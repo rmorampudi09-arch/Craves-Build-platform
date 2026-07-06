@@ -24,7 +24,7 @@ public class AuthAudit {
     @Column(name = "actor_identity_id")
     private UUID actorIdentityId;
 
-    @Column(name = "details")
+    @Column(name = "details", columnDefinition = "text")
     private String details;
 
     @Column(name = "correlation_id", length = 80)

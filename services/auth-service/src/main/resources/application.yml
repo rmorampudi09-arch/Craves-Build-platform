@@ -47,3 +47,5 @@ craves:
     private-key-pem-base64: ${CRAVES_JWT_PRIVATE_KEY_PEM_BASE64:}
     public-key-pem-base64: ${CRAVES_JWT_PUBLIC_KEY_PEM_BASE64:}
     allow-generated-local-keys: ${CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS:false}
+  internal:
+    service-secret: ${CRAVES_INTERNAL_SERVICE_SECRET:}

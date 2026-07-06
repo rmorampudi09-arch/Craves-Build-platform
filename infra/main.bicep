@@ -55,6 +55,8 @@ var commandQueues = [
 
 // CPU values are strings and converted with json(app.cpu) inside the resource.
 // This avoids Bicep parser issues seen with direct 0.25 / 0.5 decimal literals.
+// To control idle cost, only web and auth-service stay warm in prodlow.
+// Other placeholder services scale to zero until their real modules are built.
 var containerApps = [
   {
     name: 'web'
@@ -78,7 +80,7 @@ var containerApps = [
     name: 'user-chef-service'
     containerName: 'user-chef-service'
     external: false
-    minReplicas: 1
+    minReplicas: 0
     maxReplicas: 2
     cpu: '0.25'
     memory: '0.5Gi'
@@ -87,7 +89,7 @@ var containerApps = [
     name: 'catalog-service'
     containerName: 'catalog-service'
     external: false
-    minReplicas: 1
+    minReplicas: 0
     maxReplicas: 2
     cpu: '0.25'
     memory: '0.5Gi'
@@ -96,7 +98,7 @@ var containerApps = [
     name: 'order-service'
     containerName: 'order-service'
     external: false
-    minReplicas: 1
+    minReplicas: 0
     maxReplicas: 3
     cpu: '0.5'
     memory: '1Gi'
@@ -114,7 +116,7 @@ var containerApps = [
     name: 'integration-service'
     containerName: 'integration-service'
     external: false
-    minReplicas: 1
+    minReplicas: 0
     maxReplicas: 2
     cpu: '0.5'
     memory: '1Gi'

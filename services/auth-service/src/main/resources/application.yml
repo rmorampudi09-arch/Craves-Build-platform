@@ -37,7 +37,7 @@ management:
 craves:
   firebase:
     project-id: ${FIREBASE_PROJECT_ID:}
-    service-account-json-base64: ${FIREBASE_SERVICE_ACCOUNT_JSON_BASE64:}
+    credentials-json-base64: ${FIREBASE_SERVICE_ACCOUNT_JSON_BASE64:}
     check-revoked: ${FIREBASE_CHECK_REVOKED:true}
   jwt:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}

@@ -131,6 +131,9 @@ stages:
                     craves-jwt-private-key-pem-base64="$(CRAVES_JWT_PRIVATE_KEY_PEM_BASE64)" \
                   -o table
 
+                echo "Secret update submitted. Waiting 90 seconds before image update to avoid active provisioning conflict."
+                sleep 90
+
           - task: AzureCLI@2
             displayName: Update Container App revision
             inputs:
@@ -150,24 +153,47 @@ stages:
                 IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
 
                 echo "Updating Container App to image: $IMAGE"
-                az containerapp update \
-                  --name "$APP" \
-                  --resource-group "$RG" \
-                  --image "$IMAGE" \
-                  --set-env-vars \
-                    SPRING_PROFILES_ACTIVE=prod \
-                    SPRING_DATASOURCE_URL="$(POSTGRES_AUTH_DB_URL)" \
-                    SPRING_DATASOURCE_USERNAME="$(POSTGRES_AUTH_DB_USER)" \
-                    SPRING_DATASOURCE_PASSWORD=secretref:spring-datasource-password \
-                    FIREBASE_PROJECT_ID="$(FIREBASE_PROJECT_ID)" \
-                    FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=secretref:firebase-service-account-json-base64 \
-                    CRAVES_JWT_PRIVATE_KEY_PEM_BASE64=secretref:craves-jwt-private-key-pem-base64 \
-                    CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS=false \
-                    CRAVES_JWT_ISSUER="https://api.craves.in/auth" \
-                    CRAVES_JWT_AUDIENCE="craves-api" \
-                  --no-wait
+                for attempt in 1 2 3 4 5; do
+                  set +e
+                  OUTPUT=$(az containerapp update \
+                    --name "$APP" \
+                    --resource-group "$RG" \
+                    --image "$IMAGE" \
+                    --set-env-vars \
+                      SPRING_PROFILES_ACTIVE=prod \
+                      SPRING_DATASOURCE_URL="$(POSTGRES_AUTH_DB_URL)" \
+                      SPRING_DATASOURCE_USERNAME="$(POSTGRES_AUTH_DB_USER)" \
+                      SPRING_DATASOURCE_PASSWORD=secretref:spring-datasource-password \
+                      FIREBASE_PROJECT_ID="$(FIREBASE_PROJECT_ID)" \
+                      FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=secretref:firebase-service-account-json-base64 \
+                      CRAVES_JWT_PRIVATE_KEY_PEM_BASE64=secretref:craves-jwt-private-key-pem-base64 \
+                      CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS=false \
+                      CRAVES_JWT_ISSUER="https://api.craves.in/auth" \
+                      CRAVES_JWT_AUDIENCE="craves-api" \
+                    --no-wait 2>&1)
+                  CODE=$?
+                  set -e
 
-                echo "Update submitted. Showing current app summary. New revision may take a few minutes to become active."
+                  if [ "$CODE" -eq 0 ]; then
+                    echo "Container App update submitted."
+                    break
+                  fi
+
+                  echo "$OUTPUT"
+                  if echo "$OUTPUT" | grep -q "ContainerAppOperationInProgress"; then
+                    echo "Another Container App operation is active. Waiting 90 seconds before retry $attempt/5."
+                    sleep 90
+                  else
+                    exit "$CODE"
+                  fi
+
+                  if [ "$attempt" -eq 5 ]; then
+                    echo "Container App was still busy after retries. Re-run the pipeline after the active Azure operation completes."
+                    exit 1
+                  fi
+                done
+
+                echo "Showing current app summary. New revision may take a few minutes to become active."
                 az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus, fqdn:properties.configuration.ingress.fqdn}" -o table
 
           - task: AzureCLI@2

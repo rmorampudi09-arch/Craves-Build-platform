@@ -4,16 +4,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "craves.storage")
 public class DocumentStoreProperties {
-    private String connectionString;
+    private String endpointValue;
     private String documentsContainer = "documents";
     private long kycMaxFileSizeBytes = 10 * 1024 * 1024;
 
-    public String getConnectionString() {
-        return connectionString;
+    public String getEndpointValue() {
+        return endpointValue;
     }
 
-    public void setConnectionString(String connectionString) {
-        this.connectionString = connectionString;
+    public void setEndpointValue(String endpointValue) {
+        this.endpointValue = endpointValue;
     }
 
     public String getDocumentsContainer() {

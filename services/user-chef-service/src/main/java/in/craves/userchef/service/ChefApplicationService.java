@@ -25,10 +25,16 @@ import org.springframework.web.multipart.MultipartFile;
 public class ChefApplicationService {
     private final JdbcTemplate jdbcTemplate;
     private final BlobDocumentStorageService storageService;
+    private final AuthInternalClient authInternalClient;
 
-    public ChefApplicationService(JdbcTemplate jdbcTemplate, BlobDocumentStorageService storageService) {
+    public ChefApplicationService(
+        JdbcTemplate jdbcTemplate,
+        BlobDocumentStorageService storageService,
+        AuthInternalClient authInternalClient
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.storageService = storageService;
+        this.authInternalClient = authInternalClient;
     }
 
     public ChefApplicationResponse getMyApplication(CurrentUser user) {
@@ -155,7 +161,12 @@ public class ChefApplicationService {
     @Transactional
     public ChefApplicationResponse approve(CurrentUser admin, UUID applicationId) {
         requireAdmin(admin);
+        ChefApplicationResponse application = getApplicationForAdmin(admin, applicationId);
+        if (application.status() != ChefApplicationStatus.PENDING) {
+            throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be approved");
+        }
         updateDecision(applicationId, admin.identityId(), "APPROVED", null);
+        authInternalClient.grantChefRole(application.identityId(), applicationId);
         return getApplicationForAdmin(admin, applicationId);
     }
 

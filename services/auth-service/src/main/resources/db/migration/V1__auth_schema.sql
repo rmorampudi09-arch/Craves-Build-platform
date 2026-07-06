@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 CREATE TABLE auth_role (
     code        VARCHAR(32) PRIMARY KEY,
     description VARCHAR(255) NOT NULL

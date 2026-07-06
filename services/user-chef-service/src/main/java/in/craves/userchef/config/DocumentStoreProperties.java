@@ -2,33 +2,33 @@ package in.craves.userchef.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-@ConfigurationProperties(prefix = "craves.document-store")
+@ConfigurationProperties(prefix = "craves.storage")
 public class DocumentStoreProperties {
-    private String endpointValue;
-    private String container = "documents";
-    private long maxFileSizeBytes = 10 * 1024 * 1024;
+    private String connectionString;
+    private String documentsContainer = "documents";
+    private long kycMaxFileSizeBytes = 10 * 1024 * 1024;
 
-    public String getEndpointValue() {
-        return endpointValue;
+    public String getConnectionString() {
+        return connectionString;
     }
 
-    public void setEndpointValue(String endpointValue) {
-        this.endpointValue = endpointValue;
+    public void setConnectionString(String connectionString) {
+        this.connectionString = connectionString;
     }
 
-    public String getContainer() {
-        return container;
+    public String getDocumentsContainer() {
+        return documentsContainer;
     }
 
-    public void setContainer(String container) {
-        this.container = container;
+    public void setDocumentsContainer(String documentsContainer) {
+        this.documentsContainer = documentsContainer;
     }
 
-    public long getMaxFileSizeBytes() {
-        return maxFileSizeBytes;
+    public long getKycMaxFileSizeBytes() {
+        return kycMaxFileSizeBytes;
     }
 
-    public void setMaxFileSizeBytes(long maxFileSizeBytes) {
-        this.maxFileSizeBytes = maxFileSizeBytes;
+    public void setKycMaxFileSizeBytes(long kycMaxFileSizeBytes) {
+        this.kycMaxFileSizeBytes = kycMaxFileSizeBytes;
     }
 }

@@ -32,6 +32,7 @@ stages:
     jobs:
       - job: BuildDeploy
         displayName: Build Docker image and update Azure Container App
+        timeoutInMinutes: 30
         steps:
           - checkout: self
 
@@ -48,7 +49,90 @@ stages:
             displayName: Maven build and tests
 
           - task: AzureCLI@2
-            displayName: Build, push and deploy image
+            displayName: Build and push image to ACR
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+
+                ACR='${{ parameters.acrName }}'
+                TAG='${{ parameters.imageTag }}'
+                IMAGE_REPOSITORY='$(imageRepository)'
+
+                ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+                IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+
+                echo "Building $IMAGE"
+                az acr login --name "$ACR"
+                docker build -t "$IMAGE" "$(modulePath)"
+                docker push "$IMAGE"
+
+                echo "Image pushed: $IMAGE"
+                az acr repository show-tags --name "$ACR" --repository "$IMAGE_REPOSITORY" --orderby time_desc --top 5 -o table
+
+          - task: AzureCLI@2
+            displayName: Configure ACR pull permission
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+
+                RG='${{ parameters.resourceGroupName }}'
+                ACR='${{ parameters.acrName }}'
+                APP='${{ parameters.containerAppName }}'
+
+                PRINCIPAL_ID=$(az containerapp show --name "$APP" --resource-group "$RG" --query identity.principalId -o tsv)
+                ACR_ID=$(az acr show --name "$ACR" --query id -o tsv)
+
+                echo "Container App principal: $PRINCIPAL_ID"
+                echo "ACR scope: $ACR_ID"
+
+                EXISTING=$(az role assignment list --assignee "$PRINCIPAL_ID" --role AcrPull --scope "$ACR_ID" --query "[0].id" -o tsv || true)
+                if [ -z "$EXISTING" ]; then
+                  echo "Creating AcrPull role assignment"
+                  az role assignment create --assignee "$PRINCIPAL_ID" --role AcrPull --scope "$ACR_ID" -o table
+                  echo "Waiting 120 seconds for role assignment propagation"
+                  sleep 120
+                else
+                  echo "AcrPull role assignment already exists"
+                fi
+
+                ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+                echo "Setting registry on Container App"
+                az containerapp registry set \
+                  --name "$APP" \
+                  --resource-group "$RG" \
+                  --server "$ACR_LOGIN_SERVER" \
+                  --identity system \
+                  -o table
+
+          - task: AzureCLI@2
+            displayName: Set Container App secrets
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+
+                RG='${{ parameters.resourceGroupName }}'
+                APP='${{ parameters.containerAppName }}'
+
+                az containerapp secret set \
+                  --name "$APP" \
+                  --resource-group "$RG" \
+                  --secrets \
+                    spring-datasource-password="$(POSTGRES_AUTH_DB_PASSWORD)" \
+                    firebase-service-account-json-base64="$(FIREBASE_SERVICE_ACCOUNT_JSON_BASE64)" \
+                    craves-jwt-private-key-pem-base64="$(CRAVES_JWT_PRIVATE_KEY_PEM_BASE64)" \
+                  -o table
+
+          - task: AzureCLI@2
+            displayName: Update Container App revision
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               scriptType: bash
@@ -65,33 +149,7 @@ stages:
                 ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
                 IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
 
-                echo "Building $IMAGE"
-                az acr login --name "$ACR"
-                docker build -t "$IMAGE" "$(modulePath)"
-                docker push "$IMAGE"
-
-                echo "Granting Container App managed identity AcrPull on ACR"
-                PRINCIPAL_ID=$(az containerapp show --name "$APP" --resource-group "$RG" --query identity.principalId -o tsv)
-                ACR_ID=$(az acr show --name "$ACR" --query id -o tsv)
-                az role assignment create --assignee "$PRINCIPAL_ID" --role AcrPull --scope "$ACR_ID" || true
-
-                echo "Configuring Container App registry"
-                az containerapp registry set \
-                  --name "$APP" \
-                  --resource-group "$RG" \
-                  --server "$ACR_LOGIN_SERVER" \
-                  --identity system
-
-                echo "Setting app secrets"
-                az containerapp secret set \
-                  --name "$APP" \
-                  --resource-group "$RG" \
-                  --secrets \
-                    spring-datasource-password="$(POSTGRES_AUTH_DB_PASSWORD)" \
-                    firebase-service-account-json-base64="$(FIREBASE_SERVICE_ACCOUNT_JSON_BASE64)" \
-                    craves-jwt-private-key-pem-base64="$(CRAVES_JWT_PRIVATE_KEY_PEM_BASE64)"
-
-                echo "Updating Container App image and environment variables"
+                echo "Updating Container App to image: $IMAGE"
                 az containerapp update \
                   --name "$APP" \
                   --resource-group "$RG" \
@@ -106,7 +164,23 @@ stages:
                     CRAVES_JWT_PRIVATE_KEY_PEM_BASE64=secretref:craves-jwt-private-key-pem-base64 \
                     CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS=false \
                     CRAVES_JWT_ISSUER="https://api.craves.in/auth" \
-                    CRAVES_JWT_AUDIENCE="craves-api"
+                    CRAVES_JWT_AUDIENCE="craves-api" \
+                  --no-wait
 
-                echo "Deployment finished"
-                az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, fqdn:properties.configuration.ingress.fqdn}" -o table
+                echo "Update submitted. Showing current app summary. New revision may take a few minutes to become active."
+                az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus, fqdn:properties.configuration.ingress.fqdn}" -o table
+
+          - task: AzureCLI@2
+            displayName: Show latest revision diagnostics
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                RG='${{ parameters.resourceGroupName }}'
+                APP='${{ parameters.containerAppName }}'
+
+                echo "Waiting 60 seconds before revision check"
+                sleep 60
+                az containerapp revision list --name "$APP" --resource-group "$RG" --query "[].{name:name, active:properties.active, traffic:properties.trafficWeight, created:properties.createdTime, health:properties.healthState, running:properties.runningState}" -o table

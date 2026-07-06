@@ -34,7 +34,7 @@ craves:
   jwt:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
-    public-key-pem-base64: ${CRAVES_JWT_PUBLIC_KEY_PEM_BASE64:}
+    verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
   storage:
     connection-string: ${CRAVES_BLOB_CONNECTION_STRING:}
     documents-container: ${CRAVES_BLOB_DOCUMENTS_CONTAINER:documents}

@@ -73,7 +73,7 @@ stages:
                 az acr repository show-tags --name "$ACR" --repository "$IMAGE_REPOSITORY" --orderby time_desc --top 5 -o table
 
           - task: AzureCLI@2
-            displayName: Configure ACR pull permission
+            displayName: Verify ACR pull permission
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               scriptType: bash
@@ -87,44 +87,21 @@ stages:
 
                 PRINCIPAL_ID=$(az containerapp show --name "$APP" --resource-group "$RG" --query identity.principalId -o tsv)
                 ACR_ID=$(az acr show --name "$ACR" --query id -o tsv)
+                ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
 
                 echo "Container App principal: $PRINCIPAL_ID"
                 echo "ACR scope: $ACR_ID"
+                echo "ACR login server: $ACR_LOGIN_SERVER"
 
                 EXISTING=$(az role assignment list --assignee "$PRINCIPAL_ID" --role AcrPull --scope "$ACR_ID" --query "[0].id" -o tsv || true)
                 if [ -z "$EXISTING" ]; then
-                  echo "AcrPull role assignment was not found. Attempting to create it."
-                  set +e
-                  ROLE_OUTPUT=$(az role assignment create \
-                    --assignee-object-id "$PRINCIPAL_ID" \
-                    --assignee-principal-type ServicePrincipal \
-                    --role AcrPull \
-                    --scope "$ACR_ID" \
-                    -o table 2>&1)
-                  ROLE_CODE=$?
-                  set -e
-
-                  echo "$ROLE_OUTPUT"
-                  if [ "$ROLE_CODE" -ne 0 ]; then
-                    echo "WARNING: Pipeline service connection cannot create role assignments."
-                    echo "Manual one-time action required: grant AcrPull on ACR $ACR to Container App managed identity $PRINCIPAL_ID."
-                    echo "Continuing pipeline; image update may fail until that manual role assignment exists."
-                  else
-                    echo "Waiting 120 seconds for role assignment propagation"
-                    sleep 120
-                  fi
+                  echo "WARNING: AcrPull role assignment is missing."
+                  echo "Manual action required: grant AcrPull on ACR $ACR to Container App managed identity $PRINCIPAL_ID."
                 else
-                  echo "AcrPull role assignment already exists"
+                  echo "AcrPull role assignment exists."
                 fi
 
-                ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
-                echo "Setting registry on Container App"
-                az containerapp registry set \
-                  --name "$APP" \
-                  --resource-group "$RG" \
-                  --server "$ACR_LOGIN_SERVER" \
-                  --identity system \
-                  -o table
+                echo "Skipping az containerapp registry set because registry is already configured and this command can block while Azure provisions."
 
           - task: AzureCLI@2
             displayName: Set Container App secrets

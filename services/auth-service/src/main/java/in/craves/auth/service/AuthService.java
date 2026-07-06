@@ -36,6 +36,7 @@ import org.springframework.util.StringUtils;
 @Service
 public class AuthService {
     private static final String ROLE_CUSTOMER = "CUSTOMER";
+    private static final String ROLE_CHEF = "CHEF";
     private static final String STATUS_ACTIVE = "ACTIVE";
 
     private final FirebaseApp firebaseApp;
@@ -173,6 +174,17 @@ public class AuthService {
         return toIdentityResponse(identity, roles);
     }
 
+    @Transactional
+    public IdentityResponse grantChefRole(UUID identityId, UUID sourceApplicationId) {
+        AuthIdentity identity = identityRepository.findById(identityId)
+            .orElseThrow(() -> AuthException.badRequest("IDENTITY_NOT_FOUND", "Identity was not found"));
+        assertActive(identity);
+        ensureRole(identity.getId(), ROLE_CHEF);
+        List<String> roles = identityRoleRepository.findRoleCodesByIdentityId(identity.getId());
+        saveAudit(identity.getId(), "CHEF_ROLE_GRANTED", "Chef role granted from application " + sourceApplicationId, null, null);
+        return toIdentityResponse(identity, roles);
+    }
+
     private AuthIdentity loadOrCreateIdentity(FirebaseToken decodedToken, String phoneNumber) {
         String firebaseUid = decodedToken.getUid();
         Optional<AuthIdentity> byUid = identityRepository.findByFirebaseUid(firebaseUid);
@@ -200,11 +212,15 @@ public class AuthService {
     }
 
     private void ensureCustomerRole(UUID identityId) {
-        if (!roleRepository.existsById(ROLE_CUSTOMER)) {
-            throw new IllegalStateException("CUSTOMER role is missing from auth_role");
+        ensureRole(identityId, ROLE_CUSTOMER);
+    }
+
+    private void ensureRole(UUID identityId, String roleCode) {
+        if (!roleRepository.existsById(roleCode)) {
+            throw new IllegalStateException(roleCode + " role is missing from auth_role");
         }
-        if (!identityRoleRepository.existsByIdentityIdAndRoleCode(identityId, ROLE_CUSTOMER)) {
-            identityRoleRepository.save(new AuthIdentityRole(identityId, ROLE_CUSTOMER));
+        if (!identityRoleRepository.existsByIdentityIdAndRoleCode(identityId, roleCode)) {
+            identityRoleRepository.save(new AuthIdentityRole(identityId, roleCode));
         }
     }
 

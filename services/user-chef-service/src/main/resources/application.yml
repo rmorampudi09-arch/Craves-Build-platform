@@ -1,0 +1,41 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: craves-user-chef-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/craves_business_db}
+    username: ${SPRING_DATASOURCE_USERNAME:cravesadmin}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:5}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
+      connection-timeout: 30000
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  servlet:
+    multipart:
+      max-file-size: ${CRAVES_KYC_MAX_FILE_SIZE:10MB}
+      max-request-size: ${CRAVES_KYC_MAX_REQUEST_SIZE:12MB}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+craves:
+  jwt:
+    issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
+    audience: ${CRAVES_JWT_AUDIENCE:craves-api}
+    public-key-pem-base64: ${CRAVES_JWT_PUBLIC_KEY_PEM_BASE64:}
+  storage:
+    connection-string: ${CRAVES_BLOB_CONNECTION_STRING:}
+    documents-container: ${CRAVES_BLOB_DOCUMENTS_CONTAINER:documents}
+    kyc-max-file-size-bytes: ${CRAVES_KYC_MAX_FILE_SIZE_BYTES:10485760}

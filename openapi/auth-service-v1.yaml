@@ -1,0 +1,138 @@
+openapi: 3.0.3
+info:
+  title: Craves Auth Service API
+  version: 1.0.0
+  description: Authentication endpoints for Firebase token exchange and Craves session management.
+servers:
+  - url: https://api.craves.in
+paths:
+  /api/v1/auth/firebase/exchange:
+    post:
+      summary: Exchange Firebase ID token for Craves tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirebaseExchangeRequest'
+      responses:
+        '200':
+          description: Craves tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokensResponse'
+  /api/v1/auth/refresh:
+    post:
+      summary: Rotate refresh token and issue new tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: New tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokensResponse'
+  /api/v1/auth/logout:
+    post:
+      summary: Revoke current session
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '204':
+          description: Logged out
+  /api/v1/auth/me:
+    get:
+      summary: Get current authenticated Craves identity
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    FirebaseExchangeRequest:
+      type: object
+      required:
+        - firebaseIdToken
+      properties:
+        firebaseIdToken:
+          type: string
+        displayName:
+          type: string
+        requestedExperience:
+          type: string
+          enum: [CUSTOMER, CHEF]
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+    LogoutRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+    AuthTokensResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresInSeconds:
+          type: integer
+        refreshToken:
+          type: string
+        refreshTokenExpiresAt:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/MeResponse'
+    MeResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        phoneNumber:
+          type: string
+        email:
+          type: string
+        emailVerified:
+          type: boolean
+        displayName:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [CUSTOMER, CHEF, ADMIN]
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED]
+        tokenVersion:
+          type: integer

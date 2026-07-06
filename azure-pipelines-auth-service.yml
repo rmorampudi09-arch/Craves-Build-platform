@@ -93,10 +93,26 @@ stages:
 
                 EXISTING=$(az role assignment list --assignee "$PRINCIPAL_ID" --role AcrPull --scope "$ACR_ID" --query "[0].id" -o tsv || true)
                 if [ -z "$EXISTING" ]; then
-                  echo "Creating AcrPull role assignment"
-                  az role assignment create --assignee "$PRINCIPAL_ID" --role AcrPull --scope "$ACR_ID" -o table
-                  echo "Waiting 120 seconds for role assignment propagation"
-                  sleep 120
+                  echo "AcrPull role assignment was not found. Attempting to create it."
+                  set +e
+                  ROLE_OUTPUT=$(az role assignment create \
+                    --assignee-object-id "$PRINCIPAL_ID" \
+                    --assignee-principal-type ServicePrincipal \
+                    --role AcrPull \
+                    --scope "$ACR_ID" \
+                    -o table 2>&1)
+                  ROLE_CODE=$?
+                  set -e
+
+                  echo "$ROLE_OUTPUT"
+                  if [ "$ROLE_CODE" -ne 0 ]; then
+                    echo "WARNING: Pipeline service connection cannot create role assignments."
+                    echo "Manual one-time action required: grant AcrPull on ACR $ACR to Container App managed identity $PRINCIPAL_ID."
+                    echo "Continuing pipeline; image update may fail until that manual role assignment exists."
+                  else
+                    echo "Waiting 120 seconds for role assignment propagation"
+                    sleep 120
+                  fi
                 else
                   echo "AcrPull role assignment already exists"
                 fi

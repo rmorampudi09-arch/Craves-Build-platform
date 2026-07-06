@@ -14,7 +14,7 @@ param acrName string
 param postgresAdminLogin string = 'cravesadmin'
 
 @secure()
-@description('PostgreSQL administrator password. Supply from GitHub Actions secret POSTGRES_ADMIN_PASSWORD.')
+@description('PostgreSQL administrator password. Supply from GitHub Actions secret POSTGRES_ADMIN_PASSWORD. Rotate before production use.')
 param postgresAdminPassword string
 
 @description('API Management publisher email')
@@ -36,7 +36,6 @@ var storageName = take(toLower('st${cleanProject}${cleanEnv}${shortHash}'), 24)
 var keyVaultName = take(toLower('kv${cleanProject}${cleanEnv}${shortHash}'), 24)
 var postgresName = take(toLower('pg-${project}-${env}-${shortHash}'), 63)
 var serviceBusName = take(toLower('sb-${project}-${env}-${shortHash}'), 50)
-var redisName = take(toLower('redis-${project}-${env}-${shortHash}'), 63)
 var acaEnvName = take(toLower('cae-${project}-${env}-${shortHash}'), 32)
 var apimName = take(toLower('apim-${project}-${env}-${shortHash}'), 50)
 
@@ -54,6 +53,8 @@ var commandQueues = [
   'subscription-schedule'
 ]
 
+// CPU values are strings and converted with json(app.cpu) inside the resource.
+// This avoids Bicep parser issues seen with direct 0.25 / 0.5 decimal literals.
 var containerApps = [
   {
     name: 'web'
@@ -61,7 +62,7 @@ var containerApps = [
     external: true
     minReplicas: 1
     maxReplicas: 2
-    cpu: 0.25
+    cpu: '0.25'
     memory: '0.5Gi'
   }
   {
@@ -70,7 +71,7 @@ var containerApps = [
     external: false
     minReplicas: 1
     maxReplicas: 2
-    cpu: 0.25
+    cpu: '0.25'
     memory: '0.5Gi'
   }
   {
@@ -79,7 +80,7 @@ var containerApps = [
     external: false
     minReplicas: 1
     maxReplicas: 2
-    cpu: 0.25
+    cpu: '0.25'
     memory: '0.5Gi'
   }
   {
@@ -88,7 +89,7 @@ var containerApps = [
     external: false
     minReplicas: 1
     maxReplicas: 2
-    cpu: 0.25
+    cpu: '0.25'
     memory: '0.5Gi'
   }
   {
@@ -97,7 +98,7 @@ var containerApps = [
     external: false
     minReplicas: 1
     maxReplicas: 3
-    cpu: 0.5
+    cpu: '0.5'
     memory: '1Gi'
   }
   {
@@ -106,7 +107,7 @@ var containerApps = [
     external: false
     minReplicas: 0
     maxReplicas: 2
-    cpu: 0.25
+    cpu: '0.25'
     memory: '0.5Gi'
   }
   {
@@ -115,7 +116,7 @@ var containerApps = [
     external: false
     minReplicas: 1
     maxReplicas: 2
-    cpu: 0.5
+    cpu: '0.5'
     memory: '1Gi'
   }
   {
@@ -124,7 +125,7 @@ var containerApps = [
     external: false
     minReplicas: 0
     maxReplicas: 2
-    cpu: 0.25
+    cpu: '0.25'
     memory: '0.5Gi'
   }
 ]
@@ -313,23 +314,8 @@ resource integrationDb 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023
   }
 }
 
-resource redis 'Microsoft.Cache/Redis@2023-08-01' = {
-  name: redisName
-  location: location
-  tags: commonTags
-  properties: {
-    sku: {
-      name: 'Basic'
-      family: 'C'
-      capacity: 0
-    }
-    enableNonSslPort: false
-    minimumTlsVersion: '1.2'
-    redisConfiguration: {
-      maxmemory-policy: 'allkeys-lru'
-    }
-  }
-}
+// Redis is intentionally not deployed in this first safe foundation pass.
+// Old Azure Cache for Redis was rejected by Azure. Add Azure Managed Redis later after SKU/provider availability is confirmed.
 
 resource serviceBus 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
   name: serviceBusName
@@ -409,7 +395,7 @@ resource acaApps 'Microsoft.App/containerApps@2023-05-01' = [for app in containe
           name: app.containerName
           image: 'mcr.microsoft.com/k8se/quickstart:latest'
           resources: {
-            cpu: app.cpu
+            cpu: json(app.cpu)
             memory: app.memory
           }
           env: [
@@ -456,7 +442,7 @@ output businessDatabaseName string = businessDb.name
 output integrationDatabaseName string = integrationDb.name
 output storageAccountName string = storage.name
 output serviceBusNamespaceName string = serviceBus.name
-output redisName string = redis.name
+output redisStatus string = 'not-deployed-in-initial-foundation'
 output containerAppsEnvironmentName string = containerAppsEnvironment.name
 output apiManagementName string = apiManagement.name
 output webAppFqdn string = acaApps[0].properties.configuration.ingress.fqdn

@@ -8,6 +8,7 @@ public class AuthInternalClientProperties {
     private String serviceSecret;
     private String notificationServiceBaseUrl;
     private String notificationServiceKey;
+    private boolean notificationDirectDispatchEnabled = true;
 
     public String getAuthServiceBaseUrl() {
         return authServiceBaseUrl;
@@ -39,5 +40,13 @@ public class AuthInternalClientProperties {
 
     public void setNotificationServiceKey(String notificationServiceKey) {
         this.notificationServiceKey = notificationServiceKey;
+    }
+
+    public boolean isNotificationDirectDispatchEnabled() {
+        return notificationDirectDispatchEnabled;
+    }
+
+    public void setNotificationDirectDispatchEnabled(boolean notificationDirectDispatchEnabled) {
+        this.notificationDirectDispatchEnabled = notificationDirectDispatchEnabled;
     }
 }

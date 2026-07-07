@@ -2,8 +2,10 @@ package in.craves.order.service;
 
 import in.craves.order.web.ApiDtos.CheckoutResponse;
 import in.craves.order.web.ApiDtos.OrderResponse;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -41,6 +43,29 @@ public class NotificationOutboxService {
                 "orderCount", checkout.orders().size(),
                 "grandTotal", checkout.grandTotal().toPlainString(),
                 "currency", checkout.currency()
+            )
+        ));
+    }
+
+    public void recordPaymentSucceeded(UUID checkoutId, UUID customerIdentityId, String currency, BigDecimal grandTotal, int orderCount) {
+        saveBestEffort(new NotificationOutboxEvent(
+            "payment-succeeded-" + checkoutId,
+            "PAYMENT_SUCCEEDED",
+            CHECKOUT,
+            checkoutId,
+            customerIdentityId,
+            CUSTOMER,
+            IN_APP,
+            "PAYMENT_SUCCEEDED_IN_APP",
+            "Payment successful",
+            "Your Craves payment was successful. Your order is now waiting for chef confirmation.",
+            CHECKOUT,
+            checkoutId,
+            Map.of(
+                "checkoutId", checkoutId.toString(),
+                "orderCount", orderCount,
+                "grandTotal", grandTotal.toPlainString(),
+                "currency", currency
             )
         ));
     }

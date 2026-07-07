@@ -39,6 +39,7 @@ craves:
   notification:
     base-url: ${CRAVES_NOTIFICATION_INTERNAL_BASE_URL:}
     access-value: ${CRAVES_NOTIFICATION_INTERNAL_KEY:}
+    direct-dispatch-enabled: ${CRAVES_NOTIFICATION_DIRECT_DISPATCH_ENABLED:true}
     outbox-dispatcher:
       enabled: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_ENABLED:false}
       fixed-delay-ms: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_FIXED_DELAY_MS:30000}

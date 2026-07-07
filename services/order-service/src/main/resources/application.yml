@@ -36,3 +36,6 @@ craves:
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}
+  notification:
+    base-url: ${CRAVES_NOTIFICATION_INTERNAL_BASE_URL:}
+    access-value: ${CRAVES_NOTIFICATION_INTERNAL_KEY:}

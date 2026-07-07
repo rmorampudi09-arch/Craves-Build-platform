@@ -87,6 +87,10 @@ public class NotificationInternalClient {
     }
 
     private void sendSafely(CreateNotificationRequest request) {
+        if (!properties.isDirectDispatchEnabled()) {
+            log.info("Direct notification dispatch disabled. Outbox will handle requestKey={}", request.requestKey());
+            return;
+        }
         if (!StringUtils.hasText(properties.getBaseUrl())) {
             log.warn("Notification URL is not configured. Skipping notification {}", request.requestKey());
             return;

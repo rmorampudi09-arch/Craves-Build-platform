@@ -2,6 +2,7 @@ package in.craves.order.service;
 
 import in.craves.order.config.NotificationClientProperties;
 import in.craves.order.web.ApiDtos.CheckoutResponse;
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -45,6 +46,32 @@ public class NotificationInternalClient {
                     "orderCount", checkout.orders().size(),
                     "grandTotal", checkout.grandTotal().toPlainString(),
                     "currency", checkout.currency()
+                ),
+                3
+            )
+        );
+    }
+
+    public void paymentSucceeded(UUID checkoutId, UUID customerIdentityId, String currency, BigDecimal grandTotal, int orderCount) {
+        sendSafely(
+            new CreateNotificationRequest(
+                "payment-succeeded-" + checkoutId,
+                "order-service",
+                "PAYMENT_SUCCEEDED",
+                customerIdentityId,
+                "CUSTOMER",
+                "IN_APP",
+                "PAYMENT_SUCCEEDED_IN_APP",
+                null,
+                "Payment successful",
+                "Your Craves payment was successful. Your order is now waiting for chef confirmation.",
+                "CHECKOUT",
+                checkoutId,
+                Map.of(
+                    "checkoutId", checkoutId.toString(),
+                    "orderCount", orderCount,
+                    "grandTotal", grandTotal.toPlainString(),
+                    "currency", currency
                 ),
                 3
             )

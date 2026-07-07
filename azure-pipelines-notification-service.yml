@@ -1,0 +1,72 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: acrName
+    type: string
+    default: cravesprodlowacr82121
+  - name: containerAppName
+    type: string
+    default: ca-craves-notification-service-p
+  - name: imageTag
+    type: string
+    default: $(Build.BuildId)
+
+variables:
+  servicePath: services/notification-service
+  imageRepository: craves/notification-service
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - script: |
+      set -euo pipefail
+      cd $(servicePath)
+      mvn -B clean package -DskipTests
+    displayName: Build notification service
+
+  - task: AzureCLI@2
+    displayName: Build and push notification image
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        ACR='${{ parameters.acrName }}'
+        TAG='${{ parameters.imageTag }}'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
+        az acr login --name "$ACR"
+        docker build -t "$IMAGE" "$(servicePath)"
+        docker push "$IMAGE"
+        echo "Image pushed: $IMAGE"
+
+  - task: AzureCLI@2
+    displayName: Deploy notification Container App
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        ACR='${{ parameters.acrName }}'
+        APP='${{ parameters.containerAppName }}'
+        TAG='${{ parameters.imageTag }}'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
+        az containerapp update --name "$APP" --resource-group "$RG" --image "$IMAGE" --min-replicas 1 --max-replicas 1 -o table

@@ -1,0 +1,74 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: acrName
+    type: string
+    default: cravesprodlowacr82121
+  - name: containerAppName
+    type: string
+    default: ca-craves-integration-service-pr
+  - name: imageTag
+    type: string
+    default: $(Build.BuildId)
+
+variables:
+  modulePath: services/integration-service
+  imageRepository: craves/integration-service
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - script: |
+      cd $(modulePath)
+      mvn -B clean package
+    displayName: Maven build and tests
+
+  - task: AzureCLI@2
+    displayName: Build and push image to ACR
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        ACR='${{ parameters.acrName }}'
+        TAG='${{ parameters.imageTag }}'
+        IMAGE_REPOSITORY='$(imageRepository)'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+        az acr login --name "$ACR"
+        docker build -t "$IMAGE" "$(modulePath)"
+        docker push "$IMAGE"
+        echo "Image pushed: $IMAGE"
+
+  - task: AzureCLI@2
+    displayName: Update Container App image
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        ACR='${{ parameters.acrName }}'
+        APP='${{ parameters.containerAppName }}'
+        TAG='${{ parameters.imageTag }}'
+        IMAGE_REPOSITORY='$(imageRepository)'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+        az containerapp update --name "$APP" --resource-group "$RG" --image "$IMAGE" --no-wait
+        az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus}" -o table

@@ -26,15 +26,18 @@ public class ChefApplicationService {
     private final JdbcTemplate jdbcTemplate;
     private final BlobDocumentStorageService storageService;
     private final AuthInternalClient authInternalClient;
+    private final NotificationInternalClient notificationInternalClient;
 
     public ChefApplicationService(
         JdbcTemplate jdbcTemplate,
         BlobDocumentStorageService storageService,
-        AuthInternalClient authInternalClient
+        AuthInternalClient authInternalClient,
+        NotificationInternalClient notificationInternalClient
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.storageService = storageService;
         this.authInternalClient = authInternalClient;
+        this.notificationInternalClient = notificationInternalClient;
     }
 
     public ChefApplicationResponse getMyApplication(CurrentUser user) {
@@ -167,7 +170,9 @@ public class ChefApplicationService {
         }
         updateDecision(applicationId, admin.identityId(), "APPROVED", null);
         authInternalClient.grantChefRole(application.identityId(), applicationId);
-        return getApplicationForAdmin(admin, applicationId);
+        ChefApplicationResponse approved = getApplicationForAdmin(admin, applicationId);
+        notificationInternalClient.chefApproved(approved);
+        return approved;
     }
 
     @Transactional
@@ -177,7 +182,9 @@ public class ChefApplicationService {
             throw ApiException.badRequest("REJECTION_REASON_REQUIRED", "Rejection reason is required");
         }
         updateDecision(applicationId, admin.identityId(), "REJECTED", request.reason());
-        return getApplicationForAdmin(admin, applicationId);
+        ChefApplicationResponse rejected = getApplicationForAdmin(admin, applicationId);
+        notificationInternalClient.chefRejected(rejected);
+        return rejected;
     }
 
     private void updateDecision(UUID applicationId, UUID adminIdentityId, String decision, String reason) {

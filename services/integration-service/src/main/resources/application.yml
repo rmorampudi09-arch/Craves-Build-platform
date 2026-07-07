@@ -1,0 +1,22 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: craves-integration-service
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    default-schema: payment_schema
+    schemas: payment_schema
+    table: flyway_schema_history
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

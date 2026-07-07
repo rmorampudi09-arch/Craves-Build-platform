@@ -42,3 +42,5 @@ craves:
   internal:
     auth-service-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     service-secret: ${CRAVES_INTERNAL_SERVICE_SECRET:}
+    notification-service-base-url: ${CRAVES_NOTIFICATION_INTERNAL_BASE_URL:}
+    notification-service-key: ${CRAVES_NOTIFICATION_INTERNAL_KEY:}

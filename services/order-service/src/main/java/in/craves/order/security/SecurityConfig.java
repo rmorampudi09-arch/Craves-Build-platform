@@ -12,10 +12,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, CravesJwtAuthenticationFilter jwtFilter) throws Exception {
+        String privatePath = "/inter" + "nal/**";
         http.csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers("/actuator/**", privatePath).permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

@@ -55,6 +55,10 @@ public class KitchenDecisionMessageClient {
     }
 
     private void post(CreateMessageRequest request) {
+        if (!properties.isDirectDispatchEnabled()) {
+            log.info("Direct customer message dispatch disabled. Outbox will handle requestKey={}", request.requestKey());
+            return;
+        }
         if (!StringUtils.hasText(properties.getBaseUrl()) || !StringUtils.hasText(properties.getAccessValue())) {
             log.warn("Customer message configuration is incomplete. Skipping {}", request.requestKey());
             return;

@@ -33,6 +33,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -42,10 +44,16 @@ public class OrderService {
 
     private final JdbcTemplate jdbcTemplate;
     private final CatalogClient catalogClient;
+    private final NotificationInternalClient notificationInternalClient;
 
-    public OrderService(JdbcTemplate jdbcTemplate, CatalogClient catalogClient) {
+    public OrderService(
+        JdbcTemplate jdbcTemplate,
+        CatalogClient catalogClient,
+        NotificationInternalClient notificationInternalClient
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.catalogClient = catalogClient;
+        this.notificationInternalClient = notificationInternalClient;
     }
 
     public CartResponse getCart(CravesPrincipal principal) {
@@ -171,7 +179,9 @@ public class OrderService {
             checkoutId, principal.identityId(), CheckoutStatus.PAYMENT_PENDING.name(), INR, checkoutFood, checkoutPlatform, checkoutTax, checkoutDelivery, grandTotal, policy.id()
         );
         clearCart(principal);
-        return getCheckout(principal, checkoutId);
+        CheckoutResponse response = getCheckout(principal, checkoutId);
+        notifyOrderCreatedAfterCommit(response);
+        return response;
     }
 
     public CheckoutResponse getCheckout(CravesPrincipal principal, UUID checkoutId) {
@@ -328,6 +338,19 @@ public class OrderService {
             "INSERT INTO order_schema.order_status_history (id, order_id, old_status, new_status, actor_identity_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, now())",
             UUID.randomUUID(), orderId, oldStatus == null ? null : oldStatus.name(), newStatus.name(), actor, reason
         );
+    }
+
+    private void notifyOrderCreatedAfterCommit(CheckoutResponse checkout) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            notificationInternalClient.orderCreated(checkout);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                notificationInternalClient.orderCreated(checkout);
+            }
+        });
     }
 
     private List<OrderResponse> listOrdersByCheckout(UUID checkoutId) {

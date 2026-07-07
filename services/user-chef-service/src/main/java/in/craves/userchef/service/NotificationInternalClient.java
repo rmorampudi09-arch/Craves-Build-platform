@@ -19,13 +19,16 @@ public class NotificationInternalClient {
 
     private final AuthInternalClientProperties properties;
     private final RestClient.Builder restClientBuilder;
+    private final ReviewEventBuffer reviewEventBuffer;
 
-    public NotificationInternalClient(AuthInternalClientProperties properties, RestClient.Builder restClientBuilder) {
+    public NotificationInternalClient(AuthInternalClientProperties properties, RestClient.Builder restClientBuilder, ReviewEventBuffer reviewEventBuffer) {
         this.properties = properties;
         this.restClientBuilder = restClientBuilder;
+        this.reviewEventBuffer = reviewEventBuffer;
     }
 
     public void chefApproved(ChefApplicationResponse application) {
+        reviewEventBuffer.accepted(application);
         sendSafely(
             new CreateNotificationRequest(
                 "chef-approved-" + application.id(),
@@ -47,6 +50,7 @@ public class NotificationInternalClient {
     }
 
     public void chefRejected(ChefApplicationResponse application) {
+        reviewEventBuffer.returned(application);
         String reason = StringUtils.hasText(application.rejectionReason()) ? application.rejectionReason() : "Please review your application details and submit again.";
         sendSafely(
             new CreateNotificationRequest(
@@ -69,6 +73,10 @@ public class NotificationInternalClient {
     }
 
     private void sendSafely(CreateNotificationRequest request) {
+        if (!properties.isNotificationDirectDispatchEnabled()) {
+            log.info("Direct notification dispatch disabled. Outbox will handle requestKey={}", request.requestKey());
+            return;
+        }
         if (!StringUtils.hasText(properties.getNotificationServiceBaseUrl())) {
             log.warn("Notification Service URL is not configured. Skipping notification {}", request.requestKey());
             return;

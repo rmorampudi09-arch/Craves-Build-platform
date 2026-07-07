@@ -20,13 +20,20 @@ public class NotificationInternalClient {
 
     private final NotificationClientProperties properties;
     private final RestClient.Builder restClientBuilder;
+    private final NotificationOutboxService notificationOutboxService;
 
-    public NotificationInternalClient(NotificationClientProperties properties, RestClient.Builder restClientBuilder) {
+    public NotificationInternalClient(
+        NotificationClientProperties properties,
+        RestClient.Builder restClientBuilder,
+        NotificationOutboxService notificationOutboxService
+    ) {
         this.properties = properties;
         this.restClientBuilder = restClientBuilder;
+        this.notificationOutboxService = notificationOutboxService;
     }
 
     public void orderCreated(CheckoutResponse checkout) {
+        notificationOutboxService.recordOrderCreated(checkout);
         sendSafely(
             new CreateNotificationRequest(
                 "order-created-" + checkout.id(),
@@ -53,6 +60,7 @@ public class NotificationInternalClient {
     }
 
     public void paymentSucceeded(UUID checkoutId, UUID customerIdentityId, String currency, BigDecimal grandTotal, int orderCount) {
+        notificationOutboxService.recordPaymentSucceeded(checkoutId, customerIdentityId, currency, grandTotal, orderCount);
         sendSafely(
             new CreateNotificationRequest(
                 "payment-succeeded-" + checkoutId,

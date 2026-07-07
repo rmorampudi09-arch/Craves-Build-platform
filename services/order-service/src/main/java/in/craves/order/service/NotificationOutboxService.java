@@ -4,10 +4,13 @@ import in.craves.order.web.ApiDtos.CheckoutResponse;
 import in.craves.order.web.ApiDtos.OrderResponse;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class NotificationOutboxService {
+    private static final Logger log = LoggerFactory.getLogger(NotificationOutboxService.class);
     private static final String CUSTOMER = "CUSTOMER";
     private static final String IN_APP = "IN_APP";
     private static final String CHECKOUT = "CHECKOUT";
@@ -20,7 +23,7 @@ public class NotificationOutboxService {
     }
 
     public void recordOrderCreated(CheckoutResponse checkout) {
-        repository.savePending(new NotificationOutboxEvent(
+        saveBestEffort(new NotificationOutboxEvent(
             "order-created-" + checkout.id(),
             "ORDER_CREATED",
             CHECKOUT,
@@ -43,7 +46,7 @@ public class NotificationOutboxService {
     }
 
     public void recordChefAccepted(OrderResponse order) {
-        repository.savePending(new NotificationOutboxEvent(
+        saveBestEffort(new NotificationOutboxEvent(
             "chef-accepted-order-" + order.id(),
             "CHEF_ACCEPTED_ORDER",
             ORDER,
@@ -63,7 +66,7 @@ public class NotificationOutboxService {
     public void recordChefRejected(OrderResponse order) {
         Map<String, Object> payload = orderPayload(order);
         payload.put("reason", order.chefResponseNote());
-        repository.savePending(new NotificationOutboxEvent(
+        saveBestEffort(new NotificationOutboxEvent(
             "chef-rejected-order-" + order.id(),
             "CHEF_REJECTED_ORDER",
             ORDER,
@@ -83,7 +86,7 @@ public class NotificationOutboxService {
     public void recordReadyForPickup(OrderResponse order) {
         Map<String, Object> payload = orderPayload(order);
         payload.put("status", order.status().name());
-        repository.savePending(new NotificationOutboxEvent(
+        saveBestEffort(new NotificationOutboxEvent(
             "kitchen-ready-order-" + order.id(),
             "DELIVERY_STATUS_CHANGED",
             ORDER,
@@ -98,6 +101,15 @@ public class NotificationOutboxService {
             order.id(),
             payload
         ));
+    }
+
+    private void saveBestEffort(NotificationOutboxEvent event) {
+        try {
+            repository.savePending(event);
+            log.info("Notification outbox recorded eventKey={} eventType={} aggregateType={} aggregateId={}", event.eventKey(), event.eventType(), event.aggregateType(), event.aggregateId());
+        } catch (RuntimeException ex) {
+            log.warn("Notification outbox record failed eventKey={}: {}", event.eventKey(), ex.getMessage());
+        }
     }
 
     private Map<String, Object> orderPayload(OrderResponse order) {

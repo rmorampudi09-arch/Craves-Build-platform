@@ -1,0 +1,107 @@
+package in.craves.order.service;
+
+import in.craves.order.config.NotificationClientProperties;
+import in.craves.order.web.ApiDtos.CheckoutResponse;
+import java.util.Map;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+
+@Component
+public class NotificationInternalClient {
+    private static final Logger log = LoggerFactory.getLogger(NotificationInternalClient.class);
+    private static final String ACCESS_HEADER = "X-Craves-" + "Internal-Key";
+
+    private final NotificationClientProperties properties;
+    private final RestClient.Builder restClientBuilder;
+
+    public NotificationInternalClient(NotificationClientProperties properties, RestClient.Builder restClientBuilder) {
+        this.properties = properties;
+        this.restClientBuilder = restClientBuilder;
+    }
+
+    public void orderCreated(CheckoutResponse checkout) {
+        sendSafely(
+            new CreateNotificationRequest(
+                "order-created-" + checkout.id(),
+                "order-service",
+                "ORDER_CREATED",
+                checkout.customerIdentityId(),
+                "CUSTOMER",
+                "IN_APP",
+                "ORDER_CREATED_IN_APP",
+                null,
+                "Order created",
+                "Your Craves order has been created. Complete payment to continue.",
+                "CHECKOUT",
+                checkout.id(),
+                Map.of(
+                    "checkoutId", checkout.id().toString(),
+                    "orderCount", checkout.orders().size(),
+                    "grandTotal", checkout.grandTotal().toPlainString(),
+                    "currency", checkout.currency()
+                ),
+                3
+            )
+        );
+    }
+
+    private void sendSafely(CreateNotificationRequest request) {
+        if (!StringUtils.hasText(properties.getBaseUrl())) {
+            log.warn("Notification URL is not configured. Skipping notification {}", request.requestKey());
+            return;
+        }
+        if (!StringUtils.hasText(properties.getAccessValue())) {
+            log.warn("Notification access value is not configured. Skipping notification {}", request.requestKey());
+            return;
+        }
+
+        RestClient client = restClientBuilder
+            .baseUrl(properties.getBaseUrl())
+            .defaultHeader(ACCESS_HEADER, properties.getAccessValue())
+            .build();
+
+        try {
+            client.post()
+                .uri("/internal/v1/notifications")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .toBodilessEntity();
+            log.info(
+                "Notification dispatched requestKey={} eventType={} userId={} channel={} targetType={} targetId={}",
+                request.requestKey(),
+                request.eventType(),
+                request.userId(),
+                request.channel(),
+                request.targetType(),
+                request.targetId()
+            );
+        } catch (RestClientException ex) {
+            log.warn("Notification dispatch failed for requestKey={}: {}", request.requestKey(), ex.getMessage());
+        }
+    }
+
+    private record CreateNotificationRequest(
+        String requestKey,
+        String sourceService,
+        String eventType,
+        UUID userId,
+        String userRole,
+        String channel,
+        String templateCode,
+        String address,
+        String title,
+        String body,
+        String targetType,
+        UUID targetId,
+        Map<String, Object> payload,
+        Integer priority
+    ) {
+    }
+}

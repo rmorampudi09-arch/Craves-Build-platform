@@ -94,6 +94,15 @@ public class NotificationInternalClient {
                 .body(request)
                 .retrieve()
                 .toBodilessEntity();
+            log.info(
+                "Notification dispatched requestKey={} eventType={} userId={} channel={} targetType={} targetId={}",
+                request.requestKey(),
+                request.eventType(),
+                request.userId(),
+                request.channel(),
+                request.targetType(),
+                request.targetId()
+            );
         } catch (RestClientException ex) {
             log.warn("Notification dispatch failed for requestKey={}: {}", request.requestKey(), ex.getMessage());
         }

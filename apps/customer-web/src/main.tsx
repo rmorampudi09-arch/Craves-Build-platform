@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ChefHat, Heart, Home, Search, ShoppingCart, User, Bell, Star, CreditCard, ShieldCheck } from 'lucide-react';
 import './styles.css';
+import './payment-test.css';
 
 const API = (import.meta.env.VITE_API_BASE_URL ?? 'https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1').replace(/\/$/, '');
 

@@ -59,7 +59,7 @@ CREATE TABLE order_schema.checkout (
 
 CREATE TABLE order_schema.customer_order (
     id UUID PRIMARY KEY,
-    checkout_id UUID NOT NULL REFERENCES order_schema.checkout(id) ON DELETE CASCADE,
+    checkout_id UUID NOT NULL,
     customer_identity_id UUID NOT NULL,
     kitchen_id UUID NOT NULL,
     kitchen_name_snapshot VARCHAR(160),
@@ -104,4 +104,5 @@ CREATE INDEX idx_order_checkout_customer ON order_schema.checkout (customer_iden
 CREATE INDEX idx_order_customer_order_customer ON order_schema.customer_order (customer_identity_id, created_at DESC);
 CREATE INDEX idx_order_customer_order_kitchen ON order_schema.customer_order (kitchen_id, created_at DESC);
 CREATE INDEX idx_order_customer_order_status ON order_schema.customer_order (status);
+CREATE INDEX idx_order_customer_order_checkout ON order_schema.customer_order (checkout_id);
 CREATE INDEX idx_order_item_order ON order_schema.order_item (order_id);

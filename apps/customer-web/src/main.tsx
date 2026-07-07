@@ -183,7 +183,8 @@ function PaymentTestPage() {
 }
 
 function App(){
- if (window.location.pathname.includes('payment-test')) return <PaymentTestPage/>;
+ const route = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+ if (route.includes('payment-test')) return <PaymentTestPage/>;
  const [chefs,setChefs]=useState<Chef[]>([]); const [menu,setMenu]=useState<MenuItem[]>([]); const [cart,setCart]=useState<MenuItem[]>([]);
  useEffect(()=>{ fetch(`${API}/chefs`).then(r=>r.json()).then(setChefs).catch(()=>setChefs([])); fetch(`${API}/menu`).then(r=>r.json()).then(setMenu).catch(()=>setMenu([])); },[]);
  return <div className="phone-shell">

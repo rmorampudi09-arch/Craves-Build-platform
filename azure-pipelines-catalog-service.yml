@@ -2,9 +2,15 @@ trigger: none
 pr: none
 
 parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
   - name: acrName
     type: string
     default: cravesprodlowacr82121
+  - name: containerAppName
+    type: string
+    default: ca-craves-catalog-service-prodlo
   - name: imageTag
     type: string
     default: $(Build.BuildId)
@@ -48,3 +54,21 @@ steps:
         docker build -t "$IMAGE" "$(modulePath)"
         docker push "$IMAGE"
         echo "Image pushed: $IMAGE"
+
+  - task: AzureCLI@2
+    displayName: Update Container App image
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        ACR='${{ parameters.acrName }}'
+        APP='${{ parameters.containerAppName }}'
+        TAG='${{ parameters.imageTag }}'
+        IMAGE_REPOSITORY='$(imageRepository)'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+        az containerapp update --name "$APP" --resource-group "$RG" --image "$IMAGE" --no-wait
+        az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus}" -o table

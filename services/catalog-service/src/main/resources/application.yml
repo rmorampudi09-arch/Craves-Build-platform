@@ -15,6 +15,9 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    default-schema: catalog_schema
+    schemas: catalog_schema
+    table: flyway_schema_history
   servlet:
     multipart:
       max-file-size: ${CRAVES_CATALOG_MAX_IMAGE_FILE_SIZE:8MB}

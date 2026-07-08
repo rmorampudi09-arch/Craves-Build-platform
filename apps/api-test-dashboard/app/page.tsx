@@ -53,6 +53,21 @@ type LogItem = {
 
 const CONFIG_STORAGE_KEY = "craves.firebase.web.config.v2";
 const DEFAULT_APIM_BASE_URL = "https://apim-craves-prodlow-l3ing6.azure-api.net";
+const DEFAULT_PROFILE_PAYLOAD = `{
+  "displayName": "Raviteja Test Customer",
+  "email": "raviteja.test@example.com"
+}`;
+const DEFAULT_ADDRESS_PAYLOAD = `{
+  "label": "Home",
+  "line1": "Test address line 1",
+  "line2": "Test address line 2",
+  "city": "Hyderabad",
+  "state": "Telangana",
+  "postalCode": "500001",
+  "latitude": 17.385,
+  "longitude": 78.4867,
+  "isDefault": true
+}`;
 
 function formatJson(value: unknown): string {
   if (typeof value === "string") {
@@ -122,6 +137,70 @@ function selectedClass(isSelected: boolean): string {
   return isSelected ? "notification selected" : "notification";
 }
 
+function parseJsonPayload(input: string, label: string): unknown {
+  try {
+    return JSON.parse(input);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Invalid JSON.";
+    throw new Error(`${label} is not valid JSON. ${detail}`);
+  }
+}
+
+function readIdFromObject(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const root = value as Record<string, unknown>;
+  const direct = root.id || root.addressId || root.customerAddressId;
+  return typeof direct === "string" ? direct : "";
+}
+
+function readFirstAddressId(value: unknown): string {
+  if (Array.isArray(value)) {
+    return readIdFromObject(value[0]);
+  }
+
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const root = value as Record<string, unknown>;
+  const possibleArrays = [root.addresses, root.items, root.data, root.content];
+
+  for (const possibleArray of possibleArrays) {
+    if (Array.isArray(possibleArray)) {
+      const id = readIdFromObject(possibleArray[0]);
+      if (id) {
+        return id;
+      }
+    }
+  }
+
+  return readIdFromObject(value);
+}
+
+function readArrayFromResponse(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  const root = value as Record<string, unknown>;
+  const possibleArrays = [root.addresses, root.items, root.data, root.content];
+
+  for (const possibleArray of possibleArrays) {
+    if (Array.isArray(possibleArray)) {
+      return possibleArray;
+    }
+  }
+
+  return [];
+}
+
 export default function ApiTestDashboardPage() {
   const [firebaseConfig, setFirebaseConfig] = useState<FirebaseBrowserConfig>(getDefaultFirebaseConfig);
   const [phoneNumber, setPhoneNumber] = useState("+91");
@@ -134,6 +213,12 @@ export default function ApiTestDashboardPage() {
   const [meResponse, setMeResponse] = useState<unknown>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [selectedNoticeId, setSelectedNoticeId] = useState("");
+  const [customerProfileResponse, setCustomerProfileResponse] = useState<unknown>(null);
+  const [customerAddressesResponse, setCustomerAddressesResponse] = useState<unknown>(null);
+  const [customerAddresses, setCustomerAddresses] = useState<unknown[]>([]);
+  const [profilePayload, setProfilePayload] = useState(DEFAULT_PROFILE_PAYLOAD);
+  const [addressPayload, setAddressPayload] = useState(DEFAULT_ADDRESS_PAYLOAD);
+  const [addressId, setAddressId] = useState("");
   const [status, setStatus] = useState<{ type: StatusType; message: string }>({ type: "idle", message: "Ready." });
   const [busy, setBusy] = useState(false);
   const [logs, setLogs] = useState<LogItem[]>([]);
@@ -156,7 +241,7 @@ export default function ApiTestDashboardPage() {
   }, []);
 
   function addLog(title: string, value: unknown): void {
-    setLogs((current) => [{ title, value }, ...current].slice(0, 12));
+    setLogs((current) => [{ title, value }, ...current].slice(0, 16));
   }
 
   function updateConfigField(field: keyof FirebaseBrowserConfig, value: string): void {
@@ -194,6 +279,26 @@ export default function ApiTestDashboardPage() {
     await verifier.render();
     windowWithVerifier.cravesRecaptchaVerifier = verifier;
     return verifier;
+  }
+
+  async function callCravesApi(path: string, options: RequestInit = {}): Promise<ApiResult> {
+    if (!cravesAccessToken) {
+      throw new Error("Exchange with Craves first to get access token.");
+    }
+
+    const headers = new Headers(options.headers);
+    headers.set("Authorization", `Bearer ${cravesAccessToken}`);
+
+    if (options.body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers
+    });
+
+    return parseApiResponse(response);
   }
 
   async function sendOtp(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -301,23 +406,11 @@ export default function ApiTestDashboardPage() {
   }
 
   async function testMe(): Promise<void> {
-    if (!cravesAccessToken) {
-      setStatus({ type: "error", message: "Exchange with Craves first to get access token." });
-      return;
-    }
-
     setBusy(true);
     setStatus({ type: "idle", message: "Calling Auth /me through APIM..." });
 
     try {
-      const response = await fetch(`${baseUrl}/api/v1/auth/me`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${cravesAccessToken}`
-        }
-      });
-
-      const result = await parseApiResponse(response);
+      const result = await callCravesApi("/api/v1/auth/me", { method: "GET" });
       setMeResponse(result.body);
       setStatus(result.ok
         ? { type: "ok", message: "Auth /me returned current Craves identity." }
@@ -334,23 +427,11 @@ export default function ApiTestDashboardPage() {
   }
 
   async function loadNotifications(): Promise<void> {
-    if (!cravesAccessToken) {
-      setStatus({ type: "error", message: "Exchange with Craves first to get access token." });
-      return;
-    }
-
     setBusy(true);
     setStatus({ type: "idle", message: "Loading Notification Inbox through APIM..." });
 
     try {
-      const response = await fetch(`${baseUrl}/api/v1/notifications/in-app`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${cravesAccessToken}`
-        }
-      });
-
-      const result = await parseApiResponse(response);
+      const result = await callCravesApi("/api/v1/notifications/in-app", { method: "GET" });
 
       if (Array.isArray(result.body)) {
         const items = result.body as NotificationItem[];
@@ -373,11 +454,6 @@ export default function ApiTestDashboardPage() {
   }
 
   async function markSelectedRead(): Promise<void> {
-    if (!cravesAccessToken) {
-      setStatus({ type: "error", message: "Exchange with Craves first to get access token." });
-      return;
-    }
-
     if (!selectedNoticeId) {
       setStatus({ type: "error", message: "Select or paste a notification ID first." });
       return;
@@ -387,14 +463,7 @@ export default function ApiTestDashboardPage() {
     setStatus({ type: "idle", message: "Marking notification as read..." });
 
     try {
-      const response = await fetch(`${baseUrl}/api/v1/notifications/in-app/${selectedNoticeId}/read`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${cravesAccessToken}`
-        }
-      });
-
-      const result = await parseApiResponse(response);
+      const result = await callCravesApi(`/api/v1/notifications/in-app/${selectedNoticeId}/read`, { method: "PATCH" });
       setStatus(result.ok
         ? { type: "ok", message: `Notification marked as read. HTTP ${result.status} is success.` }
         : { type: "error", message: `Mark as read failed with HTTP ${result.status}.` }
@@ -408,6 +477,167 @@ export default function ApiTestDashboardPage() {
       const message = error instanceof Error ? error.message : "Failed to mark notification as read.";
       setStatus({ type: "error", message });
       addLog("Mark Notification Read Failed", message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function getCustomerProfile(): Promise<void> {
+    setBusy(true);
+    setStatus({ type: "idle", message: "Calling Customer GET /profile..." });
+
+    try {
+      const result = await callCravesApi("/api/v1/customer/profile", { method: "GET" });
+      setCustomerProfileResponse(result.body);
+      setStatus(result.ok
+        ? { type: "ok", message: "Customer profile loaded." }
+        : { type: "error", message: `Customer profile GET failed with HTTP ${result.status}.` }
+      );
+      addLog("Customer Profile GET", result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to get customer profile.";
+      setStatus({ type: "error", message });
+      addLog("Customer Profile GET Failed", message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveCustomerProfile(): Promise<void> {
+    setBusy(true);
+    setStatus({ type: "idle", message: "Calling Customer PUT /profile..." });
+
+    try {
+      const payload = parseJsonPayload(profilePayload, "Customer profile payload");
+      const result = await callCravesApi("/api/v1/customer/profile", {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+      setCustomerProfileResponse(result.body);
+      setStatus(result.ok
+        ? { type: "ok", message: "Customer profile create/update completed." }
+        : { type: "error", message: `Customer profile PUT failed with HTTP ${result.status}.` }
+      );
+      addLog("Customer Profile PUT", result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save customer profile.";
+      setStatus({ type: "error", message });
+      addLog("Customer Profile PUT Failed", message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function listCustomerAddresses(): Promise<void> {
+    setBusy(true);
+    setStatus({ type: "idle", message: "Calling Customer GET /addresses..." });
+
+    try {
+      const result = await callCravesApi("/api/v1/customer/addresses", { method: "GET" });
+      const addresses = readArrayFromResponse(result.body);
+      const firstAddressId = readFirstAddressId(result.body);
+      setCustomerAddresses(addresses);
+      setCustomerAddressesResponse(result.body);
+      if (firstAddressId) {
+        setAddressId(firstAddressId);
+      }
+      setStatus(result.ok
+        ? { type: "ok", message: "Customer addresses loaded." }
+        : { type: "error", message: `Customer addresses GET failed with HTTP ${result.status}.` }
+      );
+      addLog("Customer Addresses GET", result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to list customer addresses.";
+      setStatus({ type: "error", message });
+      addLog("Customer Addresses GET Failed", message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addCustomerAddress(): Promise<void> {
+    setBusy(true);
+    setStatus({ type: "idle", message: "Calling Customer POST /addresses..." });
+
+    try {
+      const payload = parseJsonPayload(addressPayload, "Customer address payload");
+      const result = await callCravesApi("/api/v1/customer/addresses", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      const newAddressId = readFirstAddressId(result.body);
+      if (newAddressId) {
+        setAddressId(newAddressId);
+      }
+      setCustomerAddressesResponse(result.body);
+      setStatus(result.ok
+        ? { type: "ok", message: "Customer address added." }
+        : { type: "error", message: `Customer address POST failed with HTTP ${result.status}.` }
+      );
+      addLog("Customer Address POST", result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to add customer address.";
+      setStatus({ type: "error", message });
+      addLog("Customer Address POST Failed", message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updateCustomerAddress(): Promise<void> {
+    if (!addressId.trim()) {
+      setStatus({ type: "error", message: "Address ID is required for update." });
+      return;
+    }
+
+    setBusy(true);
+    setStatus({ type: "idle", message: "Calling Customer PUT /addresses/{addressId}..." });
+
+    try {
+      const payload = parseJsonPayload(addressPayload, "Customer address payload");
+      const result = await callCravesApi(`/api/v1/customer/addresses/${addressId.trim()}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+      setCustomerAddressesResponse(result.body);
+      setStatus(result.ok
+        ? { type: "ok", message: "Customer address updated." }
+        : { type: "error", message: `Customer address PUT failed with HTTP ${result.status}.` }
+      );
+      addLog("Customer Address PUT", result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update customer address.";
+      setStatus({ type: "error", message });
+      addLog("Customer Address PUT Failed", message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteCustomerAddress(): Promise<void> {
+    if (!addressId.trim()) {
+      setStatus({ type: "error", message: "Address ID is required for delete." });
+      return;
+    }
+
+    setBusy(true);
+    setStatus({ type: "idle", message: "Calling Customer DELETE /addresses/{addressId}..." });
+
+    try {
+      const result = await callCravesApi(`/api/v1/customer/addresses/${addressId.trim()}`, { method: "DELETE" });
+      setStatus(result.ok
+        ? { type: "ok", message: `Customer address deleted. HTTP ${result.status} is success.` }
+        : { type: "error", message: `Customer address DELETE failed with HTTP ${result.status}.` }
+      );
+      addLog("Customer Address DELETE", result);
+      if (result.ok) {
+        setAddressId("");
+        await listCustomerAddresses();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete customer address.";
+      setStatus({ type: "error", message });
+      addLog("Customer Address DELETE Failed", message);
     } finally {
       setBusy(false);
     }
@@ -429,13 +659,14 @@ export default function ApiTestDashboardPage() {
         <h1>Craves API Test Dashboard</h1>
         <p className="lead">
           This page replaces manual curl testing. It verifies Firebase Phone OTP, Craves token exchange, APIM routing,
-          Auth /me, Notification Inbox, and Mark Notification as Read from one browser page.
+          Auth /me, Notification Inbox, Mark Notification as Read, and Customer Profile APIs from one browser page.
         </p>
         <div className="pill-row">
-          <span className="pill gold">APIM: {baseUrl}</span>
+          <span className="pill gold">API Base: {baseUrl}</span>
           <span className="pill">Auth /me</span>
           <span className="pill">Notification Inbox</span>
-          <span className="pill">Mark as Read</span>
+          <span className="pill">Customer Profile</span>
+          <span className="pill">Customer Addresses</span>
         </div>
       </section>
 
@@ -548,7 +779,7 @@ export default function ApiTestDashboardPage() {
         </div>
 
         <div className="card">
-          <h2>3. API Checks</h2>
+          <h2>3. Auth and Notification Checks</h2>
           <p className="small">
             These buttons use the Craves Access Token, not the Firebase ID Token.
           </p>
@@ -578,7 +809,50 @@ export default function ApiTestDashboardPage() {
 
       <section className="grid">
         <div className="card">
-          <h2>4. Notifications</h2>
+          <h2>4. Customer Profile</h2>
+          <p className="small">
+            Use this to validate Customer Service through APIM. Payload is editable so we do not hardcode product/business rules into the dashboard.
+          </p>
+          <div className="field">
+            <label htmlFor="profilePayload">PUT /api/v1/customer/profile payload</label>
+            <textarea id="profilePayload" value={profilePayload} onChange={(event) => setProfilePayload(event.target.value)} />
+          </div>
+          <div className="button-row">
+            <button type="button" onClick={getCustomerProfile} disabled={busy || !cravesAccessToken}>Get Profile</button>
+            <button type="button" className="secondary" onClick={saveCustomerProfile} disabled={busy || !cravesAccessToken}>Create / Update Profile</button>
+          </div>
+          <pre>{customerProfileResponse ? formatJson(customerProfileResponse) : "No customer profile response yet."}</pre>
+        </div>
+
+        <div className="card">
+          <h2>5. Customer Addresses</h2>
+          <p className="small">
+            Add, list, update, and delete customer addresses. If list/add response contains an address ID, the dashboard will auto-fill it.
+          </p>
+          <div className="field">
+            <label htmlFor="addressPayload">Address payload</label>
+            <textarea id="addressPayload" value={addressPayload} onChange={(event) => setAddressPayload(event.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="addressId">Address ID for update/delete</label>
+            <input id="addressId" value={addressId} onChange={(event) => setAddressId(event.target.value)} placeholder="Address UUID returned by add/list" />
+          </div>
+          <div className="button-row">
+            <button type="button" onClick={listCustomerAddresses} disabled={busy || !cravesAccessToken}>List Addresses</button>
+            <button type="button" className="secondary" onClick={addCustomerAddress} disabled={busy || !cravesAccessToken}>Add Address</button>
+            <button type="button" className="ghost" onClick={updateCustomerAddress} disabled={busy || !cravesAccessToken || !addressId}>Update Address</button>
+            <button type="button" className="ghost" onClick={deleteCustomerAddress} disabled={busy || !cravesAccessToken || !addressId}>Delete Address</button>
+          </div>
+          <div className="pill-row">
+            <span className="pill gold">Loaded addresses: {customerAddresses.length}</span>
+          </div>
+          <pre>{customerAddressesResponse ? formatJson(customerAddressesResponse) : "No customer address response yet."}</pre>
+        </div>
+      </section>
+
+      <section className="grid">
+        <div className="card">
+          <h2>6. Notifications</h2>
           {notifications.length === 0 ? (
             <p className="small">No notifications loaded yet. Click “Load Notification Inbox”.</p>
           ) : (
@@ -602,7 +876,7 @@ export default function ApiTestDashboardPage() {
         </div>
 
         <div className="card">
-          <h2>5. Response Panels</h2>
+          <h2>7. Auth Response Panels</h2>
           <h3 className="small">Craves exchange response</h3>
           <pre>{exchangeResponse ? formatJson(exchangeResponse) : "No exchange response yet."}</pre>
           <h3 className="small" style={{ marginTop: 16 }}>Auth /me response</h3>
@@ -611,7 +885,7 @@ export default function ApiTestDashboardPage() {
       </section>
 
       <section className="card full" style={{ marginTop: 20 }}>
-        <h2>6. Test Log</h2>
+        <h2>8. Test Log</h2>
         {logs.length === 0 ? (
           <p className="small">No test has been run yet.</p>
         ) : (

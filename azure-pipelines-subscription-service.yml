@@ -70,7 +70,7 @@ steps:
         IMAGE_REPOSITORY='$(imageRepository)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-        az containerapp ingress update --name "$APP" --resource-group "$RG" --target-port 8080 -o none
+        az containerapp ingress update --name "$APP" --resource-group "$RG" --type external --target-port 8080 -o none
         az containerapp update \
           --name "$APP" \
           --resource-group "$RG" \
@@ -85,4 +85,4 @@ steps:
             CRAVES_JWT_ISSUER="https://api.craves.in/auth" \
             CRAVES_JWT_AUDIENCE="craves-api" \
           --no-wait
-        az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus, image:properties.template.containers[0].image, targetPort:properties.configuration.ingress.targetPort}" -o table
+        az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus, image:properties.template.containers[0].image, targetPort:properties.configuration.ingress.targetPort, fqdn:properties.configuration.ingress.fqdn}" -o table

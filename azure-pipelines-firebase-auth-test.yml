@@ -16,10 +16,10 @@ parameters:
     default: $(Build.BuildId)
 
 variables:
-  modulePath: apps/firebase-auth-test
-  imageRepository: craves/firebase-auth-test
+  modulePath: apps/api-test-dashboard
+  imageRepository: craves/api-test-dashboard
   azureServiceConnection: $(AZURE_SERVICE_CONNECTION)
-  cravesAuthBaseUrl: https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/auth
+  apimBaseUrl: https://apim-craves-prodlow-l3ing6.azure-api.net
 
 pool:
   vmImage: ubuntu-latest
@@ -28,7 +28,7 @@ steps:
   - checkout: self
 
   - task: AzureCLI@2
-    displayName: Build and push Firebase Auth test image
+    displayName: Build and push Craves API Test Dashboard image
     inputs:
       azureSubscription: $(azureServiceConnection)
       scriptType: bash
@@ -55,14 +55,14 @@ steps:
           --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="$(NEXT_PUBLIC_FIREBASE_APP_ID)" \
           --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)" \
           --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)" \
-          --build-arg NEXT_PUBLIC_CRAVES_AUTH_BASE_URL="$(cravesAuthBaseUrl)" \
+          --build-arg NEXT_PUBLIC_APIM_BASE_URL="$(apimBaseUrl)" \
           -t "${IMAGE}" \
           "$(modulePath)"
 
         docker push "${IMAGE}"
 
   - task: AzureCLI@2
-    displayName: Deploy Firebase Auth test app to existing web Container App
+    displayName: Deploy Craves API Test Dashboard to existing web Container App
     inputs:
       azureSubscription: $(azureServiceConnection)
       scriptType: bash
@@ -100,7 +100,7 @@ steps:
             NEXT_PUBLIC_FIREBASE_APP_ID="$(NEXT_PUBLIC_FIREBASE_APP_ID)" \
             NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)" \
             NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)" \
-            NEXT_PUBLIC_CRAVES_AUTH_BASE_URL="$(cravesAuthBaseUrl)" \
+            NEXT_PUBLIC_APIM_BASE_URL="$(apimBaseUrl)" \
           -o table
 
         WEB_FQDN=$(az containerapp ingress show \
@@ -110,8 +110,8 @@ steps:
           -o tsv)
 
         echo ""
-        echo "Firebase Auth test app URL: https://${WEB_FQDN}"
-        echo "Add this exact domain to Firebase Authorized domains: ${WEB_FQDN}"
+        echo "Craves API Test Dashboard URL: https://${WEB_FQDN}"
+        echo "Firebase Authorized domain must include: ${WEB_FQDN}"
 
   - task: AzureCLI@2
     displayName: Show latest web app logs

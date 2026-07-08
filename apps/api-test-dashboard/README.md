@@ -10,6 +10,12 @@ Internal web dashboard for testing the current Craves backend flow without runni
 4. Craves `/api/v1/auth/me`
 5. Craves `/api/v1/notifications/in-app`
 6. Craves `PATCH /api/v1/notifications/in-app/{noticeId}/read`
+7. Craves `GET /api/v1/customer/profile`
+8. Craves `PUT /api/v1/customer/profile`
+9. Craves `GET /api/v1/customer/addresses`
+10. Craves `POST /api/v1/customer/addresses`
+11. Craves `PUT /api/v1/customer/addresses/{addressId}`
+12. Craves `DELETE /api/v1/customer/addresses/{addressId}`
 
 ## Deployment target
 
@@ -19,8 +25,11 @@ This module is deployed as a container image to the existing Craves web Azure Co
 Resource group: rg-craves-prodlow-centralindia
 Container App: ca-craves-web-prodlow
 ACR: cravesprodlowacr82121
-APIM base URL: https://apim-craves-prodlow-l3ing6.azure-api.net
+APIM gateway: https://apim-craves-prodlow-l3ing6.azure-api.net
+Dashboard URL: https://ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
 ```
+
+Browser calls use the dashboard same-origin route `/api/v1/*`. Next.js rewrites those requests to APIM. This avoids the browser CORS issue we hit during notification testing.
 
 ## Local setup
 
@@ -51,13 +60,13 @@ http://localhost:3000
 
 ## Azure DevOps pipeline
 
-Pipeline YAML added at repository root:
+For deployment, use the existing working pipeline YAML from the Firebase auth test flow:
 
 ```text
-azure-pipelines-api-test-dashboard.yml
+azure-pipelines-firebase-auth-test.yml
 ```
 
-It builds:
+That pipeline now builds:
 
 ```text
 apps/api-test-dashboard/Dockerfile
@@ -113,6 +122,16 @@ After OTP login and token exchange:
 Auth /me: HTTP 200
 Notification Inbox: HTTP 200
 Mark as Read: HTTP 204 or HTTP 200
+Customer Profile GET: HTTP 200 or expected empty-profile response
+Customer Profile PUT: HTTP 200 or HTTP 204 depending on backend response design
+Customer Addresses GET: HTTP 200
+Customer Addresses POST: HTTP 200 or HTTP 201
+Customer Addresses PUT: HTTP 200 or HTTP 204
+Customer Addresses DELETE: HTTP 200 or HTTP 204
 ```
 
-`204 No Content` for mark-as-read is success.
+`204 No Content` is success for update/delete style APIs.
+
+## Customer payload note
+
+The profile and address payloads are editable JSON in the dashboard. If backend validation expects different field names, use the API error shown in the dashboard test log to adjust the JSON body. This is intentional so the dashboard does not hardcode product decisions into the test UI.

@@ -19,7 +19,7 @@ variables:
   modulePath: apps/api-test-dashboard
   imageRepository: craves/api-test-dashboard
   azureServiceConnection: $(AZURE_SERVICE_CONNECTION)
-  apimBaseUrl: https://apim-craves-prodlow-l3ing6.azure-api.net
+  dashboardBaseUrl: https://ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
 
 pool:
   vmImage: ubuntu-latest
@@ -55,7 +55,7 @@ steps:
           --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="$(NEXT_PUBLIC_FIREBASE_APP_ID)" \
           --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)" \
           --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)" \
-          --build-arg NEXT_PUBLIC_APIM_BASE_URL="$(apimBaseUrl)" \
+          --build-arg NEXT_PUBLIC_APIM_BASE_URL="$(dashboardBaseUrl)" \
           -t "${IMAGE}" \
           "$(modulePath)"
 
@@ -100,7 +100,7 @@ steps:
             NEXT_PUBLIC_FIREBASE_APP_ID="$(NEXT_PUBLIC_FIREBASE_APP_ID)" \
             NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)" \
             NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)" \
-            NEXT_PUBLIC_APIM_BASE_URL="$(apimBaseUrl)" \
+            NEXT_PUBLIC_APIM_BASE_URL="$(dashboardBaseUrl)" \
           -o table
 
         WEB_FQDN=$(az containerapp ingress show \
@@ -112,6 +112,7 @@ steps:
         echo ""
         echo "Craves API Test Dashboard URL: https://${WEB_FQDN}"
         echo "Firebase Authorized domain must include: ${WEB_FQDN}"
+        echo "Dashboard same-origin API proxy is enabled for /api/v1/* routes."
 
   - task: AzureCLI@2
     displayName: Show latest web app logs

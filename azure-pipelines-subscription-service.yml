@@ -70,6 +70,10 @@ steps:
         IMAGE_REPOSITORY='$(imageRepository)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+        DS_URL="$[ variables.SPRING_DATASOURCE_URL ]"
+        DS_USER="$[ variables.SPRING_DATASOURCE_USERNAME ]"
+        DS_PASS="$[ variables.SPRING_DATASOURCE_PASSWORD ]"
+        JWT_PEM="$[ variables.CRAVES_JWT_VERIFICATION_PEM_BASE64 ]"
         az containerapp ingress update --name "$APP" --resource-group "$RG" --type external --target-port 8080 -o none
         az containerapp update \
           --name "$APP" \
@@ -78,10 +82,10 @@ steps:
           --set-env-vars \
             SERVER_PORT=8080 \
             SPRING_PROFILES_ACTIVE=prod \
-            SPRING_DATASOURCE_URL="$(POSTGRES_BUSINESS_DB_URL)" \
-            SPRING_DATASOURCE_USERNAME="$(POSTGRES_BUSINESS_DB_USER)" \
-            SPRING_DATASOURCE_PASSWORD="$(POSTGRES_BUSINESS_DB_PASSWORD)" \
-            CRAVES_JWT_VERIFICATION_PEM_BASE64="$(CRAVES_JWT_VERIFICATION_PEM_BASE64)" \
+            SPRING_DATASOURCE_URL="$DS_URL" \
+            SPRING_DATASOURCE_USERNAME="$DS_USER" \
+            SPRING_DATASOURCE_PASSWORD="$DS_PASS" \
+            CRAVES_JWT_VERIFICATION_PEM_BASE64="$JWT_PEM" \
             CRAVES_JWT_ISSUER="https://api.craves.in/auth" \
             CRAVES_JWT_AUDIENCE="craves-api" \
           --no-wait

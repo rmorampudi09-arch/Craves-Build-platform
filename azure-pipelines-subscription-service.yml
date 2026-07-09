@@ -11,9 +11,6 @@ parameters:
   - name: containerAppName
     type: string
     default: ca-craves-subscription-service-p
-  - name: sourceContainerAppName
-    type: string
-    default: ca-craves-user-chef-service-prod
   - name: imageTag
     type: string
     default: $(Build.BuildId)
@@ -69,35 +66,8 @@ steps:
         RG='${{ parameters.resourceGroupName }}'
         ACR='${{ parameters.acrName }}'
         APP='${{ parameters.containerAppName }}'
-        SOURCE_APP='${{ parameters.sourceContainerAppName }}'
         TAG='${{ parameters.imageTag }}'
         IMAGE_REPOSITORY='$(imageRepository)'
-
-        read_source_env() {
-          local env_name="$1"
-          az containerapp show \
-            --name "$SOURCE_APP" \
-            --resource-group "$RG" \
-            --query "properties.template.containers[0].env[?name=='$env_name'].value | [0]" \
-            -o tsv
-        }
-
-        DB_URL="$(read_source_env SPRING_DATASOURCE_URL)"
-        DB_USER="$(read_source_env SPRING_DATASOURCE_USERNAME)"
-        DB_PASSWORD="$(read_source_env SPRING_DATASOURCE_PASSWORD)"
-        JWT_PUBLIC_KEY="$(read_source_env CRAVES_JWT_VERIFICATION_PEM_BASE64)"
-        JWT_ISSUER="$(read_source_env CRAVES_JWT_ISSUER)"
-        JWT_AUDIENCE="$(read_source_env CRAVES_JWT_AUDIENCE)"
-
-        JWT_ISSUER="${JWT_ISSUER:-https://api.craves.in/auth}"
-        JWT_AUDIENCE="${JWT_AUDIENCE:-craves-api}"
-
-        if [ -z "$DB_URL" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ] || [ -z "$JWT_PUBLIC_KEY" ]; then
-          echo "Required runtime env is missing from source app: $SOURCE_APP" >&2
-          echo "Need SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD, CRAVES_JWT_VERIFICATION_PEM_BASE64." >&2
-          exit 1
-        fi
-
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
         az containerapp ingress update --name "$APP" --resource-group "$RG" --type external --target-port 8080 -o none
@@ -108,11 +78,11 @@ steps:
           --set-env-vars \
             SERVER_PORT=8080 \
             SPRING_PROFILES_ACTIVE=prod \
-            SPRING_DATASOURCE_URL="$DB_URL" \
-            SPRING_DATASOURCE_USERNAME="$DB_USER" \
-            SPRING_DATASOURCE_PASSWORD="$DB_PASSWORD" \
-            CRAVES_JWT_VERIFICATION_PEM_BASE64="$JWT_PUBLIC_KEY" \
-            CRAVES_JWT_ISSUER="$JWT_ISSUER" \
-            CRAVES_JWT_AUDIENCE="$JWT_AUDIENCE" \
-          -o none
+            SPRING_DATASOURCE_URL="$(POSTGRES_BUSINESS_DB_URL)" \
+            SPRING_DATASOURCE_USERNAME="$(POSTGRES_BUSINESS_DB_USER)" \
+            SPRING_DATASOURCE_PASSWORD="$(POSTGRES_BUSINESS_DB_PASSWORD)" \
+            CRAVES_JWT_VERIFICATION_PEM_BASE64="$(CRAVES_JWT_VERIFICATION_PEM_BASE64)" \
+            CRAVES_JWT_ISSUER="https://api.craves.in/auth" \
+            CRAVES_JWT_AUDIENCE="craves-api" \
+          --no-wait
         az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus, image:properties.template.containers[0].image, targetPort:properties.configuration.ingress.targetPort, fqdn:properties.configuration.ingress.fqdn}" -o table

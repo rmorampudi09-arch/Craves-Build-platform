@@ -29,7 +29,7 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
     static final String PROVIDER_ID = "borzo";
     static final String AUTH_HEADER = "X-DV-Auth-Token";
     private static final int MOTORBIKE_VEHICLE_TYPE_ID = 8;
-    private static final int MOTORBIKE_MAX_WEIGHT_KG = 20;
+    private static final int MOTORBIKE_MAX_WEIGHT_GRAMS = 20_000;
     private static final DateTimeFormatter BORZO_TIMESTAMP =
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
@@ -148,7 +148,7 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         root.put("type", "standard");
         root.put("matter", request.matter());
         root.put("vehicle_type_id", MOTORBIKE_VEHICLE_TYPE_ID);
-        root.put("total_weight_kg", request.totalWeightKg());
+        root.put("total_weight_kg", toBorzoWeightKg(request.totalWeightGrams()));
         root.put("is_thermobox_required", request.thermoboxRequired());
         root.put("is_client_notification_enabled", false);
         root.put("is_contact_person_notification_enabled", false);
@@ -285,11 +285,17 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         if (!StringUtils.hasText(request.matter())) {
             throw new IllegalArgumentException("Delivery matter is required");
         }
-        if (request.totalWeightKg() < 0 || request.totalWeightKg() > MOTORBIKE_MAX_WEIGHT_KG) {
-            throw new IllegalArgumentException("Borzo motorbike delivery weight must be between 0 and 20 kg");
+        if (request.totalWeightGrams() <= 0 || request.totalWeightGrams() > MOTORBIKE_MAX_WEIGHT_GRAMS) {
+            throw new IllegalArgumentException(
+                "Borzo motorbike delivery weight must be between 1 and 20000 grams"
+            );
         }
         validateStop(request.pickup(), "pickup");
         validateStop(request.dropoff(), "dropoff");
+    }
+
+    private static int toBorzoWeightKg(int totalWeightGrams) {
+        return Math.max(1, (totalWeightGrams + 999) / 1000);
     }
 
     private static void validateStop(Stop stop, String name) {
@@ -425,7 +431,12 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
             this.safeProviderResponse = safeProviderResponse;
         }
 
-        public HttpStatusCode getProviderStatus() { return providerStatus; }
-        public String getSafeProviderResponse() { return safeProviderResponse; }
+        public HttpStatusCode getProviderStatus() {
+            return providerStatus;
+        }
+
+        public String getSafeProviderResponse() {
+            return safeProviderResponse;
+        }
     }
 }

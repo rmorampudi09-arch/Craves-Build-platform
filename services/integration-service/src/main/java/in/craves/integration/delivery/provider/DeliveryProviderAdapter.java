@@ -48,20 +48,23 @@ public interface DeliveryProviderAdapter {
         OffsetDateTime requiredStart,
         OffsetDateTime requiredFinish,
         String note
-    ) {}
+    ) {
+    }
 
     record QuoteRequest(
         String matter,
-        int totalWeightKg,
+        int totalWeightGrams,
         boolean thermoboxRequired,
         Stop pickup,
         Stop dropoff
-    ) {}
+    ) {
+    }
 
     record CreateDeliveryRequest(
         String clientReference,
         QuoteRequest quoteRequest
-    ) {}
+    ) {
+    }
 
     record ProviderQuote(
         String providerId,
@@ -72,7 +75,8 @@ public interface DeliveryProviderAdapter {
         List<String> warnings,
         JsonNode providerMetadata,
         Instant quotedAt
-    ) {}
+    ) {
+    }
 
     record ProviderDelivery(
         String providerId,
@@ -85,7 +89,8 @@ public interface DeliveryProviderAdapter {
         String trackingUrl,
         JsonNode providerMetadata,
         Instant observedAt
-    ) {}
+    ) {
+    }
 
     record Courier(
         String providerCourierId,
@@ -94,11 +99,13 @@ public interface DeliveryProviderAdapter {
         String photoUrl,
         BigDecimal latitude,
         BigDecimal longitude
-    ) {}
+    ) {
+    }
 
     record TrackingSnapshot(
         ProviderDelivery delivery,
         Courier courier,
         Instant observedAt
-    ) {}
+    ) {
+    }
 }

@@ -33,6 +33,14 @@ craves:
     default-strategy: ${CRAVES_DELIVERY_ASSIGNMENT_STRATEGY:STOCHASTIC}
     maintenance-cron: ${CRAVES_DELIVERY_MAINTENANCE_CRON:0 0 2 * * *}
     maintenance-zone: ${CRAVES_DELIVERY_MAINTENANCE_ZONE:Asia/Kolkata}
+  providers:
+    borzo:
+      enabled: ${BORZO_API_ENABLED:false}
+      base-url: ${BORZO_API_BASE_URL:https://robotapitest-in.borzodelivery.com/api/business/1.8}
+      auth-token: ${BORZO_API_AUTH_TOKEN:}
+      callback-secret: ${BORZO_CALLBACK_TOKEN:}
+      connect-timeout-seconds: ${BORZO_CONNECT_TIMEOUT_SECONDS:5}
+      read-timeout-seconds: ${BORZO_READ_TIMEOUT_SECONDS:20}
 
 management:
   endpoints:

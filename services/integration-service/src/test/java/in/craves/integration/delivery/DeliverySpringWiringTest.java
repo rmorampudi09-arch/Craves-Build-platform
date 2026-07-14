@@ -26,8 +26,9 @@ class DeliverySpringWiringTest {
             context.registerBean(BetaSampler.class,
                 () -> mock(BetaSampler.class));
             context.registerBean(DeliveryIntelligenceProperties.class,
-                DeliveryIntelligenceProperties::new);
-            context.registerBean(ObjectMapper.class, ObjectMapper::new);
+                () -> new DeliveryIntelligenceProperties());
+            context.registerBean(ObjectMapper.class,
+                () -> new ObjectMapper());
             context.registerBean(DeliveryIntelligenceService.class);
 
             context.refresh();
@@ -42,7 +43,7 @@ class DeliverySpringWiringTest {
             context.registerBean(DeliveryMetricsRepository.class,
                 () -> mock(DeliveryMetricsRepository.class));
             context.registerBean(DeliveryIntelligenceProperties.class,
-                DeliveryIntelligenceProperties::new);
+                () -> new DeliveryIntelligenceProperties());
             context.registerBean(DeliveryMetricsMaintenanceService.class);
 
             context.refresh();

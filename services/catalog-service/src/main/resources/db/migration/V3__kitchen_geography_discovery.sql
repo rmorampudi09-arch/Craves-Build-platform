@@ -1,17 +1,17 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 ALTER TABLE catalog_schema.kitchen_profile
-    ADD COLUMN IF NOT EXISTS location geography(Point, 4326)
+    ADD COLUMN IF NOT EXISTS location public.geography(Point, 4326)
     GENERATED ALWAYS AS (
         CASE
             WHEN latitude IS NULL OR longitude IS NULL THEN NULL
-            ELSE ST_SetSRID(
-                ST_MakePoint(
+            ELSE public.ST_SetSRID(
+                public.ST_MakePoint(
                     longitude::double precision,
                     latitude::double precision
                 ),
                 4326
-            )::geography
+            )::public.geography
         END
     ) STORED;
 

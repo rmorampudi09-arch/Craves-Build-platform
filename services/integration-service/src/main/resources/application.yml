@@ -11,6 +11,29 @@ spring:
     schemas: payment_schema
     table: flyway_schema_history
 
+craves:
+  delivery-intelligence:
+    enabled: ${CRAVES_DELIVERY_INTELLIGENCE_ENABLED:true}
+    live-window-days: ${CRAVES_DELIVERY_LIVE_WINDOW_DAYS:7}
+    global-prior: ${CRAVES_DELIVERY_GLOBAL_PRIOR:100.0}
+    momentum-threshold: ${CRAVES_DELIVERY_MOMENTUM_THRESHOLD:3.0}
+    live-pull-k: ${CRAVES_DELIVERY_LIVE_PULL_K:10.0}
+    fade-factor: ${CRAVES_DELIVERY_DAILY_FADE_FACTOR:0.965}
+    max-stored-weight: ${CRAVES_DELIVERY_MAX_STORED_WEIGHT:400.0}
+    ml-weight: ${CRAVES_DELIVERY_ML_WEIGHT:0.55}
+    rolling-score-weight: ${CRAVES_DELIVERY_ROLLING_SCORE_WEIGHT:0.35}
+    exploration-weight: ${CRAVES_DELIVERY_EXPLORATION_WEIGHT:0.10}
+    proximity-weight: ${CRAVES_DELIVERY_PROXIMITY_WEIGHT:0.60}
+    quality-weight: ${CRAVES_DELIVERY_QUALITY_WEIGHT:0.40}
+    search-radius-km: ${CRAVES_DELIVERY_SEARCH_RADIUS_KM:5.0}
+    max-pickup-eta-minutes: ${CRAVES_DELIVERY_MAX_PICKUP_ETA_MINUTES:30.0}
+    softmax-temperature: ${CRAVES_DELIVERY_SOFTMAX_TEMPERATURE:10.0}
+    success-threshold: ${CRAVES_DELIVERY_SUCCESS_THRESHOLD:70.0}
+    neutral-rating-score: ${CRAVES_DELIVERY_NEUTRAL_RATING_SCORE:70.0}
+    default-strategy: ${CRAVES_DELIVERY_ASSIGNMENT_STRATEGY:STOCHASTIC}
+    maintenance-cron: ${CRAVES_DELIVERY_MAINTENANCE_CRON:0 0 2 * * *}
+    maintenance-zone: ${CRAVES_DELIVERY_MAINTENANCE_ZONE:Asia/Kolkata}
+
 management:
   endpoints:
     web:

@@ -2,6 +2,7 @@ package in.craves.integration.delivery.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,7 +46,7 @@ class DeliveryCommandSchedulerTest {
         when(publisher.schedule(any())).thenReturn(
             new DeliveryServiceBusPublisher.ScheduledMessage(7001L, "delivery-command:test")
         );
-        when(repository.recordScheduled(any(), any(Long.class), any())).thenReturn(true);
+        when(repository.recordScheduled(any(), anyLong(), any())).thenReturn(true);
 
         var receipt = scheduler.schedule(event);
 

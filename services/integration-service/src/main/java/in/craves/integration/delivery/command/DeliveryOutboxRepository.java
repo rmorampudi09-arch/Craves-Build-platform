@@ -39,8 +39,14 @@ public class DeliveryOutboxRepository {
             WITH selected AS (
                 SELECT id
                 FROM delivery_schema.delivery_outbox
-                WHERE status IN ('PENDING', 'FAILED')
-                  AND next_attempt_at <= now()
+                WHERE (
+                        status IN ('PENDING', 'FAILED')
+                        AND next_attempt_at <= now()
+                      )
+                   OR (
+                        status = 'PROCESSING'
+                        AND processing_started_at < now() - interval '10 minutes'
+                      )
                 ORDER BY created_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT ?
@@ -48,6 +54,7 @@ public class DeliveryOutboxRepository {
             UPDATE delivery_schema.delivery_outbox AS outbox
             SET status = 'PROCESSING',
                 attempt_count = attempt_count + 1,
+                processing_started_at = now(),
                 updated_at = now()
             FROM selected
             WHERE outbox.id = selected.id
@@ -59,7 +66,11 @@ public class DeliveryOutboxRepository {
     public void markPublished(UUID id) {
         jdbc.update("""
             UPDATE delivery_schema.delivery_outbox
-            SET status = 'PUBLISHED', published_at = now(), last_error = NULL, updated_at = now()
+            SET status = 'PUBLISHED',
+                published_at = now(),
+                processing_started_at = NULL,
+                last_error = NULL,
+                updated_at = now()
             WHERE id = ?
             """, id);
     }
@@ -69,6 +80,7 @@ public class DeliveryOutboxRepository {
         jdbc.update("""
             UPDATE delivery_schema.delivery_outbox
             SET status = CASE WHEN attempt_count >= 10 THEN 'DEAD_LETTER' ELSE 'FAILED' END,
+                processing_started_at = NULL,
                 next_attempt_at = ?,
                 last_error = ?,
                 updated_at = now()

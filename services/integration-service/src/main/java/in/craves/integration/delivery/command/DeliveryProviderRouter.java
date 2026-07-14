@@ -1,6 +1,12 @@
 package in.craves.integration.delivery.command;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentRequest;
+import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentResponse;
+import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateInput;
+import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateScore;
+import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus;
+import in.craves.integration.delivery.DeliveryIntelligenceService;
 import in.craves.integration.delivery.command.DeliveryCommandModels.CreateAudit;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandModels.QuoteAudit;
@@ -14,6 +20,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -27,15 +34,15 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class DeliveryProviderRouter {
-    private static final BigDecimal UNKNOWN_PRICE = new BigDecimal("999999999");
-
     private final Map<String, DeliveryProviderAdapter> adapters;
     private final DeliveryProviderCatalogRepository providerCatalog;
+    private final DeliveryIntelligenceService intelligenceService;
     private final DeliveryCommandProperties properties;
     private final ExecutorService quoteExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     public DeliveryProviderRouter(List<DeliveryProviderAdapter> discoveredAdapters,
                                   DeliveryProviderCatalogRepository providerCatalog,
+                                  DeliveryIntelligenceService intelligenceService,
                                   DeliveryCommandProperties properties) {
         Map<String, DeliveryProviderAdapter> indexed = new HashMap<>();
         for (DeliveryProviderAdapter adapter : discoveredAdapters) {
@@ -47,6 +54,7 @@ public class DeliveryProviderRouter {
         }
         this.adapters = Map.copyOf(indexed);
         this.providerCatalog = providerCatalog;
+        this.intelligenceService = intelligenceService;
         this.properties = properties;
     }
 
@@ -65,7 +73,7 @@ public class DeliveryProviderRouter {
             DeliveryProviderAdapter adapter = adapters.get(providerId);
             if (adapter == null) {
                 quoteAudit.add(new QuoteAudit(
-                    providerId, false, false, null, null,
+                    providerId, false, false, null, null, null,
                     "Provider is active in the database but no adapter is deployed"
                 ));
                 continue;
@@ -74,16 +82,20 @@ public class DeliveryProviderRouter {
         }
 
         List<QuoteOutcome> outcomes = invokeQuotes(tasks, quoteAudit);
-        List<QuoteOutcome> candidates = outcomes.stream()
-            .filter(outcome -> outcome.quote() != null && outcome.quote().available())
-            .sorted(Comparator
-                .comparingInt(QuoteOutcome::pickupEtaMinutesForSort)
-                .thenComparing(QuoteOutcome::priceForSort)
-                .thenComparing(QuoteOutcome::providerId))
-            .toList();
-
-        if (candidates.isEmpty()) {
+        boolean anyAvailableQuote = outcomes.stream()
+            .anyMatch(outcome -> outcome.quote() != null && outcome.quote().available());
+        if (!anyAvailableQuote) {
             throw new DeliveryRoutingException("No active delivery provider returned an available quote");
+        }
+
+        AssignmentResponse assignment = intelligenceService.assign(
+            assignmentRequest(command, outcomes)
+        );
+        List<RankedQuoteOutcome> candidates = orderByIntelligence(assignment, outcomes);
+        if (candidates.isEmpty()) {
+            throw new DeliveryRoutingException(
+                "The persisted intelligent assignment has no currently available provider quote"
+            );
         }
 
         List<CreateAudit> createAudit = new ArrayList<>();
@@ -91,7 +103,8 @@ public class DeliveryProviderRouter {
         String clientReference = clientReference(command.chefSubOrderId());
 
         for (int index = 0; index < maximumAttempts; index++) {
-            QuoteOutcome candidate = candidates.get(index);
+            RankedQuoteOutcome ranked = candidates.get(index);
+            QuoteOutcome candidate = ranked.outcome();
             try {
                 ProviderDelivery delivery = candidate.adapter().create(
                     new CreateDeliveryRequest(clientReference, command.deliveryRequest())
@@ -104,6 +117,8 @@ public class DeliveryProviderRouter {
                 return new RoutingResult(
                     candidate.providerId(),
                     delivery,
+                    assignment,
+                    ranked.candidate().candidateId(),
                     List.copyOf(quoteAudit),
                     List.copyOf(createAudit)
                 );
@@ -113,18 +128,96 @@ public class DeliveryProviderRouter {
         }
 
         throw new DeliveryRoutingException(
-            "Delivery creation failed across " + maximumAttempts + " quoted provider attempt(s)"
+            "Delivery creation failed across " + maximumAttempts + " intelligently ranked provider attempt(s)"
         );
+    }
+
+    private AssignmentRequest assignmentRequest(DeliveryCommandMessage command,
+                                                List<QuoteOutcome> outcomes) {
+        List<CandidateInput> candidates = outcomes.stream()
+            .filter(outcome -> outcome.quote() != null)
+            .map(this::candidateInput)
+            .toList();
+        if (candidates.isEmpty()) {
+            throw new DeliveryRoutingException("No provider quote could be submitted to delivery intelligence");
+        }
+        return new AssignmentRequest(
+            command.chefSubOrderId(),
+            command.orderId(),
+            command.distanceKm(),
+            command.orderHour(),
+            command.dayOfWeek(),
+            command.area(),
+            null,
+            candidates
+        );
+    }
+
+    private CandidateInput candidateInput(QuoteOutcome outcome) {
+        ProviderQuote quote = outcome.quote();
+        return new CandidateInput(
+            outcome.providerId(),
+            extractText(quote.providerMetadata(), List.of("provider_quote_id", "quote_id", "order_id")),
+            extractText(quote.providerMetadata(), List.of("agent_id", "courier_id")),
+            outcome.pickupDistanceKm(),
+            outcome.pickupEtaMinutes() == null ? null : outcome.pickupEtaMinutes().doubleValue(),
+            quotedCost(quote),
+            quote.currency(),
+            quote.available(),
+            quote.providerMetadata()
+        );
+    }
+
+    private static List<RankedQuoteOutcome> orderByIntelligence(AssignmentResponse assignment,
+                                                                List<QuoteOutcome> outcomes) {
+        Map<String, QuoteOutcome> availableOutcomes = new HashMap<>();
+        for (QuoteOutcome outcome : outcomes) {
+            if (outcome.quote() != null && outcome.quote().available()) {
+                availableOutcomes.put(normalize(outcome.providerId()), outcome);
+            }
+        }
+
+        Map<String, CandidateScore> rankedCandidates = new LinkedHashMap<>();
+        assignment.candidates().stream()
+            .filter(candidate -> candidate.status() != CandidateStatus.SKIPPED)
+            .sorted(Comparator.comparingInt(CandidateScore::rank))
+            .forEach(candidate -> rankedCandidates.putIfAbsent(
+                normalize(candidate.providerId()), candidate
+            ));
+
+        List<String> orderedProviderIds = new ArrayList<>();
+        if (assignment.selectedProviderId() != null) {
+            orderedProviderIds.add(normalize(assignment.selectedProviderId()));
+        }
+        for (String providerId : rankedCandidates.keySet()) {
+            if (!orderedProviderIds.contains(providerId)) {
+                orderedProviderIds.add(providerId);
+            }
+        }
+
+        List<RankedQuoteOutcome> ordered = new ArrayList<>();
+        for (String providerId : orderedProviderIds) {
+            QuoteOutcome outcome = availableOutcomes.get(providerId);
+            CandidateScore candidate = rankedCandidates.get(providerId);
+            if (outcome != null && candidate != null) {
+                ordered.add(new RankedQuoteOutcome(candidate, outcome));
+            }
+        }
+        return List.copyOf(ordered);
     }
 
     private QuoteOutcome quote(DeliveryProviderAdapter adapter, DeliveryCommandMessage command) {
         String providerId = normalize(adapter.providerId());
         try {
             ProviderQuote quote = adapter.quote(command.deliveryRequest());
-            Integer pickupEtaMinutes = extractPickupEtaMinutes(quote == null ? null : quote.providerMetadata());
-            return new QuoteOutcome(adapter, providerId, quote, pickupEtaMinutes, null);
+            JsonNode metadata = quote == null ? null : quote.providerMetadata();
+            Integer pickupEtaMinutes = extractPickupEtaMinutes(metadata);
+            Double pickupDistanceKm = extractPickupDistanceKm(metadata);
+            return new QuoteOutcome(
+                adapter, providerId, quote, pickupDistanceKm, pickupEtaMinutes, null
+            );
         } catch (RuntimeException ex) {
-            return new QuoteOutcome(adapter, providerId, null, null, safeMessage(ex));
+            return new QuoteOutcome(adapter, providerId, null, null, null, safeMessage(ex));
         }
     }
 
@@ -142,7 +235,7 @@ public class DeliveryProviderRouter {
             for (Future<QuoteOutcome> future : futures) {
                 if (future.isCancelled()) {
                     audit.add(new QuoteAudit(
-                        "unknown", false, false, null, null,
+                        "unknown", false, false, null, null, null,
                         "Provider quote timed out after " + properties.getQuoteTimeoutSeconds() + " seconds"
                     ));
                     continue;
@@ -153,6 +246,7 @@ public class DeliveryProviderRouter {
                     outcome.providerId(),
                     outcome.error() == null,
                     outcome.quote() != null && outcome.quote().available(),
+                    outcome.pickupDistanceKm(),
                     outcome.pickupEtaMinutes(),
                     outcome.quote(),
                     outcome.error()
@@ -168,25 +262,70 @@ public class DeliveryProviderRouter {
     }
 
     private static Integer extractPickupEtaMinutes(JsonNode metadata) {
-        if (metadata == null || metadata.isNull() || metadata.isMissingNode()) {
-            return null;
-        }
-        for (String field : List.of(
+        Double value = extractNumber(metadata, List.of(
             "pickup_eta_minutes",
             "estimated_pickup_minutes",
             "eta_minutes",
             "pickup_duration_minutes"
-        )) {
+        ));
+        return value == null ? null : Math.max(0, (int) Math.ceil(value));
+    }
+
+    private static Double extractPickupDistanceKm(JsonNode metadata) {
+        Double value = extractNumber(metadata, List.of(
+            "pickup_distance_km",
+            "courier_to_pickup_distance_km",
+            "agent_distance_km"
+        ));
+        return value == null ? null : Math.max(0.0, value);
+    }
+
+    private static Double extractNumber(JsonNode metadata, List<String> fields) {
+        if (metadata == null || metadata.isNull() || metadata.isMissingNode()) {
+            return null;
+        }
+        for (String field : fields) {
             JsonNode value = metadata.path(field);
-            if (value.canConvertToInt()) {
-                return Math.max(0, value.asInt());
+            if (value.isNumber()) {
+                return value.doubleValue();
+            }
+            if (value.isTextual()) {
+                try {
+                    return Double.parseDouble(value.asText());
+                } catch (NumberFormatException ignored) {
+                    // Continue to the next normalized field.
+                }
             }
         }
         JsonNode order = metadata.path("order");
         if (order.isObject()) {
-            return extractPickupEtaMinutes(order);
+            return extractNumber(order, fields);
         }
         return null;
+    }
+
+    private static String extractText(JsonNode metadata, List<String> fields) {
+        if (metadata == null || metadata.isNull() || metadata.isMissingNode()) {
+            return null;
+        }
+        for (String field : fields) {
+            JsonNode value = metadata.path(field);
+            if (value.isValueNode() && !value.isNull() && !value.asText().isBlank()) {
+                return value.asText();
+            }
+        }
+        JsonNode order = metadata.path("order");
+        if (order.isObject()) {
+            return extractText(order, fields);
+        }
+        return null;
+    }
+
+    private static BigDecimal quotedCost(ProviderQuote quote) {
+        if (quote.deliveryFeeAmount() != null) {
+            return quote.deliveryFeeAmount();
+        }
+        return quote.paymentAmount();
     }
 
     private static String clientReference(java.util.UUID chefSubOrderId) {
@@ -218,23 +357,12 @@ public class DeliveryProviderRouter {
         DeliveryProviderAdapter adapter,
         String providerId,
         ProviderQuote quote,
+        Double pickupDistanceKm,
         Integer pickupEtaMinutes,
         String error
-    ) {
-        int pickupEtaMinutesForSort() {
-            return pickupEtaMinutes == null ? Integer.MAX_VALUE : pickupEtaMinutes;
-        }
+    ) {}
 
-        BigDecimal priceForSort() {
-            if (quote == null) {
-                return UNKNOWN_PRICE;
-            }
-            if (quote.deliveryFeeAmount() != null) {
-                return quote.deliveryFeeAmount();
-            }
-            return quote.paymentAmount() == null ? UNKNOWN_PRICE : quote.paymentAmount();
-        }
-    }
+    private record RankedQuoteOutcome(CandidateScore candidate, QuoteOutcome outcome) {}
 
     public static class DeliveryRoutingException extends RuntimeException {
         public DeliveryRoutingException(String message) {

@@ -44,7 +44,7 @@ class BorzoApiClientTest {
     }
 
     @Test
-    void calculatesAValidThermoboxQuote() {
+    void roundsGramWeightUpForAValidThermoboxQuote() {
         server.expect(requestTo(BASE_URL + "/calculate-order"))
             .andExpect(method(HttpMethod.POST))
             .andExpect(header(BorzoApiClient.AUTH_HEADER, "sandbox-token"))
@@ -139,6 +139,6 @@ class BorzoApiClientTest {
             null,
             "Sandbox dropoff"
         );
-        return new QuoteRequest("Freshly prepared packaged food", 2, true, pickup, dropoff);
+        return new QuoteRequest("Freshly prepared packaged food", 1250, true, pickup, dropoff);
     }
 }

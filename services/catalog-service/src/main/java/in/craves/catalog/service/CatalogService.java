@@ -115,11 +115,12 @@ public class CatalogService {
     @Transactional
     public MenuItemResponse createMenuItem(CravesPrincipal principal, MenuItemRequest request) {
         requireChef(principal);
+        validateDeliveryMetadata(request);
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         UUID menuItemId = UUID.randomUUID();
         jdbcTemplate.update(
-            "INSERT INTO catalog_schema.menu_item (id, kitchen_id, item_name, description, category, food_type, price, currency, serves_count, preparation_time_minutes, spice_level, is_available, status, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())",
+            "INSERT INTO catalog_schema.menu_item (id, kitchen_id, item_name, description, category, food_type, price, currency, serves_count, preparation_time_minutes, spice_level, unit_package_weight_grams, thermobox_required, is_available, status, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())",
             menuItemId,
             kitchenId,
             request.itemName(),
@@ -131,6 +132,8 @@ public class CatalogService {
             request.servesCount(),
             request.preparationTimeMinutes(),
             request.spiceLevel() == null ? null : request.spiceLevel().name(),
+            request.unitPackageWeightGrams(),
+            request.thermoboxRequired(),
             Boolean.TRUE.equals(request.available()),
             statusOrDefault(request.status()).name()
         );
@@ -140,9 +143,10 @@ public class CatalogService {
     @Transactional
     public MenuItemResponse updateMenuItem(CravesPrincipal principal, UUID menuItemId, MenuItemRequest request) {
         requireChef(principal);
+        validateDeliveryMetadata(request);
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         int updated = jdbcTemplate.update(
-            "UPDATE catalog_schema.menu_item SET item_name = ?, description = ?, category = ?, food_type = ?, price = ?, currency = ?, serves_count = ?, preparation_time_minutes = ?, spice_level = ?, is_available = ?, status = ?, updated_at = now() WHERE id = ? AND kitchen_id = ?",
+            "UPDATE catalog_schema.menu_item SET item_name = ?, description = ?, category = ?, food_type = ?, price = ?, currency = ?, serves_count = ?, preparation_time_minutes = ?, spice_level = ?, unit_package_weight_grams = ?, thermobox_required = ?, is_available = ?, status = ?, updated_at = now() WHERE id = ? AND kitchen_id = ?",
             request.itemName(),
             blankToNull(request.description()),
             request.category(),
@@ -152,6 +156,8 @@ public class CatalogService {
             request.servesCount(),
             request.preparationTimeMinutes(),
             request.spiceLevel() == null ? null : request.spiceLevel().name(),
+            request.unitPackageWeightGrams(),
+            request.thermoboxRequired(),
             Boolean.TRUE.equals(request.available()),
             statusOrDefault(request.status()).name(),
             menuItemId,
@@ -168,6 +174,12 @@ public class CatalogService {
         requireChef(principal);
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         MenuItemResponse existing = getMyMenuItem(principal, menuItemId);
+        if (request.available() && (existing.unitPackageWeightGrams() == null || existing.thermoboxRequired() == null)) {
+            throw ApiException.badRequest(
+                "DELIVERY_METADATA_REQUIRED",
+                "Package weight and thermobox requirement must be set before making a menu item available"
+            );
+        }
         int updated = jdbcTemplate.update(
             "UPDATE catalog_schema.menu_item SET is_available = ?, updated_at = now() WHERE id = ? AND kitchen_id = ?",
             request.available(),
@@ -425,6 +437,8 @@ public class CatalogService {
             integerOrNull(rs, "serves_count"),
             integerOrNull(rs, "preparation_time_minutes"),
             spiceLevel == null ? null : SpiceLevel.valueOf(spiceLevel),
+            integerOrNull(rs, "unit_package_weight_grams"),
+            booleanOrNull(rs, "thermobox_required"),
             rs.getBoolean("is_available"),
             MenuItemStatus.valueOf(rs.getString("status")),
             listImages(menuItemId),
@@ -454,6 +468,21 @@ public class CatalogService {
         }
     }
 
+    private static void validateDeliveryMetadata(MenuItemRequest request) {
+        if (request.unitPackageWeightGrams() == null || request.unitPackageWeightGrams() <= 0) {
+            throw ApiException.badRequest(
+                "PACKAGE_WEIGHT_REQUIRED",
+                "Unit packaged weight must be greater than zero grams"
+            );
+        }
+        if (request.thermoboxRequired() == null) {
+            throw ApiException.badRequest(
+                "THERMOBOX_REQUIREMENT_REQUIRED",
+                "Thermobox requirement must be explicitly supplied"
+            );
+        }
+    }
+
     private static String defaultCurrency(String currency) {
         return StringUtils.hasText(currency) ? currency.trim().toUpperCase() : "INR";
     }
@@ -468,6 +497,11 @@ public class CatalogService {
 
     private static Integer integerOrNull(ResultSet rs, String column) throws SQLException {
         int value = rs.getInt(column);
+        return rs.wasNull() ? null : value;
+    }
+
+    private static Boolean booleanOrNull(ResultSet rs, String column) throws SQLException {
+        boolean value = rs.getBoolean(column);
         return rs.wasNull() ? null : value;
     }
 

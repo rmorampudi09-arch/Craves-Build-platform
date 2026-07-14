@@ -37,8 +37,9 @@ class DeliveryCommandCompletionServiceTest {
         DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);
         DeliveryOutboxRepository outbox = mock(DeliveryOutboxRepository.class);
         DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         DeliveryCommandCompletionService service = new DeliveryCommandCompletionService(
-            assignments, deliveryJobs, outbox, commands, new ObjectMapper()
+            assignments, deliveryJobs, outbox, commands, objectMapper
         );
 
         DeliveryCommandMessage command = command();
@@ -57,7 +58,7 @@ class DeliveryCommandCompletionServiceTest {
             new BigDecimal("90.00"),
             new BigDecimal("90.00"),
             "https://tracking.example/backup",
-            new ObjectMapper().createObjectNode(),
+            objectMapper.createObjectNode(),
             Instant.now()
         );
         RoutingResult routing = new RoutingResult(
@@ -90,9 +91,9 @@ class DeliveryCommandCompletionServiceTest {
     }
 
     private static AssignmentResponse assignment(DeliveryCommandMessage command,
-                                                 UUID assignmentId,
-                                                 UUID fastCandidateId,
-                                                 UUID backupCandidateId) {
+                                                  UUID assignmentId,
+                                                  UUID fastCandidateId,
+                                                  UUID backupCandidateId) {
         ObjectMapper objectMapper = new ObjectMapper();
         CandidateScore fast = candidate(
             fastCandidateId, 1, "fast", CandidateStatus.SELECTED, objectMapper
@@ -116,10 +117,10 @@ class DeliveryCommandCompletionServiceTest {
     }
 
     private static CandidateScore candidate(UUID id,
-                                            int rank,
-                                            String providerId,
-                                            CandidateStatus status,
-                                            ObjectMapper objectMapper) {
+                                             int rank,
+                                             String providerId,
+                                             CandidateStatus status,
+                                             ObjectMapper objectMapper) {
         return new CandidateScore(
             id, rank, providerId, providerId + "-quote", null,
             null, 5.0 + rank, new BigDecimal("100.00"), "INR",

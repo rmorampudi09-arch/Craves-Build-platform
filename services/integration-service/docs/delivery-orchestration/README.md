@@ -1,28 +1,100 @@
 # Delivery Command Orchestration
 
 This module implements the asynchronous delivery flow owned by the Craves Integration Service.
-It consumes `CHEF_ACCEPTED_ORDER`, schedules dispatch close to `readyAt`, executes a provider-neutral
-quote/create workflow, persists one delivery job per chef sub-order, and publishes
-`DELIVERY_STATUS_CHANGED` through the transactional outbox.
+It consumes `CHEF_ACCEPTED_ORDER`, schedules dispatch close to `readyAt`, requests quotes from all
+active and deployed delivery adapters, sends the quote candidates through the persisted Delivery
+Intelligence engine, attempts delivery creation in intelligent rank order, persists one final delivery
+job per chef sub-order, and publishes `DELIVERY_STATUS_CHANGED` through the transactional outbox.
 
-The runtime is disabled by default. Deploying the code and Flyway migration does not connect to
-Azure Service Bus and does not create provider deliveries until `CRAVES_DELIVERY_COMMAND_ENABLED=true`.
+The runtime remains disabled until:
+
+```text
+CRAVES_DELIVERY_COMMAND_ENABLED=true
+```
+
+Deploying the code while the flag is false does not start Service Bus processors and does not create
+provider deliveries.
 
 ## Architecture rules preserved
 
-- Never create a delivery when payment succeeds.
+- Never create delivery when payment succeeds.
 - Schedule only after the chef accepts the chef-specific sub-order.
 - Dispatch at `readyAt - leadTime`, with a default lead of 10 minutes.
-- Keep exactly one delivery command and one final delivery job per `chefSubOrderId`.
+- Keep exactly one delivery command, intelligence assignment, and final delivery job per
+  `chefSubOrderId`.
 - Consume Service Bus messages with PeekLock and manual settlement.
 - Treat delivery as at-least-once messaging with idempotent business outcomes.
-- Quote active provider adapters in bounded parallelism using a dedicated Java 21 virtual-thread executor.
-- Rank confirmed quotes by normalized pickup ETA, then delivery fee, then provider ID.
-- Attempt create on the next ranked provider when the prior explicit create attempt fails.
-- Persist the full quote/create audit snapshot on the delivery job.
-- Write `DELIVERY_STATUS_CHANGED` to the database outbox in the same transaction as the job.
-- Publish outbox rows separately and recover abandoned processing leases.
+- Request provider quotes concurrently with a bounded timeout.
+- Submit all quoted candidates to the Delivery Intelligence engine.
+- Persist predicted success, live and stored performance, momentum, Thompson-sampling exploration,
+  proximity, provider quality, final score, and the selected candidate.
+- Attempt creation with the intelligence-selected provider first.
+- Use the remaining persisted intelligence ranking as bounded fallback order.
+- Persist the actual accepted fallback candidate and mark failed provider attempts.
+- Store the complete quote, intelligence, and create audit snapshot on `delivery_job`.
+- Write `DELIVERY_STATUS_CHANGED` to the database outbox in the same transaction as the delivery job.
+- Recover abandoned command and outbox processing leases.
 - Dead-letter invalid or exhausted Service Bus messages with an actionable reason.
+
+## Intelligent partner-assignment formula
+
+The existing Java port of the supplied delivery-intelligence code is now in the automatic path.
+For every available provider candidate:
+
+```text
+predictedSuccessProbability
++ seven-day live performance
++ faded historical performance
++ momentum
++ Thompson-sampling exploration
+= providerQualityScore
+
+providerQualityScore
++ pickup proximity or pickup ETA
+= finalScore
+```
+
+Default quality weights:
+
+```text
+Predictor:     55%
+Rolling score: 35%
+Exploration:   10%
+```
+
+Default final-ranking weights:
+
+```text
+Proximity or pickup ETA: 60%
+Provider quality:         40%
+```
+
+The default selection strategy remains stochastic softmax. This prevents a new provider from being
+permanently excluded while still favouring stronger candidates. `GREEDY` remains available for
+controlled use.
+
+### Provider APIs without pre-booking rider ETA
+
+Some provider APIs, including the current Borzo calculate-order response, return price and
+serviceability but do not expose the rider-to-pickup ETA before order creation. The system must not
+fabricate rider locations or claim a false ETA.
+
+For such candidates:
+
+- `pickupDistanceKm` remains null.
+- `pickupEtaMinutes` remains null.
+- The engine uses the configurable neutral proximity score.
+- Provider quality, historical performance, momentum, exploration, availability, service area and
+  quoted cost remain persisted.
+
+Default:
+
+```text
+CRAVES_DELIVERY_UNKNOWN_PROXIMITY_SCORE=50.0
+```
+
+When a future adapter supplies a genuine normalized pickup distance or ETA, the full proximity formula
+is applied automatically.
 
 ## Service Bus topology
 
@@ -35,14 +107,24 @@ Queue: delivery-command
   Built-in DLQ: delivery-command/$DeadLetterQueue
 ```
 
-The Integration Service requires send access to the topic and queue, and receive access to the
-subscription and queue. The preferred production authentication is the Container App's system-assigned
-managed identity with Azure Service Bus Data Sender and Azure Service Bus Data Receiver roles.
-A connection string is supported only as a temporary development fallback.
+The Integration Service uses its system-assigned managed identity:
 
-## Event envelope
+```text
+Azure Service Bus Data Sender
+  - craves-domain-events topic
+  - delivery-command queue
 
-The Order Service must publish a versioned envelope:
+Azure Service Bus Data Receiver
+  - integration-service-chef-accepted subscription
+  - delivery-command queue
+```
+
+A Service Bus connection string is supported only as a temporary local-development fallback. The
+Azure deployment must use `SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE` and managed identity.
+
+## Chef-accepted event envelope
+
+The Order Service must publish this versioned envelope:
 
 ```json
 {
@@ -58,6 +140,8 @@ The Order Service must publish a versioned envelope:
     "orderId": "22222222-2222-2222-2222-222222222222",
     "chefSubOrderId": "33333333-3333-3333-3333-333333333333",
     "readyAt": "2026-07-14T13:30:00Z",
+    "distanceKm": 4.6,
+    "area": "Madhapur",
     "deliveryRequest": {
       "matter": "Freshly prepared packaged food",
       "totalWeightKg": 2,
@@ -87,11 +171,25 @@ The Order Service must publish a versioned envelope:
 }
 ```
 
-The Service Bus message must also contain the application property:
+The Service Bus message must also contain:
 
 ```text
 event_type=CHEF_ACCEPTED_ORDER
 ```
+
+### Deterministic routing context
+
+- `distanceKm` may be supplied by Order Service.
+- When omitted, Integration Service calculates straight-line distance from pickup and dropoff
+  coordinates using the Haversine formula.
+- `area` may be supplied explicitly.
+- When omitted, the first comma-separated pickup-address component is used, for example
+  `Madhapur, Hyderabad` becomes `Madhapur`.
+- `orderHour` and `dayOfWeek` are calculated once from `occurredAt` in `Asia/Kolkata` and stored in the
+  delivery command. Monday is `0` and Sunday is `6`, matching the supplied predictor convention.
+
+The event is rejected when distance cannot be supplied or calculated, or when an area cannot be
+resolved.
 
 ## Processing flow
 
@@ -101,6 +199,7 @@ CHEF_ACCEPTED_ORDER subscription
         v
 DeliveryCommandScheduler
   - validate event envelope
+  - calculate deterministic intelligence context
   - calculate dispatchAt
   - insert delivery_command idempotently
   - schedule delivery-command message natively in Service Bus
@@ -109,16 +208,24 @@ DeliveryCommandScheduler
 DeliveryCommandWorker
   - atomically claim command
   - skip when delivery_job already exists
-  - load active delivery_provider rows
-  - quote deployed adapters concurrently with timeout
-  - rank ETA -> fee -> provider ID
-  - create with bounded fallback
         |
         v
-DeliveryCommandCompletionService (one DB transaction)
-  - insert delivery_job and routing audit snapshot
+DeliveryProviderRouter
+  - load active delivery_provider rows
+  - quote deployed adapters concurrently
+  - normalize genuine provider pickup ETA/distance when available
+  - call DeliveryIntelligenceService.assign
+  - use persisted selected provider first
+  - use persisted ranked candidates as bounded fallback
+        |
+        v
+DeliveryCommandCompletionService (one database transaction)
+  - mark actual assignment candidate ACCEPTED
+  - mark failed create candidates FAILED
+  - update assignment status to ASSIGNED
+  - insert delivery_job with assignment_id and complete audit snapshot
   - insert DELIVERY_STATUS_CHANGED into delivery_outbox
-  - mark delivery_command completed
+  - mark delivery_command COMPLETED
         |
         v
 DeliveryOutboxPublisher
@@ -126,6 +233,20 @@ DeliveryOutboxPublisher
   - publish to craves-domain-events
   - mark published or retry/dead-letter
 ```
+
+## Idempotency model
+
+```text
+Source event:       unique source_event_id
+Chef sub-order:     unique delivery_command.chef_sub_order_id
+Assignment:         unique delivery_assignment.chef_sub_order_id
+Final delivery job: unique delivery_job.chef_sub_order_id
+Provider delivery:  unique provider_id + provider_delivery_id
+Outbox:             durable row with retry state
+```
+
+The intelligence engine seeds stochastic selection from `chefSubOrderId` and `orderId` and persists the
+first assignment. A retry returns the same assignment instead of re-randomizing.
 
 ## Runtime variables
 
@@ -145,37 +266,14 @@ CRAVES_DELIVERY_PREFETCH_COUNT=8
 CRAVES_DELIVERY_MAX_AUTO_LOCK_RENEW_MINUTES=5
 CRAVES_DELIVERY_OUTBOX_BATCH_SIZE=20
 CRAVES_DELIVERY_OUTBOX_PUBLISH_INTERVAL_MS=5000
+CRAVES_DELIVERY_UNKNOWN_PROXIMITY_SCORE=50.0
 ```
 
-Use exactly one Service Bus authentication mechanism:
-
-- Preferred: `SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE` plus managed identity.
-- Temporary fallback: `SERVICE_BUS_CONNECTION_STRING` stored as a Container App secret reference.
-
-Do not set a connection string in source control, pipeline YAML, or plain environment-variable value.
-
-## Database migration
-
-`V4__delivery_command_orchestration.sql` adds:
-
-- source event identity for event-level idempotency;
-- scheduled Service Bus sequence number and message ID;
-- command processing lease for crash recovery;
-- outbox processing lease for crash recovery;
-- supporting unique and due-work indexes.
-
-The existing V2 tables remain authoritative:
-
-- `delivery_schema.delivery_provider`
-- `delivery_schema.delivery_command`
-- `delivery_schema.delivery_job`
-- `delivery_schema.delivery_event`
-- `delivery_schema.delivery_webhook_inbox`
-- `delivery_schema.delivery_outbox`
+Do not store `SERVICE_BUS_CONNECTION_STRING` in Azure for the managed-identity deployment.
 
 ## Internal controlled-test endpoint
 
-The endpoint exists only while delivery commands are enabled:
+The endpoint exists only when delivery commands are enabled:
 
 ```http
 POST /internal/v1/delivery-orchestration/chef-accepted
@@ -183,66 +281,69 @@ X-Craves-Internal-Secret: <CRAVES_INTERNAL_SERVICE_KEY>
 Content-Type: application/json
 ```
 
-It accepts the same envelope as Service Bus and is intended only for sandbox validation before the
+It accepts the same envelope as Service Bus and is only for controlled sandbox validation before the
 Order Service publisher is wired. It must not be exposed through a public APIM product.
 
-## Files
+## Main source files
 
 ```text
-src/main/java/in/craves/integration/delivery/command/DeliveryCommandProperties.java
+src/main/java/in/craves/integration/delivery/DeliveryIntelligenceService.java
+src/main/java/in/craves/integration/delivery/DeliveryAssignmentRepository.java
 src/main/java/in/craves/integration/delivery/command/DeliveryCommandModels.java
-src/main/java/in/craves/integration/delivery/command/DeliveryCommandRepository.java
-src/main/java/in/craves/integration/delivery/command/DeliveryProviderCatalogRepository.java
-src/main/java/in/craves/integration/delivery/command/DeliveryJobRepository.java
-src/main/java/in/craves/integration/delivery/command/DeliveryOutboxRepository.java
-src/main/java/in/craves/integration/delivery/command/DeliveryProviderRouter.java
-src/main/java/in/craves/integration/delivery/command/DeliveryServiceBusConfiguration.java
-src/main/java/in/craves/integration/delivery/command/DeliveryServiceBusPublisher.java
+src/main/java/in/craves/integration/delivery/command/DeliveryCommandProperties.java
 src/main/java/in/craves/integration/delivery/command/DeliveryCommandScheduler.java
 src/main/java/in/craves/integration/delivery/command/DeliveryCommandWorker.java
+src/main/java/in/craves/integration/delivery/command/DeliveryProviderRouter.java
 src/main/java/in/craves/integration/delivery/command/DeliveryCommandCompletionService.java
-src/main/java/in/craves/integration/delivery/command/DeliveryServiceBusProcessors.java
+src/main/java/in/craves/integration/delivery/command/DeliveryJobRepository.java
+src/main/java/in/craves/integration/delivery/command/DeliveryOutboxRepository.java
 src/main/java/in/craves/integration/delivery/command/DeliveryOutboxPublisher.java
+src/main/java/in/craves/integration/delivery/command/DeliveryServiceBusConfiguration.java
+src/main/java/in/craves/integration/delivery/command/DeliveryServiceBusProcessors.java
 src/main/java/in/craves/integration/web/DeliveryOrchestrationInternalController.java
 src/main/resources/db/migration/V4__delivery_command_orchestration.sql
 ```
 
-## Local tests
+## Tests
 
 ```bash
 cd services/integration-service
 mvn -B clean test
 ```
 
-The default configuration keeps Service Bus disabled, so unit tests and normal local startup do not need
-Azure credentials.
+Coverage includes:
+
+- Scheduling before `readyAt`.
+- Haversine distance and area fallback.
+- Persisted intelligence context.
+- Intelligent selected-provider execution.
+- Ranked provider fallback without re-quoting.
+- Neutral proximity for provider APIs without pre-booking rider ETA.
+- Transactional final assignment and delivery-job completion.
+- Worker redelivery idempotency.
 
 ## Safe rollout
 
-1. Deploy code and V4 with `CRAVES_DELIVERY_COMMAND_ENABLED=false`.
-2. Confirm Maven tests, Flyway V4, Spring startup, and `/actuator/health`.
-3. Provision a Standard Service Bus namespace, topic, subscription/filter, and queue.
-4. Enable the Container App system-assigned identity and assign data sender/receiver roles.
-5. Set only namespace/entity names and keep orchestration disabled.
-6. Restart and confirm health remains UP.
-7. Activate Borzo only for the controlled sandbox window and mark only Borzo active in the provider registry.
-8. Set `CRAVES_DELIVERY_COMMAND_ENABLED=true` and verify both processors start.
-9. Submit one internal sandbox chef-accepted event with a future `readyAt`.
-10. Confirm exactly one command, one provider delivery, one job, and one published outbox event.
-11. Repeat the identical event and confirm no second command or delivery is created.
-12. Disable Borzo outbound calls after the test; keep orchestration disabled until Order Service publishing is ready.
+1. Deploy and test with `CRAVES_DELIVERY_COMMAND_ENABLED=false`.
+2. Confirm Spring startup and `/actuator/health`.
+3. Keep `BORZO_API_ENABLED=false` outside a controlled sandbox window.
+4. Register only technically and commercially approved providers as active.
+5. Activate one sandbox provider and orchestration for one controlled future `readyAt` event.
+6. Confirm one command, one assignment, one provider delivery, one job and one published outbox event.
+7. Repeat the identical event and confirm no second assignment or delivery.
+8. Disable Borzo and orchestration after the controlled test.
+9. Wire Order Service publishing only after the controlled test is documented.
 
-## Current limitations and launch blockers
+## Remaining launch blockers
 
-- Order Service does not yet publish `CHEF_ACCEPTED_ORDER`; the internal endpoint is only a controlled bridge.
-- Borzo remains sandbox-only and disabled outside controlled tests.
-- Borzo does not document `client_order_id` as a guaranteed provider idempotency key. An ambiguous network timeout
-  still requires provider reconciliation before production automatic retry is considered safe.
-- The provider-neutral quote contract does not yet contain a first-class pickup ETA field. The router reads known
-  normalized ETA keys from provider metadata. Add a mandatory normalized ETA before enabling multiple providers.
-- Only adapters with both an active database row and deployed Java adapter are eligible.
-- Webhook inbox ingestion works, but the asynchronous inbox-to-delivery-job/status/outbox processor is a later module.
-- Support-required state propagation to Order/Admin is pending the Order Service event consumer.
-- Private ingress/APIM restrictions and Key Vault references are still pending hardening items.
-- Production activation requires business registration, provider KYC, written SLA/commercial terms, and a controlled
-  Hyderabad pilot with at least two independent live providers.
+- Order Service does not yet publish `CHEF_ACCEPTED_ORDER`.
+- Borzo remains sandbox-only outside a contracted production account.
+- Borzo does not document `client_order_id` as a guaranteed create-order idempotency key. An ambiguous
+  network timeout requires reconciliation before automatic create retry is safe in production.
+- The webhook inbox is signed and idempotent, but inbox-to-delivery-job/status/outbox processing is a
+  separate pending module.
+- Additional providers need real adapters and normalized pickup ETA/distance fields where their APIs
+  expose them.
+- Private ingress/APIM restrictions and Key Vault references remain hardening items.
+- Production requires provider KYC, written commercial/SLA terms, monitoring, support runbooks, and a
+  controlled Hyderabad pilot with at least two independent live providers.

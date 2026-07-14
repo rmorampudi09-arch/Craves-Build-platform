@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.SplittableRandom;
 import java.util.UUID;
 import java.util.random.RandomGenerator;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,7 @@ public class DeliveryIntelligenceService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    @Autowired
     public DeliveryIntelligenceService(DeliveryProviderRepository providerRepository,
                                        DeliveryAssignmentRepository assignmentRepository,
                                        DeliveryMetricsRepository metricsRepository,

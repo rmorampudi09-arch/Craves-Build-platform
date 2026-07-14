@@ -33,6 +33,22 @@ craves:
     default-strategy: ${CRAVES_DELIVERY_ASSIGNMENT_STRATEGY:STOCHASTIC}
     maintenance-cron: ${CRAVES_DELIVERY_MAINTENANCE_CRON:0 0 2 * * *}
     maintenance-zone: ${CRAVES_DELIVERY_MAINTENANCE_ZONE:Asia/Kolkata}
+  delivery-command:
+    enabled: ${CRAVES_DELIVERY_COMMAND_ENABLED:false}
+    fully-qualified-namespace: ${SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+    connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
+    topic-name: ${SERVICE_BUS_TOPIC_NAME:craves-domain-events}
+    chef-accepted-subscription-name: ${SERVICE_BUS_CHEF_ACCEPTED_SUBSCRIPTION:integration-service-chef-accepted}
+    queue-name: ${SERVICE_BUS_DELIVERY_COMMAND_QUEUE:delivery-command}
+    lead-time-minutes: ${CRAVES_DELIVERY_COMMAND_LEAD_TIME_MINUTES:10}
+    quote-timeout-seconds: ${CRAVES_DELIVERY_QUOTE_TIMEOUT_SECONDS:4}
+    max-provider-attempts: ${CRAVES_DELIVERY_MAX_PROVIDER_ATTEMPTS:3}
+    max-delivery-attempts: ${CRAVES_DELIVERY_MAX_DELIVERY_ATTEMPTS:5}
+    max-concurrent-messages: ${CRAVES_DELIVERY_MAX_CONCURRENT_MESSAGES:4}
+    prefetch-count: ${CRAVES_DELIVERY_PREFETCH_COUNT:8}
+    max-auto-lock-renew-minutes: ${CRAVES_DELIVERY_MAX_AUTO_LOCK_RENEW_MINUTES:5}
+    outbox-batch-size: ${CRAVES_DELIVERY_OUTBOX_BATCH_SIZE:20}
+    outbox-publish-interval-ms: ${CRAVES_DELIVERY_OUTBOX_PUBLISH_INTERVAL_MS:5000}
   providers:
     borzo:
       enabled: ${BORZO_API_ENABLED:false}

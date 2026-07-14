@@ -91,9 +91,9 @@ class DeliveryCommandCompletionServiceTest {
     }
 
     private static AssignmentResponse assignment(DeliveryCommandMessage command,
-                                                  UUID assignmentId,
-                                                  UUID fastCandidateId,
-                                                  UUID backupCandidateId) {
+                                                   UUID assignmentId,
+                                                   UUID fastCandidateId,
+                                                   UUID backupCandidateId) {
         ObjectMapper objectMapper = new ObjectMapper();
         CandidateScore fast = candidate(
             fastCandidateId, 1, "fast", CandidateStatus.SELECTED, objectMapper
@@ -117,10 +117,10 @@ class DeliveryCommandCompletionServiceTest {
     }
 
     private static CandidateScore candidate(UUID id,
-                                             int rank,
-                                             String providerId,
-                                             CandidateStatus status,
-                                             ObjectMapper objectMapper) {
+                                              int rank,
+                                              String providerId,
+                                              CandidateStatus status,
+                                              ObjectMapper objectMapper) {
         return new CandidateScore(
             id, rank, providerId, providerId + "-quote", null,
             null, 5.0 + rank, new BigDecimal("100.00"), "INR",
@@ -135,7 +135,7 @@ class DeliveryCommandCompletionServiceTest {
         UUID chefSubOrderId = UUID.randomUUID();
         QuoteRequest request = new QuoteRequest(
             "Packaged food",
-            2,
+            2000,
             true,
             new Stop(
                 "Madhapur, Hyderabad", "Chef", "919999999991",

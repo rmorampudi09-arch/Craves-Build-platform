@@ -81,6 +81,8 @@ public final class ApiDtos {
         @Positive Integer servesCount,
         @Positive Integer preparationTimeMinutes,
         SpiceLevel spiceLevel,
+        @NotNull @Positive Integer unitPackageWeightGrams,
+        @NotNull Boolean thermoboxRequired,
         Boolean available,
         MenuItemStatus status
     ) {
@@ -98,6 +100,8 @@ public final class ApiDtos {
         Integer servesCount,
         Integer preparationTimeMinutes,
         SpiceLevel spiceLevel,
+        Integer unitPackageWeightGrams,
+        Boolean thermoboxRequired,
         boolean available,
         MenuItemStatus status,
         List<MenuItemImageResponse> images,

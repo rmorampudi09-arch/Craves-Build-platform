@@ -20,6 +20,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                .requestMatchers("/internal/v1/customer-addresses/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class);

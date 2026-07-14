@@ -1,7 +1,10 @@
 package in.craves.userchef.web;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -16,6 +19,11 @@ public final class ApiDtos {
         HOME,
         WORK,
         OTHER
+    }
+
+    public enum ActiveLocationType {
+        SAVED_ADDRESS,
+        LIVE_GPS
     }
 
     public enum ChefApplicationStatus {
@@ -51,16 +59,17 @@ public final class ApiDtos {
 
     public record CustomerAddressRequest(
         AddressLabel addressLabel,
-        String recipientName,
+        @NotBlank String recipientName,
         @NotBlank @Pattern(regexp = "^\\+?[0-9]{10,15}$") String contactPhoneNumber,
         @NotBlank String addressLine1,
         String addressLine2,
         String landmark,
+        @NotBlank String areaName,
         @NotBlank String city,
         @NotBlank String state,
-        String postalCode,
-        BigDecimal latitude,
-        BigDecimal longitude,
+        @NotBlank String postalCode,
+        @NotNull @DecimalMin("-90.0") @DecimalMax("90.0") BigDecimal latitude,
+        @NotNull @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitude,
         Boolean isDefault
     ) {
     }
@@ -74,14 +83,26 @@ public final class ApiDtos {
         String addressLine1,
         String addressLine2,
         String landmark,
+        String areaName,
         String city,
         String state,
         String postalCode,
         BigDecimal latitude,
         BigDecimal longitude,
         boolean isDefault,
+        boolean active,
         Instant createdAt,
         Instant updatedAt
+    ) {
+    }
+
+    public record CustomerLocationRecommendationResponse(
+        ActiveLocationType locationType,
+        BigDecimal latitude,
+        BigDecimal longitude,
+        CustomerAddressResponse selectedSavedAddress,
+        Long distanceMeters,
+        int matchRadiusMeters
     ) {
     }
 

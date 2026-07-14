@@ -8,6 +8,7 @@ import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus
 import in.craves.integration.delivery.DeliveryIntelligenceModels.Momentum;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -66,6 +67,55 @@ public class DeliveryAssignmentRepository {
                 candidate.momentum().name(), candidate.explorationSample(), candidate.providerQualityScore(),
                 candidate.proximityScore(), candidate.finalScore(), candidate.status().name(),
                 json.writeNode(candidate.providerMetadata()));
+        }
+    }
+
+    public void markAssigned(UUID assignmentId,
+                             UUID acceptedCandidateId,
+                             Collection<String> failedProviderIds) {
+        int accepted = jdbc.update("""
+            UPDATE delivery_schema.delivery_assignment_candidate
+            SET status = 'ACCEPTED', updated_at = now()
+            WHERE assignment_id = ? AND id = ?
+            """, assignmentId, acceptedCandidateId);
+        if (accepted != 1) {
+            throw new IllegalStateException("Executed delivery candidate does not belong to the assignment");
+        }
+
+        if (failedProviderIds != null) {
+            for (String providerId : failedProviderIds) {
+                if (providerId == null || providerId.isBlank()) {
+                    continue;
+                }
+                jdbc.update("""
+                    UPDATE delivery_schema.delivery_assignment_candidate
+                    SET status = 'FAILED', updated_at = now()
+                    WHERE assignment_id = ?
+                      AND provider_id = ?
+                      AND id <> ?
+                      AND status <> 'SKIPPED'
+                    """,
+                    assignmentId,
+                    DeliveryProviderRepository.normalize(providerId),
+                    acceptedCandidateId
+                );
+            }
+        }
+
+        int updated = jdbc.update("""
+            UPDATE delivery_schema.delivery_assignment AS assignment
+            SET status = 'ASSIGNED',
+                selected_candidate_id = candidate.id,
+                selected_provider_id = candidate.provider_id,
+                selected_agent_id = candidate.agent_id,
+                updated_at = now()
+            FROM delivery_schema.delivery_assignment_candidate AS candidate
+            WHERE assignment.id = ?
+              AND candidate.assignment_id = assignment.id
+              AND candidate.id = ?
+            """, assignmentId, acceptedCandidateId);
+        if (updated != 1) {
+            throw new IllegalStateException("Delivery assignment could not be marked assigned");
         }
     }
 

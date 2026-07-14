@@ -24,7 +24,7 @@ import org.mockito.ArgumentCaptor;
 class DeliveryCommandSchedulerTest {
 
     @Test
-    void schedulesTenMinutesBeforeReadyAtAndPersistsSequenceNumber() {
+    void schedulesTenMinutesBeforeReadyAtAndPersistsIntelligenceContext() {
         DeliveryCommandRepository repository = mock(DeliveryCommandRepository.class);
         DeliveryServiceBusPublisher publisher = mock(DeliveryServiceBusPublisher.class);
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
@@ -58,6 +58,10 @@ class DeliveryCommandSchedulerTest {
         verify(repository).createOrFind(command.capture());
         assertThat(command.getValue().chefSubOrderId()).isEqualTo(event.data().chefSubOrderId());
         assertThat(command.getValue().idempotencyKey()).isEqualTo(event.data().chefSubOrderId().toString());
+        assertThat(command.getValue().area()).isEqualTo("Madhapur");
+        assertThat(command.getValue().distanceKm()).isBetween(4.0, 5.0);
+        assertThat(command.getValue().orderHour()).isEqualTo(17);
+        assertThat(command.getValue().dayOfWeek()).isEqualTo(1);
     }
 
     private static EventEnvelope<ChefAcceptedOrderData> event(Instant readyAt) {
@@ -88,7 +92,7 @@ class DeliveryCommandSchedulerTest {
             null,
             "order-service",
             "chef-sub-order/" + subOrderId,
-            new ChefAcceptedOrderData(orderId, subOrderId, readyAt, request)
+            new ChefAcceptedOrderData(orderId, subOrderId, readyAt, null, null, request)
         );
     }
 }

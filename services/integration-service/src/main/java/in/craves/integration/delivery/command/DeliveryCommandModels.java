@@ -1,5 +1,6 @@
 package in.craves.integration.delivery.command;
 
+import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentResponse;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
@@ -30,6 +31,8 @@ public final class DeliveryCommandModels {
         UUID orderId,
         UUID chefSubOrderId,
         Instant readyAt,
+        Double distanceKm,
+        String area,
         QuoteRequest deliveryRequest
     ) {}
 
@@ -42,6 +45,10 @@ public final class DeliveryCommandModels {
         Instant readyAt,
         Instant dispatchAt,
         String idempotencyKey,
+        double distanceKm,
+        String area,
+        int orderHour,
+        int dayOfWeek,
         QuoteRequest deliveryRequest
     ) {}
 
@@ -49,6 +56,7 @@ public final class DeliveryCommandModels {
         String providerId,
         boolean successful,
         boolean available,
+        Double pickupDistanceKm,
         Integer pickupEtaMinutes,
         ProviderQuote quote,
         String error
@@ -63,6 +71,8 @@ public final class DeliveryCommandModels {
     public record RoutingResult(
         String providerId,
         ProviderDelivery delivery,
+        AssignmentResponse intelligenceAssignment,
+        UUID executedCandidateId,
         List<QuoteAudit> quoteAudit,
         List<CreateAudit> createAudit
     ) {}

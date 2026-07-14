@@ -76,6 +76,10 @@ class DeliveryCommandWorkerTest {
             Instant.now().plusSeconds(1800),
             Instant.now(),
             subOrderId.toString(),
+            4.6,
+            "Madhapur",
+            19,
+            1,
             quoteRequest
         );
     }

@@ -165,7 +165,7 @@ public class CustomerProfileService {
             id,
             user.identityId(),
             labelOrDefault(request.addressLabel()).name(),
-            blankToNull(request.recipientName()),
+            request.recipientName().trim(),
             request.contactPhoneNumber().trim(),
             request.addressLine1().trim(),
             blankToNull(request.addressLine2()),
@@ -173,7 +173,7 @@ public class CustomerProfileService {
             request.areaName().trim(),
             request.city().trim(),
             request.state().trim(),
-            blankToNull(request.postalCode()),
+            request.postalCode().trim(),
             request.latitude(),
             request.longitude(),
             makeDefault
@@ -195,7 +195,7 @@ public class CustomerProfileService {
                 "postal_code = ?, latitude = ?, longitude = ?, is_default = ?, updated_at = now() " +
                 "WHERE id = ? AND identity_id = ? AND is_active = true",
             labelOrDefault(request.addressLabel()).name(),
-            blankToNull(request.recipientName()),
+            request.recipientName().trim(),
             request.contactPhoneNumber().trim(),
             request.addressLine1().trim(),
             blankToNull(request.addressLine2()),
@@ -203,7 +203,7 @@ public class CustomerProfileService {
             request.areaName().trim(),
             request.city().trim(),
             request.state().trim(),
-            blankToNull(request.postalCode()),
+            request.postalCode().trim(),
             request.latitude(),
             request.longitude(),
             Boolean.TRUE.equals(request.isDefault()),
@@ -331,8 +331,14 @@ public class CustomerProfileService {
         if (request == null) {
             throw ApiException.badRequest("CUSTOMER_ADDRESS_REQUIRED", "Customer address is required");
         }
+        if (!StringUtils.hasText(request.recipientName())) {
+            throw ApiException.badRequest("RECIPIENT_NAME_REQUIRED", "Recipient name is required");
+        }
         if (!StringUtils.hasText(request.areaName())) {
             throw ApiException.badRequest("AREA_NAME_REQUIRED", "Area name is required");
+        }
+        if (!StringUtils.hasText(request.postalCode())) {
+            throw ApiException.badRequest("POSTAL_CODE_REQUIRED", "Postal code is required");
         }
         validateCoordinates(request.latitude(), request.longitude());
     }

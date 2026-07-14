@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -25,13 +26,13 @@ public class NearbyDiscoveryService {
 
     private static final String REQUEST_LOCATION_CTE = """
         WITH request_location AS (
-            SELECT ST_SetSRID(
-                ST_MakePoint(
+            SELECT public.ST_SetSRID(
+                public.ST_MakePoint(
                     CAST(? AS double precision),
                     CAST(? AS double precision)
                 ),
                 4326
-            )::geography AS location
+            )::public.geography AS location
         )
         """;
 
@@ -40,7 +41,7 @@ public class NearbyDiscoveryService {
         CROSS JOIN request_location rl
         WHERE kp.status = 'ACTIVE'
           AND kp.location IS NOT NULL
-          AND ST_DWithin(kp.location, rl.location, ?)
+          AND public.ST_DWithin(kp.location, rl.location, ?)
           AND EXISTS (
               SELECT 1
               FROM catalog_schema.menu_item mi
@@ -62,7 +63,7 @@ public class NearbyDiscoveryService {
           AND mi.is_available = true
           AND mi.unit_package_weight_grams IS NOT NULL
           AND mi.thermobox_required IS NOT NULL
-          AND ST_DWithin(kp.location, rl.location, ?)
+          AND public.ST_DWithin(kp.location, rl.location, ?)
         """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -147,7 +148,7 @@ public class NearbyDiscoveryService {
                 kp.state,
                 kp.latitude,
                 kp.longitude,
-                ROUND(ST_Distance(kp.location, rl.location))::bigint AS distance_meters,
+                ROUND(public.ST_Distance(kp.location, rl.location))::bigint AS distance_meters,
                 (
                     SELECT COUNT(*)
                     FROM catalog_schema.menu_item mi
@@ -201,7 +202,7 @@ public class NearbyDiscoveryService {
                 kp.state,
                 kp.latitude AS kitchen_latitude,
                 kp.longitude AS kitchen_longitude,
-                ROUND(ST_Distance(kp.location, rl.location))::bigint AS distance_meters,
+                ROUND(public.ST_Distance(kp.location, rl.location))::bigint AS distance_meters,
                 mi.item_name,
                 mi.description,
                 mi.category,
@@ -237,7 +238,7 @@ public class NearbyDiscoveryService {
 
     private NearbyKitchenSummaryResponse mapKitchen(ResultSet rs, int rowNum) throws SQLException {
         return new NearbyKitchenSummaryResponse(
-            rs.getObject("id", java.util.UUID.class),
+            rs.getObject("id", UUID.class),
             rs.getString("kitchen_name"),
             rs.getString("display_name"),
             rs.getString("description"),
@@ -254,8 +255,8 @@ public class NearbyDiscoveryService {
     private NearbyMenuItemSummaryResponse mapMenuItem(ResultSet rs, int rowNum) throws SQLException {
         String spiceLevel = rs.getString("spice_level");
         return new NearbyMenuItemSummaryResponse(
-            rs.getObject("id", java.util.UUID.class),
-            rs.getObject("kitchen_id", java.util.UUID.class),
+            rs.getObject("id", UUID.class),
+            rs.getObject("kitchen_id", UUID.class),
             rs.getString("kitchen_name"),
             rs.getString("kitchen_display_name"),
             rs.getString("area_name"),

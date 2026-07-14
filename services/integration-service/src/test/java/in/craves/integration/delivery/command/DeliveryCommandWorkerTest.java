@@ -54,7 +54,7 @@ class DeliveryCommandWorkerTest {
         UUID subOrderId = UUID.randomUUID();
         QuoteRequest quoteRequest = new QuoteRequest(
             "Packaged food",
-            2,
+            2000,
             true,
             new Stop(
                 "Madhapur, Hyderabad", "Chef", "919999999991",

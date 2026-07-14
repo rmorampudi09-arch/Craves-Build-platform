@@ -120,7 +120,7 @@ public final class ApiDtos {
     ) {
     }
 
-    public record ChefAcceptRequest(@Min(1) Integer prepTimeMinutes, String note) {
+    public record ChefAcceptRequest(@NotNull @Min(1) Integer prepTimeMinutes, String note) {
     }
 
     public record ChefRejectRequest(String reason) {

@@ -21,6 +21,7 @@ public class DeliveryIntelligenceProperties {
     private double qualityWeight = 0.40;
     private double searchRadiusKm = 5.0;
     private double maxPickupEtaMinutes = 30.0;
+    private double unknownProximityScore = 50.0;
     private double softmaxTemperature = 10.0;
     private double successThreshold = 70.0;
     private double neutralRatingScore = 70.0;
@@ -37,6 +38,9 @@ public class DeliveryIntelligenceProperties {
         if (fadeFactor <= 0 || fadeFactor > 1) throw new IllegalStateException("fadeFactor must be in (0,1]");
         if (searchRadiusKm <= 0) throw new IllegalStateException("searchRadiusKm must be positive");
         if (maxPickupEtaMinutes <= 0) throw new IllegalStateException("maxPickupEtaMinutes must be positive");
+        if (unknownProximityScore < 0 || unknownProximityScore > 100) {
+            throw new IllegalStateException("unknownProximityScore must be between 0 and 100");
+        }
         if (softmaxTemperature <= 0) throw new IllegalStateException("softmaxTemperature must be positive");
         try {
             in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentStrategy.valueOf(
@@ -80,6 +84,10 @@ public class DeliveryIntelligenceProperties {
     public void setSearchRadiusKm(double searchRadiusKm) { this.searchRadiusKm = searchRadiusKm; }
     public double getMaxPickupEtaMinutes() { return maxPickupEtaMinutes; }
     public void setMaxPickupEtaMinutes(double maxPickupEtaMinutes) { this.maxPickupEtaMinutes = maxPickupEtaMinutes; }
+    public double getUnknownProximityScore() { return unknownProximityScore; }
+    public void setUnknownProximityScore(double unknownProximityScore) {
+        this.unknownProximityScore = unknownProximityScore;
+    }
     public double getSoftmaxTemperature() { return softmaxTemperature; }
     public void setSoftmaxTemperature(double softmaxTemperature) { this.softmaxTemperature = softmaxTemperature; }
     public double getSuccessThreshold() { return successThreshold; }

@@ -1,6 +1,6 @@
 # Craves Catalog Service
 
-Catalog Service owns kitchen discovery, kitchen profiles, menu items, menu item availability and public menu media metadata for Craves.
+Catalog Service owns kitchen discovery, kitchen profiles, menu items, menu item availability, delivery-handling metadata, and public menu media metadata for Craves.
 
 This service follows the approved HLD direction for Catalog and Discovery: kitchens, dishes, menu items, prices, schedule/availability and search metadata are owned by the Catalog Service. Public images are stored in Azure Blob Storage and can be delivered through Azure Front Door/CDN.
 
@@ -8,12 +8,39 @@ This service follows the approved HLD direction for Catalog and Discovery: kitch
 
 - Approved CHEF users can create/update one kitchen profile.
 - CHEF users can create/update menu items.
+- Every menu item stores an explicit packaged weight in grams.
+- Every menu item stores an explicit thermobox requirement (`true` or `false`).
 - CHEF users can upload menu item images.
 - CHEF users can toggle item availability.
 - Customers/public clients can discover active nearby kitchens.
 - Default discovery radius is 10 km.
 - Radius can be overridden dynamically by city/area policy.
 - Public discovery returns only ACTIVE kitchens with ACTIVE + available menu items.
+
+## Menu delivery metadata
+
+The chef must explicitly supply these fields while creating or editing every menu item:
+
+```json
+{
+  "unitPackageWeightGrams": 650,
+  "thermoboxRequired": false
+}
+```
+
+`unitPackageWeightGrams` means the packaged weight of one sellable unit of the item. It is stored in grams so Craves does not lose precision.
+
+Examples:
+
+```text
+One meal box             = 650 grams
+One family biryani pack  = 1800 grams
+Two ordered meal boxes   = 650 x 2 = 1300 grams
+```
+
+`thermoboxRequired` is an explicit operational decision. It must be sent as either `true` or `false`; absence is rejected.
+
+Existing menu items created before this migration are not assigned invented values. Flyway makes those incomplete legacy items unavailable until the chef edits them and supplies both fields.
 
 ## Not included in V1
 
@@ -39,6 +66,26 @@ POST   /api/v1/kitchens/me/menu-items/{menuItemId}/images
 ```
 
 These require a Craves access token containing the `CHEF` role.
+
+Example menu-item request:
+
+```json
+{
+  "itemName": "Home-style veg meal",
+  "description": "Rice, dal, curry and curd",
+  "category": "MEALS",
+  "foodType": "VEG",
+  "price": 199.00,
+  "currency": "INR",
+  "servesCount": 1,
+  "preparationTimeMinutes": 30,
+  "spiceLevel": "MEDIUM",
+  "unitPackageWeightGrams": 650,
+  "thermoboxRequired": false,
+  "available": true,
+  "status": "ACTIVE"
+}
+```
 
 ### Public customer discovery endpoints
 

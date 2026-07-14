@@ -33,8 +33,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class DeliveryIntelligenceService {
-    private static final double UNKNOWN_PROXIMITY_NEUTRAL_SCORE = 50.0;
-
     private final DeliveryProviderRepository providerRepository;
     private final DeliveryAssignmentRepository assignmentRepository;
     private final DeliveryMetricsRepository metricsRepository;
@@ -213,7 +211,7 @@ public class DeliveryIntelligenceService {
         if (input.pickupEtaMinutes() != null) {
             return clamp(100.0 * (1.0 - input.pickupEtaMinutes() / properties.getMaxPickupEtaMinutes()));
         }
-        return UNKNOWN_PROXIMITY_NEUTRAL_SCORE;
+        return properties.getUnknownProximityScore();
     }
 
     private CandidateScore toScore(UUID id, int rank, UnrankedCandidate candidate, CandidateStatus status) {

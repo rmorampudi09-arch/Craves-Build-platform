@@ -25,6 +25,13 @@ pool:
 steps:
   - checkout: self
 
+  - script: |
+      set -euo pipefail
+      echo "Build ID: $(Build.BuildId)"
+      echo "Source commit: $(Build.SourceVersion)"
+      echo "Source branch: $(Build.SourceBranch)"
+    displayName: Show immutable build identity
+
   - task: JavaToolInstaller@0
     displayName: Use Java 21
     inputs:
@@ -50,19 +57,22 @@ steps:
         IMAGE_REPOSITORY='$(imageRepository)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+
         az acr login --name "$ACR"
         docker build -t "$IMAGE" "$(modulePath)"
         docker push "$IMAGE"
+
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Update Container App image
+    displayName: Deploy and verify healthy Container App revision
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+
         RG='${{ parameters.resourceGroupName }}'
         ACR='${{ parameters.acrName }}'
         APP='${{ parameters.containerAppName }}'
@@ -70,5 +80,98 @@ steps:
         IMAGE_REPOSITORY='$(imageRepository)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-        az containerapp update --name "$APP" --resource-group "$RG" --image "$IMAGE" --no-wait
-        az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus}" -o table
+
+        CURRENT_IMAGE=$(az containerapp show \
+          --name "$APP" \
+          --resource-group "$RG" \
+          --query "properties.template.containers[0].image" \
+          -o tsv)
+
+        echo "Current image: $CURRENT_IMAGE"
+        echo "Target image:  $IMAGE"
+
+        if [[ "$CURRENT_IMAGE" == "$IMAGE" ]]; then
+          echo "ERROR: The target image tag is already configured on the Container App."
+          echo "Start a completely new pipeline run from main instead of rerunning an old run."
+          exit 1
+        fi
+
+        PREVIOUS_LATEST=$(az containerapp show \
+          --name "$APP" \
+          --resource-group "$RG" \
+          --query "properties.latestRevisionName" \
+          -o tsv)
+
+        echo "Revision before deployment: $PREVIOUS_LATEST"
+
+        az containerapp update \
+          --name "$APP" \
+          --resource-group "$RG" \
+          --image "$IMAGE" \
+          -o none
+
+        echo "Waiting for a new healthy revision..."
+
+        for ATTEMPT in $(seq 1 60); do
+          LATEST_REVISION=$(az containerapp show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --query "properties.latestRevisionName" \
+            -o tsv)
+
+          READY_REVISION=$(az containerapp show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --query "properties.latestReadyRevisionName" \
+            -o tsv)
+
+          RUNNING_STATUS=$(az containerapp show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --query "properties.runningStatus" \
+            -o tsv)
+
+          LATEST_IMAGE=""
+          HEALTH_STATE=""
+          if [[ -n "$LATEST_REVISION" ]]; then
+            LATEST_IMAGE=$(az containerapp revision show \
+              --name "$APP" \
+              --resource-group "$RG" \
+              --revision "$LATEST_REVISION" \
+              --query "properties.template.containers[0].image" \
+              -o tsv 2>/dev/null || true)
+
+            HEALTH_STATE=$(az containerapp revision show \
+              --name "$APP" \
+              --resource-group "$RG" \
+              --revision "$LATEST_REVISION" \
+              --query "properties.healthState" \
+              -o tsv 2>/dev/null || true)
+          fi
+
+          echo "Attempt $ATTEMPT/60: latest=$LATEST_REVISION ready=$READY_REVISION health=$HEALTH_STATE running=$RUNNING_STATUS image=$LATEST_IMAGE"
+
+          if [[ "$LATEST_REVISION" != "$PREVIOUS_LATEST" \
+                && "$LATEST_REVISION" == "$READY_REVISION" \
+                && "$LATEST_IMAGE" == "$IMAGE" \
+                && "$HEALTH_STATE" == "Healthy" \
+                && "$RUNNING_STATUS" == "Running" ]]; then
+            echo "SUCCESS: New Container App revision is healthy and ready."
+            az containerapp show \
+              --name "$APP" \
+              --resource-group "$RG" \
+              --query "{name:name,runningStatus:properties.runningStatus,latestRevision:properties.latestRevisionName,latestReadyRevision:properties.latestReadyRevisionName,image:properties.template.containers[0].image}" \
+              -o table
+            exit 0
+          fi
+
+          sleep 10
+        done
+
+        echo "ERROR: The new Container App revision did not become healthy within 10 minutes."
+        az containerapp revision list \
+          --name "$APP" \
+          --resource-group "$RG" \
+          --query "[].{revision:name,active:properties.active,health:properties.healthState,replicas:properties.replicas}" \
+          -o table || true
+        exit 1

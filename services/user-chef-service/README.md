@@ -52,7 +52,7 @@ customer_address.location geography(Point, 4326)
 
 `location` is generated from longitude and latitude. A partial GiST index supports nearest-address lookup for active geocoded addresses.
 
-Legacy rows are not assigned invented area names or coordinates. New create and update requests require complete geocoding.
+Legacy rows are not assigned invented area names or coordinates. New create and update requests require complete geocoding and complete recipient details.
 
 ## Local setup
 
@@ -108,7 +108,7 @@ Example saved-address request:
 
 Rules:
 
-- Phone, address line 1, area, city, state, latitude, and longitude are required.
+- Recipient name, phone, address line 1, area, city, state, postal code, latitude, and longitude are required.
 - Latitude must be between -90 and 90.
 - Longitude must be between -180 and 180.
 - The first active address automatically becomes default.

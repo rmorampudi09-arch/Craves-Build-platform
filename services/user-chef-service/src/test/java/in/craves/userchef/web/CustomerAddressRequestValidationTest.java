@@ -14,39 +14,90 @@ class CustomerAddressRequestValidationTest {
 
     @Test
     void acceptsCompleteGeocodedAddress() {
-        assertThat(validator.validate(request("Madhapur", new BigDecimal("17.4483"), new BigDecimal("78.3915"))))
-            .isEmpty();
+        assertThat(validator.validate(request(
+            "Customer Name",
+            "Madhapur",
+            "500081",
+            new BigDecimal("17.4483"),
+            new BigDecimal("78.3915")
+        ))).isEmpty();
+    }
+
+    @Test
+    void rejectsMissingRecipientName() {
+        assertThat(validator.validate(request(
+            null,
+            "Madhapur",
+            "500081",
+            new BigDecimal("17.4483"),
+            new BigDecimal("78.3915")
+        )))
+            .extracting(violation -> violation.getPropertyPath().toString())
+            .contains("recipientName");
     }
 
     @Test
     void rejectsMissingAreaName() {
-        assertThat(validator.validate(request(null, new BigDecimal("17.4483"), new BigDecimal("78.3915"))))
+        assertThat(validator.validate(request(
+            "Customer Name",
+            null,
+            "500081",
+            new BigDecimal("17.4483"),
+            new BigDecimal("78.3915")
+        )))
             .extracting(violation -> violation.getPropertyPath().toString())
             .contains("areaName");
     }
 
     @Test
+    void rejectsMissingPostalCode() {
+        assertThat(validator.validate(request(
+            "Customer Name",
+            "Madhapur",
+            null,
+            new BigDecimal("17.4483"),
+            new BigDecimal("78.3915")
+        )))
+            .extracting(violation -> violation.getPropertyPath().toString())
+            .contains("postalCode");
+    }
+
+    @Test
     void rejectsMissingLatitude() {
-        assertThat(validator.validate(request("Madhapur", null, new BigDecimal("78.3915"))))
+        assertThat(validator.validate(request(
+            "Customer Name",
+            "Madhapur",
+            "500081",
+            null,
+            new BigDecimal("78.3915")
+        )))
             .extracting(violation -> violation.getPropertyPath().toString())
             .contains("latitude");
     }
 
     @Test
     void rejectsOutOfRangeLongitude() {
-        assertThat(validator.validate(request("Madhapur", new BigDecimal("17.4483"), new BigDecimal("181"))))
+        assertThat(validator.validate(request(
+            "Customer Name",
+            "Madhapur",
+            "500081",
+            new BigDecimal("17.4483"),
+            new BigDecimal("181")
+        )))
             .extracting(violation -> violation.getPropertyPath().toString())
             .contains("longitude");
     }
 
     private static CustomerAddressRequest request(
+        String recipientName,
         String areaName,
+        String postalCode,
         BigDecimal latitude,
         BigDecimal longitude
     ) {
         return new CustomerAddressRequest(
             AddressLabel.HOME,
-            "Ravi Teja",
+            recipientName,
             "+919876543210",
             "Flat 101, Test Residency",
             "Road No. 1",
@@ -54,7 +105,7 @@ class CustomerAddressRequestValidationTest {
             areaName,
             "Hyderabad",
             "Telangana",
-            "500081",
+            postalCode,
             latitude,
             longitude,
             true

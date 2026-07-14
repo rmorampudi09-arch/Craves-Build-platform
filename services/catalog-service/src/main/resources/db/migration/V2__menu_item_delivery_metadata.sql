@@ -2,6 +2,18 @@ ALTER TABLE catalog_schema.menu_item
     ADD COLUMN IF NOT EXISTS unit_package_weight_grams INTEGER,
     ADD COLUMN IF NOT EXISTS thermobox_required BOOLEAN;
 
+-- Existing rows cannot be assigned an invented package weight or thermobox value.
+-- Keep them in the catalog for chef correction, but stop selling them until both
+-- fields are explicitly supplied through the menu-item update API.
+UPDATE catalog_schema.menu_item
+SET is_available = false,
+    updated_at = now()
+WHERE is_available = true
+  AND (
+      unit_package_weight_grams IS NULL
+      OR thermobox_required IS NULL
+  );
+
 DO $$
 BEGIN
     IF NOT EXISTS (

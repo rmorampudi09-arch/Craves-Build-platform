@@ -137,13 +137,15 @@ public class OrderService {
         }
 
         ChargePolicyResponse policy = currentChargePolicy();
+        Map<UUID, CatalogMenuItem> catalogItems = new LinkedHashMap<>();
         Map<UUID, List<CartItemResponse>> byKitchen = new LinkedHashMap<>();
-        for (CartItemResponse item : cart.items()) {
-            byKitchen.computeIfAbsent(item.kitchenId(), ignored -> new ArrayList<>()).add(item);
+        for (CartItemResponse cartItem : cart.items()) {
+            CatalogMenuItem catalogItem = catalogClient.getActiveMenuItem(cartItem.menuItemId());
+            catalogItems.put(catalogItem.id(), catalogItem);
+            byKitchen.computeIfAbsent(catalogItem.kitchenId(), ignored -> new ArrayList<>()).add(cartItem);
         }
 
-        UUID checkoutId = UUID.randomUUID();
-        List<OrderResponse> orders = new ArrayList<>();
+        List<PendingKitchenOrder> pendingOrders = new ArrayList<>();
         BigDecimal checkoutFood = BigDecimal.ZERO;
         BigDecimal checkoutPlatform = BigDecimal.ZERO;
         BigDecimal checkoutTax = BigDecimal.ZERO;
@@ -152,32 +154,74 @@ public class OrderService {
         for (Map.Entry<UUID, List<CartItemResponse>> entry : byKitchen.entrySet()) {
             UUID kitchenId = entry.getKey();
             CatalogKitchen kitchen = catalogClient.getKitchen(kitchenId);
-            BigDecimal foodSubtotal = entry.getValue().stream().map(CartItemResponse::lineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal foodSubtotal = entry.getValue().stream()
+                .map(CartItemResponse::lineTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
             Charges charges = calculateCharges(foodSubtotal, policy);
-            UUID orderId = UUID.randomUUID();
-            jdbcTemplate.update(
-                "INSERT INTO order_schema.customer_order (id, checkout_id, customer_identity_id, kitchen_id, kitchen_name_snapshot, status, currency, food_subtotal, platform_fee, tax_amount, delivery_fee, grand_total, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())",
-                orderId, checkoutId, principal.identityId(), kitchenId, displayKitchenName(kitchen), OrderStatus.PAYMENT_PENDING.name(), INR, foodSubtotal, charges.platformFee(), charges.taxAmount(), charges.deliveryFee(), charges.grandTotal()
-            );
-            addStatusHistory(orderId, null, OrderStatus.PAYMENT_PENDING, principal.identityId(), "Checkout created");
-            for (CartItemResponse cartItem : entry.getValue()) {
-                jdbcTemplate.update(
-                    "INSERT INTO order_schema.order_item (id, order_id, menu_item_id, item_name_snapshot, category_snapshot, food_type_snapshot, unit_price_snapshot, quantity, line_total, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
-                    UUID.randomUUID(), orderId, cartItem.menuItemId(), cartItem.itemName(), null, null, cartItem.unitPrice(), cartItem.quantity(), cartItem.lineTotal()
-                );
-            }
+            OrderPackaging packaging = calculatePackaging(entry.getValue(), catalogItems);
+            pendingOrders.add(new PendingKitchenOrder(
+                kitchenId,
+                kitchen,
+                List.copyOf(entry.getValue()),
+                foodSubtotal,
+                charges,
+                packaging
+            ));
             checkoutFood = checkoutFood.add(foodSubtotal);
             checkoutPlatform = checkoutPlatform.add(charges.platformFee());
             checkoutTax = checkoutTax.add(charges.taxAmount());
             checkoutDelivery = checkoutDelivery.add(charges.deliveryFee());
-            orders.add(getOrderForCustomer(principal, orderId));
         }
 
-        BigDecimal grandTotal = checkoutFood.add(checkoutPlatform).add(checkoutTax).add(checkoutDelivery).setScale(2, RoundingMode.HALF_UP);
+        UUID checkoutId = UUID.randomUUID();
+        BigDecimal grandTotal = checkoutFood.add(checkoutPlatform)
+            .add(checkoutTax)
+            .add(checkoutDelivery)
+            .setScale(2, RoundingMode.HALF_UP);
         jdbcTemplate.update(
             "INSERT INTO order_schema.checkout (id, customer_identity_id, status, currency, food_subtotal, platform_fee, tax_amount, delivery_fee, grand_total, charge_policy_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())",
             checkoutId, principal.identityId(), CheckoutStatus.PAYMENT_PENDING.name(), INR, checkoutFood, checkoutPlatform, checkoutTax, checkoutDelivery, grandTotal, policy.id()
         );
+
+        for (PendingKitchenOrder pending : pendingOrders) {
+            UUID orderId = UUID.randomUUID();
+            jdbcTemplate.update(
+                "INSERT INTO order_schema.customer_order (id, checkout_id, customer_identity_id, kitchen_id, kitchen_name_snapshot, status, currency, food_subtotal, platform_fee, tax_amount, delivery_fee, grand_total, total_package_weight_grams, thermobox_required, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())",
+                orderId,
+                checkoutId,
+                principal.identityId(),
+                pending.kitchenId(),
+                displayKitchenName(pending.kitchen()),
+                OrderStatus.PAYMENT_PENDING.name(),
+                INR,
+                pending.foodSubtotal(),
+                pending.charges().platformFee(),
+                pending.charges().taxAmount(),
+                pending.charges().deliveryFee(),
+                pending.charges().grandTotal(),
+                pending.packaging().totalPackageWeightGrams(),
+                pending.packaging().thermoboxRequired()
+            );
+            addStatusHistory(orderId, null, OrderStatus.PAYMENT_PENDING, principal.identityId(), "Checkout created");
+            for (CartItemResponse cartItem : pending.items()) {
+                CatalogMenuItem catalogItem = catalogItems.get(cartItem.menuItemId());
+                jdbcTemplate.update(
+                    "INSERT INTO order_schema.order_item (id, order_id, menu_item_id, item_name_snapshot, category_snapshot, food_type_snapshot, unit_price_snapshot, unit_package_weight_grams_snapshot, thermobox_required_snapshot, quantity, line_total, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
+                    UUID.randomUUID(),
+                    orderId,
+                    cartItem.menuItemId(),
+                    cartItem.itemName(),
+                    catalogItem.category(),
+                    catalogItem.foodType(),
+                    cartItem.unitPrice(),
+                    catalogItem.unitPackageWeightGrams(),
+                    catalogItem.thermoboxRequired(),
+                    cartItem.quantity(),
+                    cartItem.lineTotal()
+                );
+            }
+        }
+
         clearCart(principal);
         CheckoutResponse response = getCheckout(principal, checkoutId);
         notifyOrderCreatedAfterCommit(response);
@@ -329,7 +373,20 @@ public class OrderService {
     }
 
     private void updateOrderStatus(UUID orderId, OrderStatus oldStatus, OrderStatus newStatus, UUID actor, String reason, Integer prepTimeMinutes) {
-        jdbcTemplate.update("UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = COALESCE(?, prep_time_minutes), updated_at = now() WHERE id = ?", newStatus.name(), reason, prepTimeMinutes, orderId);
+        if (newStatus == OrderStatus.CHEF_ACCEPTED) {
+            if (prepTimeMinutes == null || prepTimeMinutes <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Preparation time is required when accepting an order");
+            }
+            jdbcTemplate.update(
+                "UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = ?, ready_at = now() + (? * INTERVAL '1 minute'), updated_at = now() WHERE id = ?",
+                newStatus.name(), reason, prepTimeMinutes, prepTimeMinutes, orderId
+            );
+        } else {
+            jdbcTemplate.update(
+                "UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = COALESCE(?, prep_time_minutes), updated_at = now() WHERE id = ?",
+                newStatus.name(), reason, prepTimeMinutes, orderId
+            );
+        }
         addStatusHistory(orderId, oldStatus, newStatus, actor, reason);
     }
 
@@ -391,6 +448,38 @@ public class OrderService {
         return new ChargePolicyResponse(rs.getObject("id", UUID.class), rs.getString("policy_name"), rs.getBigDecimal("platform_fee_percent"), rs.getBigDecimal("platform_fee_flat"), rs.getBigDecimal("tax_percent"), rs.getBigDecimal("delivery_fee_flat"), rs.getBoolean("is_active"), instant(rs, "created_at"));
     }
 
+    private static OrderPackaging calculatePackaging(
+        List<CartItemResponse> cartItems,
+        Map<UUID, CatalogMenuItem> catalogItems
+    ) {
+        long totalWeightGrams = 0;
+        boolean thermoboxRequired = false;
+        try {
+            for (CartItemResponse cartItem : cartItems) {
+                CatalogMenuItem catalogItem = catalogItems.get(cartItem.menuItemId());
+                if (catalogItem == null || catalogItem.unitPackageWeightGrams() == null
+                    || catalogItem.unitPackageWeightGrams() <= 0 || catalogItem.thermoboxRequired() == null) {
+                    throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Menu item delivery metadata is incomplete"
+                    );
+                }
+                long lineWeight = Math.multiplyExact(
+                    catalogItem.unitPackageWeightGrams().longValue(),
+                    cartItem.quantity()
+                );
+                totalWeightGrams = Math.addExact(totalWeightGrams, lineWeight);
+                thermoboxRequired = thermoboxRequired || catalogItem.thermoboxRequired();
+            }
+        } catch (ArithmeticException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Calculated package weight is too large");
+        }
+        if (totalWeightGrams <= 0 || totalWeightGrams > Integer.MAX_VALUE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Calculated package weight is invalid");
+        }
+        return new OrderPackaging((int) totalWeightGrams, thermoboxRequired);
+    }
+
     private Charges calculateCharges(BigDecimal foodSubtotal, ChargePolicyResponse policy) {
         BigDecimal platform = foodSubtotal.multiply(policy.platformFeePercent()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP).add(policy.platformFeeFlat()).setScale(2, RoundingMode.HALF_UP);
         BigDecimal tax = foodSubtotal.multiply(policy.taxPercent()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP).setScale(2, RoundingMode.HALF_UP);
@@ -447,5 +536,18 @@ public class OrderService {
     }
 
     private record Charges(BigDecimal platformFee, BigDecimal taxAmount, BigDecimal deliveryFee, BigDecimal grandTotal) {
+    }
+
+    private record OrderPackaging(int totalPackageWeightGrams, boolean thermoboxRequired) {
+    }
+
+    private record PendingKitchenOrder(
+        UUID kitchenId,
+        CatalogKitchen kitchen,
+        List<CartItemResponse> items,
+        BigDecimal foodSubtotal,
+        Charges charges,
+        OrderPackaging packaging
+    ) {
     }
 }

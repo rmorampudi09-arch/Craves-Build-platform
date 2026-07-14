@@ -27,6 +27,7 @@ craves:
     quality-weight: ${CRAVES_DELIVERY_QUALITY_WEIGHT:0.40}
     search-radius-km: ${CRAVES_DELIVERY_SEARCH_RADIUS_KM:5.0}
     max-pickup-eta-minutes: ${CRAVES_DELIVERY_MAX_PICKUP_ETA_MINUTES:30.0}
+    unknown-proximity-score: ${CRAVES_DELIVERY_UNKNOWN_PROXIMITY_SCORE:50.0}
     softmax-temperature: ${CRAVES_DELIVERY_SOFTMAX_TEMPERATURE:10.0}
     success-threshold: ${CRAVES_DELIVERY_SUCCESS_THRESHOLD:70.0}
     neutral-rating-score: ${CRAVES_DELIVERY_NEUTRAL_RATING_SCORE:70.0}

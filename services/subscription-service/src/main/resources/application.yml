@@ -11,6 +11,7 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    table: ${SPRING_FLYWAY_TABLE:subscription_service_flyway_schema_history}
 
 management:
   endpoints:

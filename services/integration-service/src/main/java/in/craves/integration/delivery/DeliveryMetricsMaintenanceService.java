@@ -1,8 +1,8 @@
 package in.craves.integration.delivery;
 
 import in.craves.integration.config.DeliveryIntelligenceProperties;
-import in.craves.integration.delivery.DeliveryIntelligenceRepository.RollingState;
-import in.craves.integration.delivery.DeliveryIntelligenceRepository.ScoreRow;
+import in.craves.integration.delivery.DeliveryMetricsRepository.RollingState;
+import in.craves.integration.delivery.DeliveryMetricsRepository.ScoreRow;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,16 +21,16 @@ public class DeliveryMetricsMaintenanceService {
         "cost_efficiency", "customer_rating_component"
     );
 
-    private final DeliveryIntelligenceRepository repository;
+    private final DeliveryMetricsRepository repository;
     private final DeliveryIntelligenceProperties properties;
     private final Clock clock;
 
-    public DeliveryMetricsMaintenanceService(DeliveryIntelligenceRepository repository,
+    public DeliveryMetricsMaintenanceService(DeliveryMetricsRepository repository,
                                              DeliveryIntelligenceProperties properties) {
         this(repository, properties, Clock.systemUTC());
     }
 
-    DeliveryMetricsMaintenanceService(DeliveryIntelligenceRepository repository,
+    DeliveryMetricsMaintenanceService(DeliveryMetricsRepository repository,
                                       DeliveryIntelligenceProperties properties,
                                       Clock clock) {
         this.repository = repository;

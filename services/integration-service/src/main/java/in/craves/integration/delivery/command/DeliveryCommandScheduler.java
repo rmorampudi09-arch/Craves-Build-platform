@@ -4,8 +4,13 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.ChefAccepted
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelope;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.UUID;
@@ -17,6 +22,9 @@ import org.springframework.util.StringUtils;
 @Service
 @ConditionalOnProperty(prefix = "craves.delivery-command", name = "enabled", havingValue = "true")
 public class DeliveryCommandScheduler {
+    private static final ZoneId DELIVERY_CONTEXT_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final double EARTH_RADIUS_KM = 6371.0088;
+
     private final DeliveryCommandRepository repository;
     private final DeliveryServiceBusPublisher publisher;
     private final DeliveryCommandProperties properties;
@@ -42,6 +50,7 @@ public class DeliveryCommandScheduler {
     public ScheduleReceipt schedule(EventEnvelope<ChefAcceptedOrderData> event) {
         validate(event);
         ChefAcceptedOrderData data = event.data();
+        RoutingContext routingContext = routingContext(event, data);
         Instant dispatchAt = data.readyAt().minus(properties.getLeadTimeMinutes(), ChronoUnit.MINUTES);
         Instant minimumDispatchAt = clock.instant().plusSeconds(5);
         if (dispatchAt.isBefore(minimumDispatchAt)) {
@@ -60,6 +69,10 @@ public class DeliveryCommandScheduler {
             data.readyAt(),
             dispatchAt,
             data.chefSubOrderId().toString(),
+            routingContext.distanceKm(),
+            routingContext.area(),
+            routingContext.orderHour(),
+            routingContext.dayOfWeek(),
             data.deliveryRequest()
         );
 
@@ -93,6 +106,75 @@ public class DeliveryCommandScheduler {
         );
     }
 
+    private static RoutingContext routingContext(EventEnvelope<ChefAcceptedOrderData> event,
+                                                 ChefAcceptedOrderData data) {
+        QuoteRequest request = data.deliveryRequest();
+        double distanceKm = resolveDistanceKm(data.distanceKm(), request);
+        String area = resolveArea(data.area(), request.pickup());
+        ZonedDateTime localOccurredAt = event.occurredAt().atZone(DELIVERY_CONTEXT_ZONE);
+        return new RoutingContext(
+            distanceKm,
+            area,
+            localOccurredAt.getHour(),
+            localOccurredAt.getDayOfWeek().getValue() - 1
+        );
+    }
+
+    private static double resolveDistanceKm(Double suppliedDistanceKm, QuoteRequest request) {
+        if (suppliedDistanceKm != null) {
+            if (!Double.isFinite(suppliedDistanceKm) || suppliedDistanceKm < 0.0) {
+                throw new DeliveryMessageValidationException("distanceKm must be a finite non-negative number");
+            }
+            return suppliedDistanceKm;
+        }
+
+        Stop pickup = request.pickup();
+        Stop dropoff = request.dropoff();
+        if (hasCoordinates(pickup) && hasCoordinates(dropoff)) {
+            return haversineKm(
+                pickup.latitude(), pickup.longitude(), dropoff.latitude(), dropoff.longitude()
+            );
+        }
+        throw new DeliveryMessageValidationException(
+            "distanceKm or pickup/dropoff coordinates are required for intelligent assignment"
+        );
+    }
+
+    private static String resolveArea(String suppliedArea, Stop pickup) {
+        if (StringUtils.hasText(suppliedArea)) {
+            return suppliedArea.trim();
+        }
+        if (pickup != null && StringUtils.hasText(pickup.address())) {
+            String firstAddressPart = pickup.address().split(",", 2)[0].trim();
+            if (StringUtils.hasText(firstAddressPart)) {
+                return firstAddressPart;
+            }
+        }
+        throw new DeliveryMessageValidationException(
+            "area or a pickup address with an area prefix is required for intelligent assignment"
+        );
+    }
+
+    private static boolean hasCoordinates(Stop stop) {
+        return stop != null && stop.latitude() != null && stop.longitude() != null;
+    }
+
+    private static double haversineKm(BigDecimal firstLatitude,
+                                      BigDecimal firstLongitude,
+                                      BigDecimal secondLatitude,
+                                      BigDecimal secondLongitude) {
+        double latitude1 = Math.toRadians(firstLatitude.doubleValue());
+        double latitude2 = Math.toRadians(secondLatitude.doubleValue());
+        double latitudeDelta = latitude2 - latitude1;
+        double longitudeDelta = Math.toRadians(secondLongitude.doubleValue() - firstLongitude.doubleValue());
+        double sinLatitude = Math.sin(latitudeDelta / 2.0);
+        double sinLongitude = Math.sin(longitudeDelta / 2.0);
+        double a = sinLatitude * sinLatitude
+            + Math.cos(latitude1) * Math.cos(latitude2) * sinLongitude * sinLongitude;
+        double c = 2.0 * Math.atan2(Math.sqrt(a), Math.sqrt(1.0 - a));
+        return EARTH_RADIUS_KM * c;
+    }
+
     private static void validate(EventEnvelope<ChefAcceptedOrderData> event) {
         Objects.requireNonNull(event, "event is required");
         if (event.eventId() == null) {
@@ -119,7 +201,12 @@ public class DeliveryCommandScheduler {
         if (data.deliveryRequest() == null) {
             throw new DeliveryMessageValidationException("deliveryRequest is required");
         }
+        if (data.deliveryRequest().pickup() == null || data.deliveryRequest().dropoff() == null) {
+            throw new DeliveryMessageValidationException("pickup and dropoff are required");
+        }
     }
+
+    private record RoutingContext(double distanceKm, String area, int orderHour, int dayOfWeek) {}
 
     public record ScheduleReceipt(
         UUID commandId,

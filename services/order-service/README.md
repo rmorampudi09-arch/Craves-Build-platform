@@ -1,15 +1,68 @@
 # Craves Order Service
 
-Order Service owns customer cart, checkout, chef-specific orders, order items, order status transitions and admin-managed charge policies.
+Order Service owns customer cart, checkout, chef-specific orders, order items, order status transitions, immutable delivery-package snapshots, and admin-managed charge policies.
 
 ## Current V1 scope
 
 - Customer cart CRUD.
 - Cart validation against Catalog Service active menu item APIs.
 - Checkout that groups cart items by kitchen and creates chef-specific orders.
+- Package metadata copied from Catalog Service at checkout.
+- Dynamic chef-specific package weight calculation.
+- Thermobox requirement aggregation per chef-specific order.
+- Chef acceptance calculates and persists `ready_at` from the submitted preparation time.
 - V1 zero-fee charge policy seeded by default.
 - Admin can activate new charge policies for platform fee, tax and delivery fee.
 - Chef can list/access their orders, accept/reject and mark ready for pickup.
+
+## Dynamic package calculation
+
+Catalog Service supplies the packaged weight and thermobox decision for each menu item. Order Service snapshots those values so later menu edits cannot change an existing order.
+
+```text
+order_item.unit_package_weight_grams_snapshot
+order_item.thermobox_required_snapshot
+```
+
+For each chef-specific order:
+
+```text
+total_package_weight_grams =
+    sum(unit_package_weight_grams_snapshot x quantity)
+
+thermobox_required =
+    true when any order item requires a thermobox
+```
+
+Example:
+
+```text
+2 x meal box at 650 g = 1300 g
+1 x dessert at 250 g  =  250 g
+--------------------------------
+Total package weight  = 1550 g
+```
+
+Weights remain in grams inside Craves. Each external delivery-provider adapter converts grams into that provider's required unit.
+
+## Chef acceptance and ready time
+
+The acceptance request must include a positive preparation time:
+
+```json
+{
+  "prepTimeMinutes": 35,
+  "note": "Order confirmed"
+}
+```
+
+Order Service persists:
+
+```text
+ready_at = database current time + prepTimeMinutes
+```
+
+This timestamp will be included in the future `CHEF_ACCEPTED_ORDER` domain event. Integration Service will schedule delivery close to `ready_at`; it must not create delivery immediately after payment.
 
 ## V1 charge model
 
@@ -104,5 +157,7 @@ mvn spring-boot:run -Dspring-boot.run.profiles=local
 ## Important production notes
 
 - Cashfree payment intent creation is not implemented in this V1. Checkout creates orders in `PAYMENT_PENDING` state.
-- Delivery creation is not implemented here. Delivery must be scheduled after chef acceptance in the Integration/Delivery flow.
+- Checkout now inserts the parent checkout row before chef-specific child orders, preserving the PostgreSQL foreign-key relationship.
+- Delivery creation is not implemented in Order Service. Delivery must be scheduled after chef acceptance in the Integration/Delivery flow.
+- Customer drop-off address snapshotting and the `CHEF_ACCEPTED_ORDER` transactional domain outbox are the next implementation steps.
 - Fee/tax/commission/legal policy is configurable, but final finance rules still need Product/Finance/Legal approval before production.

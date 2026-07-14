@@ -82,6 +82,14 @@ public class DeliveryAssignmentRepository {
             throw new IllegalStateException("Executed delivery candidate does not belong to the assignment");
         }
 
+        jdbc.update("""
+            UPDATE delivery_schema.delivery_assignment_candidate
+            SET status = 'RANKED', updated_at = now()
+            WHERE assignment_id = ?
+              AND id <> ?
+              AND status = 'SELECTED'
+            """, assignmentId, acceptedCandidateId);
+
         if (failedProviderIds != null) {
             for (String providerId : failedProviderIds) {
                 if (providerId == null || providerId.isBlank()) {

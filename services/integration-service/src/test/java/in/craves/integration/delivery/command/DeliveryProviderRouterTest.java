@@ -118,7 +118,7 @@ class DeliveryProviderRouterTest {
             null, null, "Dropoff"
         );
         DeliveryProviderAdapter.QuoteRequest quoteRequest = new DeliveryProviderAdapter.QuoteRequest(
-            "Packaged food", 2, true, pickup, dropoff
+            "Packaged food", 2000, true, pickup, dropoff
         );
         return new DeliveryCommandMessage(
             UUID.randomUUID(), UUID.randomUUID(), orderId, orderId, subOrderId,

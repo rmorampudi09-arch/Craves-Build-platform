@@ -59,7 +59,7 @@ public final class ApiDtos {
 
     public record CustomerAddressRequest(
         AddressLabel addressLabel,
-        String recipientName,
+        @NotBlank String recipientName,
         @NotBlank @Pattern(regexp = "^\\+?[0-9]{10,15}$") String contactPhoneNumber,
         @NotBlank String addressLine1,
         String addressLine2,
@@ -67,7 +67,7 @@ public final class ApiDtos {
         @NotBlank String areaName,
         @NotBlank String city,
         @NotBlank String state,
-        String postalCode,
+        @NotBlank String postalCode,
         @NotNull @DecimalMin("-90.0") @DecimalMax("90.0") BigDecimal latitude,
         @NotNull @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitude,
         Boolean isDefault

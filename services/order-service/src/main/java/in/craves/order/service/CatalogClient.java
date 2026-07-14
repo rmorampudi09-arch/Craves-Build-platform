@@ -71,6 +71,39 @@ public class CatalogClient {
         boolean available,
         String status
     ) {
+        public CatalogMenuItem(
+            UUID id,
+            UUID kitchenId,
+            String itemName,
+            String description,
+            String category,
+            String foodType,
+            BigDecimal price,
+            String currency,
+            Integer servesCount,
+            Integer preparationTimeMinutes,
+            String spiceLevel,
+            boolean available,
+            String status
+        ) {
+            this(
+                id,
+                kitchenId,
+                itemName,
+                description,
+                category,
+                foodType,
+                price,
+                currency,
+                servesCount,
+                preparationTimeMinutes,
+                spiceLevel,
+                null,
+                null,
+                available,
+                status
+            );
+        }
     }
 
     public record CatalogKitchen(
@@ -92,5 +125,34 @@ public class CatalogClient {
         BigDecimal longitude,
         String status
     ) {
+        public CatalogKitchen(
+            UUID id,
+            UUID identityId,
+            String kitchenName,
+            String displayName,
+            String areaName,
+            String city,
+            String status
+        ) {
+            this(
+                id,
+                identityId,
+                kitchenName,
+                displayName,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                areaName,
+                city,
+                null,
+                null,
+                null,
+                null,
+                status
+            );
+        }
     }
 }

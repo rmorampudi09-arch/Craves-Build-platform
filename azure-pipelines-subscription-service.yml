@@ -88,5 +88,6 @@ steps:
             CRAVES_JWT_VERIFICATION_PEM_BASE64="$JWT_PEM_VALUE" \
             CRAVES_JWT_ISSUER="https://api.craves.in/auth" \
             CRAVES_JWT_AUDIENCE="craves-api" \
+            SPRING_FLYWAY_TABLE="subscription_service_flyway_schema_history" \
           --no-wait
         az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus, image:properties.template.containers[0].image, targetPort:properties.configuration.ingress.targetPort, fqdn:properties.configuration.ingress.fqdn}" -o table

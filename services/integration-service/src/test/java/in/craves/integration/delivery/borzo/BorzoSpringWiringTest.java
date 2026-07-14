@@ -16,7 +16,7 @@ class BorzoSpringWiringTest {
             context.registerBean(BorzoProperties.class, () -> new BorzoProperties());
             context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
             context.registerBean(BorzoStatusMapper.class, () -> new BorzoStatusMapper());
-            context.registerBean(RestClient.Builder.class, RestClient::builder);
+            context.registerBean(RestClient.Builder.class, () -> RestClient.builder());
             context.registerBean(BorzoApiClient.class);
 
             context.refresh();

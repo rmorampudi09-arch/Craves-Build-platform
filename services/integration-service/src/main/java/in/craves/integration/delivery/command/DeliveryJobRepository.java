@@ -32,14 +32,15 @@ public class DeliveryJobRepository {
         UUID deliveryJobId = UUID.randomUUID();
         int inserted = jdbc.update("""
             INSERT INTO delivery_schema.delivery_job
-                (id, chef_sub_order_id, order_id, provider_id, provider_delivery_id,
+                (id, chef_sub_order_id, order_id, assignment_id, provider_id, provider_delivery_id,
                  status, tracking_url, quote_snapshot, booked_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, now(), now(), now())
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, now(), now(), now())
             ON CONFLICT (chef_sub_order_id) DO NOTHING
             """,
             deliveryJobId,
             chefSubOrderId,
             orderId,
+            routingResult.intelligenceAssignment().assignmentId(),
             routingResult.providerId(),
             routingResult.delivery().providerDeliveryId(),
             routingResult.delivery().status().name(),

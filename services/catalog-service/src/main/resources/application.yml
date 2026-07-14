@@ -46,3 +46,5 @@ craves:
   discovery:
     default-radius-km: ${CRAVES_DISCOVERY_DEFAULT_RADIUS_KM:10}
     max-radius-km: ${CRAVES_DISCOVERY_MAX_RADIUS_KM:15}
+    max-query-radius-meters: ${CRAVES_DISCOVERY_MAX_QUERY_RADIUS_METERS:50000}
+    max-page-size: ${CRAVES_DISCOVERY_MAX_PAGE_SIZE:100}

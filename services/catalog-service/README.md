@@ -1,25 +1,165 @@
 # Craves Catalog Service
 
-Catalog Service owns kitchen discovery, kitchen profiles, menu items, menu item availability, delivery-handling metadata, and public menu media metadata for Craves.
+Catalog Service owns kitchen profiles, menu items, public media metadata, package-handling metadata, and coordinate-based nearby discovery for Craves.
 
-This service follows the approved HLD direction for Catalog and Discovery: kitchens, dishes, menu items, prices, schedule/availability and search metadata are owned by the Catalog Service. Public images are stored in Azure Blob Storage and can be delivered through Azure Front Door/CDN.
+## Current scope
 
-## Current V1 scope
+- Approved `CHEF` users can create or update one kitchen profile.
+- Chefs can create, update, publish, and temporarily disable menu items.
+- Every menu item has an explicit packaged weight in grams.
+- Every menu item has an explicit thermobox requirement.
+- Public discovery returns active kitchens with at least one active and available menu item.
+- Nearby discovery uses PostGIS geography queries and sorts results nearest first.
+- Nearby kitchen and menu-item endpoints support page and size parameters.
+- Existing `/api/v1/catalog/**` endpoints remain available for compatibility.
 
-- Approved CHEF users can create/update one kitchen profile.
-- CHEF users can create/update menu items.
-- Every menu item stores an explicit packaged weight in grams.
-- Every menu item stores an explicit thermobox requirement (`true` or `false`).
-- CHEF users can upload menu item images.
-- CHEF users can toggle item availability.
-- Customers/public clients can discover active nearby kitchens.
-- Default discovery radius is 10 km.
-- Radius can be overridden dynamically by city/area policy.
-- Public discovery returns only ACTIVE kitchens with ACTIVE + available menu items.
+## App-launch discovery flow
+
+```text
+Customer opens app
+    -> app obtains active latitude and longitude
+    -> active location may be SAVED_ADDRESS or LIVE_GPS
+    -> app supplies radiusMeters
+    -> Catalog Service applies PostGIS ST_DWithin
+    -> results are ordered by ST_Distance
+    -> only active kitchens and sellable menu items are returned
+```
+
+`radiusMeters` is a browsing-query radius supplied by the caller. It does not confirm final delivery serviceability, determine delivery fees, or define a permanent chef delivery radius.
+
+## Nearby discovery endpoints
+
+### Nearby kitchens
+
+```http
+GET /api/v1/discovery/kitchens
+    ?latitude=17.4483
+    &longitude=78.3915
+    &radiusMeters=5000
+    &page=0
+    &size=20
+```
+
+Example response shape:
+
+```json
+{
+  "latitude": 17.4483,
+  "longitude": 78.3915,
+  "radiusMeters": 5000,
+  "page": {
+    "page": 0,
+    "size": 20,
+    "totalElements": 3,
+    "totalPages": 1,
+    "hasNext": false
+  },
+  "kitchens": [
+    {
+      "id": "kitchen-uuid",
+      "kitchenName": "Home Kitchen",
+      "displayName": "Home Kitchen",
+      "areaName": "Madhapur",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.4480,
+      "longitude": 78.3920,
+      "distanceMeters": 74,
+      "activeMenuItemCount": 8
+    }
+  ]
+}
+```
+
+### Nearby menu items
+
+```http
+GET /api/v1/discovery/menu-items
+    ?latitude=17.4483
+    &longitude=78.3915
+    &radiusMeters=5000
+    &page=0
+    &size=20
+```
+
+The menu response includes:
+
+```text
+menu-item identity and display fields
+price and currency
+food type and category
+serves count and preparation time
+package weight in grams
+thermobox requirement
+primary image URL
+kitchen identity and display fields
+kitchen coordinates
+distance in metres
+```
+
+The query retrieves one primary image URL directly in SQL. It does not issue a separate image query for every menu item.
+
+## Discovery validation
+
+Required:
+
+```text
+latitude
+longitude
+radiusMeters
+```
+
+Rules:
+
+```text
+latitude      = -90 through 90
+longitude     = -180 through 180
+radiusMeters  = greater than zero
+page          = zero or greater
+size          = 1 through configured maximum
+```
+
+Technical query guards:
+
+```text
+CRAVES_DISCOVERY_MAX_QUERY_RADIUS_METERS default = 50000
+CRAVES_DISCOVERY_MAX_PAGE_SIZE default = 100
+```
+
+These are abuse and database-protection limits. They are not product serviceability rules. The normal app request may use `radiusMeters=5000`, as agreed, while mobile and web configuration can later change that request value.
+
+## PostGIS migration
+
+Flyway migration:
+
+```text
+V3__kitchen_geography_discovery.sql
+```
+
+It adds:
+
+```text
+catalog_schema.kitchen_profile.location geography(Point, 4326)
+partial GiST index for active geocoded kitchens
+partial menu-item discovery index
+coordinate-pair check
+latitude-range check
+longitude-range check
+```
+
+The `location` column is generated from:
+
+```text
+longitude + latitude
+    -> PostGIS point with SRID 4326
+    -> geography(Point, 4326)
+```
+
+Legacy kitchens without coordinates remain stored, but they are excluded from coordinate-based discovery. No coordinates are guessed or backfilled.
 
 ## Menu delivery metadata
 
-The chef must explicitly supply these fields while creating or editing every menu item:
+Every menu-item create or update request must include:
 
 ```json
 {
@@ -28,32 +168,11 @@ The chef must explicitly supply these fields while creating or editing every men
 }
 ```
 
-`unitPackageWeightGrams` means the packaged weight of one sellable unit of the item. It is stored in grams so Craves does not lose precision.
+`unitPackageWeightGrams` is the packaged weight of one sellable unit. `thermoboxRequired` must be explicitly sent as `true` or `false`.
 
-Examples:
+Existing incomplete legacy items remain unavailable until the chef supplies real package metadata.
 
-```text
-One meal box             = 650 grams
-One family biryani pack  = 1800 grams
-Two ordered meal boxes   = 650 x 2 = 1300 grams
-```
-
-`thermoboxRequired` is an explicit operational decision. It must be sent as either `true` or `false`; absence is rejected.
-
-Existing menu items created before this migration are not assigned invented values. Flyway makes those incomplete legacy items unavailable until the chef edits them and supplies both fields.
-
-## Not included in V1
-
-- Video upload/transcoding. This is phase 2.
-- Commission/platform fee rules.
-- Delivery radius guarantee at checkout.
-- GST/invoice logic.
-- Chef payout logic.
-- Advanced Redis cache. Redis cache can be added after the API behavior is stable.
-
-## Main endpoints
-
-### Chef endpoints
+## Chef endpoints
 
 ```http
 GET    /api/v1/kitchens/me
@@ -87,66 +206,57 @@ Example menu-item request:
 }
 ```
 
-### Public customer discovery endpoints
+## Existing public catalog endpoints
 
 ```http
-GET /api/v1/catalog/kitchens?latitude=17.448&longitude=78.391&city=Hyderabad&areaName=Madhapur
+GET /api/v1/catalog/kitchens
 GET /api/v1/catalog/kitchens/{kitchenId}
 GET /api/v1/catalog/kitchens/{kitchenId}/menu-items
 GET /api/v1/catalog/menu-items/{menuItemId}
 ```
 
-## Environment variables
+These routes are retained so existing clients do not break. New app-launch location browsing should use `/api/v1/discovery/**`.
+
+## Local run
+
+```bash
+cd services/catalog-service
+mvn -B clean test
+mvn spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Required environment variables:
 
 ```text
 SPRING_DATASOURCE_URL
 SPRING_DATASOURCE_USERNAME
 SPRING_DATASOURCE_PASSWORD
 CRAVES_JWT_VERIFICATION_PEM_BASE64
-CRAVES_JWT_ISSUER
-CRAVES_JWT_AUDIENCE
 CRAVES_STORAGE_ENDPOINT_VALUE
 CRAVES_STORAGE_MEDIA_CONTAINER
 CRAVES_MEDIA_PUBLIC_BASE_URL
+```
+
+Optional discovery configuration:
+
+```text
 CRAVES_DISCOVERY_DEFAULT_RADIUS_KM
 CRAVES_DISCOVERY_MAX_RADIUS_KM
+CRAVES_DISCOVERY_MAX_QUERY_RADIUS_METERS
+CRAVES_DISCOVERY_MAX_PAGE_SIZE
 ```
 
-## Local run
-
-```bash
-cd services/catalog-service
-mvn spring-boot:run \
-  -Dspring-boot.run.profiles=local
-```
-
-For local PostgreSQL, create `craves_business_db` and set the datasource variables. Flyway creates `catalog_schema` and the required tables.
+The first two variables support the older compatibility endpoint. The metre-based variables protect the new `/api/v1/discovery/**` queries.
 
 ## Media design
 
-Images are uploaded to Azure Blob Storage under paths like:
+Images are uploaded to Azure Blob Storage under paths such as:
 
 ```text
 public/dishes/{kitchenId}/{menuItemId}/{assetId}-{filename}
 ```
 
-The service stores metadata in PostgreSQL and returns a public URL. If `CRAVES_MEDIA_PUBLIC_BASE_URL` is set, returned URLs use that CDN/base URL. If not set, the Azure Blob URL is returned.
-
-## Discovery radius design
-
-Default policy:
-
-```text
-Hyderabad / DEFAULT = 10 km default, 15 km max
-```
-
-Dynamic policy table:
-
-```text
-catalog_schema.service_area_policy
-```
-
-This lets us later configure dense areas like Madhapur/Gachibowli differently from outer areas like Kompally/Shamshabad without code changes.
+PostgreSQL stores image metadata. Public discovery returns the stored public URL or the configured CDN/base URL.
 
 ## Deployment
 
@@ -156,16 +266,33 @@ Pipeline:
 azure-pipelines-catalog-service.yml
 ```
 
-Required Azure DevOps variables:
+After deployment verify:
 
 ```text
-AZURE_SERVICE_CONNECTION
-POSTGRES_BUSINESS_DB_URL
-POSTGRES_BUSINESS_DB_USER
-POSTGRES_BUSINESS_DB_PASSWORD
-CRAVES_JWT_VERIFICATION_PEM_BASE64
-CRAVES_STORAGE_ENDPOINT_VALUE
-CRAVES_MEDIA_PUBLIC_BASE_URL
+Java 21 build passed
+Maven tests passed
+Flyway V3 completed
+PostGIS is available
+new Container App revision is Ready
+/actuator/health returns UP
 ```
 
-`CRAVES_MEDIA_PUBLIC_BASE_URL` can be blank until Azure Front Door/CDN custom media endpoint is configured.
+No new Azure resource, secret, Key Vault entry, or Service Bus entity is required.
+
+## Deliberately excluded
+
+This module does not define:
+
+```text
+final order serviceability
+chef delivery radius
+pricing or delivery fees by distance
+commission rules
+GST or invoice rules
+FSSAI compliance rules
+Redis caching
+personalized ranking
+sponsored ranking
+```
+
+The next module will make Order Service require a saved `deliveryAddressId` and create immutable pickup and drop-off snapshots.

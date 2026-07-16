@@ -68,7 +68,40 @@ public final class ApiDtos {
     ) {
     }
 
-    public record CheckoutRequest(String note) {
+    public record CheckoutRequest(UUID deliveryAddressId, String note) {
+    }
+
+    public record CustomerAddressSnapshotResponse(
+        UUID sourceAddressId,
+        String recipientName,
+        String contactPhoneNumber,
+        String addressLine1,
+        String addressLine2,
+        String landmark,
+        String areaName,
+        String city,
+        String state,
+        String postalCode,
+        BigDecimal latitude,
+        BigDecimal longitude
+    ) {
+    }
+
+    public record KitchenPickupSnapshotResponse(
+        UUID kitchenId,
+        String kitchenName,
+        String contactPhoneNumber,
+        String email,
+        String addressLine1,
+        String addressLine2,
+        String landmark,
+        String areaName,
+        String city,
+        String state,
+        String postalCode,
+        BigDecimal latitude,
+        BigDecimal longitude
+    ) {
     }
 
     public record CheckoutResponse(
@@ -82,6 +115,8 @@ public final class ApiDtos {
         BigDecimal deliveryFee,
         BigDecimal grandTotal,
         UUID chargePolicyId,
+        UUID deliveryAddressId,
+        CustomerAddressSnapshotResponse deliveryAddress,
         List<OrderResponse> orders,
         Instant createdAt
     ) {
@@ -114,6 +149,8 @@ public final class ApiDtos {
         BigDecimal grandTotal,
         String chefResponseNote,
         Integer prepTimeMinutes,
+        CustomerAddressSnapshotResponse deliveryAddress,
+        KitchenPickupSnapshotResponse pickupAddress,
         List<OrderItemResponse> items,
         Instant createdAt,
         Instant updatedAt
@@ -124,5 +161,8 @@ public final class ApiDtos {
     }
 
     public record ChefRejectRequest(String reason) {
+    }
+
+    public record ApiErrorResponse(String error, String message) {
     }
 }

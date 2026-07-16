@@ -1,6 +1,7 @@
 ALTER TABLE order_schema.customer_order
     ADD COLUMN IF NOT EXISTS chef_acceptance_requested_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS chef_acceptance_expires_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS chef_acceptance_initial_recorded_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS chef_acceptance_reminder_10_recorded_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS chef_acceptance_reminder_20_recorded_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS chef_rejection_code VARCHAR(48),
@@ -83,6 +84,11 @@ $$;
 CREATE INDEX IF NOT EXISTS idx_customer_order_acceptance_expiry
     ON order_schema.customer_order (chef_acceptance_expires_at, id)
     WHERE status = 'CHEF_ACCEPTANCE_PENDING';
+
+CREATE INDEX IF NOT EXISTS idx_customer_order_acceptance_initial
+    ON order_schema.customer_order (chef_acceptance_requested_at, id)
+    WHERE status = 'CHEF_ACCEPTANCE_PENDING'
+      AND chef_acceptance_initial_recorded_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_customer_order_acceptance_reminder_10
     ON order_schema.customer_order (chef_acceptance_requested_at, id)

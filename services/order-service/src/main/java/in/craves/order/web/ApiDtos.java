@@ -1,5 +1,6 @@
 package in.craves.order.web;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -90,6 +91,23 @@ public final class ApiDtos {
     ) {
     }
 
+    public record KitchenPickupSnapshotResponse(
+        UUID kitchenId,
+        String kitchenName,
+        String contactPhoneNumber,
+        String email,
+        String addressLine1,
+        String addressLine2,
+        String landmark,
+        String areaName,
+        String city,
+        String state,
+        String postalCode,
+        BigDecimal latitude,
+        BigDecimal longitude
+    ) {
+    }
+
     public record CheckoutResponse(
         UUID id,
         UUID customerIdentityId,
@@ -167,6 +185,7 @@ public final class ApiDtos {
         String chefResponseNote,
         Integer prepTimeMinutes,
         CustomerAddressSnapshotResponse deliveryAddress,
+        @JsonIgnore KitchenPickupSnapshotResponse pickupAddress,
         List<OrderItemResponse> items,
         Instant createdAt,
         Instant updatedAt
@@ -205,6 +224,7 @@ public final class ApiDtos {
                 grandTotal,
                 chefResponseNote,
                 prepTimeMinutes,
+                null,
                 null,
                 items,
                 createdAt,

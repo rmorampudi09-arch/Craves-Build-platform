@@ -1,0 +1,50 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - script: |
+      set -euo pipefail
+      cd services/order-service
+      mvn -B clean verify
+    displayName: Build and test Order Service
+
+  - script: |
+      set -euo pipefail
+      cd services/integration-service
+      mvn -B clean verify
+    displayName: Build and test Integration Service
+
+  - script: |
+      set -euo pipefail
+      cd services/notification-service
+      mvn -B clean verify
+    displayName: Build and test Notification Service
+
+  - script: |
+      set -euo pipefail
+      for schema in contracts/events/*.schema.json; do
+        python3 -m json.tool "$schema" >/dev/null
+      done
+    displayName: Validate domain-event contracts
+
+  - script: |
+      set -euo pipefail
+      grep -q "CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED:false" services/order-service/src/main/resources/application.yml
+      grep -q "CRAVES_DOMAIN_EVENT_ENABLED_TYPES:CHEF_ACCEPTED_ORDER" services/order-service/src/main/resources/application.yml
+      grep -q "CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_ENABLED:false" services/order-service/src/main/resources/application.yml
+      grep -q "CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED:false" services/integration-service/src/main/resources/application.yml
+      grep -q "CRAVES_REFUND_RECONCILIATION_ENABLED:false" services/integration-service/src/main/resources/application.yml
+      echo "All financial and execution switches remain disabled by default."
+    displayName: Verify safe runtime defaults

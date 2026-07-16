@@ -1,8 +1,10 @@
 package in.craves.order.service;
 
+import in.craves.order.exception.OrderApiException;
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.service.CatalogClient.CatalogKitchen;
 import in.craves.order.service.CatalogClient.CatalogMenuItem;
+import in.craves.order.service.CustomerAddressClient.CustomerAddress;
 import in.craves.order.web.ApiDtos.AddCartItemRequest;
 import in.craves.order.web.ApiDtos.CartItemResponse;
 import in.craves.order.web.ApiDtos.CartResponse;
@@ -14,6 +16,8 @@ import in.craves.order.web.ApiDtos.CheckoutResponse;
 import in.craves.order.web.ApiDtos.CheckoutStatus;
 import in.craves.order.web.ApiDtos.ChefAcceptRequest;
 import in.craves.order.web.ApiDtos.ChefRejectRequest;
+import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
+import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
 import in.craves.order.web.ApiDtos.OrderItemResponse;
 import in.craves.order.web.ApiDtos.OrderResponse;
 import in.craves.order.web.ApiDtos.OrderStatus;
@@ -41,18 +45,26 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class OrderService {
     private static final String INR = "INR";
+    private static final String DELIVERY_ADDRESS_REQUIRED_MESSAGE =
+        "Save the current location or select a saved delivery address before placing the order.";
 
     private final JdbcTemplate jdbcTemplate;
     private final CatalogClient catalogClient;
+    private final CustomerAddressClient customerAddressClient;
+    private final CheckoutSnapshotFactory checkoutSnapshotFactory;
     private final NotificationInternalClient notificationInternalClient;
 
     public OrderService(
         JdbcTemplate jdbcTemplate,
         CatalogClient catalogClient,
+        CustomerAddressClient customerAddressClient,
+        CheckoutSnapshotFactory checkoutSnapshotFactory,
         NotificationInternalClient notificationInternalClient
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.catalogClient = catalogClient;
+        this.customerAddressClient = customerAddressClient;
+        this.checkoutSnapshotFactory = checkoutSnapshotFactory;
         this.notificationInternalClient = notificationInternalClient;
     }
 
@@ -131,6 +143,16 @@ public class OrderService {
     @Transactional
     public CheckoutResponse checkout(CravesPrincipal principal, CheckoutRequest request) {
         requireCustomer(principal);
+        if (request == null || request.deliveryAddressId() == null) {
+            throw OrderApiException.badRequest("DELIVERY_ADDRESS_REQUIRED", DELIVERY_ADDRESS_REQUIRED_MESSAGE);
+        }
+
+        CustomerAddress customerAddress = customerAddressClient.getActiveOwnedAddress(
+            principal.identityId(),
+            request.deliveryAddressId()
+        );
+        CustomerAddressSnapshotResponse dropoff = checkoutSnapshotFactory.customerDropoff(customerAddress);
+
         CartResponse cart = validateCart(principal);
         if (cart.items().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart is empty");
@@ -154,6 +176,7 @@ public class OrderService {
         for (Map.Entry<UUID, List<CartItemResponse>> entry : byKitchen.entrySet()) {
             UUID kitchenId = entry.getKey();
             CatalogKitchen kitchen = catalogClient.getKitchen(kitchenId);
+            KitchenPickupSnapshotResponse pickup = checkoutSnapshotFactory.kitchenPickup(kitchen);
             BigDecimal foodSubtotal = entry.getValue().stream()
                 .map(CartItemResponse::lineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -162,6 +185,7 @@ public class OrderService {
             pendingOrders.add(new PendingKitchenOrder(
                 kitchenId,
                 kitchen,
+                pickup,
                 List.copyOf(entry.getValue()),
                 foodSubtotal,
                 charges,
@@ -178,15 +202,71 @@ public class OrderService {
             .add(checkoutTax)
             .add(checkoutDelivery)
             .setScale(2, RoundingMode.HALF_UP);
+
         jdbcTemplate.update(
-            "INSERT INTO order_schema.checkout (id, customer_identity_id, status, currency, food_subtotal, platform_fee, tax_amount, delivery_fee, grand_total, charge_policy_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())",
-            checkoutId, principal.identityId(), CheckoutStatus.PAYMENT_PENDING.name(), INR, checkoutFood, checkoutPlatform, checkoutTax, checkoutDelivery, grandTotal, policy.id()
+            """
+                INSERT INTO order_schema.checkout (
+                    id, customer_identity_id, status, currency,
+                    food_subtotal, platform_fee, tax_amount, delivery_fee, grand_total, charge_policy_id,
+                    delivery_address_id,
+                    dropoff_recipient_name, dropoff_contact_phone, dropoff_address_line1,
+                    dropoff_address_line2, dropoff_landmark, dropoff_area_name, dropoff_city,
+                    dropoff_state, dropoff_postal_code, dropoff_latitude, dropoff_longitude,
+                    created_at, updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    now(), now()
+                )
+                """,
+            checkoutId,
+            principal.identityId(),
+            CheckoutStatus.PAYMENT_PENDING.name(),
+            INR,
+            checkoutFood,
+            checkoutPlatform,
+            checkoutTax,
+            checkoutDelivery,
+            grandTotal,
+            policy.id(),
+            dropoff.sourceAddressId(),
+            dropoff.recipientName(),
+            dropoff.contactPhoneNumber(),
+            dropoff.addressLine1(),
+            dropoff.addressLine2(),
+            dropoff.landmark(),
+            dropoff.areaName(),
+            dropoff.city(),
+            dropoff.state(),
+            dropoff.postalCode(),
+            dropoff.latitude(),
+            dropoff.longitude()
         );
 
         for (PendingKitchenOrder pending : pendingOrders) {
             UUID orderId = UUID.randomUUID();
+            KitchenPickupSnapshotResponse pickup = pending.pickup();
             jdbcTemplate.update(
-                "INSERT INTO order_schema.customer_order (id, checkout_id, customer_identity_id, kitchen_id, kitchen_name_snapshot, status, currency, food_subtotal, platform_fee, tax_amount, delivery_fee, grand_total, total_package_weight_grams, thermobox_required, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())",
+                """
+                    INSERT INTO order_schema.customer_order (
+                        id, checkout_id, customer_identity_id, kitchen_id, kitchen_name_snapshot,
+                        status, currency, food_subtotal, platform_fee, tax_amount, delivery_fee,
+                        grand_total, total_package_weight_grams, thermobox_required,
+                        delivery_address_id,
+                        dropoff_recipient_name, dropoff_contact_phone, dropoff_address_line1,
+                        dropoff_address_line2, dropoff_landmark, dropoff_area_name, dropoff_city,
+                        dropoff_state, dropoff_postal_code, dropoff_latitude, dropoff_longitude,
+                        pickup_phone_number, pickup_email, pickup_address_line1, pickup_address_line2,
+                        pickup_landmark, pickup_area_name, pickup_city, pickup_state,
+                        pickup_postal_code, pickup_latitude, pickup_longitude,
+                        created_at, updated_at
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        now(), now()
+                    )
+                    """,
                 orderId,
                 checkoutId,
                 principal.identityId(),
@@ -200,7 +280,30 @@ public class OrderService {
                 pending.charges().deliveryFee(),
                 pending.charges().grandTotal(),
                 pending.packaging().totalPackageWeightGrams(),
-                pending.packaging().thermoboxRequired()
+                pending.packaging().thermoboxRequired(),
+                dropoff.sourceAddressId(),
+                dropoff.recipientName(),
+                dropoff.contactPhoneNumber(),
+                dropoff.addressLine1(),
+                dropoff.addressLine2(),
+                dropoff.landmark(),
+                dropoff.areaName(),
+                dropoff.city(),
+                dropoff.state(),
+                dropoff.postalCode(),
+                dropoff.latitude(),
+                dropoff.longitude(),
+                pickup.contactPhoneNumber(),
+                pickup.email(),
+                pickup.addressLine1(),
+                pickup.addressLine2(),
+                pickup.landmark(),
+                pickup.areaName(),
+                pickup.city(),
+                pickup.state(),
+                pickup.postalCode(),
+                pickup.latitude(),
+                pickup.longitude()
             );
             addStatusHistory(orderId, null, OrderStatus.PAYMENT_PENDING, principal.identityId(), "Checkout created");
             for (CartItemResponse cartItem : pending.items()) {
@@ -424,15 +527,89 @@ public class OrderService {
     }
 
     private CheckoutResponse mapCheckout(ResultSet rs, List<OrderResponse> orders) throws SQLException {
+        CustomerAddressSnapshotResponse dropoff = mapDropoffSnapshot(rs);
         return new CheckoutResponse(
-            rs.getObject("id", UUID.class), rs.getObject("customer_identity_id", UUID.class), CheckoutStatus.valueOf(rs.getString("status")), rs.getString("currency"), rs.getBigDecimal("food_subtotal"), rs.getBigDecimal("platform_fee"), rs.getBigDecimal("tax_amount"), rs.getBigDecimal("delivery_fee"), rs.getBigDecimal("grand_total"), rs.getObject("charge_policy_id", UUID.class), orders, instant(rs, "created_at")
+            rs.getObject("id", UUID.class),
+            rs.getObject("customer_identity_id", UUID.class),
+            CheckoutStatus.valueOf(rs.getString("status")),
+            rs.getString("currency"),
+            rs.getBigDecimal("food_subtotal"),
+            rs.getBigDecimal("platform_fee"),
+            rs.getBigDecimal("tax_amount"),
+            rs.getBigDecimal("delivery_fee"),
+            rs.getBigDecimal("grand_total"),
+            rs.getObject("charge_policy_id", UUID.class),
+            rs.getObject("delivery_address_id", UUID.class),
+            dropoff,
+            orders,
+            instant(rs, "created_at")
         );
     }
 
     private OrderResponse mapOrder(ResultSet rs, int rowNum) throws SQLException {
         UUID orderId = rs.getObject("id", UUID.class);
         return new OrderResponse(
-            orderId, rs.getObject("checkout_id", UUID.class), rs.getObject("customer_identity_id", UUID.class), rs.getObject("kitchen_id", UUID.class), rs.getString("kitchen_name_snapshot"), OrderStatus.valueOf(rs.getString("status")), rs.getString("currency"), rs.getBigDecimal("food_subtotal"), rs.getBigDecimal("platform_fee"), rs.getBigDecimal("tax_amount"), rs.getBigDecimal("delivery_fee"), rs.getBigDecimal("grand_total"), rs.getString("chef_response_note"), integerOrNull(rs, "prep_time_minutes"), listOrderItems(orderId), instant(rs, "created_at"), instant(rs, "updated_at")
+            orderId,
+            rs.getObject("checkout_id", UUID.class),
+            rs.getObject("customer_identity_id", UUID.class),
+            rs.getObject("kitchen_id", UUID.class),
+            rs.getString("kitchen_name_snapshot"),
+            OrderStatus.valueOf(rs.getString("status")),
+            rs.getString("currency"),
+            rs.getBigDecimal("food_subtotal"),
+            rs.getBigDecimal("platform_fee"),
+            rs.getBigDecimal("tax_amount"),
+            rs.getBigDecimal("delivery_fee"),
+            rs.getBigDecimal("grand_total"),
+            rs.getString("chef_response_note"),
+            integerOrNull(rs, "prep_time_minutes"),
+            mapDropoffSnapshot(rs),
+            mapPickupSnapshot(rs),
+            listOrderItems(orderId),
+            instant(rs, "created_at"),
+            instant(rs, "updated_at")
+        );
+    }
+
+    private CustomerAddressSnapshotResponse mapDropoffSnapshot(ResultSet rs) throws SQLException {
+        UUID sourceAddressId = rs.getObject("delivery_address_id", UUID.class);
+        if (sourceAddressId == null) {
+            return null;
+        }
+        return new CustomerAddressSnapshotResponse(
+            sourceAddressId,
+            rs.getString("dropoff_recipient_name"),
+            rs.getString("dropoff_contact_phone"),
+            rs.getString("dropoff_address_line1"),
+            rs.getString("dropoff_address_line2"),
+            rs.getString("dropoff_landmark"),
+            rs.getString("dropoff_area_name"),
+            rs.getString("dropoff_city"),
+            rs.getString("dropoff_state"),
+            rs.getString("dropoff_postal_code"),
+            rs.getBigDecimal("dropoff_latitude"),
+            rs.getBigDecimal("dropoff_longitude")
+        );
+    }
+
+    private KitchenPickupSnapshotResponse mapPickupSnapshot(ResultSet rs) throws SQLException {
+        if (!StringUtils.hasText(rs.getString("pickup_address_line1"))) {
+            return null;
+        }
+        return new KitchenPickupSnapshotResponse(
+            rs.getObject("kitchen_id", UUID.class),
+            rs.getString("kitchen_name_snapshot"),
+            rs.getString("pickup_phone_number"),
+            rs.getString("pickup_email"),
+            rs.getString("pickup_address_line1"),
+            rs.getString("pickup_address_line2"),
+            rs.getString("pickup_landmark"),
+            rs.getString("pickup_area_name"),
+            rs.getString("pickup_city"),
+            rs.getString("pickup_state"),
+            rs.getString("pickup_postal_code"),
+            rs.getBigDecimal("pickup_latitude"),
+            rs.getBigDecimal("pickup_longitude")
         );
     }
 
@@ -544,6 +721,7 @@ public class OrderService {
     private record PendingKitchenOrder(
         UUID kitchenId,
         CatalogKitchen kitchen,
+        KitchenPickupSnapshotResponse pickup,
         List<CartItemResponse> items,
         BigDecimal foodSubtotal,
         Charges charges,

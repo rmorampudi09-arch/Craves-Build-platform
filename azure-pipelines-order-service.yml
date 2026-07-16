@@ -18,6 +18,7 @@ parameters:
 variables:
   modulePath: services/order-service
   imageRepository: craves/order-service
+  userChefInternalBaseUrl: https://ca-craves-user-chef-service-prod.happysand-aedc7165.centralindia.azurecontainerapps.io
 
 pool:
   vmImage: ubuntu-latest
@@ -56,6 +57,33 @@ steps:
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
+    displayName: Configure Order internal service secret
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        APP='${{ parameters.containerAppName }}'
+
+        if [ -z "${CRAVES_INTERNAL_SERVICE_SECRET_VALUE:-}" ]; then
+          echo "Azure DevOps secret variable CRAVES_INTERNAL_SERVICE_SECRET is missing or unavailable to this pipeline." >&2
+          exit 1
+        fi
+
+        az containerapp secret set \
+          --name "$APP" \
+          --resource-group "$RG" \
+          --secrets craves-internal-service-secret="$CRAVES_INTERNAL_SERVICE_SECRET_VALUE" \
+          -o none
+
+        unset CRAVES_INTERNAL_SERVICE_SECRET_VALUE
+        echo "Order internal service secret reference is configured."
+    env:
+      CRAVES_INTERNAL_SERVICE_SECRET_VALUE: $(CRAVES_INTERNAL_SERVICE_SECRET)
+
+  - task: AzureCLI@2
     displayName: Deploy and verify Container App revision
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
@@ -68,6 +96,7 @@ steps:
         APP='${{ parameters.containerAppName }}'
         TAG='${{ parameters.imageTag }}'
         IMAGE_REPOSITORY='$(imageRepository)'
+        USER_CHEF_INTERNAL_BASE_URL='$(userChefInternalBaseUrl)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
 
@@ -75,6 +104,9 @@ steps:
           --name "$APP" \
           --resource-group "$RG" \
           --image "$IMAGE" \
+          --set-env-vars \
+            CRAVES_USER_CHEF_INTERNAL_BASE_URL="$USER_CHEF_INTERNAL_BASE_URL" \
+            CRAVES_INTERNAL_SERVICE_SECRET=secretref:craves-internal-service-secret \
           -o none
 
         echo "Waiting for the new Order Service revision to become ready..."
@@ -110,8 +142,8 @@ steps:
             az containerapp show \
               --name "$APP" \
               --resource-group "$RG" \
-              --query "{name:name,latestRevision:properties.latestRevisionName,latestReadyRevision:properties.latestReadyRevisionName,runningStatus:properties.runningStatus}" \
-              -o table
+              --query "{name:name,latestRevision:properties.latestRevisionName,latestReadyRevision:properties.latestReadyRevisionName,runningStatus:properties.runningStatus,internalConfig:properties.template.containers[0].env[?name=='CRAVES_USER_CHEF_INTERNAL_BASE_URL' || name=='CRAVES_INTERNAL_SERVICE_SECRET'].{name:name,value:value,secretRef:secretRef}}" \
+              -o json
             exit 0
           fi
 

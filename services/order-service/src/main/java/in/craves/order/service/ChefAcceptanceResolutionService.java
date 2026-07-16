@@ -59,7 +59,8 @@ public class ChefAcceptanceResolutionService {
         LockedOrder lockedOrder = lockOrder(orderId);
 
         if (lockedOrder.status() == OrderStatus.CHEF_REJECTED
-            && CHEF_DECLINED.equals(lockedOrder.rejectionCode())) {
+            && (CHEF_DECLINED.equals(lockedOrder.rejectionCode())
+                || CHEF_ACCEPTANCE_TIMEOUT.equals(lockedOrder.rejectionCode()))) {
             return orderService.getOrderForChef(principal, orderId);
         }
         if (lockedOrder.status() != OrderStatus.CHEF_ACCEPTANCE_PENDING) {
@@ -69,14 +70,20 @@ public class ChefAcceptanceResolutionService {
             );
         }
 
-        String note = safeReason(request == null ? null : request.reason());
+        boolean expired = lockedOrder.acceptanceExpiresAt() != null
+            && !lockedOrder.databaseNow().isBefore(lockedOrder.acceptanceExpiresAt());
+        String rejectionCode = expired ? CHEF_ACCEPTANCE_TIMEOUT : CHEF_DECLINED;
+        String note = expired
+            ? "Kitchen did not accept the order within 30 minutes"
+            : safeReason(request == null ? null : request.reason());
+
         rejectAndRequestRefund(
             lockedOrder,
-            CHEF_DECLINED,
+            rejectionCode,
             note == null ? "Chef declined the order" : note,
-            principal.identityId(),
+            expired ? null : principal.identityId(),
             correlationId,
-            idempotencyKey
+            expired ? "timeout:" + orderId : idempotencyKey
         );
         return orderService.getOrderForChef(principal, orderId);
     }
@@ -133,7 +140,9 @@ public class ChefAcceptanceResolutionService {
         if (stage == ReminderStage.FIRST && lockedOrder.firstReminderRecordedAt() != null) {
             return false;
         }
-        if (stage == ReminderStage.SECOND && lockedOrder.secondReminderRecordedAt() != null) {
+        if (stage == ReminderStage.SECOND
+            && (lockedOrder.firstReminderRecordedAt() == null
+                || lockedOrder.secondReminderRecordedAt() != null)) {
             return false;
         }
 
@@ -230,7 +239,12 @@ public class ChefAcceptanceResolutionService {
             decision.requestedAt()
         );
         SerializedDomainEvent event = refundEventFactory.create(eventSource, correlationId, idempotencyKey);
-        domainOutboxRepository.insert(order.orderId(), event);
+        if (!domainOutboxRepository.insert(order.orderId(), event)) {
+            throw OrderApiException.conflict(
+                "REFUND_REQUESTED_EVENT_ALREADY_EXISTS",
+                "The refund request event already exists for this order."
+            );
+        }
         recordCustomerRefundNotification(order, rejectionCode, decision);
     }
 

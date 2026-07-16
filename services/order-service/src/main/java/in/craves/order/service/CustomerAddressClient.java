@@ -1,10 +1,10 @@
 package in.craves.order.service;
 
-import in.craves.order.config.UserChefInternalClientProperties;
 import in.craves.order.exception.OrderApiException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -18,11 +18,17 @@ public class CustomerAddressClient {
     private static final String INTERNAL_HEADER = "X-Craves-Internal-Secret";
 
     private final RestClient restClient;
-    private final UserChefInternalClientProperties properties;
+    private final String baseUrl;
+    private final String accessValue;
 
-    public CustomerAddressClient(UserChefInternalClientProperties properties, RestClient.Builder builder) {
-        this.properties = properties;
-        this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
+    public CustomerAddressClient(
+        @Value("${CRAVES_USER_CHEF_INTERNAL_BASE_URL:http://localhost:8081}") String baseUrl,
+        @Value("${CRAVES_INTERNAL_SERVICE_SECRET:}") String accessValue,
+        RestClient.Builder builder
+    ) {
+        this.baseUrl = baseUrl;
+        this.accessValue = accessValue;
+        this.restClient = builder.baseUrl(baseUrl).build();
     }
 
     public CustomerAddress getActiveOwnedAddress(UUID identityId, UUID addressId) {
@@ -32,7 +38,7 @@ public class CustomerAddressClient {
                 "Save the current location or select a saved delivery address before placing the order."
             );
         }
-        if (!StringUtils.hasText(properties.getBaseUrl()) || !StringUtils.hasText(properties.getAccessValue())) {
+        if (!StringUtils.hasText(baseUrl) || !StringUtils.hasText(accessValue)) {
             throw OrderApiException.serviceUnavailable(
                 "DELIVERY_ADDRESS_LOOKUP_UNAVAILABLE",
                 "Delivery address verification is temporarily unavailable."
@@ -45,7 +51,7 @@ public class CustomerAddressClient {
                     .path("/internal/v1/customer-addresses/{addressId}")
                     .queryParam("identityId", identityId)
                     .build(addressId))
-                .header(INTERNAL_HEADER, properties.getAccessValue())
+                .header(INTERNAL_HEADER, accessValue)
                 .header(HttpHeaders.ACCEPT, "application/json")
                 .retrieve()
                 .body(CustomerAddress.class);

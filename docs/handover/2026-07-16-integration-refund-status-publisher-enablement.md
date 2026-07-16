@@ -37,13 +37,13 @@ The implementation follows the approved Craves architecture baseline:
 - managed identity is preferred for Azure service authentication;
 - failed publication remains durable and retryable;
 - payment-provider timeouts must not be interpreted as success or failure without verification;
-- refund events must preserve correlation, causation, subject, provider reference, amount, reason, and normalized status.
+- refund events preserve correlation, causation, subject, provider reference, amount, reason, and normalized status.
 
 The approved refund mapping remains:
 
 ```text
-PENDING or ONHOLD  -> REFUND_PENDING
-SUCCESS            -> REFUNDED
+PENDING or ONHOLD   -> REFUND_PENDING
+SUCCESS             -> REFUNDED
 FAILED or CANCELLED -> REFUND_FAILED
 ```
 
@@ -65,40 +65,49 @@ No new payment calculation, provider call, status mapping, database table, or ev
 
 ## 4. Gap found during activation review
 
-`RefundStatusOutboxPublisher` and other Integration workers use Spring `@Scheduled` methods. The main application did not explicitly declare `@EnableScheduling`.
+`RefundStatusOutboxPublisher` uses a Spring `@Scheduled` polling method. The application did not contain scheduling activation for this publisher.
 
-Without explicit scheduling activation, the publisher bean could be created while its polling method never runs.
+Without scheduling activation, the publisher bean could be created while its polling method never runs.
 
-Correction:
+The correction is deliberately scoped:
 
 ```text
-services/integration-service/src/main/java/in/craves/integration/IntegrationServiceApplication.java
+services/integration-service/src/main/java/in/craves/integration/refund/RefundStatusPublisherSchedulingConfiguration.java
 ```
 
-now includes:
+This configuration contains:
 
 ```java
+@Configuration(proxyBeanMethods = false)
 @EnableScheduling
+@ConditionalOnProperty(
+    prefix = "craves.refund",
+    name = "status-publisher-enabled",
+    havingValue = "true"
+)
 ```
 
-A regression test verifies that scheduling remains explicitly enabled.
+The main Integration application is not globally annotated with `@EnableScheduling`. Scheduling starts only in a revision where the refund status publisher flag is true.
+
+A regression test verifies:
+
+- scheduling is present on the conditional configuration;
+- the condition is exactly `craves.refund.status-publisher-enabled=true`;
+- the main application does not globally enable scheduling.
 
 ## 5. Files changed
-
-Modified:
-
-```text
-services/integration-service/src/main/java/in/craves/integration/IntegrationServiceApplication.java
-```
 
 Added:
 
 ```text
+services/integration-service/src/main/java/in/craves/integration/refund/RefundStatusPublisherSchedulingConfiguration.java
 services/integration-service/src/test/java/in/craves/integration/IntegrationServiceSchedulingTest.java
 azure-pipelines-integration-refund-status-publisher-enable.yml
 services/integration-service/modules/refund-status-publisher/README.md
 docs/handover/2026-07-16-integration-refund-status-publisher-enablement.md
 ```
+
+No existing Flyway migration is modified.
 
 ## 6. Controlled activation pipeline
 
@@ -168,7 +177,7 @@ CRAVES_DOMAIN_EVENT_ENABLED_TYPES=CHEF_ACCEPTED_ORDER
 
 1. Run Integration Service CI on the feature branch.
 2. Merge only after CI succeeds.
-3. Run normal Integration Service deployment from `main` so explicit scheduling is deployed.
+3. Run normal Integration Service deployment from `main` so the conditional scheduling configuration is deployed.
 4. Confirm the new Integration revision is healthy and the publisher remains disabled.
 5. Register and run the controlled publisher enablement pipeline from `main`.
 6. Grant Sender RBAC once if the pipeline reports it missing.
@@ -259,9 +268,9 @@ A broker send can succeed while the database acknowledgement fails. The same eve
 
 If Service Bus or managed identity authentication fails, outbox rows remain retryable. Operations must monitor pending age, failed attempts, and local dead-letter rows before provider execution is enabled.
 
-### Scheduling
+### Scheduling scope
 
-Explicit `@EnableScheduling` activates all scheduled Integration methods. Refund execution workers still return immediately while provider execution and reconciliation flags are false. Delivery execution remains protected by its own disabled runtime switch.
+The scheduling infrastructure is conditionally imported only when refund status publication is enabled. Once active, Spring can invoke other `@Scheduled` methods, but refund provider execution still immediately returns while provider execution and reconciliation flags are false. Delivery execution remains protected by its disabled runtime flag.
 
 ### Scale
 

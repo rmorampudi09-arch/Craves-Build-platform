@@ -78,7 +78,6 @@ public class ChefAcceptanceService {
                     updated_at = now()
                 WHERE id = ?
                   AND status = ?
-                  AND chef_acceptance_expires_at > now()
                 RETURNING accepted_at, ready_at
                 """,
             (resultSet, rowNumber) -> new AcceptanceTimes(
@@ -94,10 +93,7 @@ public class ChefAcceptanceService {
         );
 
         if (acceptanceTimes == null || acceptanceTimes.acceptedAt() == null || acceptanceTimes.readyAt() == null) {
-            throw OrderApiException.conflict(
-                "CHEF_ACCEPTANCE_EXPIRED",
-                "The 30-minute chef acceptance window has expired."
-            );
+            throw new IllegalStateException("Chef acceptance timestamps were not persisted");
         }
 
         jdbcTemplate.update(

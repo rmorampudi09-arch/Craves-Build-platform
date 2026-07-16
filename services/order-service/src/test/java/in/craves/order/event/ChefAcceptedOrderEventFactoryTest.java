@@ -60,6 +60,7 @@ class ChefAcceptedOrderEventFactoryTest {
         assertThat(event.eventVersion()).isEqualTo("1.0");
         assertThat(event.correlationId()).isEqualTo(correlationId);
         assertThat(event.eventKey()).isEqualTo("CHEF_ACCEPTED_ORDER:" + chefSubOrderId);
+        assertThat(json.path("occurredAt").asText()).isEqualTo("2026-07-16T10:00:00Z");
         assertThat(json.path("source").asText()).isEqualTo("order-service");
         assertThat(json.path("subject").asText()).isEqualTo(chefSubOrderId.toString());
         assertThat(json.path("data").path("orderId").asText()).isEqualTo(checkoutId.toString());

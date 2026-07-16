@@ -2,6 +2,7 @@ package in.craves.order.event;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryRequestData;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryStopData;
 import java.nio.charset.StandardCharsets;
@@ -21,7 +22,8 @@ public class ChefAcceptedOrderEventFactory {
     private final ObjectMapper objectMapper;
 
     public ChefAcceptedOrderEventFactory(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+        this.objectMapper = objectMapper.copy()
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     public SerializedDomainEvent create(

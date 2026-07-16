@@ -56,7 +56,7 @@ steps:
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Update Container App image
+    displayName: Deploy and verify Container App revision
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -70,5 +70,71 @@ steps:
         IMAGE_REPOSITORY='$(imageRepository)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-        az containerapp update --name "$APP" --resource-group "$RG" --image "$IMAGE" --no-wait
-        az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus}" -o table
+
+        az containerapp update \
+          --name "$APP" \
+          --resource-group "$RG" \
+          --image "$IMAGE" \
+          -o none
+
+        echo "Waiting for the new Order Service revision to become ready..."
+        for attempt in $(seq 1 36); do
+          LATEST=$(az containerapp show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --query properties.latestRevisionName \
+            -o tsv)
+          READY=$(az containerapp show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --query properties.latestReadyRevisionName \
+            -o tsv)
+
+          HEALTH=$(az containerapp revision show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --revision "$LATEST" \
+            --query properties.healthState \
+            -o tsv 2>/dev/null || true)
+          RUNNING=$(az containerapp revision show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --revision "$LATEST" \
+            --query properties.runningState \
+            -o tsv 2>/dev/null || true)
+
+          echo "Attempt $attempt/36: latest=$LATEST ready=$READY health=$HEALTH running=$RUNNING"
+
+          if [ "$LATEST" = "$READY" ] && [ "$HEALTH" = "Healthy" ] && [[ "$RUNNING" == Running* ]]; then
+            echo "Order Service revision is healthy."
+            az containerapp show \
+              --name "$APP" \
+              --resource-group "$RG" \
+              --query "{name:name,latestRevision:properties.latestRevisionName,latestReadyRevision:properties.latestReadyRevisionName,runningStatus:properties.runningStatus}" \
+              -o table
+            exit 0
+          fi
+
+          if [ "$HEALTH" = "Unhealthy" ] || [ "$RUNNING" = "Failed" ]; then
+            echo "Order Service revision became unhealthy." >&2
+            az containerapp logs show \
+              --name "$APP" \
+              --resource-group "$RG" \
+              --revision "$LATEST" \
+              --type console \
+              --tail 100 \
+              --format text || true
+            exit 1
+          fi
+
+          sleep 10
+        done
+
+        echo "Timed out waiting for a healthy Order Service revision." >&2
+        az containerapp revision list \
+          --name "$APP" \
+          --resource-group "$RG" \
+          --all \
+          --query "[].{revision:name,active:properties.active,health:properties.healthState,running:properties.runningState,image:properties.template.containers[0].image}" \
+          -o table || true
+        exit 1

@@ -24,8 +24,11 @@ public class CheckoutController {
     }
 
     @PostMapping
-    public CheckoutResponse checkout(@AuthenticationPrincipal CravesPrincipal principal, @Valid @RequestBody(required = false) CheckoutRequest request) {
-        return orderService.checkout(principal, request == null ? new CheckoutRequest(null) : request);
+    public CheckoutResponse checkout(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @Valid @RequestBody(required = false) CheckoutRequest request
+    ) {
+        return orderService.checkout(principal, request == null ? new CheckoutRequest(null, null) : request);
     }
 
     @GetMapping("/{checkoutId}")

@@ -48,6 +48,11 @@ public class RefundRequestService {
 
         RefundRequestedData data = event.data();
         PaymentOrder paymentOrder = lockPaidPaymentOrder(data.checkoutId());
+        if (refundExists(data.chefSubOrderId())) {
+            markInboxDuplicate(event.eventId());
+            return false;
+        }
+
         BigDecimal requestedAmount = data.refundAmount().setScale(2, RoundingMode.HALF_UP);
         validateFinancialBounds(paymentOrder, data, requestedAmount);
 
@@ -70,7 +75,7 @@ public class RefundRequestService {
                     ?, ?, ?,
                     CAST(? AS jsonb), ?, now()
                 )
-                ON CONFLICT (chef_sub_order_id) DO NOTHING
+                ON CONFLICT DO NOTHING
                 """,
             refundId,
             paymentOrder.paymentOrderId(),
@@ -89,10 +94,7 @@ public class RefundRequestService {
         );
 
         if (inserted == 0) {
-            jdbcTemplate.update(
-                "UPDATE payment_schema.refund_request_inbox SET processing_status = 'DUPLICATE', processed_at = now() WHERE event_id = ?",
-                event.eventId()
-            );
+            markInboxDuplicate(event.eventId());
             return false;
         }
 
@@ -101,6 +103,22 @@ public class RefundRequestService {
             event.eventId()
         );
         return true;
+    }
+
+    private boolean refundExists(UUID chefSubOrderId) {
+        Integer count = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM payment_schema.refund WHERE chef_sub_order_id = ?",
+            Integer.class,
+            chefSubOrderId
+        );
+        return count != null && count > 0;
+    }
+
+    private void markInboxDuplicate(UUID eventId) {
+        jdbcTemplate.update(
+            "UPDATE payment_schema.refund_request_inbox SET processing_status = 'DUPLICATE', processed_at = now() WHERE event_id = ?",
+            eventId
+        );
     }
 
     private PaymentOrder lockPaidPaymentOrder(UUID checkoutId) {

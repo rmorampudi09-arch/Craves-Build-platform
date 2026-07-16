@@ -20,5 +20,8 @@ steps:
     displayName: Compile and run Order Service tests
 
   - script: |
-      python3 -m json.tool contracts/events/chef-accepted-order-v1.schema.json >/dev/null
-    displayName: Validate CHEF_ACCEPTED_ORDER schema JSON
+      for schema in contracts/events/*.schema.json; do
+        echo "Validating $schema"
+        python3 -m json.tool "$schema" >/dev/null
+      done
+    displayName: Validate Order domain event schema JSON files

@@ -38,6 +38,12 @@ public class RefundRepository {
                     SELECT id
                     FROM payment_schema.refund
                     WHERE attempt_count < ?
+                      AND checkout_id IS NOT NULL
+                      AND chef_sub_order_id IS NOT NULL
+                      AND customer_identity_id IS NOT NULL
+                      AND request_event_id IS NOT NULL
+                      AND idempotency_key IS NOT NULL
+                      AND cashfree_order_id IS NOT NULL
                       AND (
                           (? AND status IN ('REQUESTED', 'RETRY') AND next_attempt_at <= now())
                           OR (? AND status IN ('PENDING', 'ONHOLD') AND next_attempt_at <= now())

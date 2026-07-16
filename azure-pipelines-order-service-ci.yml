@@ -1,0 +1,24 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - script: |
+      cd services/order-service
+      mvn -B clean verify
+    displayName: Compile and run Order Service tests
+
+  - script: |
+      python3 -m json.tool contracts/events/chef-accepted-order-v1.schema.json >/dev/null
+    displayName: Validate CHEF_ACCEPTED_ORDER schema JSON

@@ -13,7 +13,7 @@ class RefundRequestServiceTest {
 
         assertThat(reference)
             .isEqualTo("CRV12345678123456789012123456789012")
-            .hasSizeBetween(3, 40)
+            .hasSize(35)
             .matches("[A-Za-z0-9]+");
     }
 

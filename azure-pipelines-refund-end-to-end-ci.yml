@@ -41,10 +41,23 @@ steps:
 
   - script: |
       set -euo pipefail
+      for script in scripts/refund/*.sh; do
+        echo "Checking Bash syntax: $script"
+        bash -n "$script"
+      done
+    displayName: Validate refund rollout script syntax
+
+  - script: |
+      set -euo pipefail
       grep -q "CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED:false" services/order-service/src/main/resources/application.yml
       grep -q "CRAVES_DOMAIN_EVENT_ENABLED_TYPES:CHEF_ACCEPTED_ORDER" services/order-service/src/main/resources/application.yml
       grep -q "CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_ENABLED:false" services/order-service/src/main/resources/application.yml
       grep -q "CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED:false" services/integration-service/src/main/resources/application.yml
       grep -q "CRAVES_REFUND_RECONCILIATION_ENABLED:false" services/integration-service/src/main/resources/application.yml
+      grep -q "PAYMENT_PROVIDER_ENVIRONMENT=sandbox" scripts/refund/activate-refund-stage.sh
+      if grep -q "PAYMENT_PROVIDER_ENVIRONMENT=production" scripts/refund/activate-refund-stage.sh; then
+        echo "ERROR: Staged activation script must never enable production Cashfree."
+        exit 1
+      fi
       echo "All financial and execution switches remain disabled by default."
     displayName: Verify safe runtime defaults

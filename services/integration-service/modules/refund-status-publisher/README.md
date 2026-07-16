@@ -25,7 +25,7 @@ Order Service consumes the event through its already validated filtered subscrip
 This module includes:
 
 ```text
-services/integration-service/src/main/java/in/craves/integration/IntegrationServiceApplication.java
+services/integration-service/src/main/java/in/craves/integration/refund/RefundStatusPublisherSchedulingConfiguration.java
 services/integration-service/src/test/java/in/craves/integration/IntegrationServiceSchedulingTest.java
 azure-pipelines-integration-refund-status-publisher-enable.yml
 services/integration-service/modules/refund-status-publisher/README.md
@@ -33,6 +33,18 @@ docs/handover/2026-07-16-integration-refund-status-publisher-enablement.md
 ```
 
 No database migration is required because Flyway V100 already created the refund status outbox.
+
+## Scheduling boundary
+
+Scheduling is enabled only when this property is true:
+
+```text
+CRAVES_REFUND_STATUS_PUBLISHER_ENABLED=true
+```
+
+The main Integration application is not globally annotated with `@EnableScheduling`. Instead, the conditional refund publisher configuration enables scheduling only for the activated revision. This avoids broad, accidental scheduler activation during normal deployments where the publisher is disabled.
+
+Other scheduled workers remain protected by their own runtime checks. In particular, the refund execution worker immediately returns while both provider execution and reconciliation are false.
 
 ## Runtime behavior
 

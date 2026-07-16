@@ -1,0 +1,229 @@
+package in.craves.order.service;
+
+import in.craves.order.event.ChefAcceptedOrderEventFactory;
+import in.craves.order.event.ChefAcceptedOrderEventSource;
+import in.craves.order.event.SerializedDomainEvent;
+import in.craves.order.exception.OrderApiException;
+import in.craves.order.outbox.OrderDomainOutboxRepository;
+import in.craves.order.security.CravesPrincipal;
+import in.craves.order.web.ApiDtos.ChefAcceptRequest;
+import in.craves.order.web.ApiDtos.OrderResponse;
+import in.craves.order.web.ApiDtos.OrderStatus;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.Objects;
+import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+@Service
+public class ChefAcceptanceService {
+    private final JdbcTemplate jdbcTemplate;
+    private final OrderService orderService;
+    private final ChefAcceptedOrderEventFactory eventFactory;
+    private final OrderDomainOutboxRepository outboxRepository;
+
+    public ChefAcceptanceService(
+        JdbcTemplate jdbcTemplate,
+        OrderService orderService,
+        ChefAcceptedOrderEventFactory eventFactory,
+        OrderDomainOutboxRepository outboxRepository
+    ) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.orderService = orderService;
+        this.eventFactory = eventFactory;
+        this.outboxRepository = outboxRepository;
+    }
+
+    @Transactional
+    public OrderResponse accept(
+        CravesPrincipal principal,
+        UUID orderId,
+        ChefAcceptRequest request,
+        UUID correlationId,
+        String idempotencyKey
+    ) {
+        if (request == null || request.prepTimeMinutes() == null || request.prepTimeMinutes() <= 0) {
+            throw OrderApiException.badRequest(
+                "PREPARATION_TIME_REQUIRED",
+                "A positive preparation time is required when accepting an order."
+            );
+        }
+
+        // Performs CHEF role and kitchen ownership authorization before the row lock is acquired.
+        orderService.getOrderForChef(principal, orderId);
+
+        LockedAcceptanceState lockedState = lockAcceptanceState(orderId);
+        if (lockedState.status() == OrderStatus.CHEF_ACCEPTED) {
+            if (Objects.equals(lockedState.prepTimeMinutes(), request.prepTimeMinutes())) {
+                return orderService.getOrderForChef(principal, orderId);
+            }
+            throw OrderApiException.conflict(
+                "ORDER_ALREADY_ACCEPTED",
+                "The order was already accepted with a different preparation time."
+            );
+        }
+
+        if (lockedState.status() != OrderStatus.CHEF_ACCEPTANCE_PENDING) {
+            throw OrderApiException.conflict(
+                "ORDER_NOT_WAITING_FOR_CHEF_ACCEPTANCE",
+                "Only an order awaiting chef acceptance can be accepted."
+            );
+        }
+
+        AcceptanceTimes acceptanceTimes = jdbcTemplate.queryForObject(
+            """
+                UPDATE order_schema.customer_order
+                SET status = ?,
+                    chef_response_note = ?,
+                    prep_time_minutes = ?,
+                    accepted_at = now(),
+                    ready_at = now() + (? * INTERVAL '1 minute'),
+                    updated_at = now()
+                WHERE id = ?
+                  AND status = ?
+                RETURNING accepted_at, ready_at
+                """,
+            (resultSet, rowNumber) -> new AcceptanceTimes(
+                instant(resultSet, "accepted_at"),
+                instant(resultSet, "ready_at")
+            ),
+            OrderStatus.CHEF_ACCEPTED.name(),
+            safeReason(request.note()),
+            request.prepTimeMinutes(),
+            request.prepTimeMinutes(),
+            orderId,
+            OrderStatus.CHEF_ACCEPTANCE_PENDING.name()
+        );
+
+        if (acceptanceTimes == null || acceptanceTimes.acceptedAt() == null || acceptanceTimes.readyAt() == null) {
+            throw new IllegalStateException("Chef acceptance timestamps were not persisted");
+        }
+
+        jdbcTemplate.update(
+            """
+                INSERT INTO order_schema.order_status_history (
+                    id, order_id, old_status, new_status,
+                    actor_identity_id, reason, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, now())
+                """,
+            UUID.randomUUID(),
+            orderId,
+            OrderStatus.CHEF_ACCEPTANCE_PENDING.name(),
+            OrderStatus.CHEF_ACCEPTED.name(),
+            principal.identityId(),
+            safeReason(request.note())
+        );
+
+        ChefAcceptedOrderEventSource eventSource = loadEventSource(orderId);
+        SerializedDomainEvent event = eventFactory.create(eventSource, correlationId, idempotencyKey);
+        if (!outboxRepository.insert(orderId, event)) {
+            throw OrderApiException.conflict(
+                "CHEF_ACCEPTED_EVENT_ALREADY_EXISTS",
+                "The chef acceptance event already exists for this order."
+            );
+        }
+
+        return orderService.getOrderForChef(principal, orderId);
+    }
+
+    private LockedAcceptanceState lockAcceptanceState(UUID orderId) {
+        return jdbcTemplate.query(
+            "SELECT status, prep_time_minutes FROM order_schema.customer_order WHERE id = ? FOR UPDATE",
+            (resultSet, rowNumber) -> new LockedAcceptanceState(
+                OrderStatus.valueOf(resultSet.getString("status")),
+                integerOrNull(resultSet, "prep_time_minutes")
+            ),
+            orderId
+        ).stream().findFirst().orElseThrow(() -> OrderApiException.notFound(
+            "ORDER_NOT_FOUND",
+            "The requested order was not found."
+        ));
+    }
+
+    private ChefAcceptedOrderEventSource loadEventSource(UUID orderId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM order_schema.customer_order WHERE id = ?",
+            this::mapEventSource,
+            orderId
+        ).stream().findFirst().orElseThrow(() -> OrderApiException.notFound(
+            "ORDER_NOT_FOUND",
+            "The requested order was not found."
+        ));
+    }
+
+    private ChefAcceptedOrderEventSource mapEventSource(ResultSet resultSet, int rowNumber) throws SQLException {
+        Integer totalPackageWeightGrams = integerOrNull(resultSet, "total_package_weight_grams");
+        Boolean thermoboxRequired = booleanOrNull(resultSet, "thermobox_required");
+        if (totalPackageWeightGrams == null || thermoboxRequired == null) {
+            throw OrderApiException.conflict(
+                "ORDER_DELIVERY_METADATA_INCOMPLETE",
+                "The order does not contain complete delivery package metadata."
+            );
+        }
+
+        return new ChefAcceptedOrderEventSource(
+            resultSet.getObject("id", UUID.class),
+            resultSet.getObject("checkout_id", UUID.class),
+            instant(resultSet, "accepted_at"),
+            instant(resultSet, "ready_at"),
+            totalPackageWeightGrams,
+            thermoboxRequired,
+            resultSet.getString("kitchen_name_snapshot"),
+            resultSet.getString("pickup_phone_number"),
+            resultSet.getString("pickup_address_line1"),
+            resultSet.getString("pickup_address_line2"),
+            resultSet.getString("pickup_landmark"),
+            resultSet.getString("pickup_area_name"),
+            resultSet.getString("pickup_city"),
+            resultSet.getString("pickup_state"),
+            resultSet.getString("pickup_postal_code"),
+            resultSet.getBigDecimal("pickup_latitude"),
+            resultSet.getBigDecimal("pickup_longitude"),
+            resultSet.getString("dropoff_recipient_name"),
+            resultSet.getString("dropoff_contact_phone"),
+            resultSet.getString("dropoff_address_line1"),
+            resultSet.getString("dropoff_address_line2"),
+            resultSet.getString("dropoff_landmark"),
+            resultSet.getString("dropoff_area_name"),
+            resultSet.getString("dropoff_city"),
+            resultSet.getString("dropoff_state"),
+            resultSet.getString("dropoff_postal_code"),
+            resultSet.getBigDecimal("dropoff_latitude"),
+            resultSet.getBigDecimal("dropoff_longitude")
+        );
+    }
+
+    private static String safeReason(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.length() > 255 ? trimmed.substring(0, 255) : trimmed;
+    }
+
+    private static Integer integerOrNull(ResultSet resultSet, String column) throws SQLException {
+        int value = resultSet.getInt(column);
+        return resultSet.wasNull() ? null : value;
+    }
+
+    private static Boolean booleanOrNull(ResultSet resultSet, String column) throws SQLException {
+        boolean value = resultSet.getBoolean(column);
+        return resultSet.wasNull() ? null : value;
+    }
+
+    private static Instant instant(ResultSet resultSet, String column) throws SQLException {
+        Timestamp timestamp = resultSet.getTimestamp(column);
+        return timestamp == null ? null : timestamp.toInstant();
+    }
+
+    private record LockedAcceptanceState(OrderStatus status, Integer prepTimeMinutes) {
+    }
+
+    private record AcceptanceTimes(Instant acceptedAt, Instant readyAt) {
+    }
+}

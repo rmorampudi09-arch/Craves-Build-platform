@@ -57,6 +57,8 @@ BEGIN
                     AND dropoff_city IS NOT NULL
                     AND dropoff_state IS NOT NULL
                     AND dropoff_postal_code IS NOT NULL
+                    AND dropoff_latitude IS NOT NULL
+                    AND dropoff_longitude IS NOT NULL
                     AND dropoff_latitude BETWEEN -90 AND 90
                     AND dropoff_longitude BETWEEN -180 AND 180
                 )
@@ -85,6 +87,8 @@ BEGIN
                     AND dropoff_city IS NOT NULL
                     AND dropoff_state IS NOT NULL
                     AND dropoff_postal_code IS NOT NULL
+                    AND dropoff_latitude IS NOT NULL
+                    AND dropoff_longitude IS NOT NULL
                     AND dropoff_latitude BETWEEN -90 AND 90
                     AND dropoff_longitude BETWEEN -180 AND 180
                 )
@@ -111,6 +115,8 @@ BEGIN
                     AND pickup_city IS NOT NULL
                     AND pickup_state IS NOT NULL
                     AND pickup_postal_code IS NOT NULL
+                    AND pickup_latitude IS NOT NULL
+                    AND pickup_longitude IS NOT NULL
                     AND pickup_latitude BETWEEN -90 AND 90
                     AND pickup_longitude BETWEEN -180 AND 180
                 )

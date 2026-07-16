@@ -46,3 +46,15 @@ craves:
       batch-size: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_BATCH_SIZE:25}
       max-attempts: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_MAX_ATTEMPTS:5}
       retry-base-delay-seconds: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_RETRY_BASE_DELAY_SECONDS:60}
+  domain-events:
+    outbox:
+      enabled: ${CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED:false}
+      fixed-delay-ms: ${CRAVES_DOMAIN_EVENT_OUTBOX_FIXED_DELAY_MS:5000}
+      batch-size: ${CRAVES_DOMAIN_EVENT_OUTBOX_BATCH_SIZE:20}
+      max-attempts: ${CRAVES_DOMAIN_EVENT_OUTBOX_MAX_ATTEMPTS:10}
+      retry-base-delay-seconds: ${CRAVES_DOMAIN_EVENT_OUTBOX_RETRY_BASE_DELAY_SECONDS:5}
+      stale-lock-seconds: ${CRAVES_DOMAIN_EVENT_OUTBOX_STALE_LOCK_SECONDS:300}
+    service-bus:
+      enabled: ${CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED:false}
+      fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+      topic-name: ${CRAVES_DOMAIN_EVENTS_TOPIC_NAME:craves-domain-events}

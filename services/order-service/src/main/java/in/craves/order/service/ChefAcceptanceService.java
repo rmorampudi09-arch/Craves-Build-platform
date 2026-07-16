@@ -6,6 +6,7 @@ import in.craves.order.event.SerializedDomainEvent;
 import in.craves.order.exception.OrderApiException;
 import in.craves.order.outbox.OrderDomainOutboxRepository;
 import in.craves.order.security.CravesPrincipal;
+import in.craves.order.service.ChefAcceptancePolicy.Decision;
 import in.craves.order.web.ApiDtos.ChefAcceptRequest;
 import in.craves.order.web.ApiDtos.OrderResponse;
 import in.craves.order.web.ApiDtos.OrderStatus;
@@ -13,7 +14,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -47,7 +47,7 @@ public class ChefAcceptanceService {
         UUID correlationId,
         String idempotencyKey
     ) {
-        if (request == null || request.prepTimeMinutes() == null || request.prepTimeMinutes() <= 0) {
+        if (request == null || request.prepTimeMinutes() == null) {
             throw OrderApiException.badRequest(
                 "PREPARATION_TIME_REQUIRED",
                 "A positive preparation time is required when accepting an order."
@@ -58,21 +58,13 @@ public class ChefAcceptanceService {
         orderService.getOrderForChef(principal, orderId);
 
         LockedAcceptanceState lockedState = lockAcceptanceState(orderId);
-        if (lockedState.status() == OrderStatus.CHEF_ACCEPTED) {
-            if (Objects.equals(lockedState.prepTimeMinutes(), request.prepTimeMinutes())) {
-                return orderService.getOrderForChef(principal, orderId);
-            }
-            throw OrderApiException.conflict(
-                "ORDER_ALREADY_ACCEPTED",
-                "The order was already accepted with a different preparation time."
-            );
-        }
-
-        if (lockedState.status() != OrderStatus.CHEF_ACCEPTANCE_PENDING) {
-            throw OrderApiException.conflict(
-                "ORDER_NOT_WAITING_FOR_CHEF_ACCEPTANCE",
-                "Only an order awaiting chef acceptance can be accepted."
-            );
+        Decision decision = ChefAcceptancePolicy.decide(
+            lockedState.status(),
+            lockedState.prepTimeMinutes(),
+            request.prepTimeMinutes()
+        );
+        if (decision == Decision.IDEMPOTENT_SUCCESS) {
+            return orderService.getOrderForChef(principal, orderId);
         }
 
         AcceptanceTimes acceptanceTimes = jdbcTemplate.queryForObject(

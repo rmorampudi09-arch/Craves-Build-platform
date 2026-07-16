@@ -6,7 +6,9 @@ import in.craves.integration.config.PaymentProviderProperties;
 import in.craves.integration.refund.RefundModels.ProviderRefundResult;
 import in.craves.integration.refund.RefundModels.RefundWorkItem;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -15,6 +17,12 @@ import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class CashfreeRefundClient {
+    private static final Set<String> SUPPORTED_SANDBOX_SIMULATION_STATUSES = Set.of(
+        "SUCCESS",
+        "FAILED",
+        "PENDING"
+    );
+
     private final PaymentProviderProperties provider;
     private final ObjectMapper objectMapper;
     private final RestClient client;
@@ -78,13 +86,17 @@ public class CashfreeRefundClient {
     }
 
     private ProviderRefundResult map(JsonNode response) {
-        if (response == null || !StringUtils.hasText(text(response, "refund_status"))) {
+        JsonNode entity = response;
+        if (response != null && response.isArray()) {
+            entity = response.isEmpty() ? null : response.get(0);
+        }
+        if (entity == null || !StringUtils.hasText(text(entity, "refund_status"))) {
             throw new RefundProviderTransientException("Cashfree returned an incomplete refund response");
         }
         return new ProviderRefundResult(
-            text(response, "refund_status").toUpperCase(),
-            text(response, "cf_refund_id"),
-            json(response)
+            text(entity, "refund_status").toUpperCase(Locale.ROOT),
+            text(entity, "cf_refund_id"),
+            json(entity)
         );
     }
 
@@ -101,6 +113,26 @@ public class CashfreeRefundClient {
         if (!StringUtils.hasText(provider.clientId()) || !StringUtils.hasText(provider.clientKey())) {
             throw new RefundProviderConfigurationException("Cashfree credentials are not configured");
         }
+        if (!StringUtils.hasText(provider.apiVersion())) {
+            throw new RefundProviderConfigurationException("Cashfree API version is not configured");
+        }
+    }
+
+    private String refundNote(String reason) {
+        if (provider.sandbox() && StringUtils.hasText(provider.sandboxRefundSimulationStatus())) {
+            String simulationStatus = provider.sandboxRefundSimulationStatus()
+                .trim()
+                .toUpperCase(Locale.ROOT);
+            if (!SUPPORTED_SANDBOX_SIMULATION_STATUSES.contains(simulationStatus)) {
+                throw new RefundProviderConfigurationException(
+                    "Unsupported Cashfree sandbox refund simulation status " + simulationStatus
+                );
+            }
+            return simulationStatus;
+        }
+
+        String value = "Craves refund: " + reason;
+        return value.length() <= 100 ? value : value.substring(0, 100);
     }
 
     private String json(JsonNode value) {
@@ -109,11 +141,6 @@ public class CashfreeRefundClient {
         } catch (Exception exception) {
             throw new RefundProviderTransientException("Cashfree response could not be serialized", exception);
         }
-    }
-
-    private static String refundNote(String reason) {
-        String value = "Craves refund: " + reason;
-        return value.length() <= 100 ? value : value.substring(0, 100);
     }
 
     private static String text(JsonNode node, String field) {

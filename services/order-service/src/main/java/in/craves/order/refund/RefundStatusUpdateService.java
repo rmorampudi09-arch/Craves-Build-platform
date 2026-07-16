@@ -28,15 +28,18 @@ public class RefundStatusUpdateService {
     private final JdbcTemplate jdbcTemplate;
     private final RefundStatusEventValidator validator;
     private final RefundStatusTransitionPolicy transitionPolicy;
+    private final RefundStatusCustomerNotificationService customerNotificationService;
 
     public RefundStatusUpdateService(
         JdbcTemplate jdbcTemplate,
         RefundStatusEventValidator validator,
-        RefundStatusTransitionPolicy transitionPolicy
+        RefundStatusTransitionPolicy transitionPolicy,
+        RefundStatusCustomerNotificationService customerNotificationService
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.validator = validator;
         this.transitionPolicy = transitionPolicy;
+        this.customerNotificationService = customerNotificationService;
     }
 
     @Transactional
@@ -124,7 +127,8 @@ public class RefundStatusUpdateService {
             throw new RefundStatusRetryableException("Order update was not applied");
         }
 
-        if (!data.status().equals(order.status())) {
+        boolean statusChanged = !data.status().equals(order.status());
+        if (statusChanged) {
             jdbcTemplate.update(
                 """
                     INSERT INTO order_schema.order_status_history (
@@ -137,6 +141,13 @@ public class RefundStatusUpdateService {
                 order.status(),
                 data.status(),
                 "Refund provider status: " + data.providerStatus()
+            );
+
+            customerNotificationService.record(
+                event.eventId(),
+                order.checkoutId(),
+                order.customerIdentityId(),
+                data
             );
         }
 

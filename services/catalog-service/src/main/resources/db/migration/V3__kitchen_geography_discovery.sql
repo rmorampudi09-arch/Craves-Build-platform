@@ -1,4 +1,8 @@
-CREATE EXTENSION IF NOT EXISTS postgis;
+-- Azure Database for PostgreSQL runs Flyway with catalog_schema as the
+-- application's default schema. PostGIS core objects such as spatial_ref_sys
+-- must be installed in public so they are available consistently to every
+-- service sharing craves_business_db.
+CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public;
 
 ALTER TABLE catalog_schema.kitchen_profile
     ADD COLUMN IF NOT EXISTS location public.geography(Point, 4326)

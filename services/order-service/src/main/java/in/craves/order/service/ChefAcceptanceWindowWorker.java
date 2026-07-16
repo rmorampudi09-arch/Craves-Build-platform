@@ -15,17 +15,20 @@ public class ChefAcceptanceWindowWorker {
 
     private final ChefAcceptanceWindowProperties properties;
     private final ChefAcceptanceWorkRepository workRepository;
+    private final ChefAcceptanceInitialNotificationService initialNotificationService;
     private final ChefAcceptanceResolutionService resolutionService;
     private final CatalogClient catalogClient;
 
     public ChefAcceptanceWindowWorker(
         ChefAcceptanceWindowProperties properties,
         ChefAcceptanceWorkRepository workRepository,
+        ChefAcceptanceInitialNotificationService initialNotificationService,
         ChefAcceptanceResolutionService resolutionService,
         CatalogClient catalogClient
     ) {
         this.properties = properties;
         this.workRepository = workRepository;
+        this.initialNotificationService = initialNotificationService;
         this.resolutionService = resolutionService;
         this.catalogClient = catalogClient;
     }
@@ -38,6 +41,7 @@ public class ChefAcceptanceWindowWorker {
 
         int batchSize = properties.validatedWorkerBatchSize();
         expireOrders(batchSize);
+        sendInitialNotifications(batchSize);
         sendFirstReminders(batchSize);
         sendSecondReminders(batchSize);
     }
@@ -50,6 +54,28 @@ public class ChefAcceptanceWindowWorker {
                 }
             } catch (RuntimeException exception) {
                 LOGGER.error("Chef acceptance timeout processing failed for orderId={}", orderId, exception);
+            }
+        }
+    }
+
+    private void sendInitialNotifications(int batchSize) {
+        for (ReminderCandidate candidate : workRepository.findInitialNotificationCandidates(batchSize)) {
+            try {
+                CatalogKitchen kitchen = catalogClient.getKitchen(candidate.kitchenId());
+                if (initialNotificationService.record(candidate.orderId(), kitchen.identityId())) {
+                    LOGGER.info(
+                        "Initial chef acceptance notification recorded for orderId={} chefIdentityId={}",
+                        candidate.orderId(),
+                        kitchen.identityId()
+                    );
+                }
+            } catch (RuntimeException exception) {
+                LOGGER.warn(
+                    "Initial chef acceptance notification could not be recorded for orderId={} kitchenId={}: {}",
+                    candidate.orderId(),
+                    candidate.kitchenId(),
+                    safeMessage(exception)
+                );
             }
         }
     }

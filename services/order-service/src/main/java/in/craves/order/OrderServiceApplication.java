@@ -2,8 +2,10 @@ package in.craves.order;
 
 import in.craves.order.config.CatalogClientProperties;
 import in.craves.order.config.CravesJwtProperties;
+import in.craves.order.config.DomainEventOutboxProperties;
 import in.craves.order.config.NotificationClientProperties;
 import in.craves.order.config.NotificationOutboxDispatcherProperties;
+import in.craves.order.config.ServiceBusDomainEventProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -15,7 +17,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
     CravesJwtProperties.class,
     CatalogClientProperties.class,
     NotificationClientProperties.class,
-    NotificationOutboxDispatcherProperties.class
+    NotificationOutboxDispatcherProperties.class,
+    DomainEventOutboxProperties.class,
+    ServiceBusDomainEventProperties.class
 })
 public class OrderServiceApplication {
     public static void main(String[] args) {

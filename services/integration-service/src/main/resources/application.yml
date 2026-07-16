@@ -50,6 +50,25 @@ craves:
     max-auto-lock-renew-minutes: ${CRAVES_DELIVERY_MAX_AUTO_LOCK_RENEW_MINUTES:5}
     outbox-batch-size: ${CRAVES_DELIVERY_OUTBOX_BATCH_SIZE:20}
     outbox-publish-interval-ms: ${CRAVES_DELIVERY_OUTBOX_PUBLISH_INTERVAL_MS:5000}
+  refund:
+    consumer-enabled: ${CRAVES_REFUND_CONSUMER_ENABLED:false}
+    provider-execution-enabled: ${CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED:false}
+    reconciliation-enabled: ${CRAVES_REFUND_RECONCILIATION_ENABLED:false}
+    status-publisher-enabled: ${CRAVES_REFUND_STATUS_PUBLISHER_ENABLED:false}
+    fully-qualified-namespace: ${SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+    connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
+    topic-name: ${SERVICE_BUS_TOPIC_NAME:craves-domain-events}
+    subscription-name: ${SERVICE_BUS_REFUND_REQUESTED_SUBSCRIPTION:integration-service-refund-requested}
+    max-concurrent-messages: ${CRAVES_REFUND_MAX_CONCURRENT_MESSAGES:2}
+    prefetch-count: ${CRAVES_REFUND_PREFETCH_COUNT:4}
+    max-delivery-attempts: ${CRAVES_REFUND_MAX_DELIVERY_ATTEMPTS:5}
+    worker-batch-size: ${CRAVES_REFUND_WORKER_BATCH_SIZE:20}
+    worker-fixed-delay-ms: ${CRAVES_REFUND_WORKER_FIXED_DELAY_MS:30000}
+    max-provider-attempts: ${CRAVES_REFUND_MAX_PROVIDER_ATTEMPTS:8}
+    retry-base-delay-seconds: ${CRAVES_REFUND_RETRY_BASE_DELAY_SECONDS:60}
+    stale-lock-seconds: ${CRAVES_REFUND_STALE_LOCK_SECONDS:300}
+    status-outbox-batch-size: ${CRAVES_REFUND_STATUS_OUTBOX_BATCH_SIZE:20}
+    status-outbox-fixed-delay-ms: ${CRAVES_REFUND_STATUS_OUTBOX_FIXED_DELAY_MS:5000}
   providers:
     borzo:
       enabled: ${BORZO_API_ENABLED:false}

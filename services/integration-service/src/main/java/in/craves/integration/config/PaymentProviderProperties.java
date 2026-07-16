@@ -13,6 +13,7 @@ public class PaymentProviderProperties {
     private final String productionBaseUrl;
     private final String defaultReturnUrl;
     private final String webhookUrl;
+    private final String sandboxRefundSimulationStatus;
 
     public PaymentProviderProperties(
         @Value("${PAYMENT_PROVIDER_ENVIRONMENT:sandbox}") String environment,
@@ -22,7 +23,8 @@ public class PaymentProviderProperties {
         @Value("${PAYMENT_PROVIDER_SANDBOX_BASE_URL:https://sandbox.cashfree.com}") String sandboxBaseUrl,
         @Value("${PAYMENT_PROVIDER_PRODUCTION_BASE_URL:https://api.cashfree.com}") String productionBaseUrl,
         @Value("${PAYMENT_PROVIDER_DEFAULT_RETURN_URL:https://craves.in/payment/return}") String defaultReturnUrl,
-        @Value("${PAYMENT_PROVIDER_WEBHOOK_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/payments/webhooks/cashfree}") String webhookUrl
+        @Value("${PAYMENT_PROVIDER_WEBHOOK_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/payments/webhooks/cashfree}") String webhookUrl,
+        @Value("${CRAVES_CASHFREE_SANDBOX_REFUND_SIMULATION_STATUS:}") String sandboxRefundSimulationStatus
     ) {
         this.environment = environment;
         this.apiVersion = apiVersion;
@@ -32,6 +34,7 @@ public class PaymentProviderProperties {
         this.productionBaseUrl = productionBaseUrl;
         this.defaultReturnUrl = defaultReturnUrl;
         this.webhookUrl = webhookUrl;
+        this.sandboxRefundSimulationStatus = sandboxRefundSimulationStatus;
     }
 
     public String environment() { return environment; }
@@ -40,5 +43,7 @@ public class PaymentProviderProperties {
     public String clientKey() { return clientKey; }
     public String defaultReturnUrl() { return defaultReturnUrl; }
     public String webhookUrl() { return webhookUrl; }
-    public String baseUrl() { return "production".equalsIgnoreCase(environment) ? productionBaseUrl : sandboxBaseUrl; }
+    public String sandboxRefundSimulationStatus() { return sandboxRefundSimulationStatus; }
+    public boolean sandbox() { return !"production".equalsIgnoreCase(environment); }
+    public String baseUrl() { return sandbox() ? sandboxBaseUrl : productionBaseUrl; }
 }

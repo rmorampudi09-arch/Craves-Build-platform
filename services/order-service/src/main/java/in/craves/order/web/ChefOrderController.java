@@ -1,6 +1,7 @@
 package in.craves.order.web;
 
 import in.craves.order.security.CravesPrincipal;
+import in.craves.order.service.ChefAcceptanceResolutionService;
 import in.craves.order.service.ChefAcceptanceService;
 import in.craves.order.service.OrderService;
 import in.craves.order.web.ApiDtos.ChefAcceptRequest;
@@ -23,10 +24,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class ChefOrderController {
     private final OrderService orderService;
     private final ChefAcceptanceService chefAcceptanceService;
+    private final ChefAcceptanceResolutionService chefAcceptanceResolutionService;
 
-    public ChefOrderController(OrderService orderService, ChefAcceptanceService chefAcceptanceService) {
+    public ChefOrderController(
+        OrderService orderService,
+        ChefAcceptanceService chefAcceptanceService,
+        ChefAcceptanceResolutionService chefAcceptanceResolutionService
+    ) {
         this.orderService = orderService;
         this.chefAcceptanceService = chefAcceptanceService;
+        this.chefAcceptanceResolutionService = chefAcceptanceResolutionService;
     }
 
     @GetMapping
@@ -51,8 +58,20 @@ public class ChefOrderController {
     }
 
     @PostMapping("/{orderId}/reject")
-    public OrderResponse reject(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID orderId, @Valid @RequestBody ChefRejectRequest request) {
-        return orderService.rejectChefOrder(principal, orderId, request);
+    public OrderResponse reject(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @PathVariable UUID orderId,
+        @Valid @RequestBody ChefRejectRequest request,
+        @RequestHeader(value = "X-Correlation-ID", required = false) UUID correlationId,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
+    ) {
+        return chefAcceptanceResolutionService.reject(
+            principal,
+            orderId,
+            request,
+            correlationId,
+            idempotencyKey
+        );
     }
 
     @PostMapping("/{orderId}/ready-for-pickup")

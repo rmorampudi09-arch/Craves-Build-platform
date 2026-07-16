@@ -69,6 +69,9 @@ public final class ApiDtos {
     }
 
     public record CheckoutRequest(UUID deliveryAddressId, String note) {
+        public CheckoutRequest(String note) {
+            this(null, note);
+        }
     }
 
     public record CustomerAddressSnapshotResponse(
@@ -120,6 +123,37 @@ public final class ApiDtos {
         List<OrderResponse> orders,
         Instant createdAt
     ) {
+        public CheckoutResponse(
+            UUID id,
+            UUID customerIdentityId,
+            CheckoutStatus status,
+            String currency,
+            BigDecimal foodSubtotal,
+            BigDecimal platformFee,
+            BigDecimal taxAmount,
+            BigDecimal deliveryFee,
+            BigDecimal grandTotal,
+            UUID chargePolicyId,
+            List<OrderResponse> orders,
+            Instant createdAt
+        ) {
+            this(
+                id,
+                customerIdentityId,
+                status,
+                currency,
+                foodSubtotal,
+                platformFee,
+                taxAmount,
+                deliveryFee,
+                grandTotal,
+                chargePolicyId,
+                null,
+                null,
+                orders,
+                createdAt
+            );
+        }
     }
 
     public record OrderItemResponse(
@@ -155,6 +189,47 @@ public final class ApiDtos {
         Instant createdAt,
         Instant updatedAt
     ) {
+        public OrderResponse(
+            UUID id,
+            UUID checkoutId,
+            UUID customerIdentityId,
+            UUID kitchenId,
+            String kitchenName,
+            OrderStatus status,
+            String currency,
+            BigDecimal foodSubtotal,
+            BigDecimal platformFee,
+            BigDecimal taxAmount,
+            BigDecimal deliveryFee,
+            BigDecimal grandTotal,
+            String chefResponseNote,
+            Integer prepTimeMinutes,
+            List<OrderItemResponse> items,
+            Instant createdAt,
+            Instant updatedAt
+        ) {
+            this(
+                id,
+                checkoutId,
+                customerIdentityId,
+                kitchenId,
+                kitchenName,
+                status,
+                currency,
+                foodSubtotal,
+                platformFee,
+                taxAmount,
+                deliveryFee,
+                grandTotal,
+                chefResponseNote,
+                prepTimeMinutes,
+                null,
+                null,
+                items,
+                createdAt,
+                updatedAt
+            );
+        }
     }
 
     public record ChefAcceptRequest(@NotNull @Min(1) Integer prepTimeMinutes, String note) {

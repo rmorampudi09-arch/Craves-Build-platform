@@ -54,7 +54,6 @@ public class ChefAcceptanceService {
             );
         }
 
-        // Performs CHEF role and kitchen ownership authorization before the row lock is acquired.
         orderService.getOrderForChef(principal, orderId);
 
         LockedAcceptanceState lockedState = lockAcceptanceState(orderId);
@@ -66,6 +65,7 @@ public class ChefAcceptanceService {
         if (decision == Decision.IDEMPOTENT_SUCCESS) {
             return orderService.getOrderForChef(principal, orderId);
         }
+        validateAcceptanceWindow(lockedState);
 
         AcceptanceTimes acceptanceTimes = jdbcTemplate.queryForObject(
             """
@@ -123,12 +123,38 @@ public class ChefAcceptanceService {
         return orderService.getOrderForChef(principal, orderId);
     }
 
+    private void validateAcceptanceWindow(LockedAcceptanceState lockedState) {
+        if (lockedState.status() != OrderStatus.CHEF_ACCEPTANCE_PENDING) {
+            return;
+        }
+        if (lockedState.acceptanceExpiresAt() == null) {
+            throw OrderApiException.conflict(
+                "CHEF_ACCEPTANCE_WINDOW_MISSING",
+                "The order does not have a valid chef acceptance deadline."
+            );
+        }
+        if (!lockedState.databaseNow().isBefore(lockedState.acceptanceExpiresAt())) {
+            throw OrderApiException.conflict(
+                "CHEF_ACCEPTANCE_EXPIRED",
+                "The 30-minute chef acceptance window has expired."
+            );
+        }
+    }
+
     private LockedAcceptanceState lockAcceptanceState(UUID orderId) {
         return jdbcTemplate.query(
-            "SELECT status, prep_time_minutes FROM order_schema.customer_order WHERE id = ? FOR UPDATE",
+            """
+                SELECT status, prep_time_minutes, chef_acceptance_expires_at,
+                       now() AS database_now
+                FROM order_schema.customer_order
+                WHERE id = ?
+                FOR UPDATE
+                """,
             (resultSet, rowNumber) -> new LockedAcceptanceState(
                 OrderStatus.valueOf(resultSet.getString("status")),
-                integerOrNull(resultSet, "prep_time_minutes")
+                integerOrNull(resultSet, "prep_time_minutes"),
+                instant(resultSet, "chef_acceptance_expires_at"),
+                instant(resultSet, "database_now")
             ),
             orderId
         ).stream().findFirst().orElseThrow(() -> OrderApiException.notFound(
@@ -213,7 +239,12 @@ public class ChefAcceptanceService {
         return timestamp == null ? null : timestamp.toInstant();
     }
 
-    private record LockedAcceptanceState(OrderStatus status, Integer prepTimeMinutes) {
+    private record LockedAcceptanceState(
+        OrderStatus status,
+        Integer prepTimeMinutes,
+        Instant acceptanceExpiresAt,
+        Instant databaseNow
+    ) {
     }
 
     private record AcceptanceTimes(Instant acceptedAt, Instant readyAt) {

@@ -4,6 +4,7 @@ import in.craves.order.config.DomainEventOutboxProperties;
 import in.craves.order.config.ServiceBusDomainEventProperties;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,12 @@ public class OrderDomainOutboxPublisherWorker {
             return;
         }
 
+        Set<String> enabledEventTypes = outboxProperties.normalizedEnabledEventTypes();
+        if (enabledEventTypes.isEmpty()) {
+            LOGGER.warn("Domain event outbox is enabled but no event types are allowed for publication");
+            return;
+        }
+
         DomainEventTransport transport = transportProvider.getIfAvailable();
         if (transport == null) {
             LOGGER.error("Domain event outbox is enabled but no transport is available");
@@ -50,7 +57,8 @@ public class OrderDomainOutboxPublisherWorker {
             positive(outboxProperties.getBatchSize(), 20),
             positive(outboxProperties.getMaxAttempts(), 10),
             positive(outboxProperties.getStaleLockSeconds(), 300),
-            lockToken
+            lockToken,
+            List.copyOf(enabledEventTypes)
         );
 
         for (OrderDomainOutboxRecord record : records) {

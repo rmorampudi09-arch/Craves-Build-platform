@@ -1,5 +1,6 @@
 package in.craves.order.service;
 
+import in.craves.order.config.ChefAcceptanceWindowProperties;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -15,10 +16,16 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class PaymentCallbackService {
     private final JdbcTemplate jdbcTemplate;
     private final NotificationInternalClient notificationInternalClient;
+    private final ChefAcceptanceWindowProperties chefAcceptanceProperties;
 
-    public PaymentCallbackService(JdbcTemplate jdbcTemplate, NotificationInternalClient notificationInternalClient) {
+    public PaymentCallbackService(
+        JdbcTemplate jdbcTemplate,
+        NotificationInternalClient notificationInternalClient,
+        ChefAcceptanceWindowProperties chefAcceptanceProperties
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.notificationInternalClient = notificationInternalClient;
+        this.chefAcceptanceProperties = chefAcceptanceProperties;
     }
 
     @Transactional
@@ -27,17 +34,39 @@ public class PaymentCallbackService {
             "UPDATE order_schema.checkout SET status = ?, updated_at = now() WHERE id = ? AND status IN (?, ?)",
             "PAID", checkoutId, "PAYMENT_PENDING", "CREATED"
         );
+        int timeoutMinutes = chefAcceptanceProperties.validatedTimeoutMinutes();
         jdbcTemplate.query(
             "SELECT id, status FROM order_schema.customer_order WHERE checkout_id = ?",
-            rs -> {
-                UUID orderId = rs.getObject("id", UUID.class);
-                String oldStatus = rs.getString("status");
+            resultSet -> {
+                UUID orderId = resultSet.getObject("id", UUID.class);
+                String oldStatus = resultSet.getString("status");
                 if ("PAYMENT_PENDING".equals(oldStatus) || "CREATED".equals(oldStatus) || "PAID".equals(oldStatus)) {
-                    jdbcTemplate.update("UPDATE order_schema.customer_order SET status = ?, updated_at = now() WHERE id = ?", "CHEF_ACCEPTANCE_PENDING", orderId);
-                    jdbcTemplate.update(
-                        "INSERT INTO order_schema.order_status_history (id, order_id, old_status, new_status, actor_identity_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, now())",
-                        UUID.randomUUID(), orderId, oldStatus, "CHEF_ACCEPTANCE_PENDING", actorId, reason
+                    int updated = jdbcTemplate.update(
+                        """
+                            UPDATE order_schema.customer_order
+                            SET status = 'CHEF_ACCEPTANCE_PENDING',
+                                chef_acceptance_requested_at = now(),
+                                chef_acceptance_expires_at = now() + (? * INTERVAL '1 minute'),
+                                chef_acceptance_initial_recorded_at = NULL,
+                                chef_acceptance_reminder_10_recorded_at = NULL,
+                                chef_acceptance_reminder_20_recorded_at = NULL,
+                                chef_rejection_code = NULL,
+                                refund_requested_at = NULL,
+                                refund_requested_amount = NULL,
+                                updated_at = now()
+                            WHERE id = ?
+                              AND status = ?
+                            """,
+                        timeoutMinutes,
+                        orderId,
+                        oldStatus
                     );
+                    if (updated == 1) {
+                        jdbcTemplate.update(
+                            "INSERT INTO order_schema.order_status_history (id, order_id, old_status, new_status, actor_identity_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, now())",
+                            UUID.randomUUID(), orderId, oldStatus, "CHEF_ACCEPTANCE_PENDING", actorId, reason
+                        );
+                    }
                 }
             },
             checkoutId
@@ -54,18 +83,18 @@ public class PaymentCallbackService {
                 "LEFT JOIN order_schema.customer_order o ON o.checkout_id = c.id " +
                 "WHERE c.id = ? " +
                 "GROUP BY c.id, c.customer_identity_id, c.currency, c.grand_total",
-            (rs, rowNum) -> mapPaymentNotification(rs),
+            (resultSet, rowNumber) -> mapPaymentNotification(resultSet),
             checkoutId
         ).stream().findFirst();
     }
 
-    private PaymentNotification mapPaymentNotification(ResultSet rs) throws SQLException {
+    private PaymentNotification mapPaymentNotification(ResultSet resultSet) throws SQLException {
         return new PaymentNotification(
-            rs.getObject("id", UUID.class),
-            rs.getObject("customer_identity_id", UUID.class),
-            rs.getString("currency"),
-            rs.getBigDecimal("grand_total"),
-            rs.getInt("order_count")
+            resultSet.getObject("id", UUID.class),
+            resultSet.getObject("customer_identity_id", UUID.class),
+            resultSet.getString("currency"),
+            resultSet.getBigDecimal("grand_total"),
+            resultSet.getInt("order_count")
         );
     }
 

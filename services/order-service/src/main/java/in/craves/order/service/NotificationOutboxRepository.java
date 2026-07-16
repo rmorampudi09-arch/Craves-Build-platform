@@ -18,7 +18,11 @@ public class NotificationOutboxRepository {
     }
 
     public void savePending(NotificationOutboxEvent event) {
-        jdbcTemplate.update(
+        savePendingIfAbsent(event);
+    }
+
+    public boolean savePendingIfAbsent(NotificationOutboxEvent event) {
+        int inserted = jdbcTemplate.update(
             "INSERT INTO order_schema.notification_outbox " +
                 "(id, event_key, event_type, aggregate_type, aggregate_id, user_identity_id, user_role, channel, template_code, title, body, target_type, target_id, payload, status, created_at, updated_at) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'PENDING', now(), now()) " +
@@ -38,6 +42,7 @@ public class NotificationOutboxRepository {
             event.targetId(),
             toJson(event.payload())
         );
+        return inserted == 1;
     }
 
     private String toJson(Map<String, Object> payload) {

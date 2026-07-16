@@ -5,6 +5,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -57,38 +59,47 @@ public class OrderDomainOutboxRepository {
         int batchSize,
         int maxAttempts,
         int staleLockSeconds,
-        UUID lockToken
+        UUID lockToken,
+        List<String> enabledEventTypes
     ) {
-        return jdbcTemplate.query(
-            """
-                WITH candidates AS (
-                    SELECT id
-                    FROM order_schema.domain_event_outbox
-                    WHERE attempts < ?
-                      AND (
-                          (status IN ('PENDING', 'FAILED') AND next_attempt_at <= now())
-                          OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 second'))
-                      )
-                    ORDER BY occurred_at ASC, created_at ASC
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT ?
-                )
-                UPDATE order_schema.domain_event_outbox outbox
-                SET status = 'PROCESSING',
-                    attempts = outbox.attempts + 1,
-                    lock_token = ?,
-                    locked_at = now(),
-                    updated_at = now()
-                FROM candidates
-                WHERE outbox.id = candidates.id
-                RETURNING outbox.*
-                """,
-            this::mapRecord,
-            maxAttempts,
-            staleLockSeconds,
-            batchSize,
-            lockToken
-        );
+        if (enabledEventTypes == null || enabledEventTypes.isEmpty()) {
+            return List.of();
+        }
+
+        String placeholders = String.join(",", Collections.nCopies(enabledEventTypes.size(), "?"));
+        String sql = """
+            WITH candidates AS (
+                SELECT id
+                FROM order_schema.domain_event_outbox
+                WHERE attempts < ?
+                  AND event_type IN (%s)
+                  AND (
+                      (status IN ('PENDING', 'FAILED') AND next_attempt_at <= now())
+                      OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 second'))
+                  )
+                ORDER BY occurred_at ASC, created_at ASC
+                FOR UPDATE SKIP LOCKED
+                LIMIT ?
+            )
+            UPDATE order_schema.domain_event_outbox outbox
+            SET status = 'PROCESSING',
+                attempts = outbox.attempts + 1,
+                lock_token = ?,
+                locked_at = now(),
+                updated_at = now()
+            FROM candidates
+            WHERE outbox.id = candidates.id
+            RETURNING outbox.*
+            """.formatted(placeholders);
+
+        List<Object> parameters = new ArrayList<>();
+        parameters.add(maxAttempts);
+        parameters.addAll(enabledEventTypes);
+        parameters.add(staleLockSeconds);
+        parameters.add(batchSize);
+        parameters.add(lockToken);
+
+        return jdbcTemplate.query(sql, this::mapRecord, parameters.toArray());
     }
 
     public boolean markPublished(UUID id, UUID lockToken, String brokerMessageId) {

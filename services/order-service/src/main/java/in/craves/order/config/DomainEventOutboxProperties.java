@@ -1,6 +1,9 @@
 package in.craves.order.config;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.StringUtils;
 
 @ConfigurationProperties(prefix = "craves.domain-events.outbox")
 public class DomainEventOutboxProperties {
@@ -10,6 +13,7 @@ public class DomainEventOutboxProperties {
     private int maxAttempts = 10;
     private int retryBaseDelaySeconds = 5;
     private int staleLockSeconds = 300;
+    private Set<String> enabledEventTypes = new LinkedHashSet<>(Set.of("CHEF_ACCEPTED_ORDER"));
 
     public boolean isEnabled() {
         return enabled;
@@ -57,5 +61,25 @@ public class DomainEventOutboxProperties {
 
     public void setStaleLockSeconds(int staleLockSeconds) {
         this.staleLockSeconds = staleLockSeconds;
+    }
+
+    public Set<String> getEnabledEventTypes() {
+        return enabledEventTypes;
+    }
+
+    public void setEnabledEventTypes(Set<String> enabledEventTypes) {
+        this.enabledEventTypes = enabledEventTypes == null
+            ? new LinkedHashSet<>()
+            : new LinkedHashSet<>(enabledEventTypes);
+    }
+
+    public Set<String> normalizedEnabledEventTypes() {
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String eventType : enabledEventTypes) {
+            if (StringUtils.hasText(eventType)) {
+                normalized.add(eventType.trim().toUpperCase());
+            }
+        }
+        return Set.copyOf(normalized);
     }
 }

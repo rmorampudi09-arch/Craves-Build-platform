@@ -1,6 +1,7 @@
 package in.craves.order.web;
 
 import in.craves.order.security.CravesPrincipal;
+import in.craves.order.service.ChefAcceptanceService;
 import in.craves.order.service.OrderService;
 import in.craves.order.web.ApiDtos.ChefAcceptRequest;
 import in.craves.order.web.ApiDtos.ChefRejectRequest;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -20,9 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/chef/orders")
 public class ChefOrderController {
     private final OrderService orderService;
+    private final ChefAcceptanceService chefAcceptanceService;
 
-    public ChefOrderController(OrderService orderService) {
+    public ChefOrderController(OrderService orderService, ChefAcceptanceService chefAcceptanceService) {
         this.orderService = orderService;
+        this.chefAcceptanceService = chefAcceptanceService;
     }
 
     @GetMapping
@@ -36,8 +40,14 @@ public class ChefOrderController {
     }
 
     @PostMapping("/{orderId}/accept")
-    public OrderResponse accept(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID orderId, @Valid @RequestBody ChefAcceptRequest request) {
-        return orderService.acceptChefOrder(principal, orderId, request);
+    public OrderResponse accept(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @PathVariable UUID orderId,
+        @Valid @RequestBody ChefAcceptRequest request,
+        @RequestHeader(value = "X-Correlation-ID", required = false) UUID correlationId,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
+    ) {
+        return chefAcceptanceService.accept(principal, orderId, request, correlationId, idempotencyKey);
     }
 
     @PostMapping("/{orderId}/reject")

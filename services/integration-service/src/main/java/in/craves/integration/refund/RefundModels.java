@@ -38,6 +38,7 @@ public final class RefundModels {
         UUID checkoutId,
         UUID chefSubOrderId,
         UUID customerIdentityId,
+        UUID requestEventId,
         String cashfreeOrderId,
         String refundReference,
         UUID idempotencyKey,
@@ -46,6 +47,7 @@ public final class RefundModels {
         String reason,
         String status,
         String providerStatus,
+        String cfRefundId,
         int attemptCount,
         UUID lockToken
     ) {

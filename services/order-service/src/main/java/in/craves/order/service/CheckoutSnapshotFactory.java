@@ -4,8 +4,8 @@ import in.craves.order.exception.OrderApiException;
 import in.craves.order.service.CatalogClient.CatalogKitchen;
 import in.craves.order.service.CustomerAddressClient.CustomerAddress;
 import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
-import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
 import java.math.BigDecimal;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -45,7 +45,7 @@ public class CheckoutSnapshotFactory {
         );
     }
 
-    public KitchenPickupSnapshotResponse kitchenPickup(CatalogKitchen kitchen) {
+    public KitchenPickupSnapshot kitchenPickup(CatalogKitchen kitchen) {
         String kitchenName = kitchen == null ? null : displayKitchenName(kitchen);
         if (kitchen == null || kitchen.id() == null || !"ACTIVE".equalsIgnoreCase(kitchen.status())
             || !hasRequiredText(
@@ -64,7 +64,7 @@ public class CheckoutSnapshotFactory {
             );
         }
 
-        return new KitchenPickupSnapshotResponse(
+        return new KitchenPickupSnapshot(
             kitchen.id(),
             kitchenName.trim(),
             kitchen.phoneNumber().trim(),
@@ -105,5 +105,22 @@ public class CheckoutSnapshotFactory {
 
     private static String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    public record KitchenPickupSnapshot(
+        UUID kitchenId,
+        String kitchenName,
+        String contactPhoneNumber,
+        String email,
+        String addressLine1,
+        String addressLine2,
+        String landmark,
+        String areaName,
+        String city,
+        String state,
+        String postalCode,
+        BigDecimal latitude,
+        BigDecimal longitude
+    ) {
     }
 }

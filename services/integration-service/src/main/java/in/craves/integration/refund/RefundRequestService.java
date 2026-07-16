@@ -5,6 +5,7 @@ import in.craves.integration.refund.RefundModels.RefundRequestedData;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -90,7 +91,7 @@ public class RefundRequestService {
             idempotencyKey,
             event.eventId(),
             rawPayload,
-            data.requestedAt()
+            Timestamp.from(data.requestedAt())
         );
 
         if (inserted == 0) {

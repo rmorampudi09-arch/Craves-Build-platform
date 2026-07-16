@@ -65,6 +65,23 @@ steps:
   - checkout: self
 
   - task: AzureCLI@2
+    displayName: Verify service health and Service Bus RBAC
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        bash scripts/refund/verify-refund-rollout-dependencies.sh
+    env:
+      RESOURCE_GROUP: ${{ parameters.resourceGroupName }}
+      ORDER_APP: ${{ parameters.orderContainerAppName }}
+      INTEGRATION_APP: ${{ parameters.integrationContainerAppName }}
+      NOTIFICATION_APP: ${{ parameters.notificationContainerAppName }}
+      SERVICE_BUS_NAMESPACE: ${{ parameters.serviceBusNamespace }}
+      SERVICE_BUS_TOPIC: ${{ parameters.serviceBusTopic }}
+
+  - task: AzureCLI@2
     displayName: Activate ${{ parameters.targetStage }} with safety gates
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)

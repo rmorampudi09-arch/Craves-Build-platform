@@ -107,6 +107,19 @@ steps:
             -o none
         fi
 
+        NAMESPACE_ID=$(az servicebus namespace show \
+          --resource-group "$RG" \
+          --name "$NS" \
+          --query id \
+          -o tsv)
+
+        TOPIC_ID=$(az servicebus topic show \
+          --resource-group "$RG" \
+          --namespace-name "$NS" \
+          --name "$TOPIC" \
+          --query id \
+          -o tsv)
+
         SUBSCRIPTION_ID=$(az servicebus topic subscription show \
           --resource-group "$RG" \
           --namespace-name "$NS" \
@@ -118,15 +131,18 @@ steps:
         RECEIVER_COUNT=$(az role assignment list \
           --assignee-object-id "$PRINCIPAL_ID" \
           --all \
-          --query "[?roleDefinitionName=='Azure Service Bus Data Receiver' && scope=='$SUBSCRIPTION_ID'] | length(@)" \
+          --query "[?roleDefinitionName=='Azure Service Bus Data Receiver'] | length(@)" \
           -o tsv)
-        if [[ "$RECEIVER_COUNT" == "0" ]]; then
-          az role assignment create \
-            --assignee-object-id "$PRINCIPAL_ID" \
-            --assignee-principal-type ServicePrincipal \
-            --role "Azure Service Bus Data Receiver" \
-            --scope "$SUBSCRIPTION_ID" \
-            -o none
+
+        if [[ "${RECEIVER_COUNT:-0}" == "0" ]]; then
+          echo "ERROR: Integration managed identity is missing Azure Service Bus Data Receiver."
+          echo "INTEGRATION_PRINCIPAL_ID=$PRINCIPAL_ID"
+          echo "NAMESPACE_SCOPE=$NAMESPACE_ID"
+          echo "TOPIC_SCOPE=$TOPIC_ID"
+          echo "SUBSCRIPTION_SCOPE=$SUBSCRIPTION_ID"
+          echo "Grant the receiver role once with an authorized Azure account, then rerun."
+          echo "The Azure DevOps service connection intentionally does not create RBAC assignments."
+          exit 2
         fi
 
         PREVIOUS_LATEST=$(az containerapp show \

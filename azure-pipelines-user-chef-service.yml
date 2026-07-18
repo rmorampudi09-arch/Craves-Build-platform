@@ -18,6 +18,7 @@ parameters:
 variables:
   modulePath: services/user-chef-service
   imageRepository: craves/user-chef-service
+  orderContainerAppName: ca-craves-order-service-prodlow
   authInternalBaseUrl: https://ca-craves-auth-service-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
 
 pool:
@@ -57,7 +58,7 @@ steps:
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Set Container App secrets
+    displayName: Verify shared Key Vault secret reference before deployment
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -65,15 +66,76 @@ steps:
       inlineScript: |
         set -euo pipefail
         RG='${{ parameters.resourceGroupName }}'
-        APP='${{ parameters.containerAppName }}'
-        az containerapp secret set \
-          --name "$APP" \
+        USER_CHEF_APP='${{ parameters.containerAppName }}'
+        ORDER_APP='$(orderContainerAppName)'
+        SECRET_NAME='craves-internal-service-secret'
+
+        fail() {
+          echo "ERROR: $*" >&2
+          exit 1
+        }
+
+        USER_CHEF_URI=$(az containerapp secret list \
           --resource-group "$RG" \
-          --secrets craves-internal-service-secret="$(CRAVES_INTERNAL_SERVICE_SECRET)" \
-          -o table
+          --name "$USER_CHEF_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].keyVaultUrl" \
+          -o tsv)
+        ORDER_URI=$(az containerapp secret list \
+          --resource-group "$RG" \
+          --name "$ORDER_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].keyVaultUrl" \
+          -o tsv)
+        USER_CHEF_SECRET_IDENTITY=$(az containerapp secret list \
+          --resource-group "$RG" \
+          --name "$USER_CHEF_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].identity" \
+          -o tsv)
+        ORDER_SECRET_IDENTITY=$(az containerapp secret list \
+          --resource-group "$RG" \
+          --name "$ORDER_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].identity" \
+          -o tsv)
+        USER_CHEF_PRINCIPAL_ID=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$USER_CHEF_APP" \
+          --query identity.principalId \
+          -o tsv)
+        ORDER_PRINCIPAL_ID=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$ORDER_APP" \
+          --query identity.principalId \
+          -o tsv)
+        USER_CHEF_ENV_SECRET_REF=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$USER_CHEF_APP" \
+          --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'] | [0].secretRef" \
+          -o tsv)
+        ORDER_ENV_SECRET_REF=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$ORDER_APP" \
+          --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'] | [0].secretRef" \
+          -o tsv)
+
+        [ -n "$USER_CHEF_URI" ] || fail "$USER_CHEF_APP does not have a Key Vault-backed $SECRET_NAME secret."
+        [ -n "$ORDER_URI" ] || fail "$ORDER_APP does not have a Key Vault-backed $SECRET_NAME secret."
+        [ "$USER_CHEF_URI" = "$ORDER_URI" ] || fail "User-Chef and Order reference different Key Vault secret versions."
+        [ "$USER_CHEF_SECRET_IDENTITY" = "system" ] || fail "$USER_CHEF_APP secret does not use the system-assigned identity."
+        [ "$ORDER_SECRET_IDENTITY" = "system" ] || fail "$ORDER_APP secret does not use the system-assigned identity."
+        [ -n "$USER_CHEF_PRINCIPAL_ID" ] || fail "$USER_CHEF_APP has no system-assigned managed identity."
+        [ -n "$ORDER_PRINCIPAL_ID" ] || fail "$ORDER_APP has no system-assigned managed identity."
+        [ "$USER_CHEF_ENV_SECRET_REF" = "$SECRET_NAME" ] || fail "$USER_CHEF_APP environment variable is not linked to $SECRET_NAME."
+        [ "$ORDER_ENV_SECRET_REF" = "$SECRET_NAME" ] || fail "$ORDER_APP environment variable is not linked to $SECRET_NAME."
+
+        case "$USER_CHEF_URI" in
+          https://*.vault.azure.net/secrets/*/*) ;;
+          *) fail "The shared Key Vault URI is not pinned to a specific secret version." ;;
+        esac
+
+        echo "Shared Key Vault reference verified for User-Chef and Order."
+        echo "Secret URI: $USER_CHEF_URI"
 
   - task: AzureCLI@2
-    displayName: Update Container App revision
+    displayName: Deploy and verify Container App revision
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -85,8 +147,10 @@ steps:
         APP='${{ parameters.containerAppName }}'
         TAG='${{ parameters.imageTag }}'
         IMAGE_REPOSITORY='$(imageRepository)'
+        AUTH_INTERNAL_BASE_URL='$(authInternalBaseUrl)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+
         az containerapp update \
           --name "$APP" \
           --resource-group "$RG" \
@@ -102,6 +166,102 @@ steps:
             CRAVES_STORAGE_ENDPOINT_VALUE="$(CRAVES_STORAGE_ENDPOINT_VALUE)" \
             CRAVES_STORAGE_DOCUMENTS_CONTAINER=documents \
             CRAVES_INTERNAL_SERVICE_SECRET=secretref:craves-internal-service-secret \
-            CRAVES_AUTH_INTERNAL_BASE_URL="$(authInternalBaseUrl)" \
-          --no-wait
-        az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus}" -o table
+            CRAVES_AUTH_INTERNAL_BASE_URL="$AUTH_INTERNAL_BASE_URL" \
+          -o none
+
+        echo "Waiting for the new User-Chef revision to become ready..."
+        for attempt in $(seq 1 36); do
+          LATEST=$(az containerapp show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --query properties.latestRevisionName \
+            -o tsv)
+          READY=$(az containerapp show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --query properties.latestReadyRevisionName \
+            -o tsv)
+          HEALTH=$(az containerapp revision show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --revision "$LATEST" \
+            --query properties.healthState \
+            -o tsv 2>/dev/null || true)
+          RUNNING=$(az containerapp revision show \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --revision "$LATEST" \
+            --query properties.runningState \
+            -o tsv 2>/dev/null || true)
+
+          echo "Attempt $attempt/36: latest=$LATEST ready=$READY health=$HEALTH running=$RUNNING"
+
+          if [ "$LATEST" = "$READY" ] && [ "$HEALTH" = "Healthy" ] && [[ "$RUNNING" == Running* ]]; then
+            echo "User-Chef revision is healthy."
+            az containerapp show \
+              --name "$APP" \
+              --resource-group "$RG" \
+              --query "{name:name,latestRevision:properties.latestRevisionName,latestReadyRevision:properties.latestReadyRevisionName,runningStatus:properties.runningStatus,internalConfig:properties.template.containers[0].env[?name=='CRAVES_AUTH_INTERNAL_BASE_URL' || name=='CRAVES_INTERNAL_SERVICE_SECRET'].{name:name,value:value,secretRef:secretRef}}" \
+              -o json
+            exit 0
+          fi
+
+          if [ "$HEALTH" = "Unhealthy" ] || [ "$RUNNING" = "Failed" ]; then
+            echo "User-Chef revision became unhealthy." >&2
+            az containerapp logs show \
+              --name "$APP" \
+              --resource-group "$RG" \
+              --revision "$LATEST" \
+              --type console \
+              --tail 100 \
+              --format text || true
+            exit 1
+          fi
+
+          sleep 10
+        done
+
+        echo "Timed out waiting for a healthy User-Chef revision." >&2
+        az containerapp revision list \
+          --name "$APP" \
+          --resource-group "$RG" \
+          --all \
+          --query "[].{revision:name,active:properties.active,health:properties.healthState,running:properties.runningState,image:properties.template.containers[0].image}" \
+          -o table || true
+        exit 1
+
+  - task: AzureCLI@2
+    displayName: Reverify shared Key Vault reference after deployment
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        USER_CHEF_APP='${{ parameters.containerAppName }}'
+        ORDER_APP='$(orderContainerAppName)'
+        SECRET_NAME='craves-internal-service-secret'
+
+        USER_CHEF_URI=$(az containerapp secret list \
+          --resource-group "$RG" \
+          --name "$USER_CHEF_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].keyVaultUrl" \
+          -o tsv)
+        ORDER_URI=$(az containerapp secret list \
+          --resource-group "$RG" \
+          --name "$ORDER_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].keyVaultUrl" \
+          -o tsv)
+        USER_CHEF_ENV_SECRET_REF=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$USER_CHEF_APP" \
+          --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'] | [0].secretRef" \
+          -o tsv)
+
+        [ -n "$USER_CHEF_URI" ] || { echo "ERROR: User-Chef Key Vault reference is missing after deployment." >&2; exit 1; }
+        [ "$USER_CHEF_URI" = "$ORDER_URI" ] || { echo "ERROR: Shared Key Vault references diverged after deployment." >&2; exit 1; }
+        [ "$USER_CHEF_ENV_SECRET_REF" = "$SECRET_NAME" ] || { echo "ERROR: User-Chef environment secret reference changed during deployment." >&2; exit 1; }
+
+        echo "Post-deployment Key Vault reference verification passed."
+        echo "Secret URI: $USER_CHEF_URI"

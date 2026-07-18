@@ -18,6 +18,7 @@ parameters:
 variables:
   modulePath: services/order-service
   imageRepository: craves/order-service
+  userChefContainerAppName: ca-craves-user-chef-service-prod
   userChefInternalBaseUrl: https://ca-craves-user-chef-service-prod.happysand-aedc7165.centralindia.azurecontainerapps.io
 
 pool:
@@ -57,7 +58,7 @@ steps:
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Configure Order internal service secret
+    displayName: Verify shared Key Vault secret reference before deployment
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -65,23 +66,73 @@ steps:
       inlineScript: |
         set -euo pipefail
         RG='${{ parameters.resourceGroupName }}'
-        APP='${{ parameters.containerAppName }}'
+        ORDER_APP='${{ parameters.containerAppName }}'
+        USER_CHEF_APP='$(userChefContainerAppName)'
+        SECRET_NAME='craves-internal-service-secret'
 
-        if [ -z "${CRAVES_INTERNAL_SERVICE_SECRET_VALUE:-}" ]; then
-          echo "Azure DevOps secret variable CRAVES_INTERNAL_SERVICE_SECRET is missing or unavailable to this pipeline." >&2
+        fail() {
+          echo "ERROR: $*" >&2
           exit 1
-        fi
+        }
 
-        az containerapp secret set \
-          --name "$APP" \
+        ORDER_URI=$(az containerapp secret list \
           --resource-group "$RG" \
-          --secrets craves-internal-service-secret="$CRAVES_INTERNAL_SERVICE_SECRET_VALUE" \
-          -o none
+          --name "$ORDER_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].keyVaultUrl" \
+          -o tsv)
+        USER_CHEF_URI=$(az containerapp secret list \
+          --resource-group "$RG" \
+          --name "$USER_CHEF_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].keyVaultUrl" \
+          -o tsv)
+        ORDER_SECRET_IDENTITY=$(az containerapp secret list \
+          --resource-group "$RG" \
+          --name "$ORDER_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].identity" \
+          -o tsv)
+        USER_CHEF_SECRET_IDENTITY=$(az containerapp secret list \
+          --resource-group "$RG" \
+          --name "$USER_CHEF_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].identity" \
+          -o tsv)
+        ORDER_PRINCIPAL_ID=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$ORDER_APP" \
+          --query identity.principalId \
+          -o tsv)
+        USER_CHEF_PRINCIPAL_ID=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$USER_CHEF_APP" \
+          --query identity.principalId \
+          -o tsv)
+        ORDER_ENV_SECRET_REF=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$ORDER_APP" \
+          --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'] | [0].secretRef" \
+          -o tsv)
+        USER_CHEF_ENV_SECRET_REF=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$USER_CHEF_APP" \
+          --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'] | [0].secretRef" \
+          -o tsv)
 
-        unset CRAVES_INTERNAL_SERVICE_SECRET_VALUE
-        echo "Order internal service secret reference is configured."
-    env:
-      CRAVES_INTERNAL_SERVICE_SECRET_VALUE: $(CRAVES_INTERNAL_SERVICE_SECRET)
+        [ -n "$ORDER_URI" ] || fail "$ORDER_APP does not have a Key Vault-backed $SECRET_NAME secret."
+        [ -n "$USER_CHEF_URI" ] || fail "$USER_CHEF_APP does not have a Key Vault-backed $SECRET_NAME secret."
+        [ "$ORDER_URI" = "$USER_CHEF_URI" ] || fail "Order and User-Chef reference different Key Vault secret versions."
+        [ "$ORDER_SECRET_IDENTITY" = "system" ] || fail "$ORDER_APP secret does not use the system-assigned identity."
+        [ "$USER_CHEF_SECRET_IDENTITY" = "system" ] || fail "$USER_CHEF_APP secret does not use the system-assigned identity."
+        [ -n "$ORDER_PRINCIPAL_ID" ] || fail "$ORDER_APP has no system-assigned managed identity."
+        [ -n "$USER_CHEF_PRINCIPAL_ID" ] || fail "$USER_CHEF_APP has no system-assigned managed identity."
+        [ "$ORDER_ENV_SECRET_REF" = "$SECRET_NAME" ] || fail "$ORDER_APP environment variable is not linked to $SECRET_NAME."
+        [ "$USER_CHEF_ENV_SECRET_REF" = "$SECRET_NAME" ] || fail "$USER_CHEF_APP environment variable is not linked to $SECRET_NAME."
+
+        case "$ORDER_URI" in
+          https://*.vault.azure.net/secrets/*/*) ;;
+          *) fail "The shared Key Vault URI is not pinned to a specific secret version." ;;
+        esac
+
+        echo "Shared Key Vault reference verified for Order and User-Chef."
+        echo "Secret URI: $ORDER_URI"
 
   - task: AzureCLI@2
     displayName: Deploy and verify Container App revision
@@ -170,3 +221,39 @@ steps:
           --query "[].{revision:name,active:properties.active,health:properties.healthState,running:properties.runningState,image:properties.template.containers[0].image}" \
           -o table || true
         exit 1
+
+  - task: AzureCLI@2
+    displayName: Reverify shared Key Vault reference after deployment
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        ORDER_APP='${{ parameters.containerAppName }}'
+        USER_CHEF_APP='$(userChefContainerAppName)'
+        SECRET_NAME='craves-internal-service-secret'
+
+        ORDER_URI=$(az containerapp secret list \
+          --resource-group "$RG" \
+          --name "$ORDER_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].keyVaultUrl" \
+          -o tsv)
+        USER_CHEF_URI=$(az containerapp secret list \
+          --resource-group "$RG" \
+          --name "$USER_CHEF_APP" \
+          --query "[?name=='$SECRET_NAME'] | [0].keyVaultUrl" \
+          -o tsv)
+        ORDER_ENV_SECRET_REF=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$ORDER_APP" \
+          --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'] | [0].secretRef" \
+          -o tsv)
+
+        [ -n "$ORDER_URI" ] || { echo "ERROR: Order Key Vault reference is missing after deployment." >&2; exit 1; }
+        [ "$ORDER_URI" = "$USER_CHEF_URI" ] || { echo "ERROR: Shared Key Vault references diverged after deployment." >&2; exit 1; }
+        [ "$ORDER_ENV_SECRET_REF" = "$SECRET_NAME" ] || { echo "ERROR: Order environment secret reference changed during deployment." >&2; exit 1; }
+
+        echo "Post-deployment Key Vault reference verification passed."
+        echo "Secret URI: $ORDER_URI"

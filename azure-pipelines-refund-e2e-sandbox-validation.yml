@@ -62,7 +62,8 @@ steps:
   - bash: |
       set -euo pipefail
       bash -n scripts/refund/validate-refund-e2e-sandbox.sh
-    displayName: Validate refund sandbox script syntax
+      bash -n scripts/refund/run-refund-e2e-sandbox-validation.sh
+    displayName: Validate refund sandbox scripts syntax
 
   - task: AzureCLI@2
     displayName: Validate one complete Cashfree sandbox refund
@@ -74,7 +75,7 @@ steps:
       inlineScript: |
         set -euo pipefail
         bash scripts/refund/verify-refund-rollout-dependencies.sh
-        bash scripts/refund/validate-refund-e2e-sandbox.sh
+        bash scripts/refund/run-refund-e2e-sandbox-validation.sh
     env:
       RESOURCE_GROUP: ${{ parameters.resourceGroupName }}
       ORDER_APP: ${{ parameters.orderContainerAppName }}

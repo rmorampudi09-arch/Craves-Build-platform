@@ -50,6 +50,9 @@ public class ServiceBusDomainEventTransport implements DomainEventTransport {
             .setSubject(record.eventType())
             .setContentType("application/json");
 
+        // event_type is the canonical property used by Service Bus subscription SQL filters.
+        // Keep eventType temporarily for backward compatibility with existing consumers and diagnostics.
+        message.getApplicationProperties().put("event_type", record.eventType());
         message.getApplicationProperties().put("eventType", record.eventType());
         message.getApplicationProperties().put("eventVersion", record.eventVersion());
         message.getApplicationProperties().put("source", record.source());

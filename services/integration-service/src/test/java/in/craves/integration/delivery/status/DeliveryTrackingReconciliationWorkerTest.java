@@ -57,9 +57,20 @@ class DeliveryTrackingReconciliationWorkerTest {
         when(adapter.providerId()).thenReturn("borzo");
         when(repository.claimTrackingBatch(20, 5, 20)).thenReturn(List.of(workItem));
         when(adapter.track("1250032")).thenReturn(snapshot);
+        when(statusService.processTracking(workItem, snapshot)).thenReturn(
+            new DeliveryStatusUpdateService.ProcessingResult(
+                workItem.deliveryJobId(),
+                true,
+                false,
+                "APPLIED"
+            )
+        );
 
         DeliveryTrackingReconciliationWorker worker = new DeliveryTrackingReconciliationWorker(
-            List.of(adapter), repository, statusService, properties
+            List.of(adapter),
+            repository,
+            statusService,
+            properties
         );
 
         worker.reconcile();

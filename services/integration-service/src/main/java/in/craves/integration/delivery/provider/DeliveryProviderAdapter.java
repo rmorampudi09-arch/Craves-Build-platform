@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Provider-neutral contract used by the Integration Service delivery worker.
@@ -20,6 +21,17 @@ public interface DeliveryProviderAdapter {
     ProviderDelivery cancel(String providerDeliveryId);
 
     TrackingSnapshot track(String providerDeliveryId);
+
+    /**
+     * Attempts to locate a delivery that may already have been created by the provider after Craves
+     * lost the create response. Implementations must never create a new provider delivery from this
+     * method.
+     */
+    default CreateReconciliationResult reconcileCreate(String clientReference, Instant notBefore) {
+        return CreateReconciliationResult.unsupported(
+            "Provider does not support deterministic create reconciliation"
+        );
+    }
 
     enum DeliveryStatus {
         PENDING,
@@ -37,6 +49,13 @@ public interface DeliveryProviderAdapter {
         RETURNED,
         FAILED,
         UNKNOWN
+    }
+
+    enum CreateReconciliationStatus {
+        FOUND,
+        NOT_FOUND,
+        INCONCLUSIVE,
+        UNSUPPORTED
     }
 
     record Stop(
@@ -107,5 +126,74 @@ public interface DeliveryProviderAdapter {
         Courier courier,
         Instant observedAt
     ) {
+    }
+
+    record CreateReconciliationResult(
+        CreateReconciliationStatus status,
+        ProviderDelivery delivery,
+        String detail
+    ) {
+        public CreateReconciliationResult {
+            Objects.requireNonNull(status, "status is required");
+            if (status == CreateReconciliationStatus.FOUND && delivery == null) {
+                throw new IllegalArgumentException("FOUND reconciliation requires a provider delivery");
+            }
+            if (status != CreateReconciliationStatus.FOUND && delivery != null) {
+                throw new IllegalArgumentException("Only FOUND reconciliation may contain a provider delivery");
+            }
+        }
+
+        public static CreateReconciliationResult found(ProviderDelivery delivery) {
+            return new CreateReconciliationResult(
+                CreateReconciliationStatus.FOUND,
+                Objects.requireNonNull(delivery, "delivery is required"),
+                "Provider delivery recovered by deterministic client reference"
+            );
+        }
+
+        public static CreateReconciliationResult notFound(String detail) {
+            return new CreateReconciliationResult(CreateReconciliationStatus.NOT_FOUND, null, detail);
+        }
+
+        public static CreateReconciliationResult inconclusive(String detail) {
+            return new CreateReconciliationResult(CreateReconciliationStatus.INCONCLUSIVE, null, detail);
+        }
+
+        public static CreateReconciliationResult unsupported(String detail) {
+            return new CreateReconciliationResult(CreateReconciliationStatus.UNSUPPORTED, null, detail);
+        }
+    }
+
+    /**
+     * Raised only when the provider create request may have succeeded but the response was not
+     * received. Callers must reconcile the deterministic client reference before any retry or
+     * provider fallback.
+     */
+    class ProviderCreateUncertainException extends RuntimeException {
+        private final String providerId;
+        private final String clientReference;
+        private final Instant attemptedAt;
+
+        public ProviderCreateUncertainException(String providerId,
+                                                String clientReference,
+                                                Instant attemptedAt,
+                                                Throwable cause) {
+            super("Provider create outcome is uncertain and requires reconciliation", cause);
+            this.providerId = Objects.requireNonNull(providerId, "providerId is required");
+            this.clientReference = Objects.requireNonNull(clientReference, "clientReference is required");
+            this.attemptedAt = Objects.requireNonNull(attemptedAt, "attemptedAt is required");
+        }
+
+        public String providerId() {
+            return providerId;
+        }
+
+        public String clientReference() {
+            return clientReference;
+        }
+
+        public Instant attemptedAt() {
+            return attemptedAt;
+        }
     }
 }

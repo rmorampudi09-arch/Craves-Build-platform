@@ -23,6 +23,15 @@ public interface DeliveryProviderAdapter {
     TrackingSnapshot track(String providerDeliveryId);
 
     /**
+     * Normalizes one verified provider webhook payload. This method must not perform network I/O.
+     */
+    default ProviderStatusUpdate normalizeWebhook(JsonNode payload) {
+        throw new UnsupportedOperationException(
+            "Provider does not support webhook normalization"
+        );
+    }
+
+    /**
      * Attempts to locate a delivery that may already have been created by the provider after Craves
      * lost the create response. Implementations must never create a new provider delivery from this
      * method.
@@ -128,6 +137,46 @@ public interface DeliveryProviderAdapter {
     ) {
     }
 
+    record ProviderStatusUpdate(
+        String providerId,
+        String providerOrderId,
+        String providerDeliveryId,
+        DeliveryStatus status,
+        String providerStatus,
+        String trackingUrl,
+        Instant observedAt,
+        JsonNode providerMetadata
+    ) {
+        public ProviderStatusUpdate {
+            Objects.requireNonNull(providerId, "providerId is required");
+            Objects.requireNonNull(providerOrderId, "providerOrderId is required");
+            Objects.requireNonNull(status, "status is required");
+            Objects.requireNonNull(observedAt, "observedAt is required");
+            providerMetadata = providerMetadata == null ? null : providerMetadata.deepCopy();
+        }
+
+        public static ProviderStatusUpdate fromTracking(TrackingSnapshot snapshot) {
+            Objects.requireNonNull(snapshot, "snapshot is required");
+            ProviderDelivery delivery = Objects.requireNonNull(
+                snapshot.delivery(),
+                "tracking delivery is required"
+            );
+            Instant observedAt = snapshot.observedAt() == null
+                ? delivery.observedAt()
+                : snapshot.observedAt();
+            return new ProviderStatusUpdate(
+                delivery.providerId(),
+                delivery.providerDeliveryId(),
+                null,
+                delivery.status(),
+                delivery.providerStatus(),
+                delivery.trackingUrl(),
+                Objects.requireNonNull(observedAt, "tracking observedAt is required"),
+                delivery.providerMetadata()
+            );
+        }
+    }
+
     record CreateReconciliationResult(
         CreateReconciliationStatus status,
         ProviderDelivery delivery,
@@ -175,9 +224,9 @@ public interface DeliveryProviderAdapter {
         private final Instant attemptedAt;
 
         public ProviderCreateUncertainException(String providerId,
-                                                String clientReference,
-                                                Instant attemptedAt,
-                                                Throwable cause) {
+                                                 String clientReference,
+                                                 Instant attemptedAt,
+                                                 Throwable cause) {
             super("Provider create outcome is uncertain and requires reconciliation", cause);
             this.providerId = Objects.requireNonNull(providerId, "providerId is required");
             this.clientReference = Objects.requireNonNull(clientReference, "clientReference is required");

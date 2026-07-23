@@ -20,13 +20,16 @@ public class DeliveryStatusRepository {
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
 
-    public DeliveryStatusRepository(JdbcTemplate jdbc, ObjectMapper objectMapper) {
+    public DeliveryStatusRepository(JdbcTemplate jdbc,
+                                    ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
-    public List<WebhookWorkItem> claimWebhookBatch(int limit, int staleMinutes, int maxAttempts) {
+    public List<WebhookWorkItem> claimWebhookBatch(int limit,
+                                                   int staleMinutes,
+                                                   int maxAttempts) {
         return jdbc.query("""
             WITH selected AS (
                 SELECT id
@@ -38,7 +41,7 @@ public class DeliveryStatusRepository {
                       )
                    OR (
                         processing_status = 'PROCESSING'
-                        AND processing_started_at < now() - (? * interval '1 minute')
+                        AND processing_started_at < now() - make_interval(mins => ?)
                         AND attempt_count < ?
                       )
                 ORDER BY received_at
@@ -52,29 +55,60 @@ public class DeliveryStatusRepository {
                 error_message = NULL
             FROM selected
             WHERE inbox.id = selected.id
-            RETURNING inbox.id, inbox.provider_id, inbox.provider_event_id,
-                      inbox.raw_payload, inbox.attempt_count
-            """, this::mapWebhook, maxAttempts, staleMinutes, maxAttempts, limit);
+            RETURNING inbox.id,
+                      inbox.provider_id,
+                      inbox.provider_event_id,
+                      inbox.raw_payload,
+                      inbox.attempt_count
+            """,
+            this::mapWebhook,
+            maxAttempts,
+            staleMinutes,
+            maxAttempts,
+            limit
+        );
     }
 
-    public Optional<DeliveryJobState> findJobByProviderOrder(String providerId, String providerOrderId) {
+    public Optional<DeliveryJobState> findJobByProviderOrder(String providerId,
+                                                             String providerOrderId) {
         return jdbc.query("""
-            SELECT id, order_id, chef_sub_order_id, provider_id, provider_delivery_id,
-                   status, provider_status, tracking_url, last_status_observed_at
+            SELECT id,
+                   order_id,
+                   chef_sub_order_id,
+                   provider_id,
+                   provider_delivery_id,
+                   status,
+                   provider_status,
+                   tracking_url,
+                   last_status_observed_at
             FROM delivery_schema.delivery_job
             WHERE provider_id = lower(?)
               AND provider_delivery_id = ?
-            """, this::mapJob, providerId, providerOrderId).stream().findFirst();
+            """,
+            this::mapJob,
+            providerId,
+            providerOrderId
+        ).stream().findFirst();
     }
 
     public Optional<DeliveryJobState> lockJob(UUID deliveryJobId) {
         return jdbc.query("""
-            SELECT id, order_id, chef_sub_order_id, provider_id, provider_delivery_id,
-                   status, provider_status, tracking_url, last_status_observed_at
+            SELECT id,
+                   order_id,
+                   chef_sub_order_id,
+                   provider_id,
+                   provider_delivery_id,
+                   status,
+                   provider_status,
+                   tracking_url,
+                   last_status_observed_at
             FROM delivery_schema.delivery_job
             WHERE id = ?
             FOR UPDATE
-            """, this::mapJob, deliveryJobId).stream().findFirst();
+            """,
+            this::mapJob,
+            deliveryJobId
+        ).stream().findFirst();
     }
 
     public boolean insertEventIfAbsent(UUID deliveryJobId,
@@ -90,9 +124,19 @@ public class DeliveryStatusRepository {
                                        String ignoredReason) {
         int inserted = jdbc.update("""
             INSERT INTO delivery_schema.delivery_event
-                (id, delivery_job_id, provider_id, provider_event_id, event_type,
-                 normalized_status, provider_status, source, payload, occurred_at,
-                 applied, ignored_reason, created_at)
+                (id,
+                 delivery_job_id,
+                 provider_id,
+                 provider_event_id,
+                 event_type,
+                 normalized_status,
+                 provider_status,
+                 source,
+                 payload,
+                 occurred_at,
+                 applied,
+                 ignored_reason,
+                 created_at)
             VALUES (?, ?, lower(?), ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, now())
             ON CONFLICT (provider_id, provider_event_id) DO NOTHING
             """,
@@ -140,6 +184,7 @@ public class DeliveryStatusRepository {
                 next_tracking_at = ?,
                 tracking_attempt_count = 0,
                 tracking_processing_started_at = NULL,
+                tracking_dead_lettered_at = NULL,
                 last_tracking_error = NULL,
                 updated_at = now()
             WHERE id = ?
@@ -186,7 +231,8 @@ public class DeliveryStatusRepository {
         );
     }
 
-    public void markWebhookDuplicate(UUID inboxId, String processingResult) {
+    public void markWebhookDuplicate(UUID inboxId,
+                                     String processingResult) {
         jdbc.update("""
             UPDATE delivery_schema.delivery_webhook_inbox
             SET processing_status = 'DUPLICATE',
@@ -195,7 +241,10 @@ public class DeliveryStatusRepository {
                 error_message = NULL,
                 processed_at = now()
             WHERE id = ?
-            """, processingResult, inboxId);
+            """,
+            processingResult,
+            inboxId
+        );
     }
 
     public void markWebhookFailed(UUID inboxId,
@@ -205,11 +254,17 @@ public class DeliveryStatusRepository {
                                   String safeError) {
         jdbc.update("""
             UPDATE delivery_schema.delivery_webhook_inbox
-            SET processing_status = CASE WHEN ? >= ? THEN 'DEAD_LETTER' ELSE 'FAILED' END,
+            SET processing_status = CASE
+                    WHEN ? >= ? THEN 'DEAD_LETTER'
+                    ELSE 'FAILED'
+                END,
                 next_attempt_at = ?,
                 processing_started_at = NULL,
                 error_message = ?,
-                processed_at = CASE WHEN ? >= ? THEN now() ELSE NULL END
+                processed_at = CASE
+                    WHEN ? >= ? THEN now()
+                    ELSE NULL
+                END
             WHERE id = ?
             """,
             attemptCount,
@@ -232,10 +287,17 @@ public class DeliveryStatusRepository {
                 FROM delivery_schema.delivery_job
                 WHERE status NOT IN ('DELIVERED', 'CANCELLED', 'RETURNED', 'FAILED')
                   AND tracking_attempt_count < ?
+                  AND tracking_dead_lettered_at IS NULL
                   AND (
-                        (next_tracking_at IS NOT NULL AND next_tracking_at <= now()
-                         AND tracking_processing_started_at IS NULL)
-                     OR (tracking_processing_started_at < now() - (? * interval '1 minute'))
+                        (
+                          next_tracking_at IS NOT NULL
+                          AND next_tracking_at <= now()
+                          AND tracking_processing_started_at IS NULL
+                        )
+                     OR (
+                          tracking_processing_started_at
+                              < now() - make_interval(mins => ?)
+                        )
                   )
                 ORDER BY next_tracking_at NULLS FIRST, updated_at
                 FOR UPDATE SKIP LOCKED
@@ -248,21 +310,35 @@ public class DeliveryStatusRepository {
                 updated_at = now()
             FROM selected
             WHERE job.id = selected.id
-            RETURNING job.id, job.order_id, job.chef_sub_order_id, job.provider_id,
-                      job.provider_delivery_id, job.tracking_attempt_count
-            """, this::mapTracking, maxAttempts, staleMinutes, limit);
+            RETURNING job.id,
+                      job.order_id,
+                      job.chef_sub_order_id,
+                      job.provider_id,
+                      job.provider_delivery_id,
+                      job.tracking_attempt_count
+            """,
+            this::mapTracking,
+            maxAttempts,
+            staleMinutes,
+            limit
+        );
     }
 
-    public void markTrackingNoChange(UUID deliveryJobId, Instant nextTrackingAt) {
+    public void markTrackingNoChange(UUID deliveryJobId,
+                                     Instant nextTrackingAt) {
         jdbc.update("""
             UPDATE delivery_schema.delivery_job
             SET next_tracking_at = ?,
                 tracking_attempt_count = 0,
                 tracking_processing_started_at = NULL,
+                tracking_dead_lettered_at = NULL,
                 last_tracking_error = NULL,
                 updated_at = now()
             WHERE id = ?
-            """, databaseTimestamp(nextTrackingAt), deliveryJobId);
+            """,
+            databaseTimestamp(nextTrackingAt),
+            deliveryJobId
+        );
     }
 
     public void markTrackingFailed(UUID deliveryJobId,
@@ -272,8 +348,15 @@ public class DeliveryStatusRepository {
                                    String safeError) {
         jdbc.update("""
             UPDATE delivery_schema.delivery_job
-            SET next_tracking_at = CASE WHEN ? >= ? THEN NULL ELSE ? END,
+            SET next_tracking_at = CASE
+                    WHEN ? >= ? THEN NULL
+                    ELSE ?
+                END,
                 tracking_processing_started_at = NULL,
+                tracking_dead_lettered_at = CASE
+                    WHEN ? >= ? THEN now()
+                    ELSE NULL
+                END,
                 last_tracking_error = ?,
                 updated_at = now()
             WHERE id = ?
@@ -281,12 +364,15 @@ public class DeliveryStatusRepository {
             attemptCount,
             maxAttempts,
             databaseTimestamp(nextTrackingAt),
+            attemptCount,
+            maxAttempts,
             truncate(safeError, 2000),
             deliveryJobId
         );
     }
 
-    private WebhookWorkItem mapWebhook(ResultSet rs, int rowNumber) throws SQLException {
+    private WebhookWorkItem mapWebhook(ResultSet rs,
+                                       int rowNumber) throws SQLException {
         return new WebhookWorkItem(
             rs.getObject("id", UUID.class),
             rs.getString("provider_id"),
@@ -296,7 +382,12 @@ public class DeliveryStatusRepository {
         );
     }
 
-    private DeliveryJobState mapJob(ResultSet rs, int rowNumber) throws SQLException {
+    private DeliveryJobState mapJob(ResultSet rs,
+                                    int rowNumber) throws SQLException {
+        OffsetDateTime observedAt = rs.getObject(
+            "last_status_observed_at",
+            OffsetDateTime.class
+        );
         return new DeliveryJobState(
             rs.getObject("id", UUID.class),
             rs.getObject("order_id", UUID.class),
@@ -306,13 +397,12 @@ public class DeliveryStatusRepository {
             rs.getString("status"),
             rs.getString("provider_status"),
             rs.getString("tracking_url"),
-            rs.getObject("last_status_observed_at", OffsetDateTime.class) == null
-                ? null
-                : rs.getObject("last_status_observed_at", OffsetDateTime.class).toInstant()
+            observedAt == null ? null : observedAt.toInstant()
         );
     }
 
-    private TrackingWorkItem mapTracking(ResultSet rs, int rowNumber) throws SQLException {
+    private TrackingWorkItem mapTracking(ResultSet rs,
+                                         int rowNumber) throws SQLException {
         return new TrackingWorkItem(
             rs.getObject("id", UUID.class),
             rs.getObject("order_id", UUID.class),
@@ -335,11 +425,14 @@ public class DeliveryStatusRepository {
         return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 
-    private static String truncate(String value, int maximumLength) {
+    private static String truncate(String value,
+                                   int maximumLength) {
         if (value == null) {
             return null;
         }
-        return value.length() <= maximumLength ? value : value.substring(0, maximumLength);
+        return value.length() <= maximumLength
+            ? value
+            : value.substring(0, maximumLength);
     }
 
     public record WebhookWorkItem(

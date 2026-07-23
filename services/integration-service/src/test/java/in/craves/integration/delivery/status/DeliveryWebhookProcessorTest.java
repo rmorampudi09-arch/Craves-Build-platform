@@ -16,9 +16,14 @@ import org.junit.jupiter.api.Test;
 class DeliveryWebhookProcessorTest {
 
     @Test
-    void schedulesBoundedRetryWhenWebhookProcessingFails() {
+    void recoversFinalLeasesAndSchedulesBoundedRetryWhenProcessingFails() {
         DeliveryStatusRepository repository = mock(DeliveryStatusRepository.class);
-        DeliveryStatusUpdateService statusService = mock(DeliveryStatusUpdateService.class);
+        DeliveryLeaseRecoveryRepository leaseRecovery = mock(
+            DeliveryLeaseRecoveryRepository.class
+        );
+        DeliveryStatusUpdateService statusService = mock(
+            DeliveryStatusUpdateService.class
+        );
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setWebhookBatchSize(20);
         properties.setWebhookStaleMinutes(5);
@@ -29,11 +34,15 @@ class DeliveryWebhookProcessorTest {
             UUID.randomUUID(),
             "borzo",
             "provider-event-1",
-            new ObjectMapper().createObjectNode().put("event_type", "delivery_changed"),
+            new ObjectMapper().createObjectNode().put(
+                "event_type",
+                "delivery_changed"
+            ),
             2
         );
 
-        when(repository.claimWebhookBatch(20, 5, 10)).thenReturn(List.of(workItem));
+        when(repository.claimWebhookBatch(20, 5, 10))
+            .thenReturn(List.of(workItem));
         when(statusService.processWebhook(workItem)).thenThrow(
             new DeliveryStatusUpdateService.UnmatchedDeliveryJobException(
                 "No delivery job matches provider order 1250032"
@@ -42,12 +51,14 @@ class DeliveryWebhookProcessorTest {
 
         DeliveryWebhookProcessor processor = new DeliveryWebhookProcessor(
             repository,
+            leaseRecovery,
             statusService,
             properties
         );
 
         processor.process();
 
+        verify(leaseRecovery).deadLetterExhaustedWebhookLeases(10, 5);
         verify(repository).markWebhookFailed(
             eq(workItem.id()),
             eq(2),

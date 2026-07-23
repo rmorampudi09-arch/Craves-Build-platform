@@ -11,6 +11,7 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResul
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
+import in.craves.integration.delivery.status.DeliveryLeaseRecoveryRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -21,26 +22,43 @@ import org.junit.jupiter.api.Test;
 class DeliveryCreateReconciliationWorkerTest {
 
     @Test
-    void completesRecoveredProviderDeliveryWithoutIssuingAnotherCreate() {
+    void recoversFinalLeasesThenCompletesProviderDeliveryWithoutAnotherCreate() {
         DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
         DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);
         DeliveryProviderRouter router = mock(DeliveryProviderRouter.class);
-        DeliveryCommandCompletionService completion = mock(DeliveryCommandCompletionService.class);
+        DeliveryCommandCompletionService completion = mock(
+            DeliveryCommandCompletionService.class
+        );
+        DeliveryLeaseRecoveryRepository leaseRecovery = mock(
+            DeliveryLeaseRecoveryRepository.class
+        );
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setReconciliationBatchSize(20);
         properties.setMaxReconciliationAttempts(20);
         properties.setReconciliationStaleMinutes(10);
 
-        DeliveryCreateReconciliationWorker worker = new DeliveryCreateReconciliationWorker(
-            commands, deliveryJobs, router, completion, properties
-        );
+        DeliveryCreateReconciliationWorker worker =
+            new DeliveryCreateReconciliationWorker(
+                commands,
+                deliveryJobs,
+                router,
+                completion,
+                leaseRecovery,
+                properties
+            );
         CommandRecord command = pendingCommand();
         RoutingResult routingResult = new RoutingResult(
-            "borzo", null, null, null, List.of(), List.of()
+            "borzo",
+            null,
+            null,
+            null,
+            List.of(),
+            List.of()
         );
         UUID deliveryJobId = UUID.randomUUID();
 
-        when(commands.claimReconciliationBatch(20, 20, 10)).thenReturn(List.of(command));
+        when(commands.claimReconciliationBatch(20, 20, 10))
+            .thenReturn(List.of(command));
         when(deliveryJobs.findIdByChefSubOrderId(command.chefSubOrderId()))
             .thenReturn(Optional.empty());
         when(router.reconcile(command)).thenReturn(routingResult);
@@ -49,6 +67,8 @@ class DeliveryCreateReconciliationWorkerTest {
 
         worker.reconcilePending();
 
+        verify(leaseRecovery)
+            .deadLetterExhaustedCreateReconciliationLeases(20, 10);
         verify(router).reconcile(command);
         verify(completion).complete(command.message(), routingResult);
         verify(commands, never()).scheduleReconciliationRetry(

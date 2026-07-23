@@ -9,7 +9,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(prefix = "craves.delivery-command", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(
+    prefix = "craves.delivery-command",
+    name = "status-publisher-enabled",
+    havingValue = "true"
+)
 public class DeliveryOutboxPublisher {
     private static final Logger log = LoggerFactory.getLogger(DeliveryOutboxPublisher.class);
 

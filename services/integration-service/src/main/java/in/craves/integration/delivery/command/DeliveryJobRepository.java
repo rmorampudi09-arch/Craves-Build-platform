@@ -3,6 +3,9 @@ package in.craves.integration.delivery.command;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,11 +33,20 @@ public class DeliveryJobRepository {
 
     public UUID insert(UUID orderId, UUID chefSubOrderId, RoutingResult routingResult) {
         UUID deliveryJobId = UUID.randomUUID();
+        Instant observedAt = routingResult.delivery().observedAt() == null
+            ? Instant.now()
+            : routingResult.delivery().observedAt();
+        String normalizedStatus = routingResult.delivery().status().name();
         int inserted = jdbc.update("""
             INSERT INTO delivery_schema.delivery_job
                 (id, chef_sub_order_id, order_id, assignment_id, provider_id, provider_delivery_id,
-                 status, tracking_url, quote_snapshot, booked_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, now(), now(), now())
+                 status, provider_status, tracking_url, quote_snapshot, booked_at,
+                 last_status_observed_at, last_status_source, next_tracking_at,
+                 created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, now(), ?, 'CREATE',
+                    CASE WHEN ? IN ('DELIVERED', 'CANCELLED', 'RETURNED', 'FAILED')
+                         THEN NULL ELSE now() END,
+                    now(), now())
             ON CONFLICT (chef_sub_order_id) DO NOTHING
             """,
             deliveryJobId,
@@ -43,15 +55,22 @@ public class DeliveryJobRepository {
             routingResult.intelligenceAssignment().assignmentId(),
             routingResult.providerId(),
             routingResult.delivery().providerDeliveryId(),
-            routingResult.delivery().status().name(),
+            normalizedStatus,
+            routingResult.delivery().providerStatus(),
             routingResult.delivery().trackingUrl(),
-            writeJson(routingResult)
+            writeJson(routingResult),
+            databaseTimestamp(observedAt),
+            normalizedStatus
         );
         if (inserted == 1) {
             return deliveryJobId;
         }
         return findIdByChefSubOrderId(chefSubOrderId)
             .orElseThrow(() -> new IllegalStateException("Delivery job conflict occurred without an existing row"));
+    }
+
+    static OffsetDateTime databaseTimestamp(Instant value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 
     private String writeJson(Object value) {

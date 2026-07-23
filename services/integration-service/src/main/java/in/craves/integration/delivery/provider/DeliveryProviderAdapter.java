@@ -27,7 +27,8 @@ public interface DeliveryProviderAdapter {
      * lost the create response. Implementations must never create a new provider delivery from this
      * method.
      */
-    default CreateReconciliationResult reconcileCreate(String clientReference, Instant notBefore) {
+    default CreateReconciliationResult reconcileCreate(String clientReference,
+                                                        Instant notBefore) {
         return CreateReconciliationResult.unsupported(
             "Provider does not support deterministic create reconciliation"
         );
@@ -67,8 +68,7 @@ public interface DeliveryProviderAdapter {
         OffsetDateTime requiredStart,
         OffsetDateTime requiredFinish,
         String note
-    ) {
-    }
+    ) {}
 
     record QuoteRequest(
         String matter,
@@ -76,14 +76,12 @@ public interface DeliveryProviderAdapter {
         boolean thermoboxRequired,
         Stop pickup,
         Stop dropoff
-    ) {
-    }
+    ) {}
 
     record CreateDeliveryRequest(
         String clientReference,
         QuoteRequest quoteRequest
-    ) {
-    }
+    ) {}
 
     record ProviderQuote(
         String providerId,
@@ -94,8 +92,7 @@ public interface DeliveryProviderAdapter {
         List<String> warnings,
         JsonNode providerMetadata,
         Instant quotedAt
-    ) {
-    }
+    ) {}
 
     record ProviderDelivery(
         String providerId,
@@ -108,8 +105,7 @@ public interface DeliveryProviderAdapter {
         String trackingUrl,
         JsonNode providerMetadata,
         Instant observedAt
-    ) {
-    }
+    ) {}
 
     record Courier(
         String providerCourierId,
@@ -118,14 +114,57 @@ public interface DeliveryProviderAdapter {
         String photoUrl,
         BigDecimal latitude,
         BigDecimal longitude
-    ) {
-    }
+    ) {}
 
     record TrackingSnapshot(
         ProviderDelivery delivery,
         Courier courier,
         Instant observedAt
+    ) {}
+
+    record ProviderStatusUpdate(
+        String providerId,
+        String providerOrderId,
+        String providerDeliveryId,
+        DeliveryStatus status,
+        String providerStatus,
+        String trackingUrl,
+        Instant observedAt,
+        JsonNode providerMetadata
     ) {
+        public ProviderStatusUpdate {
+            Objects.requireNonNull(providerId, "providerId is required");
+            Objects.requireNonNull(providerOrderId, "providerOrderId is required");
+            Objects.requireNonNull(status, "status is required");
+            Objects.requireNonNull(observedAt, "observedAt is required");
+            providerMetadata = providerMetadata == null
+                ? null
+                : providerMetadata.deepCopy();
+        }
+
+        public static ProviderStatusUpdate fromTracking(TrackingSnapshot snapshot) {
+            Objects.requireNonNull(snapshot, "snapshot is required");
+            ProviderDelivery delivery = Objects.requireNonNull(
+                snapshot.delivery(),
+                "tracking delivery is required"
+            );
+            Instant observedAt = snapshot.observedAt() == null
+                ? delivery.observedAt()
+                : snapshot.observedAt();
+            return new ProviderStatusUpdate(
+                delivery.providerId(),
+                delivery.providerDeliveryId(),
+                null,
+                delivery.status(),
+                delivery.providerStatus(),
+                delivery.trackingUrl(),
+                Objects.requireNonNull(
+                    observedAt,
+                    "tracking observedAt is required"
+                ),
+                delivery.providerMetadata()
+            );
+        }
     }
 
     record CreateReconciliationResult(
@@ -136,14 +175,20 @@ public interface DeliveryProviderAdapter {
         public CreateReconciliationResult {
             Objects.requireNonNull(status, "status is required");
             if (status == CreateReconciliationStatus.FOUND && delivery == null) {
-                throw new IllegalArgumentException("FOUND reconciliation requires a provider delivery");
+                throw new IllegalArgumentException(
+                    "FOUND reconciliation requires a provider delivery"
+                );
             }
             if (status != CreateReconciliationStatus.FOUND && delivery != null) {
-                throw new IllegalArgumentException("Only FOUND reconciliation may contain a provider delivery");
+                throw new IllegalArgumentException(
+                    "Only FOUND reconciliation may contain a provider delivery"
+                );
             }
         }
 
-        public static CreateReconciliationResult found(ProviderDelivery delivery) {
+        public static CreateReconciliationResult found(
+            ProviderDelivery delivery
+        ) {
             return new CreateReconciliationResult(
                 CreateReconciliationStatus.FOUND,
                 Objects.requireNonNull(delivery, "delivery is required"),
@@ -152,15 +197,27 @@ public interface DeliveryProviderAdapter {
         }
 
         public static CreateReconciliationResult notFound(String detail) {
-            return new CreateReconciliationResult(CreateReconciliationStatus.NOT_FOUND, null, detail);
+            return new CreateReconciliationResult(
+                CreateReconciliationStatus.NOT_FOUND,
+                null,
+                detail
+            );
         }
 
         public static CreateReconciliationResult inconclusive(String detail) {
-            return new CreateReconciliationResult(CreateReconciliationStatus.INCONCLUSIVE, null, detail);
+            return new CreateReconciliationResult(
+                CreateReconciliationStatus.INCONCLUSIVE,
+                null,
+                detail
+            );
         }
 
         public static CreateReconciliationResult unsupported(String detail) {
-            return new CreateReconciliationResult(CreateReconciliationStatus.UNSUPPORTED, null, detail);
+            return new CreateReconciliationResult(
+                CreateReconciliationStatus.UNSUPPORTED,
+                null,
+                detail
+            );
         }
     }
 
@@ -175,13 +232,25 @@ public interface DeliveryProviderAdapter {
         private final Instant attemptedAt;
 
         public ProviderCreateUncertainException(String providerId,
-                                                String clientReference,
-                                                Instant attemptedAt,
-                                                Throwable cause) {
-            super("Provider create outcome is uncertain and requires reconciliation", cause);
-            this.providerId = Objects.requireNonNull(providerId, "providerId is required");
-            this.clientReference = Objects.requireNonNull(clientReference, "clientReference is required");
-            this.attemptedAt = Objects.requireNonNull(attemptedAt, "attemptedAt is required");
+                                                 String clientReference,
+                                                 Instant attemptedAt,
+                                                 Throwable cause) {
+            super(
+                "Provider create outcome is uncertain and requires reconciliation",
+                cause
+            );
+            this.providerId = Objects.requireNonNull(
+                providerId,
+                "providerId is required"
+            );
+            this.clientReference = Objects.requireNonNull(
+                clientReference,
+                "clientReference is required"
+            );
+            this.attemptedAt = Objects.requireNonNull(
+                attemptedAt,
+                "attemptedAt is required"
+            );
         }
 
         public String providerId() {

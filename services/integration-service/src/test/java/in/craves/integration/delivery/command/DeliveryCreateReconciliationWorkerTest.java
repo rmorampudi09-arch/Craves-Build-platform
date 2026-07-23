@@ -35,14 +35,15 @@ class DeliveryCreateReconciliationWorkerTest {
             commands, deliveryJobs, router, completion, properties
         );
         CommandRecord command = pendingCommand();
-        RoutingResult routingResult = mock(RoutingResult.class);
+        RoutingResult routingResult = new RoutingResult(
+            "borzo", null, null, null, List.of(), List.of()
+        );
         UUID deliveryJobId = UUID.randomUUID();
 
         when(commands.claimReconciliationBatch(20, 20, 10)).thenReturn(List.of(command));
         when(deliveryJobs.findIdByChefSubOrderId(command.chefSubOrderId()))
             .thenReturn(Optional.empty());
         when(router.reconcile(command)).thenReturn(routingResult);
-        when(routingResult.providerId()).thenReturn("borzo");
         when(completion.complete(command.message(), routingResult))
             .thenReturn(new CompletionReceipt(deliveryJobId, false));
 

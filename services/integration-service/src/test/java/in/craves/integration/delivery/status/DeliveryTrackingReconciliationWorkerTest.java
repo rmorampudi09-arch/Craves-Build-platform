@@ -20,10 +20,15 @@ import org.junit.jupiter.api.Test;
 class DeliveryTrackingReconciliationWorkerTest {
 
     @Test
-    void performsReadOnlyTrackAndPassesSnapshotToStatusService() {
+    void recoversFinalLeasesThenPerformsReadOnlyProviderTracking() {
         DeliveryProviderAdapter adapter = mock(DeliveryProviderAdapter.class);
         DeliveryStatusRepository repository = mock(DeliveryStatusRepository.class);
-        DeliveryStatusUpdateService statusService = mock(DeliveryStatusUpdateService.class);
+        DeliveryLeaseRecoveryRepository leaseRecovery = mock(
+            DeliveryLeaseRecoveryRepository.class
+        );
+        DeliveryStatusUpdateService statusService = mock(
+            DeliveryStatusUpdateService.class
+        );
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setTrackingBatchSize(20);
         properties.setTrackingStaleMinutes(5);
@@ -55,7 +60,8 @@ class DeliveryTrackingReconciliationWorkerTest {
         );
 
         when(adapter.providerId()).thenReturn("borzo");
-        when(repository.claimTrackingBatch(20, 5, 20)).thenReturn(List.of(workItem));
+        when(repository.claimTrackingBatch(20, 5, 20))
+            .thenReturn(List.of(workItem));
         when(adapter.track("1250032")).thenReturn(snapshot);
         when(statusService.processTracking(workItem, snapshot)).thenReturn(
             new DeliveryStatusUpdateService.ProcessingResult(
@@ -66,15 +72,18 @@ class DeliveryTrackingReconciliationWorkerTest {
             )
         );
 
-        DeliveryTrackingReconciliationWorker worker = new DeliveryTrackingReconciliationWorker(
-            List.of(adapter),
-            repository,
-            statusService,
-            properties
-        );
+        DeliveryTrackingReconciliationWorker worker =
+            new DeliveryTrackingReconciliationWorker(
+                List.of(adapter),
+                repository,
+                leaseRecovery,
+                statusService,
+                properties
+            );
 
         worker.reconcile();
 
+        verify(leaseRecovery).deadLetterExhaustedTrackingLeases(20, 5);
         verify(adapter).track("1250032");
         verify(statusService).processTracking(workItem, snapshot);
     }

@@ -50,7 +50,9 @@ public class DeliveryCommandRepository {
     public Optional<CommandRecord> findByChefSubOrderId(UUID chefSubOrderId) {
         return queryOne("""
             SELECT id, chef_sub_order_id, order_id, status, attempt_count, payload,
-                   scheduled_sequence_number, service_bus_message_id
+                   scheduled_sequence_number, service_bus_message_id,
+                   reconciliation_provider_id, reconciliation_client_reference,
+                   reconciliation_started_at, reconciliation_attempt_count
             FROM delivery_schema.delivery_command
             WHERE chef_sub_order_id = ?
             """, chefSubOrderId);
@@ -59,7 +61,9 @@ public class DeliveryCommandRepository {
     public Optional<CommandRecord> findById(UUID commandId) {
         return queryOne("""
             SELECT id, chef_sub_order_id, order_id, status, attempt_count, payload,
-                   scheduled_sequence_number, service_bus_message_id
+                   scheduled_sequence_number, service_bus_message_id,
+                   reconciliation_provider_id, reconciliation_client_reference,
+                   reconciliation_started_at, reconciliation_attempt_count
             FROM delivery_schema.delivery_command
             WHERE id = ?
             """, commandId);
@@ -80,7 +84,6 @@ public class DeliveryCommandRepository {
             SET status = 'PROCESSING',
                 attempt_count = attempt_count + 1,
                 processing_started_at = now(),
-                last_error = NULL,
                 updated_at = now()
             WHERE id = ?
               AND attempt_count < ?
@@ -89,15 +92,110 @@ public class DeliveryCommandRepository {
                     OR (status = 'PROCESSING' AND processing_started_at < now() - interval '10 minutes')
                   )
             RETURNING id, chef_sub_order_id, order_id, status, attempt_count, payload,
-                      scheduled_sequence_number, service_bus_message_id
+                      scheduled_sequence_number, service_bus_message_id,
+                      reconciliation_provider_id, reconciliation_client_reference,
+                      reconciliation_started_at, reconciliation_attempt_count
             """, this::mapRow, commandId, maximumAttempts);
         return rows.stream().findFirst();
+    }
+
+    public boolean markReconciliationPending(UUID commandId,
+                                             String providerId,
+                                             String clientReference,
+                                             Instant attemptedAt,
+                                             String safeError) {
+        return jdbc.update("""
+            UPDATE delivery_schema.delivery_command
+            SET status = 'RECONCILIATION_PENDING',
+                processing_started_at = NULL,
+                reconciliation_provider_id = ?,
+                reconciliation_client_reference = ?,
+                reconciliation_started_at = ?,
+                reconciliation_attempt_count = 0,
+                reconciliation_processing_started_at = NULL,
+                next_reconciliation_at = now(),
+                last_error = ?,
+                updated_at = now()
+            WHERE id = ? AND status = 'PROCESSING'
+            """,
+            providerId,
+            clientReference,
+            toDatabaseTimestamp(attemptedAt),
+            truncate(safeError, 2000),
+            commandId
+        ) == 1;
+    }
+
+    @Transactional
+    public List<CommandRecord> claimReconciliationBatch(int limit,
+                                                        int maximumAttempts,
+                                                        int staleMinutes) {
+        return jdbc.query("""
+            WITH selected AS (
+                SELECT id
+                FROM delivery_schema.delivery_command
+                WHERE status = 'RECONCILIATION_PENDING'
+                  AND reconciliation_attempt_count < ?
+                  AND next_reconciliation_at <= now()
+                  AND (
+                        reconciliation_processing_started_at IS NULL
+                        OR reconciliation_processing_started_at
+                           < now() - make_interval(mins => ?)
+                      )
+                ORDER BY next_reconciliation_at, created_at
+                FOR UPDATE SKIP LOCKED
+                LIMIT ?
+            )
+            UPDATE delivery_schema.delivery_command AS command
+            SET reconciliation_attempt_count = reconciliation_attempt_count + 1,
+                reconciliation_processing_started_at = now(),
+                updated_at = now()
+            FROM selected
+            WHERE command.id = selected.id
+            RETURNING command.id, command.chef_sub_order_id, command.order_id,
+                      command.status, command.attempt_count, command.payload,
+                      command.scheduled_sequence_number, command.service_bus_message_id,
+                      command.reconciliation_provider_id,
+                      command.reconciliation_client_reference,
+                      command.reconciliation_started_at,
+                      command.reconciliation_attempt_count
+            """, this::mapRow, maximumAttempts, staleMinutes, limit);
+    }
+
+    public void scheduleReconciliationRetry(UUID commandId,
+                                            int reconciliationAttemptCount,
+                                            int maximumAttempts,
+                                            Instant nextAttemptAt,
+                                            String safeError) {
+        jdbc.update("""
+            UPDATE delivery_schema.delivery_command
+            SET status = CASE
+                    WHEN ? >= ? THEN 'DEAD_LETTER'
+                    ELSE 'RECONCILIATION_PENDING'
+                END,
+                reconciliation_processing_started_at = NULL,
+                next_reconciliation_at = ?,
+                last_error = ?,
+                updated_at = now()
+            WHERE id = ? AND status = 'RECONCILIATION_PENDING'
+            """,
+            reconciliationAttemptCount,
+            maximumAttempts,
+            toDatabaseTimestamp(nextAttemptAt),
+            truncate(safeError, 2000),
+            commandId
+        );
     }
 
     public void markCompleted(UUID commandId) {
         jdbc.update("""
             UPDATE delivery_schema.delivery_command
-            SET status = 'COMPLETED', processing_started_at = NULL, last_error = NULL, updated_at = now()
+            SET status = 'COMPLETED',
+                processing_started_at = NULL,
+                reconciliation_processing_started_at = NULL,
+                next_reconciliation_at = NULL,
+                last_error = NULL,
+                updated_at = now()
             WHERE id = ?
             """, commandId);
     }
@@ -113,13 +211,17 @@ public class DeliveryCommandRepository {
     public void markDeadLetter(UUID commandId, String safeError) {
         jdbc.update("""
             UPDATE delivery_schema.delivery_command
-            SET status = 'DEAD_LETTER', processing_started_at = NULL, last_error = ?, updated_at = now()
+            SET status = 'DEAD_LETTER',
+                processing_started_at = NULL,
+                reconciliation_processing_started_at = NULL,
+                last_error = ?,
+                updated_at = now()
             WHERE id = ?
             """, truncate(safeError, 2000), commandId);
     }
 
     static OffsetDateTime toDatabaseTimestamp(Instant value) {
-        return value.atOffset(ZoneOffset.UTC);
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 
     private Optional<CommandRecord> queryOne(String sql, Object argument) {
@@ -138,11 +240,20 @@ public class DeliveryCommandRepository {
                 rs.getInt("attempt_count"),
                 objectMapper.readValue(payload, DeliveryCommandMessage.class),
                 rs.getObject("scheduled_sequence_number", Long.class),
-                rs.getString("service_bus_message_id")
+                rs.getString("service_bus_message_id"),
+                rs.getString("reconciliation_provider_id"),
+                rs.getString("reconciliation_client_reference"),
+                instantOrNull(rs, "reconciliation_started_at"),
+                rs.getInt("reconciliation_attempt_count")
             );
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Stored delivery command payload is invalid", ex);
         }
+    }
+
+    private static Instant instantOrNull(ResultSet rs, String column) throws SQLException {
+        OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
     }
 
     private String writeJson(Object value) {
@@ -168,6 +279,10 @@ public class DeliveryCommandRepository {
         int attemptCount,
         DeliveryCommandMessage message,
         Long scheduledSequenceNumber,
-        String serviceBusMessageId
+        String serviceBusMessageId,
+        String reconciliationProviderId,
+        String reconciliationClientReference,
+        Instant reconciliationStartedAt,
+        int reconciliationAttemptCount
     ) {}
 }

@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,8 +37,8 @@ public class DeliveryCommandRepository {
             message.commandId(),
             message.chefSubOrderId(),
             message.orderId(),
-            message.readyAt(),
-            message.dispatchAt(),
+            toDatabaseTimestamp(message.readyAt()),
+            toDatabaseTimestamp(message.dispatchAt()),
             message.idempotencyKey(),
             writeJson(message),
             message.sourceEventId()
@@ -113,6 +116,10 @@ public class DeliveryCommandRepository {
             SET status = 'DEAD_LETTER', processing_started_at = NULL, last_error = ?, updated_at = now()
             WHERE id = ?
             """, truncate(safeError, 2000), commandId);
+    }
+
+    static OffsetDateTime toDatabaseTimestamp(Instant value) {
+        return value.atOffset(ZoneOffset.UTC);
     }
 
     private Optional<CommandRecord> queryOne(String sql, Object argument) {

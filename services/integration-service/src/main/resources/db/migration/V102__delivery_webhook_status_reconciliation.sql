@@ -48,21 +48,15 @@ ALTER TABLE delivery_schema.delivery_job
     ADD COLUMN IF NOT EXISTS tracking_dead_lettered_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS last_tracking_error TEXT;
 
+-- Existing rows receive audit metadata only. They are deliberately not scheduled for polling.
+-- A fresh webhook, an explicit operational repair, or a job created after V102 may schedule track().
 UPDATE delivery_schema.delivery_job
 SET provider_status = COALESCE(provider_status, status),
     last_status_observed_at = COALESCE(last_status_observed_at, booked_at, created_at),
-    last_status_source = COALESCE(last_status_source, 'CREATE'),
-    next_tracking_at = CASE
-        WHEN status IN ('DELIVERED', 'CANCELLED', 'RETURNED', 'FAILED') THEN NULL
-        ELSE COALESCE(next_tracking_at, now())
-    END
+    last_status_source = COALESCE(last_status_source, 'CREATE')
 WHERE provider_status IS NULL
    OR last_status_observed_at IS NULL
-   OR last_status_source IS NULL
-   OR (
-        next_tracking_at IS NULL
-        AND status NOT IN ('DELIVERED', 'CANCELLED', 'RETURNED', 'FAILED')
-      );
+   OR last_status_source IS NULL;
 
 ALTER TABLE delivery_schema.delivery_job
     DROP CONSTRAINT IF EXISTS ck_delivery_job_tracking_attempts;

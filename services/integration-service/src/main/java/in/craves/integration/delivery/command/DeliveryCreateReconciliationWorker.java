@@ -3,6 +3,7 @@ package in.craves.integration.delivery.command;
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
+import in.craves.integration.delivery.status.DeliveryLeaseRecoveryRepository;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
@@ -18,29 +19,49 @@ import org.springframework.stereotype.Component;
     havingValue = "true"
 )
 public class DeliveryCreateReconciliationWorker {
-    private static final Logger log = LoggerFactory.getLogger(DeliveryCreateReconciliationWorker.class);
+    private static final Logger log = LoggerFactory.getLogger(
+        DeliveryCreateReconciliationWorker.class
+    );
     private static final long MAX_RETRY_DELAY_SECONDS = 3600;
 
     private final DeliveryCommandRepository commands;
     private final DeliveryJobRepository deliveryJobs;
     private final DeliveryProviderRouter router;
     private final DeliveryCommandCompletionService completionService;
+    private final DeliveryLeaseRecoveryRepository leaseRecovery;
     private final DeliveryCommandProperties properties;
 
-    public DeliveryCreateReconciliationWorker(DeliveryCommandRepository commands,
-                                              DeliveryJobRepository deliveryJobs,
-                                              DeliveryProviderRouter router,
-                                              DeliveryCommandCompletionService completionService,
-                                              DeliveryCommandProperties properties) {
+    public DeliveryCreateReconciliationWorker(
+        DeliveryCommandRepository commands,
+        DeliveryJobRepository deliveryJobs,
+        DeliveryProviderRouter router,
+        DeliveryCommandCompletionService completionService,
+        DeliveryLeaseRecoveryRepository leaseRecovery,
+        DeliveryCommandProperties properties
+    ) {
         this.commands = commands;
         this.deliveryJobs = deliveryJobs;
         this.router = router;
         this.completionService = completionService;
+        this.leaseRecovery = leaseRecovery;
         this.properties = properties;
     }
 
-    @Scheduled(fixedDelayString = "${craves.delivery-command.reconciliation-interval-ms:15000}")
+    @Scheduled(
+        fixedDelayString = "${craves.delivery-command.reconciliation-interval-ms:15000}"
+    )
     public void reconcilePending() {
+        int recovered = leaseRecovery.deadLetterExhaustedCreateReconciliationLeases(
+            properties.getMaxReconciliationAttempts(),
+            properties.getReconciliationStaleMinutes()
+        );
+        if (recovered > 0) {
+            log.error(
+                "Dead-lettered {} create-reconciliation rows whose final processing lease expired",
+                recovered
+            );
+        }
+
         List<CommandRecord> records = commands.claimReconciliationBatch(
             properties.getReconciliationBatchSize(),
             properties.getMaxReconciliationAttempts(),
@@ -53,7 +74,9 @@ public class DeliveryCreateReconciliationWorker {
 
     private void reconcileOne(CommandRecord command) {
         try {
-            if (deliveryJobs.findIdByChefSubOrderId(command.chefSubOrderId()).isPresent()) {
+            if (deliveryJobs.findIdByChefSubOrderId(
+                command.chefSubOrderId()
+            ).isPresent()) {
                 commands.markCompleted(command.id());
                 log.info(
                     "Delivery create reconciliation found an existing local job commandId={} chefSubOrderId={}",
@@ -76,7 +99,10 @@ public class DeliveryCreateReconciliationWorker {
         } catch (DeliveryCreateReconciliationPendingException ex) {
             retry(command, safeMessage(ex));
         } catch (RuntimeException ex) {
-            retry(command, "Delivery create reconciliation failed: " + safeMessage(ex));
+            retry(
+                command,
+                "Delivery create reconciliation failed: " + safeMessage(ex)
+            );
             log.error(
                 "Delivery create reconciliation failed commandId={} chefSubOrderId={}",
                 command.id(),
@@ -86,9 +112,12 @@ public class DeliveryCreateReconciliationWorker {
         }
     }
 
-    private void retry(CommandRecord command, String error) {
+    private void retry(CommandRecord command,
+                       String error) {
         int attempt = command.reconciliationAttemptCount();
-        Instant nextAttemptAt = Instant.now().plusSeconds(retryDelaySeconds(attempt));
+        Instant nextAttemptAt = Instant.now().plusSeconds(
+            retryDelaySeconds(attempt)
+        );
         commands.scheduleReconciliationRetry(
             command.id(),
             attempt,
@@ -123,6 +152,8 @@ public class DeliveryCreateReconciliationWorker {
             return error.getClass().getSimpleName();
         }
         String normalized = message.replace('\n', ' ').replace('\r', ' ').trim();
-        return normalized.length() <= 1000 ? normalized : normalized.substring(0, 1000);
+        return normalized.length() <= 1000
+            ? normalized
+            : normalized.substring(0, 1000);
     }
 }

@@ -4,6 +4,7 @@ import in.craves.integration.delivery.command.DeliveryCommandCompletionService.C
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
+import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryRoutingException;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,6 +55,21 @@ public class DeliveryCommandWorker {
             return new WorkerReceipt(
                 receipt.deliveryJobId(), receipt.duplicate(), routingResult.providerId()
             );
+        } catch (DeliveryCreateReconciliationPendingException ex) {
+            boolean stored = commands.markReconciliationPending(
+                command.id(),
+                ex.providerId(),
+                ex.clientReference(),
+                ex.attemptedAt(),
+                safeMessage(ex)
+            );
+            if (!stored) {
+                throw new DeliveryCommandTransientException(
+                    "Uncertain provider create could not be moved to reconciliation",
+                    ex
+                );
+            }
+            return new WorkerReceipt(null, false, "RECONCILIATION_PENDING");
         } catch (DeliveryRoutingException ex) {
             handleFailure(command, ex);
             throw new DeliveryCommandTransientException(ex.getMessage(), ex);
@@ -75,6 +91,9 @@ public class DeliveryCommandWorker {
                     "Completed delivery command has no delivery job"
                 ));
             return new WorkerReceipt(deliveryJobId, true, "ALREADY_COMPLETED");
+        }
+        if ("RECONCILIATION_PENDING".equals(command.status())) {
+            return new WorkerReceipt(null, true, "RECONCILIATION_PENDING");
         }
         if ("DEAD_LETTER".equals(command.status())
             || command.attemptCount() >= properties.getMaxDeliveryAttempts()) {

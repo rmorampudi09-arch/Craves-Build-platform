@@ -9,11 +9,14 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryComm
 import java.time.ZoneOffset;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(prefix = "craves.delivery-command", name = "enabled", havingValue = "true")
+@ConditionalOnExpression(
+    "${craves.delivery-command.enabled:false} || "
+        + "${craves.delivery-command.status-publisher-enabled:false}"
+)
 public class DeliveryServiceBusPublisher {
     private final ServiceBusSenderClient commandSender;
     private final ServiceBusSenderClient domainEventSender;
@@ -61,6 +64,7 @@ public class DeliveryServiceBusPublisher {
             message.setCorrelationId(correlationId.toString());
         }
         message.getApplicationProperties().put("event_type", eventType);
+        message.getApplicationProperties().put("eventType", eventType);
         domainEventSender.sendMessage(message);
     }
 

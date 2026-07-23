@@ -62,7 +62,9 @@ public class DeliveryStatusUpdateService {
         ));
 
         DeliveryJobState job = repository.lockJob(discovered.id())
-            .orElseThrow(() -> new UnmatchedDeliveryJobException("Delivery job disappeared during processing"));
+            .orElseThrow(() -> new UnmatchedDeliveryJobException(
+                "Delivery job disappeared during processing"
+            ));
 
         Decision decision = decide(job, update);
         String eventType = webhookEventType(workItem.rawPayload());
@@ -77,12 +79,20 @@ public class DeliveryStatusUpdateService {
             workItem.rawPayload(),
             update.observedAt(),
             decision.applied(),
-            decision.reason()
+            decision.applied() ? null : decision.reason()
         );
 
         if (!inserted) {
-            repository.markWebhookDuplicate(workItem.id(), "PROVIDER_EVENT_ALREADY_RECORDED");
-            return new ProcessingResult(job.id(), false, true, "PROVIDER_EVENT_ALREADY_RECORDED");
+            repository.markWebhookDuplicate(
+                workItem.id(),
+                "PROVIDER_EVENT_ALREADY_RECORDED"
+            );
+            return new ProcessingResult(
+                job.id(),
+                false,
+                true,
+                "PROVIDER_EVENT_ALREADY_RECORDED"
+            );
         }
 
         if (decision.applied()) {
@@ -97,25 +107,40 @@ public class DeliveryStatusUpdateService {
             update.status().name(),
             decision.reason()
         );
-        return new ProcessingResult(job.id(), decision.applied(), false, decision.reason());
+        return new ProcessingResult(
+            job.id(),
+            decision.applied(),
+            false,
+            decision.reason()
+        );
     }
 
     @Transactional
-    public ProcessingResult processTracking(TrackingWorkItem workItem, TrackingSnapshot snapshot) {
+    public ProcessingResult processTracking(TrackingWorkItem workItem,
+                                            TrackingSnapshot snapshot) {
         ProviderStatusUpdate update = ProviderStatusUpdate.fromTracking(snapshot);
         requireProviderMatch(workItem.providerId(), update.providerId());
         if (!workItem.providerDeliveryId().equals(update.providerOrderId())) {
-            throw new IllegalStateException("Tracking response provider order does not match the claimed job");
+            throw new IllegalStateException(
+                "Tracking response provider order does not match the claimed job"
+            );
         }
 
         DeliveryJobState job = repository.lockJob(workItem.deliveryJobId())
-            .orElseThrow(() -> new UnmatchedDeliveryJobException("Tracked delivery job no longer exists"));
+            .orElseThrow(() -> new UnmatchedDeliveryJobException(
+                "Tracked delivery job no longer exists"
+            ));
         Decision decision = decide(job, update);
         Instant nextTrackingAt = nextTrackingAt(update.status());
 
         if (!decision.applied()) {
             repository.markTrackingNoChange(job.id(), nextTrackingAt);
-            return new ProcessingResult(job.id(), false, false, decision.reason());
+            return new ProcessingResult(
+                job.id(),
+                false,
+                false,
+                decision.reason()
+            );
         }
 
         String providerEventId = trackingEventId(update);
@@ -135,7 +160,12 @@ public class DeliveryStatusUpdateService {
         );
         if (!inserted) {
             repository.markTrackingNoChange(job.id(), nextTrackingAt);
-            return new ProcessingResult(job.id(), false, true, "TRACK_EVENT_ALREADY_RECORDED");
+            return new ProcessingResult(
+                job.id(),
+                false,
+                true,
+                "TRACK_EVENT_ALREADY_RECORDED"
+            );
         }
 
         applyAndPublish(job, update, "TRACK");
@@ -184,7 +214,8 @@ public class DeliveryStatusUpdateService {
         );
     }
 
-    private Decision decide(DeliveryJobState job, ProviderStatusUpdate update) {
+    private Decision decide(DeliveryJobState job,
+                            ProviderStatusUpdate update) {
         if (update.status() == DeliveryStatus.UNKNOWN) {
             return Decision.ignored("UNKNOWN_PROVIDER_STATUS");
         }
@@ -197,11 +228,17 @@ public class DeliveryStatusUpdateService {
             return Decision.ignored("TERMINAL_STATUS_PROTECTED");
         }
         if (current == update.status()
-            && Objects.equals(normalize(job.providerStatus()), normalize(update.providerStatus()))
-            && Objects.equals(normalize(job.trackingUrl()), normalize(update.trackingUrl()))) {
+            && Objects.equals(
+                normalize(job.providerStatus()),
+                normalize(update.providerStatus())
+            )
+            && Objects.equals(
+                normalize(job.trackingUrl()),
+                normalize(update.trackingUrl())
+            )) {
             return Decision.ignored("NO_STATE_CHANGE");
         }
-        return Decision.applied();
+        return Decision.accepted();
     }
 
     private Instant nextTrackingAt(DeliveryStatus status) {
@@ -238,9 +275,12 @@ public class DeliveryStatusUpdateService {
         return Map.copyOf(indexed);
     }
 
-    private static void requireProviderMatch(String expected, String actual) {
+    private static void requireProviderMatch(String expected,
+                                             String actual) {
         if (!normalize(expected).equals(normalize(actual))) {
-            throw new IllegalStateException("Webhook provider does not match the selected normalizer");
+            throw new IllegalStateException(
+                "Webhook provider does not match the selected normalizer"
+            );
         }
     }
 
@@ -279,7 +319,10 @@ public class DeliveryStatusUpdateService {
                 digest.digest(canonical.getBytes(StandardCharsets.UTF_8))
             );
         } catch (Exception ex) {
-            throw new IllegalStateException("Could not derive tracking event identity", ex);
+            throw new IllegalStateException(
+                "Could not derive tracking event identity",
+                ex
+            );
         }
     }
 
@@ -292,11 +335,13 @@ public class DeliveryStatusUpdateService {
             return "<null>";
         }
         String normalized = value.replace('\n', ' ').replace('\r', ' ').trim();
-        return normalized.length() <= 200 ? normalized : normalized.substring(0, 200);
+        return normalized.length() <= 200
+            ? normalized
+            : normalized.substring(0, 200);
     }
 
     private record Decision(boolean applied, String reason) {
-        static Decision applied() {
+        static Decision accepted() {
             return new Decision(true, "APPLIED");
         }
 

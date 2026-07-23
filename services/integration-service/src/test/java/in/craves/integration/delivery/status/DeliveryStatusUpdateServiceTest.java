@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,7 +43,10 @@ class DeliveryStatusUpdateServiceTest {
         ProviderStatusUpdate update = update(DeliveryStatus.AT_PICKUP, observedAt);
         WebhookWorkItem workItem = workItem();
         DeliveryJobState job = job(
-            jobId, orderId, subOrderId, "COURIER_TO_PICKUP",
+            jobId,
+            orderId,
+            subOrderId,
+            "COURIER_TO_PICKUP",
             Instant.parse("2026-07-24T02:59:00Z")
         );
 
@@ -51,14 +55,25 @@ class DeliveryStatusUpdateServiceTest {
             .thenReturn(Optional.of(job));
         when(repository.lockJob(jobId)).thenReturn(Optional.of(job));
         when(repository.insertEventIfAbsent(
-            eq(jobId), eq("borzo"), eq(workItem.providerEventId()),
-            eq("delivery_changed"), eq("WEBHOOK"), eq("AT_PICKUP"),
-            eq("courier_at_pickup"), eq(workItem.rawPayload()),
-            eq(observedAt), eq(true), eq("APPLIED")
+            eq(jobId),
+            eq("borzo"),
+            eq(workItem.providerEventId()),
+            eq("delivery_changed"),
+            eq("WEBHOOK"),
+            eq("AT_PICKUP"),
+            eq("courier_at_pickup"),
+            eq(workItem.rawPayload()),
+            eq(observedAt),
+            eq(true),
+            isNull()
         )).thenReturn(true);
 
         DeliveryStatusUpdateService service = new DeliveryStatusUpdateService(
-            List.of(normalizer), repository, outbox, properties, objectMapper
+            List.of(normalizer),
+            repository,
+            outbox,
+            properties,
+            objectMapper
         );
 
         var result = service.processWebhook(workItem);
@@ -66,12 +81,27 @@ class DeliveryStatusUpdateServiceTest {
         assertThat(result.applied()).isTrue();
         assertThat(result.duplicate()).isFalse();
         verify(repository).applyJobStatus(
-            eq(jobId), eq("AT_PICKUP"), eq("courier_at_pickup"),
-            eq("https://tracking.example/1"), eq(observedAt), eq("WEBHOOK"), any()
+            eq(jobId),
+            eq("AT_PICKUP"),
+            eq("courier_at_pickup"),
+            eq("https://tracking.example/1"),
+            eq(observedAt),
+            eq("WEBHOOK"),
+            any()
         );
-        verify(outbox).enqueue(eq("DELIVERY_STATUS_CHANGED"), eq(jobId), eq(orderId), any());
+        verify(outbox).enqueue(
+            eq("DELIVERY_STATUS_CHANGED"),
+            eq(jobId),
+            eq(orderId),
+            any()
+        );
         verify(repository).markWebhookProcessed(
-            workItem.id(), jobId, "1250032", "11712", "AT_PICKUP", "APPLIED"
+            workItem.id(),
+            jobId,
+            "1250032",
+            "11712",
+            "AT_PICKUP",
+            "APPLIED"
         );
     }
 
@@ -85,7 +115,10 @@ class DeliveryStatusUpdateServiceTest {
 
         UUID jobId = UUID.randomUUID();
         DeliveryJobState job = job(
-            jobId, UUID.randomUUID(), UUID.randomUUID(), "IN_TRANSIT",
+            jobId,
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "IN_TRANSIT",
             Instant.parse("2026-07-24T03:05:00Z")
         );
         WebhookWorkItem workItem = workItem();
@@ -99,14 +132,25 @@ class DeliveryStatusUpdateServiceTest {
             .thenReturn(Optional.of(job));
         when(repository.lockJob(jobId)).thenReturn(Optional.of(job));
         when(repository.insertEventIfAbsent(
-            eq(jobId), eq("borzo"), eq(workItem.providerEventId()),
-            eq("delivery_changed"), eq("WEBHOOK"), eq("AT_PICKUP"),
-            eq("courier_at_pickup"), eq(workItem.rawPayload()),
-            eq(update.observedAt()), eq(false), eq("STALE_OR_EQUAL_OBSERVED_AT")
+            eq(jobId),
+            eq("borzo"),
+            eq(workItem.providerEventId()),
+            eq("delivery_changed"),
+            eq("WEBHOOK"),
+            eq("AT_PICKUP"),
+            eq("courier_at_pickup"),
+            eq(workItem.rawPayload()),
+            eq(update.observedAt()),
+            eq(false),
+            eq("STALE_OR_EQUAL_OBSERVED_AT")
         )).thenReturn(true);
 
         DeliveryStatusUpdateService service = new DeliveryStatusUpdateService(
-            List.of(normalizer), repository, outbox, properties, objectMapper
+            List.of(normalizer),
+            repository,
+            outbox,
+            properties,
+            objectMapper
         );
 
         var result = service.processWebhook(workItem);
@@ -114,11 +158,21 @@ class DeliveryStatusUpdateServiceTest {
         assertThat(result.applied()).isFalse();
         assertThat(result.result()).isEqualTo("STALE_OR_EQUAL_OBSERVED_AT");
         verify(repository, never()).applyJobStatus(
-            any(), anyString(), anyString(), any(), any(), anyString(), any()
+            any(),
+            anyString(),
+            anyString(),
+            any(),
+            any(),
+            anyString(),
+            any()
         );
         verify(outbox, never()).enqueue(anyString(), any(), any(), any());
         verify(repository).markWebhookProcessed(
-            workItem.id(), jobId, "1250032", "11712", "AT_PICKUP",
+            workItem.id(),
+            jobId,
+            "1250032",
+            "11712",
+            "AT_PICKUP",
             "STALE_OR_EQUAL_OBSERVED_AT"
         );
     }
@@ -133,7 +187,10 @@ class DeliveryStatusUpdateServiceTest {
 
         UUID jobId = UUID.randomUUID();
         DeliveryJobState job = job(
-            jobId, UUID.randomUUID(), UUID.randomUUID(), "DELIVERED",
+            jobId,
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "DELIVERED",
             Instant.parse("2026-07-24T03:00:00Z")
         );
         WebhookWorkItem workItem = workItem();
@@ -147,14 +204,25 @@ class DeliveryStatusUpdateServiceTest {
             .thenReturn(Optional.of(job));
         when(repository.lockJob(jobId)).thenReturn(Optional.of(job));
         when(repository.insertEventIfAbsent(
-            eq(jobId), eq("borzo"), eq(workItem.providerEventId()),
-            eq("delivery_changed"), eq("WEBHOOK"), eq("IN_TRANSIT"),
-            eq("courier_at_pickup"), eq(workItem.rawPayload()),
-            eq(update.observedAt()), eq(false), eq("TERMINAL_STATUS_PROTECTED")
+            eq(jobId),
+            eq("borzo"),
+            eq(workItem.providerEventId()),
+            eq("delivery_changed"),
+            eq("WEBHOOK"),
+            eq("IN_TRANSIT"),
+            eq("courier_at_pickup"),
+            eq(workItem.rawPayload()),
+            eq(update.observedAt()),
+            eq(false),
+            eq("TERMINAL_STATUS_PROTECTED")
         )).thenReturn(true);
 
         DeliveryStatusUpdateService service = new DeliveryStatusUpdateService(
-            List.of(normalizer), repository, outbox, properties, objectMapper
+            List.of(normalizer),
+            repository,
+            outbox,
+            properties,
+            objectMapper
         );
 
         var result = service.processWebhook(workItem);
@@ -162,7 +230,13 @@ class DeliveryStatusUpdateServiceTest {
         assertThat(result.applied()).isFalse();
         assertThat(result.result()).isEqualTo("TERMINAL_STATUS_PROTECTED");
         verify(repository, never()).applyJobStatus(
-            any(), anyString(), anyString(), any(), any(), anyString(), any()
+            any(),
+            anyString(),
+            anyString(),
+            any(),
+            any(),
+            anyString(),
+            any()
         );
         verify(outbox, never()).enqueue(anyString(), any(), any(), any());
     }
@@ -177,7 +251,8 @@ class DeliveryStatusUpdateServiceTest {
         );
     }
 
-    private static ProviderStatusUpdate update(DeliveryStatus status, Instant observedAt) {
+    private static ProviderStatusUpdate update(DeliveryStatus status,
+                                               Instant observedAt) {
         return new ProviderStatusUpdate(
             "borzo",
             "1250032",

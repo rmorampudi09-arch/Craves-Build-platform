@@ -36,6 +36,7 @@ craves:
     maintenance-zone: ${CRAVES_DELIVERY_MAINTENANCE_ZONE:Asia/Kolkata}
   delivery-command:
     enabled: ${CRAVES_DELIVERY_COMMAND_ENABLED:false}
+    reconciliation-enabled: ${CRAVES_DELIVERY_RECONCILIATION_ENABLED:false}
     fully-qualified-namespace: ${SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
     connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
     topic-name: ${SERVICE_BUS_TOPIC_NAME:craves-domain-events}
@@ -50,6 +51,11 @@ craves:
     max-auto-lock-renew-minutes: ${CRAVES_DELIVERY_MAX_AUTO_LOCK_RENEW_MINUTES:5}
     outbox-batch-size: ${CRAVES_DELIVERY_OUTBOX_BATCH_SIZE:20}
     outbox-publish-interval-ms: ${CRAVES_DELIVERY_OUTBOX_PUBLISH_INTERVAL_MS:5000}
+    reconciliation-batch-size: ${CRAVES_DELIVERY_RECONCILIATION_BATCH_SIZE:20}
+    reconciliation-interval-ms: ${CRAVES_DELIVERY_RECONCILIATION_INTERVAL_MS:15000}
+    max-reconciliation-attempts: ${CRAVES_DELIVERY_MAX_RECONCILIATION_ATTEMPTS:20}
+    reconciliation-retry-base-seconds: ${CRAVES_DELIVERY_RECONCILIATION_RETRY_BASE_SECONDS:30}
+    reconciliation-stale-minutes: ${CRAVES_DELIVERY_RECONCILIATION_STALE_MINUTES:10}
   refund:
     consumer-enabled: ${CRAVES_REFUND_CONSUMER_ENABLED:false}
     provider-execution-enabled: ${CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED:false}
@@ -77,6 +83,9 @@ craves:
       callback-secret: ${BORZO_CALLBACK_TOKEN:}
       connect-timeout-seconds: ${BORZO_CONNECT_TIMEOUT_SECONDS:5}
       read-timeout-seconds: ${BORZO_READ_TIMEOUT_SECONDS:20}
+      reconciliation-page-size: ${BORZO_RECONCILIATION_PAGE_SIZE:50}
+      reconciliation-max-pages: ${BORZO_RECONCILIATION_MAX_PAGES:5}
+      reconciliation-lookback-seconds: ${BORZO_RECONCILIATION_LOOKBACK_SECONDS:120}
 
 management:
   endpoints:

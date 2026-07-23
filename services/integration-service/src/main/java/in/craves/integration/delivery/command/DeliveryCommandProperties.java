@@ -10,6 +10,7 @@ import org.springframework.util.StringUtils;
 @ConfigurationProperties(prefix = "craves.delivery-command")
 public class DeliveryCommandProperties {
     private boolean enabled = false;
+    private boolean reconciliationEnabled = false;
     private String fullyQualifiedNamespace = "";
     private String connectionString = "";
     private String topicName = "craves-domain-events";
@@ -24,6 +25,11 @@ public class DeliveryCommandProperties {
     private int maxAutoLockRenewMinutes = 5;
     private int outboxBatchSize = 20;
     private long outboxPublishIntervalMs = 5000;
+    private int reconciliationBatchSize = 20;
+    private long reconciliationIntervalMs = 15000;
+    private int maxReconciliationAttempts = 20;
+    private int reconciliationRetryBaseSeconds = 30;
+    private int reconciliationStaleMinutes = 10;
 
     @PostConstruct
     void validate() {
@@ -54,10 +60,27 @@ public class DeliveryCommandProperties {
         if (outboxPublishIntervalMs < 1000) {
             throw new IllegalStateException("Delivery command outboxPublishIntervalMs must be at least 1000");
         }
-        if (enabled) {
+        if (reconciliationBatchSize < 1 || reconciliationBatchSize > 500) {
+            throw new IllegalStateException("Delivery reconciliationBatchSize must be between 1 and 500");
+        }
+        if (reconciliationIntervalMs < 1000) {
+            throw new IllegalStateException("Delivery reconciliationIntervalMs must be at least 1000");
+        }
+        if (maxReconciliationAttempts < 1 || maxReconciliationAttempts > 100) {
+            throw new IllegalStateException("Delivery maxReconciliationAttempts must be between 1 and 100");
+        }
+        if (reconciliationRetryBaseSeconds < 1 || reconciliationRetryBaseSeconds > 3600) {
+            throw new IllegalStateException(
+                "Delivery reconciliationRetryBaseSeconds must be between 1 and 3600"
+            );
+        }
+        if (reconciliationStaleMinutes < 1 || reconciliationStaleMinutes > 120) {
+            throw new IllegalStateException("Delivery reconciliationStaleMinutes must be between 1 and 120");
+        }
+        if (enabled || reconciliationEnabled) {
             if (!StringUtils.hasText(connectionString) && !StringUtils.hasText(fullyQualifiedNamespace)) {
                 throw new IllegalStateException(
-                    "SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE or SERVICE_BUS_CONNECTION_STRING is required when delivery commands are enabled"
+                    "SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE or SERVICE_BUS_CONNECTION_STRING is required when delivery processing is enabled"
                 );
             }
             requireText(topicName, "topicName");
@@ -77,6 +100,10 @@ public class DeliveryCommandProperties {
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public boolean isReconciliationEnabled() { return reconciliationEnabled; }
+    public void setReconciliationEnabled(boolean reconciliationEnabled) {
+        this.reconciliationEnabled = reconciliationEnabled;
+    }
     public String getFullyQualifiedNamespace() { return fullyQualifiedNamespace; }
     public void setFullyQualifiedNamespace(String fullyQualifiedNamespace) { this.fullyQualifiedNamespace = fullyQualifiedNamespace; }
     public String getConnectionString() { return connectionString; }
@@ -110,5 +137,25 @@ public class DeliveryCommandProperties {
     public long getOutboxPublishIntervalMs() { return outboxPublishIntervalMs; }
     public void setOutboxPublishIntervalMs(long outboxPublishIntervalMs) {
         this.outboxPublishIntervalMs = outboxPublishIntervalMs;
+    }
+    public int getReconciliationBatchSize() { return reconciliationBatchSize; }
+    public void setReconciliationBatchSize(int reconciliationBatchSize) {
+        this.reconciliationBatchSize = reconciliationBatchSize;
+    }
+    public long getReconciliationIntervalMs() { return reconciliationIntervalMs; }
+    public void setReconciliationIntervalMs(long reconciliationIntervalMs) {
+        this.reconciliationIntervalMs = reconciliationIntervalMs;
+    }
+    public int getMaxReconciliationAttempts() { return maxReconciliationAttempts; }
+    public void setMaxReconciliationAttempts(int maxReconciliationAttempts) {
+        this.maxReconciliationAttempts = maxReconciliationAttempts;
+    }
+    public int getReconciliationRetryBaseSeconds() { return reconciliationRetryBaseSeconds; }
+    public void setReconciliationRetryBaseSeconds(int reconciliationRetryBaseSeconds) {
+        this.reconciliationRetryBaseSeconds = reconciliationRetryBaseSeconds;
+    }
+    public int getReconciliationStaleMinutes() { return reconciliationStaleMinutes; }
+    public void setReconciliationStaleMinutes(int reconciliationStaleMinutes) {
+        this.reconciliationStaleMinutes = reconciliationStaleMinutes;
     }
 }

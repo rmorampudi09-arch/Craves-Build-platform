@@ -15,6 +15,9 @@ public class BorzoProperties {
     private String callbackSecret = "";
     private int connectTimeoutSeconds = 5;
     private int readTimeoutSeconds = 20;
+    private int reconciliationPageSize = 50;
+    private int reconciliationMaxPages = 5;
+    private int reconciliationLookbackSeconds = 120;
 
     @PostConstruct
     void validate() {
@@ -32,6 +35,17 @@ public class BorzoProperties {
         }
         if (readTimeoutSeconds < 1) {
             throw new IllegalStateException("Borzo readTimeoutSeconds must be at least 1");
+        }
+        if (reconciliationPageSize < 1 || reconciliationPageSize > 50) {
+            throw new IllegalStateException("Borzo reconciliationPageSize must be between 1 and 50");
+        }
+        if (reconciliationMaxPages < 1 || reconciliationMaxPages > 20) {
+            throw new IllegalStateException("Borzo reconciliationMaxPages must be between 1 and 20");
+        }
+        if (reconciliationLookbackSeconds < 0 || reconciliationLookbackSeconds > 3600) {
+            throw new IllegalStateException(
+                "Borzo reconciliationLookbackSeconds must be between 0 and 3600"
+            );
         }
         if (enabled && !StringUtils.hasText(authToken)) {
             throw new IllegalStateException("BORZO_API_AUTH_TOKEN is required when Borzo API is enabled");
@@ -57,5 +71,17 @@ public class BorzoProperties {
     public int getReadTimeoutSeconds() { return readTimeoutSeconds; }
     public void setReadTimeoutSeconds(int readTimeoutSeconds) {
         this.readTimeoutSeconds = readTimeoutSeconds;
+    }
+    public int getReconciliationPageSize() { return reconciliationPageSize; }
+    public void setReconciliationPageSize(int reconciliationPageSize) {
+        this.reconciliationPageSize = reconciliationPageSize;
+    }
+    public int getReconciliationMaxPages() { return reconciliationMaxPages; }
+    public void setReconciliationMaxPages(int reconciliationMaxPages) {
+        this.reconciliationMaxPages = reconciliationMaxPages;
+    }
+    public int getReconciliationLookbackSeconds() { return reconciliationLookbackSeconds; }
+    public void setReconciliationLookbackSeconds(int reconciliationLookbackSeconds) {
+        this.reconciliationLookbackSeconds = reconciliationLookbackSeconds;
     }
 }

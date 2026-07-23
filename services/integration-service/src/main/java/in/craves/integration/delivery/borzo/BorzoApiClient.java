@@ -6,10 +6,14 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -107,12 +111,82 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         validateClientReference(request.clientReference());
         validateQuoteRequest(request.quoteRequest());
 
-        JsonNode response = post(
-            "/create-order",
-            buildOrderRequest(request.quoteRequest(), request.clientReference())
-        );
+        Instant attemptedAt = Instant.now();
+        JsonNode response;
+        try {
+            response = post(
+                "/create-order",
+                buildOrderRequest(request.quoteRequest(), request.clientReference())
+            );
+        } catch (BorzoApiException ex) {
+            if (ex.getCause() instanceof ResourceAccessException) {
+                throw new ProviderCreateUncertainException(
+                    PROVIDER_ID,
+                    request.clientReference(),
+                    attemptedAt,
+                    ex
+                );
+            }
+            throw ex;
+        }
         requireSuccessful(response, "Borzo create-order");
         return mapOrder(response.path("order"));
+    }
+
+    @Override
+    public CreateReconciliationResult reconcileCreate(String clientReference, Instant notBefore) {
+        requireApiReady();
+        validateClientReference(clientReference);
+        Objects.requireNonNull(notBefore, "notBefore is required");
+
+        int pageSize = properties.getReconciliationPageSize();
+        int offset = 0;
+        Instant lowerBound = notBefore.minusSeconds(properties.getReconciliationLookbackSeconds());
+
+        try {
+            for (int page = 0; page < properties.getReconciliationMaxPages(); page++) {
+                JsonNode response = getOrdersPage(offset, pageSize);
+                requireSuccessful(response, "Borzo create reconciliation");
+
+                JsonNode orders = response.path("orders");
+                if (!orders.isArray()) {
+                    return CreateReconciliationResult.inconclusive(
+                        "Borzo orders response did not contain an orders array"
+                    );
+                }
+
+                Instant oldestCreatedAt = null;
+                for (JsonNode order : orders) {
+                    if (hasClientReference(order, clientReference)) {
+                        return CreateReconciliationResult.found(mapOrder(order));
+                    }
+                    Instant createdAt = orderCreatedAt(order);
+                    if (createdAt != null && (oldestCreatedAt == null || createdAt.isBefore(oldestCreatedAt))) {
+                        oldestCreatedAt = createdAt;
+                    }
+                }
+
+                int returned = orders.size();
+                int ordersCount = response.path("orders_count").asInt(-1);
+                offset += returned;
+
+                if (returned == 0 || (ordersCount >= 0 && offset >= ordersCount)) {
+                    return CreateReconciliationResult.notFound(
+                        "All Borzo orders in the bounded result set were checked"
+                    );
+                }
+                if (oldestCreatedAt != null && oldestCreatedAt.isBefore(lowerBound)) {
+                    return CreateReconciliationResult.notFound(
+                        "Borzo results crossed the uncertain create time window"
+                    );
+                }
+            }
+            return CreateReconciliationResult.inconclusive(
+                "Borzo reconciliation reached the configured page limit"
+            );
+        } catch (BorzoApiException ex) {
+            return CreateReconciliationResult.inconclusive(safeMessage(ex));
+        }
     }
 
     @Override
@@ -252,7 +326,20 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         if ("/orders".equals(path)) {
             uriBuilder.queryParam("count", 1);
         }
-        URI uri = uriBuilder.build(true).toUri();
+        return get(uriBuilder.build(true).toUri());
+    }
+
+    private JsonNode getOrdersPage(int offset, int count) {
+        URI uri = UriComponentsBuilder.fromUriString(properties.normalizedBaseUrl())
+            .path("/orders")
+            .queryParam("offset", offset)
+            .queryParam("count", count)
+            .build(true)
+            .toUri();
+        return get(uri);
+    }
+
+    private JsonNode get(URI uri) {
         try {
             JsonNode response = restClient.get()
                 .uri(uri)
@@ -346,6 +433,31 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         return warnings;
     }
 
+    private static boolean hasClientReference(JsonNode order, String clientReference) {
+        JsonNode points = order.path("points");
+        if (!points.isArray()) {
+            return false;
+        }
+        for (JsonNode point : points) {
+            if (clientReference.equals(point.path("client_order_id").asText(null))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Instant orderCreatedAt(JsonNode order) {
+        String value = order.path("created_datetime").asText(null);
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(value).toInstant();
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
+    }
+
     private static String providerStatus(JsonNode order) {
         JsonNode points = order.path("points");
         if (points.isArray()) {
@@ -412,6 +524,15 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         } catch (NumberFormatException ex) {
             throw new IllegalArgumentException("Borzo providerDeliveryId is outside the supported range", ex);
         }
+    }
+
+    private static String safeMessage(Throwable error) {
+        String message = error.getMessage();
+        if (!StringUtils.hasText(message)) {
+            return error.getClass().getSimpleName();
+        }
+        String normalized = message.replace('\n', ' ').replace('\r', ' ').trim();
+        return normalized.length() <= 500 ? normalized : normalized.substring(0, 500);
     }
 
     public static class BorzoApiException extends RuntimeException {

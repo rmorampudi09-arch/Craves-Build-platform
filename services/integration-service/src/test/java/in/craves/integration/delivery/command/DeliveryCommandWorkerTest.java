@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
+import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
 import java.math.BigDecimal;
@@ -31,10 +32,7 @@ class DeliveryCommandWorkerTest {
         );
 
         DeliveryCommandMessage message = command();
-        CommandRecord claimed = new CommandRecord(
-            message.commandId(), message.chefSubOrderId(), message.orderId(),
-            "PROCESSING", 2, message, 7001L, "delivery-command:test"
-        );
+        CommandRecord claimed = commandRecord(message, "PROCESSING");
         UUID existingJobId = UUID.randomUUID();
         when(commands.claim(message.commandId(), 5)).thenReturn(Optional.of(claimed));
         when(deliveryJobs.findIdByChefSubOrderId(message.chefSubOrderId()))
@@ -47,6 +45,68 @@ class DeliveryCommandWorkerTest {
         assertThat(receipt.providerId()).isEqualTo("ALREADY_COMPLETED");
         verify(commands).markCompleted(message.commandId());
         verifyNoInteractions(router, completion);
+    }
+
+    @Test
+    void storesUncertainCreateForReconciliationWithoutRetryingTheProvider() {
+        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
+        DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);
+        DeliveryProviderRouter router = mock(DeliveryProviderRouter.class);
+        DeliveryCommandCompletionService completion = mock(DeliveryCommandCompletionService.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setMaxDeliveryAttempts(5);
+        DeliveryCommandWorker worker = new DeliveryCommandWorker(
+            commands, deliveryJobs, router, completion, properties
+        );
+
+        DeliveryCommandMessage message = command();
+        CommandRecord claimed = commandRecord(message, "PROCESSING");
+        Instant attemptedAt = Instant.parse("2026-07-24T02:00:00Z");
+        String clientReference = "CRV-1234567890123456789012345678";
+        DeliveryCreateReconciliationPendingException uncertain =
+            new DeliveryCreateReconciliationPendingException(
+                "borzo",
+                clientReference,
+                attemptedAt,
+                "Provider create response was not received",
+                null
+            );
+
+        when(commands.claim(message.commandId(), 5)).thenReturn(Optional.of(claimed));
+        when(deliveryJobs.findIdByChefSubOrderId(message.chefSubOrderId()))
+            .thenReturn(Optional.empty());
+        when(router.route(message)).thenThrow(uncertain);
+        when(commands.markReconciliationPending(
+            message.commandId(), "borzo", clientReference, attemptedAt,
+            "Provider create response was not received"
+        )).thenReturn(true);
+
+        var receipt = worker.process(message);
+
+        assertThat(receipt.deliveryJobId()).isNull();
+        assertThat(receipt.providerId()).isEqualTo("RECONCILIATION_PENDING");
+        verify(commands).markReconciliationPending(
+            message.commandId(), "borzo", clientReference, attemptedAt,
+            "Provider create response was not received"
+        );
+        verifyNoInteractions(completion);
+    }
+
+    private static CommandRecord commandRecord(DeliveryCommandMessage message, String status) {
+        return new CommandRecord(
+            message.commandId(),
+            message.chefSubOrderId(),
+            message.orderId(),
+            status,
+            2,
+            message,
+            7001L,
+            "delivery-command:test",
+            null,
+            null,
+            null,
+            0
+        );
     }
 
     private static DeliveryCommandMessage command() {

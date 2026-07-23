@@ -25,7 +25,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class DeliveryStatusUpdateServiceTest {
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
     void appliesNewerWebhookAndEnqueuesStatusOutboxTransactionally() {

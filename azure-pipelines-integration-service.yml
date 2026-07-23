@@ -111,6 +111,9 @@ steps:
           --set-env-vars \
             CRAVES_DELIVERY_COMMAND_ENABLED=false \
             CRAVES_DELIVERY_RECONCILIATION_ENABLED=false \
+            CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=false \
+            CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=false \
+            CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=false \
             CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true \
             BORZO_API_ENABLED=false \
           -o none
@@ -134,6 +137,18 @@ steps:
           RECONCILIATION_ENABLED=$(jq -r '
             [.properties.template.containers[0].env[]?
              | select(.name == "CRAVES_DELIVERY_RECONCILIATION_ENABLED")][0].value // ""
+          ' <<<"$APP_JSON")
+          WEBHOOK_ENABLED=$(jq -r '
+            [.properties.template.containers[0].env[]?
+             | select(.name == "CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED")][0].value // ""
+          ' <<<"$APP_JSON")
+          TRACKING_ENABLED=$(jq -r '
+            [.properties.template.containers[0].env[]?
+             | select(.name == "CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED")][0].value // ""
+          ' <<<"$APP_JSON")
+          STATUS_PUBLISHER_ENABLED=$(jq -r '
+            [.properties.template.containers[0].env[]?
+             | select(.name == "CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED")][0].value // ""
           ' <<<"$APP_JSON")
           INTELLIGENCE_ENABLED=$(jq -r '
             [.properties.template.containers[0].env[]?
@@ -162,7 +177,7 @@ steps:
               -o tsv 2>/dev/null || true)
           fi
 
-          echo "Attempt $ATTEMPT/60: latest=$LATEST_REVISION ready=$READY_REVISION health=$HEALTH_STATE running=$RUNNING_STATUS delivery=$DELIVERY_ENABLED reconciliation=$RECONCILIATION_ENABLED intelligence=$INTELLIGENCE_ENABLED borzo=$BORZO_ENABLED image=$LATEST_IMAGE"
+          echo "Attempt $ATTEMPT/60: latest=$LATEST_REVISION ready=$READY_REVISION health=$HEALTH_STATE running=$RUNNING_STATUS delivery=$DELIVERY_ENABLED reconciliation=$RECONCILIATION_ENABLED webhook=$WEBHOOK_ENABLED tracking=$TRACKING_ENABLED statusPublisher=$STATUS_PUBLISHER_ENABLED intelligence=$INTELLIGENCE_ENABLED borzo=$BORZO_ENABLED image=$LATEST_IMAGE"
 
           if [[ "$LATEST_REVISION" != "$PREVIOUS_LATEST" \
                 && "$LATEST_REVISION" == "$READY_REVISION" \
@@ -171,6 +186,9 @@ steps:
                 && "$RUNNING_STATUS" == "Running" \
                 && "${DELIVERY_ENABLED,,}" == "false" \
                 && "${RECONCILIATION_ENABLED,,}" == "false" \
+                && "${WEBHOOK_ENABLED,,}" == "false" \
+                && "${TRACKING_ENABLED,,}" == "false" \
+                && "${STATUS_PUBLISHER_ENABLED,,}" == "false" \
                 && "${INTELLIGENCE_ENABLED,,}" == "true" \
                 && "${BORZO_ENABLED,,}" == "false" ]]; then
             echo "SUCCESS: New Container App revision is healthy, ready, and fail-closed."

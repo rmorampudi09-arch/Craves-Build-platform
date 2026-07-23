@@ -40,7 +40,8 @@ class DeliveryCommandSchedulerTest {
             DeliveryCommandMessage message = invocation.getArgument(0);
             return new CommandRecord(
                 message.commandId(), message.chefSubOrderId(), message.orderId(),
-                "SCHEDULED", 0, message, null, null
+                "SCHEDULED", 0, message, null, null,
+                null, null, null, 0
             );
         });
         when(publisher.schedule(any())).thenReturn(

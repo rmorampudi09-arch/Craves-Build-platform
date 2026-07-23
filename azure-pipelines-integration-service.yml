@@ -108,28 +108,41 @@ steps:
           --name "$APP" \
           --resource-group "$RG" \
           --image "$IMAGE" \
+          --set-env-vars \
+            CRAVES_DELIVERY_COMMAND_ENABLED=false \
+            CRAVES_DELIVERY_RECONCILIATION_ENABLED=false \
+            CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true \
+            BORZO_API_ENABLED=false \
           -o none
 
-        echo "Waiting for a new healthy revision..."
+        echo "Waiting for a new healthy fail-closed revision..."
 
         for ATTEMPT in $(seq 1 60); do
-          LATEST_REVISION=$(az containerapp show \
+          APP_JSON=$(az containerapp show \
             --name "$APP" \
             --resource-group "$RG" \
-            --query "properties.latestRevisionName" \
-            -o tsv)
+            -o json)
 
-          READY_REVISION=$(az containerapp show \
-            --name "$APP" \
-            --resource-group "$RG" \
-            --query "properties.latestReadyRevisionName" \
-            -o tsv)
+          LATEST_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
+          READY_REVISION=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
+          RUNNING_STATUS=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
 
-          RUNNING_STATUS=$(az containerapp show \
-            --name "$APP" \
-            --resource-group "$RG" \
-            --query "properties.runningStatus" \
-            -o tsv)
+          DELIVERY_ENABLED=$(jq -r '
+            [.properties.template.containers[0].env[]?
+             | select(.name == "CRAVES_DELIVERY_COMMAND_ENABLED")][0].value // ""
+          ' <<<"$APP_JSON")
+          RECONCILIATION_ENABLED=$(jq -r '
+            [.properties.template.containers[0].env[]?
+             | select(.name == "CRAVES_DELIVERY_RECONCILIATION_ENABLED")][0].value // ""
+          ' <<<"$APP_JSON")
+          INTELLIGENCE_ENABLED=$(jq -r '
+            [.properties.template.containers[0].env[]?
+             | select(.name == "CRAVES_DELIVERY_INTELLIGENCE_ENABLED")][0].value // ""
+          ' <<<"$APP_JSON")
+          BORZO_ENABLED=$(jq -r '
+            [.properties.template.containers[0].env[]?
+             | select(.name == "BORZO_API_ENABLED")][0].value // ""
+          ' <<<"$APP_JSON")
 
           LATEST_IMAGE=""
           HEALTH_STATE=""
@@ -149,14 +162,18 @@ steps:
               -o tsv 2>/dev/null || true)
           fi
 
-          echo "Attempt $ATTEMPT/60: latest=$LATEST_REVISION ready=$READY_REVISION health=$HEALTH_STATE running=$RUNNING_STATUS image=$LATEST_IMAGE"
+          echo "Attempt $ATTEMPT/60: latest=$LATEST_REVISION ready=$READY_REVISION health=$HEALTH_STATE running=$RUNNING_STATUS delivery=$DELIVERY_ENABLED reconciliation=$RECONCILIATION_ENABLED intelligence=$INTELLIGENCE_ENABLED borzo=$BORZO_ENABLED image=$LATEST_IMAGE"
 
           if [[ "$LATEST_REVISION" != "$PREVIOUS_LATEST" \
                 && "$LATEST_REVISION" == "$READY_REVISION" \
                 && "$LATEST_IMAGE" == "$IMAGE" \
                 && "$HEALTH_STATE" == "Healthy" \
-                && "$RUNNING_STATUS" == "Running" ]]; then
-            echo "SUCCESS: New Container App revision is healthy and ready."
+                && "$RUNNING_STATUS" == "Running" \
+                && "${DELIVERY_ENABLED,,}" == "false" \
+                && "${RECONCILIATION_ENABLED,,}" == "false" \
+                && "${INTELLIGENCE_ENABLED,,}" == "true" \
+                && "${BORZO_ENABLED,,}" == "false" ]]; then
+            echo "SUCCESS: New Container App revision is healthy, ready, and fail-closed."
             az containerapp show \
               --name "$APP" \
               --resource-group "$RG" \
@@ -168,7 +185,7 @@ steps:
           sleep 10
         done
 
-        echo "ERROR: The new Container App revision did not become healthy within 10 minutes."
+        echo "ERROR: The new Container App revision did not become healthy and fail-closed within 10 minutes."
         az containerapp revision list \
           --name "$APP" \
           --resource-group "$RG" \

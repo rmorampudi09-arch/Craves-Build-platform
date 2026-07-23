@@ -21,19 +21,35 @@ public class DeliveryWebhookProcessor {
     private static final long MAX_RETRY_SECONDS = 300;
 
     private final DeliveryStatusRepository repository;
+    private final DeliveryLeaseRecoveryRepository leaseRecovery;
     private final DeliveryStatusUpdateService statusService;
     private final DeliveryCommandProperties properties;
 
     public DeliveryWebhookProcessor(DeliveryStatusRepository repository,
+                                    DeliveryLeaseRecoveryRepository leaseRecovery,
                                     DeliveryStatusUpdateService statusService,
                                     DeliveryCommandProperties properties) {
         this.repository = repository;
+        this.leaseRecovery = leaseRecovery;
         this.statusService = statusService;
         this.properties = properties;
     }
 
-    @Scheduled(fixedDelayString = "${craves.delivery-command.webhook-processing-interval-ms:2000}")
+    @Scheduled(
+        fixedDelayString = "${craves.delivery-command.webhook-processing-interval-ms:2000}"
+    )
     public void process() {
+        int recovered = leaseRecovery.deadLetterExhaustedWebhookLeases(
+            properties.getMaxWebhookAttempts(),
+            properties.getWebhookStaleMinutes()
+        );
+        if (recovered > 0) {
+            log.error(
+                "Dead-lettered {} webhook rows whose final processing lease expired",
+                recovered
+            );
+        }
+
         List<WebhookWorkItem> workItems = repository.claimWebhookBatch(
             properties.getWebhookBatchSize(),
             properties.getWebhookStaleMinutes(),
@@ -46,7 +62,8 @@ public class DeliveryWebhookProcessor {
 
     private void processOne(WebhookWorkItem workItem) {
         try {
-            DeliveryStatusUpdateService.ProcessingResult result = statusService.processWebhook(workItem);
+            DeliveryStatusUpdateService.ProcessingResult result =
+                statusService.processWebhook(workItem);
             log.info(
                 "Delivery webhook processed inboxId={} provider={} providerEventId={} deliveryJobId={} applied={} duplicate={} result={}",
                 workItem.id(),
@@ -93,6 +110,8 @@ public class DeliveryWebhookProcessor {
             return error.getClass().getSimpleName();
         }
         String normalized = message.replace('\n', ' ').replace('\r', ' ').trim();
-        return normalized.length() <= 1000 ? normalized : normalized.substring(0, 1000);
+        return normalized.length() <= 1000
+            ? normalized
+            : normalized.substring(0, 1000);
     }
 }

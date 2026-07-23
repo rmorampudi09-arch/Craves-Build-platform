@@ -22,26 +22,46 @@ import org.springframework.stereotype.Component;
     havingValue = "true"
 )
 public class DeliveryTrackingReconciliationWorker {
-    private static final Logger log = LoggerFactory.getLogger(DeliveryTrackingReconciliationWorker.class);
+    private static final Logger log = LoggerFactory.getLogger(
+        DeliveryTrackingReconciliationWorker.class
+    );
     private static final long MAX_RETRY_SECONDS = 900;
 
     private final Map<String, DeliveryProviderAdapter> adapters;
     private final DeliveryStatusRepository repository;
+    private final DeliveryLeaseRecoveryRepository leaseRecovery;
     private final DeliveryStatusUpdateService statusService;
     private final DeliveryCommandProperties properties;
 
-    public DeliveryTrackingReconciliationWorker(List<DeliveryProviderAdapter> adapters,
-                                                DeliveryStatusRepository repository,
-                                                DeliveryStatusUpdateService statusService,
-                                                DeliveryCommandProperties properties) {
+    public DeliveryTrackingReconciliationWorker(
+        List<DeliveryProviderAdapter> adapters,
+        DeliveryStatusRepository repository,
+        DeliveryLeaseRecoveryRepository leaseRecovery,
+        DeliveryStatusUpdateService statusService,
+        DeliveryCommandProperties properties
+    ) {
         this.adapters = indexAdapters(adapters);
         this.repository = repository;
+        this.leaseRecovery = leaseRecovery;
         this.statusService = statusService;
         this.properties = properties;
     }
 
-    @Scheduled(fixedDelayString = "${craves.delivery-command.tracking-reconciliation-interval-ms:15000}")
+    @Scheduled(
+        fixedDelayString = "${craves.delivery-command.tracking-reconciliation-interval-ms:15000}"
+    )
     public void reconcile() {
+        int recovered = leaseRecovery.deadLetterExhaustedTrackingLeases(
+            properties.getMaxTrackingAttempts(),
+            properties.getTrackingStaleMinutes()
+        );
+        if (recovered > 0) {
+            log.error(
+                "Dead-lettered {} tracking jobs whose final processing lease expired",
+                recovered
+            );
+        }
+
         List<TrackingWorkItem> workItems = repository.claimTrackingBatch(
             properties.getTrackingBatchSize(),
             properties.getTrackingStaleMinutes(),
@@ -54,17 +74,20 @@ public class DeliveryTrackingReconciliationWorker {
 
     private void reconcileOne(TrackingWorkItem workItem) {
         try {
-            DeliveryProviderAdapter adapter = adapters.get(normalize(workItem.providerId()));
+            DeliveryProviderAdapter adapter = adapters.get(
+                normalize(workItem.providerId())
+            );
             if (adapter == null) {
                 throw new IllegalStateException(
-                    "No delivery adapter is registered for provider " + workItem.providerId()
+                    "No delivery adapter is registered for provider "
+                        + workItem.providerId()
                 );
             }
-            TrackingSnapshot snapshot = adapter.track(workItem.providerDeliveryId());
-            DeliveryStatusUpdateService.ProcessingResult result = statusService.processTracking(
-                workItem,
-                snapshot
+            TrackingSnapshot snapshot = adapter.track(
+                workItem.providerDeliveryId()
             );
+            DeliveryStatusUpdateService.ProcessingResult result =
+                statusService.processTracking(workItem, snapshot);
             log.info(
                 "Delivery tracking reconciled deliveryJobId={} provider={} applied={} duplicate={} result={}",
                 workItem.deliveryJobId(),
@@ -107,9 +130,14 @@ public class DeliveryTrackingReconciliationWorker {
     ) {
         Map<String, DeliveryProviderAdapter> indexed = new HashMap<>();
         for (DeliveryProviderAdapter adapter : adapters) {
-            DeliveryProviderAdapter previous = indexed.put(normalize(adapter.providerId()), adapter);
+            DeliveryProviderAdapter previous = indexed.put(
+                normalize(adapter.providerId()),
+                adapter
+            );
             if (previous != null) {
-                throw new IllegalStateException("Duplicate delivery adapter " + adapter.providerId());
+                throw new IllegalStateException(
+                    "Duplicate delivery adapter " + adapter.providerId()
+                );
             }
         }
         return Map.copyOf(indexed);
@@ -125,6 +153,8 @@ public class DeliveryTrackingReconciliationWorker {
             return error.getClass().getSimpleName();
         }
         String normalized = message.replace('\n', ' ').replace('\r', ' ').trim();
-        return normalized.length() <= 1000 ? normalized : normalized.substring(0, 1000);
+        return normalized.length() <= 1000
+            ? normalized
+            : normalized.substring(0, 1000);
     }
 }

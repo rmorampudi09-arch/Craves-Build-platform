@@ -45,6 +45,7 @@ ALTER TABLE delivery_schema.delivery_job
     ADD COLUMN IF NOT EXISTS next_tracking_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS tracking_attempt_count INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS tracking_processing_started_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS tracking_dead_lettered_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS last_tracking_error TEXT;
 
 UPDATE delivery_schema.delivery_job
@@ -58,7 +59,10 @@ SET provider_status = COALESCE(provider_status, status),
 WHERE provider_status IS NULL
    OR last_status_observed_at IS NULL
    OR last_status_source IS NULL
-   OR (next_tracking_at IS NULL AND status NOT IN ('DELIVERED', 'CANCELLED', 'RETURNED', 'FAILED'));
+   OR (
+        next_tracking_at IS NULL
+        AND status NOT IN ('DELIVERED', 'CANCELLED', 'RETURNED', 'FAILED')
+      );
 
 ALTER TABLE delivery_schema.delivery_job
     DROP CONSTRAINT IF EXISTS ck_delivery_job_tracking_attempts;
@@ -79,6 +83,10 @@ CREATE INDEX IF NOT EXISTS ix_delivery_job_tracking_due
     ON delivery_schema.delivery_job (next_tracking_at, updated_at)
     WHERE next_tracking_at IS NOT NULL
       AND status NOT IN ('DELIVERED', 'CANCELLED', 'RETURNED', 'FAILED');
+
+CREATE INDEX IF NOT EXISTS ix_delivery_job_tracking_dead_letter
+    ON delivery_schema.delivery_job (tracking_dead_lettered_at, updated_at)
+    WHERE tracking_dead_lettered_at IS NOT NULL;
 
 ALTER TABLE delivery_schema.delivery_event
     ADD COLUMN IF NOT EXISTS source VARCHAR(30) NOT NULL DEFAULT 'WEBHOOK',

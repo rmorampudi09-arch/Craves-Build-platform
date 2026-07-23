@@ -1,6 +1,7 @@
 package in.craves.integration.delivery.command;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import in.craves.integration.delivery.DeliveryAssignmentRepository;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentRequest;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentResponse;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateInput;
@@ -11,12 +12,16 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.CreateAudit;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandModels.QuoteAudit;
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
+import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateDeliveryRequest;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
 import jakarta.annotation.PreDestroy;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -25,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -37,12 +43,14 @@ public class DeliveryProviderRouter {
     private final Map<String, DeliveryProviderAdapter> adapters;
     private final DeliveryProviderCatalogRepository providerCatalog;
     private final DeliveryIntelligenceService intelligenceService;
+    private final DeliveryAssignmentRepository assignmentRepository;
     private final DeliveryCommandProperties properties;
     private final ExecutorService quoteExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     public DeliveryProviderRouter(List<DeliveryProviderAdapter> discoveredAdapters,
                                   DeliveryProviderCatalogRepository providerCatalog,
                                   DeliveryIntelligenceService intelligenceService,
+                                  DeliveryAssignmentRepository assignmentRepository,
                                   DeliveryCommandProperties properties) {
         Map<String, DeliveryProviderAdapter> indexed = new HashMap<>();
         for (DeliveryProviderAdapter adapter : discoveredAdapters) {
@@ -55,6 +63,7 @@ public class DeliveryProviderRouter {
         this.adapters = Map.copyOf(indexed);
         this.providerCatalog = providerCatalog;
         this.intelligenceService = intelligenceService;
+        this.assignmentRepository = assignmentRepository;
         this.properties = properties;
     }
 
@@ -122,6 +131,17 @@ public class DeliveryProviderRouter {
                     List.copyOf(quoteAudit),
                     List.copyOf(createAudit)
                 );
+            } catch (ProviderCreateUncertainException ex) {
+                createAudit.add(new CreateAudit(
+                    candidate.providerId(), false, "Provider create outcome requires reconciliation"
+                ));
+                throw new DeliveryCreateReconciliationPendingException(
+                    ex.providerId(),
+                    ex.clientReference(),
+                    ex.attemptedAt(),
+                    "Provider create response was not received; fallback is blocked",
+                    ex
+                );
             } catch (RuntimeException ex) {
                 createAudit.add(new CreateAudit(candidate.providerId(), false, safeMessage(ex)));
             }
@@ -132,8 +152,74 @@ public class DeliveryProviderRouter {
         );
     }
 
+    /**
+     * Performs a read-only reconciliation for an uncertain provider create. This method never calls
+     * the provider create operation and never falls back to another provider.
+     */
+    public RoutingResult reconcile(CommandRecord command) {
+        Objects.requireNonNull(command, "delivery command is required");
+        String providerId = normalize(command.reconciliationProviderId());
+        String clientReference = requireText(
+            command.reconciliationClientReference(), "reconciliation client reference"
+        );
+        Instant attemptedAt = Objects.requireNonNull(
+            command.reconciliationStartedAt(), "reconciliation startedAt is required"
+        );
+
+        DeliveryProviderAdapter adapter = adapters.get(providerId);
+        if (adapter == null) {
+            throw new DeliveryCreateReconciliationPendingException(
+                providerId,
+                clientReference,
+                attemptedAt,
+                "No deployed adapter is available for reconciliation",
+                null
+            );
+        }
+
+        AssignmentResponse assignment = assignmentRepository
+            .findByChefSubOrderId(command.chefSubOrderId())
+            .orElseThrow(() -> new DeliveryCreateReconciliationPendingException(
+                providerId,
+                clientReference,
+                attemptedAt,
+                "The persisted delivery assignment is missing",
+                null
+            ));
+
+        CandidateScore candidate = assignment.candidates().stream()
+            .filter(value -> providerId.equals(normalize(value.providerId())))
+            .findFirst()
+            .orElseThrow(() -> new DeliveryCreateReconciliationPendingException(
+                providerId,
+                clientReference,
+                attemptedAt,
+                "The provider is not present in the persisted assignment",
+                null
+            ));
+
+        CreateReconciliationResult result = adapter.reconcileCreate(clientReference, attemptedAt);
+        return switch (result.status()) {
+            case FOUND -> new RoutingResult(
+                providerId,
+                result.delivery(),
+                assignment,
+                candidate.candidateId(),
+                List.of(),
+                List.of(new CreateAudit(providerId, true, "RECOVERED_BY_CLIENT_REFERENCE"))
+            );
+            case NOT_FOUND, INCONCLUSIVE, UNSUPPORTED -> throw new DeliveryCreateReconciliationPendingException(
+                providerId,
+                clientReference,
+                attemptedAt,
+                result.detail() == null ? "Provider create reconciliation is still unresolved" : result.detail(),
+                null
+            );
+        };
+    }
+
     private AssignmentRequest assignmentRequest(DeliveryCommandMessage command,
-                                                List<QuoteOutcome> outcomes) {
+                                                 List<QuoteOutcome> outcomes) {
         List<CandidateInput> candidates = outcomes.stream()
             .filter(outcome -> outcome.quote() != null)
             .map(this::candidateInput)
@@ -169,7 +255,7 @@ public class DeliveryProviderRouter {
     }
 
     private static List<RankedQuoteOutcome> orderByIntelligence(AssignmentResponse assignment,
-                                                                List<QuoteOutcome> outcomes) {
+                                                                 List<QuoteOutcome> outcomes) {
         Map<String, QuoteOutcome> availableOutcomes = new HashMap<>();
         for (QuoteOutcome outcome : outcomes) {
             if (outcome.quote() != null && outcome.quote().available()) {
@@ -328,7 +414,7 @@ public class DeliveryProviderRouter {
         return quote.paymentAmount();
     }
 
-    private static String clientReference(java.util.UUID chefSubOrderId) {
+    private static String clientReference(UUID chefSubOrderId) {
         String compact = chefSubOrderId.toString().replace("-", "");
         return "CRV-" + compact.substring(0, 28);
     }
@@ -338,6 +424,13 @@ public class DeliveryProviderRouter {
             throw new IllegalArgumentException("providerId is required");
         }
         return value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String requireText(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " is required");
+        }
+        return value.trim();
     }
 
     private static String safeMessage(Throwable error) {
@@ -371,6 +464,35 @@ public class DeliveryProviderRouter {
 
         public DeliveryRoutingException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    public static class DeliveryCreateReconciliationPendingException extends RuntimeException {
+        private final String providerId;
+        private final String clientReference;
+        private final Instant attemptedAt;
+
+        public DeliveryCreateReconciliationPendingException(String providerId,
+                                                            String clientReference,
+                                                            Instant attemptedAt,
+                                                            String message,
+                                                            Throwable cause) {
+            super(message, cause);
+            this.providerId = providerId;
+            this.clientReference = clientReference;
+            this.attemptedAt = attemptedAt;
+        }
+
+        public String providerId() {
+            return providerId;
+        }
+
+        public String clientReference() {
+            return clientReference;
+        }
+
+        public Instant attemptedAt() {
+            return attemptedAt;
         }
     }
 }

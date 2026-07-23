@@ -7,10 +7,10 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryStat
 import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelope;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
-import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderStatusUpdate;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
+import in.craves.integration.delivery.provider.DeliveryWebhookNormalizer;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.DeliveryJobState;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.TrackingWorkItem;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.WebhookWorkItem;
@@ -30,18 +30,18 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class DeliveryStatusUpdateService {
-    private final Map<String, DeliveryProviderAdapter> adapters;
+    private final Map<String, DeliveryWebhookNormalizer> normalizers;
     private final DeliveryStatusRepository repository;
     private final DeliveryOutboxRepository outbox;
     private final DeliveryCommandProperties properties;
     private final ObjectMapper objectMapper;
 
-    public DeliveryStatusUpdateService(List<DeliveryProviderAdapter> adapters,
+    public DeliveryStatusUpdateService(List<DeliveryWebhookNormalizer> normalizers,
                                        DeliveryStatusRepository repository,
                                        DeliveryOutboxRepository outbox,
                                        DeliveryCommandProperties properties,
                                        ObjectMapper objectMapper) {
-        this.adapters = indexAdapters(adapters);
+        this.normalizers = indexNormalizers(normalizers);
         this.repository = repository;
         this.outbox = outbox;
         this.properties = properties;
@@ -50,8 +50,8 @@ public class DeliveryStatusUpdateService {
 
     @Transactional
     public ProcessingResult processWebhook(WebhookWorkItem workItem) {
-        DeliveryProviderAdapter adapter = adapter(workItem.providerId());
-        ProviderStatusUpdate update = adapter.normalizeWebhook(workItem.rawPayload());
+        DeliveryWebhookNormalizer normalizer = normalizer(workItem.providerId());
+        ProviderStatusUpdate update = normalizer.normalize(workItem.rawPayload());
         requireProviderMatch(workItem.providerId(), update.providerId());
 
         DeliveryJobState discovered = repository.findJobByProviderOrder(
@@ -210,20 +210,29 @@ public class DeliveryStatusUpdateService {
             : Instant.now().plusSeconds(properties.getTrackingPollSeconds());
     }
 
-    private DeliveryProviderAdapter adapter(String providerId) {
-        DeliveryProviderAdapter adapter = adapters.get(normalize(providerId));
-        if (adapter == null) {
-            throw new UnsupportedProviderException("No adapter is registered for provider " + safe(providerId));
+    private DeliveryWebhookNormalizer normalizer(String providerId) {
+        DeliveryWebhookNormalizer normalizer = normalizers.get(normalize(providerId));
+        if (normalizer == null) {
+            throw new UnsupportedProviderException(
+                "No webhook normalizer is registered for provider " + safe(providerId)
+            );
         }
-        return adapter;
+        return normalizer;
     }
 
-    private static Map<String, DeliveryProviderAdapter> indexAdapters(List<DeliveryProviderAdapter> adapters) {
-        Map<String, DeliveryProviderAdapter> indexed = new HashMap<>();
-        for (DeliveryProviderAdapter adapter : adapters) {
-            DeliveryProviderAdapter previous = indexed.put(normalize(adapter.providerId()), adapter);
+    private static Map<String, DeliveryWebhookNormalizer> indexNormalizers(
+        List<DeliveryWebhookNormalizer> normalizers
+    ) {
+        Map<String, DeliveryWebhookNormalizer> indexed = new HashMap<>();
+        for (DeliveryWebhookNormalizer normalizer : normalizers) {
+            DeliveryWebhookNormalizer previous = indexed.put(
+                normalize(normalizer.providerId()),
+                normalizer
+            );
             if (previous != null) {
-                throw new IllegalStateException("Duplicate delivery adapter " + adapter.providerId());
+                throw new IllegalStateException(
+                    "Duplicate delivery webhook normalizer " + normalizer.providerId()
+                );
             }
         }
         return Map.copyOf(indexed);
@@ -231,7 +240,7 @@ public class DeliveryStatusUpdateService {
 
     private static void requireProviderMatch(String expected, String actual) {
         if (!normalize(expected).equals(normalize(actual))) {
-            throw new IllegalStateException("Webhook provider does not match the selected adapter");
+            throw new IllegalStateException("Webhook provider does not match the selected normalizer");
         }
     }
 

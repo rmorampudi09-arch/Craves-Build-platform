@@ -158,20 +158,21 @@ steps:
           --set-env-vars \
             CRAVES_USER_CHEF_INTERNAL_BASE_URL="$USER_CHEF_INTERNAL_BASE_URL" \
             CRAVES_INTERNAL_SERVICE_SECRET=secretref:craves-internal-service-secret \
+            CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=false \
           -o none
 
         echo "Waiting for the new Order Service revision to become ready..."
         for attempt in $(seq 1 36); do
-          LATEST=$(az containerapp show \
+          APP_JSON=$(az containerapp show \
             --name "$APP" \
             --resource-group "$RG" \
-            --query properties.latestRevisionName \
-            -o tsv)
-          READY=$(az containerapp show \
-            --name "$APP" \
-            --resource-group "$RG" \
-            --query properties.latestReadyRevisionName \
-            -o tsv)
+            -o json)
+          LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
+          READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
+          DELIVERY_STATUS_CONSUMER=$(jq -r '
+            [.properties.template.containers[0].env[]?
+             | select(.name == "CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED")][0].value // ""
+          ' <<<"$APP_JSON")
 
           HEALTH=$(az containerapp revision show \
             --name "$APP" \
@@ -186,14 +187,17 @@ steps:
             --query properties.runningState \
             -o tsv 2>/dev/null || true)
 
-          echo "Attempt $attempt/36: latest=$LATEST ready=$READY health=$HEALTH running=$RUNNING"
+          echo "Attempt $attempt/36: latest=$LATEST ready=$READY health=$HEALTH running=$RUNNING deliveryStatusConsumer=$DELIVERY_STATUS_CONSUMER"
 
-          if [ "$LATEST" = "$READY" ] && [ "$HEALTH" = "Healthy" ] && [[ "$RUNNING" == Running* ]]; then
-            echo "Order Service revision is healthy."
+          if [ "$LATEST" = "$READY" ] \
+            && [ "$HEALTH" = "Healthy" ] \
+            && [[ "$RUNNING" == Running* ]] \
+            && [ "${DELIVERY_STATUS_CONSUMER,,}" = "false" ]; then
+            echo "Order Service revision is healthy and delivery-status consumption is fail-closed."
             az containerapp show \
               --name "$APP" \
               --resource-group "$RG" \
-              --query "{name:name,latestRevision:properties.latestRevisionName,latestReadyRevision:properties.latestReadyRevisionName,runningStatus:properties.runningStatus,internalConfig:properties.template.containers[0].env[?name=='CRAVES_USER_CHEF_INTERNAL_BASE_URL' || name=='CRAVES_INTERNAL_SERVICE_SECRET'].{name:name,value:value,secretRef:secretRef}}" \
+              --query "{name:name,latestRevision:properties.latestRevisionName,latestReadyRevision:properties.latestReadyRevisionName,runningStatus:properties.runningStatus,internalConfig:properties.template.containers[0].env[?name=='CRAVES_USER_CHEF_INTERNAL_BASE_URL' || name=='CRAVES_INTERNAL_SERVICE_SECRET' || name=='CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED'].{name:name,value:value,secretRef:secretRef}}" \
               -o json
             exit 0
           fi

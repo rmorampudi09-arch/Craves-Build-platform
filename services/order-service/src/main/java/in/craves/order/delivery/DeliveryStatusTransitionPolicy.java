@@ -16,11 +16,9 @@ public class DeliveryStatusTransitionPolicy {
 
     public Decision decide(
         String currentStatus,
-        String currentProviderStatus,
         String currentTrackingUrl,
         Instant currentObservedAt,
         String incomingStatus,
-        String incomingProviderStatus,
         String incomingTrackingUrl,
         Instant incomingObservedAt
     ) {
@@ -32,7 +30,6 @@ public class DeliveryStatusTransitionPolicy {
             return Decision.TERMINAL_PROTECTED;
         }
         if (Objects.equals(currentStatus, incomingStatus)
-            && Objects.equals(normalize(currentProviderStatus), normalize(incomingProviderStatus))
             && Objects.equals(normalize(currentTrackingUrl), normalize(incomingTrackingUrl))) {
             return Decision.NO_CHANGE;
         }

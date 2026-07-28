@@ -24,12 +24,34 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command is not installed: $1"
 }
 
+read_policy_value() {
+  local url="$1"
+  az rest \
+    --method get \
+    --url "$url" \
+    --query properties.value \
+    -o tsv 2>/dev/null || true
+}
+
+reject_incompatible_backend_inheritance() {
+  local scope_name="$1"
+  local policy_value="$2"
+  if grep -Eqi '<set-backend-service[^>]+backend-id=' <<<"$policy_value"; then
+    fail "$scope_name contains an inherited set-backend-service backend-id policy. This module will not override it with base-url; use an approved APIM backend entity design instead."
+  fi
+}
+
 require_command az
 require_command curl
 require_command jq
 require_command sed
+require_command grep
 
 [[ -f "$POLICY_TEMPLATE" ]] || fail "APIM policy template not found: $POLICY_TEMPLATE"
+[[ "$API_PATH" =~ ^[A-Za-z0-9/_-]+$ ]] || fail "API_PATH contains unsupported characters."
+[[ "$DEFAULT_API_ID" =~ ^[A-Za-z0-9._-]+$ ]] || fail "DEFAULT_API_ID contains unsupported characters."
+[[ -z "$API_ID" || "$API_ID" =~ ^[A-Za-z0-9._-]+$ ]] || fail "API_ID contains unsupported characters."
+[[ "$OPERATION_ID" =~ ^[A-Za-z0-9._-]+$ ]] || fail "OPERATION_ID contains unsupported characters."
 
 SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 [[ -n "$SUBSCRIPTION_ID" ]] || fail "No active Azure subscription is selected."
@@ -72,7 +94,8 @@ curl -sS --fail --max-time 30 "${ORDER_BASE_URL}/actuator/health" >/dev/null
 echo "Order backend health verified."
 echo "Order revision: $LATEST_REVISION"
 
-MGMT_BASE="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis"
+SERVICE_MGMT_BASE="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}"
+MGMT_BASE="${SERVICE_MGMT_BASE}/apis"
 
 mapfile -t PATH_API_IDS < <(az apim api list \
   --resource-group "$RG" \
@@ -133,6 +156,11 @@ else
     -o none
 fi
 
+GLOBAL_POLICY_VALUE="$(read_policy_value "${SERVICE_MGMT_BASE}/policies/policy?api-version=${API_VERSION}")"
+API_POLICY_VALUE="$(read_policy_value "${MGMT_BASE}/${API_ID}/policies/policy?api-version=${API_VERSION}")"
+reject_incompatible_backend_inheritance "APIM global policy" "$GLOBAL_POLICY_VALUE"
+reject_incompatible_backend_inheritance "API $API_ID policy" "$API_POLICY_VALUE"
+
 OPERATION_BODY="$(mktemp)"
 RENDERED_POLICY="$(mktemp)"
 POLICY_BODY="$(mktemp)"
@@ -157,8 +185,8 @@ cat >"$OPERATION_BODY" <<'JSON'
     "responses": [
       { "statusCode": 200, "description": "Current provider-neutral delivery status" },
       { "statusCode": 401, "description": "Authentication required" },
-      { "statusCode": 403, "description": "Order ownership check failed" },
-      { "statusCode": 404, "description": "Order or delivery status was not found" }
+      { "statusCode": 403, "description": "Customer role is required" },
+      { "statusCode": 404, "description": "Owned order was not found" }
     ]
   }
 }

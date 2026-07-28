@@ -1,0 +1,106 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmReplaceLegacyCustomerWeb
+    type: boolean
+    default: false
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: acrName
+    type: string
+    default: cravesprodlowacr82121
+  - name: containerAppName
+    type: string
+    default: ca-craves-web-prodlow
+  - name: imageTag
+    type: string
+    default: $(Build.BuildId)
+  - name: apiBaseUrl
+    type: string
+    default: https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
+
+variables:
+  appPath: apps/customer-web-next
+  imageRepository: craves/customer-web-next
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - script: |
+      set -euo pipefail
+      if [[ '${{ parameters.confirmReplaceLegacyCustomerWeb }}' != 'true' ]]; then
+        echo 'ERROR: confirmReplaceLegacyCustomerWeb must be true before replacing the current image.' >&2
+        exit 1
+      fi
+    displayName: Confirm controlled legacy customer-web replacement
+
+  - task: AzureCLI@2
+    displayName: Verify current state and build image
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        ACR='${{ parameters.acrName }}'
+        APP='${{ parameters.containerAppName }}'
+        TAG='${{ parameters.imageTag }}'
+        CURRENT_IMAGE=$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].image' -o tsv)
+        case "$CURRENT_IMAGE" in
+          */craves/customer-web:*|*/craves/customer-web-next:*) ;;
+          *) echo "ERROR: Unexpected current customer-web image: $CURRENT_IMAGE" >&2; exit 1 ;;
+        esac
+        echo "ROLLBACK_IMAGE=$CURRENT_IMAGE"
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
+        az acr login --name "$ACR"
+        docker build -t "$IMAGE" "$(appPath)"
+        docker push "$IMAGE"
+        echo "NEXT_IMAGE=$IMAGE"
+
+  - task: AzureCLI@2
+    displayName: Deploy and verify Next.js customer web
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        ACR='${{ parameters.acrName }}'
+        APP='${{ parameters.containerAppName }}'
+        TAG='${{ parameters.imageTag }}'
+        API_BASE_URL='${{ parameters.apiBaseUrl }}'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
+        PREVIOUS_LATEST=$(az containerapp show -g "$RG" -n "$APP" --query properties.latestRevisionName -o tsv)
+
+        az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" \
+          --set-env-vars CRAVES_API_BASE_URL="$API_BASE_URL" -o none
+
+        for ATTEMPT in $(seq 1 60); do
+          APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
+          LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
+          READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
+          RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
+          CURRENT_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$APP_JSON")
+          FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
+          echo "Attempt $ATTEMPT/60: latest=$LATEST ready=$READY running=$RUNNING image=$CURRENT_IMAGE"
+          if [[ "$LATEST" != "$PREVIOUS_LATEST" && "$LATEST" == "$READY" && "$RUNNING" == "Running" && "$CURRENT_IMAGE" == "$IMAGE" && -n "$FQDN" ]]; then
+            CODE=$(curl -sS --max-time 30 -o /tmp/customer-web-home.html -w '%{http_code}' "https://$FQDN/" || true)
+            if [[ "$CODE" == "200" ]] && grep -q 'Craves' /tmp/customer-web-home.html; then
+              echo 'SUCCESS: Next.js customer web is ready.'
+              echo "URL=https://$FQDN"
+              exit 0
+            fi
+          fi
+          sleep 10
+        done
+        echo 'ERROR: Next.js customer web did not become ready.' >&2
+        exit 1

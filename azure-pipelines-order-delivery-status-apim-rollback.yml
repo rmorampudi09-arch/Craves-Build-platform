@@ -27,7 +27,8 @@ steps:
   - script: |
       set -euo pipefail
       bash -n scripts/apim/rollback-order-delivery-status-apim.sh
-      if [[ '${{ parameters.confirmOperationRollback }}' != 'true' ]]; then
+      CONFIRM='${{ parameters.confirmOperationRollback }}'
+      if [[ "${CONFIRM,,}" != 'true' ]]; then
         echo 'ERROR: confirmOperationRollback must be true.' >&2
         exit 1
       fi

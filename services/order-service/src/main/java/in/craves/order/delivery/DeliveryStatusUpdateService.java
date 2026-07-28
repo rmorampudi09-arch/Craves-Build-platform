@@ -87,11 +87,9 @@ public class DeliveryStatusUpdateService {
 
         Decision decision = transitionPolicy.decide(
             order.deliveryStatus(),
-            null,
             order.deliveryTrackingUrl(),
             order.deliveryStatusObservedAt(),
             data.status(),
-            null,
             data.trackingUrl(),
             data.observedAt()
         );

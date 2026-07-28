@@ -35,6 +35,9 @@ steps:
       assert operation['security'] == [{'bearerAuth': []}]
       assert document['components']['securitySchemes']['bearerAuth']['scheme'] == 'bearer'
       assert set(operation['responses']) >= {'200', '401', '403', '404'}
+      response_schema = document['components']['schemas']['DeliveryStatusResponse']
+      assert set(response_schema['required']) == {'orderId', 'history'}
+      assert response_schema['properties']['history']['maxItems'] == 100
 
       ET.parse(policy)
       policy_text = policy.read_text(encoding='utf-8')
@@ -62,6 +65,8 @@ steps:
       grep -q 'Multiple APIs already use the intended public path' "$CONFIGURE"
       grep -q 'will not relax an existing API-wide security setting' "$CONFIGURE"
       grep -q 'CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED' "$CONFIGURE"
+      grep -q 'inherited set-backend-service backend-id policy' "$CONFIGURE"
+      grep -q 'reject_incompatible_backend_inheritance' "$VERIFY"
       grep -q 'AUTHENTICATION_REQUIRED' "$VERIFY"
       grep -q 'CONFIRM_OPERATION_ROLLBACK' "$ROLLBACK"
       grep -q 'DELETE_EMPTY_DEDICATED_API' "$ROLLBACK"

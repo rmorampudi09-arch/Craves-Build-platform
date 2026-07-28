@@ -40,12 +40,13 @@ steps:
       assert package['dependencies']['react'] == '19.2.8'
       assert package['dependencies']['react-dom'] == '19.2.8'
       assert package['devDependencies']['tailwindcss'] == '4.3.3'
+      assert (root / 'public/robots.txt').exists()
       assert (root / 'src/app/api/orders/[orderId]/delivery-status/route.ts').exists()
       assert (root / 'src/app/orders/[orderId]/tracking/page.tsx').exists()
       print('Framework and tracking file contract verified.')
       PY
 
-      if grep -REn '(accesskey=|client_secret["'"']?\s*[:=]\s*["'"'][^$]|Bearer [A-Za-z0-9_-]{30,}|BEGIN (RSA|PRIVATE) KEY)' apps/customer-web-next; then
+      if grep -REn '(accesskey=|client_secret|Bearer [A-Za-z0-9_-]{30,}|BEGIN (RSA|PRIVATE) KEY)' apps/customer-web-next; then
         echo 'ERROR: Possible credential literal found.' >&2
         exit 1
       fi

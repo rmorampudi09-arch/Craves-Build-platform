@@ -33,7 +33,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Current provider-neutral delivery projection",
+            "description": "Owned order with its current provider-neutral delivery projection. Delivery fields can be null before the first delivery status is accepted.",
             "headers": {
               "Cache-Control": {
                 "description": "Delivery state must not be cached by shared or browser caches.",
@@ -55,10 +55,10 @@
             "description": "Missing or invalid bearer token"
           },
           "403": {
-            "description": "Authenticated identity does not own the order"
+            "description": "Authenticated identity does not have the customer role"
           },
           "404": {
-            "description": "Order not found or no delivery projection exists yet"
+            "description": "The authenticated customer does not own an order with this identifier"
           }
         }
       }
@@ -78,15 +78,25 @@
         "additionalProperties": false,
         "required": [
           "orderId",
-          "status"
+          "history"
         ],
         "properties": {
           "orderId": {
             "type": "string",
             "format": "uuid"
           },
+          "deliveryJobId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "providerId": {
+            "type": "string",
+            "nullable": true
+          },
           "status": {
             "type": "string",
+            "nullable": true,
             "enum": [
               "PENDING",
               "SEARCHING",
@@ -113,6 +123,44 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "history": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/DeliveryStatusHistoryResponse"
+            }
+          }
+        }
+      },
+      "DeliveryStatusHistoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "newStatus",
+          "observedAt",
+          "recordedAt"
+        ],
+        "properties": {
+          "oldStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "newStatus": {
+            "type": "string"
+          },
+          "trackingUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

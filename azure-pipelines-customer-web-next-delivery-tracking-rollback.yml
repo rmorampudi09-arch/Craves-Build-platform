@@ -23,14 +23,17 @@ steps:
 
   - script: |
       set -euo pipefail
-      [[ '${{ parameters.confirmRollback }}' == 'true' ]] || { echo 'ERROR: confirmRollback must be true.' >&2; exit 1; }
-      IMAGE='${{ parameters.previousImage }}'
+      CONFIRM='${{ parameters.confirmRollback }}'
+      [[ "${CONFIRM,,}" == 'true' ]] || { echo 'ERROR: confirmRollback must be true.' >&2; exit 1; }
+      IMAGE="$PREVIOUS_IMAGE"
       [[ -n "$IMAGE" ]] || { echo 'ERROR: previousImage is required.' >&2; exit 1; }
       case "$IMAGE" in
         *.azurecr.io/craves/customer-web:*|*.azurecr.io/craves/customer-web-next:*) ;;
         *) echo 'ERROR: previousImage is not an approved Craves customer-web ACR image.' >&2; exit 1 ;;
       esac
     displayName: Validate explicit rollback image
+    env:
+      PREVIOUS_IMAGE: ${{ parameters.previousImage }}
 
   - task: AzureCLI@2
     displayName: Restore previous customer-web image
@@ -42,7 +45,7 @@ steps:
         set -euo pipefail
         RG='${{ parameters.resourceGroupName }}'
         APP='${{ parameters.containerAppName }}'
-        IMAGE='${{ parameters.previousImage }}'
+        IMAGE="$PREVIOUS_IMAGE"
         az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" -o none
         for ATTEMPT in $(seq 1 60); do
           APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
@@ -58,3 +61,5 @@ steps:
           sleep 10
         done
         exit 1
+    env:
+      PREVIOUS_IMAGE: ${{ parameters.previousImage }}

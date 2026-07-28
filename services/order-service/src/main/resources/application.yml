@@ -62,6 +62,15 @@ craves:
     max-concurrent-messages: ${CRAVES_REFUND_STATUS_MAX_CONCURRENT_MESSAGES:2}
     prefetch-count: ${CRAVES_REFUND_STATUS_PREFETCH_COUNT:4}
     max-delivery-attempts: ${CRAVES_REFUND_STATUS_MAX_DELIVERY_ATTEMPTS:5}
+  delivery-status-consumer:
+    enabled: ${CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED:false}
+    fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+    connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
+    topic-name: ${CRAVES_DOMAIN_EVENTS_TOPIC_NAME:craves-domain-events}
+    subscription-name: ${CRAVES_DELIVERY_STATUS_SUBSCRIPTION:order-service-delivery-status-changed}
+    max-concurrent-messages: ${CRAVES_DELIVERY_STATUS_MAX_CONCURRENT_MESSAGES:2}
+    prefetch-count: ${CRAVES_DELIVERY_STATUS_PREFETCH_COUNT:4}
+    max-delivery-attempts: ${CRAVES_DELIVERY_STATUS_MAX_DELIVERY_ATTEMPTS:5}
   domain-events:
     outbox:
       enabled: ${CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED:false}

@@ -1,0 +1,121 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Craves Customer Delivery Status API",
+    "version": "1.0.0",
+    "description": "Authenticated customer read model for the provider-neutral delivery lifecycle of one chef-specific order."
+  },
+  "servers": [
+    {
+      "url": "https://apim-craves-prodlow-l3ing6.azure-api.net"
+    }
+  ],
+  "paths": {
+    "/api/v1/orders/{orderId}/delivery-status": {
+      "get": {
+        "operationId": "getOrderDeliveryStatus",
+        "summary": "Get delivery status for an owned chef-specific order",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current provider-neutral delivery projection",
+            "headers": {
+              "Cache-Control": {
+                "description": "Delivery state must not be cached by shared or browser caches.",
+                "schema": {
+                  "type": "string",
+                  "example": "no-store, no-cache, must-revalidate"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated identity does not own the order"
+          },
+          "404": {
+            "description": "Order not found or no delivery projection exists yet"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "DeliveryStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "status"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SEARCHING",
+              "COURIER_ASSIGNED",
+              "COURIER_TO_PICKUP",
+              "AT_PICKUP",
+              "PICKED_UP",
+              "IN_TRANSIT",
+              "AT_DROPOFF",
+              "DELIVERED",
+              "CANCELLED",
+              "DELAYED",
+              "RETURNING",
+              "RETURNED",
+              "FAILED"
+            ]
+          },
+          "trackingUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      }
+    }
+  }
+}

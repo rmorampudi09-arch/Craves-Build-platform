@@ -143,7 +143,14 @@ if [[ -n "$CRAVES_ACCESS_TOKEN" || -n "$TEST_ORDER_ID" ]]; then
     fail "Authenticated delivery-status smoke test failed."
   fi
 
-  jq -e --arg id "$TEST_ORDER_ID" '.orderId == $id and (.status | type == "string")' "$AUTH_BODY" >/dev/null \
+  jq -e --arg id "$TEST_ORDER_ID" '
+    .orderId == $id
+    and (.history | type == "array")
+    and ((.deliveryJobId == null) or (.deliveryJobId | type == "string"))
+    and ((.providerId == null) or (.providerId | type == "string"))
+    and ((.status == null) or (.status | type == "string"))
+    and ((.trackingUrl == null) or (.trackingUrl | type == "string"))
+  ' "$AUTH_BODY" >/dev/null \
     || { rm -f "$AUTH_BODY"; fail "Authenticated delivery-status response does not match the public contract."; }
   rm -f "$AUTH_BODY"
   echo "Authenticated customer delivery-status smoke test passed."

@@ -69,17 +69,15 @@ public class DeliveryStatusEventValidator {
         if (!StringUtils.hasText(trackingUrl)) {
             return;
         }
+        final URI uri;
         try {
-            URI uri = URI.create(trackingUrl);
-            if (!uri.isAbsolute() || !("https".equalsIgnoreCase(uri.getScheme())
-                || "http".equalsIgnoreCase(uri.getScheme()))) {
-                throw new DeliveryStatusValidationException("Delivery tracking URL must be HTTP or HTTPS");
-            }
+            uri = URI.create(trackingUrl);
         } catch (IllegalArgumentException exception) {
-            if (exception instanceof DeliveryStatusValidationException validationException) {
-                throw validationException;
-            }
             throw new DeliveryStatusValidationException("Delivery tracking URL is invalid");
+        }
+        if (!uri.isAbsolute() || !("https".equalsIgnoreCase(uri.getScheme())
+            || "http".equalsIgnoreCase(uri.getScheme()))) {
+            throw new DeliveryStatusValidationException("Delivery tracking URL must be HTTP or HTTPS");
         }
     }
 

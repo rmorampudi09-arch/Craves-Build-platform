@@ -71,7 +71,7 @@ steps:
 
   - task: AzureCLI@2
     displayName: Run optional authenticated customer smoke test
-    condition: and(succeeded(), eq('${{ parameters.runAuthenticatedSmoke }}', 'true'))
+    condition: and(succeeded(), ${{ eq(parameters.runAuthenticatedSmoke, true) }})
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -80,6 +80,10 @@ steps:
         set -euo pipefail
         if [[ -z "${CRAVES_ACCESS_TOKEN:-}" ]]; then
           echo 'ERROR: Secret pipeline variable CRAVES_CUSTOMER_TEST_TOKEN is required when runAuthenticatedSmoke=true.' >&2
+          exit 1
+        fi
+        if [[ '${{ parameters.testOrderId }}' == '00000000-0000-0000-0000-000000000000' ]]; then
+          echo 'ERROR: Provide an owned chef-specific order UUID when runAuthenticatedSmoke=true.' >&2
           exit 1
         fi
         export RG='${{ parameters.resourceGroupName }}'

@@ -69,28 +69,28 @@ steps:
         unset TEST_ORDER_ID || true
         bash scripts/apim/verify-order-delivery-status-apim.sh
 
-  - task: AzureCLI@2
-    displayName: Run optional authenticated customer smoke test
-    condition: and(succeeded(), ${{ eq(parameters.runAuthenticatedSmoke, true) }})
-    inputs:
-      azureSubscription: $(AZURE_SERVICE_CONNECTION)
-      scriptType: bash
-      scriptLocation: inlineScript
-      inlineScript: |
-        set -euo pipefail
-        if [[ -z "${CRAVES_ACCESS_TOKEN:-}" ]]; then
-          echo 'ERROR: Secret pipeline variable CRAVES_CUSTOMER_TEST_TOKEN is required when runAuthenticatedSmoke=true.' >&2
-          exit 1
-        fi
-        if [[ '${{ parameters.testOrderId }}' == '00000000-0000-0000-0000-000000000000' ]]; then
-          echo 'ERROR: Provide an owned chef-specific order UUID when runAuthenticatedSmoke=true.' >&2
-          exit 1
-        fi
-        export RG='${{ parameters.resourceGroupName }}'
-        export APIM='${{ parameters.apimName }}'
-        export ORDER_APP='${{ parameters.orderContainerAppName }}'
-        export API_ID='${{ parameters.apiId }}'
-        export TEST_ORDER_ID='${{ parameters.testOrderId }}'
-        bash scripts/apim/verify-order-delivery-status-apim.sh
-    env:
-      CRAVES_ACCESS_TOKEN: $(CRAVES_CUSTOMER_TEST_TOKEN)
+  - ${{ if eq(parameters.runAuthenticatedSmoke, true) }}:
+      - task: AzureCLI@2
+        displayName: Run authenticated customer delivery-status smoke test
+        inputs:
+          azureSubscription: $(AZURE_SERVICE_CONNECTION)
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            if [[ -z "${CRAVES_ACCESS_TOKEN:-}" ]]; then
+              echo 'ERROR: Secret pipeline variable CRAVES_CUSTOMER_TEST_TOKEN is required when runAuthenticatedSmoke=true.' >&2
+              exit 1
+            fi
+            if [[ '${{ parameters.testOrderId }}' == '00000000-0000-0000-0000-000000000000' ]]; then
+              echo 'ERROR: Provide an owned chef-specific order UUID when runAuthenticatedSmoke=true.' >&2
+              exit 1
+            fi
+            export RG='${{ parameters.resourceGroupName }}'
+            export APIM='${{ parameters.apimName }}'
+            export ORDER_APP='${{ parameters.orderContainerAppName }}'
+            export API_ID='${{ parameters.apiId }}'
+            export TEST_ORDER_ID='${{ parameters.testOrderId }}'
+            bash scripts/apim/verify-order-delivery-status-apim.sh
+        env:
+          CRAVES_ACCESS_TOKEN: $(CRAVES_CUSTOMER_TEST_TOKEN)

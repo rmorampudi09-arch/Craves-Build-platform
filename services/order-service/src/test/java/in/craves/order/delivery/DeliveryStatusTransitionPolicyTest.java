@@ -12,15 +12,20 @@ class DeliveryStatusTransitionPolicyTest {
     @Test
     void appliesFirstAndNewerChanges() {
         assertThat(policy.decide(
-            null, null, null, null,
-            "COURIER_ASSIGNED", null, null,
+            null,
+            null,
+            null,
+            "COURIER_ASSIGNED",
+            null,
             Instant.parse("2026-07-28T08:00:00Z")
         )).isEqualTo(Decision.APPLY);
 
         assertThat(policy.decide(
-            "COURIER_ASSIGNED", null, null,
+            "COURIER_ASSIGNED",
+            null,
             Instant.parse("2026-07-28T08:00:00Z"),
-            "IN_TRANSIT", null, "https://track.example/1",
+            "IN_TRANSIT",
+            "https://track.example/1",
             Instant.parse("2026-07-28T08:05:00Z")
         )).isEqualTo(Decision.APPLY);
     }
@@ -28,16 +33,20 @@ class DeliveryStatusTransitionPolicyTest {
     @Test
     void rejectsStaleAndProtectsTerminalStatus() {
         assertThat(policy.decide(
-            "IN_TRANSIT", null, null,
+            "IN_TRANSIT",
+            null,
             Instant.parse("2026-07-28T08:05:00Z"),
-            "PICKED_UP", null, null,
+            "PICKED_UP",
+            null,
             Instant.parse("2026-07-28T08:04:59Z")
         )).isEqualTo(Decision.STALE);
 
         assertThat(policy.decide(
-            "DELIVERED", null, null,
+            "DELIVERED",
+            null,
             Instant.parse("2026-07-28T08:05:00Z"),
-            "IN_TRANSIT", null, null,
+            "IN_TRANSIT",
+            null,
             Instant.parse("2026-07-28T08:06:00Z")
         )).isEqualTo(Decision.TERMINAL_PROTECTED);
     }
@@ -45,9 +54,11 @@ class DeliveryStatusTransitionPolicyTest {
     @Test
     void identifiesNoStateChange() {
         assertThat(policy.decide(
-            "IN_TRANSIT", null, "https://track.example/1",
+            "IN_TRANSIT",
+            "https://track.example/1",
             Instant.parse("2026-07-28T08:05:00Z"),
-            "IN_TRANSIT", null, "https://track.example/1",
+            "IN_TRANSIT",
+            "https://track.example/1",
             Instant.parse("2026-07-28T08:06:00Z")
         )).isEqualTo(Decision.NO_CHANGE);
     }

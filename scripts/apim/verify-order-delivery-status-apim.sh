@@ -17,9 +17,30 @@ fail() {
   exit 1
 }
 
-for command_name in az curl jq; do
+read_policy_value() {
+  local url="$1"
+  az rest \
+    --method get \
+    --url "$url" \
+    --query properties.value \
+    -o tsv 2>/dev/null || true
+}
+
+reject_incompatible_backend_inheritance() {
+  local scope_name="$1"
+  local policy_value="$2"
+  if grep -Eqi '<set-backend-service[^>]+backend-id=' <<<"$policy_value"; then
+    fail "$scope_name contains an inherited set-backend-service backend-id policy that is incompatible with this operation base-url override."
+  fi
+}
+
+for command_name in az curl jq grep; do
   command -v "$command_name" >/dev/null 2>&1 || fail "Required command is not installed: $command_name"
 done
+
+[[ "$API_PATH" =~ ^[A-Za-z0-9/_-]+$ ]] || fail "API_PATH contains unsupported characters."
+[[ -z "$API_ID" || "$API_ID" =~ ^[A-Za-z0-9._-]+$ ]] || fail "API_ID contains unsupported characters."
+[[ "$OPERATION_ID" =~ ^[A-Za-z0-9._-]+$ ]] || fail "OPERATION_ID contains unsupported characters."
 
 SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 [[ -n "$SUBSCRIPTION_ID" ]] || fail "No active Azure subscription is selected."
@@ -69,6 +90,13 @@ API_JSON="$(az apim api show \
 [[ "$(jq -r '.path // ""' <<<"$API_JSON")" == "$API_PATH" ]] || fail "APIM API path does not match $API_PATH."
 [[ "$(jq -r '.subscriptionRequired' <<<"$API_JSON")" == "false" ]] || fail "APIM API unexpectedly requires a subscription key."
 
+SERVICE_MGMT_BASE="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}"
+MGMT_BASE="${SERVICE_MGMT_BASE}/apis"
+GLOBAL_POLICY_VALUE="$(read_policy_value "${SERVICE_MGMT_BASE}/policies/policy?api-version=${API_VERSION}")"
+API_POLICY_VALUE="$(read_policy_value "${MGMT_BASE}/${API_ID}/policies/policy?api-version=${API_VERSION}")"
+reject_incompatible_backend_inheritance "APIM global policy" "$GLOBAL_POLICY_VALUE"
+reject_incompatible_backend_inheritance "API $API_ID policy" "$API_POLICY_VALUE"
+
 OPERATION_JSON="$(az apim api operation show \
   --resource-group "$RG" \
   --service-name "$APIM" \
@@ -79,7 +107,6 @@ OPERATION_JSON="$(az apim api operation show \
 [[ "$(jq -r '.urlTemplate // ""' <<<"$OPERATION_JSON")" == "/{orderId}/delivery-status" ]] || fail "Delivery-status APIM URL template is incorrect."
 [[ "$(jq -r '[.templateParameters[]? | select(.name == "orderId" and .required == true)] | length' <<<"$OPERATION_JSON")" == "1" ]] || fail "Required orderId path parameter is missing."
 
-MGMT_BASE="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis"
 POLICY_VALUE="$(az rest \
   --method get \
   --url "${MGMT_BASE}/${API_ID}/operations/${OPERATION_ID}/policies/policy?api-version=${API_VERSION}" \
@@ -165,4 +192,4 @@ echo "Public URL:   ${GATEWAY_URL%/}/${API_PATH}/{orderId}/delivery-status"
 echo "Order revision: $LATEST_REVISION"
 echo "Unauthenticated guard: HTTP 401 verified"
 echo
-echo "SUCCESS: Delivery-status APIM route, policy, backend mapping, and no-cache controls are valid."
+echo "SUCCESS: Delivery-status APIM route, policy, backend mapping, inherited-policy compatibility, and no-cache controls are valid."

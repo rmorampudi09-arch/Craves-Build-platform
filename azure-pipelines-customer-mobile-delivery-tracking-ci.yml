@@ -24,8 +24,14 @@ steps:
       grep -q 'isTerminalDeliveryStatus' apps/mobile/customer-app/src/screens/DeliveryTrackingScreen.tsx
       grep -q "url.protocol === 'https:'" apps/mobile/customer-app/src/delivery/contracts.ts
       grep -q 'Authorization' apps/mobile/customer-app/src/delivery/delivery-api.ts
-      if grep -REn '(rawPayload|providerDeliveryId|console\.(log|debug).*token|AsyncStorage).*' apps/mobile/customer-app/src/delivery apps/mobile/customer-app/src/screens/DeliveryTrackingScreen.tsx; then
-        echo 'ERROR: Mobile delivery tracking includes forbidden internal data, logging or storage.' >&2
+      RUNTIME_FILES=(
+        apps/mobile/customer-app/src/delivery/contracts.ts
+        apps/mobile/customer-app/src/delivery/delivery-api.ts
+        apps/mobile/customer-app/src/screens/DeliveryTrackingScreen.tsx
+        apps/mobile/customer-app/src/screens/TrackingLookupScreen.tsx
+      )
+      if grep -En '(rawPayload|providerDeliveryId|console\.(log|debug).*token|AsyncStorage)' "${RUNTIME_FILES[@]}"; then
+        echo 'ERROR: Mobile delivery tracking runtime includes forbidden internal data, logging or storage.' >&2
         exit 1
       fi
       echo 'Mobile delivery tracking safety controls passed.'

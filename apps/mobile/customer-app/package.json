@@ -26,6 +26,7 @@
     "@babel/runtime": "^7.28.0",
     "@react-native/babel-preset": "0.86.0",
     "@react-native/metro-config": "0.86.0",
+    "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "tsx": "^4.20.0",
     "typescript": "5.9.3"

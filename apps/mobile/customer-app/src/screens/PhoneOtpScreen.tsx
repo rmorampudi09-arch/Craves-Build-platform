@@ -11,12 +11,13 @@ import {
 } from 'react-native';
 import {
   getAuth,
-  signInWithPhoneNumber,
-  type ConfirmationResult
+  signInWithPhoneNumber
 } from '@react-native-firebase/auth';
 import { useAuth } from '../auth/AuthProvider';
 import { MobileAuthError } from '../auth/craves-auth';
 import { theme } from '../theme';
+
+type PhoneConfirmation = Awaited<ReturnType<typeof signInWithPhoneNumber>>;
 
 export function PhoneOtpScreen() {
   const [phone, setPhone] = useState('+91');
@@ -24,7 +25,7 @@ export function PhoneOtpScreen() {
   const [stage, setStage] = useState<'phone' | 'otp'>('phone');
   const [message, setMessage] = useState('Enter your mobile number with country code.');
   const [busy, setBusy] = useState(false);
-  const confirmation = useRef<ConfirmationResult | null>(null);
+  const confirmation = useRef<PhoneConfirmation | null>(null);
   const { createSession } = useAuth();
 
   async function sendOtp() {

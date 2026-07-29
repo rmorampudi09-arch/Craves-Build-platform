@@ -3,13 +3,17 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../auth/AuthProvider';
+import { DeliveryTrackingScreen } from '../screens/DeliveryTrackingScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { PhoneOtpScreen } from '../screens/PhoneOtpScreen';
+import { TrackingLookupScreen } from '../screens/TrackingLookupScreen';
 import { theme } from '../theme';
 
 export type RootStackParamList = {
   SignIn: undefined;
   Home: undefined;
+  TrackingLookup: undefined;
+  DeliveryTracking: { orderId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -23,7 +27,11 @@ export function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {session ? (
-          <Stack.Screen name="Home" component={HomeScreen} />
+          <>
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="TrackingLookup" component={TrackingLookupScreen} />
+            <Stack.Screen name="DeliveryTracking" component={DeliveryTrackingScreen} />
+          </>
         ) : (
           <Stack.Screen name="SignIn" component={PhoneOtpScreen} />
         )}

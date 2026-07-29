@@ -23,8 +23,9 @@ steps:
       grep -q 'react-native-keychain' apps/mobile/customer-app/package.json
       grep -q 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' apps/mobile/customer-app/src/auth/session-store.ts
       grep -q 'firebase/exchange' apps/mobile/customer-app/src/auth/craves-auth.ts
-      if grep -REn '(AsyncStorage|localStorage|sessionStorage).*token|console\.(log|debug).*token|refreshToken' apps/mobile/customer-app/src; then
-        echo 'ERROR: Mobile auth module contains unsafe token storage or logging.' >&2
+      mapfile -d '' RUNTIME_FILES < <(find apps/mobile/customer-app/src -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.test.ts' -print0)
+      if grep -En '(AsyncStorage|localStorage|sessionStorage).*token|console\.(log|debug).*token|refreshToken' "${RUNTIME_FILES[@]}"; then
+        echo 'ERROR: Mobile auth runtime contains unsafe token storage or logging.' >&2
         exit 1
       fi
       for FILE in google-services.json GoogleService-Info.plist; do

@@ -1,9 +1,13 @@
 import React from 'react';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '../auth/AuthProvider';
+import type { RootStackParamList } from '../navigation/RootNavigator';
 import { theme } from '../theme';
 
-export function HomeScreen() {
+type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
+
+export function HomeScreen({ navigation }: Props) {
   const { session, signOut } = useAuth();
   return (
     <SafeAreaView style={styles.page}>
@@ -14,13 +18,16 @@ export function HomeScreen() {
       <View style={styles.card}>
         <Text style={styles.eyebrow}>CUSTOMER MODE</Text>
         <Text style={styles.title}>Welcome{session?.identity.displayName ? `, ${session.identity.displayName}` : ''}</Text>
-        <Text style={styles.description}>Your native Firebase phone session is active. Order browsing, cart and checkout will be migrated as separate modules.</Text>
+        <Text style={styles.description}>Your secure Firebase phone session is active. Native provider-neutral delivery tracking is available for your chef-specific orders.</Text>
         <View style={styles.identityBox}>
           <Text style={styles.identityLabel}>Signed-in mobile</Text>
           <Text style={styles.identityValue}>{session?.identity.phoneNumber}</Text>
           <Text style={styles.identityLabel}>Roles</Text>
           <Text style={styles.identityValue}>{session?.identity.roles.join(', ')}</Text>
         </View>
+        <Pressable style={styles.primaryButton} onPress={() => navigation.navigate('TrackingLookup')}>
+          <Text style={styles.primaryText}>Track an order</Text>
+        </Pressable>
         <Pressable style={styles.secondaryButton} onPress={() => void signOut()}>
           <Text style={styles.secondaryText}>Sign out</Text>
         </Pressable>
@@ -41,6 +48,8 @@ const styles = StyleSheet.create({
   identityBox: { backgroundColor: theme.colors.white, borderRadius: 18, marginTop: 24, padding: 16 },
   identityLabel: { color: theme.colors.muted, fontSize: 12, fontWeight: '700', marginTop: 8 },
   identityValue: { color: theme.colors.text, fontSize: 16, fontWeight: '700', marginTop: 3 },
-  secondaryButton: { borderColor: theme.colors.primary, borderRadius: theme.radius.button, borderWidth: 1, minHeight: 48, marginTop: 24, alignItems: 'center', justifyContent: 'center' },
+  primaryButton: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.button, minHeight: 50, marginTop: 24, alignItems: 'center', justifyContent: 'center' },
+  primaryText: { color: theme.colors.white, fontSize: 16, fontWeight: '800' },
+  secondaryButton: { borderColor: theme.colors.primary, borderRadius: theme.radius.button, borderWidth: 1, minHeight: 48, marginTop: 12, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: theme.colors.primary, fontSize: 16, fontWeight: '800' }
 });

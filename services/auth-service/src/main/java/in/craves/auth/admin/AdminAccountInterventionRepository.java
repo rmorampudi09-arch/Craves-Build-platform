@@ -43,24 +43,28 @@ public class AdminAccountInterventionRepository {
         if ("SUSPEND".equals(action) && actorIdentityId.equals(targetIdentityId)) {
             throw new IllegalStateException("An administrator cannot suspend their own account");
         }
-        if (targetStatus.equals(identity.status())) {
-            return response(null, identity, action, targetStatus, "NOT_REQUIRED", false, correlationId);
-        }
 
-        long newTokenVersion = identity.tokenVersion() + 1L;
-        int identityUpdated = jdbcTemplate.update(
-            "UPDATE auth_identity SET status = ?, token_version = ?, updated_at = now() WHERE id = ? AND token_version = ?",
-            targetStatus, newTokenVersion, targetIdentityId, identity.tokenVersion()
-        );
-        if (identityUpdated != 1) {
-            throw new IllegalStateException("Identity state changed during account intervention");
-        }
+        boolean changed = !targetStatus.equals(identity.status());
+        IdentityRow resultingIdentity = identity;
+        if (changed) {
+            long newTokenVersion = identity.tokenVersion() + 1L;
+            int identityUpdated = jdbcTemplate.update(
+                "UPDATE auth_identity SET status = ?, token_version = ?, updated_at = now() WHERE id = ? AND token_version = ?",
+                targetStatus, newTokenVersion, targetIdentityId, identity.tokenVersion()
+            );
+            if (identityUpdated != 1) {
+                throw new IllegalStateException("Identity state changed during account intervention");
+            }
 
-        jdbcTemplate.update(
-            "UPDATE refresh_session SET revoked_at = COALESCE(revoked_at, now()), revoke_reason = " +
-                "CASE WHEN revoked_at IS NULL THEN ? ELSE revoke_reason END WHERE identity_id = ? AND revoked_at IS NULL",
-            "ADMIN_" + action, targetIdentityId
-        );
+            jdbcTemplate.update(
+                "UPDATE refresh_session SET revoked_at = COALESCE(revoked_at, now()), revoke_reason = " +
+                    "CASE WHEN revoked_at IS NULL THEN ? ELSE revoke_reason END WHERE identity_id = ? AND revoked_at IS NULL",
+                "ADMIN_" + action, targetIdentityId
+            );
+            resultingIdentity = new IdentityRow(
+                identity.id(), identity.firebaseUid(), identity.phoneNumber(), targetStatus, newTokenVersion
+            );
+        }
 
         UUID interventionId = UUID.randomUUID();
         jdbcTemplate.update(
@@ -81,14 +85,11 @@ public class AdminAccountInterventionRepository {
                 id, identity_id, action, actor_identity_id, details, correlation_id, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, now())
             """,
-            UUID.randomUUID(), targetIdentityId, "ACCOUNT_" + action + "ED", actorIdentityId,
+            UUID.randomUUID(), targetIdentityId, auditAction(action), actorIdentityId,
             reason, correlationId.toString()
         );
 
-        IdentityRow updated = new IdentityRow(
-            identity.id(), identity.firebaseUid(), identity.phoneNumber(), targetStatus, newTokenVersion
-        );
-        return response(interventionId, updated, action, targetStatus, "PENDING", true, correlationId);
+        return response(interventionId, resultingIdentity, action, targetStatus, "PENDING", changed, correlationId);
     }
 
     public InterventionResponse find(UUID targetIdentityId) {
@@ -205,6 +206,14 @@ public class AdminAccountInterventionRepository {
             dead ? "DEAD_LETTER" : "FAILED", dead ? 0L : delay, safe(error == null ? null : error.getMessage()),
             item.interventionId(), item.lockToken()
         );
+    }
+
+    static String auditAction(String action) {
+        return switch (action) {
+            case "SUSPEND" -> "ACCOUNT_SUSPENDED";
+            case "REACTIVATE" -> "ACCOUNT_REACTIVATED";
+            default -> throw new IllegalArgumentException("Unsupported account intervention action");
+        };
     }
 
     private static InterventionResponse response(

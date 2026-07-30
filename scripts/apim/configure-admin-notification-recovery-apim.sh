@@ -19,6 +19,7 @@ for tool in az jq curl sed; do command -v "$tool" >/dev/null || fail "$tool is r
 [[ "${CONFIRM_APIM_WRITE,,}" == "true" ]] || fail "Set CONFIRM_APIM_WRITE=true for the controlled APIM write"
 
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+[[ -n "$SUBSCRIPTION_ID" ]] || fail "Azure subscription could not be resolved"
 APP_JSON=$(az containerapp show -g "$RG" -n "$NOTIFICATION_APP" -o json)
 FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
 LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
@@ -63,13 +64,24 @@ put_operation() {
 put_operation "get-admin-notification-recovery-backlog" "GET" "/backlog" "List notification recovery backlog" false
 put_operation "post-admin-notification-recovery-retry" "POST" "/{requestId}/retry" "Requeue notification request" true
 
-for ID in get-admin-notification-recovery-backlog post-admin-notification-recovery-retry; do
+verify_operation() {
+  local ID="$1" EXPECTED_METHOD="$2" EXPECTED_TEMPLATE="$3"
+  local OPERATION POLICY ACTUAL_METHOD ACTUAL_TEMPLATE
+  OPERATION=$(az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o json)
+  ACTUAL_METHOD=$(jq -r '.method // ""' <<<"$OPERATION")
+  ACTUAL_TEMPLATE=$(jq -r '.urlTemplate // ""' <<<"$OPERATION")
+  [[ "$ACTUAL_METHOD" == "$EXPECTED_METHOD" ]] || fail "$ID method read-back failed: expected $EXPECTED_METHOD, found $ACTUAL_METHOD"
+  [[ "$ACTUAL_TEMPLATE" == "$EXPECTED_TEMPLATE" ]] || fail "$ID URL template read-back failed: expected $EXPECTED_TEMPLATE, found $ACTUAL_TEMPLATE"
   POLICY=$(az rest --method get --url "${API_MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
   [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Bearer"* && "$POLICY" == *"no-store"* ]] || fail "$ID policy read-back failed"
   [[ "$POLICY" != *'backend-id='* ]] || fail "$ID unexpectedly uses backend-id"
-done
+}
+
+verify_operation "get-admin-notification-recovery-backlog" "GET" "/backlog"
+verify_operation "post-admin-notification-recovery-retry" "POST" "/{requestId}/retry"
 
 GATEWAY_URL=$(az apim show -g "$RG" -n "$APIM" --query gatewayUrl -o tsv)
+[[ "$GATEWAY_URL" == https://* ]] || fail "APIM HTTPS gateway URL was not returned"
 HTTP_STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 "${GATEWAY_URL%/}/${API_PATH}/backlog?status=DEAD_LETTER&limit=1")
 [[ "$HTTP_STATUS" == "401" ]] || fail "Unauthenticated gateway guard returned HTTP $HTTP_STATUS instead of 401"
 

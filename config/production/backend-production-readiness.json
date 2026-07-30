@@ -51,7 +51,6 @@
     "CRAVES_DELIVERY_INTELLIGENCE_ENABLED",
     "CRAVES_DELIVERY_COMMAND_ENABLED",
     "CRAVES_DELIVERY_RECONCILIATION_ENABLED",
-    "CRAVES_DELIVERY_PROVIDER_EXECUTION_ENABLED",
     "CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED",
     "CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED",
     "CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED",
@@ -87,7 +86,7 @@
     {
       "id": 3,
       "name": "Seven-service deployment",
-      "execution": "Build immutable images and deploy all seven Spring services with every worker, provider, mutation API and enforcement flag disabled.",
+      "execution": "Build immutable images and deploy all seven Spring services with every real worker, provider, mutation API and enforcement flag disabled.",
       "evidence": ["image digests", "Container App revision names", "health and readiness responses", "rollback revision map", "disabled-flag read-back"]
     },
     {

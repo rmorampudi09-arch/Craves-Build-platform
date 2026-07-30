@@ -30,3 +30,10 @@ craves:
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}
+  subscription:
+    occurrence-generator:
+      enabled: ${CRAVES_SUBSCRIPTION_OCCURRENCE_GENERATOR_ENABLED:false}
+      batch-size: ${CRAVES_SUBSCRIPTION_OCCURRENCE_BATCH_SIZE:50}
+      horizon-days: ${CRAVES_SUBSCRIPTION_OCCURRENCE_HORIZON_DAYS:7}
+      stale-lock-minutes: ${CRAVES_SUBSCRIPTION_OCCURRENCE_STALE_LOCK_MINUTES:10}
+      fixed-delay-ms: ${CRAVES_SUBSCRIPTION_OCCURRENCE_FIXED_DELAY_MS:60000}

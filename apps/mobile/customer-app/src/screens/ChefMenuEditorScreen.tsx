@@ -29,7 +29,7 @@ export function ChefMenuEditorScreen({ navigation, route }: Props) {
   async function save() {
     if (!session) return;
     try {
-      await saveMenuItem(session, { id: menuItemId ?? '', itemName: form.itemName, description: form.description || null, category: form.category, foodType: form.foodType, price: Number(form.price), currency: form.currency, preparationTimeMinutes: form.preparationTimeMinutes ? Number(form.preparationTimeMinutes) : null, unitPackageWeightGrams: Number(form.unitPackageWeightGrams), thermoboxRequired: form.thermoboxRequired, available: form.available, status: form.status, spiceLevel: null }, menuItemId);
+      await saveMenuItem(session, { itemName: form.itemName, description: form.description || null, category: form.category, foodType: form.foodType, price: Number(form.price), currency: form.currency, preparationTimeMinutes: form.preparationTimeMinutes ? Number(form.preparationTimeMinutes) : null, unitPackageWeightGrams: Number(form.unitPackageWeightGrams), thermoboxRequired: form.thermoboxRequired, available: form.available, status: form.status, spiceLevel: null }, menuItemId);
       navigation.goBack();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Dish could not be saved.'); }
   }

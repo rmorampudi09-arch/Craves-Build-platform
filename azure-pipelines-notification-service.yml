@@ -35,8 +35,8 @@ steps:
   - script: |
       set -euo pipefail
       cd $(servicePath)
-      mvn -B clean package -DskipTests
-    displayName: Build notification service
+      mvn -B -ntp clean verify
+    displayName: Build and test notification service
 
   - task: AzureCLI@2
     displayName: Build and push notification image
@@ -49,14 +49,16 @@ steps:
         ACR='${{ parameters.acrName }}'
         TAG='${{ parameters.imageTag }}'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
         az acr login --name "$ACR"
-        docker build -t "$IMAGE" "$(servicePath)"
+        docker build --pull -t "$IMAGE" "$(servicePath)"
         docker push "$IMAGE"
+        docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}' || true
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Deploy notification Container App
+    displayName: Deploy fail-closed notification revision
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -69,4 +71,62 @@ steps:
         TAG='${{ parameters.imageTag }}'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
-        az containerapp update --name "$APP" --resource-group "$RG" --image "$IMAGE" --min-replicas 1 --max-replicas 1 -o table
+
+        APP_BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json)
+        PREVIOUS_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_BEFORE")
+        PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$APP_BEFORE")
+        [[ -n "$PREVIOUS_REVISION" && -n "$PREVIOUS_IMAGE" ]] || { echo 'ERROR: Existing Notification Container App state is incomplete.' >&2; exit 1; }
+        [[ "$PREVIOUS_IMAGE" != "$IMAGE" ]] || { echo 'ERROR: Target image is already deployed. Start a new run with a new immutable tag.' >&2; exit 1; }
+
+        az containerapp update \
+          --name "$APP" \
+          --resource-group "$RG" \
+          --image "$IMAGE" \
+          --min-replicas 1 \
+          --max-replicas 1 \
+          --set-env-vars \
+            CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED=false \
+            CRAVES_NOTIFICATION_PUSH_ENABLED=false \
+            CRAVES_NOTIFICATION_EMAIL_ENABLED=false \
+            CRAVES_NOTIFICATION_RECOVERY_API_ENABLED=false \
+            CRAVES_TOKEN_REVOCATION_ENABLED=false \
+          --no-wait \
+          -o none
+
+        for attempt in $(seq 1 60); do
+          APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
+          LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
+          READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
+          RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
+          LATEST_IMAGE=''
+          HEALTH=''
+          if [[ -n "$LATEST" ]]; then
+            LATEST_IMAGE=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || true)
+            HEALTH=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query properties.healthState -o tsv 2>/dev/null || true)
+          fi
+          env_value() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$APP_JSON"; }
+          WORKER=$(env_value CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED)
+          PUSH=$(env_value CRAVES_NOTIFICATION_PUSH_ENABLED)
+          EMAIL=$(env_value CRAVES_NOTIFICATION_EMAIL_ENABLED)
+          RECOVERY=$(env_value CRAVES_NOTIFICATION_RECOVERY_API_ENABLED)
+          REVOCATION=$(env_value CRAVES_TOKEN_REVOCATION_ENABLED)
+          echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE worker=$WORKER push=$PUSH email=$EMAIL recovery=$RECOVERY revocation=$REVOCATION"
+          if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "${WORKER,,}" == 'false' && "${PUSH,,}" == 'false' && "${EMAIL,,}" == 'false' && "${RECOVERY,,}" == 'false' && "${REVOCATION,,}" == 'false' ]]; then
+            FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
+            [[ -n "$FQDN" ]] || { echo 'ERROR: Notification FQDN is missing.' >&2; exit 1; }
+            curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null
+            echo "SUCCESS: Notification revision $LATEST is healthy and fail-closed."
+            echo "Rollback image: $PREVIOUS_IMAGE"
+            exit 0
+          fi
+          if [[ "$HEALTH" == 'Unhealthy' || "$RUNNING" == 'Failed' ]]; then
+            az containerapp logs show -g "$RG" -n "$APP" --revision "$LATEST" --type console --tail 200 --format text || true
+            echo 'ERROR: Notification revision became unhealthy.' >&2
+            exit 1
+          fi
+          sleep 10
+        done
+
+        az containerapp revision list -g "$RG" -n "$APP" --query '[].{revision:name,active:properties.active,health:properties.healthState,running:properties.runningState,image:properties.template.containers[0].image}' -o table || true
+        echo 'ERROR: Notification revision did not become healthy and fail-closed within 10 minutes.' >&2
+        exit 1

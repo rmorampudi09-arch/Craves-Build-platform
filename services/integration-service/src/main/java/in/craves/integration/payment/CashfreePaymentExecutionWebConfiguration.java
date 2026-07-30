@@ -14,6 +14,9 @@ public class CashfreePaymentExecutionWebConfiguration implements WebMvcConfigure
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(interceptor).addPathPatterns("/api/v1/payments/orders/**");
+        registry.addInterceptor(interceptor).addPathPatterns(
+            "/api/v1/payments/orders/**",
+            "/api/v1/subscription-payments/invoices/**"
+        );
     }
 }

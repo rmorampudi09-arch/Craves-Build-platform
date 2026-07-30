@@ -24,11 +24,13 @@ public class CashfreePaymentExecutionInterceptor implements HandlerInterceptor {
         }
         String method = request.getMethod();
         String uri = request.getRequestURI();
-        boolean createsOrder = "POST".equalsIgnoreCase(method)
+        boolean createsCheckoutOrder = "POST".equalsIgnoreCase(method)
             && "/api/v1/payments/orders".equals(uri);
-        boolean verifiesOrder = "POST".equalsIgnoreCase(method)
+        boolean verifiesCheckoutOrder = "POST".equalsIgnoreCase(method)
             && uri.matches("/api/v1/payments/orders/[0-9a-fA-F-]{36}/verify");
-        if (createsOrder || verifiesOrder) {
+        boolean createsSubscriptionOrder = "POST".equalsIgnoreCase(method)
+            && uri.matches("/api/v1/subscription-payments/invoices/[0-9a-fA-F-]{36}/orders");
+        if (createsCheckoutOrder || verifiesCheckoutOrder || createsSubscriptionOrder) {
             throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Cashfree production payment execution is not enabled"

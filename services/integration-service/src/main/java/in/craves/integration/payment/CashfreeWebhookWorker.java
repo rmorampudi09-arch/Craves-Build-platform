@@ -1,7 +1,6 @@
 package in.craves.integration.payment;
 
 import in.craves.integration.payment.CashfreeWebhookInboxService.WorkItem;
-import in.craves.integration.service.PaymentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -14,18 +13,21 @@ public class CashfreeWebhookWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(CashfreeWebhookWorker.class);
 
     private final CashfreeWebhookInboxService inbox;
-    private final PaymentService paymentService;
+    private final CashfreeWebhookDispatcher dispatcher;
 
-    public CashfreeWebhookWorker(CashfreeWebhookInboxService inbox, PaymentService paymentService) {
+    public CashfreeWebhookWorker(
+        CashfreeWebhookInboxService inbox,
+        CashfreeWebhookDispatcher dispatcher
+    ) {
         this.inbox = inbox;
-        this.paymentService = paymentService;
+        this.dispatcher = dispatcher;
     }
 
     @Scheduled(fixedDelayString = "${craves.cashfree.webhook.fixed-delay-ms:2000}")
     public void process() {
         for (WorkItem item : inbox.claimBatch()) {
             try {
-                paymentService.handleWebhook(item.timestamp(), item.signature(), item.rawPayload());
+                dispatcher.dispatch(item.timestamp(), item.signature(), item.rawPayload());
                 inbox.complete(item);
             } catch (Exception exception) {
                 inbox.fail(item, exception);

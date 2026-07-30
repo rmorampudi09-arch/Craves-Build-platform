@@ -49,3 +49,11 @@ craves:
     allow-generated-local-keys: ${CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS:false}
   internal:
     service-secret: ${CRAVES_INTERNAL_SERVICE_SECRET:}
+  admin-account-intervention:
+    api-enabled: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED:false}
+    firebase-worker-enabled: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED:false}
+    batch-size: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_BATCH_SIZE:20}
+    max-attempts: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_MAX_ATTEMPTS:8}
+    stale-lock-minutes: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_STALE_LOCK_MINUTES:5}
+    retry-base-seconds: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_RETRY_BASE_SECONDS:30}
+    worker-fixed-delay-ms: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_WORKER_FIXED_DELAY_MS:5000}

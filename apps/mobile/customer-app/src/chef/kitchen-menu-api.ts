@@ -7,12 +7,13 @@ export class ChefCatalogApiError extends Error {
 }
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH';
-async function request(session: MobileSession, path: string, method: Method = 'GET', body?: unknown): Promise<Response> {
+async function request(session: MobileSession, path: string, method: Method = 'GET', body?: unknown, allowNotFound = false): Promise<Response> {
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
   try {
     const response = await fetch(`${CRAVES_API_BASE_URL}${path}`, { method, headers: { Accept: 'application/json', Authorization: `Bearer ${session.accessToken}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal });
     if (response.status === 401) throw new ChefCatalogApiError('SESSION_EXPIRED', 401, 'Your session expired. Sign in again.');
     if (response.status === 403) throw new ChefCatalogApiError('CHEF_ACCESS_REQUIRED', 403, 'An approved chef role is required.');
+    if (allowNotFound && response.status === 404) return response;
     if (!response.ok) throw new ChefCatalogApiError('CHEF_CATALOG_REQUEST_FAILED', response.status, 'The chef catalog request could not be completed.');
     return response;
   } catch (error) {
@@ -23,10 +24,9 @@ async function request(session: MobileSession, path: string, method: Method = 'G
 }
 
 export async function getMyKitchen(session: MobileSession): Promise<MobileChefKitchen | null> {
-  const response = await request(session, '/kitchens/me');
-  const raw = await response.json().catch(() => null);
-  if (raw === null) return null;
-  const kitchen = parseMobileChefKitchen(raw);
+  const response = await request(session, '/kitchens/me', 'GET', undefined, true);
+  if (response.status === 404) return null;
+  const kitchen = parseMobileChefKitchen(await response.json().catch(() => null));
   if (!kitchen) throw new ChefCatalogApiError('INVALID_KITCHEN_RESPONSE', 502, 'Kitchen profile is temporarily unavailable.');
   return kitchen;
 }

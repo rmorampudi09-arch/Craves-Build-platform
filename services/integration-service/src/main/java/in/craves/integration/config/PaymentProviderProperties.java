@@ -14,6 +14,7 @@ import org.springframework.util.StringUtils;
 public class PaymentProviderProperties {
     private final String environment;
     private final boolean productionActivationApproved;
+    private final boolean productionPaymentExecutionEnabled;
     private final String apiVersion;
     private final String clientId;
     private final String clientKey;
@@ -28,6 +29,7 @@ public class PaymentProviderProperties {
     public PaymentProviderProperties(
         @Value("${PAYMENT_PROVIDER_ENVIRONMENT:sandbox}") String environment,
         @Value("${CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED:false}") boolean productionActivationApproved,
+        @Value("${CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED:false}") boolean productionPaymentExecutionEnabled,
         @Value("${PAYMENT_PROVIDER_API_VERSION:2025-01-01}") String apiVersion,
         @Value("${PAYMENT_PROVIDER_CLIENT_ID:}") String clientId,
         @Value("${PAYMENT_PROVIDER_CLIENT_KEY:}") String clientKey,
@@ -41,6 +43,7 @@ public class PaymentProviderProperties {
     ) {
         this.environment = environment;
         this.productionActivationApproved = productionActivationApproved;
+        this.productionPaymentExecutionEnabled = productionPaymentExecutionEnabled;
         this.apiVersion = apiVersion;
         this.clientId = clientId;
         this.clientKey = clientKey;
@@ -88,6 +91,10 @@ public class PaymentProviderProperties {
             if (StringUtils.hasText(sandboxRefundSimulationStatus)) {
                 throw new IllegalStateException("Cashfree refund simulation must be empty in production");
             }
+        } else if (productionPaymentExecutionEnabled) {
+            throw new IllegalStateException(
+                "Production payment execution cannot be enabled while Cashfree is in sandbox"
+            );
         }
     }
 
@@ -96,6 +103,7 @@ public class PaymentProviderProperties {
         return environment == null ? "" : environment.trim().toUpperCase(Locale.ROOT);
     }
     public boolean productionActivationApproved() { return productionActivationApproved; }
+    public boolean productionPaymentExecutionEnabled() { return productionPaymentExecutionEnabled; }
     public String apiVersion() { return apiVersion; }
     public String clientId() { return clientId; }
     public String clientKey() { return clientKey; }
@@ -106,6 +114,7 @@ public class PaymentProviderProperties {
     public Set<String> allowedWebhookVersions() { return allowedWebhookVersions; }
     public boolean sandbox() { return !"PRODUCTION".equals(normalizedEnvironment()); }
     public String baseUrl() { return sandbox() ? sandboxBaseUrl : productionBaseUrl; }
+    public boolean paymentExecutionAllowed() { return sandbox() || productionPaymentExecutionEnabled; }
     public boolean productionReady() {
         return !sandbox()
             && productionActivationApproved

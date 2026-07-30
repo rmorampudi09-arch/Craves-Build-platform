@@ -8,6 +8,21 @@ ALTER TABLE auth_admin_intervention
         )
     );
 
+-- The provider worker is disabled before this migration is deployed. Normalizing any
+-- historical processing lease prevents an interrupted old revision from blocking the
+-- identity-level uniqueness rule below.
+UPDATE auth_admin_intervention
+   SET provider_status = 'FAILED',
+       provider_lock_token = NULL,
+       provider_locked_at = NULL,
+       provider_next_attempt_at = now(),
+       provider_last_error = COALESCE(
+           provider_last_error,
+           'Recovered during identity-serialized provider migration'
+       ),
+       updated_at = now()
+ WHERE provider_status = 'PROCESSING';
+
 CREATE UNIQUE INDEX ux_auth_admin_intervention_one_processing_per_identity
     ON auth_admin_intervention (identity_id)
     WHERE provider_status = 'PROCESSING';

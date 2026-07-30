@@ -5,7 +5,9 @@ import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
 import in.craves.subscription.web.ApiDtos.CreatePlanRequest;
 import in.craves.subscription.web.ApiDtos.CreateSubscriptionRequest;
+import in.craves.subscription.web.ApiDtos.CustomerSubscriptionResponse;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
+import in.craves.subscription.web.ApiDtos.PublicPlanResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -21,7 +23,14 @@ public class SubscriptionService {
     private static final Set<String> BILLING_PERIODS = Set.of("WEEKLY", "MONTHLY");
     private static final Set<String> PLAN_STATUSES = Set.of("DRAFT", "ACTIVE", "INACTIVE");
     private static final Set<String> CUSTOMER_STATUS_CHANGES = Set.of("PAUSED", "CANCELLED");
-    private static final Set<String> ADMIN_STATUS_CHANGES = Set.of("PENDING_PAYMENT", "ACTIVE", "PAUSED", "PAYMENT_FAILED", "EXPIRED", "CANCELLED");
+    private static final Set<String> ADMIN_STATUS_CHANGES = Set.of(
+        "PENDING_PAYMENT",
+        "ACTIVE",
+        "PAUSED",
+        "PAYMENT_FAILED",
+        "EXPIRED",
+        "CANCELLED"
+    );
 
     private final SubscriptionRepository repository;
 
@@ -40,10 +49,7 @@ public class SubscriptionService {
             throw ApiException.badRequest("INVALID_AMOUNT", "amount must be zero or greater");
         }
         String currency = StringUtils.hasText(request.currency()) ? request.currency().toUpperCase(Locale.ROOT) : "INR";
-        UUID chefIdentityId = request.chefIdentityId();
-        if (user.hasRole("CHEF") && chefIdentityId == null) {
-            chefIdentityId = user.identityId();
-        }
+        UUID chefIdentityId = user.hasRole("CHEF") ? user.identityId() : request.chefIdentityId();
         return repository.createPlan(
             request.planCode().trim(),
             chefIdentityId,
@@ -51,22 +57,24 @@ public class SubscriptionService {
             request.description(),
             billingPeriod,
             amount,
-            currency
+            currency,
+            user.identityId()
         );
     }
 
-    public List<PlanResponse> listActivePlans() {
-        return repository.listPlans(true);
+    public List<PublicPlanResponse> listActivePlans() {
+        return repository.listPlans(true).stream().map(SubscriptionService::toPublicPlan).toList();
     }
 
     public List<PlanResponse> listAllPlans(CurrentUser user) {
         requireRole(user, "ADMIN", "CHEF");
-        return repository.listPlans(false);
+        return user.hasRole("ADMIN") ? repository.listPlans(false) : repository.listPlansForChef(user.identityId());
     }
 
-    public PlanResponse getPlan(UUID planId) {
-        return repository.findPlanById(planId)
-            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
+    public PublicPlanResponse getPlan(UUID planId) {
+        return repository.findActivePlanById(planId)
+            .map(SubscriptionService::toPublicPlan)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Active subscription plan was not found"));
     }
 
     public PlanResponse updatePlanStatus(UUID planId, String status, CurrentUser user) {
@@ -75,27 +83,73 @@ public class SubscriptionService {
         if (!PLAN_STATUSES.contains(normalized)) {
             throw ApiException.badRequest("INVALID_PLAN_STATUS", "status must be DRAFT, ACTIVE, or INACTIVE");
         }
-        return repository.updatePlanStatus(planId, normalized);
+        if (user.hasRole("ADMIN")) {
+            return repository.updatePlanStatus(planId, normalized, user.identityId());
+        }
+        return repository.updatePlanStatusForChef(planId, user.identityId(), normalized, user.identityId());
     }
 
-    public SubscriptionResponse createSubscription(CreateSubscriptionRequest request, CurrentUser user) {
+    public CustomerSubscriptionResponse createSubscription(CreateSubscriptionRequest request, CurrentUser user) {
         requireRole(user, "CUSTOMER", "ADMIN");
-        PlanResponse plan = getPlan(request.planId());
-        if (!"ACTIVE".equals(plan.status())) {
-            throw ApiException.conflict("PLAN_NOT_ACTIVE", "Subscription plan is not active");
-        }
+        PlanResponse plan = repository.findActivePlanById(request.planId())
+            .orElseThrow(() -> ApiException.conflict("PLAN_NOT_ACTIVE", "Subscription plan is not active"));
         if (request.startDate().isBefore(LocalDate.now())) {
             throw ApiException.badRequest("INVALID_START_DATE", "startDate cannot be in the past");
         }
-        return repository.createSubscription(user.identityId(), plan, request.startDate(), request.deliveryAddressId(), request.notes());
+        return toCustomerSubscription(
+            repository.createSubscription(user.identityId(), plan, request.startDate(), request.deliveryAddressId(), request.notes())
+        );
     }
 
-    public List<SubscriptionResponse> listMine(CurrentUser user) {
+    public List<CustomerSubscriptionResponse> listMine(CurrentUser user) {
         requireRole(user, "CUSTOMER", "ADMIN");
-        return repository.listCustomerSubscriptions(user.identityId());
+        return repository.listCustomerSubscriptions(user.identityId()).stream()
+            .map(SubscriptionService::toCustomerSubscription)
+            .toList();
     }
 
-    public SubscriptionResponse getMine(UUID subscriptionId, CurrentUser user) {
+    public CustomerSubscriptionResponse getMine(UUID subscriptionId, CurrentUser user) {
+        return toCustomerSubscription(getOwnedSubscription(subscriptionId, user));
+    }
+
+    public CustomerSubscriptionResponse changeCustomerStatus(
+        UUID subscriptionId,
+        String newStatus,
+        String reason,
+        CurrentUser user
+    ) {
+        requireRole(user, "CUSTOMER");
+        SubscriptionResponse subscription = getOwnedSubscription(subscriptionId, user);
+        String normalized = normalize(newStatus, "status");
+        if (!CUSTOMER_STATUS_CHANGES.contains(normalized)) {
+            throw ApiException.forbidden(
+                "SUBSCRIPTION_STATUS_CHANGE_DENIED",
+                "Customer can only pause or cancel subscription in MVP foundation"
+            );
+        }
+        return toCustomerSubscription(
+            repository.updateSubscriptionStatus(subscription.id(), normalized, reason, user.identityId())
+        );
+    }
+
+    public SubscriptionResponse adminChangeStatus(
+        UUID subscriptionId,
+        String newStatus,
+        String reason,
+        CurrentUser user
+    ) {
+        requireRole(user, "ADMIN");
+        SubscriptionResponse subscription = repository.findSubscriptionById(subscriptionId)
+            .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
+        String normalized = normalize(newStatus, "status");
+        if (!ADMIN_STATUS_CHANGES.contains(normalized)) {
+            throw ApiException.badRequest("INVALID_SUBSCRIPTION_STATUS", "Invalid subscription status");
+        }
+        return repository.updateSubscriptionStatus(subscription.id(), normalized, reason, user.identityId());
+    }
+
+    private SubscriptionResponse getOwnedSubscription(UUID subscriptionId, CurrentUser user) {
+        requireRole(user, "CUSTOMER", "ADMIN");
         SubscriptionResponse subscription = repository.findSubscriptionById(subscriptionId)
             .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
         if (!user.hasRole("ADMIN") && !subscription.customerIdentityId().equals(user.identityId())) {
@@ -104,22 +158,31 @@ public class SubscriptionService {
         return subscription;
     }
 
-    public SubscriptionResponse changeStatus(UUID subscriptionId, String newStatus, String reason, CurrentUser user) {
-        SubscriptionResponse subscription = getMine(subscriptionId, user);
-        String normalized = normalize(newStatus, "status");
-        if (user.hasRole("ADMIN")) {
-            if (!ADMIN_STATUS_CHANGES.contains(normalized)) {
-                throw ApiException.badRequest("INVALID_SUBSCRIPTION_STATUS", "Invalid subscription status");
-            }
-        } else {
-            if (!subscription.customerIdentityId().equals(user.identityId())) {
-                throw ApiException.forbidden("SUBSCRIPTION_ACCESS_DENIED", "You cannot change this subscription");
-            }
-            if (!CUSTOMER_STATUS_CHANGES.contains(normalized)) {
-                throw ApiException.forbidden("SUBSCRIPTION_STATUS_CHANGE_DENIED", "Customer can only pause or cancel subscription in MVP foundation");
-            }
-        }
-        return repository.updateSubscriptionStatus(subscription.id(), normalized, reason, user.identityId());
+    private static PublicPlanResponse toPublicPlan(PlanResponse plan) {
+        return new PublicPlanResponse(
+            plan.id(),
+            plan.planCode(),
+            plan.name(),
+            plan.description(),
+            plan.billingPeriod(),
+            plan.amount(),
+            plan.currency()
+        );
+    }
+
+    private static CustomerSubscriptionResponse toCustomerSubscription(SubscriptionResponse subscription) {
+        return new CustomerSubscriptionResponse(
+            subscription.id(),
+            subscription.planId(),
+            subscription.status(),
+            subscription.startDate(),
+            subscription.endDate(),
+            subscription.nextServiceDate(),
+            subscription.deliveryAddressId(),
+            subscription.notes(),
+            subscription.createdAt(),
+            subscription.updatedAt()
+        );
     }
 
     private static String normalize(String value, String fieldName) {

@@ -1,14 +1,6 @@
 trigger: none
 pr: none
 
-parameters:
-  - name: runFullJavaSuite
-    type: boolean
-    default: true
-  - name: runAdminWebSuite
-    type: boolean
-    default: true
-
 pool:
   vmImage: ubuntu-latest
 
@@ -17,14 +9,33 @@ stages:
     displayName: Source and safety integrity
     jobs:
       - job: VerifyPack
+        timeoutInMinutes: 20
         steps:
           - checkout: self
             fetchDepth: 0
           - script: |
               set -euo pipefail
+              jq -e . config/production/backend-production-readiness.json >/dev/null
+              jq -e . config/production/azure-resource-inventory.json >/dev/null
               bash scripts/release/verify-backend-production-readiness-pack.sh
+              bash scripts/release/verify-azure-resource-inventory-references.sh
               bash scripts/release/generate-backend-production-run-plan.sh "$(Build.ArtifactStagingDirectory)/backend-production-run-plan.md"
-            displayName: Verify production readiness source pack
+
+              while IFS= read -r script; do
+                bash -n "$script"
+              done < <(find scripts -type f -name '*.sh' -print | sort)
+
+              python3 - <<'PY'
+              from pathlib import Path
+              import xml.etree.ElementTree as ET
+              policies = sorted(Path('infra/apim').glob('**/*.xml'))
+              if not policies:
+                  raise SystemExit('No APIM XML policies were found')
+              for policy in policies:
+                  ET.parse(policy)
+                  print(f'XML_OK {policy}')
+              PY
+            displayName: Verify manifests, inventory, scripts and APIM XML
           - task: PublishPipelineArtifact@1
             inputs:
               targetPath: $(Build.ArtifactStagingDirectory)/backend-production-run-plan.md
@@ -34,10 +45,9 @@ stages:
   - stage: JavaVerification
     displayName: Seven-service Java verification
     dependsOn: SourceIntegrity
-    condition: and(succeeded(), eq(${{ parameters.runFullJavaSuite }}, true))
     jobs:
       - job: BuildServices
-        timeoutInMinutes: 60
+        timeoutInMinutes: 90
         steps:
           - checkout: self
           - task: JavaToolInstaller@0
@@ -51,17 +61,25 @@ stages:
               SERVICES=(auth-service user-chef-service catalog-service order-service subscription-service integration-service notification-service)
               for SERVICE in "${SERVICES[@]}"; do
                 echo "========== $SERVICE =========="
-                (cd "services/$SERVICE" && mvn -B clean verify)
+                (cd "services/$SERVICE" && mvn -B -ntp clean verify)
               done
             displayName: Build and test all Spring services
+          - task: PublishTestResults@2
+            condition: always()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: 'services/**/target/surefire-reports/TEST-*.xml'
+              failTaskOnFailedTests: true
+              failTaskOnMissingResultsFile: false
+              testRunTitle: Craves seven-service Java verification
+            displayName: Publish Java test reports
 
   - stage: AdminWebVerification
     displayName: Administrator web verification
     dependsOn: SourceIntegrity
-    condition: and(succeeded(), eq(${{ parameters.runAdminWebSuite }}, true))
     jobs:
       - job: BuildAdminWeb
-        timeoutInMinutes: 30
+        timeoutInMinutes: 40
         steps:
           - checkout: self
           - task: NodeTool@0
@@ -71,7 +89,7 @@ stages:
           - script: |
               set -euo pipefail
               cd apps/customer-web-next
-              npm install --ignore-scripts
+              npm install --ignore-scripts --no-audit --no-fund
               npm run typecheck
               npm run test
               npm run build

@@ -12,6 +12,7 @@ import in.craves.integration.subscription.SubscriptionPaymentModels.StatusChange
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
 import in.craves.integration.subscription.SubscriptionPaymentRepository.PaymentIntent;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -61,7 +62,7 @@ public class SubscriptionPaymentService {
                 EventEnvelope.class,
                 PaymentRequestedData.class
             );
-            EventEnvelope<PaymentRequestedData> event = objectMapper.treeToValue(raw, type);
+            EventEnvelope<PaymentRequestedData> event = objectMapper.readerFor(type).readValue(raw);
             validate(event);
             return repository.acceptRequest(event, raw);
         } catch (ResponseStatusException exception) {
@@ -165,7 +166,12 @@ public class SubscriptionPaymentService {
         event.put("eventVersion", "v1");
         event.put("occurredAt", data.changedAt().toString());
         event.put("correlationId", intent.invoiceId().toString());
-        event.put("causationId", providerPaymentId == null ? eventId.toString() : UUID.nameUUIDFromBytes(providerPaymentId.getBytes()).toString());
+        event.put(
+            "causationId",
+            providerPaymentId == null
+                ? eventId.toString()
+                : UUID.nameUUIDFromBytes(providerPaymentId.getBytes(StandardCharsets.UTF_8)).toString()
+        );
         event.put("subject", intent.invoiceId().toString());
         event.set("data", objectMapper.valueToTree(data));
         repository.applyProviderStatus(intent, normalized, paymentStatus, providerPaymentId, event);

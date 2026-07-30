@@ -94,7 +94,12 @@ public class SubscriptionPaymentRequestedProcessor {
     }
 
     private static String safe(Throwable error) {
-        String value = error == null || error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+        if (error == null) {
+            return "Unknown subscription payment processing error";
+        }
+        String value = StringUtils.hasText(error.getMessage())
+            ? error.getMessage()
+            : error.getClass().getSimpleName();
         value = value.replace('\n', ' ').replace('\r', ' ').trim();
         return value.length() > 1000 ? value.substring(0, 1000) : value;
     }

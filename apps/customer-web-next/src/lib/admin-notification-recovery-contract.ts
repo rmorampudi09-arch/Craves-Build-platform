@@ -19,13 +19,14 @@ export type AdminNotificationRecoveryResult = {
   recoveryAuditId: string;
   requestId: string;
   previousStatus: NotificationBacklogStatus;
-  newStatus: string;
+  newStatus: "PENDING";
   previousAttemptCount: number;
   correlationId: string;
   requeuedAt: string;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const BACKLOG_STATUSES = new Set<NotificationBacklogStatus>(["FAILED", "DEAD_LETTER"]);
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -45,7 +46,7 @@ function nullableText(value: unknown, max = 500): string | null {
 
 function uuid(value: unknown): string | null {
   const candidate = text(value, 64);
-  return candidate && UUID.test(candidate) ? candidate : null;
+  return candidate && UUID.test(candidate) ? candidate.toLowerCase() : null;
 }
 
 function dateTime(value: unknown): string | null {
@@ -62,8 +63,10 @@ export function parseNotificationBacklogQuery(value: URLSearchParams): {
   limit: number;
 } | null {
   const status = (value.get("status") ?? "DEAD_LETTER").trim().toUpperCase() as NotificationBacklogStatus;
-  const limit = Number(value.get("limit") ?? "50");
-  if (!["FAILED", "DEAD_LETTER"].includes(status) || !Number.isInteger(limit) || limit < 1 || limit > 100) return null;
+  const limitText = (value.get("limit") ?? "50").trim();
+  if (!/^\d{1,3}$/.test(limitText)) return null;
+  const limit = Number(limitText);
+  if (!BACKLOG_STATUSES.has(status) || !Number.isInteger(limit) || limit < 1 || limit > 100) return null;
   return { status, limit };
 }
 
@@ -78,7 +81,7 @@ export function parseNotificationBacklog(value: unknown): AdminNotificationBackl
     const channel = text(raw?.channel, 40);
     const status = text(raw?.status, 40) as NotificationBacklogStatus | null;
     const attemptCount = nonNegativeInteger(raw?.attemptCount);
-    if (!requestId || !sourceService || !eventType || !channel || !status || !["FAILED", "DEAD_LETTER"].includes(status) || attemptCount == null) return null;
+    if (!requestId || !sourceService || !eventType || !channel || !status || !BACKLOG_STATUSES.has(status) || attemptCount == null) return null;
     output.push({
       requestId,
       sourceService,
@@ -119,6 +122,9 @@ export function parseNotificationRecoveryResult(value: unknown): AdminNotificati
   const previousAttemptCount = nonNegativeInteger(raw?.previousAttemptCount);
   const correlationId = uuid(raw?.correlationId);
   const requeuedAt = dateTime(raw?.requeuedAt);
-  if (!recoveryAuditId || !requestId || !previousStatus || !["FAILED", "DEAD_LETTER"].includes(previousStatus) || !newStatus || previousAttemptCount == null || !correlationId || !requeuedAt) return null;
-  return { recoveryAuditId, requestId, previousStatus, newStatus, previousAttemptCount, correlationId, requeuedAt };
+  if (
+    !recoveryAuditId || !requestId || !previousStatus || !BACKLOG_STATUSES.has(previousStatus) ||
+    newStatus !== "PENDING" || previousAttemptCount == null || !correlationId || !requeuedAt
+  ) return null;
+  return { recoveryAuditId, requestId, previousStatus, newStatus: "PENDING", previousAttemptCount, correlationId, requeuedAt };
 }

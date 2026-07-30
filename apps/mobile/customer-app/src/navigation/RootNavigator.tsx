@@ -5,6 +5,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../auth/AuthProvider';
 import { AddressFormScreen } from '../screens/AddressFormScreen';
 import { AddressListScreen } from '../screens/AddressListScreen';
+import { CartScreen } from '../screens/CartScreen';
+import { CheckoutPreparationScreen } from '../screens/CheckoutPreparationScreen';
 import { DeliveryTrackingScreen } from '../screens/DeliveryTrackingScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
@@ -22,6 +24,8 @@ export type RootStackParamList = {
   Notifications: undefined;
   Addresses: undefined;
   AddressForm: { addressId?: string };
+  Cart: { menuItemId?: string; quantity?: number } | undefined;
+  MobileCheckout: undefined;
   TrackingLookup: undefined;
   DeliveryTracking: { orderId: string };
 };
@@ -30,6 +34,6 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function RootNavigator() {
   const { session, initializing } = useAuth();
   if (initializing) return <View style={styles.loading}><ActivityIndicator size="large" color={theme.colors.gold} /></View>;
-  return <NavigationContainer><Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>{session ? <><Stack.Screen name="Home" component={HomeScreen} /><Stack.Screen name="Orders" component={OrdersScreen} /><Stack.Screen name="OrderDetails" component={OrderDetailsScreen} /><Stack.Screen name="Notifications" component={NotificationsScreen} /><Stack.Screen name="Addresses" component={AddressListScreen} /><Stack.Screen name="AddressForm" component={AddressFormScreen} /><Stack.Screen name="TrackingLookup" component={TrackingLookupScreen} /><Stack.Screen name="DeliveryTracking" component={DeliveryTrackingScreen} /></> : <Stack.Screen name="SignIn" component={PhoneOtpScreen} />}</Stack.Navigator></NavigationContainer>;
+  return <NavigationContainer><Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>{session ? <><Stack.Screen name="Home" component={HomeScreen} /><Stack.Screen name="Orders" component={OrdersScreen} /><Stack.Screen name="OrderDetails" component={OrderDetailsScreen} /><Stack.Screen name="Notifications" component={NotificationsScreen} /><Stack.Screen name="Addresses" component={AddressListScreen} /><Stack.Screen name="AddressForm" component={AddressFormScreen} /><Stack.Screen name="Cart" component={CartScreen} /><Stack.Screen name="MobileCheckout" component={CheckoutPreparationScreen} /><Stack.Screen name="TrackingLookup" component={TrackingLookupScreen} /><Stack.Screen name="DeliveryTracking" component={DeliveryTrackingScreen} /></> : <Stack.Screen name="SignIn" component={PhoneOtpScreen} />}</Stack.Navigator></NavigationContainer>;
 }
 const styles = StyleSheet.create({ loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background } });

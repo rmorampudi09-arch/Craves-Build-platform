@@ -21,7 +21,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const ACCOUNT_STATUSES = new Set(["ACTIVE", "SUSPENDED"]);
 const ACTIONS = new Set<AdminAccountAction>(["SUSPEND", "REACTIVATE"]);
 const REQUESTED_STATUSES = new Set(["ACTIVE", "SUSPENDED"]);
-const PROVIDER_STATUSES = new Set(["PENDING", "PROCESSING", "COMPLETED", "FAILED", "DEAD_LETTER", "NOT_REQUIRED"]);
+const PROVIDER_STATUSES = new Set([
+  "PENDING", "PROCESSING", "COMPLETED", "FAILED", "DEAD_LETTER", "SUPERSEDED", "NOT_REQUIRED"
+]);
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)

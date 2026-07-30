@@ -50,7 +50,7 @@ put_operation() {
   local ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" HAS_ID="$5"
   local BODY RENDERED POLICY_BODY PARAMETERS='[]'
   BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
-  [[ "$HAS_ID" == "true" ]] && PARAMETERS='[{name:"requestId",type:"string",required:true}]'
+  [[ "$HAS_ID" == "true" ]] && PARAMETERS='[{"name":"requestId","type":"string","required":true}]'
   jq -n --arg display "$DISPLAY" --arg method "$METHOD" --arg template "$TEMPLATE" --argjson params "$PARAMETERS" \
     '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:$params,responses:[{statusCode:200,description:"Audited notification recovery result"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"ADMIN access required"},{statusCode:404,description:"Notification request not found"},{statusCode:409,description:"Recovery conflict"},{statusCode:503,description:"Feature disabled"}]}}' >"$BODY"
   az rest --method put --url "${API_MGMT}/operations/${ID}?api-version=${API_VERSION}" --body @"$BODY" -o none

@@ -42,9 +42,12 @@ public class CashfreeProductionReadinessService {
         if (!StringUtils.hasText(provider.apiVersion())) {
             blockers.add("API_VERSION_NOT_CONFIGURED");
         }
+        boolean configurationReady = blockers.isEmpty() && provider.productionReady();
         return new ReadinessResponse(
             provider.normalizedEnvironment(),
-            blockers.isEmpty() && provider.productionReady(),
+            configurationReady,
+            configurationReady && provider.productionPaymentExecutionEnabled(),
+            provider.productionPaymentExecutionEnabled(),
             webhook.isWorkerEnabled(),
             provider.apiVersion(),
             provider.allowedWebhookVersions().stream().sorted().toList(),
@@ -54,7 +57,9 @@ public class CashfreeProductionReadinessService {
 
     public record ReadinessResponse(
         String environment,
-        boolean productionReady,
+        boolean configurationReady,
+        boolean productionPaymentReady,
+        boolean productionPaymentExecutionEnabled,
         boolean webhookWorkerEnabled,
         String apiVersion,
         List<String> allowedWebhookVersions,

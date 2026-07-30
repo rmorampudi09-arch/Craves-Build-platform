@@ -70,7 +70,7 @@ function coordinate(value: unknown, min: number, max: number): number | null {
   return Number.isFinite(number) && number >= min && number <= max ? number : null;
 }
 
-function parseDocument(value: unknown): ChefProofDocument | null {
+export function parseChefProofDocument(value: unknown): ChefProofDocument | null {
   if (!value || typeof value !== "object") return null;
   const document = value as Record<string, unknown>;
   const id = text(document.id, 64);
@@ -90,7 +90,7 @@ export function parseChefApplication(value: unknown): ChefApplication | null {
   const status = text(application.status, 40) as ChefApplicationStatus | null;
   const id = optionalText(application.id, 64);
   if (!status || !STATUSES.has(status) || (id && !UUID.test(id))) return null;
-  const documents = (Array.isArray(application.documents) ? application.documents.slice(0, 20) : []).map(parseDocument);
+  const documents = (Array.isArray(application.documents) ? application.documents.slice(0, 20) : []).map(parseChefProofDocument);
   if (documents.some(document => document === null)) return null;
   return {
     id,

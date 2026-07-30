@@ -28,12 +28,16 @@ done < <(jq -r '.requiredDisabledByDefaultFlags[]' "$MANIFEST")
 
 REQUIRED_FILES=(
   azure-pipelines-release-readiness-orchestrator.yml
+  azure-pipelines-backend-production-readiness-final.yml
   azure-pipelines-admin-operational-investigations-ci.yml
   azure-pipelines-admin-operational-investigations-apim-ci.yml
   azure-pipelines-admin-account-intervention-web-ci.yml
   azure-pipelines-admin-account-intervention-apim-ci.yml
   azure-pipelines-admin-notification-recovery-web-ci.yml
   azure-pipelines-admin-notification-recovery-apim-ci.yml
+  config/production/azure-resource-inventory.json
+  scripts/release/verify-azure-resource-inventory-references.sh
+  services/auth-service/src/main/resources/db/migration/V5__serialize_account_provider_sync.sql
   docs/handover/2026-07-31-backend-launch-critical-completion.md
   docs/handover/2026-07-31-admin-account-intervention-web.md
   docs/handover/2026-07-31-admin-notification-recovery-web.md

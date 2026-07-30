@@ -1,0 +1,89 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: stage
+    type: string
+    default: push_config
+    values:
+      - push_config
+      - email_config
+      - worker
+  - name: confirmNotificationActivation
+    type: boolean
+    default: false
+  - name: acsSenderAddress
+    type: string
+    default: replace-before-run.invalid
+
+variables:
+  resourceGroup: rg-craves-prodlow-centralindia
+  containerApp: ca-craves-notification-service-pr
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: none
+
+  - ${{ if eq(parameters.confirmNotificationActivation, true) }}:
+    - task: AzureCLI@2
+      displayName: Apply guarded notification provider stage
+      inputs:
+        azureSubscription: $(AZURE_SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          rg='$(resourceGroup)'
+          app='$(containerApp)'
+          stage='${{ parameters.stage }}'
+
+          secrets="$(az containerapp secret list -g "$rg" -n "$app" --query '[].name' -o tsv)"
+          env_json="$(az containerapp show -g "$rg" -n "$app" --query 'properties.template.containers[0].env' -o json)"
+          current() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // .secretRef // "")' <<<"$env_json" | tail -1; }
+
+          case "$stage" in
+            push_config)
+              grep -qx 'firebase-service-account-json-base64' <<<"$secrets" || { echo 'Missing Firebase service-account secret reference.' >&2; exit 2; }
+              [[ "$(current CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED)" != 'true' ]] || { echo 'Disable worker before provider configuration.' >&2; exit 2; }
+              az containerapp update -g "$rg" -n "$app" --set-env-vars \
+                CRAVES_NOTIFICATION_PUSH_ENABLED=true \
+                FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=secretref:firebase-service-account-json-base64 \
+                CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED=false >/dev/null
+              ;;
+            email_config)
+              sender='${{ parameters.acsSenderAddress }}'
+              [[ "$sender" == *@* && "$sender" != *replace-before-run.invalid* ]] || { echo 'A verified ACS sender address is required.' >&2; exit 2; }
+              grep -qx 'acs-email-connection-string' <<<"$secrets" || { echo 'Missing ACS Email connection-string secret reference.' >&2; exit 2; }
+              [[ "$(current CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED)" != 'true' ]] || { echo 'Disable worker before provider configuration.' >&2; exit 2; }
+              az containerapp update -g "$rg" -n "$app" --set-env-vars \
+                CRAVES_NOTIFICATION_EMAIL_ENABLED=true \
+                ACS_EMAIL_CONNECTION_STRING=secretref:acs-email-connection-string \
+                ACS_EMAIL_SENDER_ADDRESS="$sender" \
+                CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED=false >/dev/null
+              ;;
+            worker)
+              push="$(current CRAVES_NOTIFICATION_PUSH_ENABLED)"
+              email="$(current CRAVES_NOTIFICATION_EMAIL_ENABLED)"
+              [[ "$push" == 'true' || "$email" == 'true' ]] || { echo 'Configure at least one provider before enabling worker.' >&2; exit 2; }
+              az containerapp update -g "$rg" -n "$app" --set-env-vars \
+                CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED=true >/dev/null
+              ;;
+          esac
+
+          latest="$(az containerapp show -g "$rg" -n "$app" --query properties.latestRevisionName -o tsv)"
+          for _ in $(seq 1 60); do
+            active="$(az containerapp revision show -g "$rg" -n "$app" --revision "$latest" --query properties.active -o tsv 2>/dev/null || true)"
+            provisioning="$(az containerapp revision show -g "$rg" -n "$app" --revision "$latest" --query properties.provisioningState -o tsv 2>/dev/null || true)"
+            replicas="$(az containerapp revision show -g "$rg" -n "$app" --revision "$latest" --query properties.replicas -o tsv 2>/dev/null || echo 0)"
+            [[ "$active" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] && break
+            sleep 10
+          done
+          [[ "$active" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] || { echo 'Notification revision did not become active.' >&2; exit 2; }
+
+  - ${{ if ne(parameters.confirmNotificationActivation, true) }}:
+    - bash: |
+        echo 'confirmNotificationActivation must be true.' >&2
+        exit 2
+      displayName: Block unconfirmed notification activation

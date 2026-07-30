@@ -20,6 +20,12 @@ parameters:
   - name: apiBaseUrl
     type: string
     default: https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
+  - name: cashfreeMode
+    type: string
+    default: sandbox
+    values:
+      - sandbox
+      - production
 
 variables:
   appPath: apps/customer-web-next
@@ -45,12 +51,14 @@ steps:
           exit 1
         fi
       done
-    displayName: Confirm replacement and Firebase web configuration
+      case "$NEXT_PUBLIC_CASHFREE_MODE" in sandbox|production) ;; *) echo 'ERROR: Cashfree mode must be sandbox or production.' >&2; exit 1 ;; esac
+    displayName: Confirm replacement, Firebase and Cashfree configuration
     env:
       NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: $(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: $(NEXT_PUBLIC_FIREBASE_PROJECT_ID)
       NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
+      NEXT_PUBLIC_CASHFREE_MODE: ${{ parameters.cashfreeMode }}
 
   - task: AzureCLI@2
     displayName: Verify current state and build image
@@ -80,6 +88,7 @@ steps:
           --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="$NEXT_PUBLIC_FIREBASE_APP_ID" \
           --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" \
           --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
+          --build-arg NEXT_PUBLIC_CASHFREE_MODE="$NEXT_PUBLIC_CASHFREE_MODE" \
           -t "$IMAGE" "$(appPath)"
         docker push "$IMAGE"
         echo "NEXT_IMAGE=$IMAGE"
@@ -90,6 +99,7 @@ steps:
       NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
       NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: $(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
       NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
+      NEXT_PUBLIC_CASHFREE_MODE: ${{ parameters.cashfreeMode }}
 
   - task: AzureCLI@2
     displayName: Deploy and verify Next.js customer web
@@ -107,10 +117,7 @@ steps:
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
         PREVIOUS_LATEST=$(az containerapp show -g "$RG" -n "$APP" --query properties.latestRevisionName -o tsv)
-
-        az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" \
-          --set-env-vars CRAVES_API_BASE_URL="$API_BASE_URL" -o none
-
+        az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --set-env-vars CRAVES_API_BASE_URL="$API_BASE_URL" -o none
         for ATTEMPT in $(seq 1 60); do
           APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
           LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")

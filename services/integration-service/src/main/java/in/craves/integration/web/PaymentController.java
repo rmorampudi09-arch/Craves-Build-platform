@@ -28,20 +28,26 @@ public class PaymentController {
 
     @PostMapping("/orders")
     public CreatePaymentOrderResponse createPaymentOrder(
-        @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
         @Valid @RequestBody CreatePaymentOrderRequest request
     ) {
         return paymentService.createPaymentOrder(authorization, request);
     }
 
     @GetMapping("/orders/{paymentOrderId}")
-    public PaymentOrderResponse getPaymentOrder(@PathVariable UUID paymentOrderId) {
-        return paymentService.getPaymentOrder(paymentOrderId);
+    public PaymentOrderResponse getPaymentOrder(
+        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+        @PathVariable UUID paymentOrderId
+    ) {
+        return paymentService.getPaymentOrder(authorization, paymentOrderId);
     }
 
     @PostMapping("/orders/{paymentOrderId}/verify")
-    public VerifyPaymentResponse verifyPayment(@PathVariable UUID paymentOrderId) {
-        return paymentService.verifyPayment(paymentOrderId);
+    public VerifyPaymentResponse verifyPayment(
+        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+        @PathVariable UUID paymentOrderId
+    ) {
+        return paymentService.verifyPayment(authorization, paymentOrderId);
     }
 
     @PostMapping("/webhooks/cashfree")

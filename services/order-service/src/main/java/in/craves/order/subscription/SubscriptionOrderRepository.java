@@ -7,7 +7,6 @@ import in.craves.order.subscription.SubscriptionOrderModels.RequestedData;
 import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
 import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,7 +44,7 @@ public class SubscriptionOrderRepository {
         int totalPackageWeightGrams,
         boolean thermoboxRequired
     ) {
-        int inboxInserted = jdbcTemplate.update(
+        jdbcTemplate.update(
             "INSERT INTO order_schema.subscription_order_request_inbox " +
                 "(event_id, event_type, event_version, correlation_id, causation_id, subject, occurrence_id, subscription_id, payload, processing_status, received_at) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), 'RECEIVED', now()) ON CONFLICT (event_id) DO NOTHING",
@@ -53,12 +52,12 @@ public class SubscriptionOrderRepository {
             event.subject(), event.data().occurrenceId(), event.data().subscriptionId(), rawPayload.toString()
         );
         Optional<UUID> existingOrder = findOrderByOccurrence(event.data().occurrenceId());
-        if (inboxInserted == 0 || existingOrder.isPresent()) {
-            UUID orderId = existingOrder.orElseGet(() -> jdbcTemplate.query(
-                "SELECT order_id FROM order_schema.subscription_order_request_inbox WHERE occurrence_id = ? AND order_id IS NOT NULL",
-                (rs, rowNum) -> rs.getObject("order_id", UUID.class),
-                event.data().occurrenceId()
-            ).stream().findFirst().orElseThrow());
+        if (existingOrder.isPresent()) {
+            UUID orderId = existingOrder.get();
+            jdbcTemplate.update(
+                "UPDATE order_schema.subscription_order_request_inbox SET processing_status = 'DUPLICATE', order_id = ?, processed_at = now() WHERE event_id = ?",
+                orderId, event.eventId()
+            );
             ensureCallback(event.data().occurrenceId(), orderId);
             return new CreatedOrder(orderId, false);
         }

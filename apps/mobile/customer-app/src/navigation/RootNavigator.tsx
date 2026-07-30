@@ -7,6 +7,8 @@ import { AddressFormScreen } from '../screens/AddressFormScreen';
 import { AddressListScreen } from '../screens/AddressListScreen';
 import { CartScreen } from '../screens/CartScreen';
 import { ChefApplicationStatusScreen } from '../screens/ChefApplicationStatusScreen';
+import { ChefKitchenScreen } from '../screens/ChefKitchenScreen';
+import { ChefMenuEditorScreen } from '../screens/ChefMenuEditorScreen';
 import { ChefModeScreen } from '../screens/ChefModeScreen';
 import { ChefWorkspacePendingScreen } from '../screens/ChefWorkspacePendingScreen';
 import { DeliveryTrackingScreen } from '../screens/DeliveryTrackingScreen';
@@ -36,6 +38,7 @@ export type RootStackParamList = {
   ChefMode: undefined;
   ChefApplicationStatus: undefined;
   ChefKitchen: undefined;
+  ChefMenuEditor: { menuItemId?: string } | undefined;
   ChefOrders: undefined;
 };
 
@@ -43,6 +46,6 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function RootNavigator() {
   const { session, initializing } = useAuth();
   if (initializing) return <View style={styles.loading}><ActivityIndicator size="large" color={theme.colors.gold} /></View>;
-  return <NavigationContainer><Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>{session ? <><Stack.Screen name="Home" component={HomeScreen} /><Stack.Screen name="Orders" component={OrdersScreen} /><Stack.Screen name="OrderDetails" component={OrderDetailsScreen} /><Stack.Screen name="Notifications" component={NotificationsScreen} /><Stack.Screen name="Addresses" component={AddressListScreen} /><Stack.Screen name="AddressForm" component={AddressFormScreen} /><Stack.Screen name="Cart" component={CartScreen} /><Stack.Screen name="MobileCheckout" component={MobileCheckoutScreen} /><Stack.Screen name="MobilePayment" component={MobilePaymentScreen} /><Stack.Screen name="TrackingLookup" component={TrackingLookupScreen} /><Stack.Screen name="DeliveryTracking" component={DeliveryTrackingScreen} /><Stack.Screen name="ChefMode" component={ChefModeScreen} /><Stack.Screen name="ChefApplicationStatus" component={ChefApplicationStatusScreen} /><Stack.Screen name="ChefKitchen" component={ChefWorkspacePendingScreen} /><Stack.Screen name="ChefOrders" component={ChefWorkspacePendingScreen} /></> : <Stack.Screen name="SignIn" component={PhoneOtpScreen} />}</Stack.Navigator></NavigationContainer>;
+  return <NavigationContainer><Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>{session ? <><Stack.Screen name="Home" component={HomeScreen} /><Stack.Screen name="Orders" component={OrdersScreen} /><Stack.Screen name="OrderDetails" component={OrderDetailsScreen} /><Stack.Screen name="Notifications" component={NotificationsScreen} /><Stack.Screen name="Addresses" component={AddressListScreen} /><Stack.Screen name="AddressForm" component={AddressFormScreen} /><Stack.Screen name="Cart" component={CartScreen} /><Stack.Screen name="MobileCheckout" component={MobileCheckoutScreen} /><Stack.Screen name="MobilePayment" component={MobilePaymentScreen} /><Stack.Screen name="TrackingLookup" component={TrackingLookupScreen} /><Stack.Screen name="DeliveryTracking" component={DeliveryTrackingScreen} /><Stack.Screen name="ChefMode" component={ChefModeScreen} /><Stack.Screen name="ChefApplicationStatus" component={ChefApplicationStatusScreen} /><Stack.Screen name="ChefKitchen" component={ChefKitchenScreen} /><Stack.Screen name="ChefMenuEditor" component={ChefMenuEditorScreen} /><Stack.Screen name="ChefOrders" component={ChefWorkspacePendingScreen} /></> : <Stack.Screen name="SignIn" component={PhoneOtpScreen} />}</Stack.Navigator></NavigationContainer>;
 }
 const styles = StyleSheet.create({ loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background } });

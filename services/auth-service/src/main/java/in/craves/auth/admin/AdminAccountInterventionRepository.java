@@ -66,6 +66,19 @@ public class AdminAccountInterventionRepository {
             );
         }
 
+        jdbcTemplate.update(
+            """
+            UPDATE auth_admin_intervention
+               SET provider_status = 'SUPERSEDED', provider_lock_token = NULL,
+                   provider_locked_at = NULL, provider_next_attempt_at = now(),
+                   provider_last_error = 'Superseded by a newer administrator intervention',
+                   updated_at = now()
+             WHERE identity_id = ?
+               AND provider_status IN ('PENDING', 'FAILED')
+            """,
+            targetIdentityId
+        );
+
         UUID interventionId = UUID.randomUUID();
         jdbcTemplate.update(
             """
@@ -108,7 +121,7 @@ public class AdminAccountInterventionRepository {
                    provider_last_error, created_at, provider_completed_at, correlation_id
               FROM auth_admin_intervention
              WHERE identity_id = ?
-             ORDER BY created_at DESC
+             ORDER BY created_at DESC, id DESC
              LIMIT 1
             """,
             (rs, rowNum) -> new InterventionRow(
@@ -136,19 +149,51 @@ public class AdminAccountInterventionRepository {
 
     @Transactional
     public List<ProviderWorkItem> claimProviderWork(int batchSize, int maxAttempts, int staleLockMinutes) {
+        jdbcTemplate.update(
+            """
+            UPDATE auth_admin_intervention
+               SET provider_status = 'FAILED', provider_lock_token = NULL,
+                   provider_locked_at = NULL, provider_next_attempt_at = now(),
+                   provider_last_error = COALESCE(provider_last_error, 'Recovered stale provider lease'),
+                   updated_at = now()
+             WHERE provider_status = 'PROCESSING'
+               AND provider_locked_at < now() - (? * INTERVAL '1 minute')
+            """,
+            staleLockMinutes
+        );
+
         UUID lockToken = UUID.randomUUID();
         String sql = """
-            WITH candidates AS (
-                SELECT id
-                  FROM auth_admin_intervention
-                 WHERE provider_attempt_count < ?
-                   AND (
-                       (provider_status IN ('PENDING', 'FAILED') AND provider_next_attempt_at <= now())
-                       OR (provider_status = 'PROCESSING' AND provider_locked_at < now() - (? * INTERVAL '1 minute'))
-                   )
-                 ORDER BY created_at
-                 FOR UPDATE SKIP LOCKED
+            WITH due_identities AS (
+                SELECT identity.id
+                  FROM auth_identity identity
+                 WHERE NOT EXISTS (
+                           SELECT 1
+                             FROM auth_admin_intervention active
+                            WHERE active.identity_id = identity.id
+                              AND active.provider_status = 'PROCESSING'
+                       )
+                   AND EXISTS (
+                           SELECT 1
+                             FROM auth_admin_intervention due
+                            WHERE due.identity_id = identity.id
+                              AND due.provider_attempt_count < ?
+                              AND due.provider_status IN ('PENDING', 'FAILED')
+                              AND due.provider_next_attempt_at <= now()
+                       )
+                 ORDER BY identity.id
+                 FOR UPDATE OF identity SKIP LOCKED
                  LIMIT ?
+            ),
+            candidates AS (
+                SELECT DISTINCT ON (intervention.identity_id) intervention.id
+                  FROM auth_admin_intervention intervention
+                  JOIN due_identities due_identity
+                    ON due_identity.id = intervention.identity_id
+                 WHERE intervention.provider_attempt_count < ?
+                   AND intervention.provider_status IN ('PENDING', 'FAILED')
+                   AND intervention.provider_next_attempt_at <= now()
+                 ORDER BY intervention.identity_id, intervention.created_at DESC, intervention.id DESC
             )
             UPDATE auth_admin_intervention intervention
                SET provider_status = 'PROCESSING', provider_lock_token = ?, provider_locked_at = now(),
@@ -167,21 +212,36 @@ public class AdminAccountInterventionRepository {
                 rs.getString("firebase_uid"), rs.getString("action"),
                 rs.getInt("provider_attempt_count"), rs.getObject("provider_lock_token", UUID.class)
             ),
-            maxAttempts, staleLockMinutes, batchSize, lockToken
+            maxAttempts, batchSize, maxAttempts, lockToken
         );
     }
 
+    public boolean currentProviderDisabled(UUID identityId) {
+        Boolean disabled = jdbcTemplate.queryForObject(
+            "SELECT status = 'SUSPENDED' FROM auth_identity WHERE id = ?",
+            Boolean.class,
+            identityId
+        );
+        if (disabled == null) {
+            throw new IllegalStateException("Identity provider state could not be resolved");
+        }
+        return disabled;
+    }
+
     public void markProviderCompleted(ProviderWorkItem item) {
-        jdbcTemplate.update(
+        int updated = jdbcTemplate.update(
             """
             UPDATE auth_admin_intervention
                SET provider_status = 'COMPLETED', provider_completed_at = now(),
                    provider_lock_token = NULL, provider_locked_at = NULL,
                    provider_last_error = NULL, updated_at = now()
-             WHERE id = ? AND provider_lock_token = ?
+             WHERE id = ? AND provider_lock_token = ? AND provider_status = 'PROCESSING'
             """,
             item.interventionId(), item.lockToken()
         );
+        if (updated != 1) {
+            throw new IllegalStateException("Provider work lease was lost before completion");
+        }
     }
 
     public void markProviderFailure(
@@ -201,7 +261,7 @@ public class AdminAccountInterventionRepository {
                SET provider_status = ?, provider_next_attempt_at = now() + (? * INTERVAL '1 second'),
                    provider_last_error = ?, provider_lock_token = NULL, provider_locked_at = NULL,
                    updated_at = now()
-             WHERE id = ? AND provider_lock_token = ?
+             WHERE id = ? AND provider_lock_token = ? AND provider_status = 'PROCESSING'
             """,
             dead ? "DEAD_LETTER" : "FAILED", dead ? 0L : delay, safe(error == null ? null : error.getMessage()),
             item.interventionId(), item.lockToken()

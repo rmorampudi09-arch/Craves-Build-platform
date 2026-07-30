@@ -24,189 +24,127 @@ pool:
 
 steps:
   - checkout: self
-
   - script: |
       set -euo pipefail
       echo "Build ID: $(Build.BuildId)"
       echo "Source commit: $(Build.SourceVersion)"
       echo "Source branch: $(Build.SourceBranch)"
     displayName: Show immutable build identity
-
   - task: JavaToolInstaller@0
     displayName: Use Java 21
     inputs:
       versionSpec: '21'
       jdkArchitectureOption: x64
       jdkSourceOption: PreInstalled
-
   - script: |
+      set -euo pipefail
       cd $(modulePath)
-      mvn -B clean package
+      mvn -B -ntp clean verify
     displayName: Maven build and tests
 
   - task: AzureCLI@2
-    displayName: Build and push image to ACR
+    displayName: Build and push immutable Integration image
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-        ACR='${{ parameters.acrName }}'
-        TAG='${{ parameters.imageTag }}'
-        IMAGE_REPOSITORY='$(imageRepository)'
+        ACR='${{ parameters.acrName }}'; TAG='${{ parameters.imageTag }}'; IMAGE_REPOSITORY='$(imageRepository)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-
         az acr login --name "$ACR"
-        docker build -t "$IMAGE" "$(modulePath)"
+        docker build --pull -t "$IMAGE" "$(modulePath)"
         docker push "$IMAGE"
-
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Deploy and verify healthy Container App revision
+    displayName: Store Integration database, JWT and internal secrets
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-
-        RG='${{ parameters.resourceGroupName }}'
-        ACR='${{ parameters.acrName }}'
-        APP='${{ parameters.containerAppName }}'
-        TAG='${{ parameters.imageTag }}'
-        IMAGE_REPOSITORY='$(imageRepository)'
-        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
-        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-
-        CURRENT_IMAGE=$(az containerapp show \
-          --name "$APP" \
-          --resource-group "$RG" \
-          --query "properties.template.containers[0].image" \
-          -o tsv)
-
-        echo "Current image: $CURRENT_IMAGE"
-        echo "Target image:  $IMAGE"
-
-        if [[ "$CURRENT_IMAGE" == "$IMAGE" ]]; then
-          echo "ERROR: The target image tag is already configured on the Container App."
-          echo "Start a completely new pipeline run from main instead of rerunning an old run."
-          exit 1
-        fi
-
-        PREVIOUS_LATEST=$(az containerapp show \
-          --name "$APP" \
-          --resource-group "$RG" \
-          --query "properties.latestRevisionName" \
-          -o tsv)
-
-        echo "Revision before deployment: $PREVIOUS_LATEST"
-
-        az containerapp update \
-          --name "$APP" \
-          --resource-group "$RG" \
-          --image "$IMAGE" \
-          --set-env-vars \
-            CRAVES_DELIVERY_COMMAND_ENABLED=false \
-            CRAVES_DELIVERY_RECONCILIATION_ENABLED=false \
-            CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=false \
-            CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=false \
-            CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=false \
-            CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true \
-            BORZO_API_ENABLED=false \
+        set +x
+        RG='${{ parameters.resourceGroupName }}'; APP='${{ parameters.containerAppName }}'
+        DB_PASSWORD='$(POSTGRES_INTEGRATION_DB_PASSWORD)'; JWT_PEM='$(CRAVES_JWT_VERIFICATION_PEM_BASE64)'; INTERNAL_KEY='$(CRAVES_INTERNAL_SERVICE_KEY)'
+        require_value() { local name="$1" value="$2"; [[ -n "$value" && "$value" != "\$($name)" ]] || { echo "ERROR: Secure pipeline variable $name is missing." >&2; exit 1; }; }
+        require_value POSTGRES_INTEGRATION_DB_PASSWORD "$DB_PASSWORD"
+        require_value CRAVES_JWT_VERIFICATION_PEM_BASE64 "$JWT_PEM"
+        require_value CRAVES_INTERNAL_SERVICE_KEY "$INTERNAL_KEY"
+        az containerapp secret set -g "$RG" -n "$APP" --secrets \
+          db-password="$DB_PASSWORD" \
+          jwt-verify-pem="$JWT_PEM" \
+          internal-secret="$INTERNAL_KEY" \
           -o none
+        echo 'Integration secrets stored; values were not printed.'
 
-        echo "Waiting for a new healthy fail-closed revision..."
+  - task: AzureCLI@2
+    displayName: Deploy and verify fully fail-closed Integration revision
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'; ACR='${{ parameters.acrName }}'; APP='${{ parameters.containerAppName }}'; TAG='${{ parameters.imageTag }}'; IMAGE_REPOSITORY='$(imageRepository)'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv); IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+        BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json); PREVIOUS_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$BEFORE"); PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")
+        [[ -n "$PREVIOUS_REVISION" && -n "$PREVIOUS_IMAGE" && "$PREVIOUS_IMAGE" != "$IMAGE" ]] || { echo 'ERROR: Integration deployment state or image tag is invalid.' >&2; exit 1; }
 
-        for ATTEMPT in $(seq 1 60); do
-          APP_JSON=$(az containerapp show \
-            --name "$APP" \
-            --resource-group "$RG" \
-            -o json)
+        az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --set-env-vars \
+          SPRING_PROFILES_ACTIVE=prod \
+          SPRING_DATASOURCE_URL='$(POSTGRES_INTEGRATION_DB_URL)' \
+          SPRING_DATASOURCE_USERNAME='$(POSTGRES_INTEGRATION_DB_USER)' \
+          SPRING_DATASOURCE_PASSWORD=secretref:db-password \
+          CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem \
+          CRAVES_JWT_ISSUER='https://api.craves.in/auth' \
+          CRAVES_JWT_AUDIENCE=craves-api \
+          CRAVES_INTERNAL_SERVICE_KEY=secretref:internal-secret \
+          PAYMENT_PROVIDER_ENVIRONMENT=sandbox \
+          CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED=false \
+          CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED=false \
+          CRAVES_PAYMENT_ORDER_API_ENABLED=false \
+          CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED=false \
+          CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED=false \
+          CRAVES_DELIVERY_INTELLIGENCE_ENABLED=false \
+          CRAVES_DELIVERY_COMMAND_ENABLED=false \
+          CRAVES_DELIVERY_RECONCILIATION_ENABLED=false \
+          CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=false \
+          CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=false \
+          CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=false \
+          CRAVES_REFUND_CONSUMER_ENABLED=false \
+          CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED=false \
+          CRAVES_REFUND_RECONCILIATION_ENABLED=false \
+          CRAVES_REFUND_STATUS_PUBLISHER_ENABLED=false \
+          CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED=false \
+          CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED=false \
+          CRAVES_SUBSCRIPTION_PAYMENT_CONSUMER_ENABLED=false \
+          CRAVES_SUBSCRIPTION_PAYMENT_STATUS_PUBLISHER_ENABLED=false \
+          BORZO_API_ENABLED=false \
+          BORZO_PRODUCTION_ACTIVATION_APPROVED=false \
+          CRAVES_TOKEN_REVOCATION_ENABLED=false \
+          --no-wait -o none
 
-          LATEST_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
-          READY_REVISION=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
-          RUNNING_STATUS=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
-
-          DELIVERY_ENABLED=$(jq -r '
-            [.properties.template.containers[0].env[]?
-             | select(.name == "CRAVES_DELIVERY_COMMAND_ENABLED")][0].value // ""
-          ' <<<"$APP_JSON")
-          RECONCILIATION_ENABLED=$(jq -r '
-            [.properties.template.containers[0].env[]?
-             | select(.name == "CRAVES_DELIVERY_RECONCILIATION_ENABLED")][0].value // ""
-          ' <<<"$APP_JSON")
-          WEBHOOK_ENABLED=$(jq -r '
-            [.properties.template.containers[0].env[]?
-             | select(.name == "CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED")][0].value // ""
-          ' <<<"$APP_JSON")
-          TRACKING_ENABLED=$(jq -r '
-            [.properties.template.containers[0].env[]?
-             | select(.name == "CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED")][0].value // ""
-          ' <<<"$APP_JSON")
-          STATUS_PUBLISHER_ENABLED=$(jq -r '
-            [.properties.template.containers[0].env[]?
-             | select(.name == "CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED")][0].value // ""
-          ' <<<"$APP_JSON")
-          INTELLIGENCE_ENABLED=$(jq -r '
-            [.properties.template.containers[0].env[]?
-             | select(.name == "CRAVES_DELIVERY_INTELLIGENCE_ENABLED")][0].value // ""
-          ' <<<"$APP_JSON")
-          BORZO_ENABLED=$(jq -r '
-            [.properties.template.containers[0].env[]?
-             | select(.name == "BORZO_API_ENABLED")][0].value // ""
-          ' <<<"$APP_JSON")
-
-          LATEST_IMAGE=""
-          HEALTH_STATE=""
-          if [[ -n "$LATEST_REVISION" ]]; then
-            LATEST_IMAGE=$(az containerapp revision show \
-              --name "$APP" \
-              --resource-group "$RG" \
-              --revision "$LATEST_REVISION" \
-              --query "properties.template.containers[0].image" \
-              -o tsv 2>/dev/null || true)
-
-            HEALTH_STATE=$(az containerapp revision show \
-              --name "$APP" \
-              --resource-group "$RG" \
-              --revision "$LATEST_REVISION" \
-              --query "properties.healthState" \
-              -o tsv 2>/dev/null || true)
-          fi
-
-          echo "Attempt $ATTEMPT/60: latest=$LATEST_REVISION ready=$READY_REVISION health=$HEALTH_STATE running=$RUNNING_STATUS delivery=$DELIVERY_ENABLED reconciliation=$RECONCILIATION_ENABLED webhook=$WEBHOOK_ENABLED tracking=$TRACKING_ENABLED statusPublisher=$STATUS_PUBLISHER_ENABLED intelligence=$INTELLIGENCE_ENABLED borzo=$BORZO_ENABLED image=$LATEST_IMAGE"
-
-          if [[ "$LATEST_REVISION" != "$PREVIOUS_LATEST" \
-                && "$LATEST_REVISION" == "$READY_REVISION" \
-                && "$LATEST_IMAGE" == "$IMAGE" \
-                && "$HEALTH_STATE" == "Healthy" \
-                && "$RUNNING_STATUS" == "Running" \
-                && "${DELIVERY_ENABLED,,}" == "false" \
-                && "${RECONCILIATION_ENABLED,,}" == "false" \
-                && "${WEBHOOK_ENABLED,,}" == "false" \
-                && "${TRACKING_ENABLED,,}" == "false" \
-                && "${STATUS_PUBLISHER_ENABLED,,}" == "false" \
-                && "${INTELLIGENCE_ENABLED,,}" == "true" \
-                && "${BORZO_ENABLED,,}" == "false" ]]; then
-            echo "SUCCESS: New Container App revision is healthy, ready, and fail-closed."
-            az containerapp show \
-              --name "$APP" \
-              --resource-group "$RG" \
-              --query "{name:name,runningStatus:properties.runningStatus,latestRevision:properties.latestRevisionName,latestReadyRevision:properties.latestReadyRevisionName,image:properties.template.containers[0].image}" \
-              -o table
+        REQUIRED_FALSE=(CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED CRAVES_PAYMENT_ORDER_API_ENABLED CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED CRAVES_DELIVERY_INTELLIGENCE_ENABLED CRAVES_DELIVERY_COMMAND_ENABLED CRAVES_DELIVERY_RECONCILIATION_ENABLED CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED CRAVES_REFUND_CONSUMER_ENABLED CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED CRAVES_REFUND_RECONCILIATION_ENABLED CRAVES_REFUND_STATUS_PUBLISHER_ENABLED CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED CRAVES_SUBSCRIPTION_PAYMENT_CONSUMER_ENABLED CRAVES_SUBSCRIPTION_PAYMENT_STATUS_PUBLISHER_ENABLED BORZO_API_ENABLED BORZO_PRODUCTION_ACTIVATION_APPROVED CRAVES_TOKEN_REVOCATION_ENABLED)
+        for attempt in $(seq 1 60); do
+          JSON=$(az containerapp show -g "$RG" -n "$APP" -o json); LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON"); READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON"); RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$JSON")
+          LATEST_IMAGE=''; HEALTH=''; if [[ -n "$LATEST" ]]; then LATEST_IMAGE=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || true); HEALTH=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query properties.healthState -o tsv 2>/dev/null || true); fi
+          FLAGS_OK=true; for name in "${REQUIRED_FALSE[@]}"; do value=$(jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$JSON"); [[ "${value,,}" == 'false' ]] || FLAGS_OK=false; done
+          ENVIRONMENT=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "PAYMENT_PROVIDER_ENVIRONMENT")][0].value // ""' <<<"$JSON")
+          ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$JSON"; }
+          DB_REF=$(ref SPRING_DATASOURCE_PASSWORD); JWT_REF=$(ref CRAVES_JWT_VERIFICATION_PEM_BASE64); INTERNAL_REF=$(ref CRAVES_INTERNAL_SERVICE_KEY)
+          echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE flagsOk=$FLAGS_OK providerEnvironment=$ENVIRONMENT dbRef=$DB_REF jwtRef=$JWT_REF internalRef=$INTERNAL_REF"
+          if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$ENVIRONMENT" == 'sandbox' && "$DB_REF" == 'db-password' && "$JWT_REF" == 'jwt-verify-pem' && "$INTERNAL_REF" == 'internal-secret' ]]; then
+            FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON"); [[ -n "$FQDN" ]] || exit 1
+            curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null
+            echo "SUCCESS: Integration revision $LATEST is healthy, secret-bound and all provider/payment/refund/delivery workers are fail-closed. Rollback image: $PREVIOUS_IMAGE"
             exit 0
           fi
-
+          [[ "$HEALTH" != 'Unhealthy' && "$RUNNING" != 'Failed' ]] || { az containerapp logs show -g "$RG" -n "$APP" --revision "$LATEST" --type console --tail 200 --format text || true; exit 1; }
           sleep 10
         done
-
-        echo "ERROR: The new Container App revision did not become healthy and fail-closed within 10 minutes."
-        az containerapp revision list \
-          --name "$APP" \
-          --resource-group "$RG" \
-          --query "[].{revision:name,active:properties.active,health:properties.healthState,replicas:properties.replicas}" \
-          -o table || true
+        echo 'ERROR: Integration revision did not become healthy and fail-closed within 10 minutes.' >&2
         exit 1

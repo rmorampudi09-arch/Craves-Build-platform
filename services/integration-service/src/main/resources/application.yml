@@ -89,6 +89,14 @@ craves:
     stale-lock-seconds: ${CRAVES_REFUND_STALE_LOCK_SECONDS:300}
     status-outbox-batch-size: ${CRAVES_REFUND_STATUS_OUTBOX_BATCH_SIZE:20}
     status-outbox-fixed-delay-ms: ${CRAVES_REFUND_STATUS_OUTBOX_FIXED_DELAY_MS:5000}
+  cashfree:
+    webhook:
+      worker-enabled: ${CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED:false}
+      batch-size: ${CRAVES_CASHFREE_WEBHOOK_BATCH_SIZE:20}
+      fixed-delay-ms: ${CRAVES_CASHFREE_WEBHOOK_FIXED_DELAY_MS:2000}
+      max-attempts: ${CRAVES_CASHFREE_WEBHOOK_MAX_ATTEMPTS:10}
+      stale-minutes: ${CRAVES_CASHFREE_WEBHOOK_STALE_MINUTES:5}
+      retry-base-seconds: ${CRAVES_CASHFREE_WEBHOOK_RETRY_BASE_SECONDS:5}
   providers:
     borzo:
       enabled: ${BORZO_API_ENABLED:false}

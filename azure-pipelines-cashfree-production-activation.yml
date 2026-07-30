@@ -1,0 +1,111 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: activationStage
+    type: string
+    default: webhook
+    values:
+      - webhook
+      - payment_execution
+  - name: confirmCashfreeProductionActivation
+    type: boolean
+    default: false
+  - name: apiVersion
+    type: string
+    default: '2025-01-01'
+  - name: webhookUrl
+    type: string
+    default: https://replace-before-run.invalid
+  - name: expectedWebhookPendingCount
+    type: number
+    default: 0
+  - name: expectedWebhookDeadLetterCount
+    type: number
+    default: 0
+
+variables:
+  resourceGroup: rg-craves-prodlow-centralindia
+  containerApp: ca-craves-integration-service-pr
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: none
+
+  - ${{ if eq(parameters.confirmCashfreeProductionActivation, true) }}:
+    - task: AzureCLI@2
+      displayName: Apply guarded Cashfree production stage
+      env:
+        CRAVES_INTERNAL_SMOKE_SECRET: $(CRAVES_INTERNAL_SMOKE_SECRET)
+      inputs:
+        azureSubscription: $(AZURE_SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          stage='${{ parameters.activationStage }}'
+          webhook_url='${{ parameters.webhookUrl }}'
+          [[ "$webhook_url" == https://* ]] || { echo 'Cashfree webhook URL must use HTTPS.' >&2; exit 2; }
+          [[ "$webhook_url" != *replace-before-run.invalid* ]] || { echo 'Replace the placeholder webhook URL.' >&2; exit 2; }
+          [[ -n "${CRAVES_INTERNAL_SMOKE_SECRET:-}" ]] || { echo 'Secret variable CRAVES_INTERNAL_SMOKE_SECRET is required.' >&2; exit 2; }
+
+          secrets="$(az containerapp secret list -g '$(resourceGroup)' -n '$(containerApp)' --query '[].name' -o tsv)"
+          grep -qx 'cashfree-client-id' <<<"$secrets" || { echo 'Missing secret cashfree-client-id.' >&2; exit 2; }
+          grep -qx 'cashfree-client-key' <<<"$secrets" || { echo 'Missing secret cashfree-client-key.' >&2; exit 2; }
+
+          env_json="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].env' -o json)"
+          current() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // .secretRef // "")' <<<"$env_json" | tail -1; }
+
+          if [[ "$stage" == 'webhook' ]]; then
+            [[ "$(current CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED)" != 'true' ]] || { echo 'Payment execution must be disabled before webhook cutover.' >&2; exit 2; }
+            az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
+              --set-env-vars \
+                PAYMENT_PROVIDER_ENVIRONMENT=production \
+                CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED=true \
+                CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED=false \
+                PAYMENT_PROVIDER_CLIENT_ID=secretref:cashfree-client-id \
+                PAYMENT_PROVIDER_CLIENT_KEY=secretref:cashfree-client-key \
+                PAYMENT_PROVIDER_API_VERSION='${{ parameters.apiVersion }}' \
+                PAYMENT_PROVIDER_WEBHOOK_URL="$webhook_url" \
+                CRAVES_CASHFREE_SANDBOX_REFUND_SIMULATION_STATUS= \
+                CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED=true >/dev/null
+          else
+            [[ "$(current PAYMENT_PROVIDER_ENVIRONMENT)" == 'production' ]] || { echo 'Cashfree environment is not production.' >&2; exit 2; }
+            [[ "$(current CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED)" == 'true' ]] || { echo 'Cashfree production configuration is not approved.' >&2; exit 2; }
+            [[ "$(current CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED)" == 'true' ]] || { echo 'Cashfree webhook worker is not enabled.' >&2; exit 2; }
+            [[ "$(current CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED)" != 'true' ]] || { echo 'Production payment execution is already enabled.' >&2; exit 2; }
+
+            fqdn="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.configuration.ingress.fqdn -o tsv)"
+            [[ -n "$fqdn" ]] || { echo 'Integration Service ingress FQDN is unavailable.' >&2; exit 2; }
+            readiness="$(curl -fsS --connect-timeout 10 --max-time 30 \
+              -H "X-Craves-Internal-Secret: ${CRAVES_INTERNAL_SMOKE_SECRET}" \
+              "https://${fqdn}/internal/v1/payment-provider-readiness")"
+            pending="$(jq -r '.webhookPendingCount' <<<"$readiness")"
+            dead="$(jq -r '.webhookDeadLetterCount' <<<"$readiness")"
+            config_ready="$(jq -r '.configurationReady' <<<"$readiness")"
+            [[ "$pending" == '${{ parameters.expectedWebhookPendingCount }}' ]] || { echo "Unexpected Cashfree webhook pending count: $pending" >&2; exit 2; }
+            [[ "$dead" == '${{ parameters.expectedWebhookDeadLetterCount }}' ]] || { echo "Unexpected Cashfree webhook dead-letter count: $dead" >&2; exit 2; }
+            [[ "$dead" == '0' ]] || { echo 'Cashfree production execution requires an empty webhook dead-letter set.' >&2; exit 2; }
+            [[ "$config_ready" == 'true' ]] || { echo 'Cashfree production configuration readiness is false.' >&2; exit 2; }
+
+            az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
+              --set-env-vars CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED=true >/dev/null
+          fi
+
+          latest="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.latestRevisionName -o tsv)"
+          for _ in $(seq 1 60); do
+            active="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.active -o tsv 2>/dev/null || true)"
+            provisioning="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.provisioningState -o tsv 2>/dev/null || true)"
+            replicas="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.replicas -o tsv 2>/dev/null || echo 0)"
+            [[ "$active" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] && break
+            sleep 10
+          done
+          [[ "$active" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] || { echo 'Cashfree revision did not become active.' >&2; exit 2; }
+
+  - ${{ if ne(parameters.confirmCashfreeProductionActivation, true) }}:
+    - bash: |
+        echo 'confirmCashfreeProductionActivation must be true.' >&2
+        exit 2
+      displayName: Block unconfirmed Cashfree activation

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,10 +59,6 @@ class AdminAccountInterventionRepositoryTest {
         assertThat(sqlCaptor.getAllValues()).anyMatch(sql -> sql.contains("INSERT INTO auth_audit"));
         assertThat(sqlCaptor.getAllValues()).noneMatch(sql -> sql.contains("UPDATE auth_identity"));
         assertThat(sqlCaptor.getAllValues()).noneMatch(sql -> sql.contains("UPDATE refresh_session"));
-        verify(jdbcTemplate, never()).update(
-            org.mockito.ArgumentMatchers.contains("UPDATE auth_identity"),
-            any(Object[].class)
-        );
     }
 
     @Test

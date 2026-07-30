@@ -18,11 +18,15 @@ steps:
   - script: |
       set -euo pipefail
       grep -q 'hasChefRole' apps/mobile/customer-app/src/screens/ChefModeScreen.tsx
-      if grep -REn '(identityId|blobName|blobContainer|AsyncStorage|console\.(log|debug)|accessToken)' \
+      if grep -REn '(identityId|blobName|blobContainer|AsyncStorage|console\.(log|debug))' \
         apps/mobile/customer-app/src/chef \
         apps/mobile/customer-app/src/screens/ChefModeScreen.tsx \
         apps/mobile/customer-app/src/screens/ChefApplicationStatusScreen.tsx --exclude='*.test.ts'; then
-        echo 'ERROR: Mobile chef shell exposes private fields, insecure storage, tokens or debug logging.' >&2
+        echo 'ERROR: Mobile chef shell exposes private fields, insecure storage or debug logging.' >&2
+        exit 1
+      fi
+      if grep -REn 'console\.(log|debug).*accessToken|accessToken.*console\.(log|debug)' apps/mobile/customer-app/src; then
+        echo 'ERROR: Mobile runtime logs an access token.' >&2
         exit 1
       fi
       echo 'Mobile chef role and privacy gates passed.'

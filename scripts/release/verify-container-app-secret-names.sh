@@ -33,7 +33,7 @@ for logical_name, secret_name in names.items():
 
 # Parse only literal keys supplied to `az containerapp secret set --secrets`.
 # Existing Key Vault-backed secrets created through earlier infrastructure are not renamed here.
-assignment = re.compile(r"^\s*([a-z0-9][a-z0-9-]*)=\")
+assignment = re.compile(r"^\s*([a-z0-9][a-z0-9-]*)=")
 for pipeline in sorted(root.glob("azure-pipelines*.yml")):
     lines = pipeline.read_text(encoding="utf-8").splitlines()
     in_secret_set = False

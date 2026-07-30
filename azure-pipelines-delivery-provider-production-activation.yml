@@ -1,0 +1,111 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: activationStage
+    type: string
+    default: downstream
+    values:
+      - downstream
+      - provider_create
+  - name: confirmProductionActivation
+    type: boolean
+    default: false
+  - name: providerBaseUrl
+    type: string
+    default: https://replace-before-run.invalid
+  - name: callbackUrl
+    type: string
+    default: https://replace-before-run.invalid
+  - name: expectedQueueActiveCount
+    type: number
+    default: 0
+  - name: expectedQueueDeadLetterCount
+    type: number
+    default: 0
+
+variables:
+  resourceGroup: rg-craves-prodlow-centralindia
+  containerApp: ca-craves-integration-service-pr
+  serviceBusNamespace: sb-craves-prodlow-l3ing6
+  deliveryQueue: delivery-command
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: none
+
+  - ${{ if eq(parameters.confirmProductionActivation, true) }}:
+    - task: AzureCLI@2
+      displayName: Apply guarded delivery production stage
+      inputs:
+        azureSubscription: $(AZURE_SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          stage='${{ parameters.activationStage }}'
+          base_url='${{ parameters.providerBaseUrl }}'
+          callback_url='${{ parameters.callbackUrl }}'
+
+          [[ "$base_url" == https://* ]] || { echo 'Provider base URL must use HTTPS.' >&2; exit 2; }
+          [[ "$callback_url" == https://* ]] || { echo 'Callback URL must use HTTPS.' >&2; exit 2; }
+          [[ "$base_url" != *test* && "$base_url" != *sandbox* ]] || { echo 'Production activation cannot use a test host.' >&2; exit 2; }
+
+          secrets="$(az containerapp secret list -g '$(resourceGroup)' -n '$(containerApp)' --query '[].name' -o tsv)"
+          grep -qx 'borzo-api-auth-token' <<<"$secrets" || { echo 'Missing Container App secret borzo-api-auth-token.' >&2; exit 2; }
+          grep -qx 'borzo-callback-token' <<<"$secrets" || { echo 'Missing Container App secret borzo-callback-token.' >&2; exit 2; }
+
+          active="$(az servicebus queue show -g '$(resourceGroup)' --namespace-name '$(serviceBusNamespace)' -n '$(deliveryQueue)' --query countDetails.activeMessageCount -o tsv)"
+          dead="$(az servicebus queue show -g '$(resourceGroup)' --namespace-name '$(serviceBusNamespace)' -n '$(deliveryQueue)' --query countDetails.deadLetterMessageCount -o tsv)"
+          [[ "$active" == '${{ parameters.expectedQueueActiveCount }}' ]] || { echo "Unexpected delivery queue active count: $active" >&2; exit 2; }
+          [[ "$dead" == '${{ parameters.expectedQueueDeadLetterCount }}' ]] || { echo "Unexpected delivery queue DLQ count: $dead" >&2; exit 2; }
+
+          env_json="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].env' -o json)"
+          current() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // .secretRef // "")' <<<"$env_json" | tail -1; }
+
+          [[ "$(current BORZO_API_ENABLED)" == 'false' ]] || { echo 'Borzo must be disabled before staged activation.' >&2; exit 2; }
+          [[ "$(current CRAVES_DELIVERY_COMMAND_ENABLED)" == 'false' ]] || { echo 'Delivery command must be disabled before staged activation.' >&2; exit 2; }
+
+          if [[ "$stage" == 'downstream' ]]; then
+            az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
+              --set-env-vars \
+                BORZO_API_ENVIRONMENT=PRODUCTION \
+                BORZO_PRODUCTION_ACTIVATION_APPROVED=true \
+                BORZO_API_BASE_URL="$base_url" \
+                BORZO_CALLBACK_URL="$callback_url" \
+                BORZO_API_AUTH_TOKEN=secretref:borzo-api-auth-token \
+                BORZO_CALLBACK_TOKEN=secretref:borzo-callback-token \
+                BORZO_API_ENABLED=false \
+                CRAVES_DELIVERY_COMMAND_ENABLED=false \
+                CRAVES_DELIVERY_RECONCILIATION_ENABLED=true \
+                CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=true \
+                CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=true \
+                CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=true \
+                CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+          else
+            for name in CRAVES_DELIVERY_RECONCILIATION_ENABLED CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED; do
+              [[ "$(current "$name")" == 'true' ]] || { echo "$name must already be true." >&2; exit 2; }
+            done
+            [[ "$(current BORZO_API_ENVIRONMENT)" == 'PRODUCTION' ]] || { echo 'Borzo environment is not PRODUCTION.' >&2; exit 2; }
+            [[ "$(current BORZO_PRODUCTION_ACTIVATION_APPROVED)" == 'true' ]] || { echo 'Production approval flag is not true.' >&2; exit 2; }
+            az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
+              --set-env-vars BORZO_API_ENABLED=true CRAVES_DELIVERY_COMMAND_ENABLED=true CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+          fi
+
+          latest="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.latestRevisionName -o tsv)"
+          for _ in $(seq 1 60); do
+            active_revision="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.active -o tsv 2>/dev/null || true)"
+            provisioning="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.provisioningState -o tsv 2>/dev/null || true)"
+            replicas="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.replicas -o tsv 2>/dev/null || echo 0)"
+            [[ "$active_revision" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] && break
+            sleep 10
+          done
+          [[ "$active_revision" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] || { echo 'New revision did not become active and provisioned.' >&2; exit 2; }
+
+  - ${{ if ne(parameters.confirmProductionActivation, true) }}:
+    - bash: |
+        echo 'confirmProductionActivation must be true.' >&2
+        exit 2
+      displayName: Block unconfirmed activation

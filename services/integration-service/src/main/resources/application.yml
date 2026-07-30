@@ -92,9 +92,12 @@ craves:
   providers:
     borzo:
       enabled: ${BORZO_API_ENABLED:false}
+      environment: ${BORZO_API_ENVIRONMENT:SANDBOX}
+      production-activation-approved: ${BORZO_PRODUCTION_ACTIVATION_APPROVED:false}
       base-url: ${BORZO_API_BASE_URL:https://robotapitest-in.borzodelivery.com/api/business/1.8}
       auth-token: ${BORZO_API_AUTH_TOKEN:}
       callback-secret: ${BORZO_CALLBACK_TOKEN:}
+      callback-url: ${BORZO_CALLBACK_URL:}
       connect-timeout-seconds: ${BORZO_CONNECT_TIMEOUT_SECONDS:5}
       read-timeout-seconds: ${BORZO_READ_TIMEOUT_SECONDS:20}
       reconciliation-page-size: ${BORZO_RECONCILIATION_PAGE_SIZE:50}

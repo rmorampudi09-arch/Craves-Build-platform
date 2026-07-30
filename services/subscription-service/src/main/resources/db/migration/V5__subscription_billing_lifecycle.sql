@@ -7,6 +7,24 @@ UPDATE subscription_schema.customer_subscription
    SET next_billing_date = start_date
  WHERE next_billing_date IS NULL;
 
+CREATE OR REPLACE FUNCTION subscription_schema.initialize_next_billing_date()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.next_billing_date IS NULL THEN
+        NEW.next_billing_date := NEW.start_date;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_initialize_next_billing_date
+BEFORE INSERT OR UPDATE OF start_date
+ON subscription_schema.customer_subscription
+FOR EACH ROW
+EXECUTE FUNCTION subscription_schema.initialize_next_billing_date();
+
 CREATE INDEX ix_customer_subscription_billing_due
     ON subscription_schema.customer_subscription (status, next_billing_date, billing_locked_at)
     WHERE status IN ('PENDING_PAYMENT', 'ACTIVE', 'PAYMENT_FAILED') AND next_billing_date IS NOT NULL;

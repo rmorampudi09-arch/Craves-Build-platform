@@ -54,11 +54,29 @@ class AdminAccountInterventionRepositoryTest {
         assertThat(response.correlationId()).isEqualTo(correlationId);
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(jdbcTemplate, times(2)).update(sqlCaptor.capture(), any(Object[].class));
+        verify(jdbcTemplate, times(3)).update(sqlCaptor.capture(), any(Object[].class));
+        assertThat(sqlCaptor.getAllValues()).anyMatch(sql -> sql.contains("provider_status = 'SUPERSEDED'"));
         assertThat(sqlCaptor.getAllValues()).anyMatch(sql -> sql.contains("INSERT INTO auth_admin_intervention"));
         assertThat(sqlCaptor.getAllValues()).anyMatch(sql -> sql.contains("INSERT INTO auth_audit"));
         assertThat(sqlCaptor.getAllValues()).noneMatch(sql -> sql.contains("UPDATE auth_identity"));
         assertThat(sqlCaptor.getAllValues()).noneMatch(sql -> sql.contains("UPDATE refresh_session"));
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Test
+    void providerClaimLocksIdentityAndSelectsOnlyLatestDueIntervention() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(0);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(List.of());
+
+        AdminAccountInterventionRepository repository = new AdminAccountInterventionRepository(jdbcTemplate);
+        assertThat(repository.claimProviderWork(20, 8, 5)).isEmpty();
+
+        ArgumentCaptor<String> queryCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).query(queryCaptor.capture(), any(RowMapper.class), any(Object[].class));
+        assertThat(queryCaptor.getValue()).contains("FOR UPDATE OF identity SKIP LOCKED");
+        assertThat(queryCaptor.getValue()).contains("DISTINCT ON (intervention.identity_id)");
+        assertThat(queryCaptor.getValue()).contains("ORDER BY intervention.identity_id, intervention.created_at DESC");
     }
 
     @Test

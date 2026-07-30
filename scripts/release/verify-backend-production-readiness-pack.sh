@@ -14,12 +14,14 @@ while IFS= read -r SERVICE; do
   [[ -f "$ROOT/$SERVICE/Dockerfile" ]] || fail "Dockerfile is missing: $SERVICE"
 done < <(jq -r '.services[]' "$MANIFEST")
 
-APPLICATION_FILES=$(find "$ROOT/services" -path '*/src/main/resources/application.yml' -type f -print)
-[[ -n "$APPLICATION_FILES" ]] || fail "No service application.yml files were found"
+mapfile -t APPLICATION_FILES < <(find "$ROOT/services" -path '*/src/main/resources/application.yml' -type f -print)
+(( ${#APPLICATION_FILES[@]} > 0 )) || fail "No service application.yml files were found"
+mapfile -t PIPELINE_FILES < <(find "$ROOT" -maxdepth 1 -type f -name 'azure-pipelines*.yml' -print)
+(( ${#PIPELINE_FILES[@]} > 0 )) || fail "No Azure pipeline definitions were found"
 while IFS= read -r FLAG; do
-  grep -Rqs "$FLAG" "$ROOT/services" "$ROOT"/azure-pipelines*.yml \
+  grep -Rqs -- "$FLAG" "$ROOT/services" "${PIPELINE_FILES[@]}" \
     || fail "Required safety flag is not represented in service source or pipeline controls: $FLAG"
-  if grep -REn "\\$\\{${FLAG}:(true|TRUE)\\}" $APPLICATION_FILES; then
+  if grep -En "\$\{${FLAG}:(true|TRUE)\}" "${APPLICATION_FILES[@]}"; then
     fail "Safety flag defaults true in application.yml: $FLAG"
   fi
 done < <(jq -r '.requiredDisabledByDefaultFlags[]' "$MANIFEST")

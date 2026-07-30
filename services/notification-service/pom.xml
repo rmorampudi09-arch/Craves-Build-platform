@@ -19,6 +19,7 @@
     <properties>
         <java.version>21</java.version>
         <azure.servicebus.version>7.17.9</azure.servicebus.version>
+        <azure.communication.email.version>1.1.2</azure.communication.email.version>
         <firebase-admin.version>9.4.3</firebase-admin.version>
     </properties>
 
@@ -47,6 +48,11 @@
             <groupId>com.google.firebase</groupId>
             <artifactId>firebase-admin</artifactId>
             <version>${firebase-admin.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-communication-email</artifactId>
+            <version>${azure.communication.email.version}</version>
         </dependency>
         <dependency>
             <groupId>com.azure</groupId>

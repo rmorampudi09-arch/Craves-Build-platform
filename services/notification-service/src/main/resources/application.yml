@@ -48,3 +48,6 @@ craves:
       firebase-service-account-json-base64: ${FIREBASE_SERVICE_ACCOUNT_JSON_BASE64:}
       acs-email-connection-string: ${ACS_EMAIL_CONNECTION_STRING:}
       acs-email-sender-address: ${ACS_EMAIL_SENDER_ADDRESS:}
+  notification-recovery:
+    api-enabled: ${CRAVES_NOTIFICATION_RECOVERY_API_ENABLED:false}
+    maximum-list-size: ${CRAVES_NOTIFICATION_RECOVERY_MAXIMUM_LIST_SIZE:100}

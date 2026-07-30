@@ -34,7 +34,7 @@ stages:
   - stage: JavaVerification
     displayName: Seven-service Java verification
     dependsOn: SourceIntegrity
-    condition: and(succeeded(), eq('${{ parameters.runFullJavaSuite }}', 'true'))
+    condition: and(succeeded(), eq(${{ parameters.runFullJavaSuite }}, true))
     jobs:
       - job: BuildServices
         timeoutInMinutes: 60
@@ -58,7 +58,7 @@ stages:
   - stage: AdminWebVerification
     displayName: Administrator web verification
     dependsOn: SourceIntegrity
-    condition: and(succeeded(), eq('${{ parameters.runAdminWebSuite }}', 'true'))
+    condition: and(succeeded(), eq(${{ parameters.runAdminWebSuite }}, true))
     jobs:
       - job: BuildAdminWeb
         timeoutInMinutes: 30

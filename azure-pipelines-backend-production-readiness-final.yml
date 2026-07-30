@@ -9,7 +9,7 @@ stages:
     displayName: Source and safety integrity
     jobs:
       - job: VerifyPack
-        timeoutInMinutes: 20
+        timeoutInMinutes: 25
         steps:
           - checkout: self
             fetchDepth: 0
@@ -17,8 +17,11 @@ stages:
               set -euo pipefail
               jq -e . config/production/backend-production-readiness.json >/dev/null
               jq -e . config/production/azure-resource-inventory.json >/dev/null
+              jq -e . config/production/container-app-secret-names.json >/dev/null
               bash scripts/release/verify-backend-production-readiness-pack.sh
               bash scripts/release/verify-azure-resource-inventory-references.sh
+              bash scripts/release/verify-container-app-secret-names.sh
+              bash scripts/release/verify-seven-service-deployment-contracts.sh
               bash scripts/release/generate-backend-production-run-plan.sh "$(Build.ArtifactStagingDirectory)/backend-production-run-plan.md"
 
               while IFS= read -r script; do
@@ -35,7 +38,7 @@ stages:
                   ET.parse(policy)
                   print(f'XML_OK {policy}')
               PY
-            displayName: Verify manifests, inventory, scripts and APIM XML
+            displayName: Verify manifests, inventory, secrets, deployments, scripts and APIM XML
           - task: PublishPipelineArtifact@1
             inputs:
               targetPath: $(Build.ArtifactStagingDirectory)/backend-production-run-plan.md

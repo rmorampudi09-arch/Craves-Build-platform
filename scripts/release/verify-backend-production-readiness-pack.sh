@@ -29,6 +29,13 @@ done < <(jq -r '.requiredDisabledByDefaultFlags[]' "$MANIFEST")
 REQUIRED_FILES=(
   azure-pipelines-release-readiness-orchestrator.yml
   azure-pipelines-backend-production-readiness-final.yml
+  azure-pipelines-auth-service.yml
+  azure-pipelines-user-chef-service.yml
+  azure-pipelines-catalog-service.yml
+  azure-pipelines-order-service.yml
+  azure-pipelines-subscription-service.yml
+  azure-pipelines-integration-service.yml
+  azure-pipelines-notification-service.yml
   azure-pipelines-admin-operational-investigations-ci.yml
   azure-pipelines-admin-operational-investigations-apim-ci.yml
   azure-pipelines-admin-account-intervention-web-ci.yml
@@ -36,8 +43,15 @@ REQUIRED_FILES=(
   azure-pipelines-admin-notification-recovery-web-ci.yml
   azure-pipelines-admin-notification-recovery-apim-ci.yml
   config/production/azure-resource-inventory.json
+  config/production/container-app-secret-names.json
   scripts/release/verify-azure-resource-inventory-references.sh
+  scripts/release/verify-container-app-secret-names.sh
+  scripts/release/verify-seven-service-deployment-contracts.sh
   services/auth-service/src/main/resources/db/migration/V5__serialize_account_provider_sync.sql
+  services/auth-service/src/test/java/in/craves/auth/admin/AdminAccountInterventionRepositoryTest.java
+  services/notification-service/src/test/java/in/craves/notification/delivery/NotificationDeliveryRepositoryTest.java
+  services/integration-service/src/main/java/in/craves/integration/config/PaymentApiProperties.java
+  services/integration-service/src/test/java/in/craves/integration/config/PaymentApiPropertiesTest.java
   docs/handover/2026-07-31-backend-launch-critical-completion.md
   docs/handover/2026-07-31-admin-account-intervention-web.md
   docs/handover/2026-07-31-admin-notification-recovery-web.md

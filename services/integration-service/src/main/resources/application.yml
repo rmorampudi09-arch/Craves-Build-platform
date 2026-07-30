@@ -75,6 +75,8 @@ craves:
     provider-execution-enabled: ${CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED:false}
     reconciliation-enabled: ${CRAVES_REFUND_RECONCILIATION_ENABLED:false}
     status-publisher-enabled: ${CRAVES_REFUND_STATUS_PUBLISHER_ENABLED:false}
+    production-provider-execution-approved: ${CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED:false}
+    production-reconciliation-approved: ${CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED:false}
     fully-qualified-namespace: ${SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
     connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
     topic-name: ${SERVICE_BUS_TOPIC_NAME:craves-domain-events}

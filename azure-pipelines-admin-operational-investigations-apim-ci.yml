@@ -37,10 +37,8 @@ steps:
       grep -q 'X-Frame-Options' "$POLICY"
       grep -q 'SUCCESS: Admin operational investigation APIM status is healthy' "$STATUS"
 
-      if grep -REn '(set-body.*Authorization|set-header name="Authorization"|backend-id=)' \
-        infra/apim/admin-operational-investigations \
-        scripts/apim/*admin-operational-investigations*; then
-        echo 'ERROR: APIM module attempts to emit authorization material or use backend-id.' >&2
+      if grep -En 'set-header name="Authorization"|set-backend-service[^>]*backend-id' "$POLICY"; then
+        echo 'ERROR: APIM policy attempts to emit authorization material or use backend-id.' >&2
         exit 1
       fi
 

@@ -7,7 +7,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/craves_business_db}
     username: ${SPRING_DATASOURCE_USERNAME:cravesadmin}
-    password: ${SPRING_DATASOURCE_PASSWORD:craves}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -18,7 +18,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       probes:
@@ -26,8 +26,8 @@ management:
 
 craves:
   jwt:
-    issuer: ${CRAVES_JWT_ISSUER:craves-auth-service}
-    audience: ${CRAVES_JWT_AUDIENCE:craves-clients}
+    issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
+    audience: ${CRAVES_JWT_AUDIENCE:craves-api}
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
   internal:
     service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}
@@ -36,7 +36,15 @@ craves:
     connection-string: ${CRAVES_SERVICEBUS_CONNECTION_STRING:}
     notification-queue-name: ${CRAVES_NOTIFICATION_QUEUE_NAME:notification-command}
   notification:
-    email-enabled: ${CRAVES_EMAIL_ENABLED:false}
-    push-enabled: ${CRAVES_PUSH_ENABLED:false}
-    sms-enabled: ${CRAVES_SMS_ENABLED:false}
-    from-email: ${CRAVES_NOTIFICATION_FROM_EMAIL:}
+    delivery:
+      worker-enabled: ${CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED:false}
+      push-enabled: ${CRAVES_NOTIFICATION_PUSH_ENABLED:false}
+      email-enabled: ${CRAVES_NOTIFICATION_EMAIL_ENABLED:false}
+      batch-size: ${CRAVES_NOTIFICATION_DELIVERY_BATCH_SIZE:50}
+      max-attempts: ${CRAVES_NOTIFICATION_DELIVERY_MAX_ATTEMPTS:8}
+      stale-lock-minutes: ${CRAVES_NOTIFICATION_DELIVERY_STALE_LOCK_MINUTES:5}
+      retry-base-seconds: ${CRAVES_NOTIFICATION_DELIVERY_RETRY_BASE_SECONDS:30}
+      fixed-delay-ms: ${CRAVES_NOTIFICATION_DELIVERY_FIXED_DELAY_MS:5000}
+      firebase-service-account-json-base64: ${FIREBASE_SERVICE_ACCOUNT_JSON_BASE64:}
+      acs-email-connection-string: ${ACS_EMAIL_CONNECTION_STRING:}
+      acs-email-sender-address: ${ACS_EMAIL_SENDER_ADDRESS:}

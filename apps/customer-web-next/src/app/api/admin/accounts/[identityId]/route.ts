@@ -27,7 +27,7 @@ function statusCode(status: number): string {
 }
 
 async function identityId(context: Context): Promise<string | null> {
-  const value = (await context.params).identityId.trim();
+  const value = (await context.params).identityId.trim().toLowerCase();
   return UUID.test(value) ? value : null;
 }
 
@@ -39,8 +39,10 @@ export async function GET(request: NextRequest, context: Context) {
     const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return failure(upstream.status, statusCode(upstream.status));
     const result = parseAdminAccountInterventionStatus(body);
-    return result ? NextResponse.json(result, { headers: { "Cache-Control": "no-store" } })
-      : failure(502, "INVALID_ACCOUNT_INTERVENTION_RESPONSE");
+    if (!result || result.identityId !== id) {
+      return failure(502, "INVALID_ACCOUNT_INTERVENTION_RESPONSE");
+    }
+    return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return error instanceof SessionRequiredError
       ? failure(401, "AUTHENTICATION_REQUIRED")
@@ -64,7 +66,9 @@ export async function POST(request: NextRequest, context: Context) {
     const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return failure(upstream.status, statusCode(upstream.status));
     const result = parseAdminAccountInterventionStatus(body);
-    if (!result) return failure(502, "INVALID_ACCOUNT_INTERVENTION_RESPONSE");
+    if (!result || result.identityId !== id || result.action !== input.action) {
+      return failure(502, "INVALID_ACCOUNT_INTERVENTION_RESPONSE");
+    }
     return NextResponse.json(result, {
       headers: {
         "Cache-Control": "no-store",

@@ -50,11 +50,15 @@ public class RedisTokenRevocationWebConfiguration implements WebMvcConfigurer {
     private final class RevocationInterceptor implements HandlerInterceptor {
         @Override
         public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+            String authorization = request.getHeader("Authorization");
+            if (authorization == null || !authorization.startsWith("Bearer ")) {
+                return true;
+            }
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication == null || !authentication.isAuthenticated()) {
                 return true;
             }
-            TokenIdentity tokenIdentity = tokenIdentity(request.getHeader("Authorization"));
+            TokenIdentity tokenIdentity = tokenIdentity(authorization);
             String projection;
             try {
                 projection = redisTemplate.opsForValue().get(keyPrefix + ":" + tokenIdentity.identityId());
@@ -85,9 +89,6 @@ public class RedisTokenRevocationWebConfiguration implements WebMvcConfigurer {
     }
 
     private TokenIdentity tokenIdentity(String authorization) {
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
-        }
         try {
             String[] parts = authorization.substring(7).trim().split("\\.");
             if (parts.length != 3) {

@@ -1,0 +1,69 @@
+export type MobileSubscriptionPlan = {
+  id: string;
+  planCode: string;
+  name: string;
+  description: string | null;
+  billingPeriod: 'WEEKLY' | 'MONTHLY';
+  amount: number;
+  currency: string;
+};
+
+export type MobileSubscriptionStatus = 'PENDING_PAYMENT' | 'ACTIVE' | 'PAUSED' | 'PAYMENT_FAILED' | 'EXPIRED' | 'CANCELLED';
+
+export type MobileSubscription = {
+  id: string;
+  planId: string;
+  status: MobileSubscriptionStatus;
+  startDate: string;
+  endDate: string | null;
+  nextServiceDate: string | null;
+  deliveryAddressId: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const PERIODS = new Set(['WEEKLY', 'MONTHLY']);
+const STATUSES = new Set(['PENDING_PAYMENT', 'ACTIVE', 'PAUSED', 'PAYMENT_FAILED', 'EXPIRED', 'CANCELLED']);
+
+function text(value: unknown, max: number): string | null {
+  if (typeof value !== 'string') return null;
+  const result = value.trim();
+  return result && result.length <= max ? result : null;
+}
+function optionalText(value: unknown, max: number): string | null { return value == null || value === '' ? null : text(value, max); }
+function dateOnly(value: unknown): string | null { return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null; }
+function instant(value: unknown): string | null { return typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null; }
+
+export function parseMobileSubscriptionPlan(value: unknown): MobileSubscriptionPlan | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const id = text(raw.id, 64); const planCode = text(raw.planCode, 80); const name = text(raw.name, 160);
+  const billingPeriod = text(raw.billingPeriod, 20); const amount = typeof raw.amount === 'number' ? raw.amount : Number(raw.amount);
+  const currency = text(raw.currency, 3)?.toUpperCase() ?? null;
+  if (!id || !UUID.test(id) || !planCode || !name || !billingPeriod || !PERIODS.has(billingPeriod) || !Number.isFinite(amount) || amount < 0 || !currency || !/^[A-Z]{3}$/.test(currency)) return null;
+  return { id, planCode, name, description: optionalText(raw.description, 2000), billingPeriod: billingPeriod as MobileSubscriptionPlan['billingPeriod'], amount, currency };
+}
+
+export function parseMobileSubscriptionPlans(value: unknown): MobileSubscriptionPlan[] | null {
+  if (!Array.isArray(value) || value.length > 500) return null;
+  const parsed = value.map(parseMobileSubscriptionPlan);
+  return parsed.some(item => item === null) ? null : parsed as MobileSubscriptionPlan[];
+}
+
+export function parseMobileSubscription(value: unknown): MobileSubscription | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const id = text(raw.id, 64); const planId = text(raw.planId, 64); const status = text(raw.status, 40);
+  const startDate = dateOnly(raw.startDate); const createdAt = instant(raw.createdAt); const updatedAt = instant(raw.updatedAt);
+  const deliveryAddressId = optionalText(raw.deliveryAddressId, 64);
+  if (!id || !UUID.test(id) || !planId || !UUID.test(planId) || !status || !STATUSES.has(status) || !startDate || !createdAt || !updatedAt || (deliveryAddressId && !UUID.test(deliveryAddressId))) return null;
+  return { id, planId, status: status as MobileSubscriptionStatus, startDate, endDate: raw.endDate == null ? null : dateOnly(raw.endDate), nextServiceDate: raw.nextServiceDate == null ? null : dateOnly(raw.nextServiceDate), deliveryAddressId, notes: optionalText(raw.notes, 2000), createdAt, updatedAt };
+}
+
+export function parseMobileSubscriptions(value: unknown): MobileSubscription[] | null {
+  if (!Array.isArray(value) || value.length > 500) return null;
+  const parsed = value.map(parseMobileSubscription);
+  return parsed.some(item => item === null) ? null : parsed as MobileSubscription[];
+}

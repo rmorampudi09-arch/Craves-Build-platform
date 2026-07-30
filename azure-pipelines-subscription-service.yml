@@ -65,21 +65,27 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        set +x
         RG='${{ parameters.resourceGroupName }}'
         APP='${{ parameters.containerAppName }}'
         DB_PASSWORD='$(POSTGRES_BUSINESS_DB_PASSWORD)'
         JWT_PEM='$(CRAVES_JWT_VERIFICATION_PEM_BASE64)'
         INTERNAL_SECRET='$(CRAVES_INTERNAL_SERVICE_SECRET)'
-        for value_name in DB_PASSWORD JWT_PEM INTERNAL_SECRET; do
-          value="${!value_name}"
-          [[ -n "$value" && "$value" != '$('*')' ]] || { echo "ERROR: Required secure pipeline variable $value_name is missing." >&2; exit 1; }
-        done
+        require_value() {
+          local variable_name="$1" value="$2"
+          [[ -n "$value" && "$value" != "\$($variable_name)" ]] || {
+            echo "ERROR: Secure pipeline variable $variable_name is missing." >&2
+            exit 1
+          }
+        }
+        require_value POSTGRES_BUSINESS_DB_PASSWORD "$DB_PASSWORD"
+        require_value CRAVES_JWT_VERIFICATION_PEM_BASE64 "$JWT_PEM"
+        require_value CRAVES_INTERNAL_SERVICE_SECRET "$INTERNAL_SECRET"
         az containerapp secret set -g "$RG" -n "$APP" --secrets \
-          spring-datasource-password="$DB_PASSWORD" \
-          craves-jwt-verification-pem-base64="$JWT_PEM" \
-          craves-internal-service-secret="$INTERNAL_SECRET" \
+          db-password="$DB_PASSWORD" \
+          jwt-verify-pem="$JWT_PEM" \
+          internal-secret="$INTERNAL_SECRET" \
           -o none
-        set +x
         echo 'Subscription Container App secrets stored; values were not printed.'
 
   - task: AzureCLI@2
@@ -113,9 +119,9 @@ steps:
             SPRING_PROFILES_ACTIVE=prod \
             SPRING_DATASOURCE_URL='$(POSTGRES_BUSINESS_DB_URL)' \
             SPRING_DATASOURCE_USERNAME='$(POSTGRES_BUSINESS_DB_USER)' \
-            SPRING_DATASOURCE_PASSWORD=secretref:spring-datasource-password \
-            CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:craves-jwt-verification-pem-base64 \
-            CRAVES_INTERNAL_SERVICE_SECRET=secretref:craves-internal-service-secret \
+            SPRING_DATASOURCE_PASSWORD=secretref:db-password \
+            CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem \
+            CRAVES_INTERNAL_SERVICE_SECRET=secretref:internal-secret \
             CRAVES_JWT_ISSUER='https://api.craves.in/auth' \
             CRAVES_JWT_AUDIENCE='craves-api' \
             SPRING_FLYWAY_TABLE=subscription_service_flyway_schema_history \
@@ -158,7 +164,7 @@ steps:
           JWT_REF=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_JWT_VERIFICATION_PEM_BASE64")][0].secretRef // ""' <<<"$APP_JSON")
           INTERNAL_REF=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_INTERNAL_SERVICE_SECRET")][0].secretRef // ""' <<<"$APP_JSON")
           echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE flagsOk=$FLAGS_OK dbSecretRef=$DB_REF jwtSecretRef=$JWT_REF internalSecretRef=$INTERNAL_REF"
-          if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$DB_REF" == 'spring-datasource-password' && "$JWT_REF" == 'craves-jwt-verification-pem-base64' && "$INTERNAL_REF" == 'craves-internal-service-secret' ]]; then
+          if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$DB_REF" == 'db-password' && "$JWT_REF" == 'jwt-verify-pem' && "$INTERNAL_REF" == 'internal-secret' ]]; then
             FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
             [[ -n "$FQDN" ]] || { echo 'ERROR: Subscription FQDN is missing.' >&2; exit 1; }
             curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null

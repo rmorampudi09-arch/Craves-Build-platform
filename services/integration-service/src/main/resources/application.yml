@@ -91,6 +91,21 @@ craves:
     stale-lock-seconds: ${CRAVES_REFUND_STALE_LOCK_SECONDS:300}
     status-outbox-batch-size: ${CRAVES_REFUND_STATUS_OUTBOX_BATCH_SIZE:20}
     status-outbox-fixed-delay-ms: ${CRAVES_REFUND_STATUS_OUTBOX_FIXED_DELAY_MS:5000}
+  subscription-payments:
+    consumer-enabled: ${CRAVES_SUBSCRIPTION_PAYMENT_CONSUMER_ENABLED:false}
+    status-publisher-enabled: ${CRAVES_SUBSCRIPTION_PAYMENT_STATUS_PUBLISHER_ENABLED:false}
+    fully-qualified-namespace: ${SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+    connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
+    topic-name: ${SERVICE_BUS_TOPIC_NAME:craves-domain-events}
+    request-subscription-name: ${SERVICE_BUS_SUBSCRIPTION_PAYMENT_REQUESTED_SUBSCRIPTION:integration-service-subscription-payment-requested}
+    subscription-service-base-url: ${CRAVES_SUBSCRIPTION_SERVICE_BASE_URL:}
+    max-concurrent-messages: ${CRAVES_SUBSCRIPTION_PAYMENT_MAX_CONCURRENT_MESSAGES:2}
+    prefetch-count: ${CRAVES_SUBSCRIPTION_PAYMENT_PREFETCH_COUNT:4}
+    max-delivery-attempts: ${CRAVES_SUBSCRIPTION_PAYMENT_MAX_DELIVERY_ATTEMPTS:5}
+    outbox-batch-size: ${CRAVES_SUBSCRIPTION_PAYMENT_OUTBOX_BATCH_SIZE:20}
+    max-publish-attempts: ${CRAVES_SUBSCRIPTION_PAYMENT_MAX_PUBLISH_ATTEMPTS:10}
+    stale-lock-minutes: ${CRAVES_SUBSCRIPTION_PAYMENT_STALE_LOCK_MINUTES:5}
+    outbox-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_PAYMENT_OUTBOX_FIXED_DELAY_MS:5000}
   cashfree:
     webhook:
       worker-enabled: ${CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED:false}

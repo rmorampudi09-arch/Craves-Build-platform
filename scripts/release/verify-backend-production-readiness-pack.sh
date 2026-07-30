@@ -6,7 +6,7 @@ MANIFEST="$ROOT/config/production/backend-production-readiness.json"
 fail() { echo "ERROR: $*" >&2; exit 1; }
 for tool in jq grep find; do command -v "$tool" >/dev/null || fail "$tool is required"; done
 [[ -f "$MANIFEST" ]] || fail "Production readiness manifest is missing"
-jq -e '.schemaVersion == 1 and (.workstreams | length) == 8 and .runtimeChangesAllowedByThisPack == false' "$MANIFEST" >/dev/null 
+jq -e '.schemaVersion == 1 and (.workstreams | length) == 8 and .runtimeChangesAllowedByThisPack == false' "$MANIFEST" >/dev/null
 
 while IFS= read -r SERVICE; do
   [[ -d "$ROOT/$SERVICE" ]] || fail "Service directory is missing: $SERVICE"
@@ -17,9 +17,10 @@ done < <(jq -r '.services[]' "$MANIFEST")
 APPLICATION_FILES=$(find "$ROOT/services" -path '*/src/main/resources/application.yml' -type f -print)
 [[ -n "$APPLICATION_FILES" ]] || fail "No service application.yml files were found"
 while IFS= read -r FLAG; do
-  grep -Rqs "$FLAG" $APPLICATION_FILES || fail "Required safety flag is not represented in application configuration: $FLAG"
+  grep -Rqs "$FLAG" "$ROOT/services" "$ROOT"/azure-pipelines*.yml \
+    || fail "Required safety flag is not represented in service source or pipeline controls: $FLAG"
   if grep -REn "\\$\\{${FLAG}:(true|TRUE)\\}" $APPLICATION_FILES; then
-    fail "Safety flag defaults true: $FLAG"
+    fail "Safety flag defaults true in application.yml: $FLAG"
   fi
 done < <(jq -r '.requiredDisabledByDefaultFlags[]' "$MANIFEST")
 

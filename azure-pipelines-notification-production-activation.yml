@@ -18,7 +18,7 @@ parameters:
 
 variables:
   resourceGroup: rg-craves-prodlow-centralindia
-  containerApp: ca-craves-notification-service-pr
+  containerApp: ca-craves-notification-service-p
 
 pool:
   vmImage: ubuntu-latest
@@ -73,6 +73,9 @@ steps:
           esac
 
           latest="$(az containerapp show -g "$rg" -n "$app" --query properties.latestRevisionName -o tsv)"
+          active=''
+          provisioning=''
+          replicas='0'
           for _ in $(seq 1 60); do
             active="$(az containerapp revision show -g "$rg" -n "$app" --revision "$latest" --query properties.active -o tsv 2>/dev/null || true)"
             provisioning="$(az containerapp revision show -g "$rg" -n "$app" --revision "$latest" --query properties.provisioningState -o tsv 2>/dev/null || true)"

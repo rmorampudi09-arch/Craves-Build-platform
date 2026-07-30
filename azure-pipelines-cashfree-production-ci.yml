@@ -1,0 +1,35 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    persistCredentials: false
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - bash: |
+      set -euo pipefail
+      cd services/integration-service
+      mvn -B -ntp -DskipTests=false verify
+    displayName: Verify Cashfree production hardening
+
+  - bash: |
+      set -euo pipefail
+      grep -Fq '${CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED:false}' \
+        services/integration-service/src/main/java/in/craves/integration/config/PaymentProviderProperties.java
+      grep -Fq '${CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED:false}' \
+        services/integration-service/src/main/java/in/craves/integration/config/PaymentProviderProperties.java
+      grep -Fq 'worker-enabled: ${CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED:false}' \
+        services/integration-service/src/main/resources/application.yml
+      grep -Fq 'FOR UPDATE SKIP LOCKED' \
+        services/integration-service/src/main/java/in/craves/integration/payment/CashfreeWebhookInboxService.java
+    displayName: Verify financial switches and durable claims

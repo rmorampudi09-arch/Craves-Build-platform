@@ -42,6 +42,17 @@ public final class ApiDtos {
     ) {
     }
 
+    public record PublicPlanResponse(
+        UUID id,
+        String planCode,
+        String name,
+        String description,
+        String billingPeriod,
+        BigDecimal amount,
+        String currency
+    ) {
+    }
+
     public record CreateSubscriptionRequest(
         @NotNull UUID planId,
         @NotNull LocalDate startDate,
@@ -58,6 +69,20 @@ public final class ApiDtos {
         UUID customerIdentityId,
         UUID planId,
         UUID chefIdentityId,
+        String status,
+        LocalDate startDate,
+        LocalDate endDate,
+        LocalDate nextServiceDate,
+        UUID deliveryAddressId,
+        String notes,
+        Instant createdAt,
+        Instant updatedAt
+    ) {
+    }
+
+    public record CustomerSubscriptionResponse(
+        UUID id,
+        UUID planId,
         String status,
         LocalDate startDate,
         LocalDate endDate,

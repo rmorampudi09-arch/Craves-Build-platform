@@ -15,6 +15,23 @@ stages:
             fetchDepth: 0
           - script: |
               set -euo pipefail
+
+              syntax_failures=0
+              syntax_checked=0
+              while IFS= read -r script; do
+                syntax_checked=$((syntax_checked+1))
+                if ! bash -n "$script"; then
+                  echo "SHELL_SYNTAX_ERROR $script" >&2
+                  syntax_failures=$((syntax_failures+1))
+                fi
+              done < <(find scripts -type f -name '*.sh' -print | sort)
+
+              if (( syntax_failures > 0 )); then
+                echo "ERROR: $syntax_failures shell script(s) failed Bash syntax validation; all failures are listed above." >&2
+                exit 1
+              fi
+              echo "SUCCESS: $syntax_checked shell scripts passed Bash syntax validation."
+
               jq -e . config/production/backend-production-readiness.json >/dev/null
               jq -e . config/production/azure-resource-inventory.json >/dev/null
               jq -e . config/production/container-app-secret-names.json >/dev/null
@@ -23,10 +40,6 @@ stages:
               bash scripts/release/verify-container-app-secret-names.sh
               bash scripts/release/verify-seven-service-deployment-contracts.sh
               bash scripts/release/generate-backend-production-run-plan.sh "$(Build.ArtifactStagingDirectory)/backend-production-run-plan.md"
-
-              while IFS= read -r script; do
-                bash -n "$script"
-              done < <(find scripts -type f -name '*.sh' -print | sort)
 
               python3 - <<'PY'
               from pathlib import Path
@@ -38,7 +51,7 @@ stages:
                   ET.parse(policy)
                   print(f'XML_OK {policy}')
               PY
-            displayName: Verify manifests, inventory, secrets, deployments, scripts and APIM XML
+            displayName: Verify all shell syntax, manifests, inventory, deployments and APIM XML
           - task: PublishPipelineArtifact@1
             inputs:
               targetPath: $(Build.ArtifactStagingDirectory)/backend-production-run-plan.md

@@ -47,6 +47,7 @@ REQUIRED_FILES=(
   scripts/release/verify-azure-resource-inventory-references.sh
   scripts/release/verify-container-app-secret-names.sh
   scripts/release/verify-seven-service-deployment-contracts.sh
+  scripts/release/verify-deployment-environment-bindings.sh
   services/auth-service/src/main/resources/db/migration/V5__serialize_account_provider_sync.sql
   services/auth-service/src/test/java/in/craves/auth/admin/AdminAccountInterventionRepositoryTest.java
   services/notification-service/src/test/java/in/craves/notification/delivery/NotificationDeliveryRepositoryTest.java

@@ -76,10 +76,16 @@ required_by_service = {
         "CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem",
         "CRAVES_PAYMENT_ORDER_API_ENABLED=false",
         "CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED=false",
-        "CRAVES_DELIVERY_PROVIDER_EXECUTION_ENABLED=false",
+        "CRAVES_DELIVERY_INTELLIGENCE_ENABLED=false",
+        "CRAVES_DELIVERY_COMMAND_ENABLED=false",
+        "CRAVES_DELIVERY_RECONCILIATION_ENABLED=false",
+        "CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=false",
+        "CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=false",
+        "CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=false",
         "CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED=false",
         "CRAVES_SUBSCRIPTION_PAYMENT_CONSUMER_ENABLED=false",
         "BORZO_API_ENABLED=false",
+        "BORZO_PRODUCTION_ACTIVATION_APPROVED=false",
     ),
     "notification": (
         "CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem",
@@ -105,6 +111,11 @@ for service, path in pipelines.items():
         raise SystemExit(f"ERROR: {path.name} passes JWT key material as plaintext environment data")
     if "--no-wait" not in text:
         raise SystemExit(f"ERROR: {path.name} does not use an explicit asynchronous revision followed by polling")
+    if service == "integration" and "CRAVES_DELIVERY_PROVIDER_EXECUTION_ENABLED" in text:
+        raise SystemExit(
+            "ERROR: Integration pipeline contains obsolete CRAVES_DELIVERY_PROVIDER_EXECUTION_ENABLED; "
+            "use the real delivery and Borzo controls instead"
+        )
     print(f"DEPLOYMENT_CONTRACT_OK {service}={path.name}")
 
 print("SUCCESS: All seven service deployment pipelines enforce tests, secret references, fail-closed flags and healthy revision evidence.")

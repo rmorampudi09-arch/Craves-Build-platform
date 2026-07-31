@@ -73,13 +73,28 @@ stages:
               jdkSourceOption: PreInstalled
             displayName: Use Java 21
           - script: |
-              set -euo pipefail
+              set -uo pipefail
               SERVICES=(auth-service user-chef-service catalog-service order-service subscription-service integration-service notification-service)
+              FAILED_SERVICES=()
+
               for SERVICE in "${SERVICES[@]}"; do
                 echo "========== $SERVICE =========="
-                (cd "services/$SERVICE" && mvn -B -ntp clean verify)
+                if (cd "services/$SERVICE" && mvn -B -ntp clean verify); then
+                  echo "MAVEN_OK $SERVICE"
+                else
+                  echo "MAVEN_FAILED $SERVICE" >&2
+                  FAILED_SERVICES+=("$SERVICE")
+                fi
               done
-            displayName: Build and test all Spring services
+
+              if (( ${#FAILED_SERVICES[@]} > 0 )); then
+                echo "ERROR: ${#FAILED_SERVICES[@]} service build(s) failed:" >&2
+                printf '  - %s\n' "${FAILED_SERVICES[@]}" >&2
+                exit 1
+              fi
+
+              echo "SUCCESS: All ${#SERVICES[@]} Spring services passed Maven clean verify."
+            displayName: Build and test all Spring services and report every failure
           - task: PublishTestResults@2
             condition: always()
             inputs:
@@ -106,10 +121,30 @@ stages:
               set -euo pipefail
               cd apps/customer-web-next
               npm install --ignore-scripts --no-audit --no-fund
+
+              set +e
+              FAILED_CHECKS=()
               npm run typecheck
+              TYPECHECK_EXIT=$?
+              (( TYPECHECK_EXIT == 0 )) || FAILED_CHECKS+=("typecheck")
+
               npm run test
+              TEST_EXIT=$?
+              (( TEST_EXIT == 0 )) || FAILED_CHECKS+=("test")
+
               npm run build
-            displayName: Build and test administrator web surfaces
+              BUILD_EXIT=$?
+              (( BUILD_EXIT == 0 )) || FAILED_CHECKS+=("build")
+              set -e
+
+              if (( ${#FAILED_CHECKS[@]} > 0 )); then
+                echo "ERROR: ${#FAILED_CHECKS[@]} administrator web check(s) failed:" >&2
+                printf '  - %s\n' "${FAILED_CHECKS[@]}" >&2
+                exit 1
+              fi
+
+              echo 'SUCCESS: Administrator web typecheck, tests and production build passed.'
+            displayName: Run all administrator web checks and report every failure
 
   - stage: FinalGate
     displayName: Final non-deploying gate

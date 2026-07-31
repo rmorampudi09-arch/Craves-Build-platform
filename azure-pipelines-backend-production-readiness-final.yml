@@ -77,12 +77,58 @@ stages:
               SERVICES=(auth-service user-chef-service catalog-service order-service subscription-service integration-service notification-service)
               FAILED_SERVICES=()
 
+              print_surefire_failures() {
+                local service="$1"
+                local report_dir="services/$service/target/surefire-reports"
+                [[ -d "$report_dir" ]] || return 0
+
+                python3 - "$report_dir" <<'PY'
+              import sys
+              import xml.etree.ElementTree as ET
+              from pathlib import Path
+
+              report_dir = Path(sys.argv[1])
+              failures_found = False
+
+              for report in sorted(report_dir.glob("TEST-*.xml")):
+                  try:
+                      root = ET.parse(report).getroot()
+                  except ET.ParseError as error:
+                      print(f"SUREFIRE_REPORT_PARSE_ERROR {report}: {error}")
+                      continue
+
+                  for case in root.iter("testcase"):
+                      failure = case.find("failure")
+                      error = case.find("error")
+                      problem = failure if failure is not None else error
+                      if problem is None:
+                          continue
+
+                      failures_found = True
+                      class_name = case.attrib.get("classname", "unknown-class")
+                      method_name = case.attrib.get("name", "unknown-test")
+                      message = " ".join((problem.attrib.get("message") or "").split())
+                      print(f"FAILING_TEST {class_name}#{method_name}")
+                      print(f"  report: {report}")
+                      if message:
+                          print(f"  message: {message[:1000]}")
+
+                      detail_lines = (problem.text or "").strip().splitlines()
+                      for detail_line in detail_lines[:12]:
+                          print(f"  {detail_line[:500]}")
+
+              if not failures_found:
+                  print(f"SUREFIRE_FAILURE_DETAILS_UNAVAILABLE {report_dir}")
+              PY
+              }
+
               for SERVICE in "${SERVICES[@]}"; do
                 echo "========== $SERVICE =========="
                 if (cd "services/$SERVICE" && mvn -B -ntp clean verify); then
                   echo "MAVEN_OK $SERVICE"
                 else
                   echo "MAVEN_FAILED $SERVICE" >&2
+                  print_surefire_failures "$SERVICE"
                   FAILED_SERVICES+=("$SERVICE")
                 fi
               done
@@ -94,7 +140,7 @@ stages:
               fi
 
               echo "SUCCESS: All ${#SERVICES[@]} Spring services passed Maven clean verify."
-            displayName: Build and test all Spring services and report every failure
+            displayName: Build all Spring services and print every test failure
           - task: PublishTestResults@2
             condition: always()
             inputs:

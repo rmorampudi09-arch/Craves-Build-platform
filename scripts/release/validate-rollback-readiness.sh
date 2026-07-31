@@ -6,6 +6,11 @@ cd "$ROOT"
 mapfile -t PIPELINES < <(find . -maxdepth 1 -type f -name 'azure-pipelines*.yml' -print | sort)
 ((${#PIPELINES[@]} > 0)) || { echo 'ERROR: no Azure pipeline YAML files found.' >&2; exit 1; }
 
+MUTABLE_LATEST_PATTERN=$(cat <<'REGEX'
+:[[:space:]]*latest([[:space:]"']|$)
+REGEX
+)
+
 failures=0
 checked=0
 for file in "${PIPELINES[@]}"; do
@@ -19,7 +24,7 @@ for file in "${PIPELINES[@]}"; do
   checked=$((checked+1))
   echo "Checking $name"
 
-  if grep -Eq ':[[:space:]]*latest(["'"'[:space:]]|$)|:latest(["'"'[:space:]]|$)' "$file"; then
+  if grep -Eq -- "$MUTABLE_LATEST_PATTERN" "$file"; then
     echo "ERROR: $name uses a mutable latest image tag." >&2
     failures=$((failures+1))
   fi

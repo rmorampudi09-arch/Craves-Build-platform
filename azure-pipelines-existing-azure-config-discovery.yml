@@ -8,7 +8,7 @@ steps:
   - checkout: self
 
   - task: AzureCLI@2
-    displayName: Discover existing Azure configuration without exposing secrets
+    displayName: Discover and sanitize existing Azure configuration
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -18,9 +18,10 @@ steps:
         set +x
 
         INVENTORY='config/production/azure-resource-inventory.json'
-        WORK='$(Build.ArtifactStagingDirectory)/azure-existing-config'
-        REPORT="$WORK/azure-existing-config-report.md"
-        SNAPSHOT="$WORK/azure-existing-config-redacted.json"
+        RAW='$(Agent.TempDirectory)/craves-existing-config-raw-$(Build.BuildId)'
+        SAFE='$(Build.ArtifactStagingDirectory)/azure-existing-config-safe'
+        REPORT="$SAFE/azure-existing-config-report.md"
+        SNAPSHOT="$SAFE/azure-existing-config-redacted.json"
         fail() { echo "ERROR: $*" >&2; exit 1; }
 
         command -v jq >/dev/null || fail 'jq is required on the pipeline agent'
@@ -29,71 +30,122 @@ steps:
         jq -e '.schemaVersion == 1 and (.containerApps | length == 7)' "$INVENTORY" >/dev/null \
           || fail 'Azure resource inventory is malformed'
 
-        mkdir -p "$WORK/apps" "$WORK/keyvaults"
+        rm -rf "$RAW" "$SAFE"
+        mkdir -p "$RAW/apps" "$RAW/keyvaults" "$SAFE"
+        trap 'rm -rf "$RAW"' EXIT
+
         RG=$(jq -r '.resourceGroup' "$INVENTORY")
-        az account show -o json >"$WORK/account.json"
-        az group show --name "$RG" -o json >"$WORK/resource-group.json"
+        az group show --name "$RG" \
+          --query '{name:name,location:location,id:id}' -o json >"$RAW/resource-group.json"
+
         az resource list --resource-group "$RG" \
-          --query '[].{name:name,type:type,location:location,id:id}' -o json >"$WORK/resources.json"
+          --query '[].{name:name,type:type,location:location,id:id}' -o json >"$RAW/resources.json"
 
         while IFS=$'\t' read -r SERVICE_KEY APP_NAME; do
           echo "Inspecting Container App metadata: $SERVICE_KEY -> $APP_NAME"
           az containerapp show --resource-group "$RG" --name "$APP_NAME" -o json \
-            >"$WORK/apps/${SERVICE_KEY}-app.json"
+            >"$RAW/apps/${SERVICE_KEY}-app.json"
           az containerapp secret list --resource-group "$RG" --name "$APP_NAME" \
             --query '[].{name:name,keyVaultUrl:keyVaultUrl,identity:identity}' -o json \
-            >"$WORK/apps/${SERVICE_KEY}-secrets.json" 2>/dev/null \
-            || printf '[]' >"$WORK/apps/${SERVICE_KEY}-secrets.json"
+            >"$RAW/apps/${SERVICE_KEY}-secrets.json" 2>/dev/null \
+            || printf '[]' >"$RAW/apps/${SERVICE_KEY}-secrets.json"
         done < <(jq -r '.containerApps | to_entries[] | [.key, .value] | @tsv' "$INVENTORY")
 
         az keyvault list --resource-group "$RG" \
           --query '[].{name:name,vaultUri:properties.vaultUri,enableRbacAuthorization:properties.enableRbacAuthorization}' \
-          -o json >"$WORK/keyvaults.json" 2>/dev/null || printf '[]' >"$WORK/keyvaults.json"
+          -o json >"$RAW/keyvaults.json" 2>/dev/null || printf '[]' >"$RAW/keyvaults.json"
 
         while IFS= read -r VAULT_NAME; do
           [[ -n "$VAULT_NAME" ]] || continue
           SAFE_NAME=$(printf '%s' "$VAULT_NAME" | tr -c 'A-Za-z0-9._-' '_')
           az keyvault secret list --vault-name "$VAULT_NAME" \
             --query '[].{name:name,enabled:attributes.enabled,expires:attributes.expires}' -o json \
-            >"$WORK/keyvaults/${SAFE_NAME}-secret-metadata.json" 2>/dev/null \
-            || printf '[]' >"$WORK/keyvaults/${SAFE_NAME}-secret-metadata.json"
-        done < <(jq -r '.[].name' "$WORK/keyvaults.json")
+            >"$RAW/keyvaults/${SAFE_NAME}-secret-metadata.json" 2>/dev/null \
+            || printf '[]' >"$RAW/keyvaults/${SAFE_NAME}-secret-metadata.json"
+        done < <(jq -r '.[].name' "$RAW/keyvaults.json")
 
         az postgres flexible-server list --resource-group "$RG" \
           --query '[].{name:name,fullyQualifiedDomainName:fullyQualifiedDomainName,version:version,state:state,location:location}' \
-          -o json >"$WORK/postgres-servers.json" 2>/dev/null || printf '[]' >"$WORK/postgres-servers.json"
+          -o json >"$RAW/postgres-servers.json" 2>/dev/null || printf '[]' >"$RAW/postgres-servers.json"
 
         az redis list --resource-group "$RG" \
           --query '[].{name:name,hostName:hostName,sslPort:sslPort,sku:sku.name,provisioningState:provisioningState}' \
-          -o json >"$WORK/redis.json" 2>/dev/null || printf '[]' >"$WORK/redis.json"
+          -o json >"$RAW/redis.json" 2>/dev/null || printf '[]' >"$RAW/redis.json"
 
         az storage account list --resource-group "$RG" \
           --query '[].{name:name,primaryBlobEndpoint:primaryEndpoints.blob,kind:kind,sku:sku.name}' \
-          -o json >"$WORK/storage.json" 2>/dev/null || printf '[]' >"$WORK/storage.json"
+          -o json >"$RAW/storage.json" 2>/dev/null || printf '[]' >"$RAW/storage.json"
 
         SERVICE_BUS=$(jq -r '.serviceBusNamespace' "$INVENTORY")
         az servicebus topic list --resource-group "$RG" --namespace-name "$SERVICE_BUS" \
-          --query '[].{name:name,status:status}' -o json >"$WORK/servicebus-topics.json" 2>/dev/null \
-          || printf '[]' >"$WORK/servicebus-topics.json"
+          --query '[].{name:name,status:status}' -o json >"$RAW/servicebus-topics.json" 2>/dev/null \
+          || printf '[]' >"$RAW/servicebus-topics.json"
 
         APIM=$(jq -r '.apiManagement' "$INVENTORY")
         az apim api list --resource-group "$RG" --service-name "$APIM" \
-          --query '[].{name:name,path:path,protocols:protocols}' -o json >"$WORK/apim-apis.json" 2>/dev/null \
-          || printf '[]' >"$WORK/apim-apis.json"
+          --query '[].{name:name,path:path,protocols:protocols}' -o json >"$RAW/apim-apis.json" 2>/dev/null \
+          || printf '[]' >"$RAW/apim-apis.json"
 
-        python3 - "$INVENTORY" "$WORK" "$REPORT" "$SNAPSHOT" <<'PY'
+        python3 - "$INVENTORY" "$RAW" "$REPORT" "$SNAPSHOT" <<'PY'
         import json
         import re
         import sys
         from pathlib import Path
+        from urllib.parse import urlsplit
 
-        inventory_path, work_path, report_path, snapshot_path = map(Path, sys.argv[1:])
+        inventory_path, raw_path, report_path, snapshot_path = map(Path, sys.argv[1:])
         inventory = json.loads(inventory_path.read_text(encoding='utf-8'))
-        work = work_path
+        raw = raw_path
 
-        sensitive_pattern = re.compile(
-            r'(PASSWORD|SECRET|TOKEN|PRIVATE|PEM|CREDENTIAL|ACCESS[_-]?KEY|CONNECTION[_-]?STRING|SERVICE[_-]?ACCOUNT|SAS|CLIENT[_-]?KEY)',
+        sensitive_name = re.compile(
+            r'(PASSWORD|SECRET|TOKEN|PRIVATE|PEM|CREDENTIAL|ACCESS[_-]?KEY|CONNECTION[_-]?STRING|SERVICE[_-]?ACCOUNT|SAS|CLIENT[_-]?KEY|ACCOUNT[_-]?KEY|STORAGE_ENDPOINT)',
             re.IGNORECASE,
+        )
+        dangerous_value = re.compile(
+            r'(AccountKey=|SharedAccessSignature=|SharedAccessKey=|accesskey=|-----BEGIN [A-Z ]*PRIVATE KEY-----)',
+            re.IGNORECASE,
+        )
+        safe_exact = {
+            'CRAVES_ENVIRONMENT',
+            'CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS',
+            'CRAVES_JWT_AUDIENCE',
+            'CRAVES_JWT_ISSUER',
+            'FIREBASE_PROJECT_ID',
+            'SPRING_DATASOURCE_URL',
+            'SPRING_DATASOURCE_USERNAME',
+            'SPRING_PROFILES_ACTIVE',
+            'SERVER_PORT',
+            'SPRING_FLYWAY_TABLE',
+            'CRAVES_STORAGE_DOCUMENTS_CONTAINER',
+            'CRAVES_STORAGE_MEDIA_CONTAINER',
+            'CRAVES_DOMAIN_EVENTS_TOPIC_NAME',
+            'CRAVES_DOMAIN_EVENT_ENABLED_TYPES',
+            'CRAVES_REFUND_STATUS_SUBSCRIPTION',
+            'CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE',
+            'SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE',
+            'SERVICE_BUS_CHEF_ACCEPTED_SUBSCRIPTION',
+            'SERVICE_BUS_DELIVERY_COMMAND_QUEUE',
+            'SERVICE_BUS_REFUND_REQUESTED_SUBSCRIPTION',
+            'SERVICE_BUS_TOPIC_NAME',
+            'PAYMENT_PROVIDER_API_VERSION',
+            'PAYMENT_PROVIDER_ENVIRONMENT',
+            'CRAVES_CASHFREE_SANDBOX_REFUND_SIMULATION_STATUS',
+            'FORCE_RESTART',
+        }
+        safe_suffixes = (
+            '_ENABLED',
+            '_APPROVED',
+            '_BASE_URL',
+            '_WEBHOOK_URL',
+            '_BATCH_SIZE',
+            '_FIXED_DELAY_MS',
+            '_MAX_ATTEMPTS',
+            '_RETRY_BASE_DELAY_SECONDS',
+            '_RADIUS_KM',
+            '_QUEUE',
+            '_SUBSCRIPTION',
+            '_TOPIC_NAME',
+            '_CONTAINER',
         )
 
         def load(path: Path, default):
@@ -102,32 +154,45 @@ steps:
             except Exception:
                 return default
 
+        def is_safe_plaintext(name: str, value: str) -> bool:
+            if not value or sensitive_name.search(name) or dangerous_value.search(value):
+                return False
+            if name == 'SPRING_DATASOURCE_URL':
+                return value.startswith('jdbc:postgresql://') and 'password=' not in value.lower()
+            if name.endswith(('_BASE_URL', '_WEBHOOK_URL')):
+                try:
+                    parsed = urlsplit(value)
+                    return parsed.scheme == 'https' and bool(parsed.netloc) and not parsed.username and not parsed.password
+                except Exception:
+                    return False
+            return name in safe_exact or name.endswith(safe_suffixes)
+
         def safe_env(env):
             name = str(env.get('name') or '')
             secret_ref = str(env.get('secretRef') or '')
-            value = env.get('value')
+            value = '' if env.get('value') is None else str(env.get('value'))
             if secret_ref:
                 return {'name': name, 'binding': 'secretRef', 'safeValue': secret_ref}
-            if sensitive_pattern.search(name):
-                return {'name': name, 'binding': 'plaintext-redacted', 'safeValue': '<redacted>'}
-            return {'name': name, 'binding': 'value', 'safeValue': '' if value is None else str(value)}
+            if is_safe_plaintext(name, value):
+                return {'name': name, 'binding': 'value', 'safeValue': value}
+            return {'name': name, 'binding': 'plaintext-redacted', 'safeValue': '<redacted>'}
 
         snapshot = {
-            'schemaVersion': 1,
+            'schemaVersion': 2,
             'resourceGroup': inventory['resourceGroup'],
-            'note': 'Redacted discovery only. No secret values are included.',
+            'note': 'Sanitized discovery only. Raw Azure responses are never published.',
             'containerApps': {},
-            'keyVaults': load(work / 'keyvaults.json', []),
-            'postgresServers': load(work / 'postgres-servers.json', []),
-            'redis': load(work / 'redis.json', []),
-            'storage': load(work / 'storage.json', []),
-            'serviceBusTopics': load(work / 'servicebus-topics.json', []),
-            'apimApis': load(work / 'apim-apis.json', []),
+            'keyVaults': load(raw / 'keyvaults.json', []),
+            'postgresServers': load(raw / 'postgres-servers.json', []),
+            'redis': load(raw / 'redis.json', []),
+            'storage': load(raw / 'storage.json', []),
+            'serviceBusTopics': load(raw / 'servicebus-topics.json', []),
+            'apimApis': load(raw / 'apim-apis.json', []),
         }
 
         for service_key, app_name in inventory['containerApps'].items():
-            app = load(work / 'apps' / f'{service_key}-app.json', {})
-            secrets = load(work / 'apps' / f'{service_key}-secrets.json', [])
+            app = load(raw / 'apps' / f'{service_key}-app.json', {})
+            secrets = load(raw / 'apps' / f'{service_key}-secrets.json', [])
             container = ((app.get('properties') or {}).get('template') or {}).get('containers') or []
             first = container[0] if container else {}
             env = [safe_env(item) for item in (first.get('env') or [])]
@@ -147,14 +212,10 @@ steps:
         lines = [
             '# Craves existing Azure configuration discovery',
             '',
-            '> This report is redacted. It contains no Container App secret values, Key Vault secret values, passwords, private keys, tokens, or provider credentials.',
+            '> Sanitized metadata only. Raw Container App responses and plaintext credentials are never published.',
             '',
             f"- Resource group: `{snapshot['resourceGroup']}`",
             '- Azure changes performed: **none**',
-            '',
-            '## Important limitation',
-            '',
-            'Azure Container Apps exposes secret names and Key Vault references, but it does not return the value of a Container App managed secret. Managed secret values must be reused by reference, replaced deliberately, or recovered from their original Key Vault/source.',
             '',
             '## Container Apps',
             '',
@@ -170,7 +231,7 @@ steps:
                 f"- FQDN: `{app.get('fqdn') or 'Not configured'}`",
                 f"- Image: `{app.get('image') or 'Unknown'}`",
                 '',
-                '| Environment name | Binding | Safe value/reference |',
+                '| Environment name | Binding | Sanitized value/reference |',
                 '|---|---|---|',
             ])
             for env in app['environment']:
@@ -182,78 +243,78 @@ steps:
             for secret in app['secrets']:
                 name = secret.get('name') or 'Unknown'
                 key_vault_url = secret.get('keyVaultUrl') or ''
-                backing = f"Key Vault: {key_vault_url}" if key_vault_url else 'Container App managed secret; value not retrievable'
+                backing = f"Key Vault reference: {key_vault_url}" if key_vault_url else 'Container App managed secret; value unavailable'
                 lines.append(f"| `{name}` | `{backing}` |")
             if not app['secrets']:
                 lines.append('| _none or list permission unavailable_ |  |')
             lines.append('')
 
-        lines.extend(['## Key Vaults', ''])
-        for vault in snapshot['keyVaults']:
-            lines.append(f"- `{vault.get('name')}` — `{vault.get('vaultUri')}` — RBAC: `{vault.get('enableRbacAuthorization')}`")
-            metadata_file = work / 'keyvaults' / (re.sub(r'[^A-Za-z0-9._-]', '_', str(vault.get('name') or '')) + '-secret-metadata.json')
-            metadata = load(metadata_file, [])
-            if metadata:
-                lines.append('  - Readable secret names: ' + ', '.join(f"`{item.get('name')}`" for item in metadata))
+        sections = (
+            ('Key Vaults', 'keyVaults', lambda item: f"`{item.get('name')}` — `{item.get('vaultUri')}` — RBAC `{item.get('enableRbacAuthorization')}`"),
+            ('PostgreSQL Flexible Servers', 'postgresServers', lambda item: f"`{item.get('name')}` — `{item.get('fullyQualifiedDomainName')}` — state `{item.get('state')}` — PostgreSQL `{item.get('version')}`"),
+            ('Redis', 'redis', lambda item: f"`{item.get('name')}` — `{item.get('hostName')}:{item.get('sslPort')}` — SKU `{item.get('sku')}` — state `{item.get('provisioningState')}`"),
+            ('Storage', 'storage', lambda item: f"`{item.get('name')}` — blob endpoint `{item.get('primaryBlobEndpoint')}` — `{item.get('sku')}`"),
+            ('Service Bus topics', 'serviceBusTopics', lambda item: f"`{item.get('name')}` — status `{item.get('status')}`"),
+            ('APIM APIs', 'apimApis', lambda item: f"`{item.get('name')}` — path `{item.get('path')}` — protocols `{item.get('protocols')}`"),
+        )
+        for title, key, render in sections:
+            lines.extend([f'## {title}', ''])
+            items = snapshot[key]
+            if items:
+                lines.extend(f'- {render(item)}' for item in items)
             else:
-                lines.append('  - Secret names unavailable or none exist; values were not requested.')
-        if not snapshot['keyVaults']:
-            lines.append('- No Key Vault was discovered in the resource group.')
-
-        lines.extend(['', '## PostgreSQL Flexible Servers', ''])
-        for item in snapshot['postgresServers']:
-            lines.append(f"- `{item.get('name')}` — `{item.get('fullyQualifiedDomainName')}` — state `{item.get('state')}` — PostgreSQL `{item.get('version')}`")
-        if not snapshot['postgresServers']:
-            lines.append('- None discovered or list permission unavailable.')
-
-        lines.extend(['', '## Redis', ''])
-        for item in snapshot['redis']:
-            lines.append(f"- `{item.get('name')}` — `{item.get('hostName')}:{item.get('sslPort')}` — SKU `{item.get('sku')}` — state `{item.get('provisioningState')}`")
-        if not snapshot['redis']:
-            lines.append('- None discovered or list permission unavailable.')
-
-        lines.extend(['', '## Storage', ''])
-        for item in snapshot['storage']:
-            lines.append(f"- `{item.get('name')}` — blob endpoint `{item.get('primaryBlobEndpoint')}` — `{item.get('sku')}`")
-        if not snapshot['storage']:
-            lines.append('- None discovered or list permission unavailable.')
-
-        lines.extend(['', '## Service Bus topics', ''])
-        for item in snapshot['serviceBusTopics']:
-            lines.append(f"- `{item.get('name')}` — status `{item.get('status')}`")
-        if not snapshot['serviceBusTopics']:
-            lines.append('- None discovered or list permission unavailable.')
-
-        lines.extend(['', '## APIM APIs', ''])
-        for item in snapshot['apimApis']:
-            lines.append(f"- `{item.get('name')}` — path `{item.get('path')}` — protocols `{item.get('protocols')}`")
-        if not snapshot['apimApis']:
-            lines.append('- None discovered or list permission unavailable.')
+                lines.append('- None discovered or list permission unavailable.')
+            lines.append('')
 
         lines.extend([
+            '## Security boundary',
             '',
-            '## Next decision',
-            '',
-            '1. Reuse existing Container App secret references where they are valid.',
-            '2. Link Azure DevOps variable groups directly to Key Vault for retrievable secrets.',
-            '3. Rotate and replace only secrets that exist solely as unrecoverable Container App managed values.',
-            '4. Do not print or export secret values into pipeline logs or downloadable artifacts.',
+            '- Raw Azure responses were stored only under the temporary agent directory.',
+            '- The temporary raw directory is deleted automatically.',
+            '- Only this report and the schema-version-2 sanitized snapshot are published.',
+            '- Container App managed secret values are not retrievable and are never requested.',
             '',
         ])
         report_path.write_text('\n'.join(lines), encoding='utf-8')
         PY
 
-        jq -e '.schemaVersion == 1 and (.containerApps | length == 7)' "$SNAPSHOT" >/dev/null \
-          || fail 'Redacted discovery snapshot validation failed'
-        grep -q 'This report is redacted' "$REPORT" \
-          || fail 'Redacted report marker is missing'
+        jq -e '.schemaVersion == 2 and (.containerApps | length == 7)' "$SNAPSHOT" >/dev/null \
+          || fail 'Sanitized discovery snapshot validation failed'
+        grep -q 'Sanitized metadata only' "$REPORT" \
+          || fail 'Sanitized report marker is missing'
 
-        echo 'SUCCESS: Existing Azure configuration was discovered and redacted.'
-        echo 'No secret values were requested, printed, copied, or published.'
+        python3 - "$SAFE" <<'PY'
+        import re
+        import sys
+        from pathlib import Path
+
+        root = Path(sys.argv[1])
+        forbidden = {
+            'Azure Storage account key': re.compile(r'AccountKey=', re.IGNORECASE),
+            'Azure shared-access key': re.compile(r'SharedAccessKey=', re.IGNORECASE),
+            'Azure shared-access signature': re.compile(r'SharedAccessSignature=', re.IGNORECASE),
+            'ACS access key': re.compile(r'accesskey=', re.IGNORECASE),
+            'private key material': re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----'),
+        }
+        for path in root.rglob('*'):
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding='utf-8', errors='replace')
+            for label, pattern in forbidden.items():
+                if pattern.search(text):
+                    raise SystemExit(f'ERROR: {label} detected in publishable artifact {path.name}')
+        print('Artifact secret scanner passed.')
+        PY
+
+        rm -rf "$RAW"
+        trap - EXIT
+
+        echo 'SUCCESS: Existing Azure configuration was discovered and sanitized.'
+        echo 'Only the sanitized report and snapshot will be published.'
         echo 'No Azure resource, Container App setting, Key Vault entry, or Azure DevOps variable was changed.'
 
   - task: PublishPipelineArtifact@1
-    displayName: Publish redacted existing Azure configuration report
+    displayName: Publish sanitized existing Azure configuration report
     inputs:
-      targetPath: $(Build.ArtifactStagingDirectory)/azure-existing-config
-      artifact: azure-existing-config-redacted
+      targetPath: $(Build.ArtifactStagingDirectory)/azure-existing-config-safe
+      artifact: azure-existing-config-sanitized

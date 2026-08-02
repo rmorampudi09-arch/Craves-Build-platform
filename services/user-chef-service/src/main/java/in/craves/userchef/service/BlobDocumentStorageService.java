@@ -27,17 +27,8 @@ public class BlobDocumentStorageService {
 
     public StoredDocument uploadKycDocument(UUID identityId, KycDocumentType documentType, MultipartFile file) {
         validateFile(file);
-        if (!StringUtils.hasText(properties.getEndpointValue())) {
-            throw ApiException.badRequest("DOCUMENT_STORE_NOT_CONFIGURED", "Document storage is not configured");
-        }
-
+        BlobContainerClient containerClient = documentsContainer();
         try {
-            BlobContainerClientBuilder builder = new BlobContainerClientBuilder()
-                .containerName(properties.getDocumentsContainer());
-            BlobContainerClientBuilder.class
-                .getMethod("connection" + "String", String.class)
-                .invoke(builder, properties.getEndpointValue());
-            BlobContainerClient containerClient = builder.buildClient();
             containerClient.createIfNotExists();
 
             String originalFileName = StringUtils.hasText(file.getOriginalFilename()) ? file.getOriginalFilename() : "document";
@@ -64,6 +55,60 @@ public class BlobDocumentStorageService {
         }
     }
 
+    public StoredDocumentBytes downloadKycDocument(
+        String container,
+        String blobName,
+        String originalFileName,
+        String contentType,
+        long expectedSizeBytes
+    ) {
+        if (!StringUtils.hasText(container) || !container.equals(properties.getDocumentsContainer())) {
+            throw ApiException.notFound("DOCUMENT_NOT_FOUND", "Document was not found");
+        }
+        if (!StringUtils.hasText(blobName) || !blobName.startsWith("kyc/") || blobName.contains("..")) {
+            throw ApiException.notFound("DOCUMENT_NOT_FOUND", "Document was not found");
+        }
+        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            throw ApiException.badRequest("DOCUMENT_FILE_TYPE_NOT_ALLOWED", "Document type is not allowed");
+        }
+        if (expectedSizeBytes < 1 || expectedSizeBytes > properties.getKycMaxFileSizeBytes()) {
+            throw ApiException.badRequest("DOCUMENT_FILE_SIZE_INVALID", "Document size is invalid");
+        }
+        try {
+            BlobClient client = documentsContainer().getBlobClient(blobName);
+            if (!client.exists()) {
+                throw ApiException.notFound("DOCUMENT_NOT_FOUND", "Document was not found");
+            }
+            byte[] bytes = client.downloadContent().toBytes();
+            if (bytes.length < 1 || bytes.length > properties.getKycMaxFileSizeBytes()) {
+                throw ApiException.badRequest("DOCUMENT_FILE_SIZE_INVALID", "Document size is invalid");
+            }
+            return new StoredDocumentBytes(sanitize(originalFileName), contentType, bytes);
+        } catch (ApiException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw ApiException.badRequest("DOCUMENT_DOWNLOAD_FAILED", "Document could not be downloaded");
+        }
+    }
+
+    private BlobContainerClient documentsContainer() {
+        if (!StringUtils.hasText(properties.getEndpointValue())) {
+            throw ApiException.badRequest("DOCUMENT_STORE_NOT_CONFIGURED", "Document storage is not configured");
+        }
+        try {
+            BlobContainerClientBuilder builder = new BlobContainerClientBuilder()
+                .containerName(properties.getDocumentsContainer());
+            BlobContainerClientBuilder.class
+                .getMethod("connection" + "String", String.class)
+                .invoke(builder, properties.getEndpointValue());
+            return builder.buildClient();
+        } catch (ApiException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw ApiException.badRequest("DOCUMENT_STORE_NOT_CONFIGURED", "Document storage is not configured");
+        }
+    }
+
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw ApiException.badRequest("DOCUMENT_FILE_REQUIRED", "Document file is required");
@@ -77,7 +122,8 @@ public class BlobDocumentStorageService {
     }
 
     private String sanitize(String fileName) {
-        String sanitized = fileName.replaceAll("[^a-zA-Z0-9._-]", "-");
+        String source = StringUtils.hasText(fileName) ? fileName : "document";
+        String sanitized = source.replaceAll("[^a-zA-Z0-9._-]", "-");
         return sanitized.length() > 120 ? sanitized.substring(sanitized.length() - 120) : sanitized;
     }
 
@@ -88,5 +134,8 @@ public class BlobDocumentStorageService {
         String contentType,
         long fileSizeBytes
     ) {
+    }
+
+    public record StoredDocumentBytes(String originalFileName, String contentType, byte[] bytes) {
     }
 }

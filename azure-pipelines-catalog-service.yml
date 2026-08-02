@@ -24,51 +24,93 @@ pool:
 
 steps:
   - checkout: self
-
   - task: JavaToolInstaller@0
     displayName: Use Java 21
     inputs:
       versionSpec: '21'
       jdkArchitectureOption: x64
       jdkSourceOption: PreInstalled
-
   - script: |
+      set -euo pipefail
       cd $(modulePath)
-      mvn -B clean package
+      mvn -B -ntp clean verify
     displayName: Maven build and tests
 
   - task: AzureCLI@2
-    displayName: Build and push image to ACR
+    displayName: Build and push immutable Catalog image
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-        ACR='${{ parameters.acrName }}'
-        TAG='${{ parameters.imageTag }}'
-        IMAGE_REPOSITORY='$(imageRepository)'
+        ACR='${{ parameters.acrName }}'; TAG='${{ parameters.imageTag }}'; IMAGE_REPOSITORY='$(imageRepository)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
         az acr login --name "$ACR"
-        docker build -t "$IMAGE" "$(modulePath)"
+        docker build --pull -t "$IMAGE" "$(modulePath)"
         docker push "$IMAGE"
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Update Container App image
+    displayName: Store Catalog database and JWT secrets
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-        RG='${{ parameters.resourceGroupName }}'
-        ACR='${{ parameters.acrName }}'
-        APP='${{ parameters.containerAppName }}'
-        TAG='${{ parameters.imageTag }}'
-        IMAGE_REPOSITORY='$(imageRepository)'
-        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
-        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-        az containerapp update --name "$APP" --resource-group "$RG" --image "$IMAGE" --no-wait
-        az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus}" -o table
+        set +x
+        RG='${{ parameters.resourceGroupName }}'; APP='${{ parameters.containerAppName }}'
+        DB_PASSWORD='$(POSTGRES_BUSINESS_DB_PASSWORD)'; JWT_PEM='$(CRAVES_JWT_VERIFICATION_PEM_BASE64)'
+        require_value() { local name="$1" value="$2"; [[ -n "$value" && "$value" != "\$($name)" ]] || { echo "ERROR: Secure pipeline variable $name is missing." >&2; exit 1; }; }
+        require_value POSTGRES_BUSINESS_DB_PASSWORD "$DB_PASSWORD"
+        require_value CRAVES_JWT_VERIFICATION_PEM_BASE64 "$JWT_PEM"
+        az containerapp secret set -g "$RG" -n "$APP" --secrets db-password="$DB_PASSWORD" jwt-verify-pem="$JWT_PEM" -o none
+        echo 'Catalog secrets stored; values were not printed.'
+
+  - task: AzureCLI@2
+    displayName: Deploy and verify Catalog revision
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'; ACR='${{ parameters.acrName }}'; APP='${{ parameters.containerAppName }}'; TAG='${{ parameters.imageTag }}'; IMAGE_REPOSITORY='$(imageRepository)'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv); IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+        BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json)
+        PREVIOUS_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$BEFORE"); PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")
+        [[ -n "$PREVIOUS_REVISION" && -n "$PREVIOUS_IMAGE" && "$PREVIOUS_IMAGE" != "$IMAGE" ]] || { echo 'ERROR: Catalog deployment state or image tag is invalid.' >&2; exit 1; }
+        az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --set-env-vars \
+          SPRING_PROFILES_ACTIVE=prod \
+          SPRING_DATASOURCE_URL='$(POSTGRES_BUSINESS_DB_URL)' \
+          SPRING_DATASOURCE_USERNAME='$(POSTGRES_BUSINESS_DB_USER)' \
+          SPRING_DATASOURCE_PASSWORD=secretref:db-password \
+          CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem \
+          CRAVES_JWT_ISSUER='https://api.craves.in/auth' \
+          CRAVES_JWT_AUDIENCE=craves-api \
+          CRAVES_STORAGE_ENDPOINT_VALUE='$(CRAVES_STORAGE_ENDPOINT_VALUE)' \
+          CRAVES_STORAGE_MEDIA_CONTAINER=media \
+          CRAVES_MEDIA_PUBLIC_BASE_URL='$(CRAVES_MEDIA_PUBLIC_BASE_URL)' \
+          CRAVES_TOKEN_REVOCATION_ENABLED=false \
+          --no-wait -o none
+        for attempt in $(seq 1 60); do
+          JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
+          LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON"); READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON"); RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$JSON")
+          LATEST_IMAGE=''; HEALTH=''
+          if [[ -n "$LATEST" ]]; then LATEST_IMAGE=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || true); HEALTH=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query properties.healthState -o tsv 2>/dev/null || true); fi
+          DB_REF=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "SPRING_DATASOURCE_PASSWORD")][0].secretRef // ""' <<<"$JSON"); JWT_REF=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_JWT_VERIFICATION_PEM_BASE64")][0].secretRef // ""' <<<"$JSON"); REVOCATION=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_TOKEN_REVOCATION_ENABLED")][0].value // ""' <<<"$JSON")
+          echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE dbRef=$DB_REF jwtRef=$JWT_REF revocation=$REVOCATION"
+          if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$DB_REF" == 'db-password' && "$JWT_REF" == 'jwt-verify-pem' && "${REVOCATION,,}" == 'false' ]]; then
+            FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON"); [[ -n "$FQDN" ]] || exit 1
+            curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null
+            echo "SUCCESS: Catalog revision $LATEST is healthy, secret-bound and fail-closed. Rollback image: $PREVIOUS_IMAGE"
+            exit 0
+          fi
+          [[ "$HEALTH" != 'Unhealthy' && "$RUNNING" != 'Failed' ]] || { az containerapp logs show -g "$RG" -n "$APP" --revision "$LATEST" --type console --tail 200 --format text || true; exit 1; }
+          sleep 10
+        done
+        echo 'ERROR: Catalog revision did not become healthy within 10 minutes.' >&2
+        exit 1

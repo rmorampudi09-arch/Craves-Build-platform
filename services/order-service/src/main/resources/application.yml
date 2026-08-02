@@ -36,10 +36,12 @@ craves:
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}
+  launch-policy:
+    enforcement-enabled: ${CRAVES_LAUNCH_POLICY_ENFORCEMENT_ENABLED:false}
   notification:
     base-url: ${CRAVES_NOTIFICATION_INTERNAL_BASE_URL:}
     access-value: ${CRAVES_NOTIFICATION_INTERNAL_KEY:}
-    direct-dispatch-enabled: ${CRAVES_NOTIFICATION_DIRECT_DISPATCH_ENABLED:true}
+    direct-dispatch-enabled: ${CRAVES_NOTIFICATION_DIRECT_DISPATCH_ENABLED:false}
     outbox-dispatcher:
       enabled: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_ENABLED:false}
       fixed-delay-ms: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_FIXED_DELAY_MS:30000}
@@ -62,6 +64,31 @@ craves:
     max-concurrent-messages: ${CRAVES_REFUND_STATUS_MAX_CONCURRENT_MESSAGES:2}
     prefetch-count: ${CRAVES_REFUND_STATUS_PREFETCH_COUNT:4}
     max-delivery-attempts: ${CRAVES_REFUND_STATUS_MAX_DELIVERY_ATTEMPTS:5}
+  delivery-status-consumer:
+    enabled: ${CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED:false}
+    fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+    connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
+    topic-name: ${CRAVES_DOMAIN_EVENTS_TOPIC_NAME:craves-domain-events}
+    subscription-name: ${CRAVES_DELIVERY_STATUS_SUBSCRIPTION:order-service-delivery-status-changed}
+    max-concurrent-messages: ${CRAVES_DELIVERY_STATUS_MAX_CONCURRENT_MESSAGES:2}
+    prefetch-count: ${CRAVES_DELIVERY_STATUS_PREFETCH_COUNT:4}
+    max-delivery-attempts: ${CRAVES_DELIVERY_STATUS_MAX_DELIVERY_ATTEMPTS:5}
+  subscription-orders:
+    consumer-enabled: ${CRAVES_SUBSCRIPTION_ORDER_CONSUMER_ENABLED:false}
+    callback-worker-enabled: ${CRAVES_SUBSCRIPTION_ORDER_CALLBACK_WORKER_ENABLED:false}
+    fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+    connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
+    topic-name: ${CRAVES_DOMAIN_EVENTS_TOPIC_NAME:craves-domain-events}
+    subscription-name: ${SERVICE_BUS_SUBSCRIPTION_ORDER_REQUESTED_SUBSCRIPTION:order-service-subscription-order-requested}
+    subscription-service-base-url: ${CRAVES_SUBSCRIPTION_INTERNAL_BASE_URL:}
+    internal-access-value: ${CRAVES_INTERNAL_SERVICE_SECRET:}
+    max-concurrent-messages: ${CRAVES_SUBSCRIPTION_ORDER_MAX_CONCURRENT_MESSAGES:2}
+    prefetch-count: ${CRAVES_SUBSCRIPTION_ORDER_PREFETCH_COUNT:4}
+    max-delivery-attempts: ${CRAVES_SUBSCRIPTION_ORDER_MAX_DELIVERY_ATTEMPTS:5}
+    callback-batch-size: ${CRAVES_SUBSCRIPTION_ORDER_CALLBACK_BATCH_SIZE:20}
+    callback-max-attempts: ${CRAVES_SUBSCRIPTION_ORDER_CALLBACK_MAX_ATTEMPTS:10}
+    callback-stale-minutes: ${CRAVES_SUBSCRIPTION_ORDER_CALLBACK_STALE_MINUTES:5}
+    callback-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_ORDER_CALLBACK_FIXED_DELAY_MS:5000}
   domain-events:
     outbox:
       enabled: ${CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED:false}

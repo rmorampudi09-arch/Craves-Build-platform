@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -41,7 +43,13 @@ public class PaymentService {
     private final RestClient orderClient;
     private final RestClient internalOrderClient;
 
-    public PaymentService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper, PaymentProviderProperties provider, OrderClientProperties orderClientProperties, RestClient.Builder builder) {
+    public PaymentService(
+        JdbcTemplate jdbcTemplate,
+        ObjectMapper objectMapper,
+        PaymentProviderProperties provider,
+        OrderClientProperties orderClientProperties,
+        RestClient.Builder builder
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.provider = provider;
@@ -53,46 +61,30 @@ public class PaymentService {
 
     @Transactional
     public CreatePaymentOrderResponse createPaymentOrder(String authorizationHeader, CreatePaymentOrderRequest request) {
-        if (!StringUtils.hasText(authorizationHeader)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing access token");
+        requireAuthorization(authorizationHeader);
+        CheckoutResponse checkout = fetchOwnedCheckout(authorizationHeader, request.checkoutId());
+        if (checkout.id() == null || checkout.grandTotal() == null || checkout.customerIdentityId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Checkout was not valid for payment");
         }
-        CheckoutResponse checkout = orderClient.get()
-            .uri("/checkout/{checkoutId}", request.checkoutId())
-            .header(HttpHeaders.AUTHORIZATION, authorizationHeader)
-            .retrieve()
-            .body(CheckoutResponse.class);
-        if (checkout == null || checkout.id() == null || checkout.grandTotal() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Checkout was not found");
+        Optional<PaymentOrderResponse> existing = findByCheckout(checkout.id());
+        if (existing.isPresent()) {
+            requireMatchingCustomer(existing.get().customerIdentityId(), checkout);
+            return toCreateResponse(existing.get());
         }
-        return findByCheckout(checkout.id())
-            .map(this::toCreateResponse)
-            .orElseGet(() -> createProviderOrder(checkout, request));
+        return createProviderOrder(checkout, request);
     }
 
-    public PaymentOrderResponse getPaymentOrder(UUID paymentOrderId) {
-        return jdbcTemplate.query(
-            "SELECT * FROM payment_schema.payment_order WHERE id = ?",
-            (rs, rowNum) -> new PaymentOrderResponse(
-                rs.getObject("id", UUID.class),
-                rs.getObject("checkout_id", UUID.class),
-                rs.getObject("customer_identity_id", UUID.class),
-                rs.getString("craves_payment_order_ref"),
-                rs.getString("cashfree_order_id"),
-                rs.getString("cashfree_cf_order_id"),
-                rs.getBigDecimal("amount"),
-                rs.getString("currency"),
-                PaymentOrderStatus.valueOf(rs.getString("status")),
-                rs.getString("provider_status"),
-                rs.getTimestamp("created_at").toInstant(),
-                rs.getTimestamp("updated_at").toInstant()
-            ),
-            paymentOrderId
-        ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found"));
+    public PaymentOrderResponse getPaymentOrder(String authorizationHeader, UUID paymentOrderId) {
+        requireAuthorization(authorizationHeader);
+        PaymentOrderResponse paymentOrder = loadPaymentOrder(paymentOrderId);
+        CheckoutResponse checkout = fetchOwnedCheckout(authorizationHeader, paymentOrder.checkoutId());
+        requireMatchingCustomer(paymentOrder.customerIdentityId(), checkout);
+        return paymentOrder;
     }
 
     @Transactional
-    public VerifyPaymentResponse verifyPayment(UUID paymentOrderId) {
-        PaymentOrderResponse existing = getPaymentOrder(paymentOrderId);
+    public VerifyPaymentResponse verifyPayment(String authorizationHeader, UUID paymentOrderId) {
+        PaymentOrderResponse existing = getPaymentOrder(authorizationHeader, paymentOrderId);
         JsonNode response = providerClient.get()
             .uri("/pg/orders/{orderId}", existing.cashfreeOrderId())
             .header("x-client-id", provider.clientId())
@@ -102,7 +94,10 @@ public class PaymentService {
             .body(JsonNode.class);
         String providerStatus = text(response, "order_status");
         PaymentOrderStatus status = "PAID".equalsIgnoreCase(providerStatus) ? PaymentOrderStatus.PAID : existing.status();
-        jdbcTemplate.update("UPDATE payment_schema.payment_order SET status = ?, provider_status = ?, response_payload = ?::jsonb, updated_at = now() WHERE id = ?", status.name(), providerStatus, json(response), paymentOrderId);
+        jdbcTemplate.update(
+            "UPDATE payment_schema.payment_order SET status = ?, provider_status = ?, response_payload = ?::jsonb, updated_at = now() WHERE id = ?",
+            status.name(), providerStatus, json(response), paymentOrderId
+        );
         if (status == PaymentOrderStatus.PAID) {
             notifyOrderPaid(existing.checkoutId(), existing, null);
         }
@@ -117,7 +112,10 @@ public class PaymentService {
             inboxId, "CASHFREE", hash(signature), "RECEIVED", rawBody
         );
         if (!verifySignature(timestamp, signature, rawBody)) {
-            jdbcTemplate.update("UPDATE payment_schema.webhook_inbox SET processing_status = ?, error_message = ?, processed_at = now() WHERE id = ?", "REJECTED", "Invalid signature", inboxId);
+            jdbcTemplate.update(
+                "UPDATE payment_schema.webhook_inbox SET processing_status = ?, error_message = ?, processed_at = now() WHERE id = ?",
+                "REJECTED", "Invalid signature", inboxId
+            );
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid webhook signature");
         }
         try {
@@ -126,7 +124,8 @@ public class PaymentService {
             String cfPaymentId = firstText(payload, "/data/payment/cf_payment_id", "/payment/cf_payment_id", "/cf_payment_id");
             String paymentStatus = firstText(payload, "/data/payment/payment_status", "/payment/payment_status", "/payment_status");
             BigDecimal amount = decimal(firstText(payload, "/data/payment/payment_amount", "/payment/payment_amount", "/payment_amount"));
-            PaymentOrderResponse order = findByProviderOrderId(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found"));
+            PaymentOrderResponse order = findByProviderOrderId(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found"));
             String eventIdentity = StringUtils.hasText(cfPaymentId) ? cfPaymentId : orderId + ":" + paymentStatus + ":" + hash(rawBody);
             try {
                 jdbcTemplate.update(
@@ -134,7 +133,10 @@ public class PaymentService {
                     UUID.randomUUID(), order.paymentOrderId(), eventIdentity, firstText(payload, "/type", "/event_type"), paymentStatus, rawBody
                 );
             } catch (DuplicateKeyException duplicate) {
-                jdbcTemplate.update("UPDATE payment_schema.webhook_inbox SET event_identity = ?, processing_status = ?, processed_at = now() WHERE id = ?", eventIdentity, "DUPLICATE", inboxId);
+                jdbcTemplate.update(
+                    "UPDATE payment_schema.webhook_inbox SET event_identity = ?, processing_status = ?, processed_at = now() WHERE id = ?",
+                    eventIdentity, "DUPLICATE", inboxId
+                );
                 return;
             }
             jdbcTemplate.update(
@@ -142,18 +144,68 @@ public class PaymentService {
                 UUID.randomUUID(), order.paymentOrderId(), cfPaymentId, paymentStatus, amount, INR, rawBody
             );
             if ("SUCCESS".equalsIgnoreCase(paymentStatus)) {
-                jdbcTemplate.update("UPDATE payment_schema.payment_order SET status = ?, provider_status = ?, updated_at = now() WHERE id = ?", PaymentOrderStatus.PAID.name(), paymentStatus, order.paymentOrderId());
+                jdbcTemplate.update(
+                    "UPDATE payment_schema.payment_order SET status = ?, provider_status = ?, updated_at = now() WHERE id = ?",
+                    PaymentOrderStatus.PAID.name(), paymentStatus, order.paymentOrderId()
+                );
                 notifyOrderPaid(order.checkoutId(), order, cfPaymentId);
             } else {
-                jdbcTemplate.update("UPDATE payment_schema.payment_order SET provider_status = ?, updated_at = now() WHERE id = ?", paymentStatus, order.paymentOrderId());
+                jdbcTemplate.update(
+                    "UPDATE payment_schema.payment_order SET provider_status = ?, updated_at = now() WHERE id = ?",
+                    paymentStatus, order.paymentOrderId()
+                );
             }
-            jdbcTemplate.update("UPDATE payment_schema.webhook_inbox SET event_identity = ?, processing_status = ?, processed_at = now() WHERE id = ?", eventIdentity, "PROCESSED", inboxId);
+            jdbcTemplate.update(
+                "UPDATE payment_schema.webhook_inbox SET event_identity = ?, processing_status = ?, processed_at = now() WHERE id = ?",
+                eventIdentity, "PROCESSED", inboxId
+            );
         } catch (ResponseStatusException ex) {
-            jdbcTemplate.update("UPDATE payment_schema.webhook_inbox SET processing_status = ?, error_message = ?, processed_at = now() WHERE id = ?", "FAILED", ex.getReason(), inboxId);
+            jdbcTemplate.update(
+                "UPDATE payment_schema.webhook_inbox SET processing_status = ?, error_message = ?, processed_at = now() WHERE id = ?",
+                "FAILED", ex.getReason(), inboxId
+            );
             throw ex;
         } catch (Exception ex) {
-            jdbcTemplate.update("UPDATE payment_schema.webhook_inbox SET processing_status = ?, error_message = ?, processed_at = now() WHERE id = ?", "FAILED", safe(ex.getMessage()), inboxId);
+            jdbcTemplate.update(
+                "UPDATE payment_schema.webhook_inbox SET processing_status = ?, error_message = ?, processed_at = now() WHERE id = ?",
+                "FAILED", safe(ex.getMessage()), inboxId
+            );
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Webhook processing failed");
+        }
+    }
+
+    private CheckoutResponse fetchOwnedCheckout(String authorizationHeader, UUID checkoutId) {
+        requireAuthorization(authorizationHeader);
+        try {
+            CheckoutResponse checkout = orderClient.get()
+                .uri("/checkout/{checkoutId}", checkoutId)
+                .header(HttpHeaders.AUTHORIZATION, authorizationHeader)
+                .retrieve()
+                .body(CheckoutResponse.class);
+            if (checkout == null || checkout.id() == null || checkout.customerIdentityId() == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Checkout was not found");
+            }
+            return checkout;
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 401 || ex.getStatusCode().value() == 403) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Customer access token is invalid");
+            }
+            if (ex.getStatusCode().value() == 404) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found");
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Order ownership validation failed");
+        }
+    }
+
+    static void requireAuthorization(String authorizationHeader) {
+        if (!StringUtils.hasText(authorizationHeader) || !authorizationHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing or invalid access token");
+        }
+    }
+
+    static void requireMatchingCustomer(UUID paymentCustomerIdentityId, CheckoutResponse checkout) {
+        if (paymentCustomerIdentityId == null || checkout == null || checkout.customerIdentityId() == null || !paymentCustomerIdentityId.equals(checkout.customerIdentityId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found");
         }
     }
 
@@ -188,24 +240,59 @@ public class PaymentService {
         String providerStatus = text(response, "order_status");
         jdbcTemplate.update(
             "INSERT INTO payment_schema.payment_order (id, checkout_id, customer_identity_id, craves_payment_order_ref, cashfree_order_id, cashfree_cf_order_id, payment_session_id, amount, currency, status, provider_status, request_payload, response_payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, now(), now())",
-            paymentOrderId, checkout.id(), checkout.customerIdentityId(), orderRef, cashfreeOrderId, cfOrderId, paymentSessionId, checkout.grandTotal(), checkout.currency(), PaymentOrderStatus.PAYMENT_PENDING.name(), providerStatus, json(body), json(response)
+            paymentOrderId, checkout.id(), checkout.customerIdentityId(), orderRef, cashfreeOrderId, cfOrderId, paymentSessionId,
+            checkout.grandTotal(), checkout.currency(), PaymentOrderStatus.PAYMENT_PENDING.name(), providerStatus, json(body), json(response)
         );
-        return new CreatePaymentOrderResponse(paymentOrderId, checkout.id(), orderRef, cashfreeOrderId, cfOrderId, paymentSessionId, checkout.grandTotal(), checkout.currency(), PaymentOrderStatus.PAYMENT_PENDING, Instant.now());
+        return new CreatePaymentOrderResponse(
+            paymentOrderId, checkout.id(), orderRef, cashfreeOrderId, cfOrderId, paymentSessionId,
+            checkout.grandTotal(), checkout.currency(), PaymentOrderStatus.PAYMENT_PENDING, Instant.now()
+        );
     }
 
-    private java.util.Optional<PaymentOrderResponse> findByCheckout(UUID checkoutId) {
-        return jdbcTemplate.query("SELECT id FROM payment_schema.payment_order WHERE checkout_id = ? ORDER BY created_at DESC LIMIT 1", (rs, rowNum) -> rs.getObject("id", UUID.class), checkoutId)
-            .stream().findFirst().map(this::getPaymentOrder);
+    private PaymentOrderResponse loadPaymentOrder(UUID paymentOrderId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM payment_schema.payment_order WHERE id = ?",
+            (rs, rowNum) -> new PaymentOrderResponse(
+                rs.getObject("id", UUID.class),
+                rs.getObject("checkout_id", UUID.class),
+                rs.getObject("customer_identity_id", UUID.class),
+                rs.getString("craves_payment_order_ref"),
+                rs.getString("cashfree_order_id"),
+                rs.getString("cashfree_cf_order_id"),
+                rs.getBigDecimal("amount"),
+                rs.getString("currency"),
+                PaymentOrderStatus.valueOf(rs.getString("status")),
+                rs.getString("provider_status"),
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getTimestamp("updated_at").toInstant()
+            ),
+            paymentOrderId
+        ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found"));
     }
 
-    private java.util.Optional<PaymentOrderResponse> findByProviderOrderId(String orderId) {
-        return jdbcTemplate.query("SELECT id FROM payment_schema.payment_order WHERE cashfree_order_id = ? OR craves_payment_order_ref = ?", (rs, rowNum) -> rs.getObject("id", UUID.class), orderId, orderId)
-            .stream().findFirst().map(this::getPaymentOrder);
+    private Optional<PaymentOrderResponse> findByCheckout(UUID checkoutId) {
+        return jdbcTemplate.query(
+            "SELECT id FROM payment_schema.payment_order WHERE checkout_id = ? ORDER BY created_at DESC LIMIT 1",
+            (rs, rowNum) -> rs.getObject("id", UUID.class), checkoutId
+        ).stream().findFirst().map(this::loadPaymentOrder);
+    }
+
+    private Optional<PaymentOrderResponse> findByProviderOrderId(String orderId) {
+        return jdbcTemplate.query(
+            "SELECT id FROM payment_schema.payment_order WHERE cashfree_order_id = ? OR craves_payment_order_ref = ?",
+            (rs, rowNum) -> rs.getObject("id", UUID.class), orderId, orderId
+        ).stream().findFirst().map(this::loadPaymentOrder);
     }
 
     private CreatePaymentOrderResponse toCreateResponse(PaymentOrderResponse existing) {
-        String paymentSessionId = jdbcTemplate.query("SELECT payment_session_id FROM payment_schema.payment_order WHERE id = ?", (rs, rowNum) -> rs.getString("payment_session_id"), existing.paymentOrderId()).stream().findFirst().orElse(null);
-        return new CreatePaymentOrderResponse(existing.paymentOrderId(), existing.checkoutId(), existing.cravesPaymentOrderRef(), existing.cashfreeOrderId(), existing.cfOrderId(), paymentSessionId, existing.amount(), existing.currency(), existing.status(), existing.createdAt());
+        String paymentSessionId = jdbcTemplate.query(
+            "SELECT payment_session_id FROM payment_schema.payment_order WHERE id = ?",
+            (rs, rowNum) -> rs.getString("payment_session_id"), existing.paymentOrderId()
+        ).stream().findFirst().orElse(null);
+        return new CreatePaymentOrderResponse(
+            existing.paymentOrderId(), existing.checkoutId(), existing.cravesPaymentOrderRef(), existing.cashfreeOrderId(),
+            existing.cfOrderId(), paymentSessionId, existing.amount(), existing.currency(), existing.status(), existing.createdAt()
+        );
     }
 
     private void notifyOrderPaid(UUID checkoutId, PaymentOrderResponse order, String cfPaymentId) {

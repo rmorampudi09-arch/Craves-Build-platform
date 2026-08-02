@@ -1,10 +1,12 @@
 package in.craves.integration.refund;
 
+import in.craves.integration.config.PaymentProviderProperties;
 import in.craves.integration.refund.CashfreeRefundClient.RefundProviderConfigurationException;
 import in.craves.integration.refund.CashfreeRefundClient.RefundProviderNonRetryableException;
 import in.craves.integration.refund.CashfreeRefundClient.RefundProviderTransientException;
 import in.craves.integration.refund.RefundModels.ProviderRefundResult;
 import in.craves.integration.refund.RefundModels.RefundWorkItem;
+import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -20,23 +22,47 @@ public class RefundExecutionWorker {
     private static final long MAX_RETRY_DELAY_SECONDS = 3600;
 
     private final RefundWorkflowProperties properties;
+    private final PaymentProviderProperties paymentProviderProperties;
     private final RefundRepository repository;
     private final CashfreeRefundClient cashfreeRefundClient;
 
     public RefundExecutionWorker(
         RefundWorkflowProperties properties,
+        PaymentProviderProperties paymentProviderProperties,
         RefundRepository repository,
         CashfreeRefundClient cashfreeRefundClient
     ) {
         this.properties = properties;
+        this.paymentProviderProperties = paymentProviderProperties;
         this.repository = repository;
         this.cashfreeRefundClient = cashfreeRefundClient;
+    }
+
+    @PostConstruct
+    void validateProductionActivation() {
+        if (paymentProviderProperties.sandbox()) {
+            return;
+        }
+        if (properties.isProviderExecutionEnabled() && !properties.isProductionProviderExecutionApproved()) {
+            throw new IllegalStateException(
+                "CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED must be true before production refund execution"
+            );
+        }
+        if (properties.isReconciliationEnabled() && !properties.isProductionReconciliationApproved()) {
+            throw new IllegalStateException(
+                "CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED must be true before production refund reconciliation"
+            );
+        }
     }
 
     @Scheduled(fixedDelayString = "${craves.refund.worker-fixed-delay-ms:30000}")
     public void process() {
         boolean createEnabled = properties.isProviderExecutionEnabled();
         boolean reconcileEnabled = properties.isReconciliationEnabled();
+        if (!paymentProviderProperties.sandbox()) {
+            createEnabled = createEnabled && properties.isProductionProviderExecutionApproved();
+            reconcileEnabled = reconcileEnabled && properties.isProductionReconciliationApproved();
+        }
         if (!createEnabled && !reconcileEnabled) {
             return;
         }

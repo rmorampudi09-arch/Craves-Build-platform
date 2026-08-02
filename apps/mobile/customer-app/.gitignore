@@ -1,0 +1,16 @@
+node_modules/
+android/.gradle/
+android/app/build/
+ios/Pods/
+ios/build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+android/app/google-services.json
+ios/GoogleService-Info.plist
+*.keystore
+*.jks
+*.mobileprovision
+*.p12
+.env
+.env.*
+!.env.example

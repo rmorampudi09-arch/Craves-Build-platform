@@ -44,7 +44,7 @@ craves:
     service-secret: ${CRAVES_INTERNAL_SERVICE_SECRET:}
     notification-service-base-url: ${CRAVES_NOTIFICATION_INTERNAL_BASE_URL:}
     notification-service-key: ${CRAVES_NOTIFICATION_INTERNAL_KEY:}
-    notification-direct-dispatch-enabled: ${CRAVES_NOTIFICATION_DIRECT_DISPATCH_ENABLED:true}
+    notification-direct-dispatch-enabled: ${CRAVES_NOTIFICATION_DIRECT_DISPATCH_ENABLED:false}
     notice-dispatcher:
       enabled: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_ENABLED:false}
       fixed-delay-ms: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_FIXED_DELAY_MS:30000}

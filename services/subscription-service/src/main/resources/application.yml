@@ -28,3 +28,46 @@ craves:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
+  catalog:
+    base-url: ${CRAVES_CATALOG_BASE_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}
+  subscription:
+    occurrence-generator:
+      enabled: ${CRAVES_SUBSCRIPTION_OCCURRENCE_GENERATOR_ENABLED:false}
+      batch-size: ${CRAVES_SUBSCRIPTION_OCCURRENCE_BATCH_SIZE:50}
+      horizon-days: ${CRAVES_SUBSCRIPTION_OCCURRENCE_HORIZON_DAYS:7}
+      stale-lock-minutes: ${CRAVES_SUBSCRIPTION_OCCURRENCE_STALE_LOCK_MINUTES:10}
+      fixed-delay-ms: ${CRAVES_SUBSCRIPTION_OCCURRENCE_FIXED_DELAY_MS:60000}
+    billing:
+      generator-enabled: ${CRAVES_SUBSCRIPTION_BILLING_GENERATOR_ENABLED:false}
+      publisher-enabled: ${CRAVES_SUBSCRIPTION_BILLING_PUBLISHER_ENABLED:false}
+      batch-size: ${CRAVES_SUBSCRIPTION_BILLING_BATCH_SIZE:50}
+      horizon-days: ${CRAVES_SUBSCRIPTION_BILLING_HORIZON_DAYS:7}
+      stale-lock-minutes: ${CRAVES_SUBSCRIPTION_BILLING_STALE_LOCK_MINUTES:10}
+      generator-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_BILLING_GENERATOR_FIXED_DELAY_MS:60000}
+      publisher-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_BILLING_PUBLISHER_FIXED_DELAY_MS:5000}
+      max-publish-attempts: ${CRAVES_SUBSCRIPTION_BILLING_MAX_PUBLISH_ATTEMPTS:10}
+      fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+      connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
+      topic-name: ${CRAVES_DOMAIN_EVENTS_TOPIC_NAME:craves-domain-events}
+    payment-status-consumer:
+      enabled: ${CRAVES_SUBSCRIPTION_PAYMENT_STATUS_CONSUMER_ENABLED:false}
+      fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+      connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
+      topic-name: ${CRAVES_DOMAIN_EVENTS_TOPIC_NAME:craves-domain-events}
+      subscription-name: ${SERVICE_BUS_SUBSCRIPTION_PAYMENT_STATUS_SUBSCRIPTION:subscription-service-payment-status-changed}
+      max-concurrent-messages: ${CRAVES_SUBSCRIPTION_PAYMENT_STATUS_MAX_CONCURRENT_MESSAGES:2}
+      prefetch-count: ${CRAVES_SUBSCRIPTION_PAYMENT_STATUS_PREFETCH_COUNT:4}
+      max-delivery-attempts: ${CRAVES_SUBSCRIPTION_PAYMENT_STATUS_MAX_DELIVERY_ATTEMPTS:5}
+    order-dispatch:
+      request-worker-enabled: ${CRAVES_SUBSCRIPTION_ORDER_REQUEST_WORKER_ENABLED:false}
+      publisher-enabled: ${CRAVES_SUBSCRIPTION_ORDER_PUBLISHER_ENABLED:false}
+      lead-hours: ${CRAVES_SUBSCRIPTION_ORDER_LEAD_HOURS:-1}
+      batch-size: ${CRAVES_SUBSCRIPTION_ORDER_BATCH_SIZE:50}
+      stale-lock-minutes: ${CRAVES_SUBSCRIPTION_ORDER_STALE_LOCK_MINUTES:10}
+      max-publish-attempts: ${CRAVES_SUBSCRIPTION_ORDER_MAX_PUBLISH_ATTEMPTS:10}
+      request-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_ORDER_REQUEST_FIXED_DELAY_MS:30000}
+      publisher-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_ORDER_PUBLISHER_FIXED_DELAY_MS:5000}
+      fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+      connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
+      topic-name: ${CRAVES_DOMAIN_EVENTS_TOPIC_NAME:craves-domain-events}
+      internal-access-value: ${CRAVES_INTERNAL_SERVICE_SECRET:}

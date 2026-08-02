@@ -11,6 +11,8 @@ public class RefundWorkflowProperties {
     private boolean providerExecutionEnabled;
     private boolean reconciliationEnabled;
     private boolean statusPublisherEnabled;
+    private boolean productionProviderExecutionApproved;
+    private boolean productionReconciliationApproved;
     private String fullyQualifiedNamespace = "";
     private String connectionString = "";
     private String topicName = "craves-domain-events";
@@ -34,6 +36,14 @@ public class RefundWorkflowProperties {
     public void setReconciliationEnabled(boolean reconciliationEnabled) { this.reconciliationEnabled = reconciliationEnabled; }
     public boolean isStatusPublisherEnabled() { return statusPublisherEnabled; }
     public void setStatusPublisherEnabled(boolean statusPublisherEnabled) { this.statusPublisherEnabled = statusPublisherEnabled; }
+    public boolean isProductionProviderExecutionApproved() { return productionProviderExecutionApproved; }
+    public void setProductionProviderExecutionApproved(boolean productionProviderExecutionApproved) {
+        this.productionProviderExecutionApproved = productionProviderExecutionApproved;
+    }
+    public boolean isProductionReconciliationApproved() { return productionReconciliationApproved; }
+    public void setProductionReconciliationApproved(boolean productionReconciliationApproved) {
+        this.productionReconciliationApproved = productionReconciliationApproved;
+    }
     public String getFullyQualifiedNamespace() { return fullyQualifiedNamespace; }
     public void setFullyQualifiedNamespace(String fullyQualifiedNamespace) { this.fullyQualifiedNamespace = fullyQualifiedNamespace; }
     public String getConnectionString() { return connectionString; }

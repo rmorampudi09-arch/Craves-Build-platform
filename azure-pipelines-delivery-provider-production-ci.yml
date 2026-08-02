@@ -1,0 +1,33 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    persistCredentials: false
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - bash: |
+      set -euo pipefail
+      cd services/integration-service
+      mvn -B -ntp -DskipTests=false verify
+    displayName: Verify delivery provider production readiness
+
+  - bash: |
+      set -euo pipefail
+      file=services/integration-service/src/main/resources/application.yml
+      grep -Fq 'enabled: ${BORZO_API_ENABLED:false}' "$file"
+      grep -Fq 'environment: ${BORZO_API_ENVIRONMENT:SANDBOX}' "$file"
+      grep -Fq 'production-activation-approved: ${BORZO_PRODUCTION_ACTIVATION_APPROVED:false}' "$file"
+      grep -Fq 'enabled: ${CRAVES_DELIVERY_COMMAND_ENABLED:false}' "$file"
+      grep -Fq 'status-publisher-enabled: ${CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED:false}' "$file"
+    displayName: Verify production activation is fail closed

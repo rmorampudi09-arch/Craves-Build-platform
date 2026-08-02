@@ -4,7 +4,9 @@ import in.craves.subscription.security.CurrentUser;
 import in.craves.subscription.service.SubscriptionService;
 import in.craves.subscription.web.ApiDtos.CreatePlanRequest;
 import in.craves.subscription.web.ApiDtos.CreateSubscriptionRequest;
+import in.craves.subscription.web.ApiDtos.CustomerSubscriptionResponse;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
+import in.craves.subscription.web.ApiDtos.PublicPlanResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionStateChangeRequest;
 import in.craves.subscription.web.ApiDtos.UpdatePlanStatusRequest;
@@ -32,17 +34,20 @@ public class SubscriptionController {
     }
 
     @GetMapping("/subscriptions/plans")
-    public List<PlanResponse> listActivePlans() {
+    public List<PublicPlanResponse> listActivePlans() {
         return service.listActivePlans();
     }
 
     @GetMapping("/subscriptions/plans/{planId}")
-    public PlanResponse getPlan(@PathVariable UUID planId) {
+    public PublicPlanResponse getPlan(@PathVariable UUID planId) {
         return service.getPlan(planId);
     }
 
     @PostMapping("/admin/subscription-plans")
-    public ResponseEntity<PlanResponse> createPlan(@Valid @RequestBody CreatePlanRequest request, @AuthenticationPrincipal CurrentUser user) {
+    public ResponseEntity<PlanResponse> createPlan(
+        @Valid @RequestBody CreatePlanRequest request,
+        @AuthenticationPrincipal CurrentUser user
+    ) {
         PlanResponse response = service.createPlan(request, user);
         return ResponseEntity.created(URI.create("/api/v1/subscriptions/plans/" + response.id())).body(response);
     }
@@ -62,40 +67,43 @@ public class SubscriptionController {
     }
 
     @PostMapping("/subscriptions")
-    public ResponseEntity<SubscriptionResponse> createSubscription(
+    public ResponseEntity<CustomerSubscriptionResponse> createSubscription(
         @Valid @RequestBody CreateSubscriptionRequest request,
         @AuthenticationPrincipal CurrentUser user
     ) {
-        SubscriptionResponse response = service.createSubscription(request, user);
+        CustomerSubscriptionResponse response = service.createSubscription(request, user);
         return ResponseEntity.created(URI.create("/api/v1/subscriptions/" + response.id())).body(response);
     }
 
     @GetMapping("/subscriptions")
-    public List<SubscriptionResponse> listMySubscriptions(@AuthenticationPrincipal CurrentUser user) {
+    public List<CustomerSubscriptionResponse> listMySubscriptions(@AuthenticationPrincipal CurrentUser user) {
         return service.listMine(user);
     }
 
     @GetMapping("/subscriptions/{subscriptionId}")
-    public SubscriptionResponse getSubscription(@PathVariable UUID subscriptionId, @AuthenticationPrincipal CurrentUser user) {
+    public CustomerSubscriptionResponse getSubscription(
+        @PathVariable UUID subscriptionId,
+        @AuthenticationPrincipal CurrentUser user
+    ) {
         return service.getMine(subscriptionId, user);
     }
 
     @PatchMapping("/subscriptions/{subscriptionId}/pause")
-    public SubscriptionResponse pauseSubscription(
+    public CustomerSubscriptionResponse pauseSubscription(
         @PathVariable UUID subscriptionId,
         @RequestBody(required = false) SubscriptionStateChangeRequest request,
         @AuthenticationPrincipal CurrentUser user
     ) {
-        return service.changeStatus(subscriptionId, "PAUSED", reason(request), user);
+        return service.changeCustomerStatus(subscriptionId, "PAUSED", reason(request), user);
     }
 
     @PatchMapping("/subscriptions/{subscriptionId}/cancel")
-    public SubscriptionResponse cancelSubscription(
+    public CustomerSubscriptionResponse cancelSubscription(
         @PathVariable UUID subscriptionId,
         @RequestBody(required = false) SubscriptionStateChangeRequest request,
         @AuthenticationPrincipal CurrentUser user
     ) {
-        return service.changeStatus(subscriptionId, "CANCELLED", reason(request), user);
+        return service.changeCustomerStatus(subscriptionId, "CANCELLED", reason(request), user);
     }
 
     @PatchMapping("/admin/subscriptions/{subscriptionId}/status/{status}")
@@ -105,7 +113,7 @@ public class SubscriptionController {
         @RequestBody(required = false) SubscriptionStateChangeRequest request,
         @AuthenticationPrincipal CurrentUser user
     ) {
-        return service.changeStatus(subscriptionId, status, reason(request), user);
+        return service.adminChangeStatus(subscriptionId, status, reason(request), user);
     }
 
     private static String reason(SubscriptionStateChangeRequest request) {

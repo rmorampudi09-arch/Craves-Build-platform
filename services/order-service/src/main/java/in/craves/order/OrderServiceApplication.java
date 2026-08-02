@@ -3,6 +3,7 @@ package in.craves.order;
 import in.craves.order.config.CatalogClientProperties;
 import in.craves.order.config.ChefAcceptanceWindowProperties;
 import in.craves.order.config.CravesJwtProperties;
+import in.craves.order.config.DeliveryStatusConsumerProperties;
 import in.craves.order.config.DomainEventOutboxProperties;
 import in.craves.order.config.NotificationClientProperties;
 import in.craves.order.config.NotificationOutboxDispatcherProperties;
@@ -23,7 +24,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
     DomainEventOutboxProperties.class,
     ServiceBusDomainEventProperties.class,
     ChefAcceptanceWindowProperties.class,
-    RefundStatusConsumerProperties.class
+    RefundStatusConsumerProperties.class,
+    DeliveryStatusConsumerProperties.class
 })
 public class OrderServiceApplication {
     public static void main(String[] args) {

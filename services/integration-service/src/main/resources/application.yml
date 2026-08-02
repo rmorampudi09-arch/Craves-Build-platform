@@ -13,7 +13,7 @@ spring:
 
 craves:
   delivery-intelligence:
-    enabled: ${CRAVES_DELIVERY_INTELLIGENCE_ENABLED:true}
+    enabled: ${CRAVES_DELIVERY_INTELLIGENCE_ENABLED:false}
     live-window-days: ${CRAVES_DELIVERY_LIVE_WINDOW_DAYS:7}
     global-prior: ${CRAVES_DELIVERY_GLOBAL_PRIOR:100.0}
     momentum-threshold: ${CRAVES_DELIVERY_MOMENTUM_THRESHOLD:3.0}
@@ -75,6 +75,8 @@ craves:
     provider-execution-enabled: ${CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED:false}
     reconciliation-enabled: ${CRAVES_REFUND_RECONCILIATION_ENABLED:false}
     status-publisher-enabled: ${CRAVES_REFUND_STATUS_PUBLISHER_ENABLED:false}
+    production-provider-execution-approved: ${CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED:false}
+    production-reconciliation-approved: ${CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED:false}
     fully-qualified-namespace: ${SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
     connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
     topic-name: ${SERVICE_BUS_TOPIC_NAME:craves-domain-events}
@@ -89,12 +91,38 @@ craves:
     stale-lock-seconds: ${CRAVES_REFUND_STALE_LOCK_SECONDS:300}
     status-outbox-batch-size: ${CRAVES_REFUND_STATUS_OUTBOX_BATCH_SIZE:20}
     status-outbox-fixed-delay-ms: ${CRAVES_REFUND_STATUS_OUTBOX_FIXED_DELAY_MS:5000}
+  subscription-payments:
+    consumer-enabled: ${CRAVES_SUBSCRIPTION_PAYMENT_CONSUMER_ENABLED:false}
+    status-publisher-enabled: ${CRAVES_SUBSCRIPTION_PAYMENT_STATUS_PUBLISHER_ENABLED:false}
+    fully-qualified-namespace: ${SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
+    connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
+    topic-name: ${SERVICE_BUS_TOPIC_NAME:craves-domain-events}
+    request-subscription-name: ${SERVICE_BUS_SUBSCRIPTION_PAYMENT_REQUESTED_SUBSCRIPTION:integration-service-subscription-payment-requested}
+    subscription-service-base-url: ${CRAVES_SUBSCRIPTION_SERVICE_BASE_URL:}
+    max-concurrent-messages: ${CRAVES_SUBSCRIPTION_PAYMENT_MAX_CONCURRENT_MESSAGES:2}
+    prefetch-count: ${CRAVES_SUBSCRIPTION_PAYMENT_PREFETCH_COUNT:4}
+    max-delivery-attempts: ${CRAVES_SUBSCRIPTION_PAYMENT_MAX_DELIVERY_ATTEMPTS:5}
+    outbox-batch-size: ${CRAVES_SUBSCRIPTION_PAYMENT_OUTBOX_BATCH_SIZE:20}
+    max-publish-attempts: ${CRAVES_SUBSCRIPTION_PAYMENT_MAX_PUBLISH_ATTEMPTS:10}
+    stale-lock-minutes: ${CRAVES_SUBSCRIPTION_PAYMENT_STALE_LOCK_MINUTES:5}
+    outbox-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_PAYMENT_OUTBOX_FIXED_DELAY_MS:5000}
+  cashfree:
+    webhook:
+      worker-enabled: ${CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED:false}
+      batch-size: ${CRAVES_CASHFREE_WEBHOOK_BATCH_SIZE:20}
+      fixed-delay-ms: ${CRAVES_CASHFREE_WEBHOOK_FIXED_DELAY_MS:2000}
+      max-attempts: ${CRAVES_CASHFREE_WEBHOOK_MAX_ATTEMPTS:10}
+      stale-minutes: ${CRAVES_CASHFREE_WEBHOOK_STALE_MINUTES:5}
+      retry-base-seconds: ${CRAVES_CASHFREE_WEBHOOK_RETRY_BASE_SECONDS:5}
   providers:
     borzo:
       enabled: ${BORZO_API_ENABLED:false}
+      environment: ${BORZO_API_ENVIRONMENT:SANDBOX}
+      production-activation-approved: ${BORZO_PRODUCTION_ACTIVATION_APPROVED:false}
       base-url: ${BORZO_API_BASE_URL:https://robotapitest-in.borzodelivery.com/api/business/1.8}
       auth-token: ${BORZO_API_AUTH_TOKEN:}
       callback-secret: ${BORZO_CALLBACK_TOKEN:}
+      callback-url: ${BORZO_CALLBACK_URL:}
       connect-timeout-seconds: ${BORZO_CONNECT_TIMEOUT_SECONDS:5}
       read-timeout-seconds: ${BORZO_READ_TIMEOUT_SECONDS:20}
       reconciliation-page-size: ${BORZO_RECONCILIATION_PAGE_SIZE:50}

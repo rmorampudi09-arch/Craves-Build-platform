@@ -29,7 +29,8 @@ public class SubscriptionRepository {
         String description,
         String billingPeriod,
         BigDecimal amount,
-        String currency
+        String currency,
+        UUID actorIdentityId
     ) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
@@ -45,7 +46,9 @@ public class SubscriptionRepository {
             amount,
             currency
         );
-        return findPlanById(id).orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found after creation"));
+        insertPlanAudit(id, actorIdentityId, "CREATE", null, "DRAFT");
+        return findPlanById(id)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found after creation"));
     }
 
     public List<PlanResponse> listPlans(boolean activeOnly) {
@@ -58,6 +61,15 @@ public class SubscriptionRepository {
         return jdbcTemplate.query(sql, this::mapPlan);
     }
 
+    public List<PlanResponse> listPlansForChef(UUID chefIdentityId) {
+        return jdbcTemplate.query(
+            "SELECT id, plan_code, chef_identity_id, name, description, billing_period, amount, currency, status, created_at, updated_at " +
+                "FROM subscription_schema.subscription_plan WHERE chef_identity_id = ? ORDER BY created_at DESC",
+            this::mapPlan,
+            chefIdentityId
+        );
+    }
+
     public Optional<PlanResponse> findPlanById(UUID id) {
         List<PlanResponse> rows = jdbcTemplate.query(
             "SELECT id, plan_code, chef_identity_id, name, description, billing_period, amount, currency, status, created_at, updated_at " +
@@ -68,7 +80,19 @@ public class SubscriptionRepository {
         return rows.stream().findFirst();
     }
 
-    public PlanResponse updatePlanStatus(UUID planId, String status) {
+    public Optional<PlanResponse> findActivePlanById(UUID id) {
+        List<PlanResponse> rows = jdbcTemplate.query(
+            "SELECT id, plan_code, chef_identity_id, name, description, billing_period, amount, currency, status, created_at, updated_at " +
+                "FROM subscription_schema.subscription_plan WHERE id = ? AND status = 'ACTIVE'",
+            this::mapPlan,
+            id
+        );
+        return rows.stream().findFirst();
+    }
+
+    public PlanResponse updatePlanStatus(UUID planId, String status, UUID actorIdentityId) {
+        PlanResponse existing = findPlanById(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
         int updated = jdbcTemplate.update(
             "UPDATE subscription_schema.subscription_plan SET status = ?, updated_at = now() WHERE id = ?",
             status,
@@ -77,7 +101,29 @@ public class SubscriptionRepository {
         if (updated == 0) {
             throw ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found");
         }
-        return findPlanById(planId).orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
+        insertPlanAudit(planId, actorIdentityId, "STATUS_CHANGE", existing.status(), status);
+        return findPlanById(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
+    }
+
+    public PlanResponse updatePlanStatusForChef(UUID planId, UUID chefIdentityId, String status, UUID actorIdentityId) {
+        PlanResponse existing = findPlanById(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
+        if (existing.chefIdentityId() == null || !existing.chefIdentityId().equals(chefIdentityId)) {
+            throw ApiException.forbidden("PLAN_ACCESS_DENIED", "You cannot manage another chef's subscription plan");
+        }
+        int updated = jdbcTemplate.update(
+            "UPDATE subscription_schema.subscription_plan SET status = ?, updated_at = now() WHERE id = ? AND chef_identity_id = ?",
+            status,
+            planId,
+            chefIdentityId
+        );
+        if (updated == 0) {
+            throw ApiException.forbidden("PLAN_ACCESS_DENIED", "You cannot manage another chef's subscription plan");
+        }
+        insertPlanAudit(planId, actorIdentityId, "STATUS_CHANGE", existing.status(), status);
+        return findPlanById(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
     }
 
     public SubscriptionResponse createSubscription(
@@ -102,7 +148,8 @@ public class SubscriptionRepository {
             notes
         );
         insertHistory(id, null, "PENDING_PAYMENT", "Subscription created and waiting for payment verification", customerIdentityId);
-        return findSubscriptionById(id).orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found after creation"));
+        return findSubscriptionById(id)
+            .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found after creation"));
     }
 
     public List<SubscriptionResponse> listCustomerSubscriptions(UUID customerIdentityId) {
@@ -136,7 +183,21 @@ public class SubscriptionRepository {
             throw ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found");
         }
         insertHistory(id, existing.status(), newStatus, reason, actorIdentityId);
-        return findSubscriptionById(id).orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
+        return findSubscriptionById(id)
+            .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
+    }
+
+    private void insertPlanAudit(UUID planId, UUID actorIdentityId, String action, String oldStatus, String newStatus) {
+        jdbcTemplate.update(
+            "INSERT INTO subscription_schema.subscription_plan_audit " +
+                "(id, plan_id, actor_identity_id, action, old_status, new_status, created_at) VALUES (?, ?, ?, ?, ?, ?, now())",
+            UUID.randomUUID(),
+            planId,
+            actorIdentityId,
+            action,
+            oldStatus,
+            newStatus
+        );
     }
 
     private void insertHistory(UUID subscriptionId, String oldStatus, String newStatus, String reason, UUID actorIdentityId) {

@@ -53,8 +53,10 @@ declare -a PIPELINES=(
   azure-pipelines-seven-service-image-build.yml
   azure-pipelines-seven-service-deploy.yml
   azure-pipelines-customer-web-image-build.yml
+  azure-pipelines-customer-web-provision.yml
   azure-pipelines-customer-web-deploy.yml
   azure-pipelines-mobile-native-readiness.yml
+  azure-pipelines-managed-redis.yml
   azure-pipelines-production-completion-orchestrator.yml
   azure-pipelines-release-readiness-orchestrator.yml
   pipelines/azure-pipelines-infra.yml
@@ -96,8 +98,10 @@ NEW_PIPELINE_CONTENT=$(cat \
   "$ROOT/azure-pipelines-seven-service-image-build.yml" \
   "$ROOT/azure-pipelines-seven-service-deploy.yml" \
   "$ROOT/azure-pipelines-customer-web-image-build.yml" \
+  "$ROOT/azure-pipelines-customer-web-provision.yml" \
   "$ROOT/azure-pipelines-customer-web-deploy.yml" \
   "$ROOT/azure-pipelines-mobile-native-readiness.yml" \
+  "$ROOT/azure-pipelines-managed-redis.yml" \
   "$ROOT/azure-pipelines-production-completion-orchestrator.yml" \
   "$ROOT/pipelines/azure-pipelines-infra.yml")
 
@@ -117,15 +121,33 @@ if grep -Eq 'POSTGRES_ADMIN_PASSWORD|AccountKey=|SharedAccessKey=|SharedAccessSi
   fail 'A secret value pattern or legacy plaintext bootstrap variable exists in the new pipeline pack'
 fi
 
+[[ -s "$ROOT/infra/customer-web-containerapp.bicep" ]] || fail 'missing customer web Container App Bicep definition'
+[[ -s "$ROOT/infra/managed-redis.bicep" ]] || fail 'missing Azure Managed Redis Bicep definition'
+grep -F "name: 'Balanced_B0'" "$ROOT/infra/managed-redis.bicep" >/dev/null \
+  || fail 'Managed Redis Bicep must use the approved low-capacity SKU'
+grep -F "clusteringPolicy: 'NoCluster'" "$ROOT/infra/managed-redis.bicep" >/dev/null \
+  || fail 'Managed Redis must use NoCluster for the current URL-based Spring configuration'
+jq -e '.azure.managedRedis.activationFlagsRemainDisabled == true and .azure.managedRedis.tls == true and .azure.managedRedis.port == 10000' "$PACK" >/dev/null \
+  || fail 'Managed Redis completion-pack contract is invalid'
+jq -e '.web.apiBaseUrl | startswith("https://")' "$PACK" >/dev/null \
+  || fail 'Customer web API base URL must use HTTPS'
+
 EXPECTED_CONNECTION=$(jq -r '.azure.serviceConnection' "$PACK")
-if ! grep -R -F "azureSubscription: $EXPECTED_CONNECTION" \
-  "$ROOT/azure-pipelines-seven-service-image-build.yml" \
-  "$ROOT/azure-pipelines-seven-service-deploy.yml" \
-  "$ROOT/azure-pipelines-customer-web-image-build.yml" \
-  "$ROOT/azure-pipelines-customer-web-deploy.yml" \
-  "$ROOT/pipelines/azure-pipelines-infra.yml" >/dev/null; then
-  fail 'The exact authorized service connection is missing from one or more Azure pipelines'
-fi
+declare -a AZURE_PIPELINES=(
+  azure-pipelines-seven-service-image-build.yml
+  azure-pipelines-seven-service-deploy.yml
+  azure-pipelines-customer-web-image-build.yml
+  azure-pipelines-customer-web-provision.yml
+  azure-pipelines-customer-web-deploy.yml
+  azure-pipelines-managed-redis.yml
+  azure-pipelines-production-completion-orchestrator.yml
+  azure-pipelines-release-readiness-orchestrator.yml
+  pipelines/azure-pipelines-infra.yml
+)
+for pipeline in "${AZURE_PIPELINES[@]}"; do
+  grep -F "azureSubscription: $EXPECTED_CONNECTION" "$ROOT/$pipeline" >/dev/null \
+    || fail "Exact authorized service connection is missing from $pipeline"
+done
 
 jq -e --argjson expected "$(jq '.requiredDisabledByDefaultFlags | unique | sort' "$READINESS")" '
   ([.backendServices[].disabledFlags[]] | unique | sort) as $actual

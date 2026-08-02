@@ -9,7 +9,7 @@
     "resourceGroup": "rg-craves-prodlow-centralindia",
     "location": "centralindia",
     "containerRegistry": "cravesprodlowacr82121",
-    "containerRegistryLoginServer": "cravesprodlowl82121.azurecr.io",
+    "containerRegistryLoginServer": "cravesprodlowacr82121.azurecr.io",
     "keyVault": "kvcravesprodlowl3ing6",
     "postgresServer": "pg-craves-prodlow-l3ing6",
     "storageAccount": "stcravesprodlowl3ing6",

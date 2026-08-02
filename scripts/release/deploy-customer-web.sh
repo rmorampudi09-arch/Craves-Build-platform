@@ -28,8 +28,10 @@ ACR_LOGIN=$(jq -r '.azure.containerRegistryLoginServer' "$PACK_FILE")
 IMAGE_REPOSITORY=$(jq -r '.web.imageRepository' "$PACK_FILE")
 EXPECTED_APP=$(jq -r '.web.containerApp' "$PACK_FILE")
 TARGET_PORT=$(jq -r '.web.targetPort' "$PACK_FILE")
+API_BASE_URL=$(jq -r '.web.apiBaseUrl' "$PACK_FILE")
 [[ "$RESOURCE_GROUP" == "$EXPECTED_RG" ]] || fail "Resource group must be $EXPECTED_RG"
 [[ "$CONTAINER_APP" == "$EXPECTED_APP" ]] || fail "Web Container App must be $EXPECTED_APP"
+[[ "$API_BASE_URL" == https://* ]] || fail 'Customer web API base URL must use HTTPS.'
 
 TARGET_IMAGE="$ACR_LOGIN/$IMAGE_REPOSITORY:$IMAGE_TAG"
 TAG_EXISTS=$(az acr repository show-tags --name "$ACR_NAME" --repository "$IMAGE_REPOSITORY" \
@@ -61,7 +63,7 @@ az containerapp ingress update -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
 set +e
 az containerapp update -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
   --image "$TARGET_IMAGE" \
-  --set-env-vars NODE_ENV=production PORT="$TARGET_PORT" NEXT_TELEMETRY_DISABLED=1 \
+  --set-env-vars NODE_ENV=production PORT="$TARGET_PORT" NEXT_TELEMETRY_DISABLED=1 CRAVES_API_BASE_URL="$API_BASE_URL" \
   --only-show-errors >/dev/null
 UPDATE_RC=$?
 set -e
@@ -128,8 +130,9 @@ jq -n \
   --arg image "$TARGET_IMAGE" \
   --arg revision "$NEW_REVISION" \
   --arg fqdn "$FQDN" \
+  --arg apiBaseUrl "$API_BASE_URL" \
   --arg deployedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '{schemaVersion:1,containerApp:$containerApp,image:$image,revision:$revision,fqdn:$fqdn,httpStatus:200,deployedAt:$deployedAt,secretsReadOrChanged:false,credentialRotationExecuted:false}' \
+  '{schemaVersion:1,containerApp:$containerApp,image:$image,revision:$revision,fqdn:$fqdn,apiBaseUrl:$apiBaseUrl,httpStatus:200,deployedAt:$deployedAt,secretsReadOrChanged:false,credentialRotationExecuted:false}' \
   >"$OUTPUT_DIR/customer-web-deployment-manifest.json"
 
 jq -e '.httpStatus == 200 and .secretsReadOrChanged == false and .credentialRotationExecuted == false' \

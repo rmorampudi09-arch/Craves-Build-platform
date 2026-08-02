@@ -1,25 +1,27 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { ChefHat, UserRound, X } from "lucide-react";
 import { type ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
 import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import { setSessionIdentity, type CravesUser } from "@/services/auth/cravesAuth";
 import type { CravesIdentity } from "@/lib/auth-contract";
 
 type Mode = "login" | "register";
+export type AccountMode = "customer" | "chef";
 
 interface AuthModalProps {
   open: boolean;
   mode: Mode;
   onClose: () => void;
   onSwitchMode: (mode: Mode) => void;
-  onAuthenticated?: (user: CravesUser) => void;
+  onAuthenticated?: (user: CravesUser, accountMode: AccountMode) => void;
 }
 
 export function AuthModal({ open, mode, onClose, onSwitchMode, onAuthenticated }: AuthModalProps) {
   const [phone, setPhone] = useState("");
   const [username, setUsername] = useState("");
+  const [accountMode, setAccountMode] = useState<AccountMode>("customer");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -41,6 +43,7 @@ export function AuthModal({ open, mode, onClose, onSwitchMode, onAuthenticated }
     confirmation.current = null;
     setPhone("");
     setUsername("");
+    setAccountMode("customer");
     setOtp("");
     setOtpSent(false);
     setBusy(false);
@@ -119,7 +122,7 @@ export function AuthModal({ open, mode, onClose, onSwitchMode, onAuthenticated }
         if (profileResponse?.ok) user = { ...user, username: username.trim() };
       }
 
-      onAuthenticated?.(user);
+      onAuthenticated?.(user, accountMode);
       reset();
       onClose();
     } catch (caught) {
@@ -146,6 +149,20 @@ export function AuthModal({ open, mode, onClose, onSwitchMode, onAuthenticated }
         <div className="px-6 py-6">
           <h3 className="text-2xl font-bold text-ink">Welcome to <span className="text-primary">CRAVES</span></h3>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">Your OTP is verified by Firebase. Craves access and refresh tokens stay in secure HTTP-only cookies.</p>
+          <fieldset className="mt-5" disabled={otpSent || busy}>
+            <legend className="text-xs font-bold uppercase tracking-wide text-ink">
+              {mode === "register" ? "I want to register as" : "Continue as"}
+            </legend>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <button type="button" aria-pressed={accountMode === "customer"} onClick={() => setAccountMode("customer")} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition ${accountMode === "customer" ? "border-primary bg-primary/10 text-primary" : "border-border bg-white text-ink"}`}>
+                <UserRound className="h-4 w-4" /> Customer
+              </button>
+              <button type="button" aria-pressed={accountMode === "chef"} onClick={() => setAccountMode("chef")} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition ${accountMode === "chef" ? "border-primary bg-primary/10 text-primary" : "border-border bg-white text-ink"}`}>
+                <ChefHat className="h-4 w-4" /> Home Chef
+              </button>
+            </div>
+            {accountMode === "chef" && <p className="mt-2 text-xs leading-5 text-muted-foreground">You will continue to chef application or chef mode after OTP. Chef access is granted only after admin approval.</p>}
+          </fieldset>
           <form onSubmit={otpSent ? handleVerify : handleGenerateOtp} className="mt-6 space-y-4">
             <div className="flex items-stretch overflow-hidden rounded-lg border border-border bg-white">
               <span className="flex items-center gap-1 border-r border-border px-3 text-sm font-medium text-ink">🇮🇳 <span>+91</span></span>

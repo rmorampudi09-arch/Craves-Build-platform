@@ -143,10 +143,7 @@ test("chef dashboard reuses the working Craves session for applicants and chefs"
 test("chef identity BFF unwraps the Spring Auth Service response", () => {
   const contents = source("../app/api/chef/me/route.ts");
   assert.match(contents, /parseChefModeIdentity\(raw\?\.identity\)/);
-  assert.doesNotMatch(
-    contents,
-    /parseChefModeIdentity\(await upstream\.json/,
-  );
+  assert.doesNotMatch(contents, /parseChefModeIdentity\(await upstream\.json/);
 });
 
 test("protected chef pages synchronize the JWT after admin grants CHEF", () => {

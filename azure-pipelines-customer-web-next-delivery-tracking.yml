@@ -232,12 +232,21 @@ steps:
             if (( ${#PREVIOUS_WEIGHTS[@]} == 0 )); then
               PREVIOUS_WEIGHTS=("$PREVIOUS_REVISION=100")
             fi
-            az containerapp ingress traffic set               --resource-group "$RG"               --name "$APP"               --revision-weight "${PREVIOUS_WEIGHTS[@]}"               -o none
+            az containerapp ingress traffic set \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --revision-weight "${PREVIOUS_WEIGHTS[@]}" \
+              -o none
           else
             if [[ -z "$PREVIOUS_BUILD_SHA" ]]; then
               PREVIOUS_BUILD_SHA=unknown
             fi
-            az containerapp update               --resource-group "$RG"               --name "$APP"               --image "$PREVIOUS_IMAGE"               --set-env-vars CRAVES_BUILD_SHA="$PREVIOUS_BUILD_SHA"               -o none
+            az containerapp update \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --image "$PREVIOUS_IMAGE" \
+              --set-env-vars CRAVES_BUILD_SHA="$PREVIOUS_BUILD_SHA" \
+              -o none
           fi
         }
 
@@ -252,7 +261,17 @@ steps:
         trap rollback EXIT
 
         PREVIOUS_LATEST=$(az containerapp show --resource-group "$RG" --name "$APP" --query properties.latestRevisionName -o tsv)
-        az containerapp update           --resource-group "$RG"           --name "$APP"           --image "$IMAGE"           --set-env-vars             CRAVES_API_BASE_URL="$API_BASE_URL"             CRAVES_BUILD_SHA="$EXPECTED_SHA"             NODE_ENV=production             PORT=3000             NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false           -o none
+        az containerapp update \
+          --resource-group "$RG" \
+          --name "$APP" \
+          --image "$IMAGE" \
+          --set-env-vars \
+            CRAVES_API_BASE_URL="$API_BASE_URL" \
+            CRAVES_BUILD_SHA="$EXPECTED_SHA" \
+            NODE_ENV=production \
+            PORT=3000 \
+            NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false \
+          -o none
 
         NEW_REVISION=''
         for ATTEMPT in $(seq 1 60); do
@@ -276,7 +295,11 @@ steps:
         }
 
         if [[ "$ACTIVE_MODE" == 'Multiple' ]]; then
-          az containerapp ingress traffic set             --resource-group "$RG"             --name "$APP"             --revision-weight "$NEW_REVISION=100"             -o none
+          az containerapp ingress traffic set \
+            --resource-group "$RG" \
+            --name "$APP" \
+            --revision-weight "$NEW_REVISION=100" \
+            -o none
         fi
 
         for ATTEMPT in $(seq 1 36); do

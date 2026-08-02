@@ -600,7 +600,8 @@ export async function discoverDishes(latitude: number, longitude: number, radius
 }
 
 export function allDishes(): Dish[] {
-  return discoveredDishes.length > 0 ? discoveredDishes : DISHES;
+  if (discoveredDishes.length > 0) return discoveredDishes;
+  return process.env.NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK === "true" ? DISHES : [];
 }
 
 export function getDish(id: string): Dish | undefined {

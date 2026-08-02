@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { type FormEvent, useEffect, useState } from "react";
 import type { CustomerAddress } from "@/lib/address-contract";
 import { selectActiveDeliveryAddress } from "@/lib/address-selection";
 import type {
@@ -48,8 +49,7 @@ function fromApplication(application: ChefApplication): FormState {
     city: application.city ?? "",
     state: application.state ?? "",
     postalCode: application.postalCode ?? "",
-    latitude:
-      application.latitude === null ? "" : String(application.latitude),
+    latitude: application.latitude === null ? "" : String(application.latitude),
     longitude:
       application.longitude === null ? "" : String(application.longitude),
   };
@@ -78,9 +78,7 @@ function prefillNewApplication(
       (typeof address?.latitude === "number" ? String(address.latitude) : ""),
     longitude:
       form.longitude ||
-      (typeof address?.longitude === "number"
-        ? String(address.longitude)
-        : ""),
+      (typeof address?.longitude === "number" ? String(address.longitude) : ""),
   };
 }
 
@@ -98,8 +96,7 @@ export function ChefApplicationWorkspace() {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [message, setMessage] = useState("Loading your chef application…");
   const [busy, setBusy] = useState(false);
-  const [proofType, setProofType] =
-    useState<ChefDocumentType>("AADHAAR_CARD");
+  const [proofType, setProofType] = useState<ChefDocumentType>("AADHAAR_CARD");
   const [proofFile, setProofFile] = useState<File | null>(null);
 
   async function load() {
@@ -121,12 +118,12 @@ export function ChefApplicationWorkspace() {
     }
 
     const profile = profileResponse.ok
-      ? ((await profileResponse.json().catch(() => null)) as CustomerProfile | null)
+      ? ((await profileResponse
+          .json()
+          .catch(() => null)) as CustomerProfile | null)
       : null;
     const addresses = addressesResponse.ok
-      ? ((await addressesResponse
-          .json()
-          .catch(() => [])) as CustomerAddress[])
+      ? ((await addressesResponse.json().catch(() => [])) as CustomerAddress[])
       : [];
     const nextForm =
       applicationBody.status === "NOT_SUBMITTED"
@@ -157,7 +154,9 @@ export function ChefApplicationWorkspace() {
 
   function useCurrentLocation() {
     if (!navigator.geolocation) {
-      setMessage("This browser cannot provide a location. Use your saved address coordinates.");
+      setMessage(
+        "This browser cannot provide a location. Use your saved address coordinates.",
+      );
       return;
     }
     setMessage("Requesting your current location…");
@@ -168,16 +167,27 @@ export function ChefApplicationWorkspace() {
           latitude: position.coords.latitude.toFixed(7),
           longitude: position.coords.longitude.toFixed(7),
         }));
-        setMessage("Current coordinates added. Review the address before submitting.");
+        setMessage(
+          "Current coordinates added. Review the address before submitting.",
+        );
       },
-      () => setMessage("Location permission was not granted. Your saved address remains unchanged."),
+      () =>
+        setMessage(
+          "Location permission was not granted. Your saved address remains unchanged.",
+        ),
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 },
     );
   }
 
-  async function submit() {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const updating = application?.status === "PENDING";
     setBusy(true);
-    setMessage("Submitting your chef application…");
+    setMessage(
+      updating
+        ? "Updating your pending chef application…"
+        : "Submitting your chef application…",
+    );
     try {
       const response = await fetch("/api/chef/application", {
         method: "POST",
@@ -205,11 +215,19 @@ export function ChefApplicationWorkspace() {
           ),
         );
       }
-      setApplication(body as unknown as ChefApplication);
-      setMessage("Chef application submitted. Craves admin review remains authoritative.");
+      const nextApplication = body as unknown as ChefApplication;
+      setApplication(nextApplication);
+      setForm(fromApplication(nextApplication));
+      setMessage(
+        updating
+          ? "Pending application updated. Craves admin review remains authoritative."
+          : "Chef application submitted. Upload the requested proofs and wait for Craves admin review.",
+      );
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Application submission failed.",
+        error instanceof Error
+          ? error.message
+          : "Application submission failed.",
       );
     } finally {
       setBusy(false);
@@ -246,20 +264,20 @@ export function ChefApplicationWorkspace() {
       await load();
       setMessage("Proof file uploaded for admin review.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Proof upload failed.");
+      setMessage(
+        error instanceof Error ? error.message : "Proof upload failed.",
+      );
     } finally {
       setBusy(false);
     }
   }
 
-  const locked =
-    application?.status === "PENDING" || application?.status === "APPROVED";
-  const fields: Array<[
-    keyof FormState,
-    string,
-    "text" | "email" | "decimal",
-    boolean,
-  ]> = [
+  // User-Chef Service permits a pending application to be corrected and
+  // resubmitted. Only an approved application is immutable.
+  const locked = application?.status === "APPROVED";
+  const fields: Array<
+    [keyof FormState, string, "text" | "email" | "decimal", boolean]
+  > = [
     ["email", "Email", "email", true],
     ["firstName", "First name", "text", true],
     ["lastName", "Last name", "text", true],
@@ -287,22 +305,39 @@ export function ChefApplicationWorkspace() {
           </div>
           {application?.reviewedAt && (
             <span className="text-sm text-slate-600">
-              Reviewed {new Date(application.reviewedAt).toLocaleString("en-IN")}
+              Reviewed{" "}
+              {new Date(application.reviewedAt).toLocaleString("en-IN")}
             </span>
           )}
         </div>
-        {application?.status === "REJECTED" &&
-          application.rejectionReason && (
-            <p className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-800">
-              Review note: {application.rejectionReason}
-            </p>
-          )}
+        {application?.status === "REJECTED" && application.rejectionReason && (
+          <p className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-800">
+            Review note: {application.rejectionReason}
+          </p>
+        )}
+        {application?.status === "PENDING" && (
+          <p className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
+            Your application is waiting for admin review. You can still correct
+            the details below or replace proof files until it is approved.
+          </p>
+        )}
+        {application?.status === "APPROVED" && (
+          <Link
+            href="/chef"
+            className="mt-4 inline-flex rounded-full bg-[#6930CA] px-5 py-3 text-sm font-bold text-white"
+          >
+            Continue to chef mode
+          </Link>
+        )}
         <p role="status" className="mt-4 text-sm text-slate-600">
           {message}
         </p>
       </section>
 
-      <section className="rounded-[30px] bg-white p-6 text-slate-950 sm:p-8">
+      <form
+        onSubmit={submit}
+        className="rounded-[30px] bg-white p-6 text-slate-950 sm:p-8"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-bold">Chef details</h2>
           <button
@@ -317,7 +352,8 @@ export function ChefApplicationWorkspace() {
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {fields.map(([name, label, inputMode, required]) => (
             <label key={name} className="text-sm font-semibold">
-              {label}{required ? " *" : ""}
+              {label}
+              {required ? " *" : ""}
               <input
                 type={inputMode === "email" ? "email" : "text"}
                 inputMode={inputMode === "decimal" ? "decimal" : undefined}
@@ -331,14 +367,19 @@ export function ChefApplicationWorkspace() {
           ))}
         </div>
         <button
-          type="button"
+          type="submit"
           disabled={locked || busy}
-          onClick={() => void submit()}
           className="mt-6 rounded-full bg-[#6930CA] px-6 py-3 font-bold text-white disabled:opacity-50"
         >
-          Submit application
+          {application?.status === "PENDING"
+            ? "Update pending application"
+            : application?.status === "REJECTED"
+              ? "Resubmit application"
+              : application?.status === "APPROVED"
+                ? "Application approved"
+                : "Submit application"}
         </button>
-      </section>
+      </form>
 
       <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 sm:p-8">
         <h2 className="text-2xl font-bold">Proof files</h2>
@@ -373,7 +414,7 @@ export function ChefApplicationWorkspace() {
           </label>
           <button
             type="button"
-            disabled={busy || !application?.id}
+            disabled={busy || !application?.id || locked}
             onClick={() => void uploadProof()}
             className="rounded-full bg-[#6930CA] px-6 py-3 font-bold text-white disabled:opacity-50"
           >
@@ -385,7 +426,9 @@ export function ChefApplicationWorkspace() {
             <div key={document.id} className="rounded-2xl bg-white p-4">
               <div className="flex flex-wrap justify-between gap-3">
                 <strong>{document.documentType.replaceAll("_", " ")}</strong>
-                <span className="text-sm text-slate-600">{document.status}</span>
+                <span className="text-sm text-slate-600">
+                  {document.status}
+                </span>
               </div>
               <p className="mt-1 text-sm text-slate-600">
                 {document.originalFileName} ·{" "}

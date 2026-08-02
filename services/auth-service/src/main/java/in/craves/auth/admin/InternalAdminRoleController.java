@@ -59,7 +59,7 @@ public class InternalAdminRoleController {
         CurrentUser actor = requireInternalAccessReader(authentication);
         UUID correlationId = correlationId(correlationHeader);
         repository.auditRead(actor.identityId(), "INTERNAL_ADMIN_USERS_READ", null, normalizeReason(reason), correlationId);
-        return noStore(repository.list(bounded(limit)));
+        return auditedNoStore(correlationId, repository.list(bounded(limit)));
     }
 
     @GetMapping("/users/{identityId}")
@@ -76,7 +76,7 @@ public class InternalAdminRoleController {
         repository.auditRead(
             actor.identityId(), "INTERNAL_ADMIN_USER_READ", identityId, normalizeReason(reason), correlationId
         );
-        return noStore(response);
+        return auditedNoStore(correlationId, response);
     }
 
     @PutMapping("/users/{identityId}/roles")
@@ -113,7 +113,7 @@ public class InternalAdminRoleController {
         repository.auditRead(
             actor.identityId(), "INTERNAL_ROLE_AUDIT_READ", identityId, normalizeReason(reason), correlationId
         );
-        return noStore(repository.audit(identityId, bounded(limit)));
+        return auditedNoStore(correlationId, repository.audit(identityId, bounded(limit)));
     }
 
     private void requireEnabled() {
@@ -187,6 +187,13 @@ public class InternalAdminRoleController {
 
     private static <T> ResponseEntity<T> noStore(T body) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
+    }
+
+    private static <T> ResponseEntity<T> auditedNoStore(UUID correlationId, T body) {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .header("X-Correlation-ID", correlationId.toString())
+            .body(body);
     }
 
     public record RoleReplacementRequest(

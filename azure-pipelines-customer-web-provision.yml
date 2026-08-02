@@ -1,0 +1,134 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: action
+    displayName: Customer web infrastructure action
+    type: string
+    default: validate
+    values:
+      - validate
+      - what-if
+      - deploy
+  - name: confirmCreate
+    displayName: Type CREATE_CUSTOMER_WEB_APP for the billable deploy action
+    type: string
+    default: DO_NOT_CREATE
+  - name: imageTag
+    displayName: Immutable customer web image tag
+    type: string
+    default: ''
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: WebProvisioningGuard
+    displayName: Validate customer web provisioning request
+    jobs:
+      - job: ValidateSource
+        displayName: Validate Bicep, image and explicit confirmation
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: AzureCLI@2
+            displayName: Validate customer web provisioning inputs
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                [[ -n '${{ parameters.imageTag }}' ]] || { echo 'ERROR: imageTag is required.' >&2; exit 1; }
+                [[ '${{ parameters.imageTag }}' != 'latest' ]] || { echo 'ERROR: latest is forbidden.' >&2; exit 1; }
+                if [[ '${{ parameters.action }}' == 'deploy' && '${{ parameters.confirmCreate }}' != 'CREATE_CUSTOMER_WEB_APP' ]]; then
+                  echo 'ERROR: deploy requires confirmCreate=CREATE_CUSTOMER_WEB_APP.' >&2
+                  exit 1
+                fi
+                az bicep install >/dev/null
+                az bicep build --file infra/customer-web-containerapp.bicep --stdout >/dev/null
+                FOUND=$(az acr repository show-tags \
+                  --name cravesprodlowacr82121 \
+                  --repository craves/customer-web-next \
+                  --query "[?@=='${{ parameters.imageTag }}'] | [0]" \
+                  -o tsv --only-show-errors 2>/dev/null || true)
+                [[ "$FOUND" == '${{ parameters.imageTag }}' ]] || {
+                  echo 'ERROR: the immutable customer web image tag does not exist in ACR.' >&2
+                  exit 1
+                }
+                if [[ '${{ parameters.action }}' == 'deploy' ]]; then
+                  if az containerapp show -g rg-craves-prodlow-centralindia -n ca-craves-web-prodlow --only-show-errors >/dev/null 2>&1; then
+                    echo 'ERROR: ca-craves-web-prodlow already exists. Use the customer web deployment pipeline instead.' >&2
+                    exit 1
+                  fi
+                fi
+
+  - stage: EvaluateOrCreateWeb
+    displayName: ${{ parameters.action }} customer web Container App
+    dependsOn: WebProvisioningGuard
+    condition: succeeded()
+    jobs:
+      - job: ProvisionWeb
+        displayName: Use the existing Container Apps environment
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: AzureCLI@2
+            displayName: Run guarded customer web Bicep operation
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                RG='rg-craves-prodlow-centralindia'
+                ACTION='${{ parameters.action }}'
+                TAG='${{ parameters.imageTag }}'
+                IMAGE="cravesprodlowacr82121.azurecr.io/craves/customer-web-next:$TAG"
+                ENVIRONMENT_ID=$(az containerapp show -g "$RG" -n ca-craves-auth-service-prodlow \
+                  --query properties.managedEnvironmentId -o tsv --only-show-errors)
+                [[ -n "$ENVIRONMENT_ID" ]] || { echo 'ERROR: existing Container Apps environment ID could not be resolved.' >&2; exit 1; }
+
+                common=(
+                  --resource-group "$RG"
+                  --template-file infra/customer-web-containerapp.bicep
+                  --parameters location=centralindia
+                  --parameters managedEnvironmentId="$ENVIRONMENT_ID"
+                  --parameters acrName=cravesprodlowacr82121
+                  --parameters containerAppName=ca-craves-web-prodlow
+                  --parameters image="$IMAGE"
+                  --parameters apiBaseUrl=https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
+                )
+
+                case "$ACTION" in
+                  validate)
+                    az deployment group validate "${common[@]}" --only-show-errors >/dev/null
+                    ;;
+                  what-if)
+                    az deployment group what-if "${common[@]}" --only-show-errors
+                    ;;
+                  deploy)
+                    [[ '${{ parameters.confirmCreate }}' == 'CREATE_CUSTOMER_WEB_APP' ]] || { echo 'ERROR: confirmation mismatch.' >&2; exit 1; }
+                    echo 'WARNING: this creates a billable Azure Container App and AcrPull role assignment.' >&2
+                    az deployment group create \
+                      --name "craves-customer-web-$(Build.BuildId)" \
+                      "${common[@]}" \
+                      --only-show-errors \
+                      --query properties.outputs -o json \
+                      > '$(Build.ArtifactStagingDirectory)/customer-web-provisioning-outputs.json'
+                    ;;
+                  *)
+                    echo "ERROR: unsupported action $ACTION" >&2
+                    exit 1
+                    ;;
+                esac
+          - ${{ if eq(parameters.action, 'deploy') }}:
+              - task: PublishPipelineArtifact@1
+                inputs:
+                  targetPath: $(Build.ArtifactStagingDirectory)/customer-web-provisioning-outputs.json
+                  artifact: customer-web-provisioning-outputs
+                displayName: Publish non-secret web provisioning outputs

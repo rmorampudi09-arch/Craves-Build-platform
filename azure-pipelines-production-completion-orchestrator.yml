@@ -1,0 +1,192 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: includeAzureReadOnly
+    displayName: Include read-only Azure inventory and health checks
+    type: boolean
+    default: true
+  - name: requireCommittedNodeLockfiles
+    displayName: Require committed Node lockfiles
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: CompletionPackValidation
+    displayName: Validate the complete source pack
+    jobs:
+      - job: ValidateAllDefinitions
+        displayName: Validate source, pipeline and Key Vault-first contracts
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 0
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+            displayName: Use Python 3.12
+          - bash: |
+              set -euo pipefail
+              python -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
+              chmod +x scripts/release/*.sh
+              scripts/release/validate-production-completion-pack.sh
+              scripts/release/scan-secret-material.sh .
+              python scripts/release/validate-pipeline-yaml.py
+              scripts/release/validate-dockerfiles.sh .
+              python scripts/release/validate-flyway-migrations.py
+              scripts/release/validate-apim-assets.sh .
+              scripts/release/validate-rollback-readiness.sh .
+            displayName: Validate all production-completion definitions
+
+  - stage: CompleteCodeBuild
+    displayName: Build and test all source stacks
+    dependsOn: CompletionPackValidation
+    condition: succeeded()
+    jobs:
+      - job: Backend
+        displayName: Seven Spring services
+        timeoutInMinutes: 120
+        steps:
+          - checkout: self
+            persistCredentials: false
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '21'
+              jdkArchitectureOption: x64
+              jdkSourceOption: PreInstalled
+            displayName: Use Java 21
+          - bash: |
+              set -euo pipefail
+              while IFS= read -r path; do
+                echo "========== VERIFY $path =========="
+                (cd "$path" && mvn -B -ntp clean verify)
+              done < <(jq -r '.backendServices[].path' config/production/production-completion-pack.json)
+            displayName: Maven clean verify all services
+      - job: Web
+        displayName: Next.js customer/admin/chef application
+        timeoutInMinutes: 60
+        steps:
+          - checkout: self
+            persistCredentials: false
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '24.x'
+            displayName: Use Node.js 24
+          - bash: |
+              set -euo pipefail
+              cd apps/customer-web-next
+              if [[ -f package-lock.json ]]; then
+                npm ci --ignore-scripts
+              else
+                [[ '${{ parameters.requireCommittedNodeLockfiles }}' != 'true' ]] || {
+                  echo 'ERROR: customer web package-lock.json is required.' >&2
+                  exit 1
+                }
+                echo 'WARNING: customer web package-lock.json is missing.' >&2
+                npm install --ignore-scripts
+              fi
+              npm run verify
+            displayName: Verify customer web
+      - job: Mobile
+        displayName: React Native customer and chef mode
+        timeoutInMinutes: 60
+        steps:
+          - checkout: self
+            persistCredentials: false
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '24.x'
+            displayName: Use Node.js 24
+          - bash: |
+              set -euo pipefail
+              cd apps/mobile/customer-app
+              if [[ -f package-lock.json ]]; then
+                npm ci --ignore-scripts
+              else
+                [[ '${{ parameters.requireCommittedNodeLockfiles }}' != 'true' ]] || {
+                  echo 'ERROR: mobile package-lock.json is required.' >&2
+                  exit 1
+                }
+                echo 'WARNING: mobile package-lock.json is missing.' >&2
+                npm install --ignore-scripts
+              fi
+              npm run verify
+            displayName: Verify mobile TypeScript
+          - bash: |
+              set -euo pipefail
+              bash -n scripts/mobile/bootstrap-customer-mobile-native.sh
+              for forbidden in google-services.json GoogleService-Info.plist '*.keystore' '*.jks' '*.p12' '*.mobileprovision'; do
+                ! find apps/mobile/customer-app -name "$forbidden" -print -quit | grep -q . || {
+                  echo "ERROR: secure mobile file committed: $forbidden" >&2
+                  exit 1
+                }
+              done
+            displayName: Verify mobile secure-file boundary
+
+  - ${{ if eq(parameters.includeAzureReadOnly, true) }}:
+      - stage: AzureReadOnly
+        displayName: Inspect existing Azure state without mutation
+        dependsOn: CompleteCodeBuild
+        condition: succeeded()
+        jobs:
+          - job: InspectRuntime
+            displayName: Verify seven Container Apps and fail-closed state
+            steps:
+              - checkout: self
+                persistCredentials: false
+              - task: AzureCLI@2
+                displayName: Run read-only runtime checks
+                inputs:
+                  azureSubscription: Craves-Dev-Service-Connection
+                  scriptType: bash
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    set -euo pipefail
+                    set +x
+                    PACK='config/production/production-completion-pack.json'
+                    RG=$(jq -r '.azure.resourceGroup' "$PACK")
+                    APPS=$(jq -r '[.backendServices[].containerApp] | join(",")' "$PACK")
+                    INTEGRATION_APP=$(jq -r '.backendServices[] | select(.key == "integration") | .containerApp' "$PACK")
+                    chmod +x scripts/release/*.sh
+                    scripts/release/verify-containerapps-readonly.sh "$RG" "$APPS"
+                    scripts/release/verify-failclosed-controls.sh "$RG" "$INTEGRATION_APP"
+                    scripts/release/verify-observability-baseline.sh "$RG" "$APPS"
+                    echo 'Azure read-only checks completed. No secret values were requested.'
+
+  - stage: CompletionPlan
+    displayName: Publish the exact later execution plan
+    dependsOn:
+      - CompleteCodeBuild
+      - ${{ if eq(parameters.includeAzureReadOnly, true) }}:
+          - AzureReadOnly
+    condition: succeeded()
+    jobs:
+      - job: GeneratePlan
+        displayName: Generate run order and pipeline catalog
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - bash: |
+              set -euo pipefail
+              OUT='$(Build.ArtifactStagingDirectory)/production-completion-plan'
+              mkdir -p "$OUT"
+              python scripts/release/generate-production-completion-runbook.py "$OUT/production-completion-run-plan.md"
+              scripts/release/generate-backend-production-run-plan.sh "$OUT/backend-production-run-plan.md"
+              cp config/production/production-completion-pack.json "$OUT/"
+              cp config/production/azure-resource-inventory.json "$OUT/"
+              git rev-parse HEAD >"$OUT/source-sha.txt"
+              find . -maxdepth 2 -type f -name 'azure-pipelines*.yml' -printf '%P\n' | sort >"$OUT/pipeline-files.txt"
+              cat >"$OUT/BOUNDARY.txt" <<'TEXT'
+              This orchestrator is source-build and read-only Azure verification only.
+              It does not build or push images, deploy Container Apps, run Azure migrations, change APIM, activate workers/providers, or rotate credentials.
+              TEXT
+            displayName: Generate immutable completion plan
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/production-completion-plan
+              artifact: production-completion-plan
+            displayName: Publish production completion plan

@@ -33,12 +33,13 @@ steps:
       jdkSourceOption: PreInstalled
 
   - script: |
+      set -euo pipefail
       cd $(modulePath)
-      mvn -B clean package
+      mvn -B -ntp clean verify
     displayName: Maven build and tests
 
   - task: AzureCLI@2
-    displayName: Build and push image to ACR
+    displayName: Build and push immutable image to ACR
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -49,14 +50,46 @@ steps:
         TAG='${{ parameters.imageTag }}'
         IMAGE_REPOSITORY='$(imageRepository)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
         az acr login --name "$ACR"
-        docker build -t "$IMAGE" "$(modulePath)"
+        docker build --pull -t "$IMAGE" "$(modulePath)"
         docker push "$IMAGE"
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Update Container App revision
+    displayName: Store Subscription service secrets in Container App
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        RG='${{ parameters.resourceGroupName }}'
+        APP='${{ parameters.containerAppName }}'
+        DB_PASSWORD='$(POSTGRES_BUSINESS_DB_PASSWORD)'
+        JWT_PEM='$(CRAVES_JWT_VERIFICATION_PEM_BASE64)'
+        INTERNAL_SECRET='$(CRAVES_INTERNAL_SERVICE_SECRET)'
+        require_value() {
+          local variable_name="$1" value="$2"
+          [[ -n "$value" && "$value" != "\$($variable_name)" ]] || {
+            echo "ERROR: Secure pipeline variable $variable_name is missing." >&2
+            exit 1
+          }
+        }
+        require_value POSTGRES_BUSINESS_DB_PASSWORD "$DB_PASSWORD"
+        require_value CRAVES_JWT_VERIFICATION_PEM_BASE64 "$JWT_PEM"
+        require_value CRAVES_INTERNAL_SERVICE_SECRET "$INTERNAL_SECRET"
+        az containerapp secret set -g "$RG" -n "$APP" --secrets \
+          db-password="$DB_PASSWORD" \
+          jwt-verify-pem="$JWT_PEM" \
+          internal-secret="$INTERNAL_SECRET" \
+          -o none
+        echo 'Subscription Container App secrets stored; values were not printed.'
+
+  - task: AzureCLI@2
+    displayName: Deploy and verify fail-closed Subscription revision
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -70,10 +103,12 @@ steps:
         IMAGE_REPOSITORY='$(imageRepository)'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-        DB_URL_VALUE="$(POSTGRES_BUSINESS_DB_URL)"
-        DB_USER_VALUE="$(POSTGRES_BUSINESS_DB_USER)"
-        DB_PASSWORD_VALUE="$(POSTGRES_BUSINESS_DB_PASSWORD)"
-        JWT_PEM_VALUE="$(CRAVES_JWT_VERIFICATION_PEM_BASE64)"
+        APP_BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json)
+        PREVIOUS_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_BEFORE")
+        PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$APP_BEFORE")
+        [[ -n "$PREVIOUS_REVISION" && -n "$PREVIOUS_IMAGE" ]] || { echo 'ERROR: Existing Subscription Container App state is incomplete.' >&2; exit 1; }
+        [[ "$PREVIOUS_IMAGE" != "$IMAGE" ]] || { echo 'ERROR: Target image is already deployed. Use a new immutable image tag.' >&2; exit 1; }
+
         az containerapp ingress update --name "$APP" --resource-group "$RG" --type external --target-port 8080 -o none
         az containerapp update \
           --name "$APP" \
@@ -82,12 +117,68 @@ steps:
           --set-env-vars \
             SERVER_PORT=8080 \
             SPRING_PROFILES_ACTIVE=prod \
-            SPRING_DATASOURCE_URL="$DB_URL_VALUE" \
-            SPRING_DATASOURCE_USERNAME="$DB_USER_VALUE" \
-            SPRING_DATASOURCE_PASSWORD="$DB_PASSWORD_VALUE" \
-            CRAVES_JWT_VERIFICATION_PEM_BASE64="$JWT_PEM_VALUE" \
-            CRAVES_JWT_ISSUER="https://api.craves.in/auth" \
-            CRAVES_JWT_AUDIENCE="craves-api" \
-            SPRING_FLYWAY_TABLE="subscription_service_flyway_schema_history" \
-          --no-wait
-        az containerapp show --name "$APP" --resource-group "$RG" --query "{name:name, latestRevision:properties.latestRevisionName, runningStatus:properties.runningStatus, image:properties.template.containers[0].image, targetPort:properties.configuration.ingress.targetPort, fqdn:properties.configuration.ingress.fqdn}" -o table
+            SPRING_DATASOURCE_URL='$(POSTGRES_BUSINESS_DB_URL)' \
+            SPRING_DATASOURCE_USERNAME='$(POSTGRES_BUSINESS_DB_USER)' \
+            SPRING_DATASOURCE_PASSWORD=secretref:db-password \
+            CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem \
+            CRAVES_INTERNAL_SERVICE_SECRET=secretref:internal-secret \
+            CRAVES_JWT_ISSUER='https://api.craves.in/auth' \
+            CRAVES_JWT_AUDIENCE='craves-api' \
+            SPRING_FLYWAY_TABLE=subscription_service_flyway_schema_history \
+            CRAVES_SUBSCRIPTION_OCCURRENCE_GENERATOR_ENABLED=false \
+            CRAVES_SUBSCRIPTION_BILLING_GENERATOR_ENABLED=false \
+            CRAVES_SUBSCRIPTION_BILLING_PUBLISHER_ENABLED=false \
+            CRAVES_SUBSCRIPTION_PAYMENT_STATUS_CONSUMER_ENABLED=false \
+            CRAVES_SUBSCRIPTION_ORDER_REQUEST_WORKER_ENABLED=false \
+            CRAVES_SUBSCRIPTION_ORDER_PUBLISHER_ENABLED=false \
+            CRAVES_TOKEN_REVOCATION_ENABLED=false \
+          --no-wait \
+          -o none
+
+        REQUIRED_FALSE=(
+          CRAVES_SUBSCRIPTION_OCCURRENCE_GENERATOR_ENABLED
+          CRAVES_SUBSCRIPTION_BILLING_GENERATOR_ENABLED
+          CRAVES_SUBSCRIPTION_BILLING_PUBLISHER_ENABLED
+          CRAVES_SUBSCRIPTION_PAYMENT_STATUS_CONSUMER_ENABLED
+          CRAVES_SUBSCRIPTION_ORDER_REQUEST_WORKER_ENABLED
+          CRAVES_SUBSCRIPTION_ORDER_PUBLISHER_ENABLED
+          CRAVES_TOKEN_REVOCATION_ENABLED
+        )
+        for attempt in $(seq 1 60); do
+          APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
+          LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
+          READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
+          RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
+          LATEST_IMAGE=''
+          HEALTH=''
+          if [[ -n "$LATEST" ]]; then
+            LATEST_IMAGE=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || true)
+            HEALTH=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query properties.healthState -o tsv 2>/dev/null || true)
+          fi
+          FLAGS_OK=true
+          for name in "${REQUIRED_FALSE[@]}"; do
+            value=$(jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$APP_JSON")
+            [[ "${value,,}" == 'false' ]] || FLAGS_OK=false
+          done
+          DB_REF=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "SPRING_DATASOURCE_PASSWORD")][0].secretRef // ""' <<<"$APP_JSON")
+          JWT_REF=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_JWT_VERIFICATION_PEM_BASE64")][0].secretRef // ""' <<<"$APP_JSON")
+          INTERNAL_REF=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_INTERNAL_SERVICE_SECRET")][0].secretRef // ""' <<<"$APP_JSON")
+          echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE flagsOk=$FLAGS_OK dbSecretRef=$DB_REF jwtSecretRef=$JWT_REF internalSecretRef=$INTERNAL_REF"
+          if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$DB_REF" == 'db-password' && "$JWT_REF" == 'jwt-verify-pem' && "$INTERNAL_REF" == 'internal-secret' ]]; then
+            FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
+            [[ -n "$FQDN" ]] || { echo 'ERROR: Subscription FQDN is missing.' >&2; exit 1; }
+            curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null
+            echo "SUCCESS: Subscription revision $LATEST is healthy, secret-bound and fail-closed."
+            echo "Rollback image: $PREVIOUS_IMAGE"
+            exit 0
+          fi
+          if [[ "$HEALTH" == 'Unhealthy' || "$RUNNING" == 'Failed' ]]; then
+            az containerapp logs show -g "$RG" -n "$APP" --revision "$LATEST" --type console --tail 200 --format text || true
+            echo 'ERROR: Subscription revision became unhealthy.' >&2
+            exit 1
+          fi
+          sleep 10
+        done
+
+        echo 'ERROR: Subscription revision did not become healthy and fail-closed within 10 minutes.' >&2
+        exit 1

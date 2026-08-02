@@ -24,6 +24,8 @@ const order = {
   updatedAt: "2026-07-30T00:00:00Z"
 };
 
+const deliveryAddressId = "88888888-8888-4888-8888-888888888888";
+
 test("parses backend checkout totals without private identity fields", () => {
   const parsed = parseCheckout({
     id: "22222222-2222-4222-8222-222222222222",
@@ -36,8 +38,8 @@ test("parses backend checkout totals without private identity fields", () => {
     deliveryFee: 40,
     grandTotal: 234,
     chargePolicyId: "77777777-7777-4777-8777-777777777777",
-    deliveryAddressId: "88888888-8888-4888-8888-888888888888",
-    deliveryAddress: { sourceAddressId: "88888888-8888-4888-8888-888888888888", recipientName: "Ravi", contactPhoneNumber: "+919876543210", addressLine1: "Plot 1", areaName: "Kukatpally", city: "Hyderabad", state: "Telangana", postalCode: "500072" },
+    deliveryAddressId,
+    deliveryAddress: { sourceAddressId: deliveryAddressId, recipientName: "Ravi", contactPhoneNumber: "+919876543210", addressLine1: "Plot 1", areaName: "Kukatpally", city: "Hyderabad", state: "Telangana", postalCode: "500072" },
     orders: [order],
     createdAt: "2026-07-30T00:00:00Z"
   });
@@ -48,7 +50,10 @@ test("parses backend checkout totals without private identity fields", () => {
 });
 
 test("validates checkout input", () => {
-  assert.deepEqual(parseCheckoutInput({ deliveryAddressId: "88888888-8888-4888-8888-888888888888", note: "Ring bell" }), { deliveryAddressId: "88888888-8888-4888-8888-888888888888", note: "Ring bell" });
+  assert.deepEqual(parseCheckoutInput({ deliveryAddressId, note: "Ring bell" }), { deliveryAddressId, note: "Ring bell" });
+  assert.deepEqual(parseCheckoutInput({ deliveryAddressId, note: "   " }), { deliveryAddressId, note: null });
+  assert.deepEqual(parseCheckoutInput({ deliveryAddressId }), { deliveryAddressId, note: null });
   assert.equal(parseCheckoutInput({ deliveryAddressId: "bad", note: "Ring bell" }), null);
-  assert.equal(parseCheckoutInput({ deliveryAddressId: "88888888-8888-4888-8888-888888888888", note: "x".repeat(501) }), null);
+  assert.equal(parseCheckoutInput({ deliveryAddressId, note: "x".repeat(501) }), null);
+  assert.equal(parseCheckoutInput({ deliveryAddressId, note: 123 }), null);
 });

@@ -5,7 +5,7 @@ set +x
 RG="${RG:-rg-craves-prodlow-centralindia}"
 APIM="${APIM:-apim-craves-prodlow-l3ing6}"
 SUBSCRIPTION_APP="${SUBSCRIPTION_APP:-ca-craves-subscription-service-p}"
-USER_CHEF_APP="${USER_CHEF_APP:-ca-craves-user-chef-service-prodlow}"
+USER_CHEF_APP="${USER_CHEF_APP:-ca-craves-user-chef-service-prod}"
 API_VERSION="${API_VERSION:-2022-08-01}"
 CONFIRM_APIM_WRITE="${CONFIRM_APIM_WRITE:-false}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

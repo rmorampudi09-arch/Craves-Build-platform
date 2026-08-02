@@ -39,17 +39,22 @@ public class FirebaseAccountInterventionWorker {
             properties.getBatchSize(), properties.getMaxAttempts(), properties.getStaleLockMinutes()
         )) {
             try {
-                boolean disabled = "SUSPEND".equals(item.action());
-                FirebaseAuth.getInstance(firebaseApp).updateUser(
+                if (item.firebaseUid() == null || item.firebaseUid().isBlank()) {
+                    throw new IllegalStateException("Firebase UID is missing for the target identity");
+                }
+
+                boolean disabled = repository.currentProviderDisabled(item.identityId());
+                FirebaseAuth firebaseAuth = FirebaseAuth.getInstance(firebaseApp);
+                firebaseAuth.updateUser(
                     new UserRecord.UpdateRequest(item.firebaseUid()).setDisabled(disabled)
                 );
                 if (disabled) {
-                    FirebaseAuth.getInstance(firebaseApp).revokeRefreshTokens(item.firebaseUid());
+                    firebaseAuth.revokeRefreshTokens(item.firebaseUid());
                 }
                 repository.markProviderCompleted(item);
                 LOGGER.info(
-                    "Firebase account intervention completed interventionId={} identityId={} action={}",
-                    item.interventionId(), item.identityId(), item.action()
+                    "Firebase account state synchronized interventionId={} identityId={} requestedAction={} appliedDisabled={}",
+                    item.interventionId(), item.identityId(), item.action(), disabled
                 );
             } catch (Exception exception) {
                 repository.markProviderFailure(

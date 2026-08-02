@@ -105,8 +105,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
       const body = (await response.json().catch(() => ({}))) as {
         message?: string;
       };
-      if (!response.ok)
-        throw new Error(body.message ?? "Sign-in failed.");
+      if (!response.ok) throw new Error(body.message ?? "Sign-in failed.");
       setStage("done");
       setMessage("Signed in successfully.");
       window.location.assign(destination);

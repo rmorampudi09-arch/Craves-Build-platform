@@ -14,8 +14,12 @@ import eggBiryani from "@/assets/images/food-eggbiryani.jpg";
 import pongal from "@/assets/images/food-pongal.jpg";
 import paratha from "@/assets/images/food-paratha.jpg";
 import prawn from "@/assets/images/food-prawn.jpg";
-import type { NearbyMenuDiscovery, NearbyMenuItem } from "@/lib/discovery-contract";
+import type {
+  NearbyMenuDiscovery,
+  NearbyMenuItem,
+} from "@/lib/discovery-contract";
 import { assetUrl } from "@/lib/asset-url";
+import { candidateDiscoveryRadii } from "@/lib/catalog-discovery-policy";
 export type Dish = {
   id: string;
   name: string;
@@ -37,6 +41,9 @@ export type Dish = {
   kitchenId?: string;
   currency?: string;
   distanceMeters?: number;
+  areaName?: string;
+  city?: string;
+  state?: string;
 };
 export const DISHES: Dish[] = [
   {
@@ -91,7 +98,14 @@ export const DISHES: Dish[] = [
     veg: true,
     tag: "Chef Special",
     desc: "Colourful veggies, whole spices and cashews slow-cooked in a clay pot.",
-    ingredients: ["Basmati rice", "Mixed vegetables", "Cashews", "Ghee", "Biryani masala", "Mint"],
+    ingredients: [
+      "Basmati rice",
+      "Mixed vegetables",
+      "Cashews",
+      "Ghee",
+      "Biryani masala",
+      "Mint",
+    ],
     serves: "1–2 people",
     originalPrice: 225,
     spiceLevel: "Medium",
@@ -123,7 +137,15 @@ export const DISHES: Dish[] = [
     veg: true,
     tag: "Home Fav",
     desc: "Rice, sambar, rasam, 2 curries, curd, papad & sweet on banana leaf.",
-    ingredients: ["Rice", "Sambar", "Rasam", "2 curries", "Curd", "Papad", "Sweet"],
+    ingredients: [
+      "Rice",
+      "Sambar",
+      "Rasam",
+      "2 curries",
+      "Curd",
+      "Papad",
+      "Sweet",
+    ],
     serves: "1 person",
     originalPrice: 200,
     spiceLevel: "Mild",
@@ -556,17 +578,22 @@ export const DISHES: Dish[] = [
 ];
 
 let discoveredDishes: Dish[] = [];
+let discoveryRadiusMeters = 5_000;
 
 function fallbackImage(item: NearbyMenuItem): string {
   const name = `${item.category} ${item.itemName}`.toLowerCase();
-  if (name.includes("biryani")) return item.foodType === "VEG" ? assetUrl(vegBiryani) : assetUrl(chickenBiryani);
+  if (name.includes("biryani"))
+    return item.foodType === "VEG"
+      ? assetUrl(vegBiryani)
+      : assetUrl(chickenBiryani);
   if (name.includes("dosa")) return assetUrl(dosa);
   if (name.includes("idli")) return assetUrl(idli);
   if (name.includes("paneer")) return assetUrl(paneer);
   if (name.includes("fish")) return assetUrl(fish);
   if (name.includes("prawn")) return assetUrl(prawn);
   if (name.includes("mutton")) return assetUrl(mutton);
-  if (name.includes("curry")) return item.foodType === "VEG" ? assetUrl(paneer) : assetUrl(chickenCurry);
+  if (name.includes("curry"))
+    return item.foodType === "VEG" ? assetUrl(paneer) : assetUrl(chickenCurry);
   return assetUrl(thali);
 }
 
@@ -581,27 +608,66 @@ function mapNearbyItem(item: NearbyMenuItem): Dish {
     price: item.price,
     currency: item.currency,
     rating: 0,
-    time: item.preparationTimeMinutes ? `${item.preparationTimeMinutes} min` : "Freshly prepared",
+    time: item.preparationTimeMinutes
+      ? `${item.preparationTimeMinutes} min`
+      : "Freshly prepared",
     veg: item.foodType === "VEG",
-    desc: item.description || "Fresh homemade food prepared by a verified Craves kitchen.",
-    serves: item.servesCount ? `${item.servesCount} ${item.servesCount === 1 ? "person" : "people"}` : undefined,
-    spiceLevel: item.spiceLevel === "SPICY" ? "Hot" : item.spiceLevel === "MILD" ? "Mild" : item.spiceLevel === "MEDIUM" ? "Medium" : undefined,
+    desc:
+      item.description ||
+      "Fresh homemade food prepared by a verified Craves kitchen.",
+    serves: item.servesCount
+      ? `${item.servesCount} ${item.servesCount === 1 ? "person" : "people"}`
+      : undefined,
+    spiceLevel:
+      item.spiceLevel === "SPICY"
+        ? "Hot"
+        : item.spiceLevel === "MILD"
+          ? "Mild"
+          : item.spiceLevel === "MEDIUM"
+            ? "Medium"
+            : undefined,
     distanceMeters: item.distanceMeters,
+    areaName: item.areaName ?? undefined,
+    city: item.city,
+    state: item.state,
   };
 }
 
-export async function discoverDishes(latitude: number, longitude: number, radiusMeters = 5_000): Promise<Dish[]> {
-  const query = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radiusMeters: String(radiusMeters), page: "0", size: "50" });
-  const response = await fetch(`/api/discovery/menu-items?${query}`, { cache: "no-store" });
-  if (!response.ok) throw new Error("Nearby dishes are temporarily unavailable.");
-  const payload = await response.json() as NearbyMenuDiscovery;
-  discoveredDishes = payload.menuItems.map(mapNearbyItem);
+export async function discoverDishes(
+  latitude: number,
+  longitude: number,
+  radiusMeters = 5_000,
+): Promise<Dish[]> {
+  for (const candidateRadius of candidateDiscoveryRadii(radiusMeters)) {
+    const query = new URLSearchParams({
+      latitude: String(latitude),
+      longitude: String(longitude),
+      radiusMeters: String(candidateRadius),
+      page: "0",
+      size: "50",
+    });
+    const response = await fetch(`/api/discovery/menu-items?${query}`, {
+      cache: "no-store",
+    });
+    if (!response.ok)
+      throw new Error("Nearby dishes are temporarily unavailable.");
+    const payload = (await response.json()) as NearbyMenuDiscovery;
+    discoveredDishes = payload.menuItems.map(mapNearbyItem);
+    discoveryRadiusMeters = candidateRadius;
+    if (discoveredDishes.length > 0) return discoveredDishes;
+  }
   return discoveredDishes;
+}
+
+export function getDiscoveryRadiusMeters(): number {
+  return discoveryRadiusMeters;
 }
 
 export function allDishes(): Dish[] {
   if (discoveredDishes.length > 0) return discoveredDishes;
-  return process.env.NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK === "true" ? DISHES : [];
+  return process.env.NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK === "true"
+    ? DISHES
+    : [];
 }
 
 export function getDish(id: string): Dish | undefined {
@@ -610,5 +676,7 @@ export function getDish(id: string): Dish | undefined {
 
 /** Up to `limit` other dishes in the same category, for the "Similar Dishes" rail. */
 export function getSimilarDishes(dish: Dish, limit = 4): Dish[] {
-  return allDishes().filter((d) => d.id !== dish.id && d.category === dish.category).slice(0, limit);
+  return allDishes()
+    .filter((d) => d.id !== dish.id && d.category === dish.category)
+    .slice(0, limit);
 }

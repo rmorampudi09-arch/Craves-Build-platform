@@ -110,9 +110,44 @@ if grep -Eiq 'AzureStaticWebApp|static web app|Microsoft\.Web/staticSites' <<<"$
   fail 'Static Web Apps are forbidden in the production completion pack'
 fi
 
-if grep -Eq ':[[:space:]]*latest([[:space:]]|$)|--image[^\n]*:latest' <<<"$NEW_PIPELINE_CONTENT"; then
-  fail 'Mutable latest image tags are forbidden in production pipelines'
-fi
+# Check only executable image declarations and CLI arguments. The earlier broad
+# grep also matched safety messages such as "ERROR: latest is forbidden".
+python3 - "$ROOT" \
+  "$ROOT/azure-pipelines-production-source-completion.yml" \
+  "$ROOT/azure-pipelines-seven-service-image-build.yml" \
+  "$ROOT/azure-pipelines-seven-service-deploy.yml" \
+  "$ROOT/azure-pipelines-customer-web-image-build.yml" \
+  "$ROOT/azure-pipelines-customer-web-provision.yml" \
+  "$ROOT/azure-pipelines-customer-web-deploy.yml" \
+  "$ROOT/azure-pipelines-mobile-native-readiness.yml" \
+  "$ROOT/azure-pipelines-managed-redis.yml" \
+  "$ROOT/azure-pipelines-production-completion-orchestrator.yml" \
+  "$ROOT/pipelines/azure-pipelines-infra.yml" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+yaml_image = re.compile(
+    r"^\s*image\s*:\s*['\"]?[^\s#'\"]+:latest(?:['\"]?\s*(?:#.*)?)$",
+    re.IGNORECASE,
+)
+cli_image = re.compile(
+    r"--image(?:\s+|=)(?:\"[^\"]*:latest\"|'[^']*:latest'|[^\s\\]+:latest)(?:\s|\\|$)",
+    re.IGNORECASE,
+)
+
+violations: list[str] = []
+for raw_path in sys.argv[2:]:
+    path = Path(raw_path)
+    for line_number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), start=1):
+        if yaml_image.search(line) or cli_image.search(line):
+            violations.append(f"{path.relative_to(root)}:{line_number}: {line.strip()}")
+
+if violations:
+    details = "\n".join(violations)
+    raise SystemExit(f"Mutable latest image tags are forbidden in production pipelines:\n{details}")
+PY
 
 if grep -Eq 'azureSubscription:[[:space:]]*\$\(AZURE_SERVICE_CONNECTION\)' <<<"$NEW_PIPELINE_CONTENT"; then
   fail 'New pipelines must use the exact authorized Craves service connection name'

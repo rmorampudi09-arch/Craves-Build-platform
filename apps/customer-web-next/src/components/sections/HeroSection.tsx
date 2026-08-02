@@ -1,4 +1,11 @@
-import { MapPin, Search, ShoppingBag, ChefHat, ChevronDown, Heart } from "lucide-react";
+import {
+  MapPin,
+  Search,
+  ShoppingBag,
+  ChefHat,
+  ChevronDown,
+  Heart,
+} from "lucide-react";
 import heroFood from "@/assets/images/hero-food.jpg";
 import { Logo } from "@/components/layout/Logo";
 import { navLinks } from "@/constants/landingContent";
@@ -10,6 +17,7 @@ interface HeroSectionProps {
   locationLabel: string;
   onOpenLocation: () => void;
   onOpenAuth: (mode: "login" | "register") => void;
+  onBecomeChef: () => void;
   onLogout: () => void;
 }
 
@@ -19,6 +27,7 @@ export function HeroSection({
   locationLabel,
   onOpenLocation,
   onOpenAuth,
+  onBecomeChef,
   onLogout,
 }: HeroSectionProps) {
   return (
@@ -30,7 +39,10 @@ export function HeroSection({
         height={1280}
         className="absolute inset-0 h-full w-full object-cover"
       />
-      <div className="absolute inset-0" style={{ background: "var(--gradient-hero)" }} />
+      <div
+        className="absolute inset-0"
+        style={{ background: "var(--gradient-hero)" }}
+      />
 
       {/* Nav */}
       <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
@@ -41,7 +53,9 @@ export function HeroSection({
               key={l}
               href="#"
               className={`text-sm font-medium transition-colors ${
-                i === 0 ? "text-primary-glow" : "text-white/90 hover:text-primary-glow"
+                i === 0
+                  ? "text-primary-glow"
+                  : "text-white/90 hover:text-primary-glow"
               }`}
             >
               {l}
@@ -86,7 +100,8 @@ export function HeroSection({
       {/* Hero content */}
       <div className="relative z-10 mx-auto max-w-4xl px-6 pb-40 pt-16 text-center md:pt-24">
         <p className="font-script text-2xl text-primary-glow md:text-3xl">
-          Good food, Made with love <Heart className="inline h-5 w-5 fill-primary-glow" />
+          Good food, Made with love{" "}
+          <Heart className="inline h-5 w-5 fill-primary-glow" />
         </p>
         <h1 className="mt-4 text-5xl font-bold leading-[1.05] text-white md:text-7xl">
           Homemade Meals,
@@ -95,8 +110,8 @@ export function HeroSection({
           <Heart className="inline h-12 w-12 fill-primary-glow text-primary-glow md:h-16 md:w-16" />
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-base text-white/85 md:text-lg">
-          Discover delicious home-cooked food prepared by trusted home chefs near you. Fast delivery
-          to your doorstep.
+          Discover delicious home-cooked food prepared by trusted home chefs
+          near you. Fast delivery to your doorstep.
         </p>
 
         {/* Search bar */}
@@ -107,7 +122,9 @@ export function HeroSection({
             className="flex items-center gap-2 rounded-xl px-4 py-3 text-left md:w-56 md:border-r md:border-border"
           >
             <MapPin className="h-5 w-5 text-primary" />
-            <span className="truncate text-sm font-medium text-foreground">{locationLabel}</span>
+            <span className="truncate text-sm font-medium text-foreground">
+              {locationLabel}
+            </span>
           </button>
           <div className="flex flex-1 items-center gap-2 rounded-xl px-4 py-3">
             <Search className="h-5 w-5 text-muted-foreground" />
@@ -117,7 +134,9 @@ export function HeroSection({
               className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
             />
           </div>
-          <button className="btn-primary justify-center rounded-xl md:rounded-full">Search</button>
+          <button className="btn-primary justify-center rounded-xl md:rounded-full">
+            Search
+          </button>
         </div>
 
         {/* CTA buttons */}
@@ -125,7 +144,11 @@ export function HeroSection({
           <button className="btn-primary">
             <ShoppingBag className="h-5 w-5" /> Order Food
           </button>
-          <button className="btn-outline-light">
+          <button
+            type="button"
+            onClick={onBecomeChef}
+            className="btn-outline-light"
+          >
             <ChefHat className="h-5 w-5" /> Become a Home Chef
           </button>
         </div>

@@ -27,7 +27,7 @@ function errorCode(status: number): string {
 
 export async function POST(request: NextRequest, context: Context) {
   if (!isSameOrigin(request)) return failure(403, "CROSS_ORIGIN_REQUEST_REJECTED");
-  const requestId = (await context.params).requestId.trim();
+  const requestId = (await context.params).requestId.trim().toLowerCase();
   const input = parseNotificationRecoveryRequest(await request.json().catch(() => null));
   if (!UUID.test(requestId) || !input || input.requestId !== requestId) return failure(400, "INVALID_NOTIFICATION_RECOVERY_REQUEST");
 
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest, context: Context) {
     const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return failure(upstream.status, errorCode(upstream.status));
     const result = parseNotificationRecoveryResult(body);
-    if (!result) return failure(502, "INVALID_NOTIFICATION_RECOVERY_RESPONSE");
+    if (!result || result.requestId !== requestId) return failure(502, "INVALID_NOTIFICATION_RECOVERY_RESPONSE");
     return NextResponse.json(result, {
       headers: { "Cache-Control": "no-store", "X-Correlation-ID": result.correlationId }
     });

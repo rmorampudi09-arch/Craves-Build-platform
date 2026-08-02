@@ -66,13 +66,25 @@ put_operation "get-admin-account-intervention-status" "GET" "/{identityId}/inter
 put_operation "post-admin-account-suspend" "POST" "/{identityId}/suspend" "Suspend account"
 put_operation "post-admin-account-reactivate" "POST" "/{identityId}/reactivate" "Reactivate account"
 
-for ID in get-admin-account-intervention-status post-admin-account-suspend post-admin-account-reactivate; do
+verify_operation() {
+  local ID="$1" EXPECTED_METHOD="$2" EXPECTED_TEMPLATE="$3"
+  local OPERATION POLICY ACTUAL_METHOD ACTUAL_TEMPLATE
+  OPERATION=$(az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o json)
+  ACTUAL_METHOD=$(jq -r '.method // ""' <<<"$OPERATION")
+  ACTUAL_TEMPLATE=$(jq -r '.urlTemplate // ""' <<<"$OPERATION")
+  [[ "$ACTUAL_METHOD" == "$EXPECTED_METHOD" ]] || fail "$ID method read-back failed: expected $EXPECTED_METHOD, found $ACTUAL_METHOD"
+  [[ "$ACTUAL_TEMPLATE" == "$EXPECTED_TEMPLATE" ]] || fail "$ID URL template read-back failed: expected $EXPECTED_TEMPLATE, found $ACTUAL_TEMPLATE"
   POLICY=$(az rest --method get --url "${API_MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
   [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Bearer"* && "$POLICY" == *"no-store"* ]] || fail "$ID policy read-back failed"
   [[ "$POLICY" != *'backend-id='* ]] || fail "$ID unexpectedly uses backend-id"
-done
+}
+
+verify_operation "get-admin-account-intervention-status" "GET" "/{identityId}/intervention-status"
+verify_operation "post-admin-account-suspend" "POST" "/{identityId}/suspend"
+verify_operation "post-admin-account-reactivate" "POST" "/{identityId}/reactivate"
 
 GATEWAY_URL=$(az apim show -g "$RG" -n "$APIM" --query gatewayUrl -o tsv)
+[[ "$GATEWAY_URL" == https://* ]] || fail "APIM HTTPS gateway URL was not returned"
 SMOKE_ID="00000000-0000-4000-8000-000000000001"
 HTTP_STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 "${GATEWAY_URL%/}/${API_PATH}/${SMOKE_ID}/intervention-status")
 [[ "$HTTP_STATUS" == "401" ]] || fail "Unauthenticated gateway guard returned HTTP $HTTP_STATUS instead of 401"

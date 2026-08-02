@@ -9,6 +9,11 @@ mapfile -t POLICIES < <(find infra/apim -type f -name '*.xml' 2>/dev/null | sort
 mapfile -t SCRIPTS < <(find scripts/apim -type f -name '*.sh' 2>/dev/null | sort)
 ((${#POLICIES[@]} > 0)) || { echo 'ERROR: no APIM policy XML files found.' >&2; exit 1; }
 
+WRITE_CONFIRM_PATTERN=$(cat <<'REGEX'
+confirm[^=]*=["']?(true|yes)
+REGEX
+)
+
 failures=0
 for file in "${POLICIES[@]}"; do
   echo "Checking $file"
@@ -29,7 +34,7 @@ done
 
 for script in "${SCRIPTS[@]}"; do
   bash -n "$script" || failures=$((failures+1))
-  if grep -Eiq 'confirm[^=]*=["'"']?(true|yes)' "$script"; then
+  if grep -Eiq -- "$WRITE_CONFIRM_PATTERN" "$script"; then
     echo "ERROR: $script appears to default a write confirmation to true." >&2
     failures=$((failures+1))
   fi

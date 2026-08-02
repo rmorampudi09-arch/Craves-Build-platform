@@ -13,7 +13,7 @@ spring:
 
 craves:
   delivery-intelligence:
-    enabled: ${CRAVES_DELIVERY_INTELLIGENCE_ENABLED:true}
+    enabled: ${CRAVES_DELIVERY_INTELLIGENCE_ENABLED:false}
     live-window-days: ${CRAVES_DELIVERY_LIVE_WINDOW_DAYS:7}
     global-prior: ${CRAVES_DELIVERY_GLOBAL_PRIOR:100.0}
     momentum-threshold: ${CRAVES_DELIVERY_MOMENTUM_THRESHOLD:3.0}

@@ -1,10 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-import {
-  AuthModal,
-  type AccountMode,
-} from "@/components/auth/AuthModal";
+import { AuthModal, type AccountMode } from "@/components/auth/AuthModal";
 import { LocationModal } from "@/components/layout/LocationModal";
 import { HeroSection } from "@/components/sections/HeroSection";
 import { WhyCravesSection } from "@/components/sections/WhyCravesSection";
@@ -84,9 +81,7 @@ function LandingPage() {
       <WhyCravesSection />
       <HowItWorksSection />
       <WhatMakesSpecialSection />
-      <BecomeChefCtaSection
-        onBecomeChef={() => openAuth("register", "chef")}
-      />
+      <BecomeChefCtaSection onBecomeChef={() => openAuth("register", "chef")} />
       <TestimonialsSection />
       <StatsSection />
       <FooterSection />

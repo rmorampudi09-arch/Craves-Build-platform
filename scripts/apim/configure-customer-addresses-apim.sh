@@ -4,7 +4,7 @@ set +x
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
 APIM="${APIM:-apim-craves-prodlow-l3ing6}"
-USER_APP="${USER_APP:-ca-craves-user-chef-service-prodlow}"
+USER_APP="${USER_APP:-ca-craves-user-chef-service-prod}"
 API_PATH="${API_PATH:-api/v1/customer}"
 NEW_API_ID="${NEW_API_ID:-craves-customer-profile-v1}"
 API_VERSION="${API_VERSION:-2022-08-01}"

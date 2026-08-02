@@ -10,7 +10,7 @@ parameters:
     default: rg-craves-prodlow-centralindia
   - name: notificationContainerAppName
     type: string
-    default: ca-craves-notification-service-prodlow
+    default: ca-craves-notification-service-p
 
 pool:
   vmImage: ubuntu-latest

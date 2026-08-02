@@ -1,5 +1,6 @@
 package in.craves.integration.web;
 
+import in.craves.integration.config.PaymentApiProperties;
 import in.craves.integration.payment.CashfreeWebhookInboxService;
 import in.craves.integration.service.PaymentService;
 import in.craves.integration.web.PaymentDtos.CreatePaymentOrderRequest;
@@ -23,13 +24,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentController {
     private final PaymentService paymentService;
     private final CashfreeWebhookInboxService cashfreeWebhookInboxService;
+    private final PaymentApiProperties apiProperties;
 
     public PaymentController(
         PaymentService paymentService,
-        CashfreeWebhookInboxService cashfreeWebhookInboxService
+        CashfreeWebhookInboxService cashfreeWebhookInboxService,
+        PaymentApiProperties apiProperties
     ) {
         this.paymentService = paymentService;
         this.cashfreeWebhookInboxService = cashfreeWebhookInboxService;
+        this.apiProperties = apiProperties;
     }
 
     @PostMapping("/orders")
@@ -37,6 +41,7 @@ public class PaymentController {
         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
         @Valid @RequestBody CreatePaymentOrderRequest request
     ) {
+        apiProperties.requireOrderExecutionEnabled();
         return paymentService.createPaymentOrder(authorization, request);
     }
 
@@ -53,6 +58,7 @@ public class PaymentController {
         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
         @PathVariable UUID paymentOrderId
     ) {
+        apiProperties.requireOrderExecutionEnabled();
         return paymentService.verifyPayment(authorization, paymentOrderId);
     }
 
@@ -64,6 +70,7 @@ public class PaymentController {
         @RequestHeader(name = "x-idempotency-key", required = false) String idempotencyKey,
         @RequestBody String rawBody
     ) {
+        apiProperties.requireWebhookIngressEnabled();
         cashfreeWebhookInboxService.accept(timestamp, signature, version, idempotencyKey, rawBody);
         return ResponseEntity.ok().build();
     }

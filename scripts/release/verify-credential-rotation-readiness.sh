@@ -115,19 +115,19 @@ classify_binding() {
   local present secret_ref key_vault_url
   present=$(jq -r --arg name "$env_name" '[.[] | select(.name == $name)] | length' <<<"$env_json")
   if [[ "$present" == '0' ]]; then
-    printf 'missing\t\t\n'
+    printf 'missing||\n'
     return
   fi
   secret_ref=$(jq -r --arg name "$env_name" '.[] | select(.name == $name) | (.secretRef // "")' <<<"$env_json" | head -n1)
   if [[ -z "$secret_ref" ]]; then
-    printf 'plaintext\t\t\n'
+    printf 'plaintext||\n'
     return
   fi
   key_vault_url=$(jq -r --arg ref "$secret_ref" '.[] | select(.name == $ref) | (.keyVaultUrl // "")' <<<"$secret_json" | head -n1)
   if [[ -n "$key_vault_url" ]]; then
-    printf 'key-vault\t%s\t%s\n' "$secret_ref" "$key_vault_url"
+    printf 'key-vault|%s|%s\n' "$secret_ref" "$key_vault_url"
   else
-    printf 'container-app-secret\t%s\t\n' "$secret_ref"
+    printf 'container-app-secret|%s|\n' "$secret_ref"
   fi
 }
 
@@ -169,7 +169,7 @@ while IFS=$'\t' read -r SERVICE_KEY APP_NAME; do
   SECRET_JSON=$(az containerapp secret list --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" \
     --query '[].{name:name,keyVaultUrl:keyVaultUrl,identity:identity}' -o json 2>/dev/null || printf '[]')
 
-  IFS=$'\t' read -r DB_BINDING DB_SECRET_REF DB_KV_URL \
+  IFS='|' read -r DB_BINDING DB_SECRET_REF DB_KV_URL \
     < <(classify_binding 'SPRING_DATASOURCE_PASSWORD' "$ENV_JSON" "$SECRET_JSON")
   [[ "$DB_BINDING" != 'missing' ]] \
     || add_blocker "Container App $APP_NAME has no SPRING_DATASOURCE_PASSWORD binding."
@@ -179,11 +179,11 @@ while IFS=$'\t' read -r SERVICE_KEY APP_NAME; do
   STORAGE_KV_URL=''
   STORAGE_ENV_COUNT=$(jq -r '[.[] | select(.name == "CRAVES_STORAGE_ENDPOINT_VALUE")] | length' <<<"$ENV_JSON")
   if [[ "$STORAGE_ENV_COUNT" != '0' ]]; then
-    IFS=$'\t' read -r STORAGE_BINDING STORAGE_SECRET_REF STORAGE_KV_URL \
+    IFS='|' read -r STORAGE_BINDING STORAGE_SECRET_REF STORAGE_KV_URL \
       < <(classify_binding 'CRAVES_STORAGE_ENDPOINT_VALUE' "$ENV_JSON" "$SECRET_JSON")
   fi
 
-  jq -n \
+  jq -cn \
     --arg serviceKey "$SERVICE_KEY" \
     --arg appName "$APP_NAME" \
     --arg runningStatus "$RUNNING_STATUS" \

@@ -1,0 +1,164 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmDeployment
+    displayName: Type DEPLOY_SEVEN_SERVICES to allow Container App updates
+    type: string
+    default: DO_NOT_DEPLOY
+  - name: imageTag
+    displayName: Immutable image tag produced by the seven-service image build
+    type: string
+    default: ''
+  - name: deploymentEnvironment
+    displayName: Azure DevOps environment used for approval and audit
+    type: string
+    default: craves-prodlow-backend
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: DeploymentPreflight
+    displayName: Validate deployment request without mutation
+    jobs:
+      - job: ValidateRequest
+        displayName: Verify exact tag, inventory and current safety state
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+            displayName: Use Python 3.12
+          - bash: |
+              set -euo pipefail
+              [[ '${{ parameters.confirmDeployment }}' == 'DEPLOY_SEVEN_SERVICES' ]] || {
+                echo 'ERROR: confirmDeployment must be DEPLOY_SEVEN_SERVICES.' >&2
+                exit 1
+              }
+              [[ -n '${{ parameters.imageTag }}' ]] || {
+                echo 'ERROR: imageTag is required.' >&2
+                exit 1
+              }
+              [[ '${{ parameters.imageTag }}' != 'latest' ]] || {
+                echo 'ERROR: latest is forbidden.' >&2
+                exit 1
+              }
+              python -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
+              chmod +x scripts/release/*.sh
+              scripts/release/validate-production-completion-pack.sh
+            displayName: Validate source and explicit confirmation
+          - task: AzureCLI@2
+            displayName: Read back current seven-service state
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                PACK='config/production/production-completion-pack.json'
+                RG=$(jq -r '.azure.resourceGroup' "$PACK")
+                ACR=$(jq -r '.azure.containerRegistry' "$PACK")
+                TAG='${{ parameters.imageTag }}'
+                while IFS= read -r service; do
+                  APP=$(jq -r '.containerApp' <<<"$service")
+                  REPOSITORY=$(jq -r '.imageRepository' <<<"$service")
+                  az containerapp show -g "$RG" -n "$APP" --only-show-errors >/dev/null
+                  FOUND=$(az acr repository show-tags --name "$ACR" --repository "$REPOSITORY" \
+                    --query "[?@=='$TAG'] | [0]" -o tsv --only-show-errors 2>/dev/null || true)
+                  [[ "$FOUND" == "$TAG" ]] || {
+                    echo "ERROR: missing image $REPOSITORY:$TAG" >&2
+                    exit 1
+                  }
+                done < <(jq -c '.backendServices[]' "$PACK")
+                echo 'Read-only deployment preflight passed.'
+
+  - stage: DeploySevenServices
+    displayName: Deploy seven services sequentially
+    dependsOn: DeploymentPreflight
+    condition: succeeded()
+    jobs:
+      - deployment: DeployBackend
+        displayName: Update Container Apps with all execution flags disabled
+        environment: ${{ parameters.deploymentEnvironment }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  persistCredentials: false
+                  fetchDepth: 1
+                - task: AzureCLI@2
+                  displayName: Deploy, verify and preserve rollback evidence
+                  inputs:
+                    azureSubscription: Craves-Dev-Service-Connection
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      set +x
+                      chmod +x scripts/release/*.sh
+                      scripts/release/deploy-seven-services.sh \
+                        'rg-craves-prodlow-centralindia' \
+                        '${{ parameters.imageTag }}' \
+                        'config/production/production-completion-pack.json' \
+                        '$(Build.ArtifactStagingDirectory)/seven-service-deployment-evidence'
+                  env:
+                    CONFIRM_DEPLOYMENT: ${{ parameters.confirmDeployment }}
+                - task: PublishPipelineArtifact@1
+                  condition: always()
+                  inputs:
+                    targetPath: $(Build.ArtifactStagingDirectory)/seven-service-deployment-evidence
+                    artifact: seven-service-deployment-evidence
+                  displayName: Publish deployment and rollback evidence
+
+  - stage: PostDeploymentReadOnly
+    displayName: Post-deployment safety read-back
+    dependsOn: DeploySevenServices
+    condition: succeeded()
+    jobs:
+      - job: VerifyFlagsAndHealth
+        displayName: Verify exact images, disabled flags and health
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: AzureCLI@2
+            displayName: Verify seven-service runtime state
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                PACK='config/production/production-completion-pack.json'
+                RG=$(jq -r '.azure.resourceGroup' "$PACK")
+                LOGIN=$(jq -r '.azure.containerRegistryLoginServer' "$PACK")
+                TAG='${{ parameters.imageTag }}'
+                while IFS= read -r service; do
+                  APP=$(jq -r '.containerApp' <<<"$service")
+                  REPOSITORY=$(jq -r '.imageRepository' <<<"$service")
+                  EXPECTED_IMAGE="$LOGIN/$REPOSITORY:$TAG"
+                  ACTUAL_IMAGE=$(az containerapp show -g "$RG" -n "$APP" \
+                    --query 'properties.template.containers[0].image' -o tsv --only-show-errors)
+                  [[ "$ACTUAL_IMAGE" == "$EXPECTED_IMAGE" ]] || {
+                    echo "ERROR: image mismatch for $APP" >&2
+                    exit 1
+                  }
+                  ENV_JSON=$(az containerapp show -g "$RG" -n "$APP" \
+                    --query 'properties.template.containers[0].env[].{name:name,value:value,secretRef:secretRef}' -o json --only-show-errors)
+                  while IFS= read -r flag; do
+                    VALUE=$(jq -r --arg flag "$flag" '.[] | select(.name == $flag) | (.value // "")' <<<"$ENV_JSON" | head -n1)
+                    [[ "$VALUE" == 'false' ]] || {
+                      echo "ERROR: $APP flag $flag is not false" >&2
+                      exit 1
+                    }
+                  done < <(jq -r '.disabledFlags[]' <<<"$service")
+                done < <(jq -c '.backendServices[]' "$PACK")
+                APPS=$(jq -r '[.backendServices[].containerApp] | join(",")' "$PACK")
+                scripts/release/smoke-containerapp-health.sh "$RG" "$APPS"
+                echo 'Post-deployment safety read-back passed.'

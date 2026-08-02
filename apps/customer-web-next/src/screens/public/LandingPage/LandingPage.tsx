@@ -1,10 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-import {
-  AuthModal,
-  type AccountMode,
-} from "@/components/auth/AuthModal";
+import { AuthModal, type AccountMode } from "@/components/auth/AuthModal";
 import { LocationModal } from "@/components/layout/LocationModal";
 import { HeroSection } from "@/components/sections/HeroSection";
 import { WhyCravesSection } from "@/components/sections/WhyCravesSection";
@@ -23,6 +20,10 @@ import {
 } from "@/services/auth/cravesAuth";
 
 export const routeMeta = {};
+
+function hasChefRole(user: CravesUser): boolean {
+  return user.roles.some((role) => role.toUpperCase() === "CHEF");
+}
 
 function LandingPage() {
   const navigate = useNavigate();
@@ -74,14 +75,13 @@ function LandingPage() {
         locationLabel={locationLabel}
         onOpenLocation={() => setLocOpen(true)}
         onOpenAuth={openAuth}
+        onBecomeChef={() => openAuth("register", "chef")}
         onLogout={handleLogout}
       />
       <WhyCravesSection />
       <HowItWorksSection />
       <WhatMakesSpecialSection />
-      <BecomeChefCtaSection
-        onBecomeChef={() => openAuth("register", "chef")}
-      />
+      <BecomeChefCtaSection onBecomeChef={() => openAuth("register", "chef")} />
       <TestimonialsSection />
       <StatsSection />
       <FooterSection />
@@ -94,7 +94,14 @@ function LandingPage() {
         onSwitchMode={setAuthMode}
         onAuthenticated={(authenticatedUser, accountMode) => {
           setUser(authenticatedUser);
-          navigate({ to: accountMode === "chef" ? "/chef" : "/home" });
+          navigate({
+            to:
+              accountMode === "chef"
+                ? hasChefRole(authenticatedUser)
+                  ? "/chef"
+                  : "/chef/application"
+                : "/home",
+          });
         }}
       />
       <LocationModal

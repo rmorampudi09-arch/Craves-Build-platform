@@ -93,11 +93,21 @@ test("dish and chef detail pages reload discovery after a browser refresh", () =
   }
 });
 
-test("chef onboarding is reachable and prefills approved backend data", () => {
+test("every home-chef call to action opens the live chef registration flow", () => {
   const landing = source("../screens/public/LandingPage/LandingPage.tsx");
+  const hero = source("../components/sections/HeroSection.tsx");
   const application = source("../components/chef-application-workspace.tsx");
   const kitchen = source("../components/chef-kitchen-form.tsx");
-  assert.match(landing, /openAuth\("register", "chef"\)/);
+
+  assert.match(
+    landing,
+    /onBecomeChef=\{\(\) => openAuth\("register", "chef"\)\}/,
+  );
+  assert.match(hero, /onClick=\{onBecomeChef\}/);
+  assert.match(
+    landing,
+    /hasChefRole\(authenticatedUser\)\s*\?\s*"\/chef"\s*:\s*"\/chef\/application"/s,
+  );
   assert.match(application, /fetch\("\/api\/customer\/profile"/);
   assert.match(application, /fetch\("\/api\/customer\/addresses"/);
   assert.match(kitchen, /application\.status !== "APPROVED"/);
@@ -118,12 +128,32 @@ test("pending chef applications remain editable exactly as the backend permits",
   );
 });
 
+test("chef dashboard reuses the working Craves session for applicants and chefs", () => {
+  const dashboard = source("../components/chef-mode-dashboard.tsx");
+  const phoneAuth = source("../components/phone-auth-form.tsx");
+
+  assert.match(dashboard, /loadSession\(\)/);
+  assert.match(dashboard, /state === "applicant"/);
+  assert.match(dashboard, /Open chef application/);
+  assert.doesNotMatch(dashboard, /fetch\("\/api\/chef\/me"/);
+  assert.match(phoneAuth, /Secure Craves access/);
+  assert.doesNotMatch(phoneAuth, /Secure customer access/);
+});
+
+test("chef identity BFF unwraps the Spring Auth Service response", () => {
+  const contents = source("../app/api/chef/me/route.ts");
+  assert.match(contents, /parseChefModeIdentity\(raw\?\.identity\)/);
+  assert.doesNotMatch(contents, /parseChefModeIdentity\(await upstream\.json/);
+});
+
 test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   const auth = source("../services/auth/cravesAuth.ts");
   const boundary = source("../components/chef-access-boundary.tsx");
   assert.match(auth, /synchronizeSessionRoles/);
   assert.match(auth, /fetch\("\/api\/auth\/refresh"/);
+  assert.match(boundary, /loadSession\(\)/);
   assert.match(boundary, /synchronizeSessionRoles\(\)/);
+  assert.match(boundary, /setState\("not-approved"\)/);
 
   for (const page of [
     "../app/chef/kitchen/page.tsx",

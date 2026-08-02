@@ -1,5 +1,17 @@
 import { Link } from "@tanstack/react-router";
-import { Search, MapPin, ShoppingCart, LogOut, Heart, UserCircle, Bell } from "lucide-react";
+import {
+  Bell,
+  CalendarRange,
+  ChefHat,
+  ClipboardList,
+  Heart,
+  Home,
+  LogOut,
+  MapPin,
+  Search,
+  ShoppingCart,
+  UserCircle,
+} from "lucide-react";
 import cravesLogo from "@/assets/images/craves-logo.png";
 import type { CravesUser } from "@/services/auth/cravesAuth";
 import { assetUrl } from "@/lib/asset-url";
@@ -16,7 +28,14 @@ interface BrowseHeaderProps {
   onSearchTermChange: (value: string) => void;
 }
 
-/** Sticky top bar: logo, delivery location, wishlist, profile link, cart button, logout and search. */
+const serviceLinks = [
+  { to: "/home", label: "Home", icon: Home },
+  { to: "/orders", label: "Orders", icon: ClipboardList },
+  { to: "/subscriptions", label: "Meal plans", icon: CalendarRange },
+  { to: "/notifications", label: "Notifications", icon: Bell },
+  { to: "/chef", label: "Chef mode", icon: ChefHat },
+];
+
 export function BrowseHeader({
   user,
   locationLabel,
@@ -32,9 +51,17 @@ export function BrowseHeader({
     <header className="sticky top-0 z-30 border-b border-border bg-cream/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 md:px-6">
         <Link to="/" className="flex items-center gap-2">
-          <img src={assetUrl(cravesLogo)} alt="Craves" width={40} height={40} className="h-10 w-10" />
+          <img
+            src={assetUrl(cravesLogo)}
+            alt="Craves"
+            width={40}
+            height={40}
+            className="h-10 w-10"
+          />
           <div className="leading-tight">
-            <div className="font-display text-xl font-bold text-primary">Craves</div>
+            <div className="font-display text-xl font-bold text-primary">
+              Craves
+            </div>
             <div className="text-[9px] font-medium tracking-[0.2em] text-primary/70">
               FOOD FROM HOME
             </div>
@@ -52,8 +79,6 @@ export function BrowseHeader({
           <span className="hidden text-sm font-semibold text-ink sm:inline">
             Hi, {user.username.split(" ")[0]}
           </span>
-
-          {/* WISHLIST — goes straight to the wishlist page, no dropdown */}
           <Link
             to="/wishlist"
             className="relative rounded-full border border-border bg-white p-2.5 text-ink hover:border-primary"
@@ -66,24 +91,13 @@ export function BrowseHeader({
               </span>
             )}
           </Link>
-
-          <Link
-            to="/notifications"
-            className="rounded-full border border-border bg-white p-2.5 text-ink hover:border-primary"
-            aria-label="Open notifications"
-          >
-            <Bell className="h-4 w-4" />
-          </Link>
-
-          {/* PROFILE — goes straight to the profile page, no dropdown */}
           <Link
             to="/profile"
             className="flex items-center gap-1 rounded-full border border-border bg-white px-3 py-2 text-xs font-semibold text-ink hover:border-primary"
           >
-            <UserCircle className="h-4 w-4" /> <span className="hidden sm:inline">Profile</span>
+            <UserCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">Profile</span>
           </Link>
-
-          {/* LOGOUT */}
           <button
             type="button"
             onClick={onLogout}
@@ -92,8 +106,6 @@ export function BrowseHeader({
           >
             <LogOut className="h-4 w-4" />
           </button>
-
-          {/* CART — top right */}
           <button
             type="button"
             onClick={onOpenCart}
@@ -109,17 +121,30 @@ export function BrowseHeader({
           </button>
         </div>
       </div>
-      {/* Search */}
       <div className="mx-auto max-w-7xl px-4 pb-3 md:px-6">
         <div className="flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2.5 shadow-sm">
           <Search className="h-4 w-4 text-muted-foreground" />
           <input
             value={searchTerm}
-            onChange={(e) => onSearchTermChange(e.target.value)}
+            onChange={(event) => onSearchTermChange(event.target.value)}
             placeholder="Search biryanis, meals, home chefs…"
             className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted-foreground"
           />
         </div>
+        <nav
+          className="mt-3 flex gap-2 overflow-x-auto pb-1"
+          aria-label="Craves services"
+        >
+          {serviceLinks.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-white px-3 py-2 text-xs font-semibold text-ink transition hover:border-primary hover:text-primary"
+            >
+              <link.icon className="h-3.5 w-3.5" /> {link.label}
+            </Link>
+          ))}
+        </nav>
       </div>
     </header>
   );

@@ -61,7 +61,14 @@ Use a test customer and confirm, in this order:
 1. Phone OTP sign-in succeeds and refresh keeps the session without browser-visible tokens.
 2. Profile and saved-address changes survive a reload; Home must use the active default address coordinates.
 3. Select Home Chef during login/sign-up and confirm the user continues to the application or approved chef dashboard.
-4. Nearby menu responses use the active saved-address coordinates and a 5 km request radius. An empty result is valid until an approved kitchen is active, geocoded and has a sellable menu item.\n5. Add, change and remove cart items; confirm displayed amounts equal backend responses.\n6. Create checkout using a saved address; confirm all fee/tax/grand-total values come from Order Service.\n7. Open Cashfree sandbox hosted checkout. Complete a sandbox payment and verify the result through the backend.\n8. Confirm the paid checkout creates customer orders and delivery tracking appears only after a delivery job exists.\n9. Open notifications, mark one unread item read, reload and confirm `readAt` persists.\n10. Sign out and confirm protected routes return to sign-in.\n
+4. Nearby menu responses use the active saved-address coordinates and a 5 km request radius. An empty result is valid until an approved kitchen is active, geocoded and has a sellable menu item.
+5. Add, change and remove cart items; confirm displayed amounts equal backend responses.
+6. Create checkout using a saved address; confirm all fee/tax/grand-total values come from Order Service.
+7. Open Cashfree sandbox hosted checkout. Complete a sandbox payment and verify the result through the backend.
+8. Confirm the paid checkout creates customer orders and delivery tracking appears only after a delivery job exists.
+9. Open notifications, mark one unread item read, reload and confirm `readAt` persists.
+10. Sign out and confirm protected routes return to sign-in.
+
 ## Azure deployment handoff
 
 The Dockerfile produces a non-root Next.js standalone image. Firebase and Cashfree public variables are build-time values. `CRAVES_API_BASE_URL` is a server-only runtime value and must be set on the deployed container/app.

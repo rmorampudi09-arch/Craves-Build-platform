@@ -79,7 +79,6 @@ SAFE_PLACEHOLDER_MARKERS = (
     'not-configured',
     'not-set',
 )
-SIMPLE_IDENTIFIER = re.compile(r'^[A-Za-z_][A-Za-z0-9_.-]*$')
 
 
 def is_configuration_file(path: Path) -> bool:
@@ -106,9 +105,6 @@ def is_safe_reference(raw: str) -> bool:
         return True
     if any(marker in lowered for marker in SAFE_PLACEHOLDER_MARKERS):
         return True
-    # Ordinary variable-to-variable source assignments are not credentials.
-    if SIMPLE_IDENTIFIER.fullmatch(value):
-        return True
     return False
 
 
@@ -119,11 +115,16 @@ def scan_line(line: str, *, config_file: bool) -> list[str]:
         if pattern.search(line):
             reasons.append(reason)
 
+    # Source files are checked only for quoted hard-coded assignments. Normal
+    # variable-to-variable Java/TypeScript assignments are therefore ignored,
+    # while quoted credential literals remain blocked.
     for match in QUOTED_ASSIGNMENT.finditer(line):
         value = match.group('value')
         if len(normalized_value(value)) >= 16 and not is_safe_reference(value):
             reasons.append('hard-coded quoted secret assignment')
 
+    # Configuration formats may legitimately use unquoted values. Safe
+    # indirections are allow-listed; other long values remain blocked.
     if config_file:
         for match in UNQUOTED_CONFIG_ASSIGNMENT.finditer(line):
             value = match.group('value')

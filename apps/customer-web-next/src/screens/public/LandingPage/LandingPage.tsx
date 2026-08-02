@@ -19,14 +19,8 @@ import {
   type CravesUser,
 } from "@/services/auth/cravesAuth";
 
-// Route metadata (head tags, etc.) consumed by src/routes/index.tsx
 export const routeMeta = {};
 
-/**
- * Public marketing landing page (the very first screen a signed-out visitor sees).
- * Composed entirely of named section components from src/components/sections/.
- * Post-login browsing lives at src/pages/public/BrowseFoods/BrowseFoods.tsx instead.
- */
 function LandingPage() {
   const navigate = useNavigate();
   const [authOpen, setAuthOpen] = useState(false);
@@ -48,8 +42,8 @@ function LandingPage() {
     return () => { active = false; };
   }, [navigate]);
 
-  const openAuth = (m: "login" | "register") => {
-    setAuthMode(m);
+  const openAuth = (mode: "login" | "register") => {
+    setAuthMode(mode);
     setAuthOpen(true);
   };
 
@@ -84,23 +78,17 @@ function LandingPage() {
         mode={authMode}
         onClose={() => setAuthOpen(false)}
         onSwitchMode={setAuthMode}
-        onAuthenticated={(u) => {
-          setUser(u);
-          if (authMode === "register" || !getAddress()) {
-            setLocOpen(true);
-          } else {
-            navigate({ to: "/home" });
-          }
+        onAuthenticated={(authenticatedUser, accountMode) => {
+          setUser(authenticatedUser);
+          navigate({ to: accountMode === "chef" ? "/chef" : "/home" });
         }}
       />
       <LocationModal
         open={locOpen}
         onClose={() => setLocOpen(false)}
-        onSaved={(a) => {
-          setAddress(a);
+        onSaved={(savedAddress) => {
+          setAddress(savedAddress);
           setLocOpen(false);
-          // Once we have both a session and an address, send them to Home.
-          if (user) navigate({ to: "/home" });
         }}
       />
     </div>

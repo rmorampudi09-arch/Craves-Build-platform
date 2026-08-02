@@ -52,7 +52,7 @@ UNQUOTED_CONFIG_ASSIGNMENT = re.compile(
     rf'''(?ix)
     ["']?{SECRET_KEY}["']?
     \s*[:=]\s*
-    (?P<value>[^\s,#]+)
+    (?P<value>[^\s,#"']+)
     ''',
 )
 
@@ -124,7 +124,9 @@ def scan_line(line: str, *, config_file: bool) -> list[str]:
             reasons.append('hard-coded quoted secret assignment')
 
     # Configuration formats may legitimately use unquoted values. Safe
-    # indirections are allow-listed; other long values remain blocked.
+    # indirections are allow-listed; other long values remain blocked. The
+    # unquoted pattern deliberately excludes quote characters so a quoted JSON
+    # value is never evaluated twice.
     if config_file:
         for match in UNQUOTED_CONFIG_ASSIGNMENT.finditer(line):
             value = match.group('value')
@@ -144,6 +146,7 @@ def run_regression_tests() -> None:
         ('connectionString: $(SERVICE_BUS_CONNECTION_STRING)', True),
         ('connectionString: ${SERVICE_BUS_CONNECTION_STRING}', True),
         ('connectionString: @Microsoft.KeyVault(SecretUri=https://vault/secrets/example)', True),
+        ('"cashfreeClientSecret": "cashfree-secret",', True),
     )
     blocked_cases = (
         ('-----BEGIN PRIVATE KEY-----', False),

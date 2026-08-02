@@ -1,6 +1,8 @@
 "use client";
 
 import type { CravesIdentity } from "@/lib/auth-contract";
+import type { CustomerAddress } from "@/lib/address-contract";
+import { selectActiveDeliveryAddress } from "@/lib/address-selection";
 
 export type CravesUser = {
   id: string;
@@ -14,6 +16,8 @@ export type CravesUser = {
 };
 
 export type CravesAddress = {
+  id?: string;
+  label?: string;
   hno: string;
   street?: string;
   city: string;
@@ -93,5 +97,33 @@ export function saveAddress(address: CravesAddress) {
 }
 
 export function getAddress(): CravesAddress | null {
+  return selectedLocation;
+}
+
+function fromCustomerAddress(address: CustomerAddress): CravesAddress {
+  return {
+    id: address.id,
+    label: address.addressLabel,
+    hno: address.addressLine1,
+    street: address.addressLine2 ?? address.landmark ?? undefined,
+    city: address.city,
+    mandal: address.areaName,
+    district: address.state,
+    pincode: address.postalCode,
+    lat: address.latitude,
+    lng: address.longitude,
+  };
+}
+
+export async function loadSelectedAddress(): Promise<CravesAddress | null> {
+  const response = await fetch("/api/customer/addresses", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  if (!response.ok) throw new Error("Saved delivery addresses could not be loaded.");
+  const addresses = await response.json().catch(() => null) as CustomerAddress[] | null;
+  if (!Array.isArray(addresses)) throw new Error("Saved delivery addresses returned an invalid response.");
+  const selected = selectActiveDeliveryAddress(addresses);
+  selectedLocation = selected ? fromCustomerAddress(selected) : null;
   return selectedLocation;
 }

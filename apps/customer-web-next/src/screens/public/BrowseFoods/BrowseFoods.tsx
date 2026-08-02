@@ -1,25 +1,23 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { BrowseHeader } from "@/components/home/BrowseHeader";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
 import { CategoryFilterChips } from "@/components/home/CategoryFilterChips";
 import { DishesGrid } from "@/components/home/DishesGrid";
 import { FloatingCartBar } from "@/components/home/FloatingCartBar";
-import { LocationModal } from "@/components/layout/LocationModal";
 import { DISH_CATEGORIES, type DishCategory } from "@/constants/dishCategories";
 import { DISHES, discoverDishes, type Dish } from "@/services/api/dishes";
 import {
   clearSession,
-  getAddress,
+  loadSelectedAddress,
   loadSession,
   type CravesAddress,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
-import { cartCount, subscribeCart } from "@/services/api/cravesCart";
+import { cartCount, loadCart, subscribeCart } from "@/services/api/cravesCart";
 import { wishlistCount, subscribeWishlist } from "@/services/api/cravesWishlist";
 
-// Route metadata (head tags, etc.) consumed by src/routes/home.tsx
 export const routeMeta = {
   head: () => ({
     meta: [
@@ -34,31 +32,34 @@ export const routeMeta = {
   }),
 };
 
-/**
- * Post-login "browse dishes" screen. All dish data comes from
- * src/services/api/dishes.ts (single source of truth — also used by
- * src/pages/public/FoodDetails/FoodDetails.tsx), and the screen itself is
- * composed of named pieces from src/components/home/.
- */
 function BrowseFoodsPage() {
   const navigate = useNavigate();
   const [user, setUser] = useState<CravesUser | null>(null);
   const [address, setAddress] = useState<CravesAddress | null>(null);
-  const [locOpen, setLocOpen] = useState(false);
   const [category, setCategory] = useState<DishCategory>(DISH_CATEGORIES[0]);
   const [searchTerm, setSearchTerm] = useState("");
   const [cartItemCount, setCartItemCount] = useState(0);
   const [wishlistItemCount, setWishlistItemCount] = useState(0);
   const [dishes, setDishes] = useState<Dish[]>([]);
-  const [catalogMessage, setCatalogMessage] = useState("Loading nearby homemade food…");
+  const [catalogMessage, setCatalogMessage] = useState("Loading your saved delivery location…");
 
   const refreshDiscovery = async (activeAddress: CravesAddress | null) => {
-    const latitude = activeAddress?.lat ?? 17.4483;
-    const longitude = activeAddress?.lng ?? 78.3915;
+    if (
+      typeof activeAddress?.lat !== "number"
+      || typeof activeAddress.lng !== "number"
+    ) {
+      setDishes([]);
+      setCatalogMessage("Add a delivery address with map coordinates to see real kitchens near you.");
+      return;
+    }
     try {
-      const nearby = await discoverDishes(latitude, longitude, 5_000);
+      const nearby = await discoverDishes(activeAddress.lat, activeAddress.lng, 5_000);
       setDishes(nearby);
-      setCatalogMessage(nearby.length === 0 ? "No active kitchens with available dishes were found within 5 km." : "");
+      setCatalogMessage(
+        nearby.length === 0
+          ? "No active kitchens with sellable dishes were found within 5 km of your saved address."
+          : "",
+      );
     } catch {
       if (process.env.NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK === "true") {
         setDishes(DISHES);
@@ -72,19 +73,31 @@ function BrowseFoodsPage() {
 
   useEffect(() => {
     let active = true;
-    void loadSession().then((current) => {
+    void loadSession().then(async (current) => {
       if (!active) return;
       if (!current) {
         navigate({ to: "/", replace: true });
         return;
       }
       setUser(current);
-      const activeAddress = getAddress();
-      setAddress(activeAddress);
-      void refreshDiscovery(activeAddress);
-      setCartItemCount(cartCount());
       setWishlistItemCount(wishlistCount());
+
+      try {
+        const activeAddress = await loadSelectedAddress();
+        if (!active) return;
+        setAddress(activeAddress);
+        await refreshDiscovery(activeAddress);
+      } catch {
+        if (!active) return;
+        setAddress(null);
+        setDishes([]);
+        setCatalogMessage("Your saved delivery address could not be loaded. Open addresses and try again.");
+      }
+
+      await loadCart();
+      if (active) setCartItemCount(cartCount());
     });
+
     const unsubCart = subscribeCart(() => setCartItemCount(cartCount()));
     const unsubWishlist = subscribeWishlist(() => setWishlistItemCount(wishlistCount()));
     return () => {
@@ -97,9 +110,9 @@ function BrowseFoodsPage() {
   const filteredDishes = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return dishes.filter(
-      (d) =>
-        (category === "All" || d.category === category) &&
-        (!term || d.name.toLowerCase().includes(term) || d.chef.toLowerCase().includes(term)),
+      (dish) =>
+        (category === "All" || dish.category === category)
+        && (!term || dish.name.toLowerCase().includes(term) || dish.chef.toLowerCase().includes(term)),
     );
   }, [category, searchTerm, dishes]);
 
@@ -109,7 +122,7 @@ function BrowseFoodsPage() {
   };
 
   const locationLabel = address
-    ? `${address.hno ? address.hno + ", " : ""}${address.city}${address.mandal ? ", " + address.mandal : ""}`
+    ? `${address.hno ? `${address.hno}, ` : ""}${address.city}${address.mandal ? `, ${address.mandal}` : ""}`
     : "Set delivery address";
 
   if (!user) return null;
@@ -119,7 +132,7 @@ function BrowseFoodsPage() {
       <BrowseHeader
         user={user}
         locationLabel={locationLabel}
-        onOpenLocation={() => setLocOpen(true)}
+        onOpenLocation={() => navigate({ to: "/addresses" })}
         cartCount={cartItemCount}
         onOpenCart={() => navigate({ to: "/cart" })}
         wishlistCount={wishlistItemCount}
@@ -129,17 +142,22 @@ function BrowseFoodsPage() {
       />
       <WelcomeBanner firstName={user.username.split(" ")[0]} />
       <CategoryFilterChips selected={category} onSelect={setCategory} />
-      {catalogMessage && <p className="mx-auto max-w-7xl px-4 pt-3 text-sm text-muted-foreground md:px-6">{catalogMessage}</p>}
+      {catalogMessage && (
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 pt-3 text-sm text-muted-foreground md:px-6">
+          <p>{catalogMessage}</p>
+          {!address && (
+            <button
+              type="button"
+              onClick={() => navigate({ to: "/addresses" })}
+              className="font-semibold text-primary hover:underline"
+            >
+              Manage delivery addresses
+            </button>
+          )}
+        </div>
+      )}
       <DishesGrid dishes={filteredDishes} selectedCategory={category} searchTerm={searchTerm} />
       <FloatingCartBar itemCount={cartItemCount} onViewCart={() => navigate({ to: "/cart" })} />
-      <LocationModal
-        open={locOpen}
-        onClose={() => setLocOpen(false)}
-        onSaved={(a) => {
-          setAddress(a);
-          void refreshDiscovery(a);
-        }}
-      />
     </div>
   );
 }

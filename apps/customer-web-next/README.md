@@ -18,6 +18,9 @@ Backend baseline used for this integration: `rmorampudi09-arch/Craves-Build-plat
 | Orders | `/orders` | order list and detail |
 | Delivery | `/tracking?id={orderId}` | provider-neutral delivery status and history |
 | Notifications | `/notifications` | inbox and mark-read |
+| Chef account choice | login/sign-up | same Firebase/Craves identity, customer or chef continuation |
+| Chef registration | `/chef/application` | application status, submission and KYC proof upload |
+| Chef mode | `/chef` | approved role, kitchen, menu and chef-owned orders |
 
 The browser never stores access or refresh tokens. The Next.js BFF keeps them in secure, HTTP-only cookies and forwards them to API Management server-side. Mutating BFF routes enforce same-origin requests and validate identifiers and response shapes.
 
@@ -56,14 +59,15 @@ Requirements: Node.js 24 and npm.
 Use a test customer and confirm, in this order:
 
 1. Phone OTP sign-in succeeds and refresh keeps the session without browser-visible tokens.
-2. Profile and saved-address changes survive a reload.
-3. Nearby menu responses use the selected coordinates and a 5 km request radius.
-4. Add, change and remove cart items; confirm displayed amounts equal backend responses.
-5. Create checkout using a saved address; confirm all fee/tax/grand-total values come from Order Service.
-6. Open Cashfree sandbox hosted checkout. Complete a sandbox payment and verify the result through the backend.
-7. Confirm the paid checkout creates customer orders and delivery tracking appears only after a delivery job exists.
-8. Open notifications, mark one unread item read, reload and confirm `readAt` persists.
-9. Sign out and confirm protected routes return to sign-in.
+2. Profile and saved-address changes survive a reload; Home must use the active default address coordinates.
+3. Select Home Chef during login/sign-up and confirm the user continues to the application or approved chef dashboard.
+4. Nearby menu responses use the active saved-address coordinates and a 5 km request radius. An empty result is valid until an approved kitchen is active, geocoded and has a sellable menu item.
+5. Add, change and remove cart items; confirm displayed amounts equal backend responses.
+6. Create checkout using a saved address; confirm all fee/tax/grand-total values come from Order Service.
+7. Open Cashfree sandbox hosted checkout. Complete a sandbox payment and verify the result through the backend.
+8. Confirm the paid checkout creates customer orders and delivery tracking appears only after a delivery job exists.
+9. Open notifications, mark one unread item read, reload and confirm `readAt` persists.
+10. Sign out and confirm protected routes return to sign-in.
 
 ## Azure deployment handoff
 

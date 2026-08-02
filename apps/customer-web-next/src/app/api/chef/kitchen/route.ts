@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefKitchen, parseChefKitchenInput } from "@/lib/chef-kitchen-contract";
 
@@ -7,15 +8,6 @@ function apiBaseUrl(): string {
   const value = process.env.CRAVES_API_BASE_URL?.trim();
   if (!value?.startsWith("https://")) throw new Error("CRAVES_API_BASE_URL must use HTTPS");
   return value.replace(/\/$/, "");
-}
-function sameOrigin(request: NextRequest): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    const supplied = new URL(origin);
-    const current = new URL(request.url);
-    return supplied.protocol === current.protocol && supplied.host === current.host;
-  } catch { return false; }
 }
 
 async function call(request: NextRequest, method: "GET" | "PUT", body?: unknown) {
@@ -50,7 +42,7 @@ async function call(request: NextRequest, method: "GET" | "PUT", body?: unknown)
 
 export async function GET(request: NextRequest) { return call(request, "GET"); }
 export async function PUT(request: NextRequest) {
-  if (!sameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
+  if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const input = parseChefKitchenInput(await request.json().catch(() => null));
   if (!input) return NextResponse.json({ code: "INVALID_KITCHEN_PROFILE" }, { status: 400 });
   return call(request, "PUT", input);

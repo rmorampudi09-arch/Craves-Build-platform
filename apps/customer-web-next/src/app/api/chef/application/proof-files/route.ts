@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefProofDocument, type ChefDocumentType } from "@/lib/chef-application-contract";
 
@@ -13,20 +14,9 @@ function apiBaseUrl(): string {
   return value.replace(/\/$/, "");
 }
 
-function sameOrigin(request: NextRequest): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    const supplied = new URL(origin);
-    const current = new URL(request.url);
-    return supplied.protocol === current.protocol && supplied.host === current.host;
-  } catch {
-    return false;
-  }
-}
 
 export async function POST(request: NextRequest) {
-  if (!sameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
+  if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const token = request.cookies.get("craves_access_token")?.value;
   if (!token) return NextResponse.json({ code: "AUTHENTICATION_REQUIRED" }, { status: 401 });
 

@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefApplication, parseChefApplicationInput } from "@/lib/chef-application-contract";
 
@@ -9,17 +10,6 @@ function apiBaseUrl(): string {
   return value.replace(/\/$/, "");
 }
 
-function sameOrigin(request: NextRequest): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    const supplied = new URL(origin);
-    const current = new URL(request.url);
-    return supplied.protocol === current.protocol && supplied.host === current.host;
-  } catch {
-    return false;
-  }
-}
 
 async function forward(request: NextRequest, method: "GET" | "POST", body?: unknown) {
   const token = request.cookies.get("craves_access_token")?.value;
@@ -61,7 +51,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!sameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
+  if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const input = parseChefApplicationInput(await request.json().catch(() => null));
   if (!input) return NextResponse.json({ code: "INVALID_CHEF_APPLICATION" }, { status: 400 });
   return forward(request, "POST", input);

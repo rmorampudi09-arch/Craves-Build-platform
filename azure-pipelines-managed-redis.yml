@@ -31,7 +31,7 @@ stages:
     displayName: Validate Azure Managed Redis request
     jobs:
       - job: ValidateSource
-        displayName: Validate Bicep and explicit confirmation
+        displayName: Validate Bicep, binding script and explicit confirmation
         steps:
           - checkout: self
             persistCredentials: false
@@ -57,6 +57,7 @@ stages:
                   echo 'ERROR: deploy requires confirmDeploy=DEPLOY_MANAGED_REDIS.' >&2
                   exit 1
                 fi
+                bash -n scripts/release/bind-managed-redis.sh
                 az bicep install >/dev/null
                 az bicep build --file infra/managed-redis.bicep --stdout >/dev/null
                 echo 'Managed Redis source validation passed.'
@@ -100,7 +101,10 @@ stages:
                     az deployment group what-if "${common[@]}" --only-show-errors
                     ;;
                   deploy)
-                    [[ '${{ parameters.confirmDeploy }}' == 'DEPLOY_MANAGED_REDIS' ]] || { echo 'ERROR: confirmation mismatch.' >&2; exit 1; }
+                    [[ '${{ parameters.confirmDeploy }}' == 'DEPLOY_MANAGED_REDIS' ]] || {
+                      echo 'ERROR: confirmation mismatch.' >&2
+                      exit 1
+                    }
                     echo 'WARNING: Azure Managed Redis is a billable resource. Review current Azure pricing before running this action.' >&2
                     az deployment group create \
                       --name "craves-managed-redis-$(Build.BuildId)" \
@@ -128,7 +132,7 @@ stages:
         condition: succeeded()
         jobs:
           - deployment: BindRedis
-            displayName: Create versionless Key Vault reference with controls disabled
+            displayName: Create rollback-safe Key Vault references with controls disabled
             environment: craves-prodlow-backend
             strategy:
               runOnce:
@@ -138,7 +142,7 @@ stages:
                       persistCredentials: false
                       fetchDepth: 1
                     - task: AzureCLI@2
-                      displayName: Store and bind the new Redis secret without printing it
+                      displayName: Bind Managed Redis through Key Vault without printing it
                       inputs:
                         azureSubscription: Craves-Dev-Service-Connection
                         scriptType: bash
@@ -146,155 +150,19 @@ stages:
                         inlineScript: |
                           set -euo pipefail
                           set +x
-                          umask 077
-                          RG='rg-craves-prodlow-centralindia'
-                          REDIS_NAME='${{ parameters.redisName }}'
-                          VAULT='kvcravesprodlowl3ing6'
-                          SECRET_NAME='${{ parameters.keyVaultSecretName }}'
-                          PACK='config/production/production-completion-pack.json'
-                          TMP_DIR=$(mktemp -d)
-                          trap 'rm -rf "$TMP_DIR"' EXIT
-
-                          az extension add --name redisenterprise --upgrade --yes --only-show-errors >/dev/null
-                          az redisenterprise wait \
-                            --resource-group "$RG" \
-                            --name "$REDIS_NAME" \
-                            --created \
-                            --interval 20 \
-                            --timeout 3600 \
-                            --only-show-errors
-
-                          HOST=$(az redisenterprise show \
-                            --resource-group "$RG" \
-                            --name "$REDIS_NAME" \
-                            --query hostName -o tsv --only-show-errors)
-                          PRIMARY_KEY=$(az redisenterprise database list-keys \
-                            --resource-group "$RG" \
-                            --cluster-name "$REDIS_NAME" \
-                            --query primaryKey -o tsv --only-show-errors)
-                          [[ -n "$HOST" && -n "$PRIMARY_KEY" ]] || {
-                            echo 'ERROR: Redis endpoint or access key was unavailable.' >&2
-                            exit 1
-                          }
-
-                          REDIS_HOST="$HOST" REDIS_KEY="$PRIMARY_KEY" python3 - "$TMP_DIR/redis-url.txt" <<'PY'
-                          import os
-                          import sys
-                          from pathlib import Path
-                          from urllib.parse import quote
-
-                          host = os.environ['REDIS_HOST']
-                          key = quote(os.environ['REDIS_KEY'], safe='')
-                          Path(sys.argv[1]).write_text(f'rediss://:{key}@{host}:10000', encoding='utf-8')
-                          PY
-                          unset PRIMARY_KEY REDIS_KEY
-
-                          az keyvault secret set \
-                            --vault-name "$VAULT" \
-                            --name "$SECRET_NAME" \
-                            --file "$TMP_DIR/redis-url.txt" \
-                            --encoding utf-8 \
-                            --content-type 'Spring Data Redis TLS URL' \
-                            --only-show-errors \
-                            --query id -o tsv >"$TMP_DIR/secret-versioned-id.txt"
-                          SECRET_URI="https://$VAULT.vault.azure.net/secrets/$SECRET_NAME"
-                          KV_ID=$(az keyvault show --resource-group "$RG" --name "$VAULT" --query id -o tsv --only-show-errors)
-
-                          OUT='$(Build.ArtifactStagingDirectory)/managed-redis-binding-evidence'
-                          mkdir -p "$OUT"
-                          : >"$OUT/apps.jsonl"
-                          while IFS= read -r service; do
-                            KEY=$(jq -r '.key' <<<"$service")
-                            APP=$(jq -r '.containerApp' <<<"$service")
-                            PRINCIPAL_ID=$(az containerapp show -g "$RG" -n "$APP" \
-                              --query identity.principalId -o tsv --only-show-errors)
-                            [[ -n "$PRINCIPAL_ID" ]] || { echo "ERROR: $APP has no system identity." >&2; exit 1; }
-
-                            ROLE_EXISTS=$(az role assignment list \
-                              --assignee-object-id "$PRINCIPAL_ID" \
-                              --scope "$KV_ID" \
-                              --include-inherited \
-                              --query "[?roleDefinitionName=='Key Vault Secrets User'] | length(@)" \
-                              -o tsv --only-show-errors 2>/dev/null || printf '0')
-                            if [[ "$ROLE_EXISTS" == '0' ]]; then
-                              az role assignment create \
-                                --assignee-object-id "$PRINCIPAL_ID" \
-                                --assignee-principal-type ServicePrincipal \
-                                --role 'Key Vault Secrets User' \
-                                --scope "$KV_ID" \
-                                --only-show-errors >/dev/null
-                              for attempt in $(seq 1 12); do
-                                ROLE_EXISTS=$(az role assignment list \
-                                  --assignee-object-id "$PRINCIPAL_ID" \
-                                  --scope "$KV_ID" \
-                                  --include-inherited \
-                                  --query "[?roleDefinitionName=='Key Vault Secrets User'] | length(@)" \
-                                  -o tsv --only-show-errors 2>/dev/null || printf '0')
-                                [[ "$ROLE_EXISTS" != '0' ]] && break
-                                sleep 10
-                              done
-                              [[ "$ROLE_EXISTS" != '0' ]] || { echo "ERROR: Key Vault role did not propagate for $APP." >&2; exit 1; }
-                            fi
-
-                            az containerapp secret set -g "$RG" -n "$APP" \
-                              --secrets "redis-url=keyvaultref:$SECRET_URI,identityref:system" \
-                              --only-show-errors >/dev/null
-
-                            ENV_ARGS=(
-                              'SPRING_DATA_REDIS_URL=secretref:redis-url'
-                              'CRAVES_TOKEN_REVOCATION_ENABLED=false'
-                            )
-                            if [[ "$KEY" == 'auth' ]]; then
-                              ENV_ARGS+=(
-                                'CRAVES_TOKEN_REVOCATION_PUBLISHER_ENABLED=false'
-                                'CRAVES_AUTH_RATE_LIMIT_ENABLED=false'
-                              )
-                            fi
-                            az containerapp update -g "$RG" -n "$APP" \
-                              --set-env-vars "${ENV_ARGS[@]}" \
-                              --only-show-errors >/dev/null
-
-                            READY_REVISION=''
-                            for attempt in $(seq 1 36); do
-                              LATEST=$(az containerapp show -g "$RG" -n "$APP" --query properties.latestRevisionName -o tsv --only-show-errors 2>/dev/null || true)
-                              READY=$(az containerapp show -g "$RG" -n "$APP" --query properties.latestReadyRevisionName -o tsv --only-show-errors 2>/dev/null || true)
-                              RUNNING=$(az containerapp show -g "$RG" -n "$APP" --query properties.runningStatus -o tsv --only-show-errors 2>/dev/null || true)
-                              if [[ -n "$LATEST" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' ]]; then
-                                READY_REVISION="$READY"
-                                break
-                              fi
-                              sleep 10
-                            done
-                            [[ -n "$READY_REVISION" ]] || { echo "ERROR: $APP did not become ready after Redis binding." >&2; exit 1; }
-
-                            jq -cn \
-                              --arg serviceKey "$KEY" \
-                              --arg containerApp "$APP" \
-                              --arg readyRevision "$READY_REVISION" \
-                              --arg secretName 'redis-url' \
-                              --arg keyVaultSecretUri "$SECRET_URI" \
-                              '{serviceKey:$serviceKey,containerApp:$containerApp,readyRevision:$readyRevision,secretName:$secretName,keyVaultSecretUri:$keyVaultSecretUri,tokenRevocationEnabled:false,authRateLimitEnabled:false}' \
-                              >>"$OUT/apps.jsonl"
-                          done < <(jq -c '.backendServices[]' "$PACK")
-
-                          APPS=$(jq -r '[.backendServices[].containerApp] | join(",")' "$PACK")
-                          scripts/release/smoke-containerapp-health.sh "$RG" "$APPS"
-                          jq -s '.' "$OUT/apps.jsonl" >"$OUT/apps.json"
-                          rm -f "$OUT/apps.jsonl"
-                          jq -n \
-                            --arg redisName "$REDIS_NAME" \
-                            --arg hostName "$HOST" \
-                            --arg keyVaultSecretName "$SECRET_NAME" \
-                            --arg keyVaultSecretUri "$SECRET_URI" \
-                            --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-                            --argjson apps "$(cat "$OUT/apps.json")" \
-                            '{schemaVersion:1,redisName:$redisName,hostName:$hostName,port:10000,tls:true,keyVaultSecretName:$keyVaultSecretName,keyVaultSecretUri:$keyVaultSecretUri,secretValuePublished:false,existingCredentialRotationExecuted:false,runtimeControlsEnabled:false,generatedAt:$generatedAt,apps:$apps}' \
-                            >"$OUT/manifest.json"
-                          jq -e '.secretValuePublished == false and .existingCredentialRotationExecuted == false and .runtimeControlsEnabled == false and (.apps | length == 7)' \
-                            "$OUT/manifest.json" >/dev/null
+                          chmod +x scripts/release/bind-managed-redis.sh
+                          scripts/release/bind-managed-redis.sh \
+                            'rg-craves-prodlow-centralindia' \
+                            '${{ parameters.redisName }}' \
+                            'kvcravesprodlowl3ing6' \
+                            '${{ parameters.keyVaultSecretName }}' \
+                            'config/production/production-completion-pack.json' \
+                            '$(Build.ArtifactStagingDirectory)/managed-redis-binding-evidence'
+                      env:
+                        CONFIRM_REDIS_BINDING: ${{ parameters.confirmDeploy }}
                     - task: PublishPipelineArtifact@1
                       condition: always()
                       inputs:
                         targetPath: $(Build.ArtifactStagingDirectory)/managed-redis-binding-evidence
                         artifact: managed-redis-binding-evidence
-                      displayName: Publish sanitized Redis binding evidence
+                      displayName: Publish sanitized Redis binding or rollback evidence

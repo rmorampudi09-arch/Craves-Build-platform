@@ -66,7 +66,10 @@ test("empty nearby discovery expands without changing checkout serviceability", 
   const dishes = source("../services/api/dishes.ts");
   const policy = source("./catalog-discovery-policy.ts");
   assert.match(dishes, /candidateDiscoveryRadii\(radiusMeters\)/);
-  assert.match(dishes, /if \(discoveredDishes\.length > 0\) return discoveredDishes/);
+  assert.match(
+    dishes,
+    /if \(discoveredDishes\.length > 0\) return discoveredDishes/,
+  );
   assert.match(policy, /15_000/);
   assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 50_000/);
 });
@@ -98,7 +101,39 @@ test("chef onboarding is reachable and prefills approved backend data", () => {
   assert.match(application, /fetch\("\/api\/customer\/profile"/);
   assert.match(application, /fetch\("\/api\/customer\/addresses"/);
   assert.match(kitchen, /application\.status !== "APPROVED"/);
-  assert.match(kitchen, /Active kitchens without coordinates cannot appear in discovery/);
+  assert.match(
+    kitchen,
+    /Active kitchens without coordinates cannot appear in discovery/,
+  );
+});
+
+test("pending chef applications remain editable exactly as the backend permits", () => {
+  const contents = source("../components/chef-application-workspace.tsx");
+  assert.match(contents, /const locked = application\?\.status === "APPROVED"/);
+  assert.match(contents, /onSubmit=\{submit\}/);
+  assert.match(contents, /Update pending application/);
+  assert.doesNotMatch(
+    contents,
+    /application\?\.status === "PENDING" \|\| application\?\.status === "APPROVED"/,
+  );
+});
+
+test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
+  const auth = source("../services/auth/cravesAuth.ts");
+  const boundary = source("../components/chef-access-boundary.tsx");
+  assert.match(auth, /synchronizeSessionRoles/);
+  assert.match(auth, /fetch\("\/api\/auth\/refresh"/);
+  assert.match(boundary, /synchronizeSessionRoles\(\)/);
+
+  for (const page of [
+    "../app/chef/kitchen/page.tsx",
+    "../app/chef/menu/page.tsx",
+    "../app/chef/menu/media/page.tsx",
+    "../app/chef/orders/page.tsx",
+    "../app/chef/orders/[orderId]/page.tsx",
+  ]) {
+    assert.match(source(page), /ChefAccessBoundary/, page);
+  }
 });
 
 test("signed-in navigation exposes the implemented backend services", () => {

@@ -2,6 +2,7 @@
 
 import type { CravesIdentity } from "@/lib/auth-contract";
 import type { CustomerAddress } from "@/lib/address-contract";
+import { selectActiveDeliveryAddress } from "@/lib/address-selection";
 
 export type CravesUser = {
   id: string;
@@ -122,9 +123,7 @@ export async function loadSelectedAddress(): Promise<CravesAddress | null> {
   if (!response.ok) throw new Error("Saved delivery addresses could not be loaded.");
   const addresses = await response.json().catch(() => null) as CustomerAddress[] | null;
   if (!Array.isArray(addresses)) throw new Error("Saved delivery addresses returned an invalid response.");
-  const selected = addresses.find((address) => address.isDefault && address.active)
-    ?? addresses.find((address) => address.active)
-    ?? null;
+  const selected = selectActiveDeliveryAddress(addresses);
   selectedLocation = selected ? fromCustomerAddress(selected) : null;
   return selectedLocation;
 }

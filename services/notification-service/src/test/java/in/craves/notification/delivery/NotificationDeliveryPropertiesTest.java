@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 class NotificationDeliveryPropertiesTest {
     @Test
-    void all external deliveryIsDisabledByDefault() {
+    void allExternalDeliveryIsDisabledByDefault() {
         NotificationDeliveryProperties properties = new NotificationDeliveryProperties();
         properties.validate();
 

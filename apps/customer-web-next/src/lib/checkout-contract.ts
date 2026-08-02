@@ -103,7 +103,19 @@ export function parseCheckout(value: unknown): CustomerCheckout | null {
 export function parseCheckoutInput(value: unknown): { deliveryAddressId: string; note: string | null } | null {
   const raw = record(value);
   if (!raw) return null;
+
   const deliveryAddressId = text(raw.deliveryAddressId, 64);
-  const note = optionalText(raw.note, 500);
-  return deliveryAddressId && UUID.test(deliveryAddressId) ? { deliveryAddressId, note } : null;
+  if (!deliveryAddressId || !UUID.test(deliveryAddressId)) return null;
+
+  let note: string | null = null;
+  if (raw.note !== null && raw.note !== undefined) {
+    if (typeof raw.note !== "string") return null;
+    const normalizedNote = raw.note.trim();
+    if (normalizedNote.length > 0) {
+      if (normalizedNote.length > 500) return null;
+      note = normalizedNote;
+    }
+  }
+
+  return { deliveryAddressId, note };
 }

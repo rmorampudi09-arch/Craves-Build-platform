@@ -20,22 +20,22 @@ parameters:
     default: ca-craves-auth-service-prodlow
   - name: userChefContainerAppName
     type: string
-    default: ca-craves-user-chef-service-prodlow
+    default: ca-craves-user-chef-service-prod
   - name: catalogContainerAppName
     type: string
-    default: ca-craves-catalog-service-prodlow
+    default: ca-craves-catalog-service-prodlo
   - name: orderContainerAppName
     type: string
     default: ca-craves-order-service-prodlow
   - name: subscriptionContainerAppName
     type: string
-    default: ca-craves-subscription-service-prodlow
+    default: ca-craves-subscription-service-p
   - name: integrationContainerAppName
     type: string
     default: ca-craves-integration-service-pr
   - name: notificationContainerAppName
     type: string
-    default: ca-craves-notification-service-prodlow
+    default: ca-craves-notification-service-p
   - name: exchangeLimit
     type: number
     default: 0
@@ -105,6 +105,26 @@ steps:
           fi
         }
 
+        wait_ready() {
+          local app="$1"
+          local expected_name="$2"
+          local expected_value="$3"
+          local latest ready running actual
+          for attempt in $(seq 1 60); do
+            latest=$(az containerapp show -g "$RG" -n "$app" --query properties.latestRevisionName -o tsv)
+            ready=$(az containerapp show -g "$RG" -n "$app" --query properties.latestReadyRevisionName -o tsv)
+            running=$(az containerapp show -g "$RG" -n "$app" --query properties.runningStatus -o tsv)
+            actual=$(read_env_value "$app" "$expected_name")
+            echo "Attempt $attempt/60 app=$app latest=$latest ready=$ready running=$running $expected_name=$actual"
+            if [[ -n "$latest" && "$latest" == "$ready" && "$running" == 'Running' && "${actual,,}" == "${expected_value,,}" ]]; then
+              return 0
+            fi
+            sleep 10
+          done
+          echo "ERROR: $app did not become ready with $expected_name=$expected_value." >&2
+          exit 1
+        }
+
         case "$PHASE" in
           PUBLISHER)
             require_redis_secret_ref "$AUTH"
@@ -118,6 +138,7 @@ steps:
                 CRAVES_TOKEN_REVOCATION_FAIL_CLOSED=true \
                 CRAVES_TOKEN_REVOCATION_KEY_PREFIX="$KEY_PREFIX" \
               --output none
+            wait_ready "$AUTH" CRAVES_TOKEN_REVOCATION_PUBLISHER_ENABLED true
             echo 'Revocation publisher enabled. API consumers and Auth rate limiting remain disabled.'
             ;;
 
@@ -137,6 +158,7 @@ steps:
                   CRAVES_TOKEN_REVOCATION_FAIL_CLOSED=true \
                   CRAVES_TOKEN_REVOCATION_KEY_PREFIX="$KEY_PREFIX" \
                 --output none
+              wait_ready "$app" CRAVES_TOKEN_REVOCATION_ENABLED true
             done
             echo 'Distributed revocation consumers enabled on all seven Spring services.'
             ;;
@@ -169,6 +191,7 @@ steps:
                 CRAVES_AUTH_RATE_LIMIT_WINDOW_SECONDS='${{ parameters.windowSeconds }}' \
                 CRAVES_AUTH_RATE_LIMIT_TRUST_FORWARDED_FOR="$TRUST" \
               --output none
+            wait_ready "$AUTH" CRAVES_AUTH_RATE_LIMIT_ENABLED true
             echo 'Auth exchange and refresh rate limiting enabled with explicit operator-supplied limits.'
             ;;
 

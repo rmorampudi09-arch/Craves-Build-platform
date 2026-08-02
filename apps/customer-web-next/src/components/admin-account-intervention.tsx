@@ -44,14 +44,16 @@ export function AdminAccountIntervention() {
 
   async function loadStatus(event: React.FormEvent) {
     event.preventDefault();
-    if (!UUID.test(identityId)) {
+    const normalizedIdentityId = identityId.trim().toLowerCase();
+    if (!UUID.test(normalizedIdentityId)) {
       setStatus(null);
       setMessage("Enter a valid identity UUID.");
       return;
     }
+    setIdentityId(normalizedIdentityId);
     setBusy(true);
     try {
-      const result = await request(`/api/admin/accounts/${identityId}`);
+      const result = await request(`/api/admin/accounts/${normalizedIdentityId}`);
       setStatus(result);
       setConfirmation("");
       setMessage("Identity status loaded. Review the masked account evidence before choosing an action.");
@@ -65,8 +67,9 @@ export function AdminAccountIntervention() {
 
   async function intervene(event: React.FormEvent) {
     event.preventDefault();
+    const normalizedIdentityId = identityId.trim().toLowerCase();
     const normalizedReason = reason.replace(/[\r\n]+/g, " ").trim();
-    if (!status || status.identityId !== identityId) {
+    if (!status || status.identityId.toLowerCase() !== normalizedIdentityId) {
       setMessage("Reload the identity status before intervening.");
       return;
     }
@@ -81,11 +84,12 @@ export function AdminAccountIntervention() {
 
     setBusy(true);
     try {
-      const result = await request(`/api/admin/accounts/${identityId}`, {
+      const result = await request(`/api/admin/accounts/${normalizedIdentityId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identityId, action, reason: normalizedReason, confirmation })
+        body: JSON.stringify({ identityId: normalizedIdentityId, action, reason: normalizedReason, confirmation })
       });
+      setIdentityId(result.identityId.toLowerCase());
       setStatus(result);
       setReason("");
       setConfirmation("");
@@ -106,7 +110,7 @@ export function AdminAccountIntervention() {
         <h2 className="mt-3 text-2xl font-bold">Load account status</h2>
         <p className="mt-3 text-sm leading-6 text-slate-600">Only an exact backend identity UUID is accepted. Phone and Firebase identifiers are never requested or displayed.</p>
         <label className="mt-5 block text-sm font-bold">Identity UUID
-          <input value={identityId} onChange={event => { setIdentityId(event.target.value.trim()); setStatus(null); }} autoComplete="off" spellCheck={false} maxLength={64} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4 font-mono text-sm" required />
+          <input value={identityId} onChange={event => { setIdentityId(event.target.value.trim().toLowerCase()); setStatus(null); }} autoComplete="off" spellCheck={false} maxLength={64} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4 font-mono text-sm" required />
         </label>
         <button disabled={busy} className="mt-5 min-h-12 w-full rounded-2xl bg-[#6930CA] font-bold text-white disabled:opacity-50">{busy ? "Checking…" : "Load audited status"}</button>
       </form>

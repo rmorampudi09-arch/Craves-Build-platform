@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "craves.internal.notice-dispatcher")
 public class ChefNoticeDispatcherProperties {
     private boolean enabled = false;
-    private boolean directDispatchEnabled = true;
+    private boolean directDispatchEnabled = false;
     private long fixedDelayMs = 30000;
     private int batchSize = 25;
     private int maxAttempts = 5;

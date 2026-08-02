@@ -24,6 +24,10 @@ import {
 
 export const routeMeta = {};
 
+function hasChefRole(user: CravesUser): boolean {
+  return user.roles.some((role) => role.toUpperCase() === "CHEF");
+}
+
 function LandingPage() {
   const navigate = useNavigate();
   const [authOpen, setAuthOpen] = useState(false);
@@ -74,6 +78,7 @@ function LandingPage() {
         locationLabel={locationLabel}
         onOpenLocation={() => setLocOpen(true)}
         onOpenAuth={openAuth}
+        onBecomeChef={() => openAuth("register", "chef")}
         onLogout={handleLogout}
       />
       <WhyCravesSection />
@@ -94,7 +99,14 @@ function LandingPage() {
         onSwitchMode={setAuthMode}
         onAuthenticated={(authenticatedUser, accountMode) => {
           setUser(authenticatedUser);
-          navigate({ to: accountMode === "chef" ? "/chef" : "/home" });
+          navigate({
+            to:
+              accountMode === "chef"
+                ? hasChefRole(authenticatedUser)
+                  ? "/chef"
+                  : "/chef/application"
+                : "/home",
+          });
         }}
       />
       <LocationModal

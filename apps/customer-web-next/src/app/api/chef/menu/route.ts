@@ -1,9 +1,9 @@
+import { isSameOrigin } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefMenuItem, parseChefMenuItemInput, parseChefMenuItems } from "@/lib/chef-menu-contract";
 
 export const dynamic = "force-dynamic";
 function apiBaseUrl(): string { const value = process.env.CRAVES_API_BASE_URL?.trim(); if (!value?.startsWith("https://")) throw new Error("CRAVES_API_BASE_URL must use HTTPS"); return value.replace(/\/$/, ""); }
-function sameOrigin(request: NextRequest): boolean { const origin = request.headers.get("origin"); if (!origin) return false; try { const supplied = new URL(origin); const current = new URL(request.url); return supplied.protocol === current.protocol && supplied.host === current.host; } catch { return false; } }
 
 async function requestUpstream(request: NextRequest, method: "GET" | "POST", body?: unknown) {
   const token = request.cookies.get("craves_access_token")?.value;
@@ -21,4 +21,4 @@ async function requestUpstream(request: NextRequest, method: "GET" | "POST", bod
 }
 
 export async function GET(request: NextRequest) { return requestUpstream(request, "GET"); }
-export async function POST(request: NextRequest) { if (!sameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 }); const input = parseChefMenuItemInput(await request.json().catch(() => null)); if (!input) return NextResponse.json({ code: "INVALID_MENU_ITEM" }, { status: 400 }); return requestUpstream(request, "POST", input); }
+export async function POST(request: NextRequest) { if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 }); const input = parseChefMenuItemInput(await request.json().catch(() => null)); if (!input) return NextResponse.json({ code: "INVALID_MENU_ITEM" }, { status: 400 }); return requestUpstream(request, "POST", input); }

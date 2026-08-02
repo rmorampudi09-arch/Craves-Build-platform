@@ -102,17 +102,17 @@ stages:
               done
             displayName: Verify customer web and mobile
 
-  - ${{ if eq(parameters.runAzureReadiness, true) }}:
-      - stage: AzureReadiness
-        displayName: Read-only Azure runtime readiness
-        dependsOn: CompileAndTest
-        condition: succeeded()
-        jobs:
-          - job: RuntimeReadiness
-            displayName: Verify all seven existing Container Apps without mutation
-            steps:
-              - checkout: self
-                persistCredentials: false
+  - stage: AzureReadiness
+    displayName: Read-only Azure runtime readiness
+    dependsOn: CompileAndTest
+    condition: succeeded()
+    jobs:
+      - job: RuntimeReadiness
+        displayName: Verify all seven existing Container Apps without mutation
+        steps:
+          - checkout: self
+            persistCredentials: false
+          - ${{ if eq(parameters.runAzureReadiness, true) }}:
               - task: AzureCLI@2
                 displayName: Run read-only Azure release gates
                 inputs:
@@ -136,13 +136,15 @@ stages:
                     scripts/release/verify-failclosed-controls.sh "$RG" "$INTEGRATION_APP"
                     scripts/release/smoke-containerapp-health.sh "$RG" "$APPS"
                     scripts/release/verify-observability-baseline.sh "$RG" "$APPS"
+          - ${{ if eq(parameters.runAzureReadiness, false) }}:
+              - bash: |
+                  set -euo pipefail
+                  echo 'Azure readiness was deliberately skipped. No Azure connection was used.'
+                displayName: Record deliberate Azure-readiness skip
 
   - stage: ReleaseManifest
     displayName: Generate immutable release evidence
-    dependsOn:
-      - CompileAndTest
-      - ${{ if eq(parameters.runAzureReadiness, true) }}:
-          - AzureReadiness
+    dependsOn: AzureReadiness
     condition: succeeded()
     jobs:
       - job: Manifest

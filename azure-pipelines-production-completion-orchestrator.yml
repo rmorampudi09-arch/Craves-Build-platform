@@ -126,17 +126,17 @@ stages:
               done
             displayName: Verify mobile secure-file boundary
 
-  - ${{ if eq(parameters.includeAzureReadOnly, true) }}:
-      - stage: AzureReadOnly
-        displayName: Inspect existing Azure state without mutation
-        dependsOn: CompleteCodeBuild
-        condition: succeeded()
-        jobs:
-          - job: InspectRuntime
-            displayName: Verify seven Container Apps and fail-closed state
-            steps:
-              - checkout: self
-                persistCredentials: false
+  - stage: AzureReadOnly
+    displayName: Inspect existing Azure state without mutation
+    dependsOn: CompleteCodeBuild
+    condition: succeeded()
+    jobs:
+      - job: InspectRuntime
+        displayName: Verify seven Container Apps and fail-closed state
+        steps:
+          - checkout: self
+            persistCredentials: false
+          - ${{ if eq(parameters.includeAzureReadOnly, true) }}:
               - task: AzureCLI@2
                 displayName: Run read-only runtime checks
                 inputs:
@@ -155,13 +155,15 @@ stages:
                     scripts/release/verify-failclosed-controls.sh "$RG" "$INTEGRATION_APP"
                     scripts/release/verify-observability-baseline.sh "$RG" "$APPS"
                     echo 'Azure read-only checks completed. No secret values were requested.'
+          - ${{ if eq(parameters.includeAzureReadOnly, false) }}:
+              - bash: |
+                  set -euo pipefail
+                  echo 'Azure read-only inspection was deliberately skipped. No Azure connection was used.'
+                displayName: Record deliberate Azure-inspection skip
 
   - stage: CompletionPlan
     displayName: Publish the exact later execution plan
-    dependsOn:
-      - CompleteCodeBuild
-      - ${{ if eq(parameters.includeAzureReadOnly, true) }}:
-          - AzureReadOnly
+    dependsOn: AzureReadOnly
     condition: succeeded()
     jobs:
       - job: GeneratePlan

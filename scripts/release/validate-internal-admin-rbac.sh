@@ -80,6 +80,9 @@ grep -Fq '"PLATFORM_ADMIN", "CHEF_ADMIN", "COMPLIANCE_ADMIN", "AUDIT_ADMIN"' \
 grep -Fq '"PLATFORM_ADMIN", "CHEF_ADMIN"' \
   "$ROOT/services/user-chef-service/src/main/java/in/craves/userchef/service/ChefApplicationService.java" \
   || fail 'chef decision role mapping is incomplete'
+grep -Fq 'Only pending chef applications can be rejected' \
+  "$ROOT/services/user-chef-service/src/main/java/in/craves/userchef/service/ChefApplicationService.java" \
+  || fail 'chef rejection does not preserve the pending-state transition guard'
 grep -Fq '"PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN"' \
   "$ROOT/services/subscription-service/src/main/java/in/craves/subscription/service/SubscriptionService.java" \
   || fail 'subscription role mapping is incomplete'

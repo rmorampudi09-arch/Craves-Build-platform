@@ -123,7 +123,7 @@ fi
 
 [[ -s "$ROOT/infra/customer-web-containerapp.bicep" ]] || fail 'missing customer web Container App Bicep definition'
 [[ -s "$ROOT/infra/managed-redis.bicep" ]] || fail 'missing Azure Managed Redis Bicep definition'
-grep -F "name: 'Balanced_B0'" "$ROOT/infra/managed-redis.bicep" >/dev/null \
+grep -F "param skuName string = 'Balanced_B0'" "$ROOT/infra/managed-redis.bicep" >/dev/null \
   || fail 'Managed Redis Bicep must use the approved low-capacity SKU'
 grep -F "clusteringPolicy: 'NoCluster'" "$ROOT/infra/managed-redis.bicep" >/dev/null \
   || fail 'Managed Redis must use NoCluster for the current URL-based Spring configuration'

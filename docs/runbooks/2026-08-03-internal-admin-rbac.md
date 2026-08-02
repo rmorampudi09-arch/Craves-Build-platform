@@ -22,6 +22,8 @@ The following backend capabilities already existed on `main` and remain authorit
 
 This change applies least-privilege internal roles to those operations and adds secure role lifecycle management in Auth Service.
 
+Chef rejection now also enforces the same pending-application guard as approval, preventing an internal operator from rejecting an already approved or previously rejected application.
+
 ## Role ownership
 
 Auth Service owns internal role definitions, assignments, token invalidation and role-change audit. Downstream services trust only signed Craves JWT role claims and apply operation-specific authorization again inside the owning service.

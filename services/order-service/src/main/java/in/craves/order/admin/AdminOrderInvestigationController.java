@@ -156,8 +156,10 @@ public class AdminOrderInvestigationController {
         if (authentication == null || !(authentication.getPrincipal() instanceof CravesPrincipal principal)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
         }
-        if (!principal.hasRole("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN role is required");
+        if (!principal.hasAnyRole(
+            "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
+        )) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Order investigation access is required");
         }
         return principal;
     }
@@ -230,3 +232,4 @@ public class AdminOrderInvestigationController {
         String processingStatus, OffsetDateTime receivedAt, OffsetDateTime processedAt
     ) {}
 }
+

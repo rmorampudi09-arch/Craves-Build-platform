@@ -1,131 +1,95 @@
-# Craves Customer Web — Next.js Delivery Tracking
+# Craves customer web
 
-This is the clean Next.js migration path for the Craves customer website. It does not extend the temporary Vite application in `apps/customer-web`.
+The uploaded Craves interface has been migrated from its temporary Vite/TanStack shell to the approved Next.js customer-web stack and connected to the current Spring Boot backend contracts. The original orange/cream design tokens, logo, food imagery and Lucide icons are retained.
 
-## Scope
+Backend baseline used for this integration: `rmorampudi09-arch/Craves-Build-platform`, `main` merge commit `a78e676e9a06ed43d6478e645cc22a038ee827b6` (2 August 2026).
 
-Implemented:
+## Connected customer flows
 
-- Next.js App Router, TypeScript and Tailwind CSS foundation.
-- Customer route `/orders/{orderId}/tracking`.
-- Server-side BFF route `/api/orders/{orderId}/delivery-status`.
-- Secure forwarding to the APIM Order delivery-status endpoint.
-- HTTP-only `craves_access_token` cookie contract.
-- Customer-safe response parsing and field allow-listing.
-- Current state, progress indicator and chronological history.
-- Manual refresh and 30-second visible-page refresh for active deliveries.
-- Automatic refresh stop for terminal states.
-- HTTPS-only provider tracking links.
-- Loading, unauthenticated, forbidden, not-found, timeout and upstream-error states.
-- Unit tests and standalone production Docker image.
+| Area | Browser route | Backend contract |
+|---|---|---|
+| Firebase phone sign-in | `/` | `POST /auth/firebase/exchange`, refresh, logout, `/auth/me` |
+| Profile | `/profile` | `GET/PUT /customer/profile` |
+| Addresses | `/addresses` | customer address CRUD and location recommendation |
+| Nearby menu | `/home` | `/discovery/kitchens`, `/discovery/menu-items` |
+| Cart | `/cart` | cart read, add, quantity, remove, clear and validate |
+| Checkout | `/payment` | `POST /checkout`, `GET /checkout/{id}` |
+| Payment | `/checkout/{id}/payment` | Cashfree payment create, status and backend verify |
+| Orders | `/orders` | order list and detail |
+| Delivery | `/tracking?id={orderId}` | provider-neutral delivery status and history |
+| Notifications | `/notifications` | inbox and mark-read |
 
-Not implemented here:
+The browser never stores access or refresh tokens. The Next.js BFF keeps them in secure, HTTP-only cookies and forwards them to API Management server-side. Mutating BFF routes enforce same-origin requests and validate identifiers and response shapes.
 
-- phone OTP/password sign-in UI or cookie creation;
-- order history/details migration;
-- browsing, cart, checkout or payment migration;
-- mobile UI;
-- provider activation;
-- delivery pricing or serviceability rules.
+Pricing is authoritative only when returned by Cart Service and Order Service. The frontend does not invent delivery fees, platform fees, taxes, discounts or eligibility rules. Payment details are collected only by Cashfree hosted checkout; Craves does not render card, CVV, UPI PIN or banking fields.
 
-## Why a separate app path
-
-The existing `apps/customer-web` package is a temporary Vite shell with manual token entry. The approved Craves stack requires Next.js. This module is isolated under `apps/customer-web-next` so it can be built and tested without replacing the current image.
-
-## Request flow
-
-```text
-browser tracking page
-  -> Next.js BFF route
-  -> HTTP-only craves_access_token cookie
-  -> APIM GET /api/v1/orders/{orderId}/delivery-status
-  -> Order Service JWT/customer/ownership validation
-  -> provider-neutral delivery projection
-  -> BFF response allow-list and no-store headers
-  -> customer tracking UI
-```
-
-The browser never reads or stores the access token.
-
-## Environment
-
-```text
-CRAVES_API_BASE_URL=https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
-```
-
-Future authentication must create:
-
-```text
-name: craves_access_token
-HttpOnly: true
-Secure: true
-SameSite: Lax
-Path: /
-Max-Age: no longer than the access-token lifetime
-```
-
-Clear the cookie on logout and expiry. Do not use `localStorage`.
+Wishlist remains explicitly browser-local because the current backend has no customer wishlist contract. It is isolated from checkout and never determines backend pricing.
 
 ## Local setup
 
+Requirements: Node.js 24 and npm.
+
+1. Copy `.env.example` to `.env.local`.
+2. Keep the API base as:
+
+   ```text
+   https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
+   ```
+
+3. In Firebase Console, open the Craves web app and copy only the public Web SDK configuration into the `NEXT_PUBLIC_FIREBASE_*` variables. Do not use or expose a Firebase Admin private key.
+4. Use local mode for visual and contract testing. Test real Firebase phone OTP only from the deployed HTTPS Container App hostname; use a configured Firebase test number for repeated tests.
+5. Keep `NEXT_PUBLIC_CASHFREE_MODE=sandbox` until controlled sandbox payment and webhook tests pass.
+6. Install, verify and start:
+
+   ```bash
+   npm ci
+   npm run verify
+   npm run dev
+   ```
+
+7. Open `http://localhost:3000` and sign in with a Firebase test customer.
+
+`NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK` must be `false` in production. It exists only to preview the uploaded visual catalogue in development when Catalog/APIM has no seeded records.
+
+## Manual runtime checks
+
+Use a test customer and confirm, in this order:
+
+1. Phone OTP sign-in succeeds and refresh keeps the session without browser-visible tokens.
+2. Profile and saved-address changes survive a reload.
+3. Nearby menu responses use the selected coordinates and a 5 km request radius.
+4. Add, change and remove cart items; confirm displayed amounts equal backend responses.
+5. Create checkout using a saved address; confirm all fee/tax/grand-total values come from Order Service.
+6. Open Cashfree sandbox hosted checkout. Complete a sandbox payment and verify the result through the backend.
+7. Confirm the paid checkout creates customer orders and delivery tracking appears only after a delivery job exists.
+8. Open notifications, mark one unread item read, reload and confirm `readAt` persists.
+9. Sign out and confirm protected routes return to sign-in.
+
+## Azure deployment handoff
+
+The Dockerfile produces a non-root Next.js standalone image. Firebase and Cashfree public variables are build-time values. `CRAVES_API_BASE_URL` is a server-only runtime value and must be set on the deployed container/app.
+
+Before production:
+
+- rotate any Storage, PostgreSQL, provider or other credentials that have appeared in chat, logs or configuration;
+- configure the final HTTPS web domain in Firebase authorized domains;
+- keep Cashfree secrets only in Integration Service/Key Vault, never in this web app;
+- confirm the APIM customer operations above route to the deployed backend versions;
+- confirm Cashfree provider activation, domain allow-list, return URL and webhook verification in sandbox before switching the web build to `production` mode;
+- verify delivery-provider activation separately; the UI deliberately shows a waiting state when no delivery job exists;
+- keep provider execution fail-closed when required runtime configuration is absent.
+
+`azure-pipelines.yml` runs build-only verification for a standalone checkout. In the Craves monorepo, use the guarded root pipeline `azure-pipelines-customer-web-next-delivery-tracking.yml`; it records rollback evidence, builds and pushes the image, updates the existing Container App, verifies readiness, and restores the previous image automatically if verification fails.
+
+See `SECURITY.md` for the current upstream Next.js/PostCSS audit exception and its mitigation.
+
+## Commands
+
 ```bash
-cd apps/customer-web-next
-npm install
-npm run verify
-npm run dev
+npm run dev        # local Next.js server
+npm run lint       # ESLint
+npm run typecheck  # strict TypeScript
+npm run test       # Vitest contract tests
+npm run build      # optimized standalone build
+npm run start      # stage static assets and run the standalone production build
 ```
-
-## Pipelines
-
-Build-only CI:
-
-```text
-azure-pipelines-customer-web-next-delivery-tracking-ci.yml
-```
-
-Guarded replacement deployment:
-
-```text
-azure-pipelines-customer-web-next-delivery-tracking.yml
-confirmReplaceLegacyCustomerWeb=false
-```
-
-Read-only status:
-
-```text
-azure-pipelines-customer-web-next-delivery-tracking-status.yml
-```
-
-Explicit-image rollback:
-
-```text
-azure-pipelines-customer-web-next-delivery-tracking-rollback.yml
-confirmRollback=true
-previousImage=<exact recorded ACR image>
-```
-
-The deployment targets the existing `ca-craves-web-prodlow` app and therefore requires explicit approval before replacing the legacy image.
-
-## Security
-
-- UUID validation at page and BFF boundaries.
-- Ten-second upstream timeout.
-- Explicit response allow-list.
-- Unknown provider fields and raw payloads discarded.
-- HTTPS-only tracking URLs.
-- `Cache-Control: no-store`.
-- `noindex` tracking pages.
-- Order Service remains authoritative for role and ownership.
-- No token, cookie or upstream body logging.
-
-## Scale
-
-Thirty-second polling occurs only while the tab is visible and the delivery is non-terminal. This is suitable for the current 50–100 concurrent-user environment. Higher scale should introduce SSE/WebSocket delivery updates with polling fallback.
-
-## Pending modules
-
-1. Next.js authentication/session and secure cookie issuance.
-2. Customer order history/details with tracking navigation.
-3. Browsing, addresses, cart, checkout and Cashfree migration.
-4. React Native customer delivery tracking.
-5. Chef delivery visibility.

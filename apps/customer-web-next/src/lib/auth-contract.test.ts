@@ -4,6 +4,8 @@ import { parseSessionExchange, publicAuthError, safeReturnPath } from "./auth-co
 
 const valid = {
   accessToken: "header.payload.signature",
+  refreshToken: "server-only-refresh-token",
+  refreshTokenExpiresAt: "2026-09-02T08:00:00Z",
   expiresIn: 3600,
   identity: {
     id: "11111111-2222-4333-8444-555555555555",
@@ -16,11 +18,11 @@ const valid = {
   }
 };
 
-test("accepts and sanitises a valid Craves session", () => {
-  const result = parseSessionExchange({ ...valid, refreshToken: "must-not-be-returned" });
+test("accepts a valid Craves server session", () => {
+  const result = parseSessionExchange(valid);
   assert.equal(result?.identity.id, valid.identity.id);
   assert.equal(result?.accessToken, valid.accessToken);
-  assert.equal("refreshToken" in (result ?? {}), false);
+  assert.equal(result?.refreshToken, valid.refreshToken);
 });
 
 test("rejects malformed identity and short sessions", () => {

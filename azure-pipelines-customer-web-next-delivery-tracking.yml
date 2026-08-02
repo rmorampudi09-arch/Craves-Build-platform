@@ -2,7 +2,7 @@ trigger: none
 pr: none
 
 parameters:
-  - name: confirmReplaceLegacyCustomerWeb
+  - name: confirmReplaceCurrentCustomerWeb
     type: boolean
     default: false
   - name: resourceGroupName
@@ -37,31 +37,69 @@ pool:
 steps:
   - checkout: self
 
+  - task: NodeTool@0
+    displayName: Use Node.js 24
+    inputs:
+      versionSpec: 24.x
+
   - script: |
       set -euo pipefail
-      CONFIRM='${{ parameters.confirmReplaceLegacyCustomerWeb }}'
+      CONFIRM='${{ parameters.confirmReplaceCurrentCustomerWeb }}'
       if [[ "${CONFIRM,,}" != 'true' ]]; then
-        echo 'ERROR: confirmReplaceLegacyCustomerWeb must be true before replacing the current image.' >&2
+        echo 'ERROR: confirmReplaceCurrentCustomerWeb must be true before replacing the current web image.' >&2
         exit 1
       fi
-      for NAME in NEXT_PUBLIC_FIREBASE_API_KEY NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN NEXT_PUBLIC_FIREBASE_PROJECT_ID NEXT_PUBLIC_FIREBASE_APP_ID; do
+
+      for NAME in \
+        NEXT_PUBLIC_FIREBASE_API_KEY \
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN \
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID \
+        NEXT_PUBLIC_FIREBASE_APP_ID \
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID \
+        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET; do
         VALUE="${!NAME:-}"
-        if [[ -z "$VALUE" || "$VALUE" == '$('* ]]; then
+        if [[ -z "$VALUE" || "$VALUE" == '$('* || "$VALUE" == replace-* ]]; then
           echo "ERROR: Azure DevOps variable $NAME is required." >&2
           exit 1
         fi
       done
-      case "$NEXT_PUBLIC_CASHFREE_MODE" in sandbox|production) ;; *) echo 'ERROR: Cashfree mode must be sandbox or production.' >&2; exit 1 ;; esac
-    displayName: Confirm replacement, Firebase and Cashfree configuration
+
+      case "$NEXT_PUBLIC_CASHFREE_MODE" in
+        sandbox|production) ;;
+        *) echo 'ERROR: Cashfree mode must be sandbox or production.' >&2; exit 1 ;;
+      esac
+    displayName: Confirm replacement and public web configuration
     env:
       NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: $(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: $(NEXT_PUBLIC_FIREBASE_PROJECT_ID)
       NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: $(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
       NEXT_PUBLIC_CASHFREE_MODE: ${{ parameters.cashfreeMode }}
 
+  - script: |
+      set -euo pipefail
+      cd '$(appPath)'
+      npm ci --no-audit --no-fund
+      npm run lint
+      npm run typecheck
+      npm run test
+      npm run build
+    displayName: Verify merged customer web
+    env:
+      CRAVES_API_BASE_URL: ${{ parameters.apiBaseUrl }}
+      NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: $(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: $(NEXT_PUBLIC_FIREBASE_PROJECT_ID)
+      NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: $(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
+      NEXT_PUBLIC_CASHFREE_MODE: ${{ parameters.cashfreeMode }}
+      NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK: 'false'
+
   - task: AzureCLI@2
-    displayName: Verify current state and build image
+    displayName: Record current web image and revision
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -69,17 +107,57 @@ steps:
       inlineScript: |
         set -euo pipefail
         RG='${{ parameters.resourceGroupName }}'
-        ACR='${{ parameters.acrName }}'
         APP='${{ parameters.containerAppName }}'
-        TAG='${{ parameters.imageTag }}'
-        CURRENT_IMAGE=$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].image' -o tsv)
+
+        APP_JSON=$(az containerapp show --resource-group "$RG" --name "$APP" -o json)
+        CURRENT_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$APP_JSON")
+        CURRENT_REVISION=$(jq -r '.properties.latestReadyRevisionName // .properties.latestRevisionName // ""' <<<"$APP_JSON")
+        FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
+        TARGET_PORT=$(jq -r '.properties.configuration.ingress.targetPort // 0' <<<"$APP_JSON")
+
         case "$CURRENT_IMAGE" in
-          */craves/customer-web:*|*/craves/customer-web-next:*) ;;
-          *) echo "ERROR: Unexpected current customer-web image: $CURRENT_IMAGE" >&2; exit 1 ;;
+          */craves/customer-web:*|*/craves/customer-web-next:*|*/craves/api-test-dashboard:*) ;;
+          *) echo "ERROR: Unexpected current web image: $CURRENT_IMAGE" >&2; exit 1 ;;
         esac
-        echo "ROLLBACK_IMAGE=$CURRENT_IMAGE"
-        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        [[ -n "$CURRENT_REVISION" ]] || { echo 'ERROR: Current ready revision is missing.' >&2; exit 1; }
+        [[ -n "$FQDN" ]] || { echo 'ERROR: Current web FQDN is missing.' >&2; exit 1; }
+        [[ "$TARGET_PORT" == '3000' ]] || { echo "ERROR: Expected ingress target port 3000, found $TARGET_PORT." >&2; exit 1; }
+
+        mkdir -p '$(Build.ArtifactStagingDirectory)/customer-web-rollback'
+        {
+          printf 'RESOURCE_GROUP=%s\n' "$RG"
+          printf 'CONTAINER_APP=%s\n' "$APP"
+          printf 'ROLLBACK_IMAGE=%s\n' "$CURRENT_IMAGE"
+          printf 'ROLLBACK_REVISION=%s\n' "$CURRENT_REVISION"
+          printf 'FQDN=%s\n' "$FQDN"
+        } > '$(Build.ArtifactStagingDirectory)/customer-web-rollback/state.env'
+
+        echo "Current revision: $CURRENT_REVISION"
+        echo "Current image: $CURRENT_IMAGE"
+        echo "##vso[task.setvariable variable=ROLLBACK_IMAGE]$CURRENT_IMAGE"
+        echo "##vso[task.setvariable variable=ROLLBACK_REVISION]$CURRENT_REVISION"
+        echo "##vso[task.setvariable variable=WEB_FQDN]$FQDN"
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish customer web rollback record
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)/customer-web-rollback
+      artifact: customer-web-rollback-$(Build.BuildId)
+      publishLocation: pipeline
+
+  - task: AzureCLI@2
+    displayName: Build and push connected customer web image
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        ACR='${{ parameters.acrName }}'
+        TAG='${{ parameters.imageTag }}'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --resource-group '${{ parameters.resourceGroupName }}' --query loginServer -o tsv)
         IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
+
         az acr login --name "$ACR"
         docker build \
           --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="$NEXT_PUBLIC_FIREBASE_API_KEY" \
@@ -89,9 +167,11 @@ steps:
           --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" \
           --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
           --build-arg NEXT_PUBLIC_CASHFREE_MODE="$NEXT_PUBLIC_CASHFREE_MODE" \
-          -t "$IMAGE" "$(appPath)"
+          --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false \
+          -t "$IMAGE" \
+          '$(appPath)'
         docker push "$IMAGE"
-        echo "NEXT_IMAGE=$IMAGE"
+        echo "##vso[task.setvariable variable=NEXT_IMAGE]$IMAGE"
     env:
       NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: $(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)
@@ -102,7 +182,7 @@ steps:
       NEXT_PUBLIC_CASHFREE_MODE: ${{ parameters.cashfreeMode }}
 
   - task: AzureCLI@2
-    displayName: Deploy and verify Next.js customer web
+    displayName: Deploy, verify and automatically roll back on failure
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -110,33 +190,72 @@ steps:
       inlineScript: |
         set -euo pipefail
         RG='${{ parameters.resourceGroupName }}'
-        ACR='${{ parameters.acrName }}'
         APP='${{ parameters.containerAppName }}'
-        TAG='${{ parameters.imageTag }}'
-        API_BASE_URL="$CRAVES_API_BASE_URL_INPUT"
-        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
-        IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
-        PREVIOUS_LATEST=$(az containerapp show -g "$RG" -n "$APP" --query properties.latestRevisionName -o tsv)
-        az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --set-env-vars CRAVES_API_BASE_URL="$API_BASE_URL" -o none
+        IMAGE='$(NEXT_IMAGE)'
+        PREVIOUS_IMAGE='$(ROLLBACK_IMAGE)'
+        PREVIOUS_REVISION='$(ROLLBACK_REVISION)'
+        API_BASE_URL='${{ parameters.apiBaseUrl }}'
+        FQDN='$(WEB_FQDN)'
+
+        rollback() {
+          EXIT_CODE=$?
+          if [[ "$EXIT_CODE" -eq 0 ]]; then return; fi
+          trap - EXIT
+          echo "Deployment verification failed. Restoring $PREVIOUS_IMAGE (recorded revision $PREVIOUS_REVISION)." >&2
+          az containerapp update \
+            --resource-group "$RG" \
+            --name "$APP" \
+            --image "$PREVIOUS_IMAGE" \
+            -o none || true
+          exit "$EXIT_CODE"
+        }
+        trap rollback EXIT
+
+        PREVIOUS_LATEST=$(az containerapp show --resource-group "$RG" --name "$APP" --query properties.latestRevisionName -o tsv)
+        az containerapp update \
+          --resource-group "$RG" \
+          --name "$APP" \
+          --image "$IMAGE" \
+          --set-env-vars \
+            CRAVES_API_BASE_URL="$API_BASE_URL" \
+            NODE_ENV=production \
+            PORT=3000 \
+            NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false \
+          -o none
+
         for ATTEMPT in $(seq 1 60); do
-          APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
+          APP_JSON=$(az containerapp show --resource-group "$RG" --name "$APP" -o json)
           LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
           READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
           RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
           CURRENT_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$APP_JSON")
-          FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
-          echo "Attempt $ATTEMPT/60: latest=$LATEST ready=$READY running=$RUNNING image=$CURRENT_IMAGE"
-          if [[ "$LATEST" != "$PREVIOUS_LATEST" && "$LATEST" == "$READY" && "$RUNNING" == "Running" && "$CURRENT_IMAGE" == "$IMAGE" && -n "$FQDN" ]]; then
-            CODE=$(curl -sS --max-time 30 -o /tmp/customer-web-home.html -w '%{http_code}' "https://$FQDN/" || true)
-            if [[ "$CODE" == "200" ]] && grep -q 'Craves' /tmp/customer-web-home.html; then
-              echo 'SUCCESS: Next.js customer web is ready.'
-              echo "URL=https://$FQDN"
+          echo "Attempt $ATTEMPT/60: latest=$LATEST ready=$READY running=$RUNNING"
+
+          if [[ "$LATEST" != "$PREVIOUS_LATEST" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$CURRENT_IMAGE" == "$IMAGE" ]]; then
+            HOME_CODE=$(curl -sS --max-time 30 -o /tmp/customer-web-home.html -w '%{http_code}' "https://$FQDN/" || true)
+            AUTH_CODE=$(curl -sS --max-time 30 -o /tmp/customer-web-auth.json -w '%{http_code}' "https://$FQDN/api/auth/me" || true)
+            if [[ "$HOME_CODE" == '200' ]] && grep -q 'Craves' /tmp/customer-web-home.html && [[ "$AUTH_CODE" == '401' ]]; then
+              trap - EXIT
+              echo "SUCCESS: Connected customer web is ready at https://$FQDN"
+              echo "Firebase Authorized Domains must include: $FQDN"
               exit 0
             fi
           fi
           sleep 10
         done
-        echo 'ERROR: Next.js customer web did not become ready.' >&2
+
+        echo 'ERROR: Connected customer web did not pass readiness checks within ten minutes.' >&2
         exit 1
-    env:
-      CRAVES_API_BASE_URL_INPUT: ${{ parameters.apiBaseUrl }}
+
+  - task: AzureCLI@2
+    displayName: Show latest customer web logs
+    condition: always()
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        az containerapp logs show \
+          --resource-group '${{ parameters.resourceGroupName }}' \
+          --name '${{ parameters.containerAppName }}' \
+          --tail 120 || true

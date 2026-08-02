@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { CustomerCheckout } from "@/lib/checkout-contract";
 import type { CustomerPaymentSession, CustomerPaymentStatus, PaymentStatus } from "@/lib/payment-contract";
 
@@ -118,6 +119,6 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
     <button type="button" disabled={busy || !checkout || checkout.status === "PAID" || status === "PAID"} onClick={() => void openCheckout()} className="mt-6 w-full rounded-full bg-[#6930CA] px-6 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? "Processing…" : status === "PAID" ? "Payment verified" : "Pay securely with Cashfree"}</button>
     {payment && status !== "PAID" && <div className="mt-3 flex flex-wrap gap-3"><button type="button" disabled={busy} onClick={() => void verifyPayment()} className="rounded-full border border-[#6930CA] px-5 py-3 text-sm font-bold text-[#6930CA]">Verify payment</button><button type="button" disabled={busy} onClick={() => void refreshStatus()} className="rounded-full px-5 py-3 text-sm font-bold text-slate-600">Refresh status</button></div>}
     <p role="status" className="mt-5 text-sm text-slate-600">{message}</p>
-    {status === "PAID" && <a href="/orders" className="mt-5 inline-flex rounded-full border border-[#6930CA] px-5 py-3 text-sm font-bold text-[#6930CA]">View your orders</a>}
+    {status === "PAID" && <Link href="/orders" className="mt-5 inline-flex rounded-full border border-[#6930CA] px-5 py-3 text-sm font-bold text-[#6930CA]">View your orders</Link>}
   </section>;
 }

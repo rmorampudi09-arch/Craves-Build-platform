@@ -1,86 +1,9 @@
-import { cookies } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server';
-import {
-  DeliveryStatusContractError,
-  isUuid,
-  parseDeliveryStatusResponse,
-} from '@/lib/delivery-status';
-
-export const dynamic = 'force-dynamic';
-
-const DEFAULT_API_BASE_URL = 'https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1';
-const TOKEN_COOKIE_NAME = 'craves_access_token';
-
-function responseHeaders(): HeadersInit {
-  return {
-    'Cache-Control': 'no-store, no-cache, must-revalidate',
-    Pragma: 'no-cache',
-    'X-Content-Type-Options': 'nosniff',
-  };
-}
-
-function errorResponse(status: number, error: string, message: string): NextResponse {
-  return NextResponse.json({ error, message }, { status, headers: responseHeaders() });
-}
-
-export async function GET(
-  _request: NextRequest,
-  context: { params: Promise<{ orderId: string }> },
-): Promise<NextResponse> {
-  const { orderId } = await context.params;
-  if (!isUuid(orderId)) {
-    return errorResponse(400, 'INVALID_ORDER_ID', 'The order identifier is invalid.');
-  }
-
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get(TOKEN_COOKIE_NAME)?.value;
-  if (!accessToken) {
-    return errorResponse(401, 'AUTHENTICATION_REQUIRED', 'Sign in to view delivery tracking.');
-  }
-
-  const apiBaseUrl = (process.env.CRAVES_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, '');
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-
-  try {
-    const upstream = await fetch(`${apiBaseUrl}/orders/${orderId}/delivery-status`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (upstream.status === 401) {
-      return errorResponse(401, 'SESSION_EXPIRED', 'Your session expired. Sign in again.');
-    }
-    if (upstream.status === 403) {
-      return errorResponse(403, 'ORDER_ACCESS_DENIED', 'This order is not available for this account.');
-    }
-    if (upstream.status === 404) {
-      return errorResponse(404, 'ORDER_NOT_FOUND', 'The order could not be found.');
-    }
-    if (!upstream.ok) {
-      return errorResponse(502, 'DELIVERY_STATUS_UNAVAILABLE', 'Delivery tracking is temporarily unavailable.');
-    }
-
-    const parsed = parseDeliveryStatusResponse(await upstream.json());
-    if (parsed.orderId.toLowerCase() !== orderId.toLowerCase()) {
-      return errorResponse(502, 'DELIVERY_STATUS_CONTRACT_ERROR', 'The delivery response did not match the requested order.');
-    }
-
-    return NextResponse.json(parsed, { status: 200, headers: responseHeaders() });
-  } catch (error) {
-    if (error instanceof DeliveryStatusContractError) {
-      return errorResponse(502, 'DELIVERY_STATUS_CONTRACT_ERROR', 'The delivery response could not be verified.');
-    }
-    if (error instanceof Error && error.name === 'AbortError') {
-      return errorResponse(504, 'DELIVERY_STATUS_TIMEOUT', 'Delivery tracking took too long to respond.');
-    }
-    return errorResponse(502, 'DELIVERY_STATUS_UNAVAILABLE', 'Delivery tracking is temporarily unavailable.');
-  } finally {
-    clearTimeout(timeout);
-  }
+import { NextRequest, NextResponse } from "next/server";
+import { DeliveryStatusContractError, parseDeliveryStatusResponse } from "@/lib/delivery-status";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+export const dynamic = "force-dynamic";
+export async function GET(request: NextRequest, context: { params: Promise<{ orderId: string }> }) {
+  const { orderId } = await context.params; if (!isUuid(orderId)) return NextResponse.json({ error: "INVALID_ORDER_ID", message: "The order identifier is invalid." }, { status: 400 });
+  try { const upstream = await authenticatedApiFetch(request, `/orders/${orderId}/delivery-status`); if (!upstream.ok) return NextResponse.json({ error: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "ORDER_ACCESS_DENIED" : upstream.status === 404 ? "ORDER_NOT_FOUND" : "DELIVERY_STATUS_UNAVAILABLE", message: upstream.status === 401 ? "Your session expired. Sign in again." : upstream.status === 403 ? "This order is not available for this account." : upstream.status === 404 ? "The order could not be found." : "Delivery tracking is temporarily unavailable." }, { status: upstream.status }); const result = parseDeliveryStatusResponse(await upstream.json()); if (result.orderId.toLowerCase() !== orderId.toLowerCase()) throw new DeliveryStatusContractError("Order mismatch"); return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } }); }
+  catch (error) { const timeout = error instanceof Error && error.name === "AbortError"; return NextResponse.json({ error: error instanceof SessionRequiredError ? "AUTHENTICATION_REQUIRED" : error instanceof DeliveryStatusContractError ? "DELIVERY_STATUS_CONTRACT_ERROR" : timeout ? "DELIVERY_STATUS_TIMEOUT" : "DELIVERY_STATUS_UNAVAILABLE", message: error instanceof SessionRequiredError ? "Sign in to view delivery tracking." : timeout ? "Delivery tracking took too long to respond." : "Delivery tracking is temporarily unavailable." }, { status: error instanceof SessionRequiredError ? 401 : timeout ? 504 : 502 }); }
 }

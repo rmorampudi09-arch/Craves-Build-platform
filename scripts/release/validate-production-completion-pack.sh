@@ -88,7 +88,8 @@ PY
 for script in \
   scripts/release/validate-production-completion-pack.sh \
   scripts/release/deploy-seven-services.sh \
-  scripts/release/deploy-customer-web.sh; do
+  scripts/release/deploy-customer-web.sh \
+  scripts/release/bind-managed-redis.sh; do
   [[ -s "$ROOT/$script" ]] || fail "missing release script: $script"
   bash -n "$ROOT/$script"
 done

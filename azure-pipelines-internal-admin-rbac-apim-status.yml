@@ -1,0 +1,15 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+  - task: AzureCLI@2
+    displayName: Read internal administrator RBAC APIM status
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: scriptPath
+      scriptPath: scripts/apim/status-internal-admin-rbac-apim.sh

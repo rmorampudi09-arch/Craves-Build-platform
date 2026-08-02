@@ -51,8 +51,8 @@ public class ChefDocumentReviewService {
     }
 
     private static void requireAdmin(CurrentUser user) {
-        if (user == null || !user.hasRole("ADMIN")) {
-            throw ApiException.forbidden("ADMIN_ROLE_REQUIRED", "Admin role is required");
+        if (user == null || !user.hasAnyRole("PLATFORM_ADMIN", "CHEF_ADMIN", "COMPLIANCE_ADMIN")) {
+            throw ApiException.forbidden("CHEF_DOCUMENT_REVIEW_ROLE_REQUIRED", "Chef document review access is required");
         }
     }
 
@@ -65,3 +65,4 @@ public class ChefDocumentReviewService {
     ) {
     }
 }
+

@@ -21,7 +21,8 @@
       "deployOrder": 10,
       "defaultFalseFlags": [
         "CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED",
-        "CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED"
+        "CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED",
+        "CRAVES_INTERNAL_ADMIN_RBAC_API_ENABLED"
       ]
     },
     {
@@ -119,3 +120,4 @@
     "providerPolicy": "do not activate Cashfree production, delivery, refund, FCM, ACS Email, or recurring-subscription workers"
   }
 }
+

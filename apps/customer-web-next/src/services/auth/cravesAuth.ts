@@ -30,6 +30,7 @@ export type CravesAddress = {
 
 let session: CravesUser | null = null;
 let selectedLocation: CravesAddress | null = null;
+let roleSynchronization: Promise<CravesUser | null> | null = null;
 const listeners = new Set<() => void>();
 
 function fromIdentity(identity: CravesIdentity): CravesUser {
@@ -61,10 +62,17 @@ export function getSession(): CravesUser | null {
 }
 
 export async function loadSession(): Promise<CravesUser | null> {
-  const lookup = async () => fetch("/api/auth/me", { cache: "no-store", credentials: "same-origin" });
+  const lookup = async () =>
+    fetch("/api/auth/me", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
   let response = await lookup();
   if (response.status === 401) {
-    const refreshed = await fetch("/api/auth/refresh", { method: "POST", credentials: "same-origin" }).catch(() => null);
+    const refreshed = await fetch("/api/auth/refresh", {
+      method: "POST",
+      credentials: "same-origin",
+    }).catch(() => null);
     if (refreshed?.ok) response = await lookup();
   }
   if (!response.ok) {
@@ -72,14 +80,43 @@ export async function loadSession(): Promise<CravesUser | null> {
     notify();
     return null;
   }
-  const identity = await response.json().catch(() => null) as CravesIdentity | null;
+  const identity = (await response
+    .json()
+    .catch(() => null)) as CravesIdentity | null;
   if (!identity?.id) return null;
   return setSessionIdentity(identity);
 }
 
+/**
+ * Rotates the HTTP-only Craves session so newly granted roles are embedded in
+ * the access token used by downstream Catalog and Order services. Auth /me
+ * reads current roles from the database, but those services authorize the JWT
+ * claims, so approval is not complete in the browser until this succeeds.
+ */
+export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
+  if (roleSynchronization) return roleSynchronization;
+  roleSynchronization = (async () => {
+    const response = await fetch("/api/auth/refresh", {
+      method: "POST",
+      credentials: "same-origin",
+    }).catch(() => null);
+    if (!response?.ok) return null;
+    const body = (await response.json().catch(() => null)) as {
+      identity?: CravesIdentity;
+    } | null;
+    return body?.identity?.id ? setSessionIdentity(body.identity) : null;
+  })().finally(() => {
+    roleSynchronization = null;
+  });
+  return roleSynchronization;
+}
+
 export async function clearSession(): Promise<void> {
   try {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+    });
   } finally {
     session = null;
     selectedLocation = null;
@@ -120,9 +157,13 @@ export async function loadSelectedAddress(): Promise<CravesAddress | null> {
     cache: "no-store",
     credentials: "same-origin",
   });
-  if (!response.ok) throw new Error("Saved delivery addresses could not be loaded.");
-  const addresses = await response.json().catch(() => null) as CustomerAddress[] | null;
-  if (!Array.isArray(addresses)) throw new Error("Saved delivery addresses returned an invalid response.");
+  if (!response.ok)
+    throw new Error("Saved delivery addresses could not be loaded.");
+  const addresses = (await response.json().catch(() => null)) as
+    | CustomerAddress[]
+    | null;
+  if (!Array.isArray(addresses))
+    throw new Error("Saved delivery addresses returned an invalid response.");
   const selected = selectActiveDeliveryAddress(addresses);
   selectedLocation = selected ? fromCustomerAddress(selected) : null;
   return selectedLocation;

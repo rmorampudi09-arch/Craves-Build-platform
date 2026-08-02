@@ -181,6 +181,10 @@ public class ChefApplicationService {
         if (request == null || !StringUtils.hasText(request.reason())) {
             throw ApiException.badRequest("REJECTION_REASON_REQUIRED", "Rejection reason is required");
         }
+        ChefApplicationResponse application = getApplicationForAdmin(admin, applicationId);
+        if (application.status() != ChefApplicationStatus.PENDING) {
+            throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be rejected");
+        }
         updateDecision(applicationId, admin.identityId(), "REJECTED", request.reason());
         ChefApplicationResponse rejected = getApplicationForAdmin(admin, applicationId);
         notificationInternalClient.chefRejected(rejected);
@@ -301,4 +305,3 @@ public class ChefApplicationService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 }
-

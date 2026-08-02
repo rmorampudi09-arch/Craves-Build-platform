@@ -2,47 +2,161 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { ChefModeIdentity } from "@/lib/chef-mode-contract";
+import {
+  loadSession,
+  type CravesUser,
+} from "@/services/auth/cravesAuth";
 
 const approvedLinks = [
-  { href: "/chef/kitchen", label: "Kitchen profile", description: "Manage the approved kitchen profile used by Catalog and Order services." },
-  { href: "/chef/menu", label: "Menu", description: "Create dishes, update availability and manage approved item images." },
-  { href: "/chef/orders", label: "Chef orders", description: "Review chef-owned orders and take supported workflow actions." },
-  { href: "/notifications", label: "Notifications", description: "Review identity-owned operational notifications." }
+  {
+    href: "/chef/kitchen",
+    label: "Kitchen profile",
+    description:
+      "Manage the approved kitchen profile used by Catalog and Order services.",
+  },
+  {
+    href: "/chef/menu",
+    label: "Menu",
+    description:
+      "Create dishes, update availability and manage approved item images.",
+  },
+  {
+    href: "/chef/orders",
+    label: "Chef orders",
+    description:
+      "Review chef-owned orders and take supported workflow actions.",
+  },
+  {
+    href: "/notifications",
+    label: "Notifications",
+    description: "Review identity-owned operational notifications.",
+  },
 ];
 
+type DashboardState =
+  | "loading"
+  | "signed-out"
+  | "applicant"
+  | "approved"
+  | "unavailable";
+
+function hasChefRole(user: CravesUser): boolean {
+  return user.roles.some((role) => role.toUpperCase() === "CHEF");
+}
+
 export function ChefModeDashboard() {
-  const [identity, setIdentity] = useState<ChefModeIdentity | null>(null);
-  const [message, setMessage] = useState("Checking your Craves chef access…");
+  const [user, setUser] = useState<CravesUser | null>(null);
+  const [state, setState] = useState<DashboardState>("loading");
 
   useEffect(() => {
     let active = true;
-    fetch("/api/chef/me", { cache: "no-store" })
-      .then(async response => ({ response, body: await response.json().catch(() => null) }))
-      .then(({ response, body }) => {
+    void loadSession()
+      .then((current) => {
         if (!active) return;
-        if (response.status === 401) {
-          setMessage("Sign in with your registered mobile number to continue.");
+        if (!current) {
+          setState("signed-out");
           return;
         }
-        if (!response.ok) {
-          setMessage("Chef mode is temporarily unavailable.");
-          return;
-        }
-        setIdentity(body as ChefModeIdentity);
-        setMessage("");
+        setUser(current);
+        setState(hasChefRole(current) ? "approved" : "applicant");
       })
-      .catch(() => active && setMessage("Chef mode is temporarily unavailable."));
-    return () => { active = false; };
+      .catch(() => {
+        if (active) setState("unavailable");
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
-  if (!identity) {
-    return <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950"><p role="status">{message}</p><Link href="/sign-in?returnTo=/chef" className="mt-5 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-bold text-white">Sign in</Link></section>;
+  if (state === "loading") {
+    return (
+      <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">
+        <p role="status">Checking your Craves chef access…</p>
+      </section>
+    );
   }
 
-  if (!identity.chefEnabled) {
-    return <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950"><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">Chef access</p><h2 className="mt-3 text-3xl font-bold">Chef mode is not enabled yet</h2><p className="mt-3 text-sm leading-6 text-slate-600">Submit or review your chef application. Approval and compliance decisions remain with the Craves admin process.</p><Link href="/chef/application" className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-bold text-white">Open chef application</Link></section>;
+  if (state === "signed-out") {
+    return (
+      <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">
+          Secure Craves access
+        </p>
+        <h2 className="mt-3 text-3xl font-bold">Sign in as a home chef</h2>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          Use your registered mobile number. The same Firebase identity supports
+          customer and chef mode.
+        </p>
+        <Link
+          href="/sign-in?returnTo=/chef"
+          className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-bold text-white"
+        >
+          Continue with mobile OTP
+        </Link>
+      </section>
+    );
   }
 
-  return <section className="space-y-6"><div className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950"><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">Chef mode</p><h2 className="mt-3 text-3xl font-bold">Welcome{identity.displayName ? `, ${identity.displayName}` : ""}</h2><p className="mt-3 text-sm text-slate-600">Your backend identity includes the CHEF role. Each service still validates ownership and role on every request.</p></div><div className="grid gap-4 md:grid-cols-2">{approvedLinks.map(link => <Link key={link.href} href={link.href} className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-white transition hover:bg-white/10"><strong>{link.label}</strong><p className="mt-2 text-sm leading-6 text-slate-300">{link.description}</p></Link>)}</div></section>;
+  if (state === "unavailable") {
+    return (
+      <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">
+        <p role="status">Chef mode is temporarily unavailable. Try again.</p>
+      </section>
+    );
+  }
+
+  if (state === "applicant") {
+    return (
+      <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">
+          Chef registration
+        </p>
+        <h2 className="mt-3 text-3xl font-bold">
+          Continue your home-chef application
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          You are signed in as {user?.phoneNumber}. Submit or review the chef
+          application for this same Craves account. Chef functions unlock only
+          after admin approval.
+        </p>
+        <Link
+          href="/chef/application"
+          className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-bold text-white"
+        >
+          Open chef application
+        </Link>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-6">
+      <div className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">
+          Chef mode
+        </p>
+        <h2 className="mt-3 text-3xl font-bold">
+          Welcome{user?.username ? `, ${user.username}` : ""}
+        </h2>
+        <p className="mt-3 text-sm text-slate-600">
+          Your backend identity includes the CHEF role. Each service still
+          validates ownership and role on every request.
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        {approvedLinks.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-white transition hover:bg-white/10"
+          >
+            <strong>{link.label}</strong>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              {link.description}
+            </p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }

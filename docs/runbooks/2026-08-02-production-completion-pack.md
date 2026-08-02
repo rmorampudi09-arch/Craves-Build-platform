@@ -24,7 +24,9 @@ The pack adds or corrects:
 - one immutable seven-service ACR image-build pipeline;
 - one sequential seven-service Container App deployment pipeline with safety flags disabled;
 - one customer-web ACR image-build pipeline using Key Vault-backed Firebase build configuration;
+- one dedicated billable customer-web Container App provisioning definition and pipeline;
 - one customer-web Container App deployment pipeline;
+- one Azure Managed Redis definition and Key Vault-first deployment/binding pipeline;
 - one React Native native-readiness and shell-artifact pipeline;
 - one corrected seven-service release-readiness orchestrator without the obsolete PR-stack gate;
 - one production-completion planning orchestrator;
@@ -39,15 +41,20 @@ scripts/release/validate-production-completion-pack.sh
 scripts/release/generate-production-completion-runbook.py
 scripts/release/deploy-seven-services.sh
 scripts/release/deploy-customer-web.sh
+scripts/release/bind-managed-redis.sh
 azure-pipelines-production-source-completion.yml
 azure-pipelines-seven-service-image-build.yml
 azure-pipelines-seven-service-deploy.yml
 azure-pipelines-customer-web-image-build.yml
+azure-pipelines-customer-web-provision.yml
 azure-pipelines-customer-web-deploy.yml
 azure-pipelines-mobile-native-readiness.yml
+azure-pipelines-managed-redis.yml
 azure-pipelines-production-completion-orchestrator.yml
 azure-pipelines-release-readiness-orchestrator.yml
 pipelines/azure-pipelines-infra.yml
+infra/customer-web-containerapp.bicep
+infra/managed-redis.bicep
 docs/runbooks/2026-08-02-production-completion-pack.md
 ```
 
@@ -150,9 +157,19 @@ Required confirmation:
 confirmBuild = BUILD_CUSTOMER_WEB
 ```
 
-## 10. Customer web deployment
+## 10. Customer web provisioning and deployment
 
-Use `azure-pipelines-customer-web-deploy.yml` only after the web image digest is reviewed.
+The sanitized Azure inventory does not currently show `ca-craves-web-prodlow`. When it is still absent, first use `azure-pipelines-customer-web-provision.yml` with default `validate`, then `what-if`. The billable `deploy` action requires:
+
+```text
+action = deploy
+confirmCreate = CREATE_CUSTOMER_WEB_APP
+imageTag = <exact immutable web tag>
+```
+
+The dedicated Bicep file places the web app in the existing Container Apps environment, enables external HTTPS ingress on port 3000, gives its system identity `AcrPull`, and sets the non-secret production APIM base URL. It does not add runtime secret values.
+
+After the app exists, use `azure-pipelines-customer-web-deploy.yml` only after the web image digest is reviewed.
 
 Required confirmation:
 
@@ -161,9 +178,28 @@ confirmDeployment = DEPLOY_CUSTOMER_WEB
 imageTag = <exact immutable web tag>
 ```
 
-The pipeline expects the existing Container App `ca-craves-web-prodlow`. It will not silently create a resource because creation is billable and requires explicit owner approval. It updates the image, target port 3000 and non-secret runtime variables, then verifies the ready revision and HTTP 200 from `/`.
+The deployment pipeline expects the existing Container App `ca-craves-web-prodlow`. It will not silently create it. It updates the image, target port 3000, `CRAVES_API_BASE_URL` and other non-secret runtime variables, then verifies the ready revision and HTTP 200 from `/`.
 
-## 11. Mobile native readiness
+## 11. Azure Managed Redis
+
+Use `azure-pipelines-managed-redis.yml` only after source verification and a current price/SKU review.
+
+The default `validate` action and the `what-if` action do not create the cache. The billable deployment requires:
+
+```text
+action = deploy
+confirmDeploy = DEPLOY_MANAGED_REDIS
+```
+
+The pipeline deploys `amr-craves-prodlow-l3ing6` using `Balanced_B0`, TLS, port 10000 and `NoCluster` so the existing Spring URL configuration remains compatible. It retrieves the newly created access key without printing it, writes the TLS Redis URL to Key Vault secret `prodlow-redis-url` from a temporary protected file, and binds all seven Container Apps through the versionless application secret `redis-url`.
+
+The binding step keeps `CRAVES_TOKEN_REVOCATION_ENABLED`, `CRAVES_TOKEN_REVOCATION_PUBLISHER_ENABLED` and `CRAVES_AUTH_RATE_LIMIT_ENABLED` false. Redis provisioning does not activate authentication enforcement.
+
+Before mutation, all seven apps are checked for conflicting or partial Redis bindings. On partial failure, the rollback script removes `SPRING_DATA_REDIS_URL` and `redis-url` only from apps first modified by the current run, keeps every safety flag false, and retains the new Key Vault secret for a controlled retry. Compatible pre-existing bindings are never removed.
+
+This is a new credential and is Key Vault-first. It does not rotate the existing Storage or PostgreSQL credentials.
+
+## 12. Mobile native readiness
 
 Use `azure-pipelines-mobile-native-readiness.yml` first in `source-only` mode.
 
@@ -185,7 +221,7 @@ The source documents explicitly defer:
 
 These cannot be invented by the pipeline. They require product/privacy review and owner console actions.
 
-## 12. Corrected release-readiness orchestrator
+## 13. Corrected release-readiness orchestrator
 
 `azure-pipelines-release-readiness-orchestrator.yml` now:
 
@@ -198,7 +234,7 @@ These cannot be invented by the pipeline. They require product/privacy review an
 
 It does not deploy or activate anything.
 
-## 13. Corrected infrastructure pipeline
+## 14. Corrected infrastructure pipeline
 
 The old `pipelines/azure-pipelines-infra.yml` used `sc-craves-dev` and `POSTGRES_ADMIN_PASSWORD`. The corrected pipeline uses:
 
@@ -216,7 +252,7 @@ confirmDeploy = DEPLOY_FOUNDATION
 
 A deployment can create or modify billable resources. It must not be run merely to test a YAML change.
 
-## 14. APIM and runtime modules
+## 15. APIM and runtime modules
 
 The repository already contains module-specific APIM CI/write pipelines and runtime activation/rollback pipelines. This pack does not combine all APIM writes or provider activations into one unsafe operation. They must be run one module at a time after the owning service is healthy.
 
@@ -231,7 +267,7 @@ Required order:
 
 Runtime activation remains downstream-first. Consumers must be proven before publishers. Webhook ingress must be proven before payment/refund/provider workers. Real provider execution remains last.
 
-## 15. Key Vault-first contract
+## 16. Key Vault-first contract
 
 For every new confidential value:
 
@@ -244,7 +280,7 @@ For every new confidential value:
 
 Existing legacy bindings remain unchanged until the final security phase, per the owner’s instruction.
 
-## 16. Manual steps required
+## 17. Manual steps required
 
 ### Azure DevOps
 
@@ -257,6 +293,8 @@ Existing legacy bindings remain unchanged until the final security phase, per th
 ### Azure Portal and Key Vault
 
 - Enter the six web Firebase configuration values under the exact Key Vault names listed above.
+- Review and approve the billable customer-web Container App creation only when the web image is ready.
+- Review current Azure Managed Redis pricing and region/SKU availability before any deploy action.
 - Confirm Container App managed identities have required Key Vault access for future new secrets.
 - Do not rotate existing Storage or PostgreSQL credentials yet.
 - Review any future resource creation because Redis, Front Door/CDN, extra capacity and monitoring retention are billable.
@@ -278,7 +316,7 @@ Existing legacy bindings remain unchanged until the final security phase, per th
 - Upload signing materials through Azure DevOps Secure Files or the approved signing system.
 - Complete Google Play Console and Apple Developer/App Store Connect setup manually.
 
-## 17. Testing before deployment
+## 18. Testing before deployment
 
 Run locally or through the source pipeline:
 
@@ -302,16 +340,16 @@ npm run verify
 
 The two `npm install` commands are temporary until reviewed lockfiles are committed.
 
-## 18. Risks and stop conditions
+## 19. Risks and stop conditions
 
 - Missing Node lockfiles prevent deterministic release claims.
-- Redis is not currently discovered in the Azure environment; token revocation and rate limiting must remain disabled.
+- Redis is not currently discovered in the Azure environment. The guarded source now exists to provision it Key Vault-first, but token revocation and rate limiting must remain disabled until a separate activation session.
 - The web Container App name is derived from the existing Bicep design but must be verified before web deployment.
 - Internal Container App health endpoints may not be reachable from a Microsoft-hosted agent; a failed health gate must be resolved through network design, not bypassed.
 - No pricing, commission, radius, refund entitlement, settlement, subscription grace, delivery SLA or FSSAI value is introduced by this pack.
 - No pipeline may continue after source, build, health, revision, APIM, migration, security or rollback failure.
 
-## 19. Deferred final security phase
+## 20. Deferred final security phase
 
 After the full application, APIM, mobile native projects, providers, monitoring and production tests are complete:
 

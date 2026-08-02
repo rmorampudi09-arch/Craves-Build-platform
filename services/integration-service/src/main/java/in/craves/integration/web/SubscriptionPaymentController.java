@@ -1,5 +1,6 @@
 package in.craves.integration.web;
 
+import in.craves.integration.config.PaymentApiProperties;
 import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
 import in.craves.integration.subscription.SubscriptionPaymentService;
@@ -18,9 +19,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/subscription-payments")
 public class SubscriptionPaymentController {
     private final SubscriptionPaymentService service;
+    private final PaymentApiProperties apiProperties;
 
-    public SubscriptionPaymentController(SubscriptionPaymentService service) {
+    public SubscriptionPaymentController(
+        SubscriptionPaymentService service,
+        PaymentApiProperties apiProperties
+    ) {
         this.service = service;
+        this.apiProperties = apiProperties;
     }
 
     @GetMapping("/invoices/{invoiceId}")
@@ -37,6 +43,7 @@ public class SubscriptionPaymentController {
         @PathVariable UUID invoiceId,
         @Valid @RequestBody CreateSubscriptionPaymentOrderRequest request
     ) {
+        apiProperties.requireOrderExecutionEnabled();
         return service.createProviderOrder(authorization, invoiceId, request);
     }
 }

@@ -18,6 +18,12 @@ export type AdminAccountInterventionStatus = {
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ACCOUNT_STATUSES = new Set(["ACTIVE", "SUSPENDED"]);
+const ACTIONS = new Set<AdminAccountAction>(["SUSPEND", "REACTIVATE"]);
+const REQUESTED_STATUSES = new Set(["ACTIVE", "SUSPENDED"]);
+const PROVIDER_STATUSES = new Set([
+  "PENDING", "PROCESSING", "COMPLETED", "FAILED", "DEAD_LETTER", "SUPERSEDED", "NOT_REQUIRED"
+]);
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -37,7 +43,7 @@ function nullableText(value: unknown, max = 500): string | null {
 
 function uuid(value: unknown): string | null {
   const candidate = text(value, 64);
-  return candidate && UUID.test(candidate) ? candidate : null;
+  return candidate && UUID.test(candidate) ? candidate.toLowerCase() : null;
 }
 
 function nonNegativeInteger(value: unknown): number | null {
@@ -47,6 +53,12 @@ function nonNegativeInteger(value: unknown): number | null {
 function dateTime(value: unknown): string | null {
   const candidate = nullableText(value, 80);
   return candidate && !Number.isNaN(Date.parse(candidate)) ? candidate : null;
+}
+
+function nullableEnum(value: unknown, allowed: Set<string>, max = 80): string | null {
+  if (value == null) return null;
+  const candidate = text(value, max);
+  return candidate && allowed.has(candidate) ? candidate : null;
 }
 
 export function parseAdminAccountLookup(value: unknown): { identityId: string } | null {
@@ -66,7 +78,7 @@ export function parseAdminAccountAction(value: unknown): {
   const action = text(root?.action, 20) as AdminAccountAction | null;
   const reason = text(root?.reason, 500);
   const confirmation = text(root?.confirmation, 20);
-  if (!identityId || !action || !["SUSPEND", "REACTIVATE"].includes(action)) return null;
+  if (!identityId || !action || !ACTIONS.has(action)) return null;
   if (!reason || reason.length < 10 || confirmation !== action) return null;
   return { identityId, action, reason, confirmation };
 }
@@ -78,23 +90,36 @@ export function parseAdminAccountInterventionStatus(value: unknown): AdminAccoun
   const status = text(root.status, 80);
   const tokenVersion = nonNegativeInteger(root.tokenVersion);
   const providerAttemptCount = nonNegativeInteger(root.providerAttemptCount);
-  if (!identityId || !status || tokenVersion == null || providerAttemptCount == null || typeof root.changed !== "boolean") {
+  const action = nullableEnum(root.action, ACTIONS as Set<string>, 40);
+  const requestedStatus = nullableEnum(root.requestedStatus, REQUESTED_STATUSES, 80);
+  const providerStatus = nullableEnum(root.providerStatus, PROVIDER_STATUSES, 80);
+  const interventionId = root.interventionId == null ? null : uuid(root.interventionId);
+  const correlationId = root.correlationId == null ? null : uuid(root.correlationId);
+  if (
+    !identityId || !status || !ACCOUNT_STATUSES.has(status) || tokenVersion == null ||
+    providerAttemptCount == null || typeof root.changed !== "boolean"
+  ) {
     return null;
   }
+  if (root.interventionId != null && !interventionId) return null;
+  if (root.action != null && !action) return null;
+  if (root.requestedStatus != null && !requestedStatus) return null;
+  if (root.providerStatus != null && !providerStatus) return null;
+  if (root.correlationId != null && !correlationId) return null;
   return {
-    interventionId: root.interventionId == null ? null : uuid(root.interventionId),
+    interventionId,
     identityId,
     maskedPhoneNumber: nullableText(root.maskedPhoneNumber, 40),
     status,
     tokenVersion,
-    action: nullableText(root.action, 40),
-    requestedStatus: nullableText(root.requestedStatus, 80),
-    providerStatus: nullableText(root.providerStatus, 80),
+    action,
+    requestedStatus,
+    providerStatus,
     providerAttemptCount,
     providerLastError: nullableText(root.providerLastError, 500),
     requestedAt: dateTime(root.requestedAt),
     providerCompletedAt: dateTime(root.providerCompletedAt),
-    correlationId: root.correlationId == null ? null : uuid(root.correlationId),
+    correlationId,
     changed: root.changed
   };
 }

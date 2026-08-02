@@ -16,7 +16,7 @@ parameters:
     default: ca-craves-subscription-service-p
   - name: userChefContainerAppName
     type: string
-    default: ca-craves-user-chef-service-prodlow
+    default: ca-craves-user-chef-service-prod
 
 pool:
   vmImage: ubuntu-latest

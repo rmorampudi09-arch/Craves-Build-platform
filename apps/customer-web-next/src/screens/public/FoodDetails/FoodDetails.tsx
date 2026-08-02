@@ -82,7 +82,7 @@ function DishDetailPage() {
           <DishInfoSummary dish={dish} />
           <PriceBlockCard price={dish.price} originalPrice={dish.originalPrice} />
         </div>
-        <ChefInfoCard chefName={dish.chef} rating={dish.rating} />
+        <ChefInfoCard chefName={dish.chef} rating={dish.rating} distanceMeters={dish.distanceMeters} />
         <QuickInfoChips dish={dish} />
         <AboutDishSection description={dish.desc} />
         <WhatsInsideCard ingredients={dish.ingredients ?? []} />

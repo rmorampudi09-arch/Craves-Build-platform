@@ -47,7 +47,7 @@ stages:
               set -euo pipefail
               bash -n scripts/mobile/bootstrap-customer-mobile-native.sh
               grep -q 'react-native-keychain' apps/mobile/customer-app/package.json
-              grep -q 'CFEnvironment.SANDBOX' apps/mobile/customer-app/src/payment/cashfree.ts
+              grep -q 'CFEnvironment.SANDBOX' apps/mobile/customer-app/src/screens/MobilePaymentScreen.tsx
               if grep -R -n 'CFEnvironment.PRODUCTION' apps/mobile/customer-app/src; then
                 echo 'ERROR: Production Cashfree mode is forbidden before controlled activation.' >&2
                 exit 1

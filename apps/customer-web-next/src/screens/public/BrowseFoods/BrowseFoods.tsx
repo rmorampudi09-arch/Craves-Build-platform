@@ -7,7 +7,13 @@ import { CategoryFilterChips } from "@/components/home/CategoryFilterChips";
 import { DishesGrid } from "@/components/home/DishesGrid";
 import { FloatingCartBar } from "@/components/home/FloatingCartBar";
 import { DISH_CATEGORIES, type DishCategory } from "@/constants/dishCategories";
-import { DISHES, discoverDishes, type Dish } from "@/services/api/dishes";
+import {
+  DISHES,
+  discoverDishes,
+  getDiscoveryRadiusMeters,
+  type Dish,
+} from "@/services/api/dishes";
+import { formatDiscoveryRadius } from "@/lib/catalog-discovery-policy";
 import {
   clearSession,
   loadSelectedAddress,
@@ -16,7 +22,10 @@ import {
   type CravesUser,
 } from "@/services/auth/cravesAuth";
 import { cartCount, loadCart, subscribeCart } from "@/services/api/cravesCart";
-import { wishlistCount, subscribeWishlist } from "@/services/api/cravesWishlist";
+import {
+  wishlistCount,
+  subscribeWishlist,
+} from "@/services/api/cravesWishlist";
 
 export const routeMeta = {
   head: () => ({
@@ -41,32 +50,47 @@ function BrowseFoodsPage() {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [wishlistItemCount, setWishlistItemCount] = useState(0);
   const [dishes, setDishes] = useState<Dish[]>([]);
-  const [catalogMessage, setCatalogMessage] = useState("Loading your saved delivery location…");
+  const [catalogMessage, setCatalogMessage] = useState(
+    "Loading your saved delivery location…",
+  );
 
   const refreshDiscovery = async (activeAddress: CravesAddress | null) => {
     if (
-      typeof activeAddress?.lat !== "number"
-      || typeof activeAddress.lng !== "number"
+      typeof activeAddress?.lat !== "number" ||
+      typeof activeAddress.lng !== "number"
     ) {
       setDishes([]);
-      setCatalogMessage("Add a delivery address with map coordinates to see real kitchens near you.");
+      setCatalogMessage(
+        "Add a delivery address with map coordinates to see real kitchens near you.",
+      );
       return;
     }
     try {
-      const nearby = await discoverDishes(activeAddress.lat, activeAddress.lng, 5_000);
+      const nearby = await discoverDishes(
+        activeAddress.lat,
+        activeAddress.lng,
+        5_000,
+      );
       setDishes(nearby);
+      const usedRadius = getDiscoveryRadiusMeters();
       setCatalogMessage(
         nearby.length === 0
-          ? "No active kitchens with sellable dishes were found within 5 km of your saved address."
-          : "",
+          ? `No active kitchens with sellable dishes were found within ${formatDiscoveryRadius(usedRadius)} of your saved address.`
+          : usedRadius > 5_000
+            ? `Showing active home kitchens within ${formatDiscoveryRadius(usedRadius)}. Final delivery availability is confirmed at checkout.`
+            : "",
       );
     } catch {
       if (process.env.NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK === "true") {
         setDishes(DISHES);
-        setCatalogMessage("Showing the development visual catalogue while Catalog/APIM is unavailable.");
+        setCatalogMessage(
+          "Showing the development visual catalogue while Catalog/APIM is unavailable.",
+        );
       } else {
         setDishes([]);
-        setCatalogMessage("Nearby dishes are temporarily unavailable. Please try again.");
+        setCatalogMessage(
+          "Nearby dishes are temporarily unavailable. Please try again.",
+        );
       }
     }
   };
@@ -91,7 +115,9 @@ function BrowseFoodsPage() {
         if (!active) return;
         setAddress(null);
         setDishes([]);
-        setCatalogMessage("Your saved delivery address could not be loaded. Open addresses and try again.");
+        setCatalogMessage(
+          "Your saved delivery address could not be loaded. Open addresses and try again.",
+        );
       }
 
       await loadCart();
@@ -99,7 +125,9 @@ function BrowseFoodsPage() {
     });
 
     const unsubCart = subscribeCart(() => setCartItemCount(cartCount()));
-    const unsubWishlist = subscribeWishlist(() => setWishlistItemCount(wishlistCount()));
+    const unsubWishlist = subscribeWishlist(() =>
+      setWishlistItemCount(wishlistCount()),
+    );
     return () => {
       active = false;
       unsubCart();
@@ -111,8 +139,10 @@ function BrowseFoodsPage() {
     const term = searchTerm.trim().toLowerCase();
     return dishes.filter(
       (dish) =>
-        (category === "All" || dish.category === category)
-        && (!term || dish.name.toLowerCase().includes(term) || dish.chef.toLowerCase().includes(term)),
+        (category === "All" || dish.category === category) &&
+        (!term ||
+          dish.name.toLowerCase().includes(term) ||
+          dish.chef.toLowerCase().includes(term)),
     );
   }, [category, searchTerm, dishes]);
 
@@ -156,8 +186,15 @@ function BrowseFoodsPage() {
           )}
         </div>
       )}
-      <DishesGrid dishes={filteredDishes} selectedCategory={category} searchTerm={searchTerm} />
-      <FloatingCartBar itemCount={cartItemCount} onViewCart={() => navigate({ to: "/cart" })} />
+      <DishesGrid
+        dishes={filteredDishes}
+        selectedCategory={category}
+        searchTerm={searchTerm}
+      />
+      <FloatingCartBar
+        itemCount={cartItemCount}
+        onViewCart={() => navigate({ to: "/cart" })}
+      />
     </div>
   );
 }

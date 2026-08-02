@@ -11,9 +11,7 @@ import {
 type AccessState = "synchronizing" | "ready" | "sign-in" | "not-approved";
 
 function hasChefRole(user: CravesUser | null): boolean {
-  return Boolean(
-    user?.roles.some((role) => role.toUpperCase() === "CHEF"),
-  );
+  return Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF"));
 }
 
 export function ChefAccessBoundary({ children }: { children: ReactNode }) {

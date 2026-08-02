@@ -167,7 +167,7 @@ confirmCreate = CREATE_CUSTOMER_WEB_APP
 imageTag = <exact immutable web tag>
 ```
 
-The dedicated Bicep file places the web app in the existing Container Apps environment, enables external HTTPS ingress on port 3000, gives its system identity `AcrPull`, and sets the non-secret production APIM base URL. It does not add runtime secret values.
+The dedicated Bicep file places the web app in the existing Container Apps environment, enables external HTTPS ingress on port 3000, creates a dedicated user-assigned registry identity with `AcrPull` while retaining a system identity for future Key Vault access, and sets the non-secret production APIM base URL. It does not add runtime secret values.
 
 After the app exists, use `azure-pipelines-customer-web-deploy.yml` only after the web image digest is reviewed.
 

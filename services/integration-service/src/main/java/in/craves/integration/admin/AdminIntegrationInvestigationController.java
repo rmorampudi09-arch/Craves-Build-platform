@@ -203,7 +203,7 @@ public class AdminIntegrationInvestigationController {
         String reason,
         String correlationHeader
     ) {
-        CravesPrincipal principal = requireAdmin(authentication);
+        CravesPrincipal principal = requireInvestigationAccess(authentication, resourceType);
         return new AuditContext(
             principal.identityId(), resourceType, resourceId, validateReason(reason), correlationId(correlationHeader)
         );
@@ -226,12 +226,24 @@ public class AdminIntegrationInvestigationController {
             .body(body);
     }
 
-    private static CravesPrincipal requireAdmin(Authentication authentication) {
+    private static CravesPrincipal requireInvestigationAccess(
+        Authentication authentication,
+        String resourceType
+    ) {
         if (authentication == null || !(authentication.getPrincipal() instanceof CravesPrincipal principal)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
         }
-        if (!principal.hasRole("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN role is required");
+        boolean allowed = switch (resourceType) {
+            case "PAYMENT", "REFUND" -> principal.hasAnyRole(
+                "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "AUDIT_ADMIN"
+            );
+            case "DELIVERY_COMMAND" -> principal.hasAnyRole(
+                "PLATFORM_ADMIN", "SUPPORT_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
+            );
+            default -> false;
+        };
+        if (!allowed) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Investigation role is required");
         }
         return principal;
     }
@@ -320,3 +332,4 @@ public class AdminIntegrationInvestigationController {
         OffsetDateTime createdAt, OffsetDateTime updatedAt
     ) {}
 }
+

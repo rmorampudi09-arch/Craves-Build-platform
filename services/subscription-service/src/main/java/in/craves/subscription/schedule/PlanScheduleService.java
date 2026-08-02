@@ -89,10 +89,10 @@ public class PlanScheduleService {
     }
 
     private PlanOwner requireOwnedPlan(UUID planId, CurrentUser user) {
-        requireRole(user, "ADMIN", "CHEF");
+        requireRole(user, "PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN", "CHEF");
         PlanOwner plan = repository.findPlanOwner(planId)
             .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
-        if (!user.hasRole("ADMIN") && !user.identityId().equals(plan.chefIdentityId())) {
+        if (!isSubscriptionAdmin(user) && !user.identityId().equals(plan.chefIdentityId())) {
             throw ApiException.forbidden("PLAN_ACCESS_DENIED", "Chef cannot manage another chef's plan schedule");
         }
         return plan;
@@ -130,6 +130,10 @@ public class PlanScheduleService {
         }
     }
 
+    private static boolean isSubscriptionAdmin(CurrentUser user) {
+        return user != null && user.hasAnyRole("PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN");
+    }
+
     private static void requireRole(CurrentUser user, String... roles) {
         if (user != null) {
             for (String role : roles) {
@@ -141,3 +145,4 @@ public class PlanScheduleService {
         throw ApiException.forbidden("ROLE_NOT_ALLOWED", "User does not have the required role");
     }
 }
+

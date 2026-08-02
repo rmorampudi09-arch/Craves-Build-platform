@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  loadSession,
-  type CravesUser,
-} from "@/services/auth/cravesAuth";
+import { loadSession, type CravesUser } from "@/services/auth/cravesAuth";
 
 const approvedLinks = [
   {

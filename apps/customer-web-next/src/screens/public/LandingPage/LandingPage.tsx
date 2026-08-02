@@ -1,7 +1,10 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-import { AuthModal } from "@/components/auth/AuthModal";
+import {
+  AuthModal,
+  type AccountMode,
+} from "@/components/auth/AuthModal";
 import { LocationModal } from "@/components/layout/LocationModal";
 import { HeroSection } from "@/components/sections/HeroSection";
 import { WhyCravesSection } from "@/components/sections/WhyCravesSection";
@@ -25,6 +28,8 @@ function LandingPage() {
   const navigate = useNavigate();
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authAccountMode, setAuthAccountMode] =
+    useState<AccountMode>("customer");
   const [locOpen, setLocOpen] = useState(false);
   const [user, setUser] = useState<CravesUser | null>(null);
   const [address, setAddress] = useState<CravesAddress | null>(null);
@@ -39,11 +44,17 @@ function LandingPage() {
         setAddress(getAddress());
       }
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [navigate]);
 
-  const openAuth = (mode: "login" | "register") => {
+  const openAuth = (
+    mode: "login" | "register",
+    accountMode: AccountMode = "customer",
+  ) => {
     setAuthMode(mode);
+    setAuthAccountMode(accountMode);
     setAuthOpen(true);
   };
 
@@ -68,7 +79,9 @@ function LandingPage() {
       <WhyCravesSection />
       <HowItWorksSection />
       <WhatMakesSpecialSection />
-      <BecomeChefCtaSection />
+      <BecomeChefCtaSection
+        onBecomeChef={() => openAuth("register", "chef")}
+      />
       <TestimonialsSection />
       <StatsSection />
       <FooterSection />
@@ -76,6 +89,7 @@ function LandingPage() {
       <AuthModal
         open={authOpen}
         mode={authMode}
+        initialAccountMode={authAccountMode}
         onClose={() => setAuthOpen(false)}
         onSwitchMode={setAuthMode}
         onAuthenticated={(authenticatedUser, accountMode) => {

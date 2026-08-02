@@ -40,7 +40,10 @@ test("signed-in home loads backend address, cart, and discovery without fixed co
   const contents = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
   assert.match(contents, /loadSelectedAddress\(\)/);
   assert.match(contents, /loadCart\(\)/);
-  assert.match(contents, /discoverDishes\(activeAddress\.lat, activeAddress\.lng/);
+  assert.match(
+    contents,
+    /discoverDishes\(\s*activeAddress\.lat,\s*activeAddress\.lng/s,
+  );
   assert.doesNotMatch(contents, /17\.4483|78\.3915/);
 });
 
@@ -55,6 +58,57 @@ test("production catalogue does not fall back to demo dishes", () => {
   const contents = source("../services/api/dishes.ts");
   assert.match(
     contents,
-    /NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK === "true" \? DISHES : \[\]/,
+    /NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK === "true"\s*\?\s*DISHES\s*:\s*\[\]/s,
   );
+});
+
+test("empty nearby discovery expands without changing checkout serviceability", () => {
+  const dishes = source("../services/api/dishes.ts");
+  const policy = source("./catalog-discovery-policy.ts");
+  assert.match(dishes, /candidateDiscoveryRadii\(radiusMeters\)/);
+  assert.match(dishes, /if \(discoveredDishes\.length > 0\) return discoveredDishes/);
+  assert.match(policy, /15_000/);
+  assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 50_000/);
+});
+
+test("real backend chefs remain available in production", () => {
+  const contents = source("../services/api/chefs.ts");
+  assert.match(contents, /dish\.kitchenId === id/);
+  assert.match(contents, /catalogBacked: true/);
+  assert.doesNotMatch(
+    contents,
+    /NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK !== "true"\)\s*return undefined/,
+  );
+});
+
+test("dish and chef detail pages reload discovery after a browser refresh", () => {
+  const dish = source("../screens/public/FoodDetails/FoodDetails.tsx");
+  const chef = source("../screens/public/ChefProfile/ChefProfile.tsx");
+  for (const contents of [dish, chef]) {
+    assert.match(contents, /loadSelectedAddress\(\)/);
+    assert.match(contents, /discoverDishes\(address\.lat, address\.lng\)/);
+  }
+});
+
+test("chef onboarding is reachable and prefills approved backend data", () => {
+  const landing = source("../screens/public/LandingPage/LandingPage.tsx");
+  const application = source("../components/chef-application-workspace.tsx");
+  const kitchen = source("../components/chef-kitchen-form.tsx");
+  assert.match(landing, /openAuth\("register", "chef"\)/);
+  assert.match(application, /fetch\("\/api\/customer\/profile"/);
+  assert.match(application, /fetch\("\/api\/customer\/addresses"/);
+  assert.match(kitchen, /application\.status !== "APPROVED"/);
+  assert.match(kitchen, /Active kitchens without coordinates cannot appear in discovery/);
+});
+
+test("signed-in navigation exposes the implemented backend services", () => {
+  const contents = source("../components/home/BrowseHeader.tsx");
+  for (const route of [
+    "/orders",
+    "/subscriptions",
+    "/notifications",
+    "/chef",
+  ]) {
+    assert.match(contents, new RegExp(route.replace("/", "\\/")));
+  }
 });

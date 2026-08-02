@@ -2,12 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bell, ChefHat, ClipboardList, Heart, LogOut, MapPinned } from "lucide-react";
+import {
+  Bell,
+  CalendarRange,
+  ChefHat,
+  ClipboardList,
+  Heart,
+  LogOut,
+  MapPinned,
+} from "lucide-react";
 import type { CustomerProfile } from "@/lib/profile-contract";
 import type { CustomerAddress } from "@/lib/address-contract";
 import type { CustomerOrder } from "@/lib/order-contract";
 import type { ChefApplication } from "@/lib/chef-application-contract";
-import { clearSession, loadSession, type CravesUser } from "@/services/auth/cravesAuth";
+import {
+  clearSession,
+  loadSession,
+  type CravesUser,
+} from "@/services/auth/cravesAuth";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { AccountCard } from "@/components/profile/AccountCard";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
@@ -68,15 +80,19 @@ export default function ProfilePage() {
         return;
       }
       setUser(session);
-      const [profileResponse, addressResponse, ordersResponse, chefResponse] = await Promise.all([
-        fetch("/api/customer/profile", { cache: "no-store" }),
-        fetch("/api/customer/addresses", { cache: "no-store" }),
-        fetch("/api/orders", { cache: "no-store" }),
-        fetch("/api/chef/application", { cache: "no-store" }),
-      ]);
+      const [profileResponse, addressResponse, ordersResponse, chefResponse] =
+        await Promise.all([
+          fetch("/api/customer/profile", { cache: "no-store" }),
+          fetch("/api/customer/addresses", { cache: "no-store" }),
+          fetch("/api/orders", { cache: "no-store" }),
+          fetch("/api/chef/application", { cache: "no-store" }),
+        ]);
       if (profileResponse.ok) setProfile(await profileResponse.json());
       if (addressResponse.ok) setAddresses(await addressResponse.json());
-      if (ordersResponse.ok) setOrderCount((await ordersResponse.json() as CustomerOrder[]).length);
+      if (ordersResponse.ok)
+        setOrderCount(
+          ((await ordersResponse.json()) as CustomerOrder[]).length,
+        );
       if (chefResponse.ok) setApplication(await chefResponse.json());
       setMessage(
         profileResponse.ok
@@ -84,7 +100,9 @@ export default function ProfilePage() {
           : "Complete your customer profile to keep checkout details current.",
       );
     })().catch((error) => {
-      setMessage(error instanceof Error ? error.message : "Profile could not be loaded.");
+      setMessage(
+        error instanceof Error ? error.message : "Profile could not be loaded.",
+      );
     });
   }, [navigate]);
 
@@ -96,7 +114,8 @@ export default function ProfilePage() {
     );
   }
 
-  const preferred = addresses.find((address) => address.isDefault) ?? addresses[0];
+  const preferred =
+    addresses.find((address) => address.isDefault) ?? addresses[0];
   const addressLine = preferred
     ? [
         preferred.addressLine1,
@@ -105,7 +124,9 @@ export default function ProfilePage() {
         preferred.city,
         preferred.state,
         preferred.postalCode,
-      ].filter(Boolean).join(", ")
+      ]
+        .filter(Boolean)
+        .join(", ")
     : "No delivery address saved yet.";
   const chef = chefLink(user, application);
 
@@ -118,8 +139,14 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-cream pb-10">
       <ProfileHeader />
       <main className="mx-auto max-w-3xl px-4 pt-6 md:px-6">
-        <AccountCard user={user} profile={profile} onEdit={() => setEditOpen(true)} />
-        <p role="status" className="mt-3 text-xs text-muted-foreground">{message}</p>
+        <AccountCard
+          user={user}
+          profile={profile}
+          onEdit={() => setEditOpen(true)}
+        />
+        <p role="status" className="mt-3 text-xs text-muted-foreground">
+          {message}
+        </p>
         <div className="mt-4">
           <ProfileLinkCard
             to={chef.to}
@@ -136,7 +163,10 @@ export default function ProfilePage() {
             subtitle="Saved on this browser until a wishlist backend is available"
           />
         </div>
-        <AddressCard addressLine={addressLine} onEdit={() => navigate({ to: "/addresses" })} />
+        <AddressCard
+          addressLine={addressLine}
+          onEdit={() => navigate({ to: "/addresses" })}
+        />
         <div className="mt-4">
           <ProfileLinkCard
             to="/addresses"
@@ -161,7 +191,19 @@ export default function ProfilePage() {
             subtitle="Updates from Craves"
           />
         </div>
-        <button type="button" onClick={() => void logout()} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-white p-4 text-sm font-bold text-ink hover:border-primary">
+        <div className="mt-4">
+          <ProfileLinkCard
+            to="/subscriptions"
+            icon={CalendarRange}
+            title="Meal subscriptions"
+            subtitle="View plans and manage backend subscription status"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => void logout()}
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-white p-4 text-sm font-bold text-ink hover:border-primary"
+        >
           <LogOut className="h-4 w-4" /> Logout
         </button>
       </main>

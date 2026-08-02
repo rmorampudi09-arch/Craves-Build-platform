@@ -197,7 +197,11 @@ public class NotificationDeliveryRepository {
                 jdbcTemplate.update(
                     "INSERT INTO notification_schema.channel_delivery_dead_letter " +
                         "(id, notification_request_id, channel, final_error_code, final_error_message, attempt_count, created_at) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, now()) ON CONFLICT (notification_request_id) DO NOTHING",
+                        "VALUES (?, ?, ?, ?, ?, ?, now()) " +
+                        "ON CONFLICT (notification_request_id) DO UPDATE SET " +
+                        "channel = EXCLUDED.channel, final_error_code = EXCLUDED.final_error_code, " +
+                        "final_error_message = EXCLUDED.final_error_message, attempt_count = EXCLUDED.attempt_count, " +
+                        "created_at = now()",
                     UUID.randomUUID(), item.requestId(), item.channel(), errorCode(error), message, item.attemptCount()
                 );
             }

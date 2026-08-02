@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class NotificationClientProperties {
     private String baseUrl;
     private String accessValue;
-    private boolean directDispatchEnabled = true;
+    private boolean directDispatchEnabled = false;
 
     public String getBaseUrl() {
         return baseUrl;

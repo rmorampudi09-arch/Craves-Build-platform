@@ -1,27 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clearSessionCookies } from "@/lib/auth-cookies";
+import { isSameOrigin } from "@/lib/request-security";
+import { apiBaseUrl } from "@/lib/server-api";
 
 export async function POST(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  let accepted = false;
-  if (origin) {
+  if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
+  const refreshToken = request.cookies.get("craves_refresh_token")?.value;
+  if (refreshToken) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
-      const supplied = new URL(origin);
-      const current = new URL(request.url);
-      accepted = supplied.protocol === current.protocol && supplied.host === current.host;
+      await fetch(`${apiBaseUrl()}/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ refreshToken }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
     } catch {
-      accepted = false;
+      // Local cookies are still cleared. The backend session naturally expires if unavailable.
+    } finally {
+      clearTimeout(timeout);
     }
   }
-  if (!accepted) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
-
-  const response = NextResponse.json({ signedOut: true });
-  response.cookies.set("craves_access_token", "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0
-  });
-  response.headers.set("Cache-Control", "no-store");
+  const response = NextResponse.json({ signedOut: true }, { headers: { "Cache-Control": "no-store" } });
+  clearSessionCookies(response);
   return response;
 }

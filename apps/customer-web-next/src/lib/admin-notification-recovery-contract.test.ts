@@ -5,7 +5,7 @@ import {
   parseNotificationBacklogQuery,
   parseNotificationRecoveryRequest,
   parseNotificationRecoveryResult
-} from "./admin-notification-recovery-contract";
+} from "./admin-notification-recovery-contract.ts";
 
 const ID = "123e4567-e89b-42d3-a456-426614174000";
 

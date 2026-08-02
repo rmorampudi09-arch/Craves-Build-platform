@@ -1,0 +1,122 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+/* All font loading & naming now lives in one place: */
+@import "./assets/fonts/font.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-cream: var(--cream);
+  --color-cream-deep: var(--cream-deep);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-glow: var(--primary-glow);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-ink: var(--ink);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --font-display: var(--font-display-family);
+  --font-script: var(--font-script-family);
+  --font-sans: var(--font-sans-family);
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.985 0.012 80);
+  --foreground: oklch(0.22 0.03 40);
+  --ink: oklch(0.16 0.02 40);
+  --cream: oklch(0.975 0.018 75);
+  --cream-deep: oklch(0.955 0.028 70);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.03 40);
+  --primary: oklch(0.68 0.19 45);
+  --primary-foreground: oklch(1 0 0);
+  --primary-glow: oklch(0.78 0.17 60);
+  --secondary: oklch(0.96 0.02 70);
+  --secondary-foreground: oklch(0.22 0.03 40);
+  --muted: oklch(0.95 0.015 70);
+  --muted-foreground: oklch(0.5 0.03 40);
+  --accent: oklch(0.93 0.05 60);
+  --accent-foreground: oklch(0.3 0.1 40);
+  --border: oklch(0.9 0.02 60);
+  --input: oklch(0.9 0.02 60);
+  --ring: oklch(0.68 0.19 45);
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(1 0 0);
+
+  --gradient-primary: linear-gradient(135deg, oklch(0.68 0.19 45), oklch(0.78 0.17 60));
+  --gradient-hero: linear-gradient(180deg, oklch(0.15 0.02 40 / 0.55), oklch(0.15 0.02 40 / 0.75));
+  --shadow-warm: 0 20px 50px -20px oklch(0.68 0.19 45 / 0.4);
+  --shadow-card: 0 4px 20px -8px oklch(0.4 0.05 40 / 0.15);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
+}
+
+@utility btn-primary {
+  background: var(--gradient-primary);
+  color: var(--color-primary-foreground);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: var(--shadow-warm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  &:hover { transform: translateY(-2px); box-shadow: 0 25px 55px -20px oklch(0.68 0.19 45 / 0.55); }
+}
+
+@utility btn-outline-light {
+  background: transparent;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1.5px solid oklch(1 0 0 / 0.5);
+  transition: background 0.2s ease;
+  &:hover { background: oklch(1 0 0 / 0.1); }
+}
+
+@utility section-wave-top {
+  clip-path: ellipse(120% 100% at 50% 100%);
+}
+
+@utility feature-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.75rem 1.25rem;
+  text-align: center;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  &:hover { transform: translateY(-4px); box-shadow: var(--shadow-card); }
+}

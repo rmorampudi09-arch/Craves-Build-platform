@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import type { CustomerCart } from "@/lib/cart-contract";
 
 function formatMoney(amount: number, currency: string): string {
@@ -62,7 +63,7 @@ export function CustomerCartView() {
         <div className="mt-5 flex justify-between text-lg"><span>Food subtotal</span><strong>{formatMoney(cart.foodSubtotal, cart.currency)}</strong></div>
         <p className="mt-4 text-sm leading-6 text-slate-600">Platform fee, tax and delivery fee are not calculated in the browser. Order Service calculates final checkout totals after you select an address.</p>
         <button type="button" disabled={!cart.items.length || busyId !== null} onClick={() => void mutate("/api/cart/validate", "POST")} className="mt-6 w-full rounded-full border border-[#6930CA] px-5 py-3 text-sm font-bold text-[#6930CA] disabled:opacity-50">Validate availability</button>
-        <a href="/checkout" aria-disabled={!cart.items.length} className={`mt-3 flex w-full justify-center rounded-full bg-[#6930CA] px-5 py-3 text-sm font-bold text-white ${!cart.items.length ? "pointer-events-none opacity-50" : ""}`}>Continue to checkout</a>
+        <Link href="/checkout" aria-disabled={!cart.items.length} className={`mt-3 flex w-full justify-center rounded-full bg-[#6930CA] px-5 py-3 text-sm font-bold text-white ${!cart.items.length ? "pointer-events-none opacity-50" : ""}`}>Continue to checkout</Link>
         <button type="button" disabled={!cart.items.length || busyId !== null} onClick={() => window.confirm("Clear every item from your cart?") && void mutate("/api/cart", "DELETE")} className="mt-3 w-full rounded-full px-5 py-3 text-sm font-bold text-red-700 disabled:opacity-50">Clear cart</button>
         <p role="status" className="mt-5 text-sm text-slate-600">{message}</p>
       </aside>

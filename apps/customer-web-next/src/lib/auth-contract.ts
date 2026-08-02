@@ -11,6 +11,8 @@ export type CravesIdentity = {
 export type CravesSessionExchange = {
   accessToken: string;
   expiresIn: number;
+  refreshToken: string;
+  refreshTokenExpiresAt: string;
   identity: CravesIdentity;
 };
 
@@ -22,37 +24,44 @@ function text(value: unknown, maxLength: number): string | null {
   return result && result.length <= maxLength ? result : null;
 }
 
-export function parseSessionExchange(value: unknown): CravesSessionExchange | null {
+export function parseIdentity(value: unknown): CravesIdentity | null {
   if (!value || typeof value !== "object") return null;
-  const body = value as Record<string, unknown>;
-  const accessToken = text(body.accessToken, 20_000);
-  const expiresIn = typeof body.expiresIn === "number" && Number.isFinite(body.expiresIn)
-    ? Math.floor(body.expiresIn)
-    : 0;
-  const rawIdentity = body.identity;
-  if (!accessToken || expiresIn < 60 || !rawIdentity || typeof rawIdentity !== "object") return null;
-
-  const identity = rawIdentity as Record<string, unknown>;
+  const identity = value as Record<string, unknown>;
   const id = text(identity.id, 64);
   const phoneNumber = text(identity.phoneNumber, 24);
   const status = text(identity.status, 40);
   const roles = Array.isArray(identity.roles)
-    ? identity.roles.filter((role): role is string => typeof role === "string").map(role => role.trim()).filter(Boolean).slice(0, 10)
+    ? identity.roles.filter((role): role is string => typeof role === "string").map((role) => role.trim()).filter(Boolean).slice(0, 10)
     : [];
   if (!id || !UUID.test(id) || !phoneNumber || !status || roles.length === 0) return null;
+  return {
+    id,
+    phoneNumber,
+    email: text(identity.email, 320),
+    emailVerified: identity.emailVerified === true,
+    displayName: text(identity.displayName, 160),
+    status,
+    roles,
+  };
+}
 
+export function parseSessionExchange(value: unknown): CravesSessionExchange | null {
+  if (!value || typeof value !== "object") return null;
+  const body = value as Record<string, unknown>;
+  const accessToken = text(body.accessToken, 20_000);
+  const refreshToken = text(body.refreshToken, 20_000);
+  const refreshTokenExpiresAt = text(body.refreshTokenExpiresAt, 80);
+  const expiresIn = typeof body.expiresIn === "number" && Number.isFinite(body.expiresIn)
+    ? Math.floor(body.expiresIn)
+    : 0;
+  const identity = parseIdentity(body.identity);
+  if (!accessToken || !refreshToken || !refreshTokenExpiresAt || Number.isNaN(Date.parse(refreshTokenExpiresAt)) || expiresIn < 60 || !identity) return null;
   return {
     accessToken,
     expiresIn: Math.min(expiresIn, 60 * 60),
-    identity: {
-      id,
-      phoneNumber,
-      email: text(identity.email, 320),
-      emailVerified: identity.emailVerified === true,
-      displayName: text(identity.displayName, 160),
-      status,
-      roles
-    }
+    refreshToken,
+    refreshTokenExpiresAt,
+    identity,
   };
 }
 

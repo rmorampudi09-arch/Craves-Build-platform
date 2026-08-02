@@ -1,15 +1,28 @@
-import type { Metadata } from 'next';
-import './globals.css';
+import type { Metadata, Viewport } from "next";
+import type { ReactNode } from "react";
+import "@fontsource/poppins/500.css";
+import "@fontsource/poppins/600.css";
+import "@fontsource/poppins/700.css";
+import "../styles.css";
 
 export const metadata: Metadata = {
   title: {
-    default: 'Craves',
-    template: '%s | Craves',
+    default: "Craves — Homemade Meals from Trusted Home Chefs",
+    template: "%s – Craves",
   },
-  description: 'Craves — food from home.',
+  description:
+    "Discover fresh homemade meals from trusted home chefs near you, delivered through Craves.",
+  authors: [{ name: "Craves" }],
+  robots: { index: true, follow: true },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#FFF8EC",
+};
+
+export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en">
       <body>{children}</body>

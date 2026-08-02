@@ -36,6 +36,8 @@ pool:
 
 steps:
   - checkout: self
+    clean: true
+    fetchDepth: 1
 
   - task: NodeTool@0
     displayName: Use Node.js 24
@@ -114,6 +116,9 @@ steps:
         CURRENT_REVISION=$(jq -r '.properties.latestReadyRevisionName // .properties.latestRevisionName // ""' <<<"$APP_JSON")
         FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
         TARGET_PORT=$(jq -r '.properties.configuration.ingress.targetPort // 0' <<<"$APP_JSON")
+        ACTIVE_REVISIONS_MODE=$(jq -r '.properties.configuration.activeRevisionsMode // "Single"' <<<"$APP_JSON")
+        ROLLBACK_TRAFFIC_B64=$(jq -c '.properties.configuration.ingress.traffic // []' <<<"$APP_JSON" | base64 -w0)
+        ROLLBACK_BUILD_SHA=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_BUILD_SHA") | .value][0] // ""' <<<"$APP_JSON")
 
         case "$CURRENT_IMAGE" in
           */craves/customer-web:*|*/craves/customer-web-next:*|*/craves/api-test-dashboard:*) ;;
@@ -122,6 +127,10 @@ steps:
         [[ -n "$CURRENT_REVISION" ]] || { echo 'ERROR: Current ready revision is missing.' >&2; exit 1; }
         [[ -n "$FQDN" ]] || { echo 'ERROR: Current web FQDN is missing.' >&2; exit 1; }
         [[ "$TARGET_PORT" == '3000' ]] || { echo "ERROR: Expected ingress target port 3000, found $TARGET_PORT." >&2; exit 1; }
+        case "$ACTIVE_REVISIONS_MODE" in
+          Single|Multiple) ;;
+          *) echo "ERROR: Unexpected active revisions mode: $ACTIVE_REVISIONS_MODE" >&2; exit 1 ;;
+        esac
 
         mkdir -p '$(Build.ArtifactStagingDirectory)/customer-web-rollback'
         {
@@ -130,6 +139,9 @@ steps:
           printf 'ROLLBACK_IMAGE=%s\n' "$CURRENT_IMAGE"
           printf 'ROLLBACK_REVISION=%s\n' "$CURRENT_REVISION"
           printf 'FQDN=%s\n' "$FQDN"
+          printf 'ACTIVE_REVISIONS_MODE=%s\n' "$ACTIVE_REVISIONS_MODE"
+          printf 'ROLLBACK_TRAFFIC_B64=%s\n' "$ROLLBACK_TRAFFIC_B64"
+          printf 'ROLLBACK_BUILD_SHA=%s\n' "$ROLLBACK_BUILD_SHA"
         } > '$(Build.ArtifactStagingDirectory)/customer-web-rollback/state.env'
 
         echo "Current revision: $CURRENT_REVISION"
@@ -137,6 +149,9 @@ steps:
         echo "##vso[task.setvariable variable=ROLLBACK_IMAGE]$CURRENT_IMAGE"
         echo "##vso[task.setvariable variable=ROLLBACK_REVISION]$CURRENT_REVISION"
         echo "##vso[task.setvariable variable=WEB_FQDN]$FQDN"
+        echo "##vso[task.setvariable variable=ACTIVE_REVISIONS_MODE]$ACTIVE_REVISIONS_MODE"
+        echo "##vso[task.setvariable variable=ROLLBACK_TRAFFIC_B64]$ROLLBACK_TRAFFIC_B64"
+        echo "##vso[task.setvariable variable=ROLLBACK_BUILD_SHA]$ROLLBACK_BUILD_SHA"
 
   - task: PublishPipelineArtifact@1
     displayName: Publish customer web rollback record
@@ -168,6 +183,7 @@ steps:
           --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
           --build-arg NEXT_PUBLIC_CASHFREE_MODE="$NEXT_PUBLIC_CASHFREE_MODE" \
           --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false \
+          --label org.opencontainers.image.revision="$(Build.SourceVersion)" \
           -t "$IMAGE" \
           '$(appPath)'
         docker push "$IMAGE"
@@ -182,7 +198,7 @@ steps:
       NEXT_PUBLIC_CASHFREE_MODE: ${{ parameters.cashfreeMode }}
 
   - task: AzureCLI@2
-    displayName: Deploy, verify and automatically roll back on failure
+    displayName: Deploy exact commit, shift traffic, verify and automatically roll back
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -194,19 +210,52 @@ steps:
         IMAGE='$(NEXT_IMAGE)'
         PREVIOUS_IMAGE='$(ROLLBACK_IMAGE)'
         PREVIOUS_REVISION='$(ROLLBACK_REVISION)'
+        PREVIOUS_BUILD_SHA='$(ROLLBACK_BUILD_SHA)'
+        ROLLBACK_TRAFFIC_B64='$(ROLLBACK_TRAFFIC_B64)'
+        ACTIVE_MODE='$(ACTIVE_REVISIONS_MODE)'
+        EXPECTED_SHA='$(Build.SourceVersion)'
         API_BASE_URL='${{ parameters.apiBaseUrl }}'
         FQDN='$(WEB_FQDN)'
+
+        [[ "$EXPECTED_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || {
+          echo "ERROR: Build.SourceVersion is not a full Git commit SHA: $EXPECTED_SHA" >&2
+          exit 1
+        }
+
+        restore_previous_release() {
+          if [[ "$ACTIVE_MODE" == 'Multiple' ]]; then
+            mapfile -t PREVIOUS_WEIGHTS < <(
+              printf '%s' "$ROLLBACK_TRAFFIC_B64" |
+                base64 -d |
+                jq -r '.[] | select((.revisionName // "") != "" and (.weight // 0) > 0) | "\(.revisionName)=\(.weight)"'
+            )
+            if (( ${#PREVIOUS_WEIGHTS[@]} == 0 )); then
+              PREVIOUS_WEIGHTS=("$PREVIOUS_REVISION=100")
+            fi
+            az containerapp ingress traffic set \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --revision-weight "${PREVIOUS_WEIGHTS[@]}" \
+              -o none
+          else
+            if [[ -z "$PREVIOUS_BUILD_SHA" ]]; then
+              PREVIOUS_BUILD_SHA=unknown
+            fi
+            az containerapp update \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --image "$PREVIOUS_IMAGE" \
+              --set-env-vars CRAVES_BUILD_SHA="$PREVIOUS_BUILD_SHA" \
+              -o none
+          fi
+        }
 
         rollback() {
           EXIT_CODE=$?
           if [[ "$EXIT_CODE" -eq 0 ]]; then return; fi
           trap - EXIT
           echo "Deployment verification failed. Restoring $PREVIOUS_IMAGE (recorded revision $PREVIOUS_REVISION)." >&2
-          az containerapp update \
-            --resource-group "$RG" \
-            --name "$APP" \
-            --image "$PREVIOUS_IMAGE" \
-            -o none || true
+          restore_previous_release || true
           exit "$EXIT_CODE"
         }
         trap rollback EXIT
@@ -218,35 +267,67 @@ steps:
           --image "$IMAGE" \
           --set-env-vars \
             CRAVES_API_BASE_URL="$API_BASE_URL" \
+            CRAVES_BUILD_SHA="$EXPECTED_SHA" \
             NODE_ENV=production \
             PORT=3000 \
             NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false \
           -o none
 
+        NEW_REVISION=''
         for ATTEMPT in $(seq 1 60); do
           APP_JSON=$(az containerapp show --resource-group "$RG" --name "$APP" -o json)
           LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
           READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
           RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
           CURRENT_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$APP_JSON")
-          echo "Attempt $ATTEMPT/60: latest=$LATEST ready=$READY running=$RUNNING"
+          echo "Revision attempt $ATTEMPT/60: latest=$LATEST ready=$READY running=$RUNNING"
 
           if [[ "$LATEST" != "$PREVIOUS_LATEST" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$CURRENT_IMAGE" == "$IMAGE" ]]; then
-            HOME_CODE=$(curl -sS --max-time 30 -o /tmp/customer-web-home.html -w '%{http_code}' "https://$FQDN/" || true)
-            AUTH_CODE=$(curl -sS --max-time 30 -o /tmp/customer-web-auth.json -w '%{http_code}' "https://$FQDN/api/auth/me" || true)
-            if [[ "$HOME_CODE" == '200' ]] && grep -q 'Craves' /tmp/customer-web-home.html && [[ "$AUTH_CODE" == '401' ]]; then
-              trap - EXIT
-              echo "SUCCESS: Connected customer web is ready at https://$FQDN"
-              echo "Firebase Authorized Domains must include: $FQDN"
-              exit 0
-            fi
+            NEW_REVISION="$LATEST"
+            break
           fi
           sleep 10
         done
 
-        echo 'ERROR: Connected customer web did not pass readiness checks within ten minutes.' >&2
-        exit 1
+        [[ -n "$NEW_REVISION" ]] || {
+          echo 'ERROR: The new customer-web revision did not become ready within ten minutes.' >&2
+          exit 1
+        }
 
+        if [[ "$ACTIVE_MODE" == 'Multiple' ]]; then
+          az containerapp ingress traffic set \
+            --resource-group "$RG" \
+            --name "$APP" \
+            --revision-weight "$NEW_REVISION=100" \
+            -o none
+        fi
+
+        for ATTEMPT in $(seq 1 36); do
+          VERSION_CODE=$(curl -sS --max-time 30 -H 'Cache-Control: no-cache' -o /tmp/customer-web-version.json -w '%{http_code}' "https://$FQDN/api/version?release=$EXPECTED_SHA" || true)
+          LIVE_SHA=$(jq -r '.commitSha // ""' /tmp/customer-web-version.json 2>/dev/null || true)
+          HOME_CODE=$(curl -sS --max-time 30 -H 'Cache-Control: no-cache' -o /tmp/customer-web-home.html -w '%{http_code}' "https://$FQDN/?release=$EXPECTED_SHA" || true)
+          SIGN_IN_CODE=$(curl -sS --max-time 30 -H 'Cache-Control: no-cache' -o /tmp/customer-web-sign-in.html -w '%{http_code}' "https://$FQDN/sign-in?returnTo=%2Fchef&release=$EXPECTED_SHA" || true)
+          AUTH_CODE=$(curl -sS --max-time 30 -o /tmp/customer-web-auth.json -w '%{http_code}' "https://$FQDN/api/auth/me" || true)
+          echo "Public attempt $ATTEMPT/36: version=$VERSION_CODE sha=$LIVE_SHA home=$HOME_CODE chef-sign-in=$SIGN_IN_CODE auth=$AUTH_CODE"
+
+          if [[ "$VERSION_CODE" == '200' ]] &&
+             [[ "$LIVE_SHA" == "$EXPECTED_SHA" ]] &&
+             [[ "$HOME_CODE" == '200' ]] &&
+             grep -q 'Craves' /tmp/customer-web-home.html &&
+             [[ "$SIGN_IN_CODE" == '200' ]] &&
+             grep -q 'Secure Craves access' /tmp/customer-web-sign-in.html &&
+             ! grep -q 'Secure customer access' /tmp/customer-web-sign-in.html &&
+             [[ "$AUTH_CODE" == '401' ]]; then
+            trap - EXIT
+            echo "SUCCESS: Git commit $EXPECTED_SHA is receiving 100% customer-web traffic at https://$FQDN"
+            echo "Firebase Authorized Domains must include: $FQDN"
+            exit 0
+          fi
+          sleep 5
+        done
+
+        echo "ERROR: Public ingress never served the exact deployed commit $EXPECTED_SHA." >&2
+        exit 1
   - task: AzureCLI@2
     displayName: Show latest customer web logs
     condition: always()

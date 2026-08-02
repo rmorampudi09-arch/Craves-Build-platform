@@ -1,0 +1,137 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmBuild
+    displayName: Type BUILD_SEVEN_SERVICES to allow ACR builds
+    type: string
+    default: DO_NOT_BUILD
+  - name: imageTag
+    displayName: Immutable image tag; leave blank to use the exact source SHA
+    type: string
+    default: ''
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: Validate
+    displayName: Validate immutable image build request
+    jobs:
+      - job: SourceGate
+        displayName: Verify source, Dockerfiles and confirmation
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+            displayName: Use Python 3.12
+          - bash: |
+              set -euo pipefail
+              [[ '${{ parameters.confirmBuild }}' == 'BUILD_SEVEN_SERVICES' ]] || {
+                echo 'ERROR: confirmBuild must be BUILD_SEVEN_SERVICES.' >&2
+                exit 1
+              }
+              python -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
+              chmod +x scripts/release/*.sh
+              scripts/release/validate-production-completion-pack.sh
+              scripts/release/validate-dockerfiles.sh .
+              mapfile -t paths < <(jq -r '.backendServices[].path' config/production/production-completion-pack.json)
+              for path in "${paths[@]}"; do
+                test -s "$path/Dockerfile"
+                grep -q 'eclipse-temurin-21\|temurin:21' "$path/Dockerfile"
+              done
+            displayName: Validate seven-service image source
+
+  - stage: BuildAndPush
+    displayName: Build immutable images in ACR
+    dependsOn: Validate
+    condition: succeeded()
+    jobs:
+      - job: BuildImages
+        displayName: Build and record all seven image digests
+        timeoutInMinutes: 180
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: AzureCLI@2
+            displayName: Build seven images without deploying
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                PACK='config/production/production-completion-pack.json'
+                ACR=$(jq -r '.azure.containerRegistry' "$PACK")
+                REQUESTED_TAG='${{ parameters.imageTag }}'
+                TAG=${REQUESTED_TAG:-$(Build.SourceVersion)}
+                [[ "$TAG" != 'latest' ]] || { echo 'ERROR: latest is forbidden.' >&2; exit 1; }
+                [[ "$TAG" =~ ^[A-Za-z0-9._-]{7,128}$ ]] || { echo 'ERROR: invalid image tag.' >&2; exit 1; }
+
+                OUT='$(Build.ArtifactStagingDirectory)/seven-service-image-manifest'
+                mkdir -p "$OUT"
+                EVENTS="$OUT/images.jsonl"
+                : >"$EVENTS"
+
+                while IFS= read -r service; do
+                  KEY=$(jq -r '.key' <<<"$service")
+                  PATH_VALUE=$(jq -r '.path' <<<"$service")
+                  REPOSITORY=$(jq -r '.imageRepository' <<<"$service")
+                  echo "========== ACR BUILD $KEY -> $REPOSITORY:$TAG =========="
+                  az acr build \
+                    --registry "$ACR" \
+                    --image "$REPOSITORY:$TAG" \
+                    --file "$PATH_VALUE/Dockerfile" \
+                    "$PATH_VALUE" \
+                    --only-show-errors
+                  DIGEST=$(az acr repository show \
+                    --name "$ACR" \
+                    --image "$REPOSITORY:$TAG" \
+                    --query digest -o tsv --only-show-errors)
+                  [[ -n "$DIGEST" ]] || { echo "ERROR: digest missing for $REPOSITORY:$TAG" >&2; exit 1; }
+                  jq -cn \
+                    --arg serviceKey "$KEY" \
+                    --arg repository "$REPOSITORY" \
+                    --arg tag "$TAG" \
+                    --arg digest "$DIGEST" \
+                    --arg sourceSha '$(Build.SourceVersion)' \
+                    '{serviceKey:$serviceKey,repository:$repository,tag:$tag,digest:$digest,sourceSha:$sourceSha}' \
+                    >>"$EVENTS"
+                done < <(jq -c '.backendServices[]' "$PACK")
+
+                jq -s '.' "$EVENTS" >"$OUT/images.json"
+                rm -f "$EVENTS"
+                jq -n \
+                  --arg registry "$ACR" \
+                  --arg sourceSha '$(Build.SourceVersion)' \
+                  --arg tag "$TAG" \
+                  --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                  --argjson images "$(cat "$OUT/images.json")" \
+                  '{schemaVersion:1,registry:$registry,sourceSha:$sourceSha,tag:$tag,generatedAt:$generatedAt,deploymentExecuted:false,credentialRotationExecuted:false,images:$images}' \
+                  >"$OUT/manifest.json"
+                jq -e '.deploymentExecuted == false and .credentialRotationExecuted == false and (.images | length == 7) and ([.images[].digest] | all(startswith("sha256:")))' \
+                  "$OUT/manifest.json" >/dev/null
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/seven-service-image-manifest
+              artifact: seven-service-image-manifest
+            displayName: Publish immutable image manifest
+
+  - stage: Boundary
+    displayName: Confirm build-only boundary
+    dependsOn: BuildAndPush
+    condition: succeeded()
+    jobs:
+      - job: ConfirmNoDeployment
+        steps:
+          - checkout: none
+          - bash: |
+              set -euo pipefail
+              echo 'Seven immutable service images were built in ACR.'
+              echo 'No Container App was updated, no database migration was run against Azure, no APIM write occurred, no provider was called, and no credential was rotated.'
+            displayName: Confirm build-only result

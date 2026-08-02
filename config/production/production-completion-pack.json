@@ -9,12 +9,23 @@
     "resourceGroup": "rg-craves-prodlow-centralindia",
     "location": "centralindia",
     "containerRegistry": "cravesprodlowacr82121",
-    "containerRegistryLoginServer": "cravesprodlowacr82121.azurecr.io",
+    "containerRegistryLoginServer": "cravesprodlowl82121.azurecr.io",
     "keyVault": "kvcravesprodlowl3ing6",
     "postgresServer": "pg-craves-prodlow-l3ing6",
     "storageAccount": "stcravesprodlowl3ing6",
     "serviceBusNamespace": "sb-craves-prodlow-l3ing6",
-    "apiManagement": "apim-craves-prodlow-l3ing6"
+    "apiManagement": "apim-craves-prodlow-l3ing6",
+    "managedRedis": {
+      "name": "amr-craves-prodlow-l3ing6",
+      "database": "default",
+      "port": 10000,
+      "tls": true,
+      "sku": "Balanced_B0",
+      "keyVaultSecretName": "prodlow-redis-url",
+      "containerAppSecretName": "redis-url",
+      "runtimeEnvironmentVariable": "SPRING_DATA_REDIS_URL",
+      "activationFlagsRemainDisabled": true
+    }
   },
   "backendServices": [
     {
@@ -149,7 +160,8 @@
     ],
     "nonSecretBuildConfiguration": [
       "NEXT_PUBLIC_CASHFREE_MODE"
-    ]
+    ],
+    "apiBaseUrl": "https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1"
   },
   "mobile": {
     "path": "apps/mobile/customer-app",
@@ -178,13 +190,17 @@
     "backendImageBuild": "azure-pipelines-seven-service-image-build.yml",
     "backendDeployment": "azure-pipelines-seven-service-deploy.yml",
     "webImageBuild": "azure-pipelines-customer-web-image-build.yml",
+    "customerWebProvision": "azure-pipelines-customer-web-provision.yml",
     "webDeployment": "azure-pipelines-customer-web-deploy.yml",
     "mobileReadiness": "azure-pipelines-mobile-native-readiness.yml",
+    "managedRedis": "azure-pipelines-managed-redis.yml",
     "masterOrchestrator": "azure-pipelines-production-completion-orchestrator.yml",
     "releaseReadiness": "azure-pipelines-release-readiness-orchestrator.yml",
     "legacyInfrastructure": "pipelines/azure-pipelines-infra.yml"
   },
   "manualOnly": [
+    "Customer web Container App creation only after explicit billable-resource approval",
+    "Azure Managed Redis deployment and current price/SKU review before explicit approval",
     "Azure DevOps pipeline execution and environment approvals",
     "Key Vault secret-value entry and access grants",
     "Firebase Android and iOS configuration downloads",

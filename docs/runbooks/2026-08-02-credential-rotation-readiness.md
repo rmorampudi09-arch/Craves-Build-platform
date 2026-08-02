@@ -31,7 +31,10 @@ Resource group: rg-craves-prodlow-centralindia
 Key Vault: kvcravesprodlowl3ing6
 Storage account: stcravesprodlowl3ing6
 PostgreSQL Flexible Server: pg-craves-prodlow-l3ing6
+Azure service connection: Craves-Dev-Service-Connection
 ```
+
+The Azure service connection is bound directly in the YAML so a newly created Azure DevOps pipeline does not depend on an undefined `AZURE_SERVICE_CONNECTION` variable during pipeline validation.
 
 ## What the gate checks
 
@@ -63,11 +66,12 @@ It does not contain Storage keys, PostgreSQL passwords, connection-string values
 ## Manual steps required
 
 1. Create or select an Azure DevOps pipeline using `azure-pipelines-credential-rotation-readiness.yml`.
-2. Confirm variable `AZURE_SERVICE_CONNECTION` points to `Craves-Dev-Service-Connection`.
-3. Run the pipeline with the default resource names.
-4. Download the `credential-rotation-readiness` artifact.
-5. Resolve every blocker before any credential mutation.
-6. Never paste secret values into chat, source control, pipeline logs, or non-secret Azure DevOps variables.
+2. Confirm the YAML shows `azureSubscription: Craves-Dev-Service-Connection`.
+3. If Azure DevOps displays an **Authorize resources** button for the new pipeline, authorize that existing service connection once.
+4. Run the pipeline with the default resource names.
+5. Download the `credential-rotation-readiness` artifact.
+6. Resolve every blocker before any credential mutation.
+7. Never paste secret values into chat, source control, pipeline logs, or non-secret Azure DevOps variables.
 
 ## Expected current migration categories
 

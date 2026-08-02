@@ -63,15 +63,18 @@ function buildChef(name: string, dishes: Dish[]): Chef {
 }
 
 /** One chef profile per unique dish.chef name, built from that chef's dishes. */
-export const CHEFS: Chef[] = Array.from(new Set(DISHES.map((d) => d.chef))).map((name) =>
-  buildChef(
-    name,
-    DISHES.filter((d) => d.chef === name),
-  ),
-);
+export const CHEFS: Chef[] = process.env.NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK === "true"
+  ? Array.from(new Set(DISHES.map((dish) => dish.chef))).map((name) =>
+      buildChef(
+        name,
+        DISHES.filter((dish) => dish.chef === name),
+      ),
+    )
+  : [];
 
 export function getChef(id: string): Chef | undefined {
-  const existing = CHEFS.find((c) => c.id === id);
+  if (process.env.NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK !== "true") return undefined;
+  const existing = CHEFS.find((chef) => chef.id === id);
   if (existing) return existing;
   const dishes = allDishes().filter((dish) => slugifyChefName(dish.chef) === id);
   return dishes.length > 0 ? buildChef(dishes[0].chef, dishes) : undefined;

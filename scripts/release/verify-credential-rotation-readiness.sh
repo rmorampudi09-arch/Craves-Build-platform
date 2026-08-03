@@ -292,4 +292,8 @@ jq -e '.schemaVersion == 1 and .azureMutationExecuted == false and .secretValues
   || fail 'readiness snapshot validation failed'
 
 printf 'Credential-rotation readiness completed: %s blocker(s), %s warning(s).\n' "$BLOCKERS" "$WARNINGS"
+if [[ "$BLOCKERS" -ne 0 && -s "$TMP_DIR/blockers.txt" ]]; then
+  echo 'Sanitized credential-rotation blockers:'
+  sed 's/^/- /' "$TMP_DIR/blockers.txt"
+fi
 [[ "$BLOCKERS" -eq 0 ]]

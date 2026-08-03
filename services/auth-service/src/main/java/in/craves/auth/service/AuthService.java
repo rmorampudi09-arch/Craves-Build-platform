@@ -7,6 +7,7 @@ import com.google.firebase.auth.FirebaseToken;
 import in.craves.auth.api.AuthTokenResponse;
 import in.craves.auth.api.FirebaseExchangeRequest;
 import in.craves.auth.api.IdentityResponse;
+import in.craves.auth.api.InternalIdentityEmailResponse;
 import in.craves.auth.domain.AuthAudit;
 import in.craves.auth.domain.AuthIdentity;
 import in.craves.auth.domain.AuthIdentityRole;
@@ -172,6 +173,18 @@ public class AuthService {
         assertActive(identity);
         List<String> roles = identityRoleRepository.findRoleCodesByIdentityId(identity.getId());
         return toIdentityResponse(identity, roles);
+    }
+
+    @Transactional(readOnly = true)
+    public InternalIdentityEmailResponse internalIdentityEmail(UUID identityId) {
+        AuthIdentity identity = identityRepository.findById(identityId)
+            .orElseThrow(() -> AuthException.badRequest("IDENTITY_NOT_FOUND", "Identity was not found"));
+        return new InternalIdentityEmailResponse(
+            identity.getId(),
+            identity.getEmail(),
+            identity.isEmailVerified(),
+            identity.getStatus()
+        );
     }
 
     @Transactional

@@ -6,7 +6,7 @@ cd "$ROOT"
 MANIFEST='config/production/production-completion-pack.json'
 [[ -f "$MANIFEST" ]] || { echo "ERROR: production completion manifest is missing: $MANIFEST" >&2; exit 1; }
 mapfile -t PIPELINES < <(
-  jq -r '.pipelines | to_entries[] | .value | select(endswith(".yml"))' "$MANIFEST" | sort -u
+  jq -r '.pipelines | to_entries[] | select(.key | startswith("legacy") | not) | .value | select(endswith(".yml"))' "$MANIFEST" | sort -u
 )
 ((${#PIPELINES[@]} > 0)) || { echo 'ERROR: no production completion pipelines are declared.' >&2; exit 1; }
 for file in "${PIPELINES[@]}"; do

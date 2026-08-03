@@ -32,14 +32,13 @@ stages:
           - bash: |
               set -euo pipefail
               python -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
-              chmod +x scripts/release/*.sh
-              scripts/release/validate-production-completion-pack.sh
-              scripts/release/scan-secret-material.sh .
+              bash scripts/release/validate-production-completion-pack.sh
+              bash scripts/release/scan-secret-material.sh .
               python scripts/release/validate-pipeline-yaml.py
               python scripts/release/validate-flyway-migrations.py
-              scripts/release/validate-dockerfiles.sh .
-              scripts/release/validate-apim-assets.sh .
-              scripts/release/validate-rollback-readiness.sh .
+              bash scripts/release/validate-dockerfiles.sh .
+              bash scripts/release/validate-apim-assets.sh .
+              bash scripts/release/validate-rollback-readiness.sh .
             displayName: Run production completion source gates
           - bash: |
               set -euo pipefail

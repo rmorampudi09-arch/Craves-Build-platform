@@ -1,6 +1,7 @@
 package in.craves.notification.delivery;
 
 import com.azure.communication.email.EmailClient;
+import com.azure.communication.email.models.EmailAddress;
 import com.azure.communication.email.models.EmailMessage;
 import com.azure.communication.email.models.EmailSendResult;
 import com.azure.core.util.polling.PollResponse;
@@ -15,21 +16,28 @@ import org.springframework.util.StringUtils;
 public class AcsEmailAdapter {
     private final EmailClient emailClient;
     private final NotificationDeliveryProperties properties;
+    private final AuthRecipientEmailResolver recipientEmailResolver;
 
-    public AcsEmailAdapter(EmailClient emailClient, NotificationDeliveryProperties properties) {
+    public AcsEmailAdapter(
+        EmailClient emailClient,
+        NotificationDeliveryProperties properties,
+        AuthRecipientEmailResolver recipientEmailResolver
+    ) {
         this.emailClient = emailClient;
         this.properties = properties;
+        this.recipientEmailResolver = recipientEmailResolver;
     }
 
     public DeliveryResult send(DeliveryWorkItem item) {
-        if (!StringUtils.hasText(item.deliveryAddress()) || !item.deliveryAddress().contains("@")) {
-            throw new IllegalArgumentException("Notification email address is missing or invalid");
-        }
+        String recipient = recipientEmailResolver.resolve(item);
         EmailMessage message = new EmailMessage()
             .setSenderAddress(properties.getAcsEmailSenderAddress())
-            .setToRecipients(item.deliveryAddress())
+            .setToRecipients(recipient)
             .setSubject(item.title())
             .setBodyPlainText(item.body());
+        if (StringUtils.hasText(properties.getAcsEmailReplyToAddress())) {
+            message.setReplyTo(new EmailAddress(properties.getAcsEmailReplyToAddress().trim()));
+        }
         PollResponse<EmailSendResult> response = emailClient.beginSend(message).waitForCompletion();
         EmailSendResult result = response.getValue();
         if (result == null || result.getId() == null) {

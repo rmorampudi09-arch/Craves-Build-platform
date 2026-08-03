@@ -19,6 +19,9 @@ public class NotificationDeliveryProperties {
     private String firebaseServiceAccountJsonBase64 = "";
     private String acsEmailConnectionString = "";
     private String acsEmailSenderAddress = "";
+    private String acsEmailReplyToAddress = "support@craves.in";
+    private String authInternalBaseUrl = "";
+    private String authInternalServiceSecret = "";
 
     @PostConstruct
     void validate() {
@@ -37,6 +40,9 @@ public class NotificationDeliveryProperties {
         if (emailEnabled && (!StringUtils.hasText(acsEmailConnectionString)
             || !StringUtils.hasText(acsEmailSenderAddress))) {
             throw new IllegalStateException("ACS Email connection string and sender address are required");
+        }
+        if (StringUtils.hasText(acsEmailReplyToAddress) && !acsEmailReplyToAddress.contains("@")) {
+            throw new IllegalStateException("ACS Email reply-to address is invalid");
         }
         if (workerEnabled && !pushEnabled && !emailEnabled) {
             throw new IllegalStateException("At least one provider channel must be enabled with the delivery worker");
@@ -65,4 +71,10 @@ public class NotificationDeliveryProperties {
     public void setAcsEmailConnectionString(String value) { this.acsEmailConnectionString = value; }
     public String getAcsEmailSenderAddress() { return acsEmailSenderAddress; }
     public void setAcsEmailSenderAddress(String value) { this.acsEmailSenderAddress = value; }
+    public String getAcsEmailReplyToAddress() { return acsEmailReplyToAddress; }
+    public void setAcsEmailReplyToAddress(String value) { this.acsEmailReplyToAddress = value; }
+    public String getAuthInternalBaseUrl() { return authInternalBaseUrl; }
+    public void setAuthInternalBaseUrl(String value) { this.authInternalBaseUrl = value; }
+    public String getAuthInternalServiceSecret() { return authInternalServiceSecret; }
+    public void setAuthInternalServiceSecret(String value) { this.authInternalServiceSecret = value; }
 }

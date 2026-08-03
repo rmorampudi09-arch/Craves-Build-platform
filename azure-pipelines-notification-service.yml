@@ -86,9 +86,13 @@ steps:
         set -euo pipefail
         RG='${{ parameters.resourceGroupName }}'; ACR='${{ parameters.acrName }}'; APP='${{ parameters.containerAppName }}'; TAG='${{ parameters.imageTag }}'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv); IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
-        BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json); PREVIOUS_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$BEFORE"); PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")
-        target_ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$BEFORE"; }
-        target_value() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$BEFORE"; }
+        BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json)
+        PREVIOUS_REVISION=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$BEFORE")
+        [[ -n "$PREVIOUS_REVISION" ]] || { echo 'ERROR: Notification app has no ready revision to preserve.' >&2; exit 1; }
+        READY_JSON=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$PREVIOUS_REVISION" -o json --only-show-errors)
+        PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$READY_JSON")
+        target_ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$READY_JSON"; }
+        target_value() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$READY_JSON"; }
         TARGET_DB_URL=$(target_value SPRING_DATASOURCE_URL)
         TARGET_DB_USER=$(target_value SPRING_DATASOURCE_USERNAME)
         TARGET_DB_REF=$(target_ref SPRING_DATASOURCE_PASSWORD)

@@ -169,11 +169,11 @@ steps:
         {
           echo '# Craves Azure Front Door / CDN status'
           echo
-          echo "- Action: `$ACTION`"
-          echo "- Production origin: `https://$ORIGIN_FQDN`"
-          echo "- Origin status: `$RUNNING_STATUS`; external ingress: `$EXTERNAL_INGRESS`; target port: `$TARGET_PORT`"
-          echo "- Front Door profile: `$PROFILE`; deployed: `$PROFILE_EXISTS`; state: `$PROFILE_STATE`; SKU: `$PROFILE_SKU`"
-          echo "- Front Door endpoint: `$ENDPOINT`; host: `$ENDPOINT_HOST`; state: `$ENDPOINT_STATE`"
+          echo "- Action: $ACTION"
+          echo "- Production origin: https://$ORIGIN_FQDN"
+          echo "- Origin status: $RUNNING_STATUS; external ingress: $EXTERNAL_INGRESS; target port: $TARGET_PORT"
+          echo "- Front Door profile: $PROFILE; deployed: $PROFILE_EXISTS; state: $PROFILE_STATE; SKU: $PROFILE_SKU"
+          echo "- Front Door endpoint: $ENDPOINT; host: $ENDPOINT_HOST; state: $ENDPOINT_STATE"
           echo
           echo '## Routes'
           echo

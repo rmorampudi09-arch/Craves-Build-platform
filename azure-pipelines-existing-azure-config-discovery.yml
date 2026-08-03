@@ -81,15 +81,16 @@ steps:
           az communication create             --resource-group "$RG"             --name "$COMMUNICATION_SERVICE"             --location Global             --data-location "$DATA_LOCATION"             --linked-domains "$DOMAIN_ID"             --tags environment=prodlow application=craves managedBy=azure-devops             --only-show-errors >/dev/null
         fi
 
-        EMAIL_STATE=$(az communication email show           --resource-group "$RG"           --name "$EMAIL_SERVICE"           --query properties.provisioningState -o tsv --only-show-errors)
+        EMAIL_JSON=$(az communication email show           --resource-group "$RG"           --name "$EMAIL_SERVICE"           -o json --only-show-errors)
+        EMAIL_STATE=$(jq -r '.provisioningState // .properties.provisioningState // ""' <<<"$EMAIL_JSON")
         DOMAIN_JSON=$(az communication email domain show           --resource-group "$RG"           --email-service-name "$EMAIL_SERVICE"           --domain-name "$MANAGED_DOMAIN"           -o json --only-show-errors)
         DOMAIN_ID=$(jq -r '.id // ""' <<<"$DOMAIN_JSON")
-        DOMAIN_STATE=$(jq -r '.properties.provisioningState // ""' <<<"$DOMAIN_JSON")
-        MAIL_FROM_DOMAIN=$(jq -r '.properties.mailFromSenderDomain // ""' <<<"$DOMAIN_JSON")
+        DOMAIN_STATE=$(jq -r '.provisioningState // .properties.provisioningState // ""' <<<"$DOMAIN_JSON")
+        MAIL_FROM_DOMAIN=$(jq -r '.mailFromSenderDomain // .properties.mailFromSenderDomain // ""' <<<"$DOMAIN_JSON")
         SENDER="DoNotReply@$MAIL_FROM_DOMAIN"
         COMMUNICATION_JSON=$(az communication show           --resource-group "$RG"           --name "$COMMUNICATION_SERVICE"           -o json --only-show-errors)
-        COMMUNICATION_STATE=$(jq -r '.properties.provisioningState // ""' <<<"$COMMUNICATION_JSON")
-        LINKED_DOMAIN=$(jq -r '.properties.linkedDomains[0] // ""' <<<"$COMMUNICATION_JSON")
+        COMMUNICATION_STATE=$(jq -r '.provisioningState // .properties.provisioningState // ""' <<<"$COMMUNICATION_JSON")
+        LINKED_DOMAIN=$(jq -r '.linkedDomains[0] // .properties.linkedDomains[0] // ""' <<<"$COMMUNICATION_JSON")
 
         [[ "$EMAIL_STATE" == 'Succeeded' ]] || fail "Email service state is $EMAIL_STATE"
         [[ "$DOMAIN_STATE" == 'Succeeded' ]] || fail "Managed domain state is $DOMAIN_STATE"

@@ -16,11 +16,13 @@ Create an Azure DevOps pipeline from:
 azure-pipelines-backend-completion.yml
 ```
 
-The pipeline uses the existing service connection:
+The pipeline follows the established Craves variable-driven pattern. Add or retain this non-secret Azure DevOps pipeline variable:
 
 ```text
-Craves-Dev-Service-Connection
+AZURE_SERVICE_CONNECTION = Craves-Dev-Service-Connection
 ```
+
+The resource-group and ACR names are prefilled as run parameters and validated against the guarded backend inventory. No Azure DevOps Environment resource is required.
 
 Its default mode is `VERIFY_ONLY`, which performs no Azure mutation. It validates the backend release contract, Flyway ordering, secret hygiene and Docker hardening, then runs `mvn -B -ntp clean verify` with Java 21 for all seven services.
 
@@ -54,17 +56,18 @@ Expected result: seven ACR images are tagged with the exact 40-character Git com
 
 Before this mode, confirm a restorable Azure PostgreSQL backup/restore point for the three Craves databases. Flyway migrations are forward-only; an image rollback cannot undo a database migration.
 
-Create or verify the Azure DevOps environment `craves-prodlow-backend`, add the required owner approval, and authorize `Craves-Dev-Service-Connection` for this pipeline. Then run:
+Confirm that the pipeline is authorized to use `Craves-Dev-Service-Connection`. Then run:
 
 ```text
 releaseMode: DEPLOY_BACKEND
 confirmBuild: BUILD_SEVEN_SERVICES
 confirmDeployment: DEPLOY_SEVEN_SERVICES
 databaseBackupConfirmation: DATABASE_BACKUP_VERIFIED
-deploymentEnvironment: craves-prodlow-backend
+resourceGroupName: rg-craves-prodlow-centralindia
+containerRegistryName: cravesprodlowacr82121
 ```
 
-The same run verifies source, runs all Maven tests, builds all seven images, records their digests, waits for the environment approval, and deploys only those digests.
+The same run verifies source, runs all Maven tests, builds all seven images, records their digests, and deploys only those digests. The typed confirmations are the deliberate deployment gate.
 
 ## Deployment guarantees
 

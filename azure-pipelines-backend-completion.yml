@@ -22,10 +22,6 @@ parameters:
     displayName: Type DATABASE_BACKUP_VERIFIED for DEPLOY_BACKEND
     type: string
     default: DATABASE_BACKUP_NOT_VERIFIED
-  - name: deploymentEnvironment
-    displayName: Azure DevOps approval environment
-    type: string
-    default: craves-prodlow-backend
 
 pool:
   vmImage: ubuntu-latest
@@ -135,14 +131,23 @@ stages:
           - task: AzureCLI@2
             displayName: Build seven backend images without deployment
             inputs:
-              azureSubscription: Craves-Dev-Service-Connection
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
                 set -euo pipefail
                 set +x
                 pack='$(backendPack)'
-                registry=$(jq -r '.azure.containerRegistry' "$pack")
+                registry='$(ACR_NAME)'
+                expected_registry=$(jq -r '.azure.containerRegistry' "$pack")
+                [[ -n "$registry" && "$registry" != '$(ACR_NAME)' ]] || {
+                  echo 'ERROR: Add the ACR_NAME Azure DevOps pipeline variable.' >&2
+                  exit 1
+                }
+                [[ "$registry" == "$expected_registry" ]] || {
+                  echo "ERROR: ACR_NAME must match the guarded backend inventory: $expected_registry" >&2
+                  exit 1
+                }
                 tag='$(Build.SourceVersion)'
                 [[ "$tag" =~ ^[0-9a-f]{40}$ ]] || {
                   echo 'ERROR: Build.SourceVersion must be a full Git commit SHA.' >&2
@@ -204,44 +209,51 @@ stages:
     dependsOn: ImageBuild
     condition: and(succeeded(), eq('${{ parameters.releaseMode }}', 'DEPLOY_BACKEND'))
     jobs:
-      - deployment: DeploySevenServices
+      - job: DeploySevenServices
         displayName: Digest-pinned deployment with full-release rollback
-        environment: ${{ parameters.deploymentEnvironment }}
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - checkout: self
-                  persistCredentials: false
-                  fetchDepth: 1
-                - task: DownloadPipelineArtifact@2
-                  inputs:
-                    buildType: current
-                    artifactName: backend-image-manifest
-                    targetPath: $(Pipeline.Workspace)/backend-image-manifest
-                  displayName: Download current-run image manifest
-                - task: AzureCLI@2
-                  displayName: Deploy backend without changing runtime configuration
-                  inputs:
-                    azureSubscription: Craves-Dev-Service-Connection
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      set -euo pipefail
-                      set +x
-                      bash scripts/release/deploy-backend-release.sh \
-                        'rg-craves-prodlow-centralindia' \
-                        '$(backendPack)' \
-                        '$(Pipeline.Workspace)/backend-image-manifest/manifest.json' \
-                        '$(Build.ArtifactStagingDirectory)/backend-deployment-evidence' \
-                        '$(Build.SourceVersion)'
-                  env:
-                    CONFIRM_DEPLOYMENT: ${{ parameters.confirmDeployment }}
-                    DATABASE_BACKUP_CONFIRMATION: ${{ parameters.databaseBackupConfirmation }}
-                - task: PublishPipelineArtifact@1
-                  condition: always()
-                  inputs:
-                    targetPath: $(Build.ArtifactStagingDirectory)/backend-deployment-evidence
-                    artifact: backend-deployment-evidence
-                  displayName: Publish deployment and rollback evidence
-
+        timeoutInMinutes: 120
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              buildType: current
+              artifactName: backend-image-manifest
+              targetPath: $(Pipeline.Workspace)/backend-image-manifest
+            displayName: Download current-run image manifest
+          - task: AzureCLI@2
+            displayName: Deploy backend without changing runtime configuration
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                pack='$(backendPack)'
+                resource_group='$(RESOURCE_GROUP_NAME)'
+                expected_resource_group=$(jq -r '.azure.resourceGroup' "$pack")
+                [[ -n "$resource_group" && "$resource_group" != '$(RESOURCE_GROUP_NAME)' ]] || {
+                  echo 'ERROR: Add the RESOURCE_GROUP_NAME Azure DevOps pipeline variable.' >&2
+                  exit 1
+                }
+                [[ "$resource_group" == "$expected_resource_group" ]] || {
+                  echo "ERROR: RESOURCE_GROUP_NAME must match the guarded backend inventory: $expected_resource_group" >&2
+                  exit 1
+                }
+                bash scripts/release/deploy-backend-release.sh \
+                  "$resource_group" \
+                  "$pack" \
+                  '$(Pipeline.Workspace)/backend-image-manifest/manifest.json' \
+                  '$(Build.ArtifactStagingDirectory)/backend-deployment-evidence' \
+                  '$(Build.SourceVersion)'
+            env:
+              CONFIRM_DEPLOYMENT: ${{ parameters.confirmDeployment }}
+              DATABASE_BACKUP_CONFIRMATION: ${{ parameters.databaseBackupConfirmation }}
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/backend-deployment-evidence
+              artifact: backend-deployment-evidence
+            displayName: Publish deployment and rollback evidence

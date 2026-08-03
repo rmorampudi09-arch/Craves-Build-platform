@@ -11,10 +11,10 @@ steps:
   - checkout: self
     clean: true
 
-  - task: NodeTool@0
+  - task: UseNode@1
     displayName: Use Node.js 24
     inputs:
-      versionSpec: 24.x
+      version: 24.x
 
   - script: npm ci --no-audit --no-fund
     displayName: Install locked customer-web dependencies

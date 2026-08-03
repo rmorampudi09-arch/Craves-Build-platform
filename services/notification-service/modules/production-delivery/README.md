@@ -59,7 +59,7 @@ Do not paste either value into chat, Git, pipeline YAML, a non-secret pipeline v
 
 ## Provider activation order
 
-1. Deploy Flyway V2 and code with every new flag false.
+1. Deploy Flyway V3 and code with every new flag false.
 2. Register device/preference APIM operations.
 3. Bind one provider secret reference.
 4. Run the matching `push_config` or `email_config` stage.

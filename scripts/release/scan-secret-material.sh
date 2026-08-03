@@ -7,8 +7,11 @@ cd "$ROOT"
 mapfile -t FILES < <(git ls-files -z | xargs -0 -n1 printf '%s\n' | grep -Ev '(^|/)(node_modules|target|dist|build|coverage|\.git)/' || true)
 ((${#FILES[@]} > 0)) || { echo 'ERROR: no tracked files found.' >&2; exit 1; }
 
+# Keep signatures value-oriented. Source code may legitimately contain parser
+# delimiters or property/accessor names such as connectionString; those are not
+# credential material unless an actual secret-shaped value follows them.
 PATTERN=$(cat <<'REGEX'
------BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|accesskey=[A-Za-z0-9+/=]{20,}|client[_-]?secret["'=: ]+[A-Za-z0-9._~+/-]{16,}|connectionString["'=: ]+[^$({][^[:space:]]{16,}|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._-]{20,}|AIza[0-9A-Za-z_-]{30,}|AKIA[0-9A-Z]{16}
+^[[:space:]]*-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|accesskey=[A-Za-z0-9+/=]{20,}|client[_-]?secret["'=: ]+[A-Za-z0-9._~+/-]{16,}|(connectionString|connection-string)["']?[[:space:]]*[:=][[:space:]]*["']?(Endpoint=sb://|DefaultEndpointsProtocol=|AccountEndpoint=|Server=tcp:|Host=|jdbc:)[^[:space:]"']{8,}|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._-]{20,}|AIza[0-9A-Za-z_-]{30,}|AKIA[0-9A-Z]{16}
 REGEX
 )
 

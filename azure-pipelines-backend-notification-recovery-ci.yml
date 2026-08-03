@@ -27,7 +27,7 @@ steps:
       grep -F "Only FAILED or DEAD_LETTER notification requests may be requeued" \
         services/notification-service/src/main/java/in/craves/notification/recovery/NotificationRecoveryRepository.java
       grep -F "previous_attempt_count" \
-        services/notification-service/src/main/resources/db/migration/V3__notification_recovery_operations.sql
+        services/notification-service/src/main/resources/db/migration/V4__notification_recovery_operations.sql
       grep -F 'hasRole("ADMIN")' \
         services/notification-service/src/main/java/in/craves/notification/recovery/AdminNotificationRecoveryController.java
       if grep -R -E 'device_token|raw_payload|connection-string|service-account-json' \

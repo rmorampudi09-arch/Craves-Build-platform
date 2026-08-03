@@ -22,6 +22,14 @@ parameters:
     displayName: Type DATABASE_BACKUP_VERIFIED for DEPLOY_BACKEND
     type: string
     default: DATABASE_BACKUP_NOT_VERIFIED
+  - name: resourceGroupName
+    displayName: Azure resource group
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: containerRegistryName
+    displayName: Azure Container Registry
+    type: string
+    default: cravesprodlowacr82121
 
 pool:
   vmImage: ubuntu-latest
@@ -137,14 +145,10 @@ stages:
                 set -euo pipefail
                 set +x
                 pack='$(backendPack)'
-                registry='$(ACR_NAME)'
+                registry='${{ parameters.containerRegistryName }}'
                 expected_registry=$(jq -r '.azure.containerRegistry' "$pack")
-                [[ -n "$registry" && "$registry" != '$(ACR_NAME)' ]] || {
-                  echo 'ERROR: Add the ACR_NAME Azure DevOps pipeline variable.' >&2
-                  exit 1
-                }
                 [[ "$registry" == "$expected_registry" ]] || {
-                  echo "ERROR: ACR_NAME must match the guarded backend inventory: $expected_registry" >&2
+                  echo "ERROR: containerRegistryName must match the guarded backend inventory: $expected_registry" >&2
                   exit 1
                 }
                 tag='$(Build.SourceVersion)'
@@ -231,14 +235,10 @@ stages:
                 set -euo pipefail
                 set +x
                 pack='$(backendPack)'
-                resource_group='$(RESOURCE_GROUP_NAME)'
+                resource_group='${{ parameters.resourceGroupName }}'
                 expected_resource_group=$(jq -r '.azure.resourceGroup' "$pack")
-                [[ -n "$resource_group" && "$resource_group" != '$(RESOURCE_GROUP_NAME)' ]] || {
-                  echo 'ERROR: Add the RESOURCE_GROUP_NAME Azure DevOps pipeline variable.' >&2
-                  exit 1
-                }
                 [[ "$resource_group" == "$expected_resource_group" ]] || {
-                  echo "ERROR: RESOURCE_GROUP_NAME must match the guarded backend inventory: $expected_resource_group" >&2
+                  echo "ERROR: resourceGroupName must match the guarded backend inventory: $expected_resource_group" >&2
                   exit 1
                 }
                 bash scripts/release/deploy-backend-release.sh \

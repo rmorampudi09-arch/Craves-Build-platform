@@ -88,15 +88,19 @@ steps:
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv); IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
         BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json); PREVIOUS_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$BEFORE"); PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")
         target_ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$BEFORE"; }
+        target_value() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$BEFORE"; }
+        TARGET_DB_URL=$(target_value SPRING_DATASOURCE_URL)
+        TARGET_DB_USER=$(target_value SPRING_DATASOURCE_USERNAME)
         TARGET_DB_REF=$(target_ref SPRING_DATASOURCE_PASSWORD)
         TARGET_JWT_REF=$(target_ref CRAVES_JWT_VERIFICATION_PEM_BASE64)
         TARGET_INTERNAL_REF=$(target_ref CRAVES_INTERNAL_SERVICE_KEY)
         [[ -n "$PREVIOUS_REVISION" && -n "$PREVIOUS_IMAGE" && "$PREVIOUS_IMAGE" != "$IMAGE" ]] || { echo 'ERROR: Notification deployment state or image tag is invalid.' >&2; exit 1; }
+        [[ -n "$TARGET_DB_URL" && -n "$TARGET_DB_USER" ]] || { echo 'ERROR: Existing Notification database settings are incomplete.' >&2; exit 1; }
         [[ -n "$TARGET_DB_REF" && -n "$TARGET_JWT_REF" && -n "$TARGET_INTERNAL_REF" ]] || { echo 'ERROR: Existing Notification secret references are incomplete.' >&2; exit 1; }
         az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --min-replicas 1 --max-replicas 1 --set-env-vars \
           SPRING_PROFILES_ACTIVE=prod \
-          SPRING_DATASOURCE_URL='$(POSTGRES_BUSINESS_DB_URL)' \
-          SPRING_DATASOURCE_USERNAME='$(POSTGRES_BUSINESS_DB_USER)' \
+          SPRING_DATASOURCE_URL="$TARGET_DB_URL" \
+          SPRING_DATASOURCE_USERNAME="$TARGET_DB_USER" \
           SPRING_DATASOURCE_PASSWORD=secretref:$TARGET_DB_REF \
           CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:$TARGET_JWT_REF \
           CRAVES_JWT_ISSUER='https://api.craves.in/auth' \

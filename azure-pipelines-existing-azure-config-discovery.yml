@@ -9,6 +9,7 @@ parameters:
     default: discover
     values:
       - discover
+      - validate
       - deploy
   - name: confirmDeploy
     displayName: Type DEPLOY_CDN when action is deploy
@@ -192,7 +193,7 @@ steps:
         cat "$REPORT"
         echo '--- END CDN STATUS REPORT ---'
 
-        if [[ "$ACTION" == 'deploy' ]]; then
+        if [[ "$ACTION" == 'deploy' || "$ACTION" == 'validate' ]]; then
           [[ "$PROFILE_EXISTS" == 'true' ]] || fail 'Front Door profile was not deployed'
           [[ "$PROFILE_STATE" == 'Succeeded' ]] || fail "Front Door profile state is $PROFILE_STATE"
           [[ "$ENDPOINT_STATE" == 'Succeeded' ]] || fail "Front Door endpoint state is $ENDPOINT_STATE"
@@ -200,13 +201,13 @@ steps:
 
           echo "Waiting for edge endpoint: https://$ENDPOINT_HOST"
           HTTP_STATUS=''
-          for attempt in $(seq 1 18); do
+          for attempt in $(seq 1 60); do
             HTTP_STATUS=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 "https://$ENDPOINT_HOST/" || true)
             if [[ "$HTTP_STATUS" =~ ^(200|301|302|307|308)$ ]]; then
               break
             fi
-            echo "Endpoint not ready yet (attempt $attempt/18, HTTP $HTTP_STATUS)"
-            sleep 10
+            echo "Endpoint not ready yet (attempt $attempt/60, HTTP $HTTP_STATUS)"
+            sleep 15
           done
           [[ "$HTTP_STATUS" =~ ^(200|301|302|307|308)$ ]]             || fail "Front Door endpoint validation failed with HTTP $HTTP_STATUS"
           echo "SUCCESS: Craves Front Door endpoint is serving traffic with HTTP $HTTP_STATUS"

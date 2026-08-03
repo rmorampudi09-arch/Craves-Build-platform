@@ -1,320 +1,218 @@
+# Backward-compatible Azure DevOps entrypoint for the Craves CDN completion workflow.
 trigger: none
 pr: none
 
+parameters:
+  - name: action
+    displayName: Action
+    type: string
+    default: discover
+    values:
+      - discover
+      - deploy
+  - name: confirmDeploy
+    displayName: Type DEPLOY_CDN when action is deploy
+    type: string
+    default: DO_NOT_DEPLOY
+
 pool:
   vmImage: ubuntu-latest
+
+variables:
+  resourceGroup: rg-craves-prodlow-centralindia
+  webContainerApp: ca-craves-web-prodlow
+  frontDoorProfile: afd-craves-prodlow
+  originGroup: craves-web-origin-group
+  originName: craves-web-origin
+  appRoute: craves-web-route
+  staticRoute: craves-static-route
 
 steps:
   - checkout: self
 
   - task: AzureCLI@2
-    displayName: Discover and sanitize existing Azure configuration
+    displayName: Discover or deploy Craves Azure Front Door CDN
     inputs:
-      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      azureSubscription: Craves-Dev-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
         set +x
 
-        INVENTORY='config/production/azure-resource-inventory.json'
-        RAW='$(Agent.TempDirectory)/craves-existing-config-raw-$(Build.BuildId)'
-        SAFE='$(Build.ArtifactStagingDirectory)/azure-existing-config-safe'
-        REPORT="$SAFE/azure-existing-config-report.md"
-        SNAPSHOT="$SAFE/azure-existing-config-redacted.json"
+        ACTION='${{ parameters.action }}'
+        CONFIRM='${{ parameters.confirmDeploy }}'
+        RG='$(resourceGroup)'
+        WEB_APP='$(webContainerApp)'
+        PROFILE='$(frontDoorProfile)'
+        ORIGIN_GROUP='$(originGroup)'
+        ORIGIN_NAME='$(originName)'
+        APP_ROUTE='$(appRoute)'
+        STATIC_ROUTE='$(staticRoute)'
+        SAFE='$(Build.ArtifactStagingDirectory)/craves-cdn-status'
+        REPORT="$SAFE/craves-cdn-report.md"
+        SNAPSHOT="$SAFE/craves-cdn-status.json"
+
         fail() { echo "ERROR: $*" >&2; exit 1; }
-
         command -v jq >/dev/null || fail 'jq is required on the pipeline agent'
-        command -v python3 >/dev/null || fail 'python3 is required on the pipeline agent'
-        [[ -f "$INVENTORY" ]] || fail "Azure resource inventory is missing: $INVENTORY"
-        jq -e '.schemaVersion == 1 and (.containerApps | length == 7)' "$INVENTORY" >/dev/null \
-          || fail 'Azure resource inventory is malformed'
+        mkdir -p "$SAFE"
 
-        rm -rf "$RAW" "$SAFE"
-        mkdir -p "$RAW/apps" "$RAW/keyvaults" "$SAFE"
-        trap 'rm -rf "$RAW"' EXIT
+        SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+        SUBSCRIPTION_NAME=$(az account show --query name -o tsv)
+        UNIQUE_SUFFIX=$(printf '%s' "$SUBSCRIPTION_ID" | tr -d '-' | tr '[:upper:]' '[:lower:]' | cut -c1-8)
+        ENDPOINT="craves-prodlow-$UNIQUE_SUFFIX"
 
-        RG=$(jq -r '.resourceGroup' "$INVENTORY")
-        az group show --name "$RG" \
-          --query '{name:name,location:location,id:id}' -o json >"$RAW/resource-group.json"
+        ORIGIN_FQDN=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.configuration.ingress.fqdn' -o tsv)
+        EXTERNAL_INGRESS=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.configuration.ingress.external' -o tsv)
+        TARGET_PORT=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.configuration.ingress.targetPort' -o tsv)
+        RUNNING_STATUS=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.runningStatus' -o tsv)
 
-        az resource list --resource-group "$RG" \
-          --query '[].{name:name,type:type,location:location,id:id}' -o json >"$RAW/resources.json"
+        [[ -n "$ORIGIN_FQDN" ]] || fail "Container App $WEB_APP has no ingress FQDN"
+        [[ "$EXTERNAL_INGRESS" == "true" || "$EXTERNAL_INGRESS" == "True" ]]           || fail "Container App $WEB_APP does not have external ingress"
 
-        while IFS=$'\t' read -r SERVICE_KEY APP_NAME; do
-          echo "Inspecting Container App metadata: $SERVICE_KEY -> $APP_NAME"
-          az containerapp show --resource-group "$RG" --name "$APP_NAME" -o json \
-            >"$RAW/apps/${SERVICE_KEY}-app.json"
-          az containerapp secret list --resource-group "$RG" --name "$APP_NAME" \
-            --query '[].{name:name,keyVaultUrl:keyVaultUrl,identity:identity}' -o json \
-            >"$RAW/apps/${SERVICE_KEY}-secrets.json" 2>/dev/null \
-            || printf '[]' >"$RAW/apps/${SERVICE_KEY}-secrets.json"
-        done < <(jq -r '.containerApps | to_entries[] | [.key, .value] | @tsv' "$INVENTORY")
+        az extension add --name cdn --upgrade --yes --only-show-errors >/dev/null
 
-        az keyvault list --resource-group "$RG" \
-          --query '[].{name:name,vaultUri:properties.vaultUri,enableRbacAuthorization:properties.enableRbacAuthorization}' \
-          -o json >"$RAW/keyvaults.json" 2>/dev/null || printf '[]' >"$RAW/keyvaults.json"
+        if [[ "$ACTION" == 'deploy' ]]; then
+          [[ "$CONFIRM" == 'DEPLOY_CDN' ]]             || fail 'Deployment requires confirmDeploy=DEPLOY_CDN'
 
-        while IFS= read -r VAULT_NAME; do
-          [[ -n "$VAULT_NAME" ]] || continue
-          SAFE_NAME=$(printf '%s' "$VAULT_NAME" | tr -c 'A-Za-z0-9._-' '_')
-          az keyvault secret list --vault-name "$VAULT_NAME" \
-            --query '[].{name:name,enabled:attributes.enabled,expires:attributes.expires}' -o json \
-            >"$RAW/keyvaults/${SAFE_NAME}-secret-metadata.json" 2>/dev/null \
-            || printf '[]' >"$RAW/keyvaults/${SAFE_NAME}-secret-metadata.json"
-        done < <(jq -r '.[].name' "$RAW/keyvaults.json")
+          if ! az afd profile show --resource-group "$RG" --profile-name "$PROFILE" >/dev/null 2>&1; then
+            az afd profile create               --resource-group "$RG"               --profile-name "$PROFILE"               --sku Standard_AzureFrontDoor               --only-show-errors >/dev/null
+          fi
 
-        az postgres flexible-server list --resource-group "$RG" \
-          --query '[].{name:name,fullyQualifiedDomainName:fullyQualifiedDomainName,version:version,state:state,location:location}' \
-          -o json >"$RAW/postgres-servers.json" 2>/dev/null || printf '[]' >"$RAW/postgres-servers.json"
+          if ! az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" >/dev/null 2>&1; then
+            az afd endpoint create               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --enabled-state Enabled               --only-show-errors >/dev/null
+          else
+            az afd endpoint update               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --enabled-state Enabled               --only-show-errors >/dev/null
+          fi
 
-        az redis list --resource-group "$RG" \
-          --query '[].{name:name,hostName:hostName,sslPort:sslPort,sku:sku.name,provisioningState:provisioningState}' \
-          -o json >"$RAW/redis.json" 2>/dev/null || printf '[]' >"$RAW/redis.json"
+          if ! az afd origin-group show --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" >/dev/null 2>&1; then
+            az afd origin-group create               --resource-group "$RG"               --profile-name "$PROFILE"               --origin-group-name "$ORIGIN_GROUP"               --probe-request-type GET               --probe-protocol Https               --probe-path /               --probe-interval-in-seconds 120               --sample-size 4               --successful-samples-required 3               --additional-latency-in-milliseconds 50               --only-show-errors >/dev/null
+          fi
 
-        az storage account list --resource-group "$RG" \
-          --query '[].{name:name,primaryBlobEndpoint:primaryEndpoints.blob,kind:kind,sku:sku.name}' \
-          -o json >"$RAW/storage.json" 2>/dev/null || printf '[]' >"$RAW/storage.json"
+          if ! az afd origin show --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" --origin-name "$ORIGIN_NAME" >/dev/null 2>&1; then
+            az afd origin create               --resource-group "$RG"               --profile-name "$PROFILE"               --origin-group-name "$ORIGIN_GROUP"               --origin-name "$ORIGIN_NAME"               --host-name "$ORIGIN_FQDN"               --origin-host-header "$ORIGIN_FQDN"               --priority 1               --weight 1000               --enabled-state Enabled               --http-port 80               --https-port 443               --certificate-name-check-enabled true               --only-show-errors >/dev/null
+          else
+            az afd origin update               --resource-group "$RG"               --profile-name "$PROFILE"               --origin-group-name "$ORIGIN_GROUP"               --origin-name "$ORIGIN_NAME"               --host-name "$ORIGIN_FQDN"               --origin-host-header "$ORIGIN_FQDN"               --priority 1               --weight 1000               --enabled-state Enabled               --http-port 80               --https-port 443               --certificate-name-check-enabled true               --only-show-errors >/dev/null
+          fi
 
-        SERVICE_BUS=$(jq -r '.serviceBusNamespace' "$INVENTORY")
-        az servicebus topic list --resource-group "$RG" --namespace-name "$SERVICE_BUS" \
-          --query '[].{name:name,status:status}' -o json >"$RAW/servicebus-topics.json" 2>/dev/null \
-          || printf '[]' >"$RAW/servicebus-topics.json"
+          ORIGIN_GROUP_ID=$(az afd origin-group show             --resource-group "$RG"             --profile-name "$PROFILE"             --origin-group-name "$ORIGIN_GROUP"             --query id -o tsv)
 
-        APIM=$(jq -r '.apiManagement' "$INVENTORY")
-        az apim api list --resource-group "$RG" --service-name "$APIM" \
-          --query '[].{name:name,path:path,protocols:protocols}' -o json >"$RAW/apim-apis.json" 2>/dev/null \
-          || printf '[]' >"$RAW/apim-apis.json"
+          if ! az afd route show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" >/dev/null 2>&1; then
+            az afd route create               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$APP_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --enabled-state Enabled               --only-show-errors >/dev/null
+          else
+            az afd route update               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$APP_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --enabled-state Enabled               --only-show-errors >/dev/null
+          fi
 
-        python3 - "$INVENTORY" "$RAW" "$REPORT" "$SNAPSHOT" <<'PY'
-        import json
-        import re
-        import sys
-        from pathlib import Path
-        from urllib.parse import urlsplit
+          CACHE_CONFIGURATION='{compression-settings:{content-types-to-compress:[text/css,text/javascript,application/javascript,application/json,image/svg+xml,font/woff2],is-compression-enabled:true},query-string-caching-behavior:IgnoreQueryString}'
+          if ! az afd route show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" >/dev/null 2>&1; then
+            az afd route create               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$STATIC_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/_next/static/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --cache-configuration "$CACHE_CONFIGURATION"               --enabled-state Enabled               --only-show-errors >/dev/null
+          else
+            az afd route update               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$STATIC_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/_next/static/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --cache-configuration "$CACHE_CONFIGURATION"               --enabled-state Enabled               --only-show-errors >/dev/null
+          fi
+        fi
 
-        inventory_path, raw_path, report_path, snapshot_path = map(Path, sys.argv[1:])
-        inventory = json.loads(inventory_path.read_text(encoding='utf-8'))
-        raw = raw_path
+        PROFILE_EXISTS=false
+        ENDPOINT_HOST=''
+        PROFILE_SKU=''
+        PROFILE_STATE='NotDeployed'
+        ENDPOINT_STATE='NotDeployed'
+        ROUTES='[]'
+        ORIGINS='[]'
+        CUSTOM_DOMAINS='[]'
 
-        sensitive_name = re.compile(
-            r'(PASSWORD|SECRET|TOKEN|PRIVATE|PEM|CREDENTIAL|ACCESS[_-]?KEY|CONNECTION[_-]?STRING|SERVICE[_-]?ACCOUNT|SAS|CLIENT[_-]?KEY|ACCOUNT[_-]?KEY|STORAGE_ENDPOINT)',
-            re.IGNORECASE,
-        )
-        dangerous_value = re.compile(
-            r'(AccountKey=|SharedAccessSignature=|SharedAccessKey=|accesskey=|-----BEGIN [A-Z ]*PRIVATE KEY-----)',
-            re.IGNORECASE,
-        )
-        safe_exact = {
-            'CRAVES_ENVIRONMENT',
-            'CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS',
-            'CRAVES_JWT_AUDIENCE',
-            'CRAVES_JWT_ISSUER',
-            'FIREBASE_PROJECT_ID',
-            'SPRING_DATASOURCE_URL',
-            'SPRING_DATASOURCE_USERNAME',
-            'SPRING_PROFILES_ACTIVE',
-            'SERVER_PORT',
-            'SPRING_FLYWAY_TABLE',
-            'CRAVES_STORAGE_DOCUMENTS_CONTAINER',
-            'CRAVES_STORAGE_MEDIA_CONTAINER',
-            'CRAVES_DOMAIN_EVENTS_TOPIC_NAME',
-            'CRAVES_DOMAIN_EVENT_ENABLED_TYPES',
-            'CRAVES_REFUND_STATUS_SUBSCRIPTION',
-            'CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE',
-            'SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE',
-            'SERVICE_BUS_CHEF_ACCEPTED_SUBSCRIPTION',
-            'SERVICE_BUS_DELIVERY_COMMAND_QUEUE',
-            'SERVICE_BUS_REFUND_REQUESTED_SUBSCRIPTION',
-            'SERVICE_BUS_TOPIC_NAME',
-            'PAYMENT_PROVIDER_API_VERSION',
-            'PAYMENT_PROVIDER_ENVIRONMENT',
-            'CRAVES_CASHFREE_SANDBOX_REFUND_SIMULATION_STATUS',
-            'FORCE_RESTART',
-        }
-        safe_suffixes = (
-            '_ENABLED',
-            '_APPROVED',
-            '_BASE_URL',
-            '_WEBHOOK_URL',
-            '_BATCH_SIZE',
-            '_FIXED_DELAY_MS',
-            '_MAX_ATTEMPTS',
-            '_RETRY_BASE_DELAY_SECONDS',
-            '_RADIUS_KM',
-            '_QUEUE',
-            '_SUBSCRIPTION',
-            '_TOPIC_NAME',
-            '_CONTAINER',
-        )
+        if az afd profile show --resource-group "$RG" --profile-name "$PROFILE" >/dev/null 2>&1; then
+          PROFILE_EXISTS=true
+          PROFILE_SKU=$(az afd profile show --resource-group "$RG" --profile-name "$PROFILE" --query 'sku.name' -o tsv)
+          PROFILE_STATE=$(az afd profile show --resource-group "$RG" --profile-name "$PROFILE" --query 'provisioningState' -o tsv)
+          if az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" >/dev/null 2>&1; then
+            ENDPOINT_HOST=$(az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --query 'hostName' -o tsv)
+            ENDPOINT_STATE=$(az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --query 'provisioningState' -o tsv)
+            ROUTES=$(az afd route list --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT"               --query '[].{name:name,state:provisioningState,enabledState:enabledState,patterns:patternsToMatch,forwardingProtocol:forwardingProtocol,httpsRedirect:httpsRedirect,cacheEnabled:cacheConfiguration!=null}' -o json)
+          fi
+          if az afd origin-group show --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" >/dev/null 2>&1; then
+            ORIGINS=$(az afd origin list --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP"               --query '[].{name:name,hostName:hostName,originHostHeader:originHostHeader,state:provisioningState,enabledState:enabledState}' -o json)
+          fi
+          CUSTOM_DOMAINS=$(az afd custom-domain list --resource-group "$RG" --profile-name "$PROFILE"             --query '[].{name:name,hostName:hostName,domainValidationState:domainValidationState,certificateType:tlsSettings.certificateType,deploymentStatus:deploymentStatus,provisioningState:provisioningState}' -o json)
+        fi
 
-        def load(path: Path, default):
-            try:
-                return json.loads(path.read_text(encoding='utf-8'))
-            except Exception:
-                return default
+        DNS_ZONES=$(az network dns zone list           --query '[].{name:name,resourceGroup:resourceGroup,recordCount:numberOfRecordSets}' -o json 2>/dev/null || printf '[]')
+        ALL_FRONT_DOOR_PROFILES=$(az resource list --resource-type Microsoft.Cdn/profiles           --query '[].{name:name,resourceGroup:resourceGroup,location:location,kind:kind,sku:sku.name}' -o json)
 
-        def is_safe_plaintext(name: str, value: str) -> bool:
-            if not value or sensitive_name.search(name) or dangerous_value.search(value):
-                return False
-            if name == 'SPRING_DATASOURCE_URL':
-                return value.startswith('jdbc:postgresql://') and 'password=' not in value.lower()
-            if name.endswith(('_BASE_URL', '_WEBHOOK_URL')):
-                try:
-                    parsed = urlsplit(value)
-                    return parsed.scheme == 'https' and bool(parsed.netloc) and not parsed.username and not parsed.password
-                except Exception:
-                    return False
-            return name in safe_exact or name.endswith(safe_suffixes)
+        jq -n           --arg action "$ACTION"           --arg subscriptionName "$SUBSCRIPTION_NAME"           --arg subscriptionId "$SUBSCRIPTION_ID"           --arg resourceGroup "$RG"           --arg webContainerApp "$WEB_APP"           --arg originFqdn "$ORIGIN_FQDN"           --arg runningStatus "$RUNNING_STATUS"           --arg targetPort "$TARGET_PORT"           --argjson externalIngress "$EXTERNAL_INGRESS"           --arg profile "$PROFILE"           --arg profileSku "$PROFILE_SKU"           --arg profileState "$PROFILE_STATE"           --argjson profileExists "$PROFILE_EXISTS"           --arg endpoint "$ENDPOINT"           --arg endpointHost "$ENDPOINT_HOST"           --arg endpointState "$ENDPOINT_STATE"           --argjson routes "$ROUTES"           --argjson origins "$ORIGINS"           --argjson customDomains "$CUSTOM_DOMAINS"           --argjson dnsZones "$DNS_ZONES"           --argjson allFrontDoorProfiles "$ALL_FRONT_DOOR_PROFILES"           '{
+            schemaVersion: 1,
+            action: $action,
+            subscription: {name: $subscriptionName, id: $subscriptionId},
+            resourceGroup: $resourceGroup,
+            origin: {
+              containerApp: $webContainerApp,
+              fqdn: $originFqdn,
+              externalIngress: $externalIngress,
+              targetPort: ($targetPort | tonumber),
+              runningStatus: $runningStatus
+            },
+            frontDoor: {
+              exists: $profileExists,
+              profile: $profile,
+              sku: $profileSku,
+              provisioningState: $profileState,
+              endpoint: $endpoint,
+              endpointHost: $endpointHost,
+              endpointProvisioningState: $endpointState,
+              routes: $routes,
+              origins: $origins,
+              customDomains: $customDomains
+            },
+            azureDnsZones: $dnsZones,
+            allFrontDoorProfiles: $allFrontDoorProfiles
+          }' >"$SNAPSHOT"
 
-        def safe_env(env):
-            name = str(env.get('name') or '')
-            secret_ref = str(env.get('secretRef') or '')
-            value = '' if env.get('value') is None else str(env.get('value'))
-            if secret_ref:
-                return {'name': name, 'binding': 'secretRef', 'safeValue': secret_ref}
-            if is_safe_plaintext(name, value):
-                return {'name': name, 'binding': 'value', 'safeValue': value}
-            return {'name': name, 'binding': 'plaintext-redacted', 'safeValue': '<redacted>'}
+        {
+          echo '# Craves Azure Front Door / CDN status'
+          echo
+          echo "- Action: `$ACTION`"
+          echo "- Production origin: `https://$ORIGIN_FQDN`"
+          echo "- Origin status: `$RUNNING_STATUS`; external ingress: `$EXTERNAL_INGRESS`; target port: `$TARGET_PORT`"
+          echo "- Front Door profile: `$PROFILE`; deployed: `$PROFILE_EXISTS`; state: `$PROFILE_STATE`; SKU: `$PROFILE_SKU`"
+          echo "- Front Door endpoint: `$ENDPOINT`; host: `$ENDPOINT_HOST`; state: `$ENDPOINT_STATE`"
+          echo
+          echo '## Routes'
+          echo
+          echo "$ROUTES" | jq -r 'if length == 0 then "- None" else .[] | "- \(.name): state=\(.state), enabled=\(.enabledState), patterns=\(.patterns|join(",")), cache=\(.cacheEnabled)" end'
+          echo
+          echo '## Custom domains'
+          echo
+          echo "$CUSTOM_DOMAINS" | jq -r 'if length == 0 then "- None" else .[] | "- \(.hostName): validation=\(.domainValidationState), certificate=\(.certificateType), deployment=\(.deploymentStatus)" end'
+          echo
+          echo '## Azure DNS zones'
+          echo
+          echo "$DNS_ZONES" | jq -r 'if length == 0 then "- None found in this subscription" else .[] | "- \(.name) (resource group: \(.resourceGroup), records: \(.recordCount))" end'
+        } >"$REPORT"
 
-        snapshot = {
-            'schemaVersion': 2,
-            'resourceGroup': inventory['resourceGroup'],
-            'note': 'Sanitized discovery only. Raw Azure responses are never published.',
-            'containerApps': {},
-            'keyVaults': load(raw / 'keyvaults.json', []),
-            'postgresServers': load(raw / 'postgres-servers.json', []),
-            'redis': load(raw / 'redis.json', []),
-            'storage': load(raw / 'storage.json', []),
-            'serviceBusTopics': load(raw / 'servicebus-topics.json', []),
-            'apimApis': load(raw / 'apim-apis.json', []),
-        }
+        if [[ "$ACTION" == 'deploy' ]]; then
+          [[ "$PROFILE_EXISTS" == 'true' ]] || fail 'Front Door profile was not deployed'
+          [[ "$PROFILE_STATE" == 'Succeeded' ]] || fail "Front Door profile state is $PROFILE_STATE"
+          [[ "$ENDPOINT_STATE" == 'Succeeded' ]] || fail "Front Door endpoint state is $ENDPOINT_STATE"
+          [[ "$(echo "$ROUTES" | jq 'length')" -ge 2 ]] || fail 'Expected app and static routes were not deployed'
 
-        for service_key, app_name in inventory['containerApps'].items():
-            app = load(raw / 'apps' / f'{service_key}-app.json', {})
-            secrets = load(raw / 'apps' / f'{service_key}-secrets.json', [])
-            container = ((app.get('properties') or {}).get('template') or {}).get('containers') or []
-            first = container[0] if container else {}
-            env = [safe_env(item) for item in (first.get('env') or [])]
-            snapshot['containerApps'][service_key] = {
-                'name': app_name,
-                'runningStatus': (app.get('properties') or {}).get('runningStatus'),
-                'latestRevisionName': (app.get('properties') or {}).get('latestRevisionName'),
-                'latestReadyRevisionName': (app.get('properties') or {}).get('latestReadyRevisionName'),
-                'fqdn': (((app.get('properties') or {}).get('configuration') or {}).get('ingress') or {}).get('fqdn'),
-                'image': first.get('image'),
-                'environment': sorted(env, key=lambda item: item['name']),
-                'secrets': sorted(secrets, key=lambda item: str(item.get('name') or '')),
-            }
-
-        snapshot_path.write_text(json.dumps(snapshot, indent=2, sort_keys=True), encoding='utf-8')
-
-        lines = [
-            '# Craves existing Azure configuration discovery',
-            '',
-            '> Sanitized metadata only. Raw Container App responses and plaintext credentials are never published.',
-            '',
-            f"- Resource group: `{snapshot['resourceGroup']}`",
-            '- Azure changes performed: **none**',
-            '',
-            '## Container Apps',
-            '',
-        ]
-
-        for service_key, app in snapshot['containerApps'].items():
-            lines.extend([
-                f"### {service_key}: `{app['name']}`",
-                '',
-                f"- Running status: `{app.get('runningStatus') or 'Unknown'}`",
-                f"- Latest revision: `{app.get('latestRevisionName') or 'Unknown'}`",
-                f"- Latest ready revision: `{app.get('latestReadyRevisionName') or 'Unknown'}`",
-                f"- FQDN: `{app.get('fqdn') or 'Not configured'}`",
-                f"- Image: `{app.get('image') or 'Unknown'}`",
-                '',
-                '| Environment name | Binding | Sanitized value/reference |',
-                '|---|---|---|',
-            ])
-            for env in app['environment']:
-                safe_value = env['safeValue'].replace('|', '\\|').replace('\n', ' ')
-                lines.append(f"| `{env['name']}` | `{env['binding']}` | `{safe_value}` |")
-            if not app['environment']:
-                lines.append('| _none_ |  |  |')
-            lines.extend(['', '| Container App secret name | Backing |', '|---|---|'])
-            for secret in app['secrets']:
-                name = secret.get('name') or 'Unknown'
-                key_vault_url = secret.get('keyVaultUrl') or ''
-                backing = f"Key Vault reference: {key_vault_url}" if key_vault_url else 'Container App managed secret; value unavailable'
-                lines.append(f"| `{name}` | `{backing}` |")
-            if not app['secrets']:
-                lines.append('| _none or list permission unavailable_ |  |')
-            lines.append('')
-
-        sections = (
-            ('Key Vaults', 'keyVaults', lambda item: f"`{item.get('name')}` — `{item.get('vaultUri')}` — RBAC `{item.get('enableRbacAuthorization')}`"),
-            ('PostgreSQL Flexible Servers', 'postgresServers', lambda item: f"`{item.get('name')}` — `{item.get('fullyQualifiedDomainName')}` — state `{item.get('state')}` — PostgreSQL `{item.get('version')}`"),
-            ('Redis', 'redis', lambda item: f"`{item.get('name')}` — `{item.get('hostName')}:{item.get('sslPort')}` — SKU `{item.get('sku')}` — state `{item.get('provisioningState')}`"),
-            ('Storage', 'storage', lambda item: f"`{item.get('name')}` — blob endpoint `{item.get('primaryBlobEndpoint')}` — `{item.get('sku')}`"),
-            ('Service Bus topics', 'serviceBusTopics', lambda item: f"`{item.get('name')}` — status `{item.get('status')}`"),
-            ('APIM APIs', 'apimApis', lambda item: f"`{item.get('name')}` — path `{item.get('path')}` — protocols `{item.get('protocols')}`"),
-        )
-        for title, key, render in sections:
-            lines.extend([f'## {title}', ''])
-            items = snapshot[key]
-            if items:
-                lines.extend(f'- {render(item)}' for item in items)
-            else:
-                lines.append('- None discovered or list permission unavailable.')
-            lines.append('')
-
-        lines.extend([
-            '## Security boundary',
-            '',
-            '- Raw Azure responses were stored only under the temporary agent directory.',
-            '- The temporary raw directory is deleted automatically.',
-            '- Only this report and the schema-version-2 sanitized snapshot are published.',
-            '- Container App managed secret values are not retrievable and are never requested.',
-            '',
-        ])
-        report_path.write_text('\n'.join(lines), encoding='utf-8')
-        PY
-
-        jq -e '.schemaVersion == 2 and (.containerApps | length == 7)' "$SNAPSHOT" >/dev/null \
-          || fail 'Sanitized discovery snapshot validation failed'
-        grep -q 'Sanitized metadata only' "$REPORT" \
-          || fail 'Sanitized report marker is missing'
-
-        python3 - "$SAFE" <<'PY'
-        import re
-        import sys
-        from pathlib import Path
-
-        root = Path(sys.argv[1])
-        forbidden = {
-            'Azure Storage account key': re.compile(r'AccountKey=', re.IGNORECASE),
-            'Azure shared-access key': re.compile(r'SharedAccessKey=', re.IGNORECASE),
-            'Azure shared-access signature': re.compile(r'SharedAccessSignature=', re.IGNORECASE),
-            'ACS access key': re.compile(r'accesskey=', re.IGNORECASE),
-            'private key material': re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----'),
-        }
-        for path in root.rglob('*'):
-            if not path.is_file():
-                continue
-            text = path.read_text(encoding='utf-8', errors='replace')
-            for label, pattern in forbidden.items():
-                if pattern.search(text):
-                    raise SystemExit(f'ERROR: {label} detected in publishable artifact {path.name}')
-        print('Artifact secret scanner passed.')
-        PY
-
-        rm -rf "$RAW"
-        trap - EXIT
-
-        echo 'SUCCESS: Existing Azure configuration was discovered and sanitized.'
-        echo 'Only the sanitized report and snapshot will be published.'
-        echo 'No Azure resource, Container App setting, Key Vault entry, or Azure DevOps variable was changed.'
+          echo "Waiting for edge endpoint: https://$ENDPOINT_HOST"
+          HTTP_STATUS=''
+          for attempt in $(seq 1 18); do
+            HTTP_STATUS=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 "https://$ENDPOINT_HOST/" || true)
+            if [[ "$HTTP_STATUS" =~ ^(200|301|302|307|308)$ ]]; then
+              break
+            fi
+            echo "Endpoint not ready yet (attempt $attempt/18, HTTP $HTTP_STATUS)"
+            sleep 10
+          done
+          [[ "$HTTP_STATUS" =~ ^(200|301|302|307|308)$ ]]             || fail "Front Door endpoint validation failed with HTTP $HTTP_STATUS"
+          echo "SUCCESS: Craves Front Door endpoint is serving traffic with HTTP $HTTP_STATUS"
+        else
+          echo 'SUCCESS: CDN discovery completed; no Azure resource was changed.'
+        fi
 
   - task: PublishPipelineArtifact@1
-    displayName: Publish sanitized existing Azure configuration report
+    displayName: Publish Craves CDN status report
+    condition: always()
     inputs:
-      targetPath: $(Build.ArtifactStagingDirectory)/azure-existing-config-safe
-      artifact: azure-existing-config-sanitized
+      targetPath: $(Build.ArtifactStagingDirectory)/craves-cdn-status
+      artifact: craves-cdn-status

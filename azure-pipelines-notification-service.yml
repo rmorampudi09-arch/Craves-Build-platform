@@ -54,34 +54,27 @@ steps:
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Store Notification database, JWT and internal secrets
+    displayName: Verify existing Notification secret references
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-        set +x
         RG='${{ parameters.resourceGroupName }}'; APP='${{ parameters.containerAppName }}'
         APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)
-        resolve_value() {
-          local variable_name="$1" env_name="$2" supplied="$3"
-          if [[ -n "$supplied" && "$supplied" != "\$($variable_name)" ]]; then
-            printf '%s' "$supplied"
-            return
-          fi
-          local current_ref current_value
-          current_ref=$(jq -r --arg name "$env_name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$APP_JSON")
-          [[ -n "$current_ref" ]] || { echo "ERROR: $variable_name is missing and $env_name has no reusable secret reference." >&2; exit 1; }
-          current_value=$(az containerapp secret list -g "$RG" -n "$APP" --query "[?name=='$current_ref'].value | [0]" -o tsv --only-show-errors)
-          [[ -n "$current_value" ]] || { echo "ERROR: Existing secret $current_ref could not be copied securely." >&2; exit 1; }
-          printf '%s' "$current_value"
+        SECRET_NAMES=$(az containerapp secret list -g "$RG" -n "$APP" --query '[].name' -o tsv --only-show-errors)
+        env_ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$APP_JSON"; }
+        verify_ref() {
+          local env_name="$1" ref
+          ref=$(env_ref "$env_name")
+          [[ -n "$ref" ]] || { echo "ERROR: $env_name has no Container App secret reference." >&2; exit 1; }
+          grep -Fxq "$ref" <<<"$SECRET_NAMES" || { echo "ERROR: Secret reference for $env_name is missing from the Container App." >&2; exit 1; }
+          echo "$env_name secret reference verified."
         }
-        DB_PASSWORD=$(resolve_value POSTGRES_BUSINESS_DB_PASSWORD SPRING_DATASOURCE_PASSWORD '$(POSTGRES_BUSINESS_DB_PASSWORD)')
-        JWT_PEM=$(resolve_value CRAVES_JWT_VERIFICATION_PEM_BASE64 CRAVES_JWT_VERIFICATION_PEM_BASE64 '$(CRAVES_JWT_VERIFICATION_PEM_BASE64)')
-        INTERNAL_KEY=$(resolve_value CRAVES_INTERNAL_SERVICE_KEY CRAVES_INTERNAL_SERVICE_KEY '$(CRAVES_INTERNAL_SERVICE_KEY)')
-        az containerapp secret set -g "$RG" -n "$APP" --secrets db-password="$DB_PASSWORD" jwt-verify-pem="$JWT_PEM" internal-secret="$INTERNAL_KEY" -o none
-        echo 'Notification core secrets stored; values were not printed.'
+        verify_ref SPRING_DATASOURCE_PASSWORD
+        verify_ref CRAVES_JWT_VERIFICATION_PEM_BASE64
+        verify_ref CRAVES_INTERNAL_SERVICE_KEY
 
   - task: AzureCLI@2
     displayName: Deploy and verify fail-closed Notification revision
@@ -94,16 +87,21 @@ steps:
         RG='${{ parameters.resourceGroupName }}'; ACR='${{ parameters.acrName }}'; APP='${{ parameters.containerAppName }}'; TAG='${{ parameters.imageTag }}'
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv); IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
         BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json); PREVIOUS_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$BEFORE"); PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")
+        target_ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$BEFORE"; }
+        TARGET_DB_REF=$(target_ref SPRING_DATASOURCE_PASSWORD)
+        TARGET_JWT_REF=$(target_ref CRAVES_JWT_VERIFICATION_PEM_BASE64)
+        TARGET_INTERNAL_REF=$(target_ref CRAVES_INTERNAL_SERVICE_KEY)
         [[ -n "$PREVIOUS_REVISION" && -n "$PREVIOUS_IMAGE" && "$PREVIOUS_IMAGE" != "$IMAGE" ]] || { echo 'ERROR: Notification deployment state or image tag is invalid.' >&2; exit 1; }
+        [[ -n "$TARGET_DB_REF" && -n "$TARGET_JWT_REF" && -n "$TARGET_INTERNAL_REF" ]] || { echo 'ERROR: Existing Notification secret references are incomplete.' >&2; exit 1; }
         az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --min-replicas 1 --max-replicas 1 --set-env-vars \
           SPRING_PROFILES_ACTIVE=prod \
           SPRING_DATASOURCE_URL='$(POSTGRES_BUSINESS_DB_URL)' \
           SPRING_DATASOURCE_USERNAME='$(POSTGRES_BUSINESS_DB_USER)' \
-          SPRING_DATASOURCE_PASSWORD=secretref:db-password \
-          CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem \
+          SPRING_DATASOURCE_PASSWORD=secretref:$TARGET_DB_REF \
+          CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:$TARGET_JWT_REF \
           CRAVES_JWT_ISSUER='https://api.craves.in/auth' \
           CRAVES_JWT_AUDIENCE=craves-api \
-          CRAVES_INTERNAL_SERVICE_KEY=secretref:internal-secret \
+          CRAVES_INTERNAL_SERVICE_KEY=secretref:$TARGET_INTERNAL_REF \
           CRAVES_SERVICEBUS_ENABLED=false \
           CRAVES_NOTIFICATION_PUSH_ENABLED=false \
           CRAVES_NOTIFICATION_RECOVERY_API_ENABLED=false \
@@ -117,7 +115,7 @@ steps:
           ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$JSON"; }
           DB_REF=$(ref SPRING_DATASOURCE_PASSWORD); JWT_REF=$(ref CRAVES_JWT_VERIFICATION_PEM_BASE64); INTERNAL_REF=$(ref CRAVES_INTERNAL_SERVICE_KEY)
           echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE flagsOk=$FLAGS_OK dbRef=$DB_REF jwtRef=$JWT_REF internalRef=$INTERNAL_REF"
-          if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$DB_REF" == 'db-password' && "$JWT_REF" == 'jwt-verify-pem' && "$INTERNAL_REF" == 'internal-secret' ]]; then
+          if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$DB_REF" == "$TARGET_DB_REF" && "$JWT_REF" == "$TARGET_JWT_REF" && "$INTERNAL_REF" == "$TARGET_INTERNAL_REF" ]]; then
             FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON"); [[ -n "$FQDN" ]] || exit 1
             if curl --fail --silent --max-time 30 "https://$FQDN/actuator/health/liveness" | jq -e '.status == "UP"' >/dev/null; then
               echo 'Direct Notification liveness endpoint is reachable.'

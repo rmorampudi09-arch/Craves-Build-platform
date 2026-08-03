@@ -8,6 +8,14 @@ parameters:
   - name: deleteEmptyApi
     type: boolean
     default: false
+  - name: resourceGroupName
+    displayName: Azure resource group
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: apimServiceName
+    displayName: API Management service
+    type: string
+    default: apim-craves-prodlow-l3ing6
 
 pool:
   vmImage: ubuntu-latest
@@ -17,7 +25,7 @@ steps:
   - task: AzureCLI@2
     displayName: Roll back internal administrator RBAC APIM
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
@@ -28,3 +36,6 @@ steps:
         fi
         CONFIRM_APIM_ROLLBACK=true DELETE_EMPTY_API='${{ parameters.deleteEmptyApi }}' \
           bash scripts/apim/rollback-internal-admin-rbac-apim.sh
+    env:
+      RG: ${{ parameters.resourceGroupName }}
+      APIM: ${{ parameters.apimServiceName }}

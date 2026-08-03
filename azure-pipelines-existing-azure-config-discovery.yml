@@ -111,7 +111,12 @@ steps:
 
           az containerapp secret set             --resource-group "$RG"             --name "$NOTIFICATION_APP"             --secrets               acs-email-conn="$CONNECTION_STRING"               auth-internal-secret="$AUTH_SECRET"             --only-show-errors -o none
 
-          az containerapp update             --resource-group "$RG"             --name "$NOTIFICATION_APP"             --set-env-vars               CRAVES_NOTIFICATION_EMAIL_ENABLED=true               CRAVES_NOTIFICATION_IMPORTANT_EMAIL_ENABLED=true               CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED=true               ACS_EMAIL_CONNECTION_STRING=secretref:acs-email-conn               ACS_EMAIL_SENDER_ADDRESS="$SENDER"               ACS_EMAIL_REPLY_TO_ADDRESS="$REPLY_TO"               CRAVES_AUTH_INTERNAL_BASE_URL="https://$AUTH_FQDN"               CRAVES_AUTH_INTERNAL_SERVICE_SECRET=secretref:auth-internal-secret             --only-show-errors -o none
+          ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
+          NOTIFICATION_IMAGE_TAG=$(az acr repository show-tags --name "$ACR" --repository "$NOTIFICATION_IMAGE_REPOSITORY" --orderby time_desc --top 1 -o tsv --only-show-errors)
+          [[ -n "$ACR_LOGIN_SERVER" && -n "$NOTIFICATION_IMAGE_TAG" ]] || fail 'Latest Notification image was not resolved from ACR'
+          NOTIFICATION_IMAGE="$ACR_LOGIN_SERVER/$NOTIFICATION_IMAGE_REPOSITORY:$NOTIFICATION_IMAGE_TAG"
+
+          az containerapp update --resource-group "$RG" --name "$NOTIFICATION_APP" --image "$NOTIFICATION_IMAGE" --set-env-vars CRAVES_NOTIFICATION_EMAIL_ENABLED=true CRAVES_NOTIFICATION_IMPORTANT_EMAIL_ENABLED=true CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED=true ACS_EMAIL_CONNECTION_STRING=secretref:acs-email-conn ACS_EMAIL_SENDER_ADDRESS="$SENDER" ACS_EMAIL_REPLY_TO_ADDRESS="$REPLY_TO" CRAVES_AUTH_INTERNAL_BASE_URL="https://$AUTH_FQDN" CRAVES_AUTH_INTERNAL_SERVICE_SECRET=secretref:auth-internal-secret --only-show-errors -o none
 
           if [[ "$SEND_TEST" == 'true' ]]; then
             az communication email send               --connection-string "$CONNECTION_STRING"               --sender "$SENDER"               --to "$TEST_RECIPIENT"               --reply-to "$REPLY_TO"               --subject 'Craves email service is ready'               --text 'Azure Communication Services email is active for Craves. The production Notification Service is configured for durable important-event email delivery. The custom craves.in sender domain will be connected after DNS verification.'               --importance high               --wait-until completed               --only-show-errors -o none

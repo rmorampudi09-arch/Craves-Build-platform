@@ -188,6 +188,10 @@ steps:
           echo "$DNS_ZONES" | jq -r 'if length == 0 then "- None found in this subscription" else .[] | "- \(.name) (resource group: \(.resourceGroup), records: \(.recordCount))" end'
         } >"$REPORT"
 
+        echo '--- CDN STATUS REPORT ---'
+        cat "$REPORT"
+        echo '--- END CDN STATUS REPORT ---'
+
         if [[ "$ACTION" == 'deploy' ]]; then
           [[ "$PROFILE_EXISTS" == 'true' ]] || fail 'Front Door profile was not deployed'
           [[ "$PROFILE_STATE" == 'Succeeded' ]] || fail "Front Door profile state is $PROFILE_STATE"

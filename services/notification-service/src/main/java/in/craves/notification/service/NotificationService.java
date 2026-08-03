@@ -15,15 +15,54 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class NotificationService {
-    private final NotificationRepository repository;
+    private static final String EMAIL_KEY_SUFFIX = "-email";
 
-    public NotificationService(NotificationRepository repository) {
+    private final NotificationRepository repository;
+    private final ImportantEmailPolicyProperties importantEmailPolicy;
+
+    public NotificationService(
+        NotificationRepository repository,
+        ImportantEmailPolicyProperties importantEmailPolicy
+    ) {
         this.repository = repository;
+        this.importantEmailPolicy = importantEmailPolicy;
     }
 
     @Transactional
     public NotificationRequestResponse create(CreateNotificationRequest request) {
-        return repository.findByRequestKey(request.requestKey()).orElseGet(() -> createNew(request));
+        NotificationRequestResponse response = repository.findByRequestKey(request.requestKey())
+            .orElseGet(() -> createNew(request));
+        NotificationChannel channel = request.channel() == null
+            ? NotificationChannel.IN_APP
+            : request.channel();
+        if (importantEmailPolicy.shouldFanOut(request, channel)) {
+            createImportantEmailCopy(request);
+        }
+        return response;
+    }
+
+    private void createImportantEmailCopy(CreateNotificationRequest request) {
+        String emailRequestKey = emailRequestKey(request.requestKey());
+        if (repository.findByRequestKey(emailRequestKey).isPresent()) {
+            return;
+        }
+        CreateNotificationRequest emailRequest = new CreateNotificationRequest(
+            emailRequestKey,
+            request.sourceService(),
+            request.eventType(),
+            request.userId(),
+            request.userRole(),
+            NotificationChannel.EMAIL,
+            emailTemplateCode(request.templateCode()),
+            null,
+            request.title(),
+            request.body(),
+            request.targetType(),
+            request.targetId(),
+            request.payload(),
+            request.priority()
+        );
+        createNew(emailRequest);
     }
 
     private NotificationRequestResponse createNew(CreateNotificationRequest request) {
@@ -61,6 +100,25 @@ public class NotificationService {
     @Transactional
     public void markRead(UUID userId, UUID noticeId) {
         repository.markRead(userId, noticeId);
+    }
+
+    private static String emailRequestKey(String requestKey) {
+        String normalized = requestKey.trim();
+        int maximumBaseLength = 160 - EMAIL_KEY_SUFFIX.length();
+        if (normalized.length() > maximumBaseLength) {
+            normalized = normalized.substring(0, maximumBaseLength);
+        }
+        return normalized + EMAIL_KEY_SUFFIX;
+    }
+
+    private static String emailTemplateCode(String templateCode) {
+        if (templateCode == null || templateCode.isBlank()) {
+            return null;
+        }
+        if (templateCode.endsWith("_IN_APP")) {
+            return templateCode.substring(0, templateCode.length() - "_IN_APP".length()) + "_EMAIL";
+        }
+        return templateCode + "_EMAIL";
     }
 
     private static CreateNotificationRequest normalizeChannel(

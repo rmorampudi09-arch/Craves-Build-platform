@@ -26,6 +26,11 @@ stages:
             displayName: Use Python 3.12
           - bash: |
               set -euo pipefail
+              sudo apt-get update
+              sudo apt-get install -y --no-install-recommends libxml2-utils
+            displayName: Install XML validation tools
+          - bash: |
+              set -euo pipefail
               python -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
               chmod +x scripts/release/*.sh
               scripts/release/validate-production-completion-pack.sh
@@ -98,9 +103,9 @@ stages:
         steps:
           - checkout: self
             persistCredentials: false
-          - task: NodeTool@0
+          - task: UseNode@1
             inputs:
-              versionSpec: '24.x'
+              version: '24.x'
             displayName: Use Node.js 24
           - bash: |
               set -euo pipefail
@@ -135,9 +140,9 @@ stages:
         steps:
           - checkout: self
             persistCredentials: false
-          - task: NodeTool@0
+          - task: UseNode@1
             inputs:
-              versionSpec: '24.x'
+              version: '24.x'
             displayName: Use Node.js 24
           - bash: |
               set -euo pipefail

@@ -10,10 +10,12 @@ const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
 test("every chef route inherits the customer-styled workspace shell", () => {
   assert.match(layout, /className="chef-panel-theme"/);
-  assert.match(layout, /href="\/chef\/application"/);
-  assert.match(layout, /href="\/chef\/kitchen"/);
-  assert.match(layout, /href="\/chef\/menu"/);
-  assert.match(layout, /href="\/chef\/orders"/);
+  assert.match(layout, /workspaceLinks\.map\(\(link\) =>/);
+  assert.match(layout, /href=\{link\.href\}/);
+  assert.match(layout, /\{ href: "\/chef\/application", label: "Application" \}/);
+  assert.match(layout, /\{ href: "\/chef\/kitchen", label: "Kitchen" \}/);
+  assert.match(layout, /\{ href: "\/chef\/menu", label: "Menu" \}/);
+  assert.match(layout, /\{ href: "\/chef\/orders", label: "Orders" \}/);
   assert.match(layout, /Customer mode/);
 });
 

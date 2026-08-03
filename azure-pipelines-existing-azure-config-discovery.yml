@@ -1,40 +1,38 @@
-# Backward-compatible Azure DevOps entrypoint for the Craves CDN completion workflow.
 trigger: none
 pr: none
 
 parameters:
   - name: action
-    displayName: Action
+    displayName: Communication Services action
     type: string
-    default: discover
+    default: deploy
     values:
-      - discover
-      - validate
       - deploy
-  - name: confirmDeploy
-    displayName: Type DEPLOY_CDN when action is deploy
-    type: string
-    default: DO_NOT_DEPLOY
+      - validate
+  - name: sendTestEmail
+    displayName: Send validation email to support@craves.in
+    type: boolean
+    default: true
 
 pool:
   vmImage: ubuntu-latest
 
 variables:
+  azureServiceConnection: Craves-Dev-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia
-  webContainerApp: ca-craves-web-prodlow
-  frontDoorProfile: afd-craves-prodlow
-  originGroup: craves-web-origin-group
-  originName: craves-web-origin
-  appRoute: craves-web-route
-  staticRoute: craves-static-route
+  communicationService: acs-craves-prodlow-4f897b61
+  emailService: ecs-craves-prodlow-4f897b61
+  dataLocation: India
+  notificationApp: ca-craves-notification-service-p
+  authApp: ca-craves-auth-service-prodlow
 
 steps:
   - checkout: self
 
   - task: AzureCLI@2
-    displayName: Discover or deploy Craves Azure Front Door CDN
+    displayName: Provision, connect and validate ACS Email
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: $(azureServiceConnection)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
@@ -42,182 +40,113 @@ steps:
         set +x
 
         ACTION='${{ parameters.action }}'
-        CONFIRM='${{ parameters.confirmDeploy }}'
+        SEND_TEST='${{ parameters.sendTestEmail }}'
         RG='$(resourceGroup)'
-        WEB_APP='$(webContainerApp)'
-        PROFILE='$(frontDoorProfile)'
-        ORIGIN_GROUP='$(originGroup)'
-        ORIGIN_NAME='$(originName)'
-        APP_ROUTE='$(appRoute)'
-        STATIC_ROUTE='$(staticRoute)'
-        SAFE='$(Build.ArtifactStagingDirectory)/craves-cdn-status'
-        REPORT="$SAFE/craves-cdn-report.md"
-        SNAPSHOT="$SAFE/craves-cdn-status.json"
+        COMMUNICATION_SERVICE='$(communicationService)'
+        EMAIL_SERVICE='$(emailService)'
+        DATA_LOCATION='$(dataLocation)'
+        NOTIFICATION_APP='$(notificationApp)'
+        AUTH_APP='$(authApp)'
+        MANAGED_DOMAIN='AzureManagedDomain'
+        TEST_RECIPIENT='support@craves.in'
+        REPLY_TO='support@craves.in'
 
-        fail() { echo "ERROR: $*" >&2; exit 1; }
-        command -v jq >/dev/null || fail 'jq is required on the pipeline agent'
-        mkdir -p "$SAFE"
+        fail() {
+          echo "ERROR: $1" >&2
+          exit 1
+        }
 
-        SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-        SUBSCRIPTION_NAME=$(az account show --query name -o tsv)
-        UNIQUE_SUFFIX=$(printf '%s' "$SUBSCRIPTION_ID" | tr -d '-' | tr '[:upper:]' '[:lower:]' | cut -c1-8)
-        ENDPOINT="craves-prodlow-$UNIQUE_SUFFIX"
+        az extension add --name communication --upgrade --yes --only-show-errors >/dev/null
 
-        ORIGIN_FQDN=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.configuration.ingress.fqdn' -o tsv)
-        EXTERNAL_INGRESS=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.configuration.ingress.external' -o tsv)
-        TARGET_PORT=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.configuration.ingress.targetPort' -o tsv)
-        RUNNING_STATUS=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.runningStatus' -o tsv)
-
-        [[ -n "$ORIGIN_FQDN" ]] || fail "Container App $WEB_APP has no ingress FQDN"
-        [[ "$EXTERNAL_INGRESS" == "true" || "$EXTERNAL_INGRESS" == "True" ]]           || fail "Container App $WEB_APP does not have external ingress"
-
-        az extension add --name cdn --upgrade --yes --only-show-errors >/dev/null
+        az group show --name "$RG" --only-show-errors >/dev/null           || fail "Resource group $RG was not found"
+        az containerapp show --resource-group "$RG" --name "$NOTIFICATION_APP" --only-show-errors >/dev/null           || fail "Notification Container App $NOTIFICATION_APP was not found"
+        az containerapp show --resource-group "$RG" --name "$AUTH_APP" --only-show-errors >/dev/null           || fail "Auth Container App $AUTH_APP was not found"
 
         if [[ "$ACTION" == 'deploy' ]]; then
-          [[ "$CONFIRM" == 'DEPLOY_CDN' ]]             || fail 'Deployment requires confirmDeploy=DEPLOY_CDN'
-
-          if ! az afd profile show --resource-group "$RG" --profile-name "$PROFILE" >/dev/null 2>&1; then
-            az afd profile create               --resource-group "$RG"               --profile-name "$PROFILE"               --sku Standard_AzureFrontDoor               --only-show-errors >/dev/null
+          if ! az communication email show               --resource-group "$RG"               --name "$EMAIL_SERVICE"               --only-show-errors >/dev/null 2>&1; then
+            az communication email create               --resource-group "$RG"               --name "$EMAIL_SERVICE"               --location Global               --data-location "$DATA_LOCATION"               --tags environment=prodlow application=craves managedBy=azure-devops               --only-show-errors >/dev/null
           fi
 
-          if ! az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" >/dev/null 2>&1; then
-            az afd endpoint create               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --enabled-state Enabled               --only-show-errors >/dev/null
-          else
-            az afd endpoint update               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --enabled-state Enabled               --only-show-errors >/dev/null
+          if ! az communication email domain show               --resource-group "$RG"               --email-service-name "$EMAIL_SERVICE"               --domain-name "$MANAGED_DOMAIN"               --only-show-errors >/dev/null 2>&1; then
+            az communication email domain create               --resource-group "$RG"               --email-service-name "$EMAIL_SERVICE"               --domain-name "$MANAGED_DOMAIN"               --location Global               --domain-management AzureManaged               --only-show-errors >/dev/null
           fi
 
-          if ! az afd origin-group show --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" >/dev/null 2>&1; then
-            az afd origin-group create               --resource-group "$RG"               --profile-name "$PROFILE"               --origin-group-name "$ORIGIN_GROUP"               --probe-request-type GET               --probe-protocol Https               --probe-path /               --probe-interval-in-seconds 120               --sample-size 4               --successful-samples-required 3               --additional-latency-in-milliseconds 50               --only-show-errors >/dev/null
-          fi
+          DOMAIN_ID=$(az communication email domain show             --resource-group "$RG"             --email-service-name "$EMAIL_SERVICE"             --domain-name "$MANAGED_DOMAIN"             --query id -o tsv --only-show-errors)
+          [[ -n "$DOMAIN_ID" ]] || fail 'Azure managed email domain resource ID was not resolved'
 
-          if ! az afd origin show --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" --origin-name "$ORIGIN_NAME" >/dev/null 2>&1; then
-            az afd origin create               --resource-group "$RG"               --profile-name "$PROFILE"               --origin-group-name "$ORIGIN_GROUP"               --origin-name "$ORIGIN_NAME"               --host-name "$ORIGIN_FQDN"               --origin-host-header "$ORIGIN_FQDN"               --priority 1               --weight 1000               --enabled-state Enabled               --http-port 80               --https-port 443               --enforce-certificate-name-check true               --only-show-errors >/dev/null
-          else
-            az afd origin update               --resource-group "$RG"               --profile-name "$PROFILE"               --origin-group-name "$ORIGIN_GROUP"               --origin-name "$ORIGIN_NAME"               --host-name "$ORIGIN_FQDN"               --origin-host-header "$ORIGIN_FQDN"               --priority 1               --weight 1000               --enabled-state Enabled               --http-port 80               --https-port 443               --enforce-certificate-name-check true               --only-show-errors >/dev/null
-          fi
+          az communication create             --resource-group "$RG"             --name "$COMMUNICATION_SERVICE"             --location Global             --data-location "$DATA_LOCATION"             --linked-domains "$DOMAIN_ID"             --tags environment=prodlow application=craves managedBy=azure-devops             --only-show-errors >/dev/null
+        fi
 
-          ORIGIN_GROUP_ID=$(az afd origin-group show             --resource-group "$RG"             --profile-name "$PROFILE"             --origin-group-name "$ORIGIN_GROUP"             --query id -o tsv)
+        EMAIL_STATE=$(az communication email show           --resource-group "$RG"           --name "$EMAIL_SERVICE"           --query properties.provisioningState -o tsv --only-show-errors)
+        DOMAIN_JSON=$(az communication email domain show           --resource-group "$RG"           --email-service-name "$EMAIL_SERVICE"           --domain-name "$MANAGED_DOMAIN"           -o json --only-show-errors)
+        DOMAIN_ID=$(jq -r '.id // ""' <<<"$DOMAIN_JSON")
+        DOMAIN_STATE=$(jq -r '.properties.provisioningState // ""' <<<"$DOMAIN_JSON")
+        MAIL_FROM_DOMAIN=$(jq -r '.properties.mailFromSenderDomain // ""' <<<"$DOMAIN_JSON")
+        SENDER="DoNotReply@$MAIL_FROM_DOMAIN"
+        COMMUNICATION_JSON=$(az communication show           --resource-group "$RG"           --name "$COMMUNICATION_SERVICE"           -o json --only-show-errors)
+        COMMUNICATION_STATE=$(jq -r '.properties.provisioningState // ""' <<<"$COMMUNICATION_JSON")
+        LINKED_DOMAIN=$(jq -r '.properties.linkedDomains[0] // ""' <<<"$COMMUNICATION_JSON")
 
-          if ! az afd route show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" >/dev/null 2>&1; then
-            az afd route create               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$APP_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --enabled-state Enabled               --only-show-errors >/dev/null
-          else
-            az afd route update               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$APP_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --enabled-state Enabled               --only-show-errors >/dev/null
-          fi
+        [[ "$EMAIL_STATE" == 'Succeeded' ]] || fail "Email service state is $EMAIL_STATE"
+        [[ "$DOMAIN_STATE" == 'Succeeded' ]] || fail "Managed domain state is $DOMAIN_STATE"
+        [[ "$COMMUNICATION_STATE" == 'Succeeded' ]] || fail "Communication service state is $COMMUNICATION_STATE"
+        [[ -n "$MAIL_FROM_DOMAIN" && "$SENDER" == *@*.azurecomm.net ]]           || fail 'Managed sender address was not resolved'
+        [[ "${LINKED_DOMAIN,,}" == "${DOMAIN_ID,,}" ]]           || fail 'Managed email domain is not linked to Communication Services'
 
-          CACHE_CONFIGURATION='{compression-settings:{content-types-to-compress:[text/css,text/javascript,application/javascript,application/json,image/svg+xml,font/woff2],is-compression-enabled:true},query-string-caching-behavior:IgnoreQueryString}'
-          if ! az afd route show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" >/dev/null 2>&1; then
-            az afd route create               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$STATIC_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/_next/static/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --cache-configuration "$CACHE_CONFIGURATION"               --enabled-state Enabled               --only-show-errors >/dev/null
-          else
-            az afd route update               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$STATIC_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/_next/static/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --cache-configuration "$CACHE_CONFIGURATION"               --enabled-state Enabled               --only-show-errors >/dev/null
+        if [[ "$ACTION" == 'deploy' ]]; then
+          CONNECTION_STRING=$(az communication list-key             --resource-group "$RG"             --name "$COMMUNICATION_SERVICE"             --query primaryConnectionString -o tsv --only-show-errors)
+          [[ -n "$CONNECTION_STRING" ]] || fail 'ACS primary connection string was not resolved'
+
+          AUTH_FQDN=$(az containerapp show             --resource-group "$RG"             --name "$AUTH_APP"             --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)
+          AUTH_SECRET_REF=$(az containerapp show             --resource-group "$RG"             --name "$AUTH_APP"             --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'].secretRef | [0]"             -o tsv --only-show-errors)
+          [[ -n "$AUTH_FQDN" ]] || fail 'Auth Container App FQDN was not resolved'
+          [[ -n "$AUTH_SECRET_REF" ]] || fail 'Auth internal secret reference was not resolved'
+
+          AUTH_SECRET=$(az containerapp secret list             --resource-group "$RG"             --name "$AUTH_APP"             --query "[?name=='$AUTH_SECRET_REF'].value | [0]"             -o tsv --only-show-errors)
+          [[ -n "$AUTH_SECRET" ]] || fail 'Auth internal secret value could not be copied securely'
+
+          az containerapp secret set             --resource-group "$RG"             --name "$NOTIFICATION_APP"             --secrets               acs-email-conn="$CONNECTION_STRING"               auth-internal-secret="$AUTH_SECRET"             --only-show-errors -o none
+
+          az containerapp update             --resource-group "$RG"             --name "$NOTIFICATION_APP"             --set-env-vars               CRAVES_NOTIFICATION_EMAIL_ENABLED=true               CRAVES_NOTIFICATION_IMPORTANT_EMAIL_ENABLED=true               CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED=true               ACS_EMAIL_CONNECTION_STRING=secretref:acs-email-conn               ACS_EMAIL_SENDER_ADDRESS="$SENDER"               ACS_EMAIL_REPLY_TO_ADDRESS="$REPLY_TO"               CRAVES_AUTH_INTERNAL_BASE_URL="https://$AUTH_FQDN"               CRAVES_AUTH_INTERNAL_SERVICE_SECRET=secretref:auth-internal-secret             --only-show-errors -o none
+
+          if [[ "$SEND_TEST" == 'true' ]]; then
+            az communication email send               --connection-string "$CONNECTION_STRING"               --sender "$SENDER"               --to "$TEST_RECIPIENT"               --reply-to "$REPLY_TO"               --subject 'Craves email service is ready'               --text 'Azure Communication Services email is active for Craves. The production Notification Service is configured for durable important-event email delivery. The custom craves.in sender domain will be connected after DNS verification.'               --importance high               --wait-until completed               --only-show-errors -o none
           fi
         fi
 
-        PROFILE_EXISTS=false
-        ENDPOINT_HOST=''
-        PROFILE_SKU=''
-        PROFILE_STATE='NotDeployed'
-        ENDPOINT_STATE='NotDeployed'
-        ROUTES='[]'
-        ORIGINS='[]'
-        CUSTOM_DOMAINS='[]'
-
-        if az afd profile show --resource-group "$RG" --profile-name "$PROFILE" >/dev/null 2>&1; then
-          PROFILE_EXISTS=true
-          PROFILE_SKU=$(az afd profile show --resource-group "$RG" --profile-name "$PROFILE" --query 'sku.name' -o tsv)
-          PROFILE_STATE=$(az afd profile show --resource-group "$RG" --profile-name "$PROFILE" --query 'provisioningState' -o tsv)
-          if az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" >/dev/null 2>&1; then
-            ENDPOINT_HOST=$(az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --query 'hostName' -o tsv)
-            ENDPOINT_STATE=$(az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --query 'provisioningState' -o tsv)
-            ROUTES=$(az afd route list --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT"               --query '[].{name:name,state:provisioningState,enabledState:enabledState,patterns:patternsToMatch,forwardingProtocol:forwardingProtocol,httpsRedirect:httpsRedirect,cacheEnabled:cacheConfiguration!=null}' -o json)
+        for attempt in $(seq 1 60); do
+          APP_JSON=$(az containerapp show             --resource-group "$RG"             --name "$NOTIFICATION_APP"             -o json --only-show-errors)
+          APP_RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
+          APP_READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
+          APP_LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
+          if [[ "$APP_RUNNING" == 'Running' && "$APP_READY" == "$APP_LATEST" ]]; then
+            break
           fi
-          if az afd origin-group show --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" >/dev/null 2>&1; then
-            ORIGINS=$(az afd origin list --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP"               --query '[].{name:name,hostName:hostName,originHostHeader:originHostHeader,state:provisioningState,enabledState:enabledState}' -o json)
-          fi
-          CUSTOM_DOMAINS=$(az afd custom-domain list --resource-group "$RG" --profile-name "$PROFILE"             --query '[].{name:name,hostName:hostName,domainValidationState:domainValidationState,certificateType:tlsSettings.certificateType,deploymentStatus:deploymentStatus,provisioningState:provisioningState}' -o json)
+          [[ "$ACTION" == 'deploy' ]] || break
+          echo "Waiting for Notification Service revision readiness ($attempt/60)"
+          sleep 10
+        done
+
+        env_value() {
+          jq -r --arg name "$1"             '[.properties.template.containers[0].env[]? | select(.name == $name)][0] | (.value // .secretRef // "")'             <<<"$APP_JSON"
+        }
+
+        [[ "$APP_RUNNING" == 'Running' && "$APP_READY" == "$APP_LATEST" ]]           || fail 'Notification Service did not become ready'
+        [[ "$(env_value CRAVES_NOTIFICATION_EMAIL_ENABLED)" == 'true' ]]           || fail 'Notification email provider is not enabled'
+        [[ "$(env_value CRAVES_NOTIFICATION_IMPORTANT_EMAIL_ENABLED)" == 'true' ]]           || fail 'Important-event email fan-out is not enabled'
+        [[ "$(env_value CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED)" == 'true' ]]           || fail 'Notification delivery worker is not enabled'
+        [[ "$(env_value ACS_EMAIL_CONNECTION_STRING)" == 'acs-email-conn' ]]           || fail 'ACS connection string is not secret-bound'
+        [[ "$(env_value CRAVES_AUTH_INTERNAL_SERVICE_SECRET)" == 'auth-internal-secret' ]]           || fail 'Auth lookup secret is not secret-bound'
+        [[ "$(env_value ACS_EMAIL_REPLY_TO_ADDRESS)" == "$REPLY_TO" ]]           || fail 'Support reply-to address is not configured'
+
+        echo "SUCCESS: Craves ACS Email is active"
+        echo "Communication service: $COMMUNICATION_SERVICE"
+        echo "Email service: $EMAIL_SERVICE"
+        echo "Data location: $DATA_LOCATION"
+        echo "Managed sender: $SENDER"
+        echo "Reply-to: $REPLY_TO"
+        echo "Important-event email fan-out: enabled"
+        echo "Notification delivery worker: enabled"
+        if [[ "$SEND_TEST" == 'true' && "$ACTION" == 'deploy' ]]; then
+          echo "Validation email submitted to: $TEST_RECIPIENT"
         fi
-
-        DNS_ZONES=$(az network dns zone list           --query '[].{name:name,resourceGroup:resourceGroup,recordCount:numberOfRecordSets}' -o json 2>/dev/null || printf '[]')
-        ALL_FRONT_DOOR_PROFILES=$(az resource list --resource-type Microsoft.Cdn/profiles           --query '[].{name:name,resourceGroup:resourceGroup,location:location,kind:kind,sku:sku.name}' -o json)
-
-        jq -n           --arg action "$ACTION"           --arg subscriptionName "$SUBSCRIPTION_NAME"           --arg subscriptionId "$SUBSCRIPTION_ID"           --arg resourceGroup "$RG"           --arg webContainerApp "$WEB_APP"           --arg originFqdn "$ORIGIN_FQDN"           --arg runningStatus "$RUNNING_STATUS"           --arg targetPort "$TARGET_PORT"           --argjson externalIngress "$EXTERNAL_INGRESS"           --arg profile "$PROFILE"           --arg profileSku "$PROFILE_SKU"           --arg profileState "$PROFILE_STATE"           --argjson profileExists "$PROFILE_EXISTS"           --arg endpoint "$ENDPOINT"           --arg endpointHost "$ENDPOINT_HOST"           --arg endpointState "$ENDPOINT_STATE"           --argjson routes "$ROUTES"           --argjson origins "$ORIGINS"           --argjson customDomains "$CUSTOM_DOMAINS"           --argjson dnsZones "$DNS_ZONES"           --argjson allFrontDoorProfiles "$ALL_FRONT_DOOR_PROFILES"           '{
-            schemaVersion: 1,
-            action: $action,
-            subscription: {name: $subscriptionName, id: $subscriptionId},
-            resourceGroup: $resourceGroup,
-            origin: {
-              containerApp: $webContainerApp,
-              fqdn: $originFqdn,
-              externalIngress: $externalIngress,
-              targetPort: ($targetPort | tonumber),
-              runningStatus: $runningStatus
-            },
-            frontDoor: {
-              exists: $profileExists,
-              profile: $profile,
-              sku: $profileSku,
-              provisioningState: $profileState,
-              endpoint: $endpoint,
-              endpointHost: $endpointHost,
-              endpointProvisioningState: $endpointState,
-              routes: $routes,
-              origins: $origins,
-              customDomains: $customDomains
-            },
-            azureDnsZones: $dnsZones,
-            allFrontDoorProfiles: $allFrontDoorProfiles
-          }' >"$SNAPSHOT"
-
-        {
-          echo '# Craves Azure Front Door / CDN status'
-          echo
-          echo "- Action: $ACTION"
-          echo "- Production origin: https://$ORIGIN_FQDN"
-          echo "- Origin status: $RUNNING_STATUS; external ingress: $EXTERNAL_INGRESS; target port: $TARGET_PORT"
-          echo "- Front Door profile: $PROFILE; deployed: $PROFILE_EXISTS; state: $PROFILE_STATE; SKU: $PROFILE_SKU"
-          echo "- Front Door endpoint: $ENDPOINT; host: $ENDPOINT_HOST; state: $ENDPOINT_STATE"
-          echo
-          echo '## Routes'
-          echo
-          echo "$ROUTES" | jq -r 'if length == 0 then "- None" else .[] | "- \(.name): state=\(.state), enabled=\(.enabledState), patterns=\(.patterns|join(",")), cache=\(.cacheEnabled)" end'
-          echo
-          echo '## Custom domains'
-          echo
-          echo "$CUSTOM_DOMAINS" | jq -r 'if length == 0 then "- None" else .[] | "- \(.hostName): validation=\(.domainValidationState), certificate=\(.certificateType), deployment=\(.deploymentStatus)" end'
-          echo
-          echo '## Azure DNS zones'
-          echo
-          echo "$DNS_ZONES" | jq -r 'if length == 0 then "- None found in this subscription" else .[] | "- \(.name) (resource group: \(.resourceGroup), records: \(.recordCount))" end'
-        } >"$REPORT"
-
-        echo '--- CDN STATUS REPORT ---'
-        cat "$REPORT"
-        echo '--- END CDN STATUS REPORT ---'
-
-        if [[ "$ACTION" == 'deploy' || "$ACTION" == 'validate' ]]; then
-          [[ "$PROFILE_EXISTS" == 'true' ]] || fail 'Front Door profile was not deployed'
-          [[ "$PROFILE_STATE" == 'Succeeded' ]] || fail "Front Door profile state is $PROFILE_STATE"
-          [[ "$ENDPOINT_STATE" == 'Succeeded' ]] || fail "Front Door endpoint state is $ENDPOINT_STATE"
-          [[ "$(echo "$ROUTES" | jq 'length')" -ge 2 ]] || fail 'Expected app and static routes were not deployed'
-
-          echo "Waiting for edge endpoint: https://$ENDPOINT_HOST"
-          HTTP_STATUS=''
-          for attempt in $(seq 1 120); do
-            HTTP_STATUS=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 "https://$ENDPOINT_HOST/" || true)
-            if [[ "$HTTP_STATUS" =~ ^(200|301|302|307|308)$ ]]; then
-              break
-            fi
-            echo "Endpoint not ready yet (attempt $attempt/120, HTTP $HTTP_STATUS)"
-            sleep 15
-          done
-          [[ "$HTTP_STATUS" =~ ^(200|301|302|307|308)$ ]]             || fail "Front Door endpoint validation failed with HTTP $HTTP_STATUS"
-          echo "SUCCESS: Craves Front Door endpoint is serving traffic with HTTP $HTTP_STATUS"
-        else
-          echo 'SUCCESS: CDN discovery completed; no Azure resource was changed.'
-        fi
-
-  - task: PublishPipelineArtifact@1
-    displayName: Publish Craves CDN status report
-    condition: always()
-    inputs:
-      targetPath: $(Build.ArtifactStagingDirectory)/craves-cdn-status
-      artifact: craves-cdn-status

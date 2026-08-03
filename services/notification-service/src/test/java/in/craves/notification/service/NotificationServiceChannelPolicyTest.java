@@ -14,7 +14,10 @@ import org.springframework.web.server.ResponseStatusException;
 class NotificationServiceChannelPolicyTest {
     @Test
     void rejectsTransactionalSmsFromNotificationService() {
-        NotificationService service = new NotificationService(mock(NotificationRepository.class));
+        NotificationService service = new NotificationService(
+            mock(NotificationRepository.class),
+            new ImportantEmailPolicyProperties()
+        );
         CreateNotificationRequest request = new CreateNotificationRequest(
             "sms-test",
             "order-service",

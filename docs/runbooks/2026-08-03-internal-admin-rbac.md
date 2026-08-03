@@ -113,6 +113,16 @@ Use the backend completion pipeline order:
 
 The catalog image has no RBAC source change but remains part of the atomic seven-service release and rollback boundary.
 
+## Azure DevOps pipeline setup
+
+The backend completion, RBAC activation/status/rollback and APIM configure/status/rollback pipelines use the same established Craves setup. Add or retain this non-secret pipeline variable:
+
+```text
+AZURE_SERVICE_CONNECTION = Craves-Dev-Service-Connection
+```
+
+Resource-group, Container App, ACR and APIM names are prefilled as run parameters. No `craves-prodlow-backend` Azure DevOps Environment resource is required. Mutating pipelines remain protected by their explicit typed or boolean confirmations.
+
 ## Verification before deployment
 
 Run `azure-pipelines-backend-completion.yml` in `VERIFY_ONLY`. It now invokes the internal RBAC validator and Maven verification for all services. Confirm Auth Flyway validation includes V6 and every new JUnit role-isolation test passes.

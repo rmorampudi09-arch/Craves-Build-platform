@@ -96,6 +96,7 @@ stages:
                 set +x
                 RG='${{ parameters.resourceGroupName }}'
                 APP='${{ parameters.containerAppName }}'
+                NOTIFICATION_APP='ca-craves-notification-service-p'
                 DB_PASSWORD='$(POSTGRES_AUTH_DB_PASSWORD)'
                 FIREBASE_JSON='$(FIREBASE_SERVICE_ACCOUNT_JSON_BASE64)'
                 JWT_PRIVATE='$(CRAVES_JWT_PRIVATE_KEY_PEM_BASE64)'
@@ -117,7 +118,11 @@ stages:
                   jwt-private-pem="$JWT_PRIVATE" \
                   internal-secret="$INTERNAL_SECRET" \
                   -o none
-                echo 'Auth secrets stored; values were not printed.'
+                az containerapp show -g "$RG" -n "$NOTIFICATION_APP" --only-show-errors >/dev/null
+                az containerapp secret set -g "$RG" -n "$NOTIFICATION_APP" \
+                  --secrets auth-internal-secret="$INTERNAL_SECRET" \
+                  --only-show-errors -o none
+                echo 'Auth secrets stored and the protected email-lookup secret was handed to Notification; values were not printed.'
 
           - task: AzureCLI@2
             displayName: Deploy and verify fail-closed Auth revision

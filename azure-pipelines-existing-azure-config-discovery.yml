@@ -107,10 +107,10 @@ steps:
           [[ -n "$AUTH_FQDN" ]] || fail 'Auth Container App FQDN was not resolved'
           [[ -n "$AUTH_SECRET_REF" ]] || fail 'Auth internal secret reference was not resolved'
 
-          AUTH_SECRET=$(az containerapp secret list             --resource-group "$RG"             --name "$AUTH_APP"             --query "[?name=='$AUTH_SECRET_REF'].value | [0]"             -o tsv --only-show-errors)
-          [[ -n "$AUTH_SECRET" ]] || fail 'Auth internal secret value could not be copied securely'
+          NOTIFICATION_AUTH_SECRET=$(az containerapp secret list             --resource-group "$RG"             --name "$NOTIFICATION_APP"             --query "[?name=='auth-internal-secret'].name | [0]"             -o tsv --only-show-errors)
+          [[ "$NOTIFICATION_AUTH_SECRET" == 'auth-internal-secret' ]] || fail 'Protected Auth email-lookup secret is not present in Notification; run the Auth pipeline first'
 
-          az containerapp secret set             --resource-group "$RG"             --name "$NOTIFICATION_APP"             --secrets               acs-email-conn="$CONNECTION_STRING"               auth-internal-secret="$AUTH_SECRET"             --only-show-errors -o none
+          az containerapp secret set             --resource-group "$RG"             --name "$NOTIFICATION_APP"             --secrets               acs-email-conn="$CONNECTION_STRING"             --only-show-errors -o none
 
           ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
           NOTIFICATION_IMAGE_TAG=$(az acr repository show-tags --name "$ACR" --repository "$NOTIFICATION_IMAGE_REPOSITORY" --orderby time_desc --top 1 -o tsv --only-show-errors)

@@ -196,10 +196,12 @@ stages:
                   if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$DB_REF" == 'db-password' && "$FIREBASE_REF" == 'firebase-admin-json' && "$JWT_REF" == 'jwt-private-pem' && "$INTERNAL_REF" == 'internal-secret' ]]; then
                     FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
                     [[ -n "$FQDN" ]] || { echo 'ERROR: Auth FQDN is missing.' >&2; exit 1; }
-                    curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null
-                    echo "SUCCESS: Auth revision $LATEST is healthy, secret-bound and fail-closed."
-                    echo "Rollback image: $PREVIOUS_IMAGE"
-                    exit 0
+                    if curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null; then
+                      echo "SUCCESS: Auth revision $LATEST is healthy, secret-bound and fail-closed."
+                      echo "Rollback image: $PREVIOUS_IMAGE"
+                      exit 0
+                    fi
+                    echo "Auth revision is Azure-healthy; waiting for the public application health endpoint ($attempt/60)."
                   fi
                   if [[ "$HEALTH" == 'Unhealthy' || "$RUNNING" == 'Failed' ]]; then
                     az containerapp logs show -g "$RG" -n "$APP" --revision "$LATEST" --type console --tail 200 --format text || true

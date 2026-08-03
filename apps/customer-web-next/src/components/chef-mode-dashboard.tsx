@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { loadSession, type CravesUser } from "@/services/auth/cravesAuth";
 
 const approvedLinks = [
@@ -67,7 +67,7 @@ export function ChefModeDashboard() {
 
   if (state === "loading") {
     return (
-      <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">
+      <section className="rounded-[30px] border border-[#F6B545]/20 bg-[#FFF8EC] p-7 text-slate-950 shadow-xl shadow-black/10">
         <p role="status">Checking your Craves chef access…</p>
       </section>
     );
@@ -75,7 +75,7 @@ export function ChefModeDashboard() {
 
   if (state === "signed-out") {
     return (
-      <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">
+      <section className="rounded-[30px] border border-[#F6B545]/20 bg-[#FFF8EC] p-7 text-slate-950 shadow-xl shadow-black/10">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">
           Secure Craves access
         </p>
@@ -86,7 +86,7 @@ export function ChefModeDashboard() {
         </p>
         <Link
           href="/sign-in?returnTo=/chef"
-          className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-bold text-white"
+          className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-bold text-white transition hover:bg-[#5725ac]"
         >
           Continue with mobile OTP
         </Link>
@@ -96,7 +96,7 @@ export function ChefModeDashboard() {
 
   if (state === "unavailable") {
     return (
-      <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">
+      <section className="rounded-[30px] border border-[#F6B545]/20 bg-[#FFF8EC] p-7 text-slate-950 shadow-xl shadow-black/10">
         <p role="status">Chef mode is temporarily unavailable. Try again.</p>
       </section>
     );
@@ -104,7 +104,7 @@ export function ChefModeDashboard() {
 
   if (state === "applicant") {
     return (
-      <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">
+      <section className="rounded-[30px] border border-[#F6B545]/20 bg-[#FFF8EC] p-7 text-slate-950 shadow-xl shadow-black/10">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">
           Chef registration
         </p>
@@ -118,7 +118,7 @@ export function ChefModeDashboard() {
         </p>
         <Link
           href="/chef/application"
-          className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-bold text-white"
+          className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-bold text-white transition hover:bg-[#5725ac]"
         >
           Open chef application
         </Link>
@@ -128,7 +128,7 @@ export function ChefModeDashboard() {
 
   return (
     <section className="space-y-6">
-      <div className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">
+      <div className="rounded-[30px] border border-[#F6B545]/20 bg-[#FFF8EC] p-7 text-slate-950 shadow-xl shadow-black/10">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">
           Chef mode
         </p>
@@ -145,10 +145,15 @@ export function ChefModeDashboard() {
           <Link
             key={link.href}
             href={link.href}
-            className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-white transition hover:bg-white/10"
+            className="group rounded-[24px] border border-[#F6B545]/30 bg-[#FFF8EC] p-5 text-slate-950 shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:border-[#F6B545] hover:shadow-xl"
           >
-            <strong>{link.label}</strong>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
+            <span className="inline-flex rounded-full bg-[#F6B545]/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#6930CA]">
+              Chef workspace
+            </span>
+            <strong className="mt-4 block text-xl group-hover:text-[#6930CA]">
+              {link.label}
+            </strong>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
               {link.description}
             </p>
           </Link>

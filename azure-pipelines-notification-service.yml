@@ -63,11 +63,23 @@ steps:
         set -euo pipefail
         set +x
         RG='${{ parameters.resourceGroupName }}'; APP='${{ parameters.containerAppName }}'
-        DB_PASSWORD='$(POSTGRES_BUSINESS_DB_PASSWORD)'; JWT_PEM='$(CRAVES_JWT_VERIFICATION_PEM_BASE64)'; INTERNAL_KEY='$(CRAVES_INTERNAL_SERVICE_KEY)'
-        require_value() { local name="$1" value="$2"; [[ -n "$value" && "$value" != "\$($name)" ]] || { echo "ERROR: Secure pipeline variable $name is missing." >&2; exit 1; }; }
-        require_value POSTGRES_BUSINESS_DB_PASSWORD "$DB_PASSWORD"
-        require_value CRAVES_JWT_VERIFICATION_PEM_BASE64 "$JWT_PEM"
-        require_value CRAVES_INTERNAL_SERVICE_KEY "$INTERNAL_KEY"
+        APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)
+        resolve_value() {
+          local variable_name="$1" env_name="$2" supplied="$3"
+          if [[ -n "$supplied" && "$supplied" != "\$($variable_name)" ]]; then
+            printf '%s' "$supplied"
+            return
+          fi
+          local current_ref current_value
+          current_ref=$(jq -r --arg name "$env_name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$APP_JSON")
+          [[ -n "$current_ref" ]] || { echo "ERROR: $variable_name is missing and $env_name has no reusable secret reference." >&2; exit 1; }
+          current_value=$(az containerapp secret list -g "$RG" -n "$APP" --query "[?name=='$current_ref'].value | [0]" -o tsv --only-show-errors)
+          [[ -n "$current_value" ]] || { echo "ERROR: Existing secret $current_ref could not be copied securely." >&2; exit 1; }
+          printf '%s' "$current_value"
+        }
+        DB_PASSWORD=$(resolve_value POSTGRES_BUSINESS_DB_PASSWORD SPRING_DATASOURCE_PASSWORD '$(POSTGRES_BUSINESS_DB_PASSWORD)')
+        JWT_PEM=$(resolve_value CRAVES_JWT_VERIFICATION_PEM_BASE64 CRAVES_JWT_VERIFICATION_PEM_BASE64 '$(CRAVES_JWT_VERIFICATION_PEM_BASE64)')
+        INTERNAL_KEY=$(resolve_value CRAVES_INTERNAL_SERVICE_KEY CRAVES_INTERNAL_SERVICE_KEY '$(CRAVES_INTERNAL_SERVICE_KEY)')
         az containerapp secret set -g "$RG" -n "$APP" --secrets db-password="$DB_PASSWORD" jwt-verify-pem="$JWT_PEM" internal-secret="$INTERNAL_KEY" -o none
         echo 'Notification core secrets stored; values were not printed.'
 
@@ -93,13 +105,11 @@ steps:
           CRAVES_JWT_AUDIENCE=craves-api \
           CRAVES_INTERNAL_SERVICE_KEY=secretref:internal-secret \
           CRAVES_SERVICEBUS_ENABLED=false \
-          CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED=false \
           CRAVES_NOTIFICATION_PUSH_ENABLED=false \
-          CRAVES_NOTIFICATION_EMAIL_ENABLED=false \
           CRAVES_NOTIFICATION_RECOVERY_API_ENABLED=false \
           CRAVES_TOKEN_REVOCATION_ENABLED=false \
           --no-wait -o none
-        REQUIRED_FALSE=(CRAVES_SERVICEBUS_ENABLED CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED CRAVES_NOTIFICATION_PUSH_ENABLED CRAVES_NOTIFICATION_EMAIL_ENABLED CRAVES_NOTIFICATION_RECOVERY_API_ENABLED CRAVES_TOKEN_REVOCATION_ENABLED)
+        REQUIRED_FALSE=(CRAVES_SERVICEBUS_ENABLED CRAVES_NOTIFICATION_PUSH_ENABLED CRAVES_NOTIFICATION_RECOVERY_API_ENABLED CRAVES_TOKEN_REVOCATION_ENABLED)
         for attempt in $(seq 1 60); do
           JSON=$(az containerapp show -g "$RG" -n "$APP" -o json); LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON"); READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON"); RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$JSON")
           LATEST_IMAGE=''; HEALTH=''; if [[ -n "$LATEST" ]]; then LATEST_IMAGE=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || true); HEALTH=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query properties.healthState -o tsv 2>/dev/null || true); fi
@@ -109,9 +119,11 @@ steps:
           echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE flagsOk=$FLAGS_OK dbRef=$DB_REF jwtRef=$JWT_REF internalRef=$INTERNAL_REF"
           if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$DB_REF" == 'db-password' && "$JWT_REF" == 'jwt-verify-pem' && "$INTERNAL_REF" == 'internal-secret' ]]; then
             FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON"); [[ -n "$FQDN" ]] || exit 1
-            curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null
-            echo "SUCCESS: Notification revision $LATEST is healthy, secret-bound and fail-closed. Rollback image: $PREVIOUS_IMAGE"
-            exit 0
+            if curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null; then
+              echo "SUCCESS: Notification revision $LATEST is healthy, secret-bound and fail-closed. Rollback image: $PREVIOUS_IMAGE"
+              exit 0
+            fi
+            echo "Notification revision is Azure-healthy; waiting for the public application health endpoint ($attempt/60)."
           fi
           [[ "$HEALTH" != 'Unhealthy' && "$RUNNING" != 'Failed' ]] || { az containerapp logs show -g "$RG" -n "$APP" --revision "$LATEST" --type console --tail 200 --format text || true; exit 1; }
           sleep 10

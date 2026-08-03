@@ -25,6 +25,8 @@ variables:
   dataLocation: India
   notificationApp: ca-craves-notification-service-p
   authApp: ca-craves-auth-service-prodlow
+  acrName: cravesprodlowacr82121
+  notificationImageRepository: craves/notification-service
 
 steps:
   - checkout: self
@@ -47,6 +49,8 @@ steps:
         DATA_LOCATION='$(dataLocation)'
         NOTIFICATION_APP='$(notificationApp)'
         AUTH_APP='$(authApp)'
+        ACR='$(acrName)'
+        NOTIFICATION_IMAGE_REPOSITORY='$(notificationImageRepository)'
         MANAGED_DOMAIN='AzureManagedDomain'
         TEST_RECIPIENT='support@craves.in'
         REPLY_TO='support@craves.in'
@@ -147,6 +151,7 @@ steps:
         echo "Reply-to: $REPLY_TO"
         echo "Important-event email fan-out: enabled"
         echo "Notification delivery worker: enabled"
+        echo "Notification image: $(env_value __unused 2>/dev/null || true)" >/dev/null
         if [[ "$SEND_TEST" == 'true' && "$ACTION" == 'deploy' ]]; then
           echo "Validation email submitted to: $TEST_RECIPIENT"
         fi

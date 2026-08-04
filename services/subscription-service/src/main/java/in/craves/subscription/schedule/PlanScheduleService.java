@@ -53,24 +53,15 @@ public class PlanScheduleService {
         validateItems(recurrence, request.items(), plan.chefIdentityId());
         try {
             return repository.replaceDraft(
-                planId,
-                recurrence,
-                request.timezone().trim(),
-                request.serviceTime(),
-                request.generationLeadHours(),
-                List.copyOf(request.items()),
-                user.identityId()
+                planId, recurrence, request.timezone().trim(), request.serviceTime(),
+                request.generationLeadHours(), List.copyOf(request.items()), user.identityId()
             );
         } catch (IllegalStateException exception) {
             throw ApiException.conflict("PLAN_SCHEDULE_ACTIVE", exception.getMessage());
         }
     }
 
-    public PlanScheduleResponse activate(
-        UUID planId,
-        ActivateScheduleRequest request,
-        CurrentUser user
-    ) {
+    public PlanScheduleResponse activate(UUID planId, ActivateScheduleRequest request, CurrentUser user) {
         PlanOwner plan = requireOwnedPlan(planId, user);
         PlanScheduleResponse schedule = repository.find(plan.planId())
             .orElseThrow(() -> ApiException.notFound("PLAN_SCHEDULE_NOT_FOUND", "Plan schedule was not found"));
@@ -89,10 +80,10 @@ public class PlanScheduleService {
     }
 
     private PlanOwner requireOwnedPlan(UUID planId, CurrentUser user) {
-        requireRole(user, "ADMIN", "CHEF");
+        requireRole(user, "PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN", "CHEF");
         PlanOwner plan = repository.findPlanOwner(planId)
             .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
-        if (!user.hasRole("ADMIN") && !user.identityId().equals(plan.chefIdentityId())) {
+        if (!isSubscriptionAdmin(user) && !user.identityId().equals(plan.chefIdentityId())) {
             throw ApiException.forbidden("PLAN_ACCESS_DENIED", "Chef cannot manage another chef's plan schedule");
         }
         return plan;
@@ -128,6 +119,10 @@ public class PlanScheduleService {
         } catch (DateTimeException exception) {
             throw ApiException.badRequest("INVALID_TIMEZONE", "timezone must be a valid IANA timezone");
         }
+    }
+
+    private static boolean isSubscriptionAdmin(CurrentUser user) {
+        return user != null && user.hasAnyRole("PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN");
     }
 
     private static void requireRole(CurrentUser user, String... roles) {

@@ -20,6 +20,7 @@
       "containerApp": "ca-craves-auth-service-prodlow",
       "deployOrder": 10,
       "defaultFalseFlags": [
+        "CRAVES_INTERNAL_ADMIN_RBAC_API_ENABLED",
         "CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED",
         "CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED"
       ]

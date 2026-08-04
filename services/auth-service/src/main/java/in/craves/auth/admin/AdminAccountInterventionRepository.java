@@ -147,6 +147,22 @@ public class AdminAccountInterventionRepository {
         );
     }
 
+    public void auditStatusRead(
+        UUID actorIdentityId,
+        UUID targetIdentityId,
+        String reason,
+        UUID correlationId
+    ) {
+        jdbcTemplate.update(
+            """
+            INSERT INTO auth_audit (
+                id, identity_id, action, actor_identity_id, details, correlation_id, created_at
+            ) VALUES (?, ?, 'ACCOUNT_INTERVENTION_STATUS_READ', ?, ?, ?, now())
+            """,
+            UUID.randomUUID(), targetIdentityId, actorIdentityId, reason, correlationId.toString()
+        );
+    }
+
     @Transactional
     public List<ProviderWorkItem> claimProviderWork(int batchSize, int maxAttempts, int staleLockMinutes) {
         jdbcTemplate.update(
@@ -329,3 +345,4 @@ public class AdminAccountInterventionRepository {
         OffsetDateTime providerCompletedAt, UUID correlationId, boolean changed
     ) {}
 }
+

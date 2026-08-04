@@ -49,6 +49,9 @@ craves:
     allow-generated-local-keys: ${CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS:false}
   internal:
     service-secret: ${CRAVES_INTERNAL_SERVICE_SECRET:}
+  internal-admin-rbac:
+    api-enabled: ${CRAVES_INTERNAL_ADMIN_RBAC_API_ENABLED:false}
+    maximum-list-size: ${CRAVES_INTERNAL_ADMIN_RBAC_MAXIMUM_LIST_SIZE:100}
   admin-account-intervention:
     api-enabled: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED:false}
     firebase-worker-enabled: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED:false}
@@ -57,3 +60,4 @@ craves:
     stale-lock-minutes: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_STALE_LOCK_MINUTES:5}
     retry-base-seconds: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_RETRY_BASE_SECONDS:30}
     worker-fixed-delay-ms: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_WORKER_FIXED_DELAY_MS:5000}
+

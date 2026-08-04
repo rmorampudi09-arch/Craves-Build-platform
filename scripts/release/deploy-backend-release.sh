@@ -78,13 +78,24 @@ record_event() {
 
 environment_hash() {
   local app_name=$1
-  az containerapp show \
+  local revision_name=$2
+
+  az containerapp revision show \
     --resource-group "$RESOURCE_GROUP" \
     --name "$app_name" \
-    --query 'properties.template.containers[0].env[].{name:name,value:value,secretRef:secretRef}' \
+    --revision "$revision_name" \
+    --query 'properties.template.containers[0].env' \
     --output json \
     --only-show-errors \
-    | jq -S 'sort_by(.name)' \
+    | jq -S '
+        (. // [])
+        | map({
+            name: .name,
+            value: (.value // null),
+            secretRef: (.secretRef // null)
+          })
+        | sort_by(.name)
+      ' \
     | sha256sum \
     | cut -d' ' -f1
 }
@@ -146,7 +157,7 @@ rollback_updated_services() {
     if az containerapp update -g "$RESOURCE_GROUP" -n "$app" \
       --image "$previous_image" --no-wait --only-show-errors >/dev/null; then
       if rollback_revision=$(wait_ready "$app" "$previous_image" 60 10); then
-        if [[ "$(environment_hash "$app")" == "${PREVIOUS_ENV_HASH_BY_KEY[$key]}" ]]; then
+        if [[ "$(environment_hash "$app" "$rollback_revision")" == "${PREVIOUS_ENV_HASH_BY_KEY[$key]}" ]]; then
           record_event "$key" "$app" 'rollback' 'ready' "$previous_image" "$rollback_revision"
         else
           record_event "$key" "$app" 'rollback' 'environment-mismatch' "$previous_image" "$rollback_revision"
@@ -195,7 +206,7 @@ while IFS= read -r service; do
     --query 'properties.template.containers[0].image' -o tsv --only-show-errors)
   previous_revision=$(az containerapp show -g "$RESOURCE_GROUP" -n "$app" \
     --query 'properties.latestReadyRevisionName' -o tsv --only-show-errors)
-  previous_env_hash=$(environment_hash "$app")
+  previous_env_hash=$(environment_hash "$app" "$previous_revision")
 
   APP_BY_KEY[$key]=$app
   PREVIOUS_IMAGE_BY_KEY[$key]=$previous_image
@@ -222,7 +233,7 @@ while IFS= read -r service; do
     || abort_release "New revision did not become ready for $app."
   record_event "$key" "$app" 'readiness' 'ready' "$target_image" "$new_revision"
 
-  [[ "$(environment_hash "$app")" == "$previous_env_hash" ]] \
+  [[ "$(environment_hash "$app" "$new_revision")" == "$previous_env_hash" ]] \
     || abort_release "Runtime environment changed unexpectedly for $app."
   record_event "$key" "$app" 'environment' 'preserved' "$target_image" "$new_revision"
 

@@ -6,6 +6,7 @@ PACK="$ROOT/config/production/backend-completion-pack.json"
 INVENTORY="$ROOT/config/production/azure-resource-inventory.json"
 PIPELINE="$ROOT/azure-pipelines-backend-completion.yml"
 DEPLOY_SCRIPT="$ROOT/scripts/release/deploy-backend-release.sh"
+RBAC_VALIDATOR="$ROOT/scripts/release/validate-internal-admin-rbac.sh"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -88,6 +89,10 @@ fi
 
 if grep -En ':latest([[:space:]]|$)' "$PIPELINE" "$DEPLOY_SCRIPT"; then
   fail 'mutable latest image tags are forbidden'
+fi
+
+if [[ -s "$RBAC_VALIDATOR" ]]; then
+  bash "$RBAC_VALIDATOR"
 fi
 
 echo 'SUCCESS: backend completion pack contracts passed.'

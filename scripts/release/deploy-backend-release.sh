@@ -45,6 +45,19 @@ jq -e \
     and ([.images[].digest] | all(test("^sha256:[0-9a-f]{64}$")))
   ' "$IMAGE_MANIFEST" >/dev/null || fail 'Image manifest validation failed.'
 
+RELEASE_MODE=$(jq -r '.releaseMode // "DEPLOY_BACKEND"' "$IMAGE_MANIFEST")
+EXPECTED_DEPLOY_COUNT=7
+case "$RELEASE_MODE" in
+  DEPLOY_BACKEND)
+    ;;
+  REPAIR_CATALOG_HEALTH_AND_DEPLOY)
+    EXPECTED_DEPLOY_COUNT=1
+    ;;
+  *)
+    fail "Unsupported deployment release mode: $RELEASE_MODE"
+    ;;
+esac
+
 mkdir -p "$OUTPUT_DIR"
 EVENTS="$OUTPUT_DIR/deployment-events.jsonl"
 ROLLBACK_MAP="$OUTPUT_DIR/rollback-map.jsonl"
@@ -199,6 +212,12 @@ while IFS= read -r service; do
   key=$(jq -r '.key' <<<"$service")
   app=$(jq -r '.containerApp' <<<"$service")
   repository=$(jq -r '.imageRepository' <<<"$service")
+
+  if [[ "$RELEASE_MODE" == 'REPAIR_CATALOG_HEALTH_AND_DEPLOY' && "$key" != 'catalog' ]]; then
+    echo "Skipping unchanged service in Catalog repair mode: $key"
+    continue
+  fi
+
   digest=$(jq -r --arg key "$key" '.images[] | select(.serviceKey == $key) | .digest' "$IMAGE_MANIFEST")
   target_image="$ACR_LOGIN/$repository@$digest"
 
@@ -248,18 +267,22 @@ jq -s '.' "$ROLLBACK_MAP" >"$OUTPUT_DIR/rollback-map.json"
 jq -n \
   --arg resourceGroup "$RESOURCE_GROUP" \
   --arg sourceSha "$EXPECTED_SOURCE_SHA" \
+  --arg releaseMode "$RELEASE_MODE" \
+  --argjson expectedDeployCount "$EXPECTED_DEPLOY_COUNT" \
   --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --argjson deploymentEvents "$(cat "$OUTPUT_DIR/deployment-events.json")" \
   --argjson rollbackMap "$(cat "$OUTPUT_DIR/rollback-map.json")" \
-  '{schemaVersion:1,resourceGroup:$resourceGroup,sourceSha:$sourceSha,generatedAt:$generatedAt,runtimeEnvironmentPreserved:true,externalProvidersActivated:false,secretsReadOrChanged:false,deploymentEvents:$deploymentEvents,rollbackMap:$rollbackMap}' \
+  '{schemaVersion:1,resourceGroup:$resourceGroup,sourceSha:$sourceSha,releaseMode:$releaseMode,expectedDeployCount:$expectedDeployCount,generatedAt:$generatedAt,runtimeEnvironmentPreserved:true,externalProvidersActivated:false,secretsReadOrChanged:false,deploymentEvents:$deploymentEvents,rollbackMap:$rollbackMap}' \
   >"$OUTPUT_DIR/backend-deployment-manifest.json"
 
-jq -e '
+jq -e \
+  --argjson expectedDeployCount "$EXPECTED_DEPLOY_COUNT" '
   .runtimeEnvironmentPreserved == true
   and .externalProvidersActivated == false
   and .secretsReadOrChanged == false
-  and (.rollbackMap | length == 7)
-  and ([.deploymentEvents[] | select(.phase == "health" and .status == "passed")] | length == 7)
+  and .expectedDeployCount == $expectedDeployCount
+  and (.rollbackMap | length == $expectedDeployCount)
+  and ([.deploymentEvents[] | select(.phase == "health" and .status == "passed")] | length == $expectedDeployCount)
 ' "$OUTPUT_DIR/backend-deployment-manifest.json" >/dev/null \
   || fail 'Final backend deployment evidence validation failed.'
 

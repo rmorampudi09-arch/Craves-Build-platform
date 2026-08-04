@@ -27,12 +27,9 @@ public class AdminIntegrationInvestigationController {
     }
 
     @GetMapping("/payments/{paymentOrderId}")
-    public ResponseEntity<PaymentInvestigationResponse> payment(
-        Authentication authentication,
-        @PathVariable UUID paymentOrderId,
+    public ResponseEntity<PaymentInvestigationResponse> payment(Authentication authentication, @PathVariable UUID paymentOrderId,
         @RequestHeader("X-Admin-Reason") String reason,
-        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader
-    ) {
+        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader) {
         AuditContext audit = audit(authentication, "PAYMENT", paymentOrderId, reason, correlationHeader);
         PaymentSnapshot payment = jdbcTemplate.query(
             """
@@ -49,8 +46,7 @@ public class AdminIntegrationInvestigationController {
                 rs.getBigDecimal("amount"), rs.getString("currency"), rs.getString("status"),
                 rs.getString("provider_status"), rs.getObject("created_at", OffsetDateTime.class),
                 rs.getObject("updated_at", OffsetDateTime.class)
-            ),
-            paymentOrderId
+            ), paymentOrderId
         ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found"));
 
         List<PaymentAttemptSnapshot> attempts = jdbcTemplate.query(
@@ -64,8 +60,7 @@ public class AdminIntegrationInvestigationController {
                 rs.getString("cf_payment_id"), rs.getString("payment_status"),
                 rs.getBigDecimal("payment_amount"), rs.getString("payment_currency"),
                 rs.getObject("created_at", OffsetDateTime.class)
-            ),
-            paymentOrderId
+            ), paymentOrderId
         );
 
         List<PaymentEventSnapshot> events = jdbcTemplate.query(
@@ -78,20 +73,16 @@ public class AdminIntegrationInvestigationController {
             (rs, rowNum) -> new PaymentEventSnapshot(
                 rs.getString("provider_event_id"), rs.getString("event_type"),
                 rs.getString("payment_status"), rs.getObject("created_at", OffsetDateTime.class)
-            ),
-            paymentOrderId
+            ), paymentOrderId
         );
         persistAudit(audit);
         return response(audit.correlationId(), new PaymentInvestigationResponse(payment, attempts, events));
     }
 
     @GetMapping("/refunds/{refundId}")
-    public ResponseEntity<RefundInvestigationResponse> refund(
-        Authentication authentication,
-        @PathVariable UUID refundId,
+    public ResponseEntity<RefundInvestigationResponse> refund(Authentication authentication, @PathVariable UUID refundId,
         @RequestHeader("X-Admin-Reason") String reason,
-        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader
-    ) {
+        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader) {
         AuditContext audit = audit(authentication, "REFUND", refundId, reason, correlationHeader);
         RefundSnapshot refund = jdbcTemplate.query(
             """
@@ -113,8 +104,7 @@ public class AdminIntegrationInvestigationController {
                 rs.getObject("next_attempt_at", OffsetDateTime.class), rs.getObject("processed_at", OffsetDateTime.class),
                 safeError(rs.getString("last_error")), rs.getObject("created_at", OffsetDateTime.class),
                 rs.getObject("updated_at", OffsetDateTime.class)
-            ),
-            refundId
+            ), refundId
         ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Refund was not found"));
 
         List<OutboxSnapshot> statusEvents = jdbcTemplate.query(
@@ -127,25 +117,20 @@ public class AdminIntegrationInvestigationController {
             """,
             (rs, rowNum) -> new OutboxSnapshot(
                 rs.getObject("id", UUID.class), rs.getString("event_type"), rs.getString("event_version"),
-                rs.getString("status"), rs.getInt("attempt_count"),
-                rs.getObject("next_attempt_at", OffsetDateTime.class),
+                rs.getString("status"), rs.getInt("attempt_count"), rs.getObject("next_attempt_at", OffsetDateTime.class),
                 rs.getObject("published_at", OffsetDateTime.class), rs.getString("broker_message_id"),
                 safeError(rs.getString("last_error")), rs.getObject("created_at", OffsetDateTime.class),
                 rs.getObject("updated_at", OffsetDateTime.class)
-            ),
-            refundId
+            ), refundId
         );
         persistAudit(audit);
         return response(audit.correlationId(), new RefundInvestigationResponse(refund, statusEvents));
     }
 
     @GetMapping("/delivery-commands/{commandId}")
-    public ResponseEntity<DeliveryInvestigationResponse> delivery(
-        Authentication authentication,
-        @PathVariable UUID commandId,
+    public ResponseEntity<DeliveryInvestigationResponse> delivery(Authentication authentication, @PathVariable UUID commandId,
         @RequestHeader("X-Admin-Reason") String reason,
-        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader
-    ) {
+        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader) {
         AuditContext audit = audit(authentication, "DELIVERY_COMMAND", commandId, reason, correlationHeader);
         DeliveryCommandSnapshot command = jdbcTemplate.query(
             """
@@ -170,8 +155,7 @@ public class AdminIntegrationInvestigationController {
                 rs.getInt("reconciliation_attempt_count"),
                 rs.getObject("next_reconciliation_at", OffsetDateTime.class), safeError(rs.getString("last_error")),
                 rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
-            ),
-            commandId
+            ), commandId
         ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery command was not found"));
 
         DeliveryJobSnapshot job = jdbcTemplate.query(
@@ -189,24 +173,17 @@ public class AdminIntegrationInvestigationController {
                 rs.getObject("last_status_observed_at", OffsetDateTime.class), rs.getString("last_status_source"),
                 rs.getObject("next_tracking_at", OffsetDateTime.class),
                 rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
-            ),
-            command.chefSubOrderId()
+            ), command.chefSubOrderId()
         ).stream().findFirst().orElse(null);
         persistAudit(audit);
         return response(audit.correlationId(), new DeliveryInvestigationResponse(command, job));
     }
 
-    private AuditContext audit(
-        Authentication authentication,
-        String resourceType,
-        UUID resourceId,
-        String reason,
-        String correlationHeader
-    ) {
-        CravesPrincipal principal = requireAdmin(authentication);
-        return new AuditContext(
-            principal.identityId(), resourceType, resourceId, validateReason(reason), correlationId(correlationHeader)
-        );
+    private AuditContext audit(Authentication authentication, String resourceType, UUID resourceId,
+        String reason, String correlationHeader) {
+        CravesPrincipal principal = requireInvestigationAccess(authentication, resourceType);
+        return new AuditContext(principal.identityId(), resourceType, resourceId,
+            validateReason(reason), correlationId(correlationHeader));
     }
 
     private void persistAudit(AuditContext audit) {
@@ -220,18 +197,23 @@ public class AdminIntegrationInvestigationController {
     }
 
     private static <T> ResponseEntity<T> response(UUID correlationId, T body) {
-        return ResponseEntity.ok()
-            .cacheControl(CacheControl.noStore())
-            .header("X-Correlation-ID", correlationId.toString())
-            .body(body);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .header("X-Correlation-ID", correlationId.toString()).body(body);
     }
 
-    private static CravesPrincipal requireAdmin(Authentication authentication) {
+    private static CravesPrincipal requireInvestigationAccess(Authentication authentication, String resourceType) {
         if (authentication == null || !(authentication.getPrincipal() instanceof CravesPrincipal principal)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
         }
-        if (!principal.hasRole("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN role is required");
+        boolean allowed = switch (resourceType) {
+            case "PAYMENT", "REFUND" -> principal.hasAnyRole(
+                "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "AUDIT_ADMIN");
+            case "DELIVERY_COMMAND" -> principal.hasAnyRole(
+                "PLATFORM_ADMIN", "SUPPORT_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN");
+            default -> false;
+        };
+        if (!allowed) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Investigation role is required");
         }
         return principal;
     }
@@ -245,78 +227,45 @@ public class AdminIntegrationInvestigationController {
     }
 
     private static UUID correlationId(String value) {
-        if (value == null || value.isBlank()) {
-            return UUID.randomUUID();
-        }
-        try {
-            return UUID.fromString(value.trim());
-        } catch (IllegalArgumentException exception) {
+        if (value == null || value.isBlank()) return UUID.randomUUID();
+        try { return UUID.fromString(value.trim()); }
+        catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-Correlation-ID must be a UUID");
         }
     }
 
     private static String safeError(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
+        if (value == null || value.isBlank()) return null;
         String normalized = value.replace('\n', ' ').replace('\r', ' ').trim();
         return normalized.length() > 500 ? normalized.substring(0, 500) : normalized;
     }
 
-    private record AuditContext(
-        UUID actorIdentityId, String resourceType, UUID resourceId, String reason, UUID correlationId
-    ) {}
-
-    public record PaymentInvestigationResponse(
-        PaymentSnapshot payment, List<PaymentAttemptSnapshot> attempts, List<PaymentEventSnapshot> events
-    ) {}
-
-    public record PaymentSnapshot(
-        UUID paymentOrderId, UUID checkoutId, UUID customerIdentityId, String cravesReference,
+    private record AuditContext(UUID actorIdentityId, String resourceType, UUID resourceId, String reason, UUID correlationId) {}
+    public record PaymentInvestigationResponse(PaymentSnapshot payment, List<PaymentAttemptSnapshot> attempts, List<PaymentEventSnapshot> events) {}
+    public record PaymentSnapshot(UUID paymentOrderId, UUID checkoutId, UUID customerIdentityId, String cravesReference,
         String cashfreeOrderId, String cashfreeCfOrderId, BigDecimal amount, String currency,
-        String status, String providerStatus, OffsetDateTime createdAt, OffsetDateTime updatedAt
-    ) {}
-
-    public record PaymentAttemptSnapshot(
-        String cashfreePaymentId, String paymentStatus, BigDecimal amount, String currency, OffsetDateTime createdAt
-    ) {}
-
-    public record PaymentEventSnapshot(
-        String providerEventId, String eventType, String paymentStatus, OffsetDateTime createdAt
-    ) {}
-
+        String status, String providerStatus, OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
+    public record PaymentAttemptSnapshot(String cashfreePaymentId, String paymentStatus, BigDecimal amount, String currency, OffsetDateTime createdAt) {}
+    public record PaymentEventSnapshot(String providerEventId, String eventType, String paymentStatus, OffsetDateTime createdAt) {}
     public record RefundInvestigationResponse(RefundSnapshot refund, List<OutboxSnapshot> statusEvents) {}
-
-    public record RefundSnapshot(
-        UUID refundId, UUID paymentOrderId, UUID checkoutId, UUID chefSubOrderId, UUID customerIdentityId,
+    public record RefundSnapshot(UUID refundId, UUID paymentOrderId, UUID checkoutId, UUID chefSubOrderId, UUID customerIdentityId,
         UUID requestEventId, String cashfreeOrderId, String refundReference, UUID idempotencyKey,
         BigDecimal amount, String currency, String reason, String status, String providerStatus,
         String cashfreeRefundId, int attemptCount, OffsetDateTime nextAttemptAt, OffsetDateTime processedAt,
-        String lastError, OffsetDateTime createdAt, OffsetDateTime updatedAt
-    ) {}
-
-    public record OutboxSnapshot(
-        UUID eventId, String eventType, String eventVersion, String status, int attemptCount,
+        String lastError, OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
+    public record OutboxSnapshot(UUID eventId, String eventType, String eventVersion, String status, int attemptCount,
         OffsetDateTime nextAttemptAt, OffsetDateTime publishedAt, String brokerMessageId,
-        String lastError, OffsetDateTime createdAt, OffsetDateTime updatedAt
-    ) {}
-
+        String lastError, OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
     public record DeliveryInvestigationResponse(DeliveryCommandSnapshot command, DeliveryJobSnapshot job) {}
-
-    public record DeliveryCommandSnapshot(
-        UUID commandId, UUID chefSubOrderId, UUID orderId, String status,
+    public record DeliveryCommandSnapshot(UUID commandId, UUID chefSubOrderId, UUID orderId, String status,
         OffsetDateTime readyAt, OffsetDateTime dispatchAt, UUID idempotencyKey, UUID sourceEventId,
         int attemptCount, Long scheduledSequenceNumber, String serviceBusMessageId,
         String reconciliationProviderId, String reconciliationClientReference,
         OffsetDateTime reconciliationStartedAt, int reconciliationAttemptCount,
         OffsetDateTime nextReconciliationAt, String lastError,
-        OffsetDateTime createdAt, OffsetDateTime updatedAt
-    ) {}
-
-    public record DeliveryJobSnapshot(
-        UUID deliveryJobId, UUID assignmentId, String providerId, String providerDeliveryId,
+        OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
+    public record DeliveryJobSnapshot(UUID deliveryJobId, UUID assignmentId, String providerId, String providerDeliveryId,
         String status, String providerStatus, OffsetDateTime bookedAt,
         OffsetDateTime lastStatusObservedAt, String lastStatusSource, OffsetDateTime nextTrackingAt,
-        OffsetDateTime createdAt, OffsetDateTime updatedAt
-    ) {}
+        OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
 }

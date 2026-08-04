@@ -10,18 +10,23 @@ parameters:
       - VERIFY_ONLY
       - BUILD_IMAGES
       - DEPLOY_BACKEND
+      - REPAIR_CATALOG_HEALTH_AND_DEPLOY
   - name: confirmBuild
     displayName: Type BUILD_SEVEN_SERVICES for image build modes
     type: string
     default: DO_NOT_BUILD
   - name: confirmDeployment
-    displayName: Type DEPLOY_SEVEN_SERVICES for DEPLOY_BACKEND
+    displayName: Type DEPLOY_SEVEN_SERVICES for deployment modes
     type: string
     default: DO_NOT_DEPLOY
   - name: databaseBackupConfirmation
-    displayName: Type DATABASE_BACKUP_VERIFIED for DEPLOY_BACKEND
+    displayName: Type DATABASE_BACKUP_VERIFIED for deployment modes
     type: string
     default: DATABASE_BACKUP_NOT_VERIFIED
+  - name: reuseSourceSha
+    displayName: Verified source SHA whose unchanged service images may be reused by repair mode
+    type: string
+    default: d26ce4cd4f501ba7c77d1ab5f89bd15296af69a6
   - name: resourceGroupName
     displayName: Azure resource group
     type: string
@@ -83,7 +88,7 @@ stages:
             displayName: Publish backend source evidence
 
   - stage: MavenVerification
-    displayName: Compile and test all seven Spring Boot services
+    displayName: Compile and test required Spring Boot services
     dependsOn: SourceIntegrity
     condition: succeeded()
     jobs:
@@ -101,11 +106,18 @@ stages:
             displayName: Use Java 21
           - bash: |
               set -euo pipefail
-              while IFS= read -r service_path; do
+              mode='${{ parameters.releaseMode }}'
+              if [[ "$mode" == 'REPAIR_CATALOG_HEALTH_AND_DEPLOY' ]]; then
+                service_paths=('services/catalog-service')
+              else
+                mapfile -t service_paths < <(jq -r '.services[].path' '$(backendPack)')
+              fi
+
+              for service_path in "${service_paths[@]}"; do
                 echo "========== MAVEN VERIFY $service_path =========="
                 (cd "$service_path" && mvn -B -ntp clean verify)
-              done < <(jq -r '.services[].path' '$(backendPack)')
-            displayName: Verify all backend services
+              done
+            displayName: Verify required backend services
           - task: PublishTestResults@2
             condition: always()
             inputs:
@@ -113,11 +125,11 @@ stages:
               testResultsFiles: '**/target/surefire-reports/TEST-*.xml'
               failTaskOnFailedTests: true
               failTaskOnMissingResultsFile: false
-              testRunTitle: Craves seven-service backend verification
+              testRunTitle: Craves backend verification
             displayName: Publish backend test results
 
   - stage: ImageBuild
-    displayName: Build immutable seven-service images
+    displayName: Build or reuse immutable seven-service images
     dependsOn: MavenVerification
     condition: and(succeeded(), ne('${{ parameters.releaseMode }}', 'VERIFY_ONLY'))
     jobs:
@@ -127,7 +139,7 @@ stages:
         steps:
           - checkout: self
             persistCredentials: false
-            fetchDepth: 1
+            fetchDepth: 0
           - bash: |
               set -euo pipefail
               [[ '${{ parameters.confirmBuild }}' == 'BUILD_SEVEN_SERVICES' ]] || {
@@ -136,7 +148,7 @@ stages:
               }
             displayName: Verify explicit build confirmation
           - task: AzureCLI@2
-            displayName: Build seven backend images without deployment
+            displayName: Prepare seven immutable backend images without deployment
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               scriptType: bash
@@ -146,16 +158,41 @@ stages:
                 set +x
                 pack='$(backendPack)'
                 registry='${{ parameters.containerRegistryName }}'
+                mode='${{ parameters.releaseMode }}'
+                reuse_source='${{ parameters.reuseSourceSha }}'
+                current_source='$(Build.SourceVersion)'
                 expected_registry=$(jq -r '.azure.containerRegistry' "$pack")
+
                 [[ "$registry" == "$expected_registry" ]] || {
                   echo "ERROR: containerRegistryName must match the guarded backend inventory: $expected_registry" >&2
                   exit 1
                 }
-                tag='$(Build.SourceVersion)'
-                [[ "$tag" =~ ^[0-9a-f]{40}$ ]] || {
+                [[ "$current_source" =~ ^[0-9a-f]{40}$ ]] || {
                   echo 'ERROR: Build.SourceVersion must be a full Git commit SHA.' >&2
                   exit 1
                 }
+
+                if [[ "$mode" == 'REPAIR_CATALOG_HEALTH_AND_DEPLOY' ]]; then
+                  [[ "$reuse_source" =~ ^[0-9a-f]{40}$ ]] || {
+                    echo 'ERROR: reuseSourceSha must be a full Git commit SHA in repair mode.' >&2
+                    exit 1
+                  }
+                  git cat-file -e "${reuse_source}^{commit}" || {
+                    echo "ERROR: reuseSourceSha commit is not available: $reuse_source" >&2
+                    exit 1
+                  }
+
+                  while IFS= read -r service; do
+                    key=$(jq -r '.key' <<<"$service")
+                    path=$(jq -r '.path' <<<"$service")
+                    if [[ "$key" != 'catalog' ]]; then
+                      git diff --quiet "$reuse_source" "$current_source" -- "$path" || {
+                        echo "ERROR: $path changed after $reuse_source and its previous image cannot be reused." >&2
+                        exit 1
+                      }
+                    fi
+                  done < <(jq -c '.services[]' "$pack")
+                fi
 
                 output='$(Build.ArtifactStagingDirectory)/backend-image-manifest'
                 mkdir -p "$output"
@@ -166,27 +203,39 @@ stages:
                   key=$(jq -r '.key' <<<"$service")
                   path=$(jq -r '.path' <<<"$service")
                   repository=$(jq -r '.imageRepository' <<<"$service")
-                  echo "========== ACR BUILD $key -> $repository:$tag =========="
-                  az acr build \
-                    --registry "$registry" \
-                    --image "$repository:$tag" \
-                    --file "$path/Dockerfile" \
-                    "$path" \
-                    --only-show-errors
+                  image_source="$current_source"
+
+                  if [[ "$mode" == 'REPAIR_CATALOG_HEALTH_AND_DEPLOY' && "$key" != 'catalog' ]]; then
+                    image_source="$reuse_source"
+                    echo "========== REUSE VERIFIED IMAGE $key -> $repository:$image_source =========="
+                  else
+                    echo "========== ACR BUILD $key -> $repository:$image_source =========="
+                    az acr build \
+                      --registry "$registry" \
+                      --image "$repository:$image_source" \
+                      --file "$path/Dockerfile" \
+                      "$path" \
+                      --only-show-errors
+                  fi
+
                   digest=$(az acr repository show \
                     --name "$registry" \
-                    --image "$repository:$tag" \
-                    --query digest -o tsv --only-show-errors)
+                    --image "$repository:$image_source" \
+                    --query digest \
+                    --output tsv \
+                    --only-show-errors)
                   [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-                    echo "ERROR: digest missing for $repository:$tag" >&2
+                    echo "ERROR: digest missing for $repository:$image_source" >&2
                     exit 1
                   }
+
                   jq -cn \
                     --arg serviceKey "$key" \
                     --arg repository "$repository" \
-                    --arg tag "$tag" \
+                    --arg tag "$image_source" \
+                    --arg sourceSha "$image_source" \
                     --arg digest "$digest" \
-                    '{serviceKey:$serviceKey,repository:$repository,tag:$tag,digest:$digest}' \
+                    '{serviceKey:$serviceKey,repository:$repository,tag:$tag,sourceSha:$sourceSha,digest:$digest}' \
                     >>"$events"
                 done < <(jq -c '.services[]' "$pack")
 
@@ -194,11 +243,13 @@ stages:
                 rm -f "$events"
                 jq -n \
                   --arg registry "$registry" \
-                  --arg sourceSha '$(Build.SourceVersion)' \
+                  --arg sourceSha "$current_source" \
                   --arg buildId '$(Build.BuildId)' \
+                  --arg releaseMode "$mode" \
+                  --arg reusedSourceSha "$reuse_source" \
                   --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
                   --argjson images "$(cat "$output/images.json")" \
-                  '{schemaVersion:1,registry:$registry,sourceSha:$sourceSha,buildId:$buildId,generatedAt:$generatedAt,deploymentExecuted:false,images:$images}' \
+                  '{schemaVersion:1,registry:$registry,sourceSha:$sourceSha,buildId:$buildId,releaseMode:$releaseMode,reusedSourceSha:$reusedSourceSha,generatedAt:$generatedAt,deploymentExecuted:false,images:$images}' \
                   >"$output/manifest.json"
                 jq -e '.deploymentExecuted == false and (.images | length == 7)' "$output/manifest.json" >/dev/null
           - task: PublishPipelineArtifact@1
@@ -210,7 +261,7 @@ stages:
   - stage: DeployBackend
     displayName: Deploy the seven-service backend release
     dependsOn: ImageBuild
-    condition: and(succeeded(), eq('${{ parameters.releaseMode }}', 'DEPLOY_BACKEND'))
+    condition: and(succeeded(), or(eq('${{ parameters.releaseMode }}', 'DEPLOY_BACKEND'), eq('${{ parameters.releaseMode }}', 'REPAIR_CATALOG_HEALTH_AND_DEPLOY')))
     jobs:
       - job: DeploySevenServices
         displayName: Digest-pinned deployment with full-release rollback
@@ -250,6 +301,8 @@ stages:
             env:
               CONFIRM_DEPLOYMENT: ${{ parameters.confirmDeployment }}
               DATABASE_BACKUP_CONFIRMATION: ${{ parameters.databaseBackupConfirmation }}
+              SMOKE_ATTEMPTS: '18'
+              SMOKE_SLEEP_SECONDS: '10'
           - task: PublishPipelineArtifact@1
             condition: always()
             inputs:

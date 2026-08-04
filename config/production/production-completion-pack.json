@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "environment": "prodlow",
+  "targetConcurrency": "50-100 concurrent users",
+  "sourceOnlyBuild": true,
+  "liveExecutionDeferred": true,
+  "azure": {
+    "serviceConnection": "Craves-Dev-Service-Connection",
+    "resourceGroup": "rg-craves-prodlow-centralindia",
+    "location": "centralindia",
+    "containerRegistry": "cravesprodlowacr82121",
+    "containerRegistryLoginServer": "cravesprodlowacr82121.azurecr.io",
+    "keyVault": "kvcravesprodlowl3ing6",
+    "postgresServer": "pg-craves-prodlow-l3ing6",
+    "storageAccount": "stcravesprodlowl3ing6",
+    "serviceBusNamespace": "sb-craves-prodlow-l3ing6",
+    "apiManagement": "apim-craves-prodlow-l3ing6",
+    "managedRedis": {
+      "name": "amr-craves-prodlow-l3ing6",
+      "database": "default",
+      "port": 10000,
+      "tls": true,
+      "sku": "Balanced_B0",
+      "keyVaultSecretName": "prodlow-redis-url",
+      "containerAppSecretName": "redis-url",
+      "runtimeEnvironmentVariable": "SPRING_DATA_REDIS_URL",
+      "activationFlagsRemainDisabled": true
+    }
+  },
+  "backendServices": [
+    {
+      "key": "auth",
+      "serviceName": "auth-service",
+      "path": "services/auth-service",
+      "imageRepository": "craves/auth-service",
+      "containerApp": "ca-craves-auth-service-prodlow",
+      "disabledFlags": [
+        "CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED",
+        "CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED",
+        "CRAVES_TOKEN_REVOCATION_PUBLISHER_ENABLED",
+        "CRAVES_TOKEN_REVOCATION_ENABLED",
+        "CRAVES_AUTH_RATE_LIMIT_ENABLED"
+      ]
+    },
+    {
+      "key": "userChef",
+      "serviceName": "user-chef-service",
+      "path": "services/user-chef-service",
+      "imageRepository": "craves/user-chef-service",
+      "containerApp": "ca-craves-user-chef-service-prod",
+      "disabledFlags": [
+        "CRAVES_NOTIFICATION_DIRECT_DISPATCH_ENABLED",
+        "CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_ENABLED",
+        "CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED",
+        "CRAVES_TOKEN_REVOCATION_ENABLED"
+      ]
+    },
+    {
+      "key": "catalog",
+      "serviceName": "catalog-service",
+      "path": "services/catalog-service",
+      "imageRepository": "craves/catalog-service",
+      "containerApp": "ca-craves-catalog-service-prodlo",
+      "disabledFlags": [
+        "CRAVES_LAUNCH_POLICY_ENFORCEMENT_ENABLED",
+        "CRAVES_TOKEN_REVOCATION_ENABLED"
+      ]
+    },
+    {
+      "key": "order",
+      "serviceName": "order-service",
+      "path": "services/order-service",
+      "imageRepository": "craves/order-service",
+      "containerApp": "ca-craves-order-service-prodlow",
+      "disabledFlags": [
+        "CRAVES_REFUND_STATUS_CONSUMER_ENABLED",
+        "CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED",
+        "CRAVES_SUBSCRIPTION_ORDER_CONSUMER_ENABLED",
+        "CRAVES_SUBSCRIPTION_ORDER_CALLBACK_WORKER_ENABLED",
+        "CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED",
+        "CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED",
+        "CRAVES_TOKEN_REVOCATION_ENABLED"
+      ]
+    },
+    {
+      "key": "subscription",
+      "serviceName": "subscription-service",
+      "path": "services/subscription-service",
+      "imageRepository": "craves/subscription-service",
+      "containerApp": "ca-craves-subscription-service-p",
+      "disabledFlags": [
+        "CRAVES_SUBSCRIPTION_OCCURRENCE_GENERATOR_ENABLED",
+        "CRAVES_SUBSCRIPTION_BILLING_GENERATOR_ENABLED",
+        "CRAVES_SUBSCRIPTION_BILLING_PUBLISHER_ENABLED",
+        "CRAVES_SUBSCRIPTION_PAYMENT_STATUS_CONSUMER_ENABLED",
+        "CRAVES_SUBSCRIPTION_ORDER_REQUEST_WORKER_ENABLED",
+        "CRAVES_SUBSCRIPTION_ORDER_PUBLISHER_ENABLED",
+        "CRAVES_TOKEN_REVOCATION_ENABLED"
+      ]
+    },
+    {
+      "key": "integration",
+      "serviceName": "integration-service",
+      "path": "services/integration-service",
+      "imageRepository": "craves/integration-service",
+      "containerApp": "ca-craves-integration-service-pr",
+      "disabledFlags": [
+        "CRAVES_PAYMENT_ORDER_API_ENABLED",
+        "CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED",
+        "CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED",
+        "CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED",
+        "CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED",
+        "CRAVES_DELIVERY_INTELLIGENCE_ENABLED",
+        "CRAVES_DELIVERY_COMMAND_ENABLED",
+        "CRAVES_DELIVERY_RECONCILIATION_ENABLED",
+        "CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED",
+        "CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED",
+        "CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED",
+        "CRAVES_REFUND_CONSUMER_ENABLED",
+        "CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED",
+        "CRAVES_REFUND_RECONCILIATION_ENABLED",
+        "CRAVES_REFUND_STATUS_PUBLISHER_ENABLED",
+        "CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED",
+        "CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED",
+        "CRAVES_SUBSCRIPTION_PAYMENT_CONSUMER_ENABLED",
+        "CRAVES_SUBSCRIPTION_PAYMENT_STATUS_PUBLISHER_ENABLED",
+        "BORZO_API_ENABLED",
+        "BORZO_PRODUCTION_ACTIVATION_APPROVED",
+        "CRAVES_SERVICEBUS_ENABLED",
+        "CRAVES_TOKEN_REVOCATION_ENABLED"
+      ]
+    },
+    {
+      "key": "notification",
+      "serviceName": "notification-service",
+      "path": "services/notification-service",
+      "imageRepository": "craves/notification-service",
+      "containerApp": "ca-craves-notification-service-p",
+      "disabledFlags": [
+        "CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED",
+        "CRAVES_NOTIFICATION_PUSH_ENABLED",
+        "CRAVES_NOTIFICATION_EMAIL_ENABLED",
+        "CRAVES_NOTIFICATION_RECOVERY_API_ENABLED",
+        "CRAVES_TOKEN_REVOCATION_ENABLED"
+      ]
+    }
+  ],
+  "web": {
+    "path": "apps/customer-web-next",
+    "imageRepository": "craves/customer-web-next",
+    "containerApp": "ca-craves-web-prodlow",
+    "targetPort": 3000,
+    "publicBuildConfigurationKeyVaultSecrets": [
+      "web-firebase-api-key",
+      "web-firebase-auth-domain",
+      "web-firebase-project-id",
+      "web-firebase-app-id",
+      "web-firebase-messaging-sender-id",
+      "web-firebase-storage-bucket"
+    ],
+    "nonSecretBuildConfiguration": [
+      "NEXT_PUBLIC_CASHFREE_MODE"
+    ],
+    "apiBaseUrl": "https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1"
+  },
+  "mobile": {
+    "path": "apps/mobile/customer-app",
+    "nativeBootstrapScript": "scripts/mobile/bootstrap-customer-mobile-native.sh",
+    "androidSecureFiles": [
+      "google-services.json",
+      "craves-customer-upload.keystore"
+    ],
+    "iosSecureFiles": [
+      "GoogleService-Info.plist",
+      "Apple distribution certificate and provisioning profile"
+    ]
+  },
+  "keyVaultFirstPolicy": {
+    "newSecretValuesAllowedInGit": false,
+    "newSecretValuesAllowedInPipelineParameters": false,
+    "newSecretValuesAllowedInNormalPipelineVariables": false,
+    "newSecretValuesAllowedAsPlaintextContainerAppEnvironment": false,
+    "requiredRuntimeBinding": "versionless Azure Key Vault-backed Container App secret reference",
+    "existingLegacyBindingsMigrationDeferred": true,
+    "existingCredentialRotationDeferred": true,
+    "finalMigrationStage": "full production completion security phase"
+  },
+  "pipelines": {
+    "sourceCompletion": "azure-pipelines-production-source-completion.yml",
+    "backendImageBuild": "azure-pipelines-seven-service-image-build.yml",
+    "backendDeployment": "azure-pipelines-seven-service-deploy.yml",
+    "webImageBuild": "azure-pipelines-customer-web-image-build.yml",
+    "customerWebProvision": "azure-pipelines-customer-web-provision.yml",
+    "webDeployment": "azure-pipelines-customer-web-deploy.yml",
+    "mobileReadiness": "azure-pipelines-mobile-native-readiness.yml",
+    "managedRedis": "azure-pipelines-managed-redis.yml",
+    "masterOrchestrator": "azure-pipelines-production-completion-orchestrator.yml",
+    "releaseReadiness": "azure-pipelines-release-readiness-orchestrator.yml",
+    "legacyInfrastructure": "pipelines/azure-pipelines-infra.yml"
+  },
+  "manualOnly": [
+    "Customer web Container App creation only after explicit billable-resource approval",
+    "Azure Managed Redis deployment and current price/SKU review before explicit approval",
+    "Azure DevOps pipeline execution and environment approvals",
+    "Key Vault secret-value entry and access grants",
+    "Firebase Android and iOS configuration downloads",
+    "Android signing keystore and Google Play Console setup",
+    "Apple certificate, provisioning profile and App Store Connect setup",
+    "Cashfree merchant KYC, production credentials and webhook registration",
+    "Delivery-provider credentials, callback registration and Hyderabad field validation",
+    "DNS, certificate and Front Door/CDN cutover",
+    "Final existing Storage and PostgreSQL credential rotation"
+  ]
+}

@@ -3,11 +3,18 @@ set -euo pipefail
 
 ROOT="${1:-.}"
 cd "$ROOT"
-mapfile -t PIPELINES < <(find . -maxdepth 1 -type f -name 'azure-pipelines*.yml' -print | sort)
-((${#PIPELINES[@]} > 0)) || { echo 'ERROR: no Azure pipeline YAML files found.' >&2; exit 1; }
+MANIFEST='config/production/production-completion-pack.json'
+[[ -f "$MANIFEST" ]] || { echo "ERROR: production completion manifest is missing: $MANIFEST" >&2; exit 1; }
+mapfile -t PIPELINES < <(
+  jq -r '.pipelines | to_entries[] | select(.key | startswith("legacy") | not) | .value | select(endswith(".yml"))' "$MANIFEST" | sort -u
+)
+((${#PIPELINES[@]} > 0)) || { echo 'ERROR: no production completion pipelines are declared.' >&2; exit 1; }
+for file in "${PIPELINES[@]}"; do
+  [[ -f "$file" ]] || { echo "ERROR: declared production pipeline is missing: $file" >&2; exit 1; }
+done
 
 MUTABLE_LATEST_PATTERN=$(cat <<'REGEX'
-:[[:space:]]*latest([[:space:]"']|$)
+(--image|image[[:space:]]*:|IMAGE[[:space:]]*=)[^#[:space:]]*:latest([[:space:]"']|$)
 REGEX
 )
 
@@ -16,9 +23,9 @@ checked=0
 for file in "${PIPELINES[@]}"; do
   name=$(basename "$file")
   case "$name" in
-    *-ci.yml|*-status.yml|*-rollback.yml|azure-pipelines-release-*) continue ;;
+    *-ci.yml|*-status.yml|*-rollback.yml|*-provision.yml|azure-pipelines-release-*) continue ;;
   esac
-  if ! grep -Eq 'az[[:space:]]+containerapp[[:space:]]+update|docker[[:space:]]+push|az[[:space:]]+deployment' "$file"; then
+  if ! grep -Eq 'az[[:space:]]+containerapp[[:space:]]+update|docker[[:space:]]+push|az[[:space:]]+deployment[[:space:]]+group[[:space:]]+create' "$file"; then
     continue
   fi
   checked=$((checked+1))

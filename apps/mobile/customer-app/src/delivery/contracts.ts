@@ -73,7 +73,8 @@ function parseHistory(value: unknown): DeliveryHistory | null {
   const oldStatus = status(item.oldStatus, true);
   const observedAt = instant(item.observedAt);
   const recordedAt = instant(item.recordedAt);
-  if (!newStatus || !observedAt || !recordedAt) return null;
+  const invalidOldStatus = item.oldStatus !== null && item.oldStatus !== undefined && oldStatus === null;
+  if (!newStatus || invalidOldStatus || !observedAt || !recordedAt) return null;
   return {
     oldStatus,
     newStatus,
@@ -92,7 +93,8 @@ export function parseDeliveryProjection(value: unknown): DeliveryProjection | nu
   const currentStatus = status(projection.status, true);
   const observedAt = instant(projection.observedAt, true);
   const historyInput = Array.isArray(projection.history) ? projection.history : [];
-  if (!orderId || !UUID.test(orderId) || (deliveryJobId && !UUID.test(deliveryJobId)) || historyInput.length > 100) return null;
+  const invalidCurrentStatus = projection.status !== null && projection.status !== undefined && currentStatus === null;
+  if (!orderId || !UUID.test(orderId) || (deliveryJobId && !UUID.test(deliveryJobId)) || invalidCurrentStatus || historyInput.length > 100) return null;
   const history = historyInput.map(parseHistory);
   if (history.some(item => item === null)) return null;
   return {

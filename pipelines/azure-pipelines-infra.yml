@@ -1,33 +1,154 @@
 trigger: none
+pr: none
+
+parameters:
+  - name: action
+    displayName: Infrastructure action
+    type: string
+    default: validate
+    values:
+      - validate
+      - what-if
+      - deploy
+  - name: confirmDeploy
+    displayName: Type DEPLOY_FOUNDATION only for an approved billable deployment
+    type: string
+    default: DO_NOT_DEPLOY
+  - name: resourceGroupName
+    displayName: Existing resource group
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: location
+    displayName: Azure location
+    type: string
+    default: centralindia
+  - name: keyVaultName
+    displayName: Existing Key Vault containing the bootstrap database secret
+    type: string
+    default: kvcravesprodlowl3ing6
+  - name: postgresBootstrapPasswordSecretName
+    displayName: Key Vault secret name; never enter the value as a pipeline parameter
+    type: string
+    default: prodlow-postgres-bootstrap-password
 
 pool:
   vmImage: ubuntu-latest
 
-parameters:
-- name: environmentName
-  displayName: Environment
-  type: string
-  default: dev
-  values:
-  - dev
-  - stage
-  - prod
+stages:
+  - stage: FoundationGuard
+    displayName: Validate Key Vault-first foundation request
+    jobs:
+      - job: ValidateRequest
+        displayName: Validate source and explicit deployment confirmation
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: AzureCLI@2
+            displayName: Validate Bicep source without deployment
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                az bicep install >/dev/null
+                az bicep build --file infra/main.bicep --stdout >/dev/null
+                [[ '${{ parameters.resourceGroupName }}' == 'rg-craves-prodlow-centralindia' ]] || {
+                  echo 'ERROR: this pipeline is locked to the existing prodlow environment.' >&2
+                  exit 1
+                }
+                if [[ '${{ parameters.action }}' == 'deploy' && '${{ parameters.confirmDeploy }}' != 'DEPLOY_FOUNDATION' ]]; then
+                  echo 'ERROR: deploy requires confirmDeploy=DEPLOY_FOUNDATION.' >&2
+                  exit 1
+                fi
+                echo 'Bicep source and request validation passed.'
 
-variables:
-  resourceGroupName: rg-craves-${{ parameters.environmentName }}
-  location: centralindia
+  - stage: FoundationEvaluation
+    displayName: ${{ parameters.action }} existing prodlow foundation
+    dependsOn: FoundationGuard
+    condition: succeeded()
+    jobs:
+      - job: EvaluateFoundation
+        displayName: Use Key Vault bootstrap secret without printing it
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: AzureCLI@2
+            displayName: Run ${{ parameters.action }} with Key Vault-backed secure parameter
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                RG='${{ parameters.resourceGroupName }}'
+                LOCATION='${{ parameters.location }}'
+                VAULT='${{ parameters.keyVaultName }}'
+                SECRET_NAME='${{ parameters.postgresBootstrapPasswordSecretName }}'
+                ACTION='${{ parameters.action }}'
 
-steps:
-- task: AzureCLI@2
-  displayName: Deploy Craves Infrastructure
-  inputs:
-    azureSubscription: 'sc-craves-dev'
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      az group create -n $(resourceGroupName) -l $(location)
-      az deployment group create \
-        -g $(resourceGroupName) \
-        -f infra/main.bicep \
-        -p environmentName=${{ parameters.environmentName }} \
-        -p postgresAdminPassword='$(POSTGRES_ADMIN_PASSWORD)'
+                az group show --name "$RG" --only-show-errors >/dev/null || {
+                  echo "ERROR: existing resource group $RG was not found. Resource-group creation is a separate billable/manual action." >&2
+                  exit 1
+                }
+                az keyvault show --resource-group "$RG" --name "$VAULT" --only-show-errors >/dev/null || {
+                  echo "ERROR: existing Key Vault $VAULT was not found." >&2
+                  exit 1
+                }
+
+                POSTGRES_PASSWORD=$(az keyvault secret show \
+                  --vault-name "$VAULT" \
+                  --name "$SECRET_NAME" \
+                  --query value -o tsv --only-show-errors)
+                [[ -n "$POSTGRES_PASSWORD" ]] || {
+                  echo "ERROR: Key Vault secret $SECRET_NAME is empty or unavailable." >&2
+                  exit 1
+                }
+
+                common=(
+                  --resource-group "$RG"
+                  --template-file infra/main.bicep
+                  --parameters location="$LOCATION"
+                  --parameters environmentName=prodlow
+                  --parameters projectName=craves
+                  --parameters acrName=cravesprodlowacr82121
+                  --parameters postgresAdminPassword="$POSTGRES_PASSWORD"
+                )
+
+                case "$ACTION" in
+                  validate)
+                    az deployment group validate "${common[@]}" --only-show-errors >/dev/null
+                    ;;
+                  what-if)
+                    az deployment group what-if "${common[@]}" --only-show-errors
+                    ;;
+                  deploy)
+                    [[ '${{ parameters.confirmDeploy }}' == 'DEPLOY_FOUNDATION' ]] || {
+                      echo 'ERROR: deploy confirmation mismatch.' >&2
+                      exit 1
+                    }
+                    echo 'WARNING: this action can create or modify billable Azure resources.' >&2
+                    az deployment group create \
+                      --name "craves-foundation-$(Build.BuildId)" \
+                      "${common[@]}" \
+                      --only-show-errors \
+                      --query properties.outputs -o json \
+                      > '$(Build.ArtifactStagingDirectory)/foundation-outputs.json'
+                    ;;
+                  *)
+                    echo "ERROR: unsupported action $ACTION" >&2
+                    exit 1
+                    ;;
+                esac
+
+                unset POSTGRES_PASSWORD
+                echo "Foundation $ACTION completed without publishing secret values."
+          - ${{ if eq(parameters.action, 'deploy') }}:
+              - task: PublishPipelineArtifact@1
+                inputs:
+                  targetPath: $(Build.ArtifactStagingDirectory)/foundation-outputs.json
+                  artifact: foundation-outputs
+                displayName: Publish non-secret Bicep outputs

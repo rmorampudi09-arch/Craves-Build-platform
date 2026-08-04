@@ -1,0 +1,168 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: action
+    displayName: Azure Managed Redis action
+    type: string
+    default: validate
+    values:
+      - validate
+      - what-if
+      - deploy
+  - name: confirmDeploy
+    displayName: Type DEPLOY_MANAGED_REDIS for the billable deploy action
+    type: string
+    default: DO_NOT_DEPLOY
+  - name: redisName
+    displayName: Azure Managed Redis name
+    type: string
+    default: amr-craves-prodlow-l3ing6
+  - name: keyVaultSecretName
+    displayName: Versionless Key Vault secret name for the Redis URL
+    type: string
+    default: prodlow-redis-url
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: ManagedRedisGuard
+    displayName: Validate Azure Managed Redis request
+    jobs:
+      - job: ValidateSource
+        displayName: Validate Bicep, binding script and explicit confirmation
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: AzureCLI@2
+            displayName: Validate Managed Redis source
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                [[ '${{ parameters.redisName }}' == 'amr-craves-prodlow-l3ing6' ]] || {
+                  echo 'ERROR: Redis name differs from the approved production completion pack.' >&2
+                  exit 1
+                }
+                [[ '${{ parameters.keyVaultSecretName }}' == 'prodlow-redis-url' ]] || {
+                  echo 'ERROR: Key Vault secret name differs from the approved production completion pack.' >&2
+                  exit 1
+                }
+                if [[ '${{ parameters.action }}' == 'deploy' && '${{ parameters.confirmDeploy }}' != 'DEPLOY_MANAGED_REDIS' ]]; then
+                  echo 'ERROR: deploy requires confirmDeploy=DEPLOY_MANAGED_REDIS.' >&2
+                  exit 1
+                fi
+                bash -n scripts/release/bind-managed-redis.sh
+                az bicep install >/dev/null
+                az bicep build --file infra/managed-redis.bicep --stdout >/dev/null
+                echo 'Managed Redis source validation passed.'
+
+  - stage: ManagedRedisEvaluation
+    displayName: ${{ parameters.action }} Azure Managed Redis
+    dependsOn: ManagedRedisGuard
+    condition: succeeded()
+    jobs:
+      - job: EvaluateOrDeploy
+        displayName: Run guarded Redis infrastructure operation
+        timeoutInMinutes: 120
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: AzureCLI@2
+            displayName: Run Managed Redis Bicep operation
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                RG='rg-craves-prodlow-centralindia'
+                ACTION='${{ parameters.action }}'
+                REDIS_NAME='${{ parameters.redisName }}'
+                common=(
+                  --resource-group "$RG"
+                  --template-file infra/managed-redis.bicep
+                  --parameters location=centralindia
+                  --parameters redisName="$REDIS_NAME"
+                  --parameters skuName=Balanced_B0
+                )
+                case "$ACTION" in
+                  validate)
+                    az deployment group validate "${common[@]}" --only-show-errors >/dev/null
+                    ;;
+                  what-if)
+                    az deployment group what-if "${common[@]}" --only-show-errors
+                    ;;
+                  deploy)
+                    [[ '${{ parameters.confirmDeploy }}' == 'DEPLOY_MANAGED_REDIS' ]] || {
+                      echo 'ERROR: confirmation mismatch.' >&2
+                      exit 1
+                    }
+                    echo 'WARNING: Azure Managed Redis is a billable resource. Review current Azure pricing before running this action.' >&2
+                    az deployment group create \
+                      --name "craves-managed-redis-$(Build.BuildId)" \
+                      "${common[@]}" \
+                      --only-show-errors \
+                      --query properties.outputs -o json \
+                      > '$(Build.ArtifactStagingDirectory)/managed-redis-outputs.json'
+                    ;;
+                  *)
+                    echo "ERROR: unsupported action $ACTION" >&2
+                    exit 1
+                    ;;
+                esac
+          - ${{ if eq(parameters.action, 'deploy') }}:
+              - task: PublishPipelineArtifact@1
+                inputs:
+                  targetPath: $(Build.ArtifactStagingDirectory)/managed-redis-outputs.json
+                  artifact: managed-redis-outputs
+                displayName: Publish non-secret Managed Redis outputs
+
+  - ${{ if eq(parameters.action, 'deploy') }}:
+      - stage: RedisKeyVaultBinding
+        displayName: Store the new Redis URL in Key Vault and bind seven apps
+        dependsOn: ManagedRedisEvaluation
+        condition: succeeded()
+        jobs:
+          - deployment: BindRedis
+            displayName: Create rollback-safe Key Vault references with controls disabled
+            environment: craves-prodlow-backend
+            strategy:
+              runOnce:
+                deploy:
+                  steps:
+                    - checkout: self
+                      persistCredentials: false
+                      fetchDepth: 1
+                    - task: AzureCLI@2
+                      displayName: Bind Managed Redis through Key Vault without printing it
+                      inputs:
+                        azureSubscription: Craves-Dev-Service-Connection
+                        scriptType: bash
+                        scriptLocation: inlineScript
+                        inlineScript: |
+                          set -euo pipefail
+                          set +x
+                          chmod +x scripts/release/bind-managed-redis.sh
+                          scripts/release/bind-managed-redis.sh \
+                            'rg-craves-prodlow-centralindia' \
+                            '${{ parameters.redisName }}' \
+                            'kvcravesprodlowl3ing6' \
+                            '${{ parameters.keyVaultSecretName }}' \
+                            'config/production/production-completion-pack.json' \
+                            '$(Build.ArtifactStagingDirectory)/managed-redis-binding-evidence'
+                      env:
+                        CONFIRM_REDIS_BINDING: ${{ parameters.confirmDeploy }}
+                    - task: PublishPipelineArtifact@1
+                      condition: always()
+                      inputs:
+                        targetPath: $(Build.ArtifactStagingDirectory)/managed-redis-binding-evidence
+                        artifact: managed-redis-binding-evidence
+                      displayName: Publish sanitized Redis binding or rollback evidence

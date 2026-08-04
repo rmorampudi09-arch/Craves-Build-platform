@@ -1,0 +1,165 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmBuild
+    displayName: Type BUILD_CUSTOMER_WEB to allow the ACR image build
+    type: string
+    default: DO_NOT_BUILD
+  - name: imageTag
+    displayName: Immutable image tag; leave blank to use the exact source SHA
+    type: string
+    default: ''
+  - name: cashfreeMode
+    displayName: Public Cashfree SDK mode baked into the web image
+    type: string
+    default: sandbox
+    values:
+      - sandbox
+      - production
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: ValidateWebSource
+    displayName: Validate customer web source and secret boundary
+    jobs:
+      - job: VerifyWeb
+        displayName: Typecheck, test and production build
+        timeoutInMinutes: 60
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '24.x'
+            displayName: Use Node.js 24
+          - bash: |
+              set -euo pipefail
+              [[ '${{ parameters.confirmBuild }}' == 'BUILD_CUSTOMER_WEB' ]] || {
+                echo 'ERROR: confirmBuild must be BUILD_CUSTOMER_WEB.' >&2
+                exit 1
+              }
+              cd apps/customer-web-next
+              if [[ -f package-lock.json ]]; then
+                npm ci --ignore-scripts
+              else
+                echo 'WARNING: package-lock.json is missing; npm install is non-deterministic.' >&2
+                npm install --ignore-scripts
+              fi
+              npm run verify
+              if grep -Eiq '(^|[^A-Z_])(PASSWORD|PRIVATE_KEY|CLIENT_SECRET|SERVICE_ACCOUNT_JSON)([^A-Z_]|$)' Dockerfile; then
+                echo 'ERROR: confidential server secret build arguments are forbidden in the web Dockerfile.' >&2
+                exit 1
+              fi
+              grep -q "output: 'standalone'" next.config.ts
+            displayName: Verify Next.js application and image contract
+
+  - stage: BuildWebImage
+    displayName: Build immutable customer web image
+    dependsOn: ValidateWebSource
+    condition: succeeded()
+    jobs:
+      - job: BuildInAcr
+        displayName: Retrieve Key Vault build configuration and build in ACR
+        timeoutInMinutes: 90
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: AzureKeyVault@2
+            displayName: Read approved web build configuration from Key Vault
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              KeyVaultName: kvcravesprodlowl3ing6
+              SecretsFilter: web-firebase-api-key,web-firebase-auth-domain,web-firebase-project-id,web-firebase-app-id,web-firebase-messaging-sender-id,web-firebase-storage-bucket
+              RunAsPreJob: false
+          - task: AzureCLI@2
+            displayName: Build web image without deployment
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                PACK='config/production/production-completion-pack.json'
+                ACR=$(jq -r '.azure.containerRegistry' "$PACK")
+                REPOSITORY=$(jq -r '.web.imageRepository' "$PACK")
+                REQUESTED_TAG='${{ parameters.imageTag }}'
+                TAG=${REQUESTED_TAG:-$(Build.SourceVersion)}
+                [[ "$TAG" != 'latest' ]] || { echo 'ERROR: latest is forbidden.' >&2; exit 1; }
+                [[ "$TAG" =~ ^[A-Za-z0-9._-]{7,128}$ ]] || { echo 'ERROR: invalid image tag.' >&2; exit 1; }
+
+                required=(
+                  WEB_FIREBASE_API_KEY
+                  WEB_FIREBASE_AUTH_DOMAIN
+                  WEB_FIREBASE_PROJECT_ID
+                  WEB_FIREBASE_APP_ID
+                  WEB_FIREBASE_MESSAGING_SENDER_ID
+                  WEB_FIREBASE_STORAGE_BUCKET
+                )
+                for name in "${required[@]}"; do
+                  [[ -n "${!name:-}" ]] || { echo "ERROR: Key Vault build configuration is missing for $name" >&2; exit 1; }
+                done
+
+                az acr build \
+                  --registry "$ACR" \
+                  --image "$REPOSITORY:$TAG" \
+                  --file apps/customer-web-next/Dockerfile \
+                  --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="$WEB_FIREBASE_API_KEY" \
+                  --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="$WEB_FIREBASE_AUTH_DOMAIN" \
+                  --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="$WEB_FIREBASE_PROJECT_ID" \
+                  --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="$WEB_FIREBASE_APP_ID" \
+                  --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$WEB_FIREBASE_MESSAGING_SENDER_ID" \
+                  --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$WEB_FIREBASE_STORAGE_BUCKET" \
+                  --build-arg NEXT_PUBLIC_CASHFREE_MODE='${{ parameters.cashfreeMode }}' \
+                  apps/customer-web-next \
+                  --only-show-errors
+
+                DIGEST=$(az acr repository show --name "$ACR" --image "$REPOSITORY:$TAG" \
+                  --query digest -o tsv --only-show-errors)
+                [[ -n "$DIGEST" ]] || { echo 'ERROR: web image digest was not returned.' >&2; exit 1; }
+
+                OUT='$(Build.ArtifactStagingDirectory)/customer-web-image-manifest'
+                mkdir -p "$OUT"
+                jq -n \
+                  --arg registry "$ACR" \
+                  --arg repository "$REPOSITORY" \
+                  --arg tag "$TAG" \
+                  --arg digest "$DIGEST" \
+                  --arg sourceSha '$(Build.SourceVersion)' \
+                  --arg cashfreeMode '${{ parameters.cashfreeMode }}' \
+                  --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                  '{schemaVersion:1,registry:$registry,repository:$repository,tag:$tag,digest:$digest,sourceSha:$sourceSha,cashfreeMode:$cashfreeMode,generatedAt:$generatedAt,deploymentExecuted:false,keyVaultValuesPublished:false,credentialRotationExecuted:false}' \
+                  >"$OUT/manifest.json"
+                jq -e '.deploymentExecuted == false and .keyVaultValuesPublished == false and .credentialRotationExecuted == false and (.digest | startswith("sha256:"))' \
+                  "$OUT/manifest.json" >/dev/null
+            env:
+              WEB_FIREBASE_API_KEY: $(web-firebase-api-key)
+              WEB_FIREBASE_AUTH_DOMAIN: $(web-firebase-auth-domain)
+              WEB_FIREBASE_PROJECT_ID: $(web-firebase-project-id)
+              WEB_FIREBASE_APP_ID: $(web-firebase-app-id)
+              WEB_FIREBASE_MESSAGING_SENDER_ID: $(web-firebase-messaging-sender-id)
+              WEB_FIREBASE_STORAGE_BUCKET: $(web-firebase-storage-bucket)
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/customer-web-image-manifest
+              artifact: customer-web-image-manifest
+            displayName: Publish immutable customer web image manifest
+
+  - stage: Boundary
+    displayName: Confirm web build-only boundary
+    dependsOn: BuildWebImage
+    condition: succeeded()
+    jobs:
+      - job: ConfirmNoDeployment
+        steps:
+          - checkout: none
+          - bash: |
+              set -euo pipefail
+              echo 'Customer web image was built in ACR using Key Vault-backed build configuration.'
+              echo 'No Container App was updated, no Firebase identity was changed, no payment was created, and no credential was rotated.'
+            displayName: Confirm build-only result

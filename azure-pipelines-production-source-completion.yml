@@ -1,0 +1,199 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: requireCommittedNodeLockfiles
+    displayName: Fail when Node lockfiles are not committed
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: SourceIntegrity
+    displayName: Production completion source integrity
+    jobs:
+      - job: ValidateContracts
+        displayName: Validate manifests, pipelines and secret policy
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 0
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+            displayName: Use Python 3.12
+          - bash: |
+              set -euo pipefail
+              sudo apt-get update
+              sudo apt-get install -y --no-install-recommends libxml2-utils
+            displayName: Install XML validation tools
+          - bash: |
+              set -euo pipefail
+              python -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
+              bash scripts/release/validate-production-completion-pack.sh
+              bash scripts/release/scan-secret-material.sh .
+              python scripts/release/validate-pipeline-yaml.py
+              python scripts/release/validate-flyway-migrations.py
+              bash scripts/release/validate-dockerfiles.sh .
+              bash scripts/release/validate-apim-assets.sh .
+              bash scripts/release/validate-rollback-readiness.sh .
+            displayName: Run production completion source gates
+          - bash: |
+              set -euo pipefail
+              mkdir -p '$(Build.ArtifactStagingDirectory)/production-completion-source'
+              python scripts/release/generate-production-completion-runbook.py \
+                '$(Build.ArtifactStagingDirectory)/production-completion-source/production-completion-run-plan.md'
+              cp config/production/production-completion-pack.json \
+                '$(Build.ArtifactStagingDirectory)/production-completion-source/'
+              git rev-parse HEAD > '$(Build.ArtifactStagingDirectory)/production-completion-source/source-sha.txt'
+              git status --porcelain > '$(Build.ArtifactStagingDirectory)/production-completion-source/git-status.txt'
+              test ! -s '$(Build.ArtifactStagingDirectory)/production-completion-source/git-status.txt'
+            displayName: Generate immutable source-completion evidence
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/production-completion-source
+              artifact: production-completion-source
+            displayName: Publish source-completion evidence
+
+  - stage: BackendVerification
+    displayName: Verify all seven Spring Boot services
+    dependsOn: SourceIntegrity
+    condition: succeeded()
+    jobs:
+      - job: MavenVerify
+        displayName: Java 21 Maven clean verify
+        timeoutInMinutes: 120
+        steps:
+          - checkout: self
+            persistCredentials: false
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '21'
+              jdkArchitectureOption: x64
+              jdkSourceOption: PreInstalled
+            displayName: Use Java 21
+          - bash: |
+              set -euo pipefail
+              mapfile -t services < <(jq -r '.backendServices[].path' config/production/production-completion-pack.json)
+              for service in "${services[@]}"; do
+                echo "========== MAVEN VERIFY $service =========="
+                (cd "$service" && mvn -B -ntp clean verify)
+              done
+            displayName: Compile and test all backend services
+          - task: PublishTestResults@2
+            condition: always()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: '**/target/surefire-reports/TEST-*.xml'
+              failTaskOnFailedTests: true
+              testRunTitle: Craves seven-service Maven verification
+            displayName: Publish backend test results
+
+  - stage: WebAndMobileVerification
+    displayName: Verify Next.js and React Native source
+    dependsOn: BackendVerification
+    condition: succeeded()
+    jobs:
+      - job: NextWeb
+        displayName: Next.js typecheck, test and production build
+        timeoutInMinutes: 60
+        steps:
+          - checkout: self
+            persistCredentials: false
+          - task: UseNode@1
+            inputs:
+              version: '24.x'
+            displayName: Use Node.js 24
+          - bash: |
+              set -euo pipefail
+              cd apps/customer-web-next
+              if [[ -f package-lock.json ]]; then
+                npm ci --ignore-scripts
+              else
+                if [[ '${{ parameters.requireCommittedNodeLockfiles }}' == 'true' ]]; then
+                  echo 'ERROR: apps/customer-web-next/package-lock.json is required.' >&2
+                  exit 1
+                fi
+                echo 'WARNING: package-lock.json is missing; npm install is non-deterministic.' >&2
+                npm install --ignore-scripts
+              fi
+              npm run verify
+              mkdir -p '$(Build.ArtifactStagingDirectory)/customer-web-lockfile'
+              cp package-lock.json '$(Build.ArtifactStagingDirectory)/customer-web-lockfile/package-lock.json'
+              if git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+                echo committed > '$(Build.ArtifactStagingDirectory)/customer-web-lockfile/status.txt'
+              else
+                echo generated-candidate > '$(Build.ArtifactStagingDirectory)/customer-web-lockfile/status.txt'
+              fi
+            displayName: Verify customer web and capture lockfile
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/customer-web-lockfile
+              artifact: customer-web-lockfile
+            displayName: Publish customer web lockfile evidence
+      - job: CustomerMobile
+        displayName: React Native typecheck and tests
+        timeoutInMinutes: 60
+        steps:
+          - checkout: self
+            persistCredentials: false
+          - task: UseNode@1
+            inputs:
+              version: '24.x'
+            displayName: Use Node.js 24
+          - bash: |
+              set -euo pipefail
+              cd apps/mobile/customer-app
+              if [[ -f package-lock.json ]]; then
+                npm ci --ignore-scripts
+              else
+                if [[ '${{ parameters.requireCommittedNodeLockfiles }}' == 'true' ]]; then
+                  echo 'ERROR: apps/mobile/customer-app/package-lock.json is required.' >&2
+                  exit 1
+                fi
+                echo 'WARNING: package-lock.json is missing; npm install is non-deterministic.' >&2
+                npm install --ignore-scripts
+              fi
+              npm run verify
+              mkdir -p '$(Build.ArtifactStagingDirectory)/customer-mobile-lockfile'
+              cp package-lock.json '$(Build.ArtifactStagingDirectory)/customer-mobile-lockfile/package-lock.json'
+              if git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+                echo committed > '$(Build.ArtifactStagingDirectory)/customer-mobile-lockfile/status.txt'
+              else
+                echo generated-candidate > '$(Build.ArtifactStagingDirectory)/customer-mobile-lockfile/status.txt'
+              fi
+            displayName: Verify customer mobile and capture lockfile
+          - bash: |
+              set -euo pipefail
+              bash -n scripts/mobile/bootstrap-customer-mobile-native.sh
+              for forbidden in google-services.json GoogleService-Info.plist '*.keystore' '*.p12' '*.mobileprovision'; do
+                if find apps/mobile/customer-app -name "$forbidden" -print -quit | grep -q .; then
+                  echo "ERROR: mobile credential/config file must not be committed: $forbidden" >&2
+                  exit 1
+                fi
+              done
+            displayName: Verify mobile secure-file boundary
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/customer-mobile-lockfile
+              artifact: customer-mobile-lockfile
+            displayName: Publish customer mobile lockfile evidence
+
+  - stage: FinalGate
+    displayName: Source-only completion gate
+    dependsOn: WebAndMobileVerification
+    condition: succeeded()
+    jobs:
+      - job: ConfirmBoundary
+        displayName: Confirm no live operation occurred
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - bash: |
+              set -euo pipefail
+              echo 'Production completion source verification passed.'
+              echo 'No image was pushed, no Azure resource was changed, no migration was run, no APIM write occurred, no provider was called, and no credential was rotated.'
+            displayName: Confirm source-only boundary

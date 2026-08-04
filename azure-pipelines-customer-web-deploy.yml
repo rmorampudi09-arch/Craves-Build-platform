@@ -1,0 +1,112 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmDeployment
+    displayName: Type DEPLOY_CUSTOMER_WEB to allow the Container App update
+    type: string
+    default: DO_NOT_DEPLOY
+  - name: imageTag
+    displayName: Immutable web image tag produced by the customer web image build
+    type: string
+    default: ''
+  - name: deploymentEnvironment
+    displayName: Azure DevOps environment used for approval and audit
+    type: string
+    default: craves-prodlow-web
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: WebDeploymentPreflight
+    displayName: Validate web deployment without mutation
+    jobs:
+      - job: ValidateWebTarget
+        displayName: Verify image and existing Container App
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - bash: |
+              set -euo pipefail
+              [[ '${{ parameters.confirmDeployment }}' == 'DEPLOY_CUSTOMER_WEB' ]] || {
+                echo 'ERROR: confirmDeployment must be DEPLOY_CUSTOMER_WEB.' >&2
+                exit 1
+              }
+              [[ -n '${{ parameters.imageTag }}' ]] || {
+                echo 'ERROR: imageTag is required.' >&2
+                exit 1
+              }
+              [[ '${{ parameters.imageTag }}' != 'latest' ]] || {
+                echo 'ERROR: latest is forbidden.' >&2
+                exit 1
+              }
+              bash -n scripts/release/deploy-customer-web.sh
+            displayName: Validate explicit deployment request
+          - task: AzureCLI@2
+            displayName: Read back web target and ACR image
+            inputs:
+              azureSubscription: Craves-Dev-Service-Connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                set +x
+                PACK='config/production/production-completion-pack.json'
+                RG=$(jq -r '.azure.resourceGroup' "$PACK")
+                ACR=$(jq -r '.azure.containerRegistry' "$PACK")
+                APP=$(jq -r '.web.containerApp' "$PACK")
+                REPOSITORY=$(jq -r '.web.imageRepository' "$PACK")
+                TAG='${{ parameters.imageTag }}'
+                az containerapp show -g "$RG" -n "$APP" --only-show-errors >/dev/null || {
+                  echo "ERROR: existing web Container App $APP was not found. Creation is a separate billable/manual action." >&2
+                  exit 1
+                }
+                FOUND=$(az acr repository show-tags --name "$ACR" --repository "$REPOSITORY" \
+                  --query "[?@=='$TAG'] | [0]" -o tsv --only-show-errors 2>/dev/null || true)
+                [[ "$FOUND" == "$TAG" ]] || {
+                  echo "ERROR: missing web image $REPOSITORY:$TAG" >&2
+                  exit 1
+                }
+                echo 'Read-only web deployment preflight passed.'
+
+  - stage: DeployCustomerWeb
+    displayName: Deploy customer web Container App
+    dependsOn: WebDeploymentPreflight
+    condition: succeeded()
+    jobs:
+      - deployment: DeployWeb
+        displayName: Update customer web image and verify HTTP 200
+        environment: ${{ parameters.deploymentEnvironment }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  persistCredentials: false
+                  fetchDepth: 1
+                - task: AzureCLI@2
+                  displayName: Deploy web and preserve rollback evidence
+                  inputs:
+                    azureSubscription: Craves-Dev-Service-Connection
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      set +x
+                      chmod +x scripts/release/deploy-customer-web.sh
+                      scripts/release/deploy-customer-web.sh \
+                        'rg-craves-prodlow-centralindia' \
+                        'ca-craves-web-prodlow' \
+                        '${{ parameters.imageTag }}' \
+                        'config/production/production-completion-pack.json' \
+                        '$(Build.ArtifactStagingDirectory)/customer-web-deployment-evidence'
+                  env:
+                    CONFIRM_WEB_DEPLOYMENT: ${{ parameters.confirmDeployment }}
+                - task: PublishPipelineArtifact@1
+                  condition: always()
+                  inputs:
+                    targetPath: $(Build.ArtifactStagingDirectory)/customer-web-deployment-evidence
+                    artifact: customer-web-deployment-evidence
+                  displayName: Publish web deployment evidence

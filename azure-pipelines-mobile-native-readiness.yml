@@ -1,0 +1,147 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: mode
+    displayName: Mobile preparation mode
+    type: string
+    default: source-only
+    values:
+      - source-only
+      - generate-native-artifact
+  - name: confirmNativeBootstrap
+    displayName: Type GENERATE_NATIVE_ARTIFACT when using generate-native-artifact mode
+    type: string
+    default: DO_NOT_GENERATE
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: MobileSourceVerification
+    displayName: Verify React Native customer and chef-mode source
+    jobs:
+      - job: VerifyTypeScript
+        displayName: Typecheck, test and enforce secure mobile boundaries
+        timeoutInMinutes: 60
+        steps:
+          - checkout: self
+            persistCredentials: false
+            fetchDepth: 1
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '24.x'
+            displayName: Use Node.js 24
+          - bash: |
+              set -euo pipefail
+              cd apps/mobile/customer-app
+              if [[ -f package-lock.json ]]; then
+                npm ci --ignore-scripts
+              else
+                echo 'WARNING: package-lock.json is missing; npm install is non-deterministic.' >&2
+                npm install --ignore-scripts
+              fi
+              npm run verify
+            displayName: Verify mobile TypeScript application
+          - bash: |
+              set -euo pipefail
+              bash -n scripts/mobile/bootstrap-customer-mobile-native.sh
+              grep -q 'react-native-keychain' apps/mobile/customer-app/package.json
+              grep -q 'CFEnvironment.SANDBOX' apps/mobile/customer-app/src/screens/MobilePaymentScreen.tsx
+              if grep -R -n 'CFEnvironment.PRODUCTION' apps/mobile/customer-app/src; then
+                echo 'ERROR: Production Cashfree mode is forbidden before controlled activation.' >&2
+                exit 1
+              fi
+              for forbidden in google-services.json GoogleService-Info.plist '*.keystore' '*.jks' '*.p12' '*.mobileprovision'; do
+                if find apps/mobile/customer-app -name "$forbidden" -print -quit | grep -q .; then
+                  echo "ERROR: secure mobile file must not be committed: $forbidden" >&2
+                  exit 1
+                fi
+              done
+              if grep -R -En '(AsyncStorage|localStorage|sessionStorage).*token|console\.(log|debug).*token|refreshToken' \
+                apps/mobile/customer-app/src --include='*.ts' --include='*.tsx'; then
+                echo 'ERROR: insecure token storage or token logging detected.' >&2
+                exit 1
+              fi
+            displayName: Verify Firebase, Cashfree and secure-file boundaries
+          - bash: |
+              set -euo pipefail
+              OUT='$(Build.ArtifactStagingDirectory)/mobile-native-readiness'
+              mkdir -p "$OUT"
+              cat >"$OUT/readiness.json" <<'JSON'
+              {
+                "schemaVersion": 1,
+                "sourceVerified": true,
+                "nativeProjectsCommitted": false,
+                "firebaseNativeConfigCommitted": false,
+                "signingMaterialCommitted": false,
+                "cashfreeProductionEnabled": false,
+                "manualBlockers": [
+                  "Choose and approve the native location library before adding permissions.",
+                  "Approve Android location permission and iOS usage-description wording.",
+                  "Upload Firebase Android/iOS config through Azure DevOps Secure Files or the approved secret workflow.",
+                  "Configure Android signing and Apple signing outside source control.",
+                  "Generate and review native Android/iOS shells before signed builds."
+                ]
+              }
+              JSON
+              jq -e '.sourceVerified == true and .cashfreeProductionEnabled == false' "$OUT/readiness.json" >/dev/null
+            displayName: Generate mobile manual-blocker evidence
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/mobile-native-readiness
+              artifact: mobile-native-readiness
+            displayName: Publish mobile readiness report
+
+  - ${{ if eq(parameters.mode, 'generate-native-artifact') }}:
+      - stage: GenerateNativeArtifact
+        displayName: Generate unconfigured native shells as an artifact
+        dependsOn: MobileSourceVerification
+        condition: succeeded()
+        jobs:
+          - job: BootstrapNative
+            displayName: Generate Android and iOS shell without secrets or signing
+            timeoutInMinutes: 90
+            steps:
+              - checkout: self
+                persistCredentials: false
+                fetchDepth: 1
+              - task: NodeTool@0
+                inputs:
+                  versionSpec: '24.x'
+                displayName: Use Node.js 24
+              - bash: |
+                  set -euo pipefail
+                  [[ '${{ parameters.confirmNativeBootstrap }}' == 'GENERATE_NATIVE_ARTIFACT' ]] || {
+                    echo 'ERROR: confirmNativeBootstrap must be GENERATE_NATIVE_ARTIFACT.' >&2
+                    exit 1
+                  }
+                  [[ ! -d apps/mobile/customer-app/android && ! -d apps/mobile/customer-app/ios ]] || {
+                    echo 'ERROR: native directories already exist; the bootstrap never overwrites them.' >&2
+                    exit 1
+                  }
+                  chmod +x scripts/mobile/bootstrap-customer-mobile-native.sh
+                  CONFIRM_NATIVE_BOOTSTRAP=true scripts/mobile/bootstrap-customer-mobile-native.sh
+                  for forbidden in google-services.json GoogleService-Info.plist '*.keystore' '*.jks' '*.p12' '*.mobileprovision'; do
+                    if find apps/mobile/customer-app -name "$forbidden" -print -quit | grep -q .; then
+                      echo "ERROR: generated artifact unexpectedly contains secure material: $forbidden" >&2
+                      exit 1
+                    fi
+                  done
+                displayName: Generate clean native shell
+              - bash: |
+                  set -euo pipefail
+                  OUT='$(Build.ArtifactStagingDirectory)/customer-mobile-native-shell'
+                  mkdir -p "$OUT"
+                  cp -R apps/mobile/customer-app/android "$OUT/android"
+                  cp -R apps/mobile/customer-app/ios "$OUT/ios"
+                  cat >"$OUT/README.txt" <<'TEXT'
+                  Generated native shell only. It is not production-ready and contains no Firebase config or signing material.
+                  Review React Native Firebase integration, Cashfree native setup, location-library choice, permissions and consent wording before committing native projects.
+                  TEXT
+                displayName: Stage native shell artifact
+              - task: PublishPipelineArtifact@1
+                inputs:
+                  targetPath: $(Build.ArtifactStagingDirectory)/customer-mobile-native-shell
+                  artifact: customer-mobile-native-shell
+                displayName: Publish unconfigured native shell

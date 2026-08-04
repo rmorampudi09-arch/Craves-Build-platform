@@ -7,8 +7,11 @@ on:
       - 'services/**'
       - 'config/production/backend-completion-pack.json'
       - 'config/production/azure-resource-inventory.json'
+      - 'infra/apim/**'
+      - 'scripts/apim/**'
       - 'scripts/release/**'
-      - 'azure-pipelines-backend-completion.yml'
+      - 'azure-pipelines-backend-*.yml'
+      - 'azure-pipelines-internal-admin-rbac-*.yml'
       - '.github/workflows/backend-completion-ci.yml'
   workflow_dispatch:
 
@@ -38,6 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/release/validate-backend-completion-pack.sh
+          bash scripts/release/validate-internal-admin-rbac.sh
           bash scripts/release/scan-secret-material.sh .
           python scripts/release/validate-flyway-migrations.py
           while IFS= read -r service_path; do

@@ -1,0 +1,41 @@
+name: Admin dashboard lockfile sync
+
+on:
+  push:
+    branches:
+      - feature/admin-dashboard-v2
+    paths:
+      - apps/customer-web-next/package.json
+      - .github/workflows/admin-dashboard-lockfile-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/admin-dashboard-v2
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - name: Update package lock only
+        working-directory: apps/customer-web-next
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit reproducible lockfile
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- apps/customer-web-next/package-lock.json; then
+            echo "Package lock is already synchronized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/customer-web-next/package-lock.json
+          git commit -m "chore(admin): synchronize Syncfusion dependency lockfile"
+          git push origin HEAD:feature/admin-dashboard-v2

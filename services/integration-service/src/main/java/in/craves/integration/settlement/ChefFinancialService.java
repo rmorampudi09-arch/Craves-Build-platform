@@ -29,7 +29,7 @@ public class ChefFinancialService {
     }
 
     public EarningResponse create(CravesPrincipal principal, CreateEarningRequest request) {
-        requireRole(principal, "ADMIN");
+        requireFinanceOperator(principal);
         String source = normalize(request.orderSource());
         if (!ORDER_SOURCES.contains(source)) {
             throw badRequest("orderSource must be ON_DEMAND or SUBSCRIPTION");
@@ -53,12 +53,12 @@ public class ChefFinancialService {
     }
 
     public EarningResponse approve(CravesPrincipal principal, UUID id, String reason) {
-        requireRole(principal, "ADMIN");
+        requireFinanceOperator(principal);
         return translate(() -> repository.approve(id, principal.identityId(), requiredReason(reason)));
     }
 
     public EarningResponse reverse(CravesPrincipal principal, UUID id, String reason) {
-        requireRole(principal, "ADMIN");
+        requireFinanceOperator(principal);
         return translate(() -> repository.reverse(id, principal.identityId(), requiredReason(reason)));
     }
 
@@ -68,7 +68,7 @@ public class ChefFinancialService {
     }
 
     public List<EarningResponse> listAll(CravesPrincipal principal, String status, int limit) {
-        requireRole(principal, "ADMIN");
+        requireFinanceReader(principal);
         String normalized = StringUtils.hasText(status) ? normalize(status) : null;
         return repository.listAll(normalized, bounded(limit));
     }
@@ -77,7 +77,7 @@ public class ChefFinancialService {
         CravesPrincipal principal,
         CreateSettlementBatchRequest request
     ) {
-        requireRole(principal, "ADMIN");
+        requireFinanceOperator(principal);
         CreateSettlementBatchRequest normalized = new CreateSettlementBatchRequest(
             request.batchReference().trim(),
             normalizeCurrency(request.currency()),
@@ -92,7 +92,7 @@ public class ChefFinancialService {
         UUID batchId,
         SettlementStatusRequest request
     ) {
-        requireRole(principal, "ADMIN");
+        requireFinanceOperator(principal);
         String status = normalize(request.status());
         if (!BATCH_TARGETS.contains(status)) {
             throw badRequest("Unsupported settlement batch status");
@@ -110,7 +110,7 @@ public class ChefFinancialService {
     }
 
     public List<SettlementBatchResponse> listBatches(CravesPrincipal principal, int limit) {
-        requireRole(principal, "ADMIN");
+        requireFinanceReader(principal);
         return repository.listBatches(bounded(limit));
     }
 
@@ -158,6 +158,18 @@ public class ChefFinancialService {
         return normalized;
     }
 
+    private static void requireFinanceOperator(CravesPrincipal principal) {
+        if (principal == null || !principal.hasAnyRole("PLATFORM_ADMIN", "PAYMENTS_ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Payments administration role is required");
+        }
+    }
+
+    private static void requireFinanceReader(CravesPrincipal principal) {
+        if (principal == null || !principal.hasAnyRole("PLATFORM_ADMIN", "PAYMENTS_ADMIN", "AUDIT_ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Financial ledger read role is required");
+        }
+    }
+
     private static void requireRole(CravesPrincipal principal, String role) {
         if (principal == null || !principal.hasRole(role)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, role + " role is required");
@@ -183,3 +195,4 @@ public class ChefFinancialService {
         T get();
     }
 }
+

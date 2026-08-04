@@ -43,7 +43,7 @@ public class AdminNotificationRecoveryController {
         @RequestParam(defaultValue = "50") int limit
     ) {
         requireEnabled();
-        requireAdmin(authentication);
+        requireNotificationReader(authentication);
         int boundedLimit = Math.min(Math.max(limit, 1), properties.getMaximumListSize());
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
@@ -58,7 +58,7 @@ public class AdminNotificationRecoveryController {
         @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader
     ) {
         requireEnabled();
-        CravesPrincipal principal = requireAdmin(authentication);
+        CravesPrincipal principal = requireNotificationOperator(authentication);
         UUID correlationId = correlationId(correlationHeader);
         RecoveryResponse response = repository.requeue(
             requestId, principal.identityId(), normalizeReason(request.reason()), correlationId
@@ -78,12 +78,25 @@ public class AdminNotificationRecoveryController {
         }
     }
 
-    private static CravesPrincipal requireAdmin(Authentication authentication) {
+    private static CravesPrincipal requireNotificationOperator(Authentication authentication) {
+        CravesPrincipal principal = principal(authentication);
+        if (!principal.hasAnyRole("PLATFORM_ADMIN", "NOTIFICATION_ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Notification recovery role is required");
+        }
+        return principal;
+    }
+
+    private static CravesPrincipal requireNotificationReader(Authentication authentication) {
+        CravesPrincipal principal = principal(authentication);
+        if (!principal.hasAnyRole("PLATFORM_ADMIN", "NOTIFICATION_ADMIN", "AUDIT_ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Notification recovery read role is required");
+        }
+        return principal;
+    }
+
+    private static CravesPrincipal principal(Authentication authentication) {
         if (authentication == null || !(authentication.getPrincipal() instanceof CravesPrincipal principal)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
-        }
-        if (!principal.hasRole("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN role is required");
         }
         return principal;
     }
@@ -111,3 +124,4 @@ public class AdminNotificationRecoveryController {
         @NotBlank @Size(min = 10, max = 500) String reason
     ) {}
 }
+

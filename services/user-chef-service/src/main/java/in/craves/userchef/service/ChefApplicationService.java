@@ -145,7 +145,7 @@ public class ChefApplicationService {
     }
 
     public List<ChefApplicationResponse> listApplications(CurrentUser admin, ChefApplicationStatus status) {
-        requireAdmin(admin);
+        requireReviewAccess(admin);
         if (status == null || status == ChefApplicationStatus.NOT_SUBMITTED) {
             return findApplications("", new Object[]{});
         }
@@ -153,7 +153,7 @@ public class ChefApplicationService {
     }
 
     public ChefApplicationResponse getApplicationForAdmin(CurrentUser admin, UUID applicationId) {
-        requireAdmin(admin);
+        requireReviewAccess(admin);
         List<ChefApplicationResponse> rows = findApplications("WHERE id = ?", applicationId);
         if (rows.isEmpty()) {
             throw ApiException.notFound("CHEF_APPLICATION_NOT_FOUND", "Chef application was not found");
@@ -163,7 +163,7 @@ public class ChefApplicationService {
 
     @Transactional
     public ChefApplicationResponse approve(CurrentUser admin, UUID applicationId) {
-        requireAdmin(admin);
+        requireDecisionAccess(admin);
         ChefApplicationResponse application = getApplicationForAdmin(admin, applicationId);
         if (application.status() != ChefApplicationStatus.PENDING) {
             throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be approved");
@@ -177,9 +177,13 @@ public class ChefApplicationService {
 
     @Transactional
     public ChefApplicationResponse reject(CurrentUser admin, UUID applicationId, AdminDecisionRequest request) {
-        requireAdmin(admin);
+        requireDecisionAccess(admin);
         if (request == null || !StringUtils.hasText(request.reason())) {
             throw ApiException.badRequest("REJECTION_REASON_REQUIRED", "Rejection reason is required");
+        }
+        ChefApplicationResponse application = getApplicationForAdmin(admin, applicationId);
+        if (application.status() != ChefApplicationStatus.PENDING) {
+            throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be rejected");
         }
         updateDecision(applicationId, admin.identityId(), "REJECTED", request.reason());
         ChefApplicationResponse rejected = getApplicationForAdmin(admin, applicationId);
@@ -278,9 +282,17 @@ public class ChefApplicationService {
         );
     }
 
-    private void requireAdmin(CurrentUser user) {
-        if (!user.hasRole("ADMIN")) {
-            throw ApiException.forbidden("ADMIN_ROLE_REQUIRED", "Admin role is required");
+    private static void requireReviewAccess(CurrentUser user) {
+        if (user == null || !user.hasAnyRole(
+            "PLATFORM_ADMIN", "CHEF_ADMIN", "COMPLIANCE_ADMIN", "AUDIT_ADMIN"
+        )) {
+            throw ApiException.forbidden("CHEF_REVIEW_ROLE_REQUIRED", "Chef review access is required");
+        }
+    }
+
+    private static void requireDecisionAccess(CurrentUser user) {
+        if (user == null || !user.hasAnyRole("PLATFORM_ADMIN", "CHEF_ADMIN")) {
+            throw ApiException.forbidden("CHEF_DECISION_ROLE_REQUIRED", "Chef decision access is required");
         }
     }
 

@@ -56,12 +56,22 @@ public class AdminAccountInterventionController {
     @GetMapping("/{identityId}/intervention-status")
     public ResponseEntity<InterventionResponse> status(
         Authentication authentication,
-        @PathVariable UUID identityId
+        @PathVariable UUID identityId,
+        @RequestHeader("X-Admin-Reason") String reason,
+        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader
     ) {
         requireEnabled();
-        requireAdmin(authentication);
+        CurrentUser actor = requireAccountReader(authentication);
+        UUID correlationId = correlationId(correlationHeader);
         try {
-            return noStore(repository.find(identityId));
+            InterventionResponse response = repository.find(identityId);
+            repository.auditStatusRead(
+                actor.identityId(), identityId, normalizeReason(reason), correlationId
+            );
+            return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header("X-Correlation-ID", correlationId.toString())
+                .body(response);
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, exception.getMessage());
         }
@@ -75,7 +85,7 @@ public class AdminAccountInterventionController {
         String correlationHeader
     ) {
         requireEnabled();
-        CurrentUser actor = requireAdmin(authentication);
+        CurrentUser actor = requirePlatformAdmin(authentication);
         UUID correlationId = correlationId(correlationHeader);
         try {
             return noStore(repository.request(
@@ -97,12 +107,29 @@ public class AdminAccountInterventionController {
         }
     }
 
-    private static CurrentUser requireAdmin(Authentication authentication) {
+    private static CurrentUser requirePlatformAdmin(Authentication authentication) {
+        CurrentUser user = principal(authentication);
+        if (!user.hasRole(InternalAdminRoles.PLATFORM_ADMIN)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PLATFORM_ADMIN role is required");
+        }
+        return user;
+    }
+
+    private static CurrentUser requireAccountReader(Authentication authentication) {
+        CurrentUser user = principal(authentication);
+        if (!user.hasAnyRole(
+            InternalAdminRoles.PLATFORM_ADMIN,
+            InternalAdminRoles.SUPPORT_ADMIN,
+            InternalAdminRoles.AUDIT_ADMIN
+        )) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account status access is required");
+        }
+        return user;
+    }
+
+    private static CurrentUser principal(Authentication authentication) {
         if (authentication == null || !(authentication.getPrincipal() instanceof CurrentUser currentUser)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
-        }
-        if (currentUser.roles() == null || currentUser.roles().stream().noneMatch("ADMIN"::equalsIgnoreCase)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN role is required");
         }
         return currentUser;
     }

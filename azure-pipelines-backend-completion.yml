@@ -60,6 +60,7 @@ stages:
               set -euo pipefail
               python -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
               bash scripts/release/validate-backend-completion-pack.sh
+              bash scripts/release/validate-internal-admin-rbac.sh
               bash scripts/release/scan-secret-material.sh .
               python scripts/release/validate-flyway-migrations.py
               while IFS= read -r service_path; do

@@ -145,8 +145,26 @@ steps:
           DB_REF=$(ref SPRING_DATASOURCE_PASSWORD); JWT_REF=$(ref CRAVES_JWT_VERIFICATION_PEM_BASE64); INTERNAL_REF=$(ref CRAVES_INTERNAL_SERVICE_SECRET); ACTUAL_USER_CHEF=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_USER_CHEF_INTERNAL_BASE_URL")][0].value // ""' <<<"$JSON")
           echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE flagsOk=$FLAGS_OK dbRef=$DB_REF jwtRef=$JWT_REF internalRef=$INTERNAL_REF userChef=$ACTUAL_USER_CHEF"
           if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$DB_REF" == 'db-password' && "$JWT_REF" == 'jwt-verify-pem' && "$INTERNAL_REF" == 'craves-internal-service-secret' && "$ACTUAL_USER_CHEF" == "$USER_CHEF_URL" ]]; then
-            FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON"); [[ -n "$FQDN" ]] || exit 1
-            curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null
+            FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON")
+            [[ -n "$FQDN" ]] || { echo 'ERROR: Order FQDN is missing.' >&2; exit 1; }
+            PUBLIC_HEALTH_OK=false
+            for health_attempt in $(seq 1 18); do
+              HEALTH_BODY=$(mktemp)
+              HTTP_CODE=$(curl --silent --show-error --max-time 30 --output "$HEALTH_BODY" --write-out '%{http_code}' "https://$FQDN/actuator/health" || true)
+              if [[ "$HTTP_CODE" == '200' ]] && jq -e '.status == "UP"' "$HEALTH_BODY" >/dev/null 2>&1; then
+                PUBLIC_HEALTH_OK=true
+                rm -f "$HEALTH_BODY"
+                break
+              fi
+              echo "Public Order health attempt $health_attempt/18 returned HTTP ${HTTP_CODE:-curl-error}; waiting for ingress/readiness propagation."
+              rm -f "$HEALTH_BODY"
+              sleep 10
+            done
+            if [[ "$PUBLIC_HEALTH_OK" != true ]]; then
+              az containerapp logs show -g "$RG" -n "$APP" --revision "$LATEST" --type console --tail 200 --format text || true
+              echo 'ERROR: Order revision is healthy in Azure but its public health endpoint did not become ready within 3 minutes.' >&2
+              exit 1
+            fi
             echo "SUCCESS: Order revision $LATEST is healthy, secret-bound and all launch workers/consumers are fail-closed. Rollback image: $PREVIOUS_IMAGE"
             exit 0
           fi

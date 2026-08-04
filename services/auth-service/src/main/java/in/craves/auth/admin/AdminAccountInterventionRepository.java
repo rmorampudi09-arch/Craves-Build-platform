@@ -147,6 +147,17 @@ public class AdminAccountInterventionRepository {
         );
     }
 
+    public void auditStatusRead(UUID actorIdentityId, UUID targetIdentityId, String reason, UUID correlationId) {
+        jdbcTemplate.update(
+            """
+            INSERT INTO auth_audit (
+                id, identity_id, action, actor_identity_id, details, correlation_id, created_at
+            ) VALUES (?, ?, 'ACCOUNT_INTERVENTION_STATUS_READ', ?, ?, ?, now())
+            """,
+            UUID.randomUUID(), targetIdentityId, actorIdentityId, reason, correlationId.toString()
+        );
+    }
+
     @Transactional
     public List<ProviderWorkItem> claimProviderWork(int batchSize, int maxAttempts, int staleLockMinutes) {
         jdbcTemplate.update(
@@ -188,8 +199,7 @@ public class AdminAccountInterventionRepository {
             candidates AS (
                 SELECT DISTINCT ON (intervention.identity_id) intervention.id
                   FROM auth_admin_intervention intervention
-                  JOIN due_identities due_identity
-                    ON due_identity.id = intervention.identity_id
+                  JOIN due_identities due_identity ON due_identity.id = intervention.identity_id
                  WHERE intervention.provider_attempt_count < ?
                    AND intervention.provider_status IN ('PENDING', 'FAILED')
                    AND intervention.provider_next_attempt_at <= now()
@@ -218,9 +228,7 @@ public class AdminAccountInterventionRepository {
 
     public boolean currentProviderDisabled(UUID identityId) {
         Boolean disabled = jdbcTemplate.queryForObject(
-            "SELECT status = 'SUSPENDED' FROM auth_identity WHERE id = ?",
-            Boolean.class,
-            identityId
+            "SELECT status = 'SUSPENDED' FROM auth_identity WHERE id = ?", Boolean.class, identityId
         );
         if (disabled == null) {
             throw new IllegalStateException("Identity provider state could not be resolved");
@@ -244,17 +252,10 @@ public class AdminAccountInterventionRepository {
         }
     }
 
-    public void markProviderFailure(
-        ProviderWorkItem item,
-        int maxAttempts,
-        int retryBaseSeconds,
-        Throwable error
-    ) {
+    public void markProviderFailure(ProviderWorkItem item, int maxAttempts, int retryBaseSeconds, Throwable error) {
         boolean dead = item.attemptCount() >= maxAttempts;
-        long delay = Math.min(
-            3600L,
-            (long) retryBaseSeconds * (1L << Math.min(10, Math.max(0, item.attemptCount() - 1)))
-        );
+        long delay = Math.min(3600L,
+            (long) retryBaseSeconds * (1L << Math.min(10, Math.max(0, item.attemptCount() - 1))));
         jdbcTemplate.update(
             """
             UPDATE auth_admin_intervention
@@ -263,8 +264,8 @@ public class AdminAccountInterventionRepository {
                    updated_at = now()
              WHERE id = ? AND provider_lock_token = ? AND provider_status = 'PROCESSING'
             """,
-            dead ? "DEAD_LETTER" : "FAILED", dead ? 0L : delay, safe(error == null ? null : error.getMessage()),
-            item.interventionId(), item.lockToken()
+            dead ? "DEAD_LETTER" : "FAILED", dead ? 0L : delay,
+            safe(error == null ? null : error.getMessage()), item.interventionId(), item.lockToken()
         );
     }
 
@@ -277,13 +278,8 @@ public class AdminAccountInterventionRepository {
     }
 
     private static InterventionResponse response(
-        UUID interventionId,
-        IdentityRow identity,
-        String action,
-        String targetStatus,
-        String providerStatus,
-        boolean changed,
-        UUID correlationId
+        UUID interventionId, IdentityRow identity, String action, String targetStatus,
+        String providerStatus, boolean changed, UUID correlationId
     ) {
         return new InterventionResponse(
             interventionId, identity.id(), maskPhone(identity.phoneNumber()), identity.status(),
@@ -293,35 +289,28 @@ public class AdminAccountInterventionRepository {
     }
 
     private static String maskPhone(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
+        if (value == null || value.isBlank()) return null;
         String normalized = value.replaceAll("\\s", "");
         int visible = Math.min(4, normalized.length());
         return "*".repeat(Math.max(0, normalized.length() - visible)) + normalized.substring(normalized.length() - visible);
     }
 
     private static String safe(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
+        if (value == null || value.isBlank()) return null;
         String normalized = value.replace('\n', ' ').replace('\r', ' ').trim();
         return normalized.length() > 1000 ? normalized.substring(0, 1000) : normalized;
     }
 
     private record IdentityRow(UUID id, String firebaseUid, String phoneNumber, String status, long tokenVersion) {}
-
     private record InterventionRow(
         UUID id, String action, String requestedStatus, String providerStatus,
         int providerAttemptCount, String providerLastError, OffsetDateTime createdAt,
         OffsetDateTime providerCompletedAt, UUID correlationId
     ) {}
-
     public record ProviderWorkItem(
         UUID interventionId, UUID identityId, String firebaseUid, String action,
         int attemptCount, UUID lockToken
     ) {}
-
     public record InterventionResponse(
         UUID interventionId, UUID identityId, String maskedPhoneNumber, String status,
         long tokenVersion, String action, String requestedStatus, String providerStatus,

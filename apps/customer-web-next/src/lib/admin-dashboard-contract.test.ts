@@ -11,7 +11,7 @@ const valid = {
   statusCounts: [{ status: "PREPARING", count: 3 }],
   orderTrend: [{ date: "2026-08-04", count: 12 }],
   recentExceptions: [{
-    orderId: "99999999-9999-4999-8999-999999999999", kitchenName: "Lakshmi Kitchen",
+    orderId: "99999999-9999-9999-9999-999999999999", kitchenName: "Lakshmi Kitchen",
     status: "REFUND_PENDING", updatedAt: "2026-08-04T11:55:00Z", customerIdentityId: "must-not-pass-through"
   }]
 };
@@ -19,6 +19,7 @@ const valid = {
 test("accepts the bounded operational dashboard contract", () => {
   const parsed = parseAdminDashboardSummary(valid);
   assert.equal(parsed?.metrics.ordersCreated24h, 12);
+  assert.equal(parsed?.recentExceptions[0]?.orderId, "99999999-9999-9999-9999-999999999999");
   assert.equal(parsed?.recentExceptions[0]?.kitchenName, "Lakshmi Kitchen");
   assert.equal("customerIdentityId" in (parsed?.recentExceptions[0] ?? {}), false);
 });

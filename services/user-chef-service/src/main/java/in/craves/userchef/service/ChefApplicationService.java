@@ -63,38 +63,17 @@ public class ChefApplicationService {
             jdbcTemplate.update(
                 "INSERT INTO chef_application (id, identity_id, phone_number, email, first_name, last_name, address_line1, address_line2, landmark, city, state, postal_code, latitude, longitude, status, submitted_at, created_at, updated_at) " +
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', now(), now(), now())",
-                UUID.randomUUID(),
-                user.identityId(),
-                user.phoneNumber(),
-                request.email(),
-                request.firstName(),
-                request.lastName(),
-                request.addressLine1(),
-                blankToNull(request.addressLine2()),
-                blankToNull(request.landmark()),
-                request.city(),
-                request.state(),
-                blankToNull(request.postalCode()),
-                request.latitude(),
-                request.longitude()
+                UUID.randomUUID(), user.identityId(), user.phoneNumber(), request.email(), request.firstName(),
+                request.lastName(), request.addressLine1(), blankToNull(request.addressLine2()),
+                blankToNull(request.landmark()), request.city(), request.state(), blankToNull(request.postalCode()),
+                request.latitude(), request.longitude()
             );
         } else {
             jdbcTemplate.update(
-                "UPDATE chef_application SET phone_number = ?, email = ?, first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, landmark = ?, city = ?, state = ?, postal_code = ?, latitude = ?, longitude = ?, status = 'PENDING', rejection_reason = NULL, reviewed_at = NULL, reviewed_by_identity_id = NULL, submitted_at = now(), updated_at = now() " +
-                    "WHERE identity_id = ?",
-                user.phoneNumber(),
-                request.email(),
-                request.firstName(),
-                request.lastName(),
-                request.addressLine1(),
-                blankToNull(request.addressLine2()),
-                blankToNull(request.landmark()),
-                request.city(),
-                request.state(),
-                blankToNull(request.postalCode()),
-                request.latitude(),
-                request.longitude(),
-                user.identityId()
+                "UPDATE chef_application SET phone_number = ?, email = ?, first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, landmark = ?, city = ?, state = ?, postal_code = ?, latitude = ?, longitude = ?, status = 'PENDING', rejection_reason = NULL, reviewed_at = NULL, reviewed_by_identity_id = NULL, submitted_at = now(), updated_at = now() WHERE identity_id = ?",
+                user.phoneNumber(), request.email(), request.firstName(), request.lastName(), request.addressLine1(),
+                blankToNull(request.addressLine2()), blankToNull(request.landmark()), request.city(), request.state(),
+                blankToNull(request.postalCode()), request.latitude(), request.longitude(), user.identityId()
             );
         }
         return getMyApplication(user);
@@ -110,42 +89,28 @@ public class ChefApplicationService {
         StoredDocument stored = storageService.uploadKycDocument(user.identityId(), documentType, file);
         List<UUID> existing = jdbcTemplate.query(
             "SELECT id FROM chef_kyc_document WHERE application_id = ? AND document_type = ?",
-            (rs, rowNum) -> rs.getObject("id", UUID.class),
-            application.id(),
-            documentType.name()
+            (rs, rowNum) -> rs.getObject("id", UUID.class), application.id(), documentType.name()
         );
 
         UUID documentId = existing.isEmpty() ? UUID.randomUUID() : existing.getFirst();
         if (existing.isEmpty()) {
             jdbcTemplate.update(
-                "INSERT INTO chef_kyc_document (id, application_id, identity_id, document_type, original_file_name, blob_container, blob_name, content_type, file_size_bytes, status, created_at, updated_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'UPLOADED', now(), now())",
-                documentId,
-                application.id(),
-                user.identityId(),
-                documentType.name(),
-                stored.originalFileName(),
-                stored.container(),
-                stored.blobName(),
-                stored.contentType(),
-                stored.fileSizeBytes()
+                "INSERT INTO chef_kyc_document (id, application_id, identity_id, document_type, original_file_name, blob_container, blob_name, content_type, file_size_bytes, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'UPLOADED', now(), now())",
+                documentId, application.id(), user.identityId(), documentType.name(), stored.originalFileName(),
+                stored.container(), stored.blobName(), stored.contentType(), stored.fileSizeBytes()
             );
         } else {
             jdbcTemplate.update(
                 "UPDATE chef_kyc_document SET original_file_name = ?, blob_container = ?, blob_name = ?, content_type = ?, file_size_bytes = ?, status = 'UPLOADED', updated_at = now() WHERE id = ?",
-                stored.originalFileName(),
-                stored.container(),
-                stored.blobName(),
-                stored.contentType(),
-                stored.fileSizeBytes(),
-                documentId
+                stored.originalFileName(), stored.container(), stored.blobName(), stored.contentType(),
+                stored.fileSizeBytes(), documentId
             );
         }
         return getDocument(documentId);
     }
 
     public List<ChefApplicationResponse> listApplications(CurrentUser admin, ChefApplicationStatus status) {
-        requireAdmin(admin);
+        requireReviewAccess(admin);
         if (status == null || status == ChefApplicationStatus.NOT_SUBMITTED) {
             return findApplications("", new Object[]{});
         }
@@ -153,7 +118,7 @@ public class ChefApplicationService {
     }
 
     public ChefApplicationResponse getApplicationForAdmin(CurrentUser admin, UUID applicationId) {
-        requireAdmin(admin);
+        requireReviewAccess(admin);
         List<ChefApplicationResponse> rows = findApplications("WHERE id = ?", applicationId);
         if (rows.isEmpty()) {
             throw ApiException.notFound("CHEF_APPLICATION_NOT_FOUND", "Chef application was not found");
@@ -163,7 +128,7 @@ public class ChefApplicationService {
 
     @Transactional
     public ChefApplicationResponse approve(CurrentUser admin, UUID applicationId) {
-        requireAdmin(admin);
+        requireDecisionAccess(admin);
         ChefApplicationResponse application = getApplicationForAdmin(admin, applicationId);
         if (application.status() != ChefApplicationStatus.PENDING) {
             throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be approved");
@@ -177,9 +142,13 @@ public class ChefApplicationService {
 
     @Transactional
     public ChefApplicationResponse reject(CurrentUser admin, UUID applicationId, AdminDecisionRequest request) {
-        requireAdmin(admin);
+        requireDecisionAccess(admin);
         if (request == null || !StringUtils.hasText(request.reason())) {
             throw ApiException.badRequest("REJECTION_REASON_REQUIRED", "Rejection reason is required");
+        }
+        ChefApplicationResponse application = getApplicationForAdmin(admin, applicationId);
+        if (application.status() != ChefApplicationStatus.PENDING) {
+            throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be rejected");
         }
         updateDecision(applicationId, admin.identityId(), "REJECTED", request.reason());
         ChefApplicationResponse rejected = getApplicationForAdmin(admin, applicationId);
@@ -190,21 +159,14 @@ public class ChefApplicationService {
     private void updateDecision(UUID applicationId, UUID adminIdentityId, String decision, String reason) {
         int updated = jdbcTemplate.update(
             "UPDATE chef_application SET status = ?, rejection_reason = ?, reviewed_at = now(), reviewed_by_identity_id = ?, updated_at = now() WHERE id = ?",
-            decision,
-            blankToNull(reason),
-            adminIdentityId,
-            applicationId
+            decision, blankToNull(reason), adminIdentityId, applicationId
         );
         if (updated == 0) {
             throw ApiException.notFound("CHEF_APPLICATION_NOT_FOUND", "Chef application was not found");
         }
         jdbcTemplate.update(
             "INSERT INTO admin_chef_decision_audit (id, application_id, admin_identity_id, decision, reason, created_at) VALUES (?, ?, ?, ?, ?, now())",
-            UUID.randomUUID(),
-            applicationId,
-            adminIdentityId,
-            decision,
-            blankToNull(reason)
+            UUID.randomUUID(), applicationId, adminIdentityId, decision, blankToNull(reason)
         );
     }
 
@@ -217,11 +179,7 @@ public class ChefApplicationService {
     }
 
     private KycDocumentResponse getDocument(UUID documentId) {
-        return jdbcTemplate.query(
-            "SELECT * FROM chef_kyc_document WHERE id = ?",
-            this::mapDocument,
-            documentId
-        ).getFirst();
+        return jdbcTemplate.query("SELECT * FROM chef_kyc_document WHERE id = ?", this::mapDocument, documentId).getFirst();
     }
 
     private List<ChefApplicationResponse> findApplications(String whereClause, Object... args) {
@@ -232,55 +190,44 @@ public class ChefApplicationService {
     private ChefApplicationResponse mapApplication(ResultSet rs, int rowNum) throws SQLException {
         UUID applicationId = rs.getObject("id", UUID.class);
         return new ChefApplicationResponse(
-            applicationId,
-            rs.getObject("identity_id", UUID.class),
-            rs.getString("phone_number"),
-            rs.getString("email"),
-            rs.getString("first_name"),
-            rs.getString("last_name"),
-            rs.getString("address_line1"),
-            rs.getString("address_line2"),
-            rs.getString("landmark"),
-            rs.getString("city"),
-            rs.getString("state"),
-            rs.getString("postal_code"),
-            rs.getBigDecimal("latitude"),
-            rs.getBigDecimal("longitude"),
-            ChefApplicationStatus.valueOf(rs.getString("status")),
-            rs.getString("rejection_reason"),
-            instant(rs, "submitted_at"),
-            instant(rs, "reviewed_at"),
-            rs.getObject("reviewed_by_identity_id", UUID.class),
-            listDocuments(applicationId)
+            applicationId, rs.getObject("identity_id", UUID.class), rs.getString("phone_number"),
+            rs.getString("email"), rs.getString("first_name"), rs.getString("last_name"),
+            rs.getString("address_line1"), rs.getString("address_line2"), rs.getString("landmark"),
+            rs.getString("city"), rs.getString("state"), rs.getString("postal_code"),
+            rs.getBigDecimal("latitude"), rs.getBigDecimal("longitude"),
+            ChefApplicationStatus.valueOf(rs.getString("status")), rs.getString("rejection_reason"),
+            instant(rs, "submitted_at"), instant(rs, "reviewed_at"),
+            rs.getObject("reviewed_by_identity_id", UUID.class), listDocuments(applicationId)
         );
     }
 
     private List<KycDocumentResponse> listDocuments(UUID applicationId) {
         return jdbcTemplate.query(
             "SELECT * FROM chef_kyc_document WHERE application_id = ? ORDER BY document_type",
-            this::mapDocument,
-            applicationId
+            this::mapDocument, applicationId
         );
     }
 
     private KycDocumentResponse mapDocument(ResultSet rs, int rowNum) throws SQLException {
         return new KycDocumentResponse(
-            rs.getObject("id", UUID.class),
-            KycDocumentType.valueOf(rs.getString("document_type")),
-            rs.getString("original_file_name"),
-            rs.getString("blob_container"),
-            rs.getString("blob_name"),
-            rs.getString("content_type"),
-            rs.getLong("file_size_bytes"),
-            rs.getString("status"),
-            instant(rs, "created_at"),
-            instant(rs, "updated_at")
+            rs.getObject("id", UUID.class), KycDocumentType.valueOf(rs.getString("document_type")),
+            rs.getString("original_file_name"), rs.getString("blob_container"), rs.getString("blob_name"),
+            rs.getString("content_type"), rs.getLong("file_size_bytes"), rs.getString("status"),
+            instant(rs, "created_at"), instant(rs, "updated_at")
         );
     }
 
-    private void requireAdmin(CurrentUser user) {
-        if (!user.hasRole("ADMIN")) {
-            throw ApiException.forbidden("ADMIN_ROLE_REQUIRED", "Admin role is required");
+    private static void requireReviewAccess(CurrentUser user) {
+        if (user == null || !user.hasAnyRole(
+            "PLATFORM_ADMIN", "CHEF_ADMIN", "COMPLIANCE_ADMIN", "AUDIT_ADMIN"
+        )) {
+            throw ApiException.forbidden("CHEF_REVIEW_ROLE_REQUIRED", "Chef review access is required");
+        }
+    }
+
+    private static void requireDecisionAccess(CurrentUser user) {
+        if (user == null || !user.hasAnyRole("PLATFORM_ADMIN", "CHEF_ADMIN")) {
+            throw ApiException.forbidden("CHEF_DECISION_ROLE_REQUIRED", "Chef decision access is required");
         }
     }
 

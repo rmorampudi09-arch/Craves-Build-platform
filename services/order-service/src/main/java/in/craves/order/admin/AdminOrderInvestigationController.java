@@ -70,8 +70,7 @@ public class AdminOrderInvestigationController {
                 rs.getString("refund_provider_status"), rs.getString("cf_refund_id"),
                 rs.getObject("refund_status_updated_at", OffsetDateTime.class),
                 rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
-            ),
-            orderId
+            ), orderId
         ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order was not found"));
 
         List<OrderItemSnapshot> items = jdbcTemplate.query(
@@ -86,8 +85,7 @@ public class AdminOrderInvestigationController {
                 rs.getObject("menu_item_id", UUID.class), rs.getString("item_name_snapshot"),
                 rs.getString("category_snapshot"), rs.getString("food_type_snapshot"),
                 rs.getBigDecimal("unit_price_snapshot"), rs.getInt("quantity"), rs.getBigDecimal("line_total")
-            ),
-            orderId
+            ), orderId
         );
 
         List<StatusHistoryEntry> statusHistory = jdbcTemplate.query(
@@ -101,8 +99,7 @@ public class AdminOrderInvestigationController {
                 rs.getString("old_status"), rs.getString("new_status"),
                 rs.getObject("actor_identity_id", UUID.class), rs.getString("reason"),
                 rs.getObject("created_at", OffsetDateTime.class)
-            ),
-            orderId
+            ), orderId
         );
 
         List<DeliveryHistoryEntry> deliveryHistory = jdbcTemplate.query(
@@ -118,8 +115,7 @@ public class AdminOrderInvestigationController {
                 rs.getString("old_status"), rs.getString("new_status"), rs.getString("provider_id"),
                 rs.getString("provider_delivery_id"), rs.getObject("observed_at", OffsetDateTime.class),
                 rs.getString("source"), rs.getObject("created_at", OffsetDateTime.class)
-            ),
-            orderId
+            ), orderId
         );
 
         List<RefundInboxEntry> refundEvents = jdbcTemplate.query(
@@ -135,8 +131,7 @@ public class AdminOrderInvestigationController {
                 rs.getString("normalized_status"), rs.getString("provider_status"),
                 rs.getString("processing_status"), rs.getObject("received_at", OffsetDateTime.class),
                 rs.getObject("processed_at", OffsetDateTime.class)
-            ),
-            orderId
+            ), orderId
         );
 
         jdbcTemplate.update(
@@ -156,8 +151,10 @@ public class AdminOrderInvestigationController {
         if (authentication == null || !(authentication.getPrincipal() instanceof CravesPrincipal principal)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
         }
-        if (!principal.hasRole("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN role is required");
+        if (!principal.hasAnyRole(
+            "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
+        )) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Order investigation access is required");
         }
         return principal;
     }
@@ -182,22 +179,16 @@ public class AdminOrderInvestigationController {
     }
 
     private static String maskPhone(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
+        if (value == null || value.isBlank()) return null;
         String normalized = value.replaceAll("\\s", "");
         int visible = Math.min(4, normalized.length());
         return "*".repeat(Math.max(0, normalized.length() - visible)) + normalized.substring(normalized.length() - visible);
     }
 
     public record OrderInvestigationResponse(
-        OrderSnapshot order,
-        List<OrderItemSnapshot> items,
-        List<StatusHistoryEntry> statusHistory,
-        List<DeliveryHistoryEntry> deliveryHistory,
-        List<RefundInboxEntry> refundEvents
+        OrderSnapshot order, List<OrderItemSnapshot> items, List<StatusHistoryEntry> statusHistory,
+        List<DeliveryHistoryEntry> deliveryHistory, List<RefundInboxEntry> refundEvents
     ) {}
-
     public record OrderSnapshot(
         UUID orderId, UUID checkoutId, UUID customerIdentityId, UUID kitchenId, String kitchenName,
         String status, String currency, BigDecimal foodSubtotal, BigDecimal platformFee,
@@ -210,21 +201,17 @@ public class AdminOrderInvestigationController {
         String refundProviderStatus, String cashfreeRefundId, OffsetDateTime refundStatusUpdatedAt,
         OffsetDateTime createdAt, OffsetDateTime updatedAt
     ) {}
-
     public record OrderItemSnapshot(
         UUID menuItemId, String itemName, String category, String foodType,
         BigDecimal unitPrice, int quantity, BigDecimal lineTotal
     ) {}
-
     public record StatusHistoryEntry(
         String oldStatus, String newStatus, UUID actorIdentityId, String reason, OffsetDateTime createdAt
     ) {}
-
     public record DeliveryHistoryEntry(
         UUID eventId, UUID deliveryJobId, String oldStatus, String newStatus, String providerId,
         String providerDeliveryId, OffsetDateTime observedAt, String source, OffsetDateTime createdAt
     ) {}
-
     public record RefundInboxEntry(
         UUID eventId, UUID refundId, String normalizedStatus, String providerStatus,
         String processingStatus, OffsetDateTime receivedAt, OffsetDateTime processedAt

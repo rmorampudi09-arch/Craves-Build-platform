@@ -47,11 +47,11 @@ public class LaunchPolicyService {
     }
 
     private static void requireAdmin(CravesPrincipal principal) {
-        if (principal == null || !principal.hasRole("ADMIN")) {
+        if (principal == null || !principal.hasAnyRole("PLATFORM_ADMIN", "OPERATIONS_ADMIN")) {
             throw new OrderApiException(
                 org.springframework.http.HttpStatus.FORBIDDEN,
-                "ADMIN_REQUIRED",
-                "Administrator role is required"
+                "LAUNCH_POLICY_ROLE_REQUIRED",
+                "Launch policy administration role is required"
             );
         }
     }

@@ -49,6 +49,9 @@ craves:
     allow-generated-local-keys: ${CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS:false}
   internal:
     service-secret: ${CRAVES_INTERNAL_SERVICE_SECRET:}
+  internal-admin-rbac:
+    api-enabled: ${CRAVES_INTERNAL_ADMIN_RBAC_API_ENABLED:false}
+    maximum-list-size: ${CRAVES_INTERNAL_ADMIN_RBAC_MAXIMUM_LIST_SIZE:100}
   admin-account-intervention:
     api-enabled: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED:false}
     firebase-worker-enabled: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED:false}

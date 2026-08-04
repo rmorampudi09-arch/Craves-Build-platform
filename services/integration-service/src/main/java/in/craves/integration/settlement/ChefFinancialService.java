@@ -29,7 +29,7 @@ public class ChefFinancialService {
     }
 
     public EarningResponse create(CravesPrincipal principal, CreateEarningRequest request) {
-        requireRole(principal, "ADMIN");
+        requireFinanceOperator(principal);
         String source = normalize(request.orderSource());
         if (!ORDER_SOURCES.contains(source)) {
             throw badRequest("orderSource must be ON_DEMAND or SUBSCRIPTION");
@@ -53,12 +53,12 @@ public class ChefFinancialService {
     }
 
     public EarningResponse approve(CravesPrincipal principal, UUID id, String reason) {
-        requireRole(principal, "ADMIN");
+        requireFinanceOperator(principal);
         return translate(() -> repository.approve(id, principal.identityId(), requiredReason(reason)));
     }
 
     public EarningResponse reverse(CravesPrincipal principal, UUID id, String reason) {
-        requireRole(principal, "ADMIN");
+        requireFinanceOperator(principal);
         return translate(() -> repository.reverse(id, principal.identityId(), requiredReason(reason)));
     }
 
@@ -68,49 +68,37 @@ public class ChefFinancialService {
     }
 
     public List<EarningResponse> listAll(CravesPrincipal principal, String status, int limit) {
-        requireRole(principal, "ADMIN");
+        requireFinanceReader(principal);
         String normalized = StringUtils.hasText(status) ? normalize(status) : null;
         return repository.listAll(normalized, bounded(limit));
     }
 
-    public SettlementBatchResponse createBatch(
-        CravesPrincipal principal,
-        CreateSettlementBatchRequest request
-    ) {
-        requireRole(principal, "ADMIN");
+    public SettlementBatchResponse createBatch(CravesPrincipal principal, CreateSettlementBatchRequest request) {
+        requireFinanceOperator(principal);
         CreateSettlementBatchRequest normalized = new CreateSettlementBatchRequest(
-            request.batchReference().trim(),
-            normalizeCurrency(request.currency()),
-            request.earningEntryIds().stream().distinct().toList(),
-            request.reason().trim()
+            request.batchReference().trim(), normalizeCurrency(request.currency()),
+            request.earningEntryIds().stream().distinct().toList(), request.reason().trim()
         );
         return translate(() -> repository.createBatch(normalized, principal.identityId()));
     }
 
     public SettlementBatchResponse changeBatchStatus(
-        CravesPrincipal principal,
-        UUID batchId,
-        SettlementStatusRequest request
+        CravesPrincipal principal, UUID batchId, SettlementStatusRequest request
     ) {
-        requireRole(principal, "ADMIN");
+        requireFinanceOperator(principal);
         String status = normalize(request.status());
         if (!BATCH_TARGETS.contains(status)) {
             throw badRequest("Unsupported settlement batch status");
         }
         String externalReference = StringUtils.hasText(request.externalReference())
-            ? request.externalReference().trim()
-            : null;
+            ? request.externalReference().trim() : null;
         return translate(() -> repository.changeBatchStatus(
-            batchId,
-            status,
-            externalReference,
-            principal.identityId(),
-            request.reason().trim()
+            batchId, status, externalReference, principal.identityId(), request.reason().trim()
         ));
     }
 
     public List<SettlementBatchResponse> listBatches(CravesPrincipal principal, int limit) {
-        requireRole(principal, "ADMIN");
+        requireFinanceReader(principal);
         return repository.listBatches(bounded(limit));
     }
 
@@ -119,43 +107,43 @@ public class ChefFinancialService {
     }
 
     private static BigDecimal money(BigDecimal value) {
-        if (value == null || value.signum() < 0) {
-            throw badRequest("Money values must be zero or greater");
-        }
+        if (value == null || value.signum() < 0) throw badRequest("Money values must be zero or greater");
         return value.setScale(2, RoundingMode.HALF_UP);
     }
 
     private static BigDecimal moneySigned(BigDecimal value) {
-        if (value == null) {
-            throw badRequest("adjustmentAmount is required");
-        }
+        if (value == null) throw badRequest("adjustmentAmount is required");
         return value.setScale(2, RoundingMode.HALF_UP);
     }
 
     private static String normalizeCurrency(String value) {
         String normalized = normalize(value);
-        if (normalized.length() != 3) {
-            throw badRequest("currency must be a three-character code");
-        }
+        if (normalized.length() != 3) throw badRequest("currency must be a three-character code");
         return normalized;
     }
 
     private static String normalize(String value) {
-        if (!StringUtils.hasText(value)) {
-            throw badRequest("Required value is missing");
-        }
+        if (!StringUtils.hasText(value)) throw badRequest("Required value is missing");
         return value.trim().toUpperCase(Locale.ROOT);
     }
 
     private static String requiredReason(String value) {
-        if (!StringUtils.hasText(value)) {
-            throw badRequest("A reason is required");
-        }
+        if (!StringUtils.hasText(value)) throw badRequest("A reason is required");
         String normalized = value.trim();
-        if (normalized.length() > 1000) {
-            throw badRequest("Reason must be 1000 characters or fewer");
-        }
+        if (normalized.length() > 1000) throw badRequest("Reason must be 1000 characters or fewer");
         return normalized;
+    }
+
+    private static void requireFinanceOperator(CravesPrincipal principal) {
+        if (principal == null || !principal.hasAnyRole("PLATFORM_ADMIN", "PAYMENTS_ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Payments administration role is required");
+        }
+    }
+
+    private static void requireFinanceReader(CravesPrincipal principal) {
+        if (principal == null || !principal.hasAnyRole("PLATFORM_ADMIN", "PAYMENTS_ADMIN", "AUDIT_ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Financial ledger read role is required");
+        }
     }
 
     private static void requireRole(CravesPrincipal principal, String role) {

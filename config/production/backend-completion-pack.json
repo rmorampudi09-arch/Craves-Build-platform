@@ -20,6 +20,7 @@
       "containerApp": "ca-craves-auth-service-prodlow",
       "deployOrder": 10,
       "defaultFalseFlags": [
+        "CRAVES_INTERNAL_ADMIN_RBAC_API_ENABLED",
         "CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED",
         "CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED"
       ]
@@ -116,6 +117,6 @@
     "environmentPolicy": "preserve every existing Container App environment value and secret reference",
     "rollbackPolicy": "roll back every updated service in reverse order if any service fails readiness or health",
     "databasePolicy": "require a verified pre-deployment database backup because Flyway migrations are forward-only",
-    "providerPolicy": "do not activate Cashfree production, delivery, refund, FCM, ACS Email, or recurring-subscription workers"
+    "providerPolicy": "do not activate Cashfree production, delivery, refund, FCM, ACS Email, recurring-subscription workers, or internal administrator RBAC before guarded activation"
   }
 }

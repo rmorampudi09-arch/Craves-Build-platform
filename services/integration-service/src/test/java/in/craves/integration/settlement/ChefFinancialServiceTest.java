@@ -16,7 +16,7 @@ class ChefFinancialServiceTest {
 
     @Test
     void rejectsArithmeticMismatchBeforePersistence() {
-        CravesPrincipal admin = new CravesPrincipal(UUID.randomUUID(), null, Set.of("ADMIN"));
+        CravesPrincipal admin = new CravesPrincipal(UUID.randomUUID(), null, Set.of("PLATFORM_ADMIN"));
         CreateEarningRequest request = new CreateEarningRequest(
             UUID.randomUUID(),
             UUID.randomUUID(),
@@ -47,6 +47,6 @@ class ChefFinancialServiceTest {
 
         assertThatThrownBy(() -> service.create(chef, request))
             .isInstanceOf(ResponseStatusException.class)
-            .hasMessageContaining("ADMIN role");
+            .hasMessageContaining("Payments administration role");
     }
 }

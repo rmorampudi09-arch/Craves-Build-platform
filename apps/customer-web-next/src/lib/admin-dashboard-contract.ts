@@ -17,7 +17,9 @@ export type AdminDashboardSummary = {
   recentExceptions: Array<{ orderId: string; kitchenName: string | null; status: string; updatedAt: string }>;
 };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// PostgreSQL stores canonical UUID text without requiring RFC version bits 1–5.
+// Validate the canonical 8-4-4-4-12 shape while leaving UUID semantics to the owning service.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const STATUSES = new Set([
   "CHEF_ACCEPTANCE_PENDING", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY",

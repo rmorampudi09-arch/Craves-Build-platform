@@ -108,7 +108,7 @@ export function AdminOperationalInvestigator() {
           <div className="mt-6 rounded-2xl border border-[#6930CA]/20 p-4"><p className="text-xs font-bold uppercase tracking-wide text-[#6930CA]">Audit correlation</p><p className="mt-2 break-all font-mono text-sm">{result.correlationId}</p></div>
         </div>
         <div className="rounded-[30px] bg-white p-6 text-slate-950"><h3 className="text-2xl font-bold">Operational timeline</h3>{result.timeline.length ? <ol className="mt-5 space-y-4">{result.timeline.map((entry, index) => <li key={`${entry.label}-${entry.occurredAt}-${index}`} className="border-l-4 border-[#F6B545] pl-4"><div className="flex flex-wrap justify-between gap-2"><strong>{entry.label}</strong><time className="text-xs text-slate-500">{displayDate(entry.occurredAt)}</time></div><p className="mt-1 text-sm text-slate-600">{entry.status ?? "No status"}{entry.detail ? ` · ${entry.detail}` : ""}</p></li>)}</ol> : <p className="mt-4 text-sm text-slate-600">No bounded history entries were returned.</p>}</div>
-      </div> : <div className="rounded-[30px] border border-dashed border-white/20 p-8 text-slate-300"><h2 className="text-2xl font-bold text-white">No evidence loaded</h2><p className="mt-3 leading-7">A validated, privacy-reduced backend result will appear here. Raw provider and webhook payloads are never rendered.</p></div>}
+      </div> : <div className="rounded-[30px] border border-dashed border-[#cfc4d7] bg-white p-8 text-slate-600"><h2 className="text-2xl font-bold text-slate-950">No evidence loaded</h2><p className="mt-3 leading-7">A validated, privacy-reduced backend result will appear here. Raw provider and webhook payloads are never rendered.</p></div>}
     </section>
   </div>;
 }

@@ -195,8 +195,8 @@ export function AdminNotificationRecovery() {
               </button>
             ))
           ) : (
-            <div className="rounded-[30px] border border-dashed border-white/20 p-8 text-slate-300">
-              <h2 className="text-2xl font-bold text-white">No backlog loaded</h2>
+            <div className="rounded-[30px] border border-dashed border-[#cfc4d7] bg-white p-8 text-slate-600">
+              <h2 className="text-2xl font-bold text-slate-950">No backlog loaded</h2>
               <p className="mt-3">
                 Only bounded operational fields are shown. Recipient identity and provider payloads are
                 intentionally omitted.

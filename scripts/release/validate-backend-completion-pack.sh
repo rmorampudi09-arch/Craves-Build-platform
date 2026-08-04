@@ -6,6 +6,8 @@ PACK="$ROOT/config/production/backend-completion-pack.json"
 INVENTORY="$ROOT/config/production/azure-resource-inventory.json"
 PIPELINE="$ROOT/azure-pipelines-backend-completion.yml"
 DEPLOY_SCRIPT="$ROOT/scripts/release/deploy-backend-release.sh"
+SMOKE_SCRIPT="$ROOT/scripts/release/smoke-containerapp-health.sh"
+CATALOG_SECURITY="$ROOT/services/catalog-service/src/main/java/in/craves/catalog/security/SecurityConfig.java"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -18,6 +20,8 @@ command -v python3 >/dev/null || fail 'python3 is required'
 [[ -s "$INVENTORY" ]] || fail "missing Azure resource inventory: $INVENTORY"
 [[ -s "$PIPELINE" ]] || fail "missing backend completion pipeline: $PIPELINE"
 [[ -s "$DEPLOY_SCRIPT" ]] || fail "missing backend deployment script: $DEPLOY_SCRIPT"
+[[ -s "$SMOKE_SCRIPT" ]] || fail "missing Container App health smoke script: $SMOKE_SCRIPT"
+[[ -s "$CATALOG_SECURITY" ]] || fail "missing Catalog security configuration: $CATALOG_SECURITY"
 
 jq -e '
   .schemaVersion == 1
@@ -76,9 +80,16 @@ except Exception as exc:
     raise SystemExit(f'ERROR: invalid Azure Pipeline YAML: {exc}') from exc
 PY
 
-bash -n "$DEPLOY_SCRIPT"
+bash -n "$DEPLOY_SCRIPT" "$SMOKE_SCRIPT"
 
-if grep -En 'apps/customer-web|apps/mobile|managed-redis|customer-web' "$PACK" "$PIPELINE" "$DEPLOY_SCRIPT"; then
+grep -F '"/actuator/health/**"' "$CATALOG_SECURITY" >/dev/null \
+  || fail 'Catalog security must permit the readiness and liveness health subtree'
+grep -F '/actuator/health/readiness' "$SMOKE_SCRIPT" >/dev/null \
+  || fail 'Container App smoke must test the readiness health endpoint first'
+grep -F 'SMOKE_ATTEMPTS' "$SMOKE_SCRIPT" >/dev/null \
+  || fail 'Container App smoke must retry transient ingress propagation'
+
+if grep -En 'apps/customer-web|apps/mobile|managed-redis|customer-web' "$PACK" "$PIPELINE" "$DEPLOY_SCRIPT" "$SMOKE_SCRIPT"; then
   fail 'backend completion files must not include web, mobile, or Managed Redis work'
 fi
 

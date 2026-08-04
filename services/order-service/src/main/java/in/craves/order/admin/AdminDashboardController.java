@@ -32,8 +32,10 @@ public class AdminDashboardController {
         if (authentication == null || !(authentication.getPrincipal() instanceof CravesPrincipal principal)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
         }
-        if (!principal.hasRole("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN role is required");
+        if (!principal.hasAnyRole(
+            "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
+        )) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Dashboard read role is required");
         }
         return principal;
     }

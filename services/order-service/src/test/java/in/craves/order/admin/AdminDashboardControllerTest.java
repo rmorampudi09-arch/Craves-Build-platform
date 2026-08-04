@@ -27,20 +27,23 @@ class AdminDashboardControllerTest {
     private AdminDashboardService dashboardService;
 
     @Test
-    void rejectsAuthenticatedIdentityWithoutAdminRole() {
+    void rejectsCustomerAndLegacyAdminWithoutInternalReadRole() {
         AdminDashboardController controller = new AdminDashboardController(dashboardService);
-        var principal = new CravesPrincipal(UUID.randomUUID(), "+910000000000", Set.of("CUSTOMER"));
-        var authentication = new UsernamePasswordAuthenticationToken(principal, null);
-
-        assertThatThrownBy(() -> controller.summary(authentication))
-            .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
-                assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        for (Set<String> roles : List.of(Set.of("CUSTOMER"), Set.of("ADMIN"))) {
+            var principal = new CravesPrincipal(UUID.randomUUID(), "+910000000000", roles);
+            var authentication = new UsernamePasswordAuthenticationToken(principal, null);
+            assertThatThrownBy(() -> controller.summary(authentication))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                    assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        }
     }
 
     @Test
-    void returnsNoStoreSummaryForAdmin() {
+    void returnsNoStoreSummaryForAuthorizedInternalReader() {
         AdminDashboardController controller = new AdminDashboardController(dashboardService);
-        var principal = new CravesPrincipal(UUID.randomUUID(), "+910000000000", Set.of("ADMIN"));
+        var principal = new CravesPrincipal(
+            UUID.randomUUID(), "+910000000000", Set.of("SUPPORT_ADMIN", "ADMIN")
+        );
         var authentication = new UsernamePasswordAuthenticationToken(principal, null);
         var summary = new DashboardSummary(
             OffsetDateTime.now(ZoneOffset.UTC), new Metrics(4, 1, 1, 1, 1, 0, 0, 2),

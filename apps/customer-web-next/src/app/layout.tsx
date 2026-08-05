@@ -26,7 +26,9 @@ export const metadata: Metadata = {
   authors: [{ name: "Craves" }],
   robots: { index: true, follow: true },
   icons: {
-    icon: "/brand/craves-logo.svg",
+    icon: "/brand/craves-logo.png",
+    shortcut: "/brand/craves-logo.png",
+    apple: "/brand/craves-logo.png",
   },
 };
 

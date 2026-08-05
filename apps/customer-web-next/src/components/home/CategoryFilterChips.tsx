@@ -1,27 +1,34 @@
-import { DISH_CATEGORIES, type DishCategory } from "@/constants/dishCategories";
+import type { DishCategory } from "@/constants/dishCategories";
 
 interface CategoryFilterChipsProps {
+  categories: readonly DishCategory[];
   selected: DishCategory;
   onSelect: (category: DishCategory) => void;
 }
 
-/** Row of pill buttons ("All", "Meals", "Biryani"...) for filtering the dish grid. */
-export function CategoryFilterChips({ selected, onSelect }: CategoryFilterChipsProps) {
+export function CategoryFilterChips({
+  categories,
+  selected,
+  onSelect,
+}: CategoryFilterChipsProps) {
+  if (categories.length <= 1) return null;
+
   return (
-    <section className="mx-auto max-w-7xl px-4 pt-6 md:px-6">
-      <div className="flex flex-wrap gap-2">
-        {DISH_CATEGORIES.map((c) => (
+    <section className="mx-auto max-w-7xl px-4 pt-6 md:px-6" aria-label="Filter dishes by category">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {categories.map((category) => (
           <button
-            key={c}
+            key={category}
             type="button"
-            onClick={() => onSelect(c)}
-            className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
-              selected === c
-                ? "border-primary bg-primary text-primary-foreground"
+            onClick={() => onSelect(category)}
+            aria-pressed={selected === category}
+            className={`min-h-11 shrink-0 rounded-full border px-4 text-sm font-semibold transition-colors ${
+              selected === category
+                ? "border-primary bg-primary text-white"
                 : "border-border bg-white text-ink hover:border-primary"
             }`}
           >
-            {c}
+            {category}
           </button>
         ))}
       </div>

@@ -1,28 +1,23 @@
-import cravesLogo from "@/assets/images/craves-logo.png";
-import { assetUrl } from "@/lib/asset-url";
+import { CravesLogo } from "@/components/brand/CravesLogo";
 
-/** The Craves wordmark + icon, used in the landing page nav and elsewhere. */
-export function Logo({ light = false }: { light?: boolean }) {
+/**
+ * Canonical Craves logo used by the public landing navigation and footer.
+ *
+ * The previous implementation mixed a legacy PNG with a second text wordmark
+ * and tagline. That produced a different brand lockup from the approved red
+ * rounded-square asset used elsewhere in the application. Keep every caller on
+ * the single approved asset instead.
+ */
+export function Logo(props: { light?: boolean }) {
+  // Preserve the existing component API while keeping one identical logo in
+  // light and standard layouts. The approved asset already supplies its own
+  // red background and white lettering.
+  void props.light;
+
   return (
-    <div className="flex items-center gap-2">
-      <img
-        src={assetUrl(cravesLogo)}
-        alt="Craves"
-        width={44}
-        height={44}
-        className="h-11 w-11 object-contain"
-      />
-      <div className="leading-tight">
-        <div className={`font-display text-2xl font-bold ${light ? "text-white" : "text-primary"}`}>
-          Craves
-        </div>
-        <div
-          className={`text-[9px] tracking-[0.2em] font-medium ${light ? "text-white/70" : "text-primary/70"}`}
-        >
-          FOOD FROM HOME
-        </div>
-      </div>
-    </div>
+    <span className="inline-flex items-center" aria-label="Craves">
+      <CravesLogo size="lg" decorative priority className="h-14 w-14" />
+    </span>
   );
 }
 

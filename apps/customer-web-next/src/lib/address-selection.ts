@@ -2,7 +2,7 @@ import {
   isDeliveryReadyAddress,
   type CustomerAddress,
   type DeliveryReadyAddress,
-} from "@/lib/address-contract";
+} from "./address-contract.ts";
 
 export function selectActiveDeliveryAddress(
   addresses: readonly CustomerAddress[],

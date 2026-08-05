@@ -1,7 +1,10 @@
 "use client";
 
 import type { CravesIdentity } from "@/lib/auth-contract";
-import type { CustomerAddress } from "@/lib/address-contract";
+import type {
+  CustomerAddress,
+  DeliveryReadyAddress,
+} from "@/lib/address-contract";
 import { selectActiveDeliveryAddress } from "@/lib/address-selection";
 import {
   parseCustomerProfile,
@@ -201,7 +204,7 @@ export function getAddress(): CravesAddress | null {
   return selectedLocation;
 }
 
-function fromCustomerAddress(address: CustomerAddress): CravesAddress {
+function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
   return {
     id: address.id,
     label: address.addressLabel,

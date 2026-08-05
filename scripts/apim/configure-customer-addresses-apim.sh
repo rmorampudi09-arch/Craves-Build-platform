@@ -45,18 +45,86 @@ for SCOPE_URL in \
   [[ "$POLICY" != *'set-backend-service backend-id='* ]] || fail "Inherited backend-id policy cannot be safely overridden"
 done
 
+# Resolve an operation by HTTP method and route shape before writing it.
+# APIM operation IDs are operator-defined and may differ between earlier runs.
+# Route-shape matching also treats /addresses/{id} and
+# /addresses/{addressId} as the same operation, matching APIM's uniqueness rule.
+resolve_operation_id() {
+  local DESIRED_ID="$1" METHOD="$2" TEMPLATE="$3"
+  local OPERATIONS_JSON DESIRED_ID_COUNT
+  local -a MATCH_IDS=()
+
+  OPERATIONS_JSON=$(az apim api operation list \
+    -g "$RG" \
+    --service-name "$APIM" \
+    --api-id "$API_ID" \
+    -o json)
+
+  mapfile -t MATCH_IDS < <(
+    jq -r \
+      --arg method "$METHOD" \
+      --arg template "$TEMPLATE" '
+        def route_shape:
+          ltrimstr("/")
+          | gsub("\\{[^/{}]+\\}"; "{}");
+        .[]
+        | select(
+            (((.method // "") | ascii_upcase) == ($method | ascii_upcase))
+            and (((.urlTemplate // "") | route_shape) == ($template | route_shape))
+          )
+        | .name
+      ' <<<"$OPERATIONS_JSON"
+  )
+
+  (( ${#MATCH_IDS[@]} <= 1 )) || fail "Multiple APIM operations match $METHOD $TEMPLATE; refusing to choose one"
+
+  if (( ${#MATCH_IDS[@]} == 1 )); then
+    echo "INFO: Reusing existing APIM operation ${MATCH_IDS[0]} for $METHOD $TEMPLATE." >&2
+    printf '%s\n' "${MATCH_IDS[0]}"
+    return
+  fi
+
+  DESIRED_ID_COUNT=$(jq -r --arg id "$DESIRED_ID" '[.[] | select(.name == $id)] | length' <<<"$OPERATIONS_JSON")
+  [[ "$DESIRED_ID_COUNT" == "0" ]] || fail "Desired operation ID $DESIRED_ID already owns another route; refusing to overwrite it"
+
+  echo "INFO: Creating APIM operation $DESIRED_ID for $METHOD $TEMPLATE." >&2
+  printf '%s\n' "$DESIRED_ID"
+}
+
 put_operation() {
-  local ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" PARAMS="$5" STATUS="$6"
-  local BODY RENDERED POLICY_BODY
-  BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
+  local DESIRED_ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" PARAMS="$5" STATUS="$6"
+  local EFFECTIVE_ID BODY RENDERED POLICY_BODY OPERATION_JSON POLICY ACTUAL_METHOD ACTUAL_TEMPLATE
+
+  EFFECTIVE_ID=$(resolve_operation_id "$DESIRED_ID" "$METHOD" "$TEMPLATE")
+  BODY=$(mktemp)
+  RENDERED=$(mktemp)
+  POLICY_BODY=$(mktemp)
+
   cat >"$BODY" <<JSON
 {"properties":{"displayName":"$DISPLAY","method":"$METHOD","urlTemplate":"$TEMPLATE","templateParameters":$PARAMS,"responses":[{"statusCode":$STATUS,"description":"Customer address response"},{"statusCode":401,"description":"Authentication required"},{"statusCode":404,"description":"Address not found"}]}}
 JSON
-  az rest --method put --url "${MGMT}/operations/${ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
+
+  az rest --method put --url "${MGMT}/operations/${EFFECTIVE_ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
+
   sed "s|__CUSTOMER_BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
   jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
-  az rest --method put --url "${MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none
+  az rest --method put --url "${MGMT}/operations/${EFFECTIVE_ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none
+
+  OPERATION_JSON=$(az apim api operation show \
+    -g "$RG" \
+    --service-name "$APIM" \
+    --api-id "$API_ID" \
+    --operation-id "$EFFECTIVE_ID" \
+    -o json)
+  ACTUAL_METHOD=$(jq -r '.method // "" | ascii_upcase' <<<"$OPERATION_JSON")
+  ACTUAL_TEMPLATE=$(jq -r '.urlTemplate // ""' <<<"$OPERATION_JSON")
+  [[ "$ACTUAL_METHOD" == "${METHOD^^}" && "$ACTUAL_TEMPLATE" == "$TEMPLATE" ]] || fail "Operation $EFFECTIVE_ID route verification failed"
+
+  POLICY=$(az rest --method get --url "${MGMT}/operations/${EFFECTIVE_ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
+  [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Authorization"* && "$POLICY" == *"no-store"* ]] || fail "Operation $EFFECTIVE_ID policy verification failed"
+
   rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
+  echo "VERIFIED: $METHOD $TEMPLATE uses APIM operation $EFFECTIVE_ID."
 }
 
 ADDRESS_PARAM='[{"name":"addressId","type":"string","required":true}]'
@@ -67,10 +135,4 @@ put_operation "update-customer-address" "PUT" "/addresses/{addressId}" "Update c
 put_operation "delete-customer-address" "DELETE" "/addresses/{addressId}" "Delete customer address" "$ADDRESS_PARAM" 204
 put_operation "recommend-customer-location" "GET" "/addresses/recommendation" "Recommend customer location" '[]' 200
 
-for ID in list-customer-addresses create-customer-address get-customer-address update-customer-address delete-customer-address recommend-customer-location; do
-  az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none
-  POLICY=$(az rest --method get --url "${MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
-  [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Authorization"* && "$POLICY" == *"no-store"* ]] || fail "Operation $ID policy verification failed"
-done
-
-echo "SUCCESS: Customer address operations configured on APIM API $API_ID."
+echo "SUCCESS: Customer address operations configured idempotently on APIM API $API_ID."

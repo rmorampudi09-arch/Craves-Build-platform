@@ -30,7 +30,7 @@ export function SubscriptionPlanBrowser() {
     return () => { active = false; };
   }, []);
 
-  return <section>
+  return <section className="meal-plans-legacy-ui">
     {message && <div className="rounded-[24px] bg-[#FFF8EC] p-6 text-slate-950" role="status">{message}</div>}
     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       {plans.map(plan => <article key={plan.id} className="rounded-[28px] bg-[#FFF8EC] p-6 text-slate-950 shadow-xl shadow-black/10">
@@ -39,7 +39,12 @@ export function SubscriptionPlanBrowser() {
         <p className="mt-3 min-h-12 text-sm leading-6 text-slate-600">{plan.description ?? "Plan details are provided by the chef."}</p>
         <div className="mt-6 flex items-end justify-between gap-4">
           <strong className="text-2xl">{money(plan.amount, plan.currency)}</strong>
-          <a href={`/subscriptions/new?planId=${encodeURIComponent(plan.id)}`} className="rounded-2xl bg-[#6930CA] px-4 py-3 text-sm font-bold text-white">Choose plan</a>
+          <a
+            href={`/subscriptions/new?planId=${encodeURIComponent(plan.id)}`}
+            className="craves-button-link rounded-2xl px-4 py-3 text-sm"
+          >
+            Choose plan
+          </a>
         </div>
         <p className="mt-4 text-xs text-slate-500">Plan code: {plan.planCode}</p>
       </article>)}

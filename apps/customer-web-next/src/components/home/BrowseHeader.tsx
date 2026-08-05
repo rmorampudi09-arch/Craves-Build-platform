@@ -33,6 +33,9 @@ const serviceLinks = [
   { to: "/chef", label: "Chef mode", icon: ChefHat },
 ] as const;
 
+const actionLinkClass =
+  "border-[#C92716] bg-[#C92716] text-black transition-colors hover:border-[#F62E18] hover:bg-[#F62E18] hover:font-bold hover:text-white focus-visible:border-[#F62E18] focus-visible:bg-[#F62E18] focus-visible:font-bold focus-visible:text-white";
+
 export function BrowseHeader({
   user,
   locationLabel,
@@ -47,7 +50,7 @@ export function BrowseHeader({
   const firstName = user.firstName || user.username.split(" ")[0] || "there";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-white/95 shadow-[0_1px_0_rgba(38,26,21,0.04)] backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-border bg-white/95 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 md:px-6">
         <div className="flex min-h-18 items-center gap-3 py-3">
           <Link to="/home" className="flex min-h-11 shrink-0 items-center gap-3 rounded-lg pr-2" aria-label="Craves discovery home">
@@ -61,11 +64,11 @@ export function BrowseHeader({
           <button
             type="button"
             onClick={onOpenLocation}
-            className="hidden min-h-11 min-w-0 max-w-xs items-center gap-2 rounded-lg border border-border bg-cream px-3 text-left text-sm text-ink transition-colors hover:border-primary md:flex"
+            className="hidden min-h-11 min-w-0 max-w-xs items-center gap-2 rounded-lg border px-3 text-left text-sm md:flex"
           >
-            <MapPin className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="min-w-0">
-              <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Deliver to</span>
+              <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.08em]">Deliver to</span>
               <span className="block truncate font-semibold">{locationLabel}</span>
             </span>
           </button>
@@ -74,7 +77,7 @@ export function BrowseHeader({
             <span className="hidden text-sm font-semibold text-ink lg:inline">Hi, {firstName}</span>
             <Link
               to="/profile"
-              className="flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-ink transition-colors hover:border-primary"
+              className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${actionLinkClass}`}
             >
               <UserCircle className="h-5 w-5" aria-hidden="true" />
               <span className="hidden sm:inline">Profile</span>
@@ -82,12 +85,12 @@ export function BrowseHeader({
             <button
               type="button"
               onClick={onOpenCart}
-              className="relative flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-white shadow-[var(--shadow-card)] transition-transform hover:-translate-y-0.5"
+              className="relative flex h-11 w-11 items-center justify-center rounded-lg border shadow-[var(--shadow-card)]"
               aria-label={`Open cart${cartCount ? ` with ${cartCount} items` : ""}`}
             >
               <ShoppingCart className="h-5 w-5" aria-hidden="true" />
               {cartCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[0.62rem] font-bold text-white">
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#C92716] bg-white px-1 text-[0.62rem] font-bold text-black">
                   {cartCount}
                 </span>
               )}
@@ -95,7 +98,7 @@ export function BrowseHeader({
             <button
               type="button"
               onClick={onLogout}
-              className="hidden h-11 w-11 items-center justify-center rounded-lg border border-border text-ink transition-colors hover:border-primary hover:text-primary lg:flex"
+              className="hidden h-11 w-11 items-center justify-center rounded-lg border lg:flex"
               aria-label="Sign out"
             >
               <LogOut className="h-5 w-5" aria-hidden="true" />
@@ -104,7 +107,7 @@ export function BrowseHeader({
         </div>
 
         <div className="grid gap-3 pb-3 lg:grid-cols-[minmax(18rem,1fr)_auto] lg:items-center">
-          <label className="flex min-h-12 items-center gap-3 rounded-xl border border-border bg-cream px-4 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
+          <label className="flex min-h-12 items-center gap-3 rounded-xl border border-border bg-white px-4 focus-within:border-[#F62E18]">
             <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="sr-only">Search dishes or kitchens</span>
             <input
@@ -125,10 +128,8 @@ export function BrowseHeader({
                   key={link.to}
                   to={link.to}
                   aria-current={active ? "page" : undefined}
-                  className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors ${
-                    active
-                      ? "border-primary bg-secondary text-ink"
-                      : "border-border bg-white text-muted-foreground hover:border-primary hover:text-ink"
+                  className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${actionLinkClass} ${
+                    active ? "ring-2 ring-[#F62E18] ring-offset-2" : ""
                   }`}
                 >
                   <link.icon className="h-4 w-4" aria-hidden="true" /> {link.label}
@@ -141,9 +142,9 @@ export function BrowseHeader({
         <button
           type="button"
           onClick={onOpenLocation}
-          className="mb-3 flex min-h-11 w-full items-center gap-2 rounded-lg border border-border bg-cream px-3 text-left text-sm font-semibold text-ink md:hidden"
+          className="mb-3 flex min-h-11 w-full items-center gap-2 rounded-lg border px-3 text-left text-sm md:hidden"
         >
-          <MapPin className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="truncate">{locationLabel}</span>
         </button>
       </div>

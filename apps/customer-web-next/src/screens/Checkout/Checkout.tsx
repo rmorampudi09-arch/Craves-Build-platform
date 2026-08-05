@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
-  Check,
   LoaderCircle,
   MapPin,
   Plus,
@@ -26,6 +25,7 @@ import {
   type CartItem,
 } from "@/services/api/cravesCart";
 import { CheckoutHeader } from "@/components/checkout/CheckoutHeader";
+import { CheckoutAddressDialog } from "@/components/checkout/CheckoutAddressDialog";
 
 function money(amount: number, currency = "INR") {
   try {
@@ -45,11 +45,26 @@ function checkoutMessage(error: unknown): string {
     : "Checkout could not be prepared. Please try again.";
 }
 
+function fullAddress(address: CustomerAddress): string {
+  return [
+    address.addressLine1,
+    address.addressLine2,
+    address.landmark,
+    address.areaName,
+    address.city,
+    address.state,
+    address.postalCode,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<CartItem[]>([]);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -153,7 +168,7 @@ export default function CheckoutPage() {
   const selectedAddress = addresses.find((address) => address.id === selectedId);
 
   return (
-    <div className="min-h-screen bg-cream pb-32 text-ink">
+    <div className="min-h-screen bg-white pb-32 text-ink">
       <CheckoutHeader
         onBack={() => navigate({ to: "/cart" })}
         title="Delivery and checkout"
@@ -190,97 +205,64 @@ export default function CheckoutPage() {
                   <div>
                     <p className="craves-overline text-primary">Step 1</p>
                     <h1 className="mt-1 font-display text-2xl font-bold tracking-[-0.035em] text-ink">
-                      Choose a delivery address
+                      Delivery address
                     </h1>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Craves sends the selected saved-address ID to the Order Service, which stores a checkout snapshot.
+                      Only the address selected for this checkout is shown here. Manage addresses to choose another saved address or add a new one.
                     </p>
                   </div>
-                  <Link
-                    to="/addresses"
-                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-primary px-4 text-sm font-semibold text-contrast-red hover:bg-secondary"
+                  <button
+                    type="button"
+                    onClick={() => setAddressDialogOpen(true)}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 text-sm"
                   >
-                    <Plus className="h-4 w-4" aria-hidden="true" /> Manage addresses
-                  </Link>
+                    <Plus className="h-4 w-4" aria-hidden="true" /> Manage address
+                  </button>
                 </div>
 
-                {addresses.length === 0 ? (
-                  <div className="mt-5 rounded-2xl border border-dashed border-border bg-cream p-6 text-center">
+                {!selectedAddress ? (
+                  <div className="mt-5 rounded-2xl border border-dashed border-border bg-white p-6 text-center">
                     <MapPin className="mx-auto h-9 w-9 text-primary" aria-hidden="true" />
                     <h2 className="mt-3 font-display text-lg font-bold text-ink">
-                      No active delivery address
+                      No current delivery address
                     </h2>
                     <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                      Add a mapped address before Craves can calculate serviceability and delivery charges.
+                      Add or select a mapped address before Craves can calculate serviceability and delivery charges.
                     </p>
-                    <Link to="/addresses" className="btn-primary mt-5 inline-flex">
-                      <Plus className="h-4 w-4" aria-hidden="true" /> Add address
-                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setAddressDialogOpen(true)}
+                      className="btn-primary mt-5"
+                    >
+                      <Plus className="h-4 w-4" aria-hidden="true" /> Add or select address
+                    </button>
                   </div>
                 ) : (
-                  <fieldset className="mt-5 space-y-3">
-                    <legend className="sr-only">Select a saved delivery address</legend>
-                    {addresses.map((address) => {
-                      const selected = selectedId === address.id;
-                      const addressLine = [
-                        address.addressLine1,
-                        address.addressLine2,
-                        address.landmark,
-                        address.areaName,
-                        address.city,
-                        address.state,
-                        address.postalCode,
-                      ]
-                        .filter(Boolean)
-                        .join(", ");
-                      return (
-                        <label
-                          key={address.id}
-                          className={`flex cursor-pointer gap-3 rounded-2xl border p-4 transition-colors ${
-                            selected
-                              ? "border-primary bg-secondary"
-                              : "border-border bg-white hover:border-primary/50"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="delivery-address"
-                            value={address.id}
-                            checked={selected}
-                            onChange={() => setSelectedId(address.id)}
-                            className="sr-only"
-                          />
-                          <span
-                            className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-                              selected
-                                ? "border-primary bg-primary text-white"
-                                : "border-grey-400 bg-white"
-                            }`}
-                            aria-hidden="true"
-                          >
-                            {selected && <Check className="h-3.5 w-3.5" />}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="flex flex-wrap items-center gap-2 font-display text-base font-bold text-ink">
-                              <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
-                              {address.addressLabel}
-                              {address.isDefault && (
-                                <span className="rounded-full bg-white px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-[0.06em] text-contrast-red">
-                                  Default
-                                </span>
-                              )}
+                  <article className="mt-5 rounded-2xl border border-[#F62E18] bg-white p-5">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#C92716] text-black">
+                        <MapPin className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="font-display text-lg font-bold text-ink">
+                            {selectedAddress.addressLabel}
+                          </h2>
+                          {selectedAddress.isDefault && (
+                            <span className="rounded-full border border-border bg-white px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-[0.06em] text-ink">
+                              Default
                             </span>
-                            <span className="mt-1 block text-sm font-semibold text-ink">
-                              {address.recipientName} · {address.contactPhoneNumber}
-                            </span>
-                            <span className="mt-1 block text-sm leading-5 text-muted-foreground">
-                              {addressLine}
-                            </span>
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </fieldset>
+                          )}
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-ink">
+                          {selectedAddress.recipientName} · {selectedAddress.contactPhoneNumber}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {fullAddress(selectedAddress)}
+                        </p>
+                      </div>
+                    </div>
+                  </article>
                 )}
               </section>
 
@@ -299,7 +281,7 @@ export default function CheckoutPage() {
                   maxLength={500}
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
-                  className="mt-4 min-h-28 w-full resize-y rounded-xl border border-border bg-cream p-3 text-base text-ink outline-none placeholder:text-[#9A9A95] focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  className="mt-4 min-h-28 w-full resize-y rounded-xl border border-border bg-white p-3 text-base text-ink outline-none placeholder:text-[#9A9A95] focus:border-[#F62E18] focus:ring-0"
                   placeholder="For example: please pack the gravy separately"
                 />
                 <p className="mt-2 text-right text-xs text-muted-foreground">
@@ -347,7 +329,7 @@ export default function CheckoutPage() {
                 </section>
               )}
 
-              <p className="flex items-start gap-2 rounded-xl bg-secondary p-4 text-xs leading-5 text-muted-foreground">
+              <p className="flex items-start gap-2 rounded-xl border border-border bg-white p-4 text-xs leading-5 text-muted-foreground">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
                 Payment details are collected only inside Cashfree hosted checkout. Craves never asks for a card number, CVV or UPI PIN.
               </p>
@@ -363,7 +345,7 @@ export default function CheckoutPage() {
       </main>
 
       {!loading && items.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 p-3 shadow-[0_-8px_32px_rgba(38,26,21,0.08)] backdrop-blur-xl">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 p-3 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl">
           <div className="mx-auto flex max-w-5xl items-center gap-4 px-1 md:px-3">
             <div className="min-w-0">
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -385,6 +367,14 @@ export default function CheckoutPage() {
           </div>
         </div>
       )}
+
+      <CheckoutAddressDialog
+        open={addressDialogOpen}
+        selectedId={selectedId}
+        onClose={() => setAddressDialogOpen(false)}
+        onSelect={setSelectedId}
+        onAddressesChange={setAddresses}
+      />
     </div>
   );
 }

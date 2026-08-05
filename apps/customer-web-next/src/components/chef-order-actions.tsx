@@ -79,6 +79,7 @@ export function ChefOrderActions({
   if (order.status === "CHEF_ACCEPTANCE_PENDING") {
     const prep = Number(prepTimeMinutes);
     const validPrep = Number.isInteger(prep) && prep >= 1 && prep <= 1_440;
+    const singleBorderField = "mt-2 w-full rounded-xl border border-border bg-white text-base text-ink outline-none ring-0 focus:border-[#F62E18] focus:outline-none focus:ring-0";
     return (
       <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
         <div className="flex items-start gap-3">
@@ -104,7 +105,8 @@ export function ChefOrderActions({
               max={1440}
               value={prepTimeMinutes}
               onChange={(event) => setPrepTimeMinutes(event.target.value)}
-              className="mt-2 min-h-12 w-full rounded-xl border border-border bg-cream px-4 text-base text-ink focus:border-primary"
+              className={`${singleBorderField} min-h-12 px-4`}
+              data-craves-single-border="true"
             />
           </label>
           <label className="text-sm font-semibold text-ink">
@@ -113,8 +115,9 @@ export function ChefOrderActions({
               value={note}
               maxLength={500}
               onChange={(event) => setNote(event.target.value)}
-              className="mt-2 min-h-12 w-full rounded-xl border border-border bg-cream px-4 text-base text-ink focus:border-primary"
+              className={`${singleBorderField} min-h-12 px-4`}
               placeholder="Preparation or packing note"
+              data-craves-single-border="true"
             />
           </label>
         </div>
@@ -125,8 +128,9 @@ export function ChefOrderActions({
             value={reason}
             maxLength={500}
             onChange={(event) => setReason(event.target.value)}
-            className="mt-2 min-h-24 w-full rounded-xl border border-border bg-cream p-4 text-base text-ink focus:border-primary"
+            className={`${singleBorderField} min-h-24 p-4`}
             placeholder="Required only when rejecting"
+            data-craves-single-border="true"
           />
         </label>
 
@@ -159,7 +163,7 @@ export function ChefOrderActions({
                 actionId: crypto.randomUUID(),
               })
             }
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-error px-5 text-sm font-bold text-error hover:bg-error/5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border px-5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busyAction === "reject" ? (
               <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />

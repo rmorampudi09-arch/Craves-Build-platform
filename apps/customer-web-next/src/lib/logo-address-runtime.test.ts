@@ -17,10 +17,15 @@ test("public layout uses the single approved Craves logo component", () => {
 
 test("brand component serves the approved PNG directly", () => {
   const logo = source("../components/brand/CravesLogo.tsx");
+  const packageJson = source("../../package.json");
+  const extractor = source("../../scripts/extract-brand-logo.mjs");
 
   assert.match(logo, /src="\/brand\/craves-logo\.png"/);
   assert.match(logo, /unoptimized/);
   assert.doesNotMatch(logo, /craves-logo\.svg/);
+  assert.match(packageJson, /"prebuild": "node scripts\/extract-brand-logo\.mjs"/);
+  assert.match(extractor, /data:image\\\/png;base64/);
+  assert.match(extractor, /89504e470d0a1a0a/);
 });
 
 test("customer address BFF targets the documented APIM collection route", () => {
@@ -41,6 +46,7 @@ test("address parser preserves legacy rows and gates checkout readiness", () => 
   assert.match(contract, /postalCode: string \| null/);
   assert.match(contract, /latitude: number \| null/);
   assert.match(contract, /isDeliveryReadyAddress/);
+  assert.match(contract, /active: raw\.active && deliveryReady/);
 });
 
 test("address APIM pipeline is guarded and proves GET and POST routing", () => {

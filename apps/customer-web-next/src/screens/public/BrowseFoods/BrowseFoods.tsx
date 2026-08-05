@@ -1,14 +1,16 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { BrowseHeader } from "@/components/home/BrowseHeader";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
 import { CategoryFilterChips } from "@/components/home/CategoryFilterChips";
 import { DishesGrid } from "@/components/home/DishesGrid";
 import { FloatingCartBar } from "@/components/home/FloatingCartBar";
-import { DISH_CATEGORIES, type DishCategory } from "@/constants/dishCategories";
 import {
-  DISHES,
+  ALL_DISHES_CATEGORY,
+  type DishCategory,
+} from "@/constants/dishCategories";
+import {
   discoverDishes,
   getDiscoveryRadiusMeters,
   type Dish,
@@ -22,19 +24,16 @@ import {
   type CravesUser,
 } from "@/services/auth/cravesAuth";
 import { cartCount, loadCart, subscribeCart } from "@/services/api/cravesCart";
-import {
-  wishlistCount,
-  subscribeWishlist,
-} from "@/services/api/cravesWishlist";
+
+type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
 export const routeMeta = {
   head: () => ({
     meta: [
-      { title: "Home Kitchen – Craves" },
+      { title: "Discover Homemade Food – Craves" },
       {
         name: "description",
-        content:
-          "Freshly cooked homemade meals, biryanis and curries by trusted home chefs near you.",
+        content: "Discover live dishes from active Craves home kitchens near your delivery address.",
       },
       { name: "robots", content: "noindex" },
     ],
@@ -45,105 +44,121 @@ function BrowseFoodsPage() {
   const navigate = useNavigate();
   const [user, setUser] = useState<CravesUser | null>(null);
   const [address, setAddress] = useState<CravesAddress | null>(null);
-  const [category, setCategory] = useState<DishCategory>(DISH_CATEGORIES[0]);
+  const [category, setCategory] = useState<DishCategory>(ALL_DISHES_CATEGORY);
   const [searchTerm, setSearchTerm] = useState("");
   const [cartItemCount, setCartItemCount] = useState(0);
-  const [wishlistItemCount, setWishlistItemCount] = useState(0);
   const [dishes, setDishes] = useState<Dish[]>([]);
-  const [catalogMessage, setCatalogMessage] = useState(
-    "Loading your saved delivery location…",
-  );
+  const [discoveryState, setDiscoveryState] = useState<DiscoveryState>("loading");
+  const [catalogMessage, setCatalogMessage] = useState("Loading your saved delivery location…");
+  const [radiusLabel, setRadiusLabel] = useState<string | null>(null);
 
-  const refreshDiscovery = async (activeAddress: CravesAddress | null) => {
+  const refreshDiscovery = useCallback(async (activeAddress: CravesAddress | null) => {
     if (
       typeof activeAddress?.lat !== "number" ||
       typeof activeAddress.lng !== "number"
     ) {
       setDishes([]);
+      setRadiusLabel(null);
+      setDiscoveryState("address-required");
       setCatalogMessage(
-        "Add a delivery address with map coordinates to see real kitchens near you.",
+        "Save a delivery address with map coordinates. Craves uses those coordinates to request nearby active kitchens and menu items.",
       );
       return;
     }
+
+    setDiscoveryState("loading");
+    setCatalogMessage("Loading nearby active kitchens and dishes…");
     try {
-      const nearby = await discoverDishes(
-        activeAddress.lat,
-        activeAddress.lng,
-        5_000,
-      );
-      setDishes(nearby);
+      const nearby = await discoverDishes(activeAddress.lat, activeAddress.lng, 5_000);
       const usedRadius = getDiscoveryRadiusMeters();
+      setDishes(nearby);
+      setRadiusLabel(formatDiscoveryRadius(usedRadius));
+      setDiscoveryState("ready");
       setCatalogMessage(
         nearby.length === 0
-          ? `No active kitchens with sellable dishes were found within ${formatDiscoveryRadius(usedRadius)} of your saved address.`
-          : usedRadius > 5_000
-            ? `Showing active home kitchens within ${formatDiscoveryRadius(usedRadius)}. Final delivery availability is confirmed at checkout.`
-            : "",
+          ? `No active kitchens with sellable dishes were returned within ${formatDiscoveryRadius(usedRadius)} of this address.`
+          : `Showing the live catalog within ${formatDiscoveryRadius(usedRadius)}.`,
       );
-    } catch {
-      if (process.env.NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK === "true") {
-        setDishes(DISHES);
-        setCatalogMessage(
-          "Showing the development visual catalogue while Catalog/APIM is unavailable.",
-        );
-      } else {
-        setDishes([]);
-        setCatalogMessage(
-          "Nearby dishes are temporarily unavailable. Please try again.",
-        );
-      }
+    } catch (error) {
+      setDishes([]);
+      setRadiusLabel(null);
+      setDiscoveryState("error");
+      setCatalogMessage(
+        error instanceof Error
+          ? error.message
+          : "Nearby dishes are temporarily unavailable. No development catalog has been substituted.",
+      );
     }
-  };
+  }, []);
 
   useEffect(() => {
     let active = true;
-    void loadSession().then(async (current) => {
+
+    void (async () => {
+      const current = await loadSession();
       if (!active) return;
       if (!current) {
         navigate({ to: "/", replace: true });
         return;
       }
       setUser(current);
-      setWishlistItemCount(wishlistCount());
 
       try {
         const activeAddress = await loadSelectedAddress();
         if (!active) return;
         setAddress(activeAddress);
         await refreshDiscovery(activeAddress);
-      } catch {
+      } catch (error) {
         if (!active) return;
         setAddress(null);
         setDishes([]);
+        setDiscoveryState("error");
         setCatalogMessage(
-          "Your saved delivery address could not be loaded. Open addresses and try again.",
+          error instanceof Error
+            ? error.message
+            : "Your saved delivery addresses could not be loaded.",
         );
       }
 
-      await loadCart();
-      if (active) setCartItemCount(cartCount());
-    });
+      try {
+        await loadCart();
+        if (active) setCartItemCount(cartCount());
+      } catch {
+        if (active) setCartItemCount(0);
+      }
+    })();
 
-    const unsubCart = subscribeCart(() => setCartItemCount(cartCount()));
-    const unsubWishlist = subscribeWishlist(() =>
-      setWishlistItemCount(wishlistCount()),
-    );
+    const unsubscribeCart = subscribeCart(() => setCartItemCount(cartCount()));
     return () => {
       active = false;
-      unsubCart();
-      unsubWishlist();
+      unsubscribeCart();
     };
-  }, [navigate]);
+  }, [navigate, refreshDiscovery]);
+
+  const categories = useMemo<readonly DishCategory[]>(() => {
+    const live = Array.from(
+      new Set(dishes.map((dish) => dish.category.trim()).filter(Boolean)),
+    ).sort((left, right) => left.localeCompare(right));
+    return [ALL_DISHES_CATEGORY, ...live];
+  }, [dishes]);
+
+  useEffect(() => {
+    if (!categories.includes(category)) setCategory(ALL_DISHES_CATEGORY);
+  }, [categories, category]);
 
   const filteredDishes = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    return dishes.filter(
-      (dish) =>
-        (category === "All" || dish.category === category) &&
-        (!term ||
-          dish.name.toLowerCase().includes(term) ||
-          dish.chef.toLowerCase().includes(term)),
-    );
+    const term = searchTerm.trim().toLocaleLowerCase("en-IN");
+    return dishes.filter((dish) => {
+      const categoryMatches =
+        category === ALL_DISHES_CATEGORY || dish.category === category;
+      const searchMatches =
+        !term ||
+        dish.name.toLocaleLowerCase("en-IN").includes(term) ||
+        dish.chef.toLocaleLowerCase("en-IN").includes(term) ||
+        dish.category.toLocaleLowerCase("en-IN").includes(term) ||
+        dish.desc.toLocaleLowerCase("en-IN").includes(term);
+      return categoryMatches && searchMatches;
+    });
   }, [category, searchTerm, dishes]);
 
   const handleLogout = async () => {
@@ -152,45 +167,53 @@ function BrowseFoodsPage() {
   };
 
   const locationLabel = address
-    ? `${address.hno ? `${address.hno}, ` : ""}${address.city}${address.mandal ? `, ${address.mandal}` : ""}`
+    ? [address.hno, address.mandal, address.city].filter(Boolean).join(", ")
     : "Set delivery address";
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-cream">
+        <p className="text-sm font-medium text-muted-foreground" role="status">
+          Loading your Craves session…
+        </p>
+      </main>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-cream pb-24">
+    <div className="min-h-screen bg-cream pb-24 text-ink">
       <BrowseHeader
         user={user}
         locationLabel={locationLabel}
         onOpenLocation={() => navigate({ to: "/addresses" })}
         cartCount={cartItemCount}
         onOpenCart={() => navigate({ to: "/cart" })}
-        wishlistCount={wishlistItemCount}
         onLogout={handleLogout}
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
       />
-      <WelcomeBanner firstName={user.username.split(" ")[0]} />
-      <CategoryFilterChips selected={category} onSelect={setCategory} />
-      {catalogMessage && (
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 pt-3 text-sm text-muted-foreground md:px-6">
-          <p>{catalogMessage}</p>
-          {!address && (
-            <button
-              type="button"
-              onClick={() => navigate({ to: "/addresses" })}
-              className="font-semibold text-primary hover:underline"
-            >
-              Manage delivery addresses
-            </button>
-          )}
-        </div>
-      )}
-      <DishesGrid
-        dishes={filteredDishes}
-        selectedCategory={category}
-        searchTerm={searchTerm}
-      />
+      <main>
+        <WelcomeBanner
+          firstName={user.firstName || user.username.split(" ")[0] || "there"}
+          dishCount={dishes.length}
+          radiusLabel={radiusLabel}
+          hasAddress={Boolean(address?.lat != null && address?.lng != null)}
+        />
+        <CategoryFilterChips
+          categories={categories}
+          selected={category}
+          onSelect={setCategory}
+        />
+        <DishesGrid
+          dishes={filteredDishes}
+          selectedCategory={category}
+          searchTerm={searchTerm}
+          state={discoveryState}
+          message={catalogMessage}
+          onRetry={() => void refreshDiscovery(address)}
+          onManageAddress={() => navigate({ to: "/addresses" })}
+        />
+      </main>
       <FloatingCartBar
         itemCount={cartItemCount}
         onViewCart={() => navigate({ to: "/cart" })}

@@ -1,5 +1,4 @@
-import { ArrowLeft, Share2, Crown } from "lucide-react";
-import { WishlistHeartButton } from "@/components/order/WishlistHeartButton";
+import { ArrowLeft, ImageOff, Share2 } from "lucide-react";
 import type { Dish } from "@/services/api/dishes";
 
 interface DishImageHeaderProps {
@@ -7,61 +6,60 @@ interface DishImageHeaderProps {
   onBack: () => void;
 }
 
-/** Full-bleed hero photo with back/share/heart buttons, gallery counter and tag badge. */
 export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
   const handleShare = async () => {
-    const shareData = { title: dish.name, text: dish.desc };
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch {
-        // user cancelled — nothing to do
-      }
+    if (!navigator.share) return;
+    try {
+      await navigator.share({
+        title: dish.name,
+        text: `${dish.name} from ${dish.chef} on Craves`,
+        url: window.location.href,
+      });
+    } catch {
+      // The native share sheet can be dismissed without an application error.
     }
   };
 
   return (
-    <div className="relative">
-      <img src={dish.img} alt={dish.name} className="h-80 w-full object-cover md:h-[26rem]" />
-      <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
+    <header className="relative overflow-hidden bg-ink">
+      <div className={`mx-auto flex h-80 max-w-7xl items-center justify-center md:h-[28rem] ${dish.imageIsPlaceholder ? "bg-cream" : "bg-grey-200"}`}>
+        <img
+          src={dish.img}
+          alt={dish.imageIsPlaceholder ? "" : dish.name}
+          aria-hidden={dish.imageIsPlaceholder || undefined}
+          className={
+            dish.imageIsPlaceholder
+              ? "h-28 w-28 object-contain opacity-80"
+              : "h-full w-full object-cover"
+          }
+        />
+        {dish.imageIsPlaceholder && (
+          <span className="absolute bottom-6 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-[var(--shadow-card)]">
+            <ImageOff className="h-4 w-4" aria-hidden="true" /> Kitchen image not uploaded
+          </span>
+        )}
+      </div>
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4 md:p-6">
         <button
           type="button"
           onClick={onBack}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-ink shadow hover:bg-white"
-          aria-label="Back"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-ink shadow-[var(--shadow-card)] transition-transform hover:-translate-y-0.5"
+          aria-label="Back to discovery"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </button>
-        <div className="flex items-center gap-2">
+        {typeof navigator !== "undefined" && "share" in navigator && (
           <button
             type="button"
-            onClick={handleShare}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-ink shadow hover:bg-white"
-            aria-label="Share"
+            onClick={() => void handleShare()}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-ink shadow-[var(--shadow-card)] transition-transform hover:-translate-y-0.5"
+            aria-label="Share this dish"
           >
-            <Share2 className="h-4 w-4" />
+            <Share2 className="h-5 w-5" aria-hidden="true" />
           </button>
-          <WishlistHeartButton
-            item={{
-              id: dish.id,
-              name: dish.name,
-              chef: dish.chef,
-              price: dish.price,
-              img: dish.img,
-            }}
-            size="md"
-          />
-        </div>
+        )}
       </div>
-      <span className="absolute bottom-4 left-4 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white">
-       
-      </span>
-      {dish.tag && (
-        <span className="absolute bottom-4 right-4 flex items-center gap-1 rounded-full bg-primary/95 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-primary-foreground shadow">
-          <Crown className="h-3.5 w-3.5" /> {dish.tag}
-        </span>
-      )}
-    </div>
+    </header>
   );
 }
 

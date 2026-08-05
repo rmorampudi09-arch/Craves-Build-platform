@@ -42,7 +42,7 @@ test("signed-in home loads backend address, cart, and discovery without fixed co
   assert.match(contents, /loadCart\(\)/);
   assert.match(
     contents,
-    /discoverDishes\(\s*activeAddress\.lat,\s*activeAddress\.lng/s,
+    /discoverDishes\(activeAddress\.lat, activeAddress\.lng, 5_000\)/,
   );
   assert.doesNotMatch(contents, /17\.4483|78\.3915/);
 });
@@ -54,12 +54,12 @@ test("profile exposes backend chef application status", () => {
   assert.match(contents, /Become a home chef/);
 });
 
-test("production catalogue does not fall back to demo dishes", () => {
+test("production catalogue has no demo dish fallback", () => {
   const contents = source("../services/api/dishes.ts");
-  assert.match(
-    contents,
-    /NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK === "true"\s*\?\s*DISHES\s*:\s*\[\]/s,
-  );
+  assert.doesNotMatch(contents, /export const DISHES/);
+  assert.doesNotMatch(contents, /NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK/);
+  assert.match(contents, /parseMenuDiscovery\(body\)/);
+  assert.match(contents, /\/api\/discovery\/menu-items/);
 });
 
 test("empty nearby discovery expands without changing checkout serviceability", () => {
@@ -68,7 +68,7 @@ test("empty nearby discovery expands without changing checkout serviceability", 
   assert.match(dishes, /candidateDiscoveryRadii\(radiusMeters\)/);
   assert.match(
     dishes,
-    /if \(discoveredDishes\.length > 0\) return discoveredDishes/,
+    /if \(discoveredDishes\.length > 0\) return \[\.\.\.discoveredDishes\]/,
   );
   assert.match(policy, /15_000/);
   assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 50_000/);
@@ -78,19 +78,18 @@ test("real backend chefs remain available in production", () => {
   const contents = source("../services/api/chefs.ts");
   assert.match(contents, /dish\.kitchenId === id/);
   assert.match(contents, /catalogBacked: true/);
-  assert.doesNotMatch(
-    contents,
-    /NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK !== "true"\)\s*return undefined/,
-  );
+  assert.doesNotMatch(contents, /reviewPool|LOCATIONS|NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK/);
 });
 
-test("dish and chef detail pages reload discovery after a browser refresh", () => {
-  const dish = source("../screens/public/FoodDetails/FoodDetails.tsx");
+test("dish and chef detail pages recover live data after a browser refresh", () => {
+  const dishPage = source("../screens/public/FoodDetails/FoodDetails.tsx");
+  const dishService = source("../services/api/dishes.ts");
   const chef = source("../screens/public/ChefProfile/ChefProfile.tsx");
-  for (const contents of [dish, chef]) {
-    assert.match(contents, /loadSelectedAddress\(\)/);
-    assert.match(contents, /discoverDishes\(address\.lat, address\.lng\)/);
-  }
+
+  assert.match(dishPage, /loadDish\(id\)/);
+  assert.match(dishService, /\/api\/catalog\/menu-items/);
+  assert.match(chef, /loadSelectedAddress\(\)/);
+  assert.match(chef, /discoverDishes\(address\.lat, address\.lng\)/);
 });
 
 test("every home-chef call to action opens the live chef registration flow", () => {

@@ -1,10 +1,4 @@
-export const DISH_CATEGORIES = [
-  "All",
-  "Meals",
-  "Biryani",
-  "Veg Biryani",
-  "Curry",
-  "Tiffin",
-] as const;
+export const ALL_DISHES_CATEGORY = "All" as const;
 
-export type DishCategory = (typeof DISH_CATEGORIES)[number];
+/** Categories are returned by the live catalog; the UI always prepends All. */
+export type DishCategory = string;

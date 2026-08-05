@@ -82,11 +82,12 @@ test("real backend chefs remain available in production", () => {
 });
 
 test("dish and chef detail pages recover live data after a browser refresh", () => {
-  const dish = source("../screens/public/FoodDetails/FoodDetails.tsx");
+  const dishPage = source("../screens/public/FoodDetails/FoodDetails.tsx");
+  const dishService = source("../services/api/dishes.ts");
   const chef = source("../screens/public/ChefProfile/ChefProfile.tsx");
 
-  assert.match(dish, /loadDish\(id\)/);
-  assert.match(dish, /\/api\/catalog\/menu-items/);
+  assert.match(dishPage, /loadDish\(id\)/);
+  assert.match(dishService, /\/api\/catalog\/menu-items/);
   assert.match(chef, /loadSelectedAddress\(\)/);
   assert.match(chef, /discoverDishes\(address\.lat, address\.lng\)/);
 });

@@ -6,26 +6,47 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("public layout uses the single approved Craves logo component", () => {
-  const logo = source("../components/layout/Logo.tsx");
+const canonicalLogoPath = "/brand/craves-logo-20260805.png";
 
-  assert.match(logo, /CravesLogo/);
-  assert.match(logo, /size="lg"/);
-  assert.doesNotMatch(logo, /assets\/images\/craves-logo\.png/);
-  assert.doesNotMatch(logo, /FOOD FROM HOME/);
+test("customer and chef surfaces use the single shared Craves logo component", () => {
+  const sharedLogoSurfaces = [
+    "../components/layout/Logo.tsx",
+    "../components/sections/HeroSection.tsx",
+    "../components/auth/AuthModal.tsx",
+    "../components/home/BrowseHeader.tsx",
+    "../components/cart/CartHeader.tsx",
+    "../components/checkout/CheckoutHeader.tsx",
+    "../components/profile/ProfileHeader.tsx",
+    "../components/tracking/TrackingHeader.tsx",
+    "../screens/OrderHistory/OrderHistory.tsx",
+    "../app/chef/layout.tsx",
+  ];
+
+  for (const path of sharedLogoSurfaces) {
+    assert.match(source(path), /CravesLogo/, `${path} must render CravesLogo`);
+  }
+
+  const legacyLayoutLogo = source("../components/layout/Logo.tsx");
+  assert.doesNotMatch(legacyLayoutLogo, /assets\/images\/craves-logo\.png/);
+  assert.doesNotMatch(legacyLayoutLogo, /FOOD FROM HOME/);
 });
 
-test("brand component serves the approved PNG directly", () => {
+test("canonical component, browser icons and build output use the uploaded versioned logo", () => {
   const logo = source("../components/brand/CravesLogo.tsx");
+  const rootLayout = source("../app/layout.tsx");
   const packageJson = source("../../package.json");
   const extractor = source("../../scripts/extract-brand-logo.mjs");
+  const sourceSvg = source("../../public/brand/craves-logo.svg");
 
-  assert.match(logo, /src="\/brand\/craves-logo\.png"/);
+  assert.match(logo, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));
   assert.match(logo, /unoptimized/);
-  assert.doesNotMatch(logo, /craves-logo\.svg/);
+  assert.match(rootLayout, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));
   assert.match(packageJson, /"prebuild": "node scripts\/extract-brand-logo\.mjs"/);
-  assert.match(extractor, /data:image\\\/png;base64/);
-  assert.match(extractor, /89504e470d0a1a0a/);
+  assert.match(extractor, /craves-logo-20260805\.png/);
+  assert.match(extractor, /afb6751bb1291f5cba13f3223140cc42229cb00696e025f617766527d6c7fd07/);
+  assert.match(extractor, /sha256 !== expectedSha256/);
+  assert.match(sourceSvg, /width="112" height="112"/);
+  assert.match(sourceSvg, /data:image\/png;base64/);
 });
 
 test("customer address BFF targets the documented APIM collection route", () => {

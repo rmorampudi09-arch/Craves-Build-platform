@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ChefHat, UserRound, X } from "lucide-react";
 import {
   type ConfirmationResult,
@@ -55,6 +55,27 @@ export function AuthModal({
   const confirmation = useRef<ConfirmationResult | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
 
+  const reset = useCallback(() => {
+    verifier.current?.clear();
+    verifier.current = null;
+    confirmation.current = null;
+    setPhone("");
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setAccountMode(initialAccountMode);
+    setOtp("");
+    setOtpSent(false);
+    setBusy(false);
+    setError(null);
+    setInfo(null);
+  }, [initialAccountMode]);
+
+  const handleClose = useCallback(() => {
+    reset();
+    onClose();
+  }, [onClose, reset]);
+
   useEffect(
     () => () => {
       verifier.current?.clear();
@@ -74,30 +95,9 @@ export function AuthModal({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  });
+  }, [busy, handleClose, open]);
 
   if (!open) return null;
-
-  const reset = () => {
-    verifier.current?.clear();
-    verifier.current = null;
-    confirmation.current = null;
-    setPhone("");
-    setFirstName("");
-    setLastName("");
-    setEmail("");
-    setAccountMode(initialAccountMode);
-    setOtp("");
-    setOtpSent(false);
-    setBusy(false);
-    setError(null);
-    setInfo(null);
-  };
-
-  const handleClose = () => {
-    reset();
-    onClose();
-  };
 
   async function recaptcha(): Promise<RecaptchaVerifier> {
     if (verifier.current) return verifier.current;
@@ -235,7 +235,7 @@ export function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-[#261A15]/70 px-0 md:items-center md:px-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-espresso/70 px-0 md:items-center md:px-4"
       onClick={handleClose}
       role="presentation"
     >
@@ -334,7 +334,7 @@ export function AuthModal({
                     maxLength={100}
                     value={firstName}
                     onChange={(event) => setFirstName(event.target.value)}
-                    className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-[#9A9A95] focus:border-primary"
+                    className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-grey-400 focus:border-primary"
                     disabled={busy}
                     required
                   />
@@ -351,7 +351,7 @@ export function AuthModal({
                     maxLength={100}
                     value={lastName}
                     onChange={(event) => setLastName(event.target.value)}
-                    className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-[#9A9A95] focus:border-primary"
+                    className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-grey-400 focus:border-primary"
                     disabled={busy}
                     required
                   />
@@ -373,7 +373,7 @@ export function AuthModal({
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@example.com"
-                  className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-[#9A9A95] focus:border-primary"
+                  className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-grey-400 focus:border-primary"
                   disabled={busy}
                 />
               </label>
@@ -398,7 +398,7 @@ export function AuthModal({
                   onChange={(event) =>
                     setPhone(event.target.value.replace(/\D/g, ""))
                   }
-                  className="w-full bg-white px-3 text-base text-ink outline-none placeholder:text-[#9A9A95]"
+                  className="w-full bg-white px-3 text-base text-ink outline-none placeholder:text-grey-400"
                   disabled={otpSent || busy}
                   autoComplete="tel-national"
                   required
@@ -429,7 +429,7 @@ export function AuthModal({
                   onChange={(event) =>
                     setOtp(event.target.value.replace(/\D/g, ""))
                   }
-                  className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-center text-lg tracking-[0.32em] text-ink placeholder:text-[#9A9A95] focus:border-primary"
+                  className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-center text-lg tracking-widest text-ink placeholder:text-grey-400 focus:border-primary"
                   autoComplete="one-time-code"
                   autoFocus
                   required
@@ -448,7 +448,7 @@ export function AuthModal({
             {info && !error && (
               <p
                 role="status"
-                className="rounded-lg border border-[#1E5BA8]/20 bg-[#1E5BA8]/5 px-3 py-2 text-sm font-medium text-[#1E5BA8]"
+                className="rounded-lg border border-info/20 bg-info/5 px-3 py-2 text-sm font-medium text-info"
               >
                 {info}
               </p>

@@ -18,11 +18,11 @@ const width = png.length >= 24 ? png.readUInt32BE(16) : 0;
 const height = png.length >= 24 ? png.readUInt32BE(20) : 0;
 if (
   signature !== "89504e470d0a1a0a"
-  || width < 128
-  || height < 128
+  || width < 32
+  || height < 32
   || width !== height
 ) {
-  throw new Error("Extracted Craves logo is not a valid square production PNG");
+  throw new Error("Extracted Craves logo is not a valid square PNG");
 }
 
 await mkdir(dirname(targetPath), { recursive: true });

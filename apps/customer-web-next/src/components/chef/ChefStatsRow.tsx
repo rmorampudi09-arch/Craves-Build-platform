@@ -1,50 +1,42 @@
-import { Award, BadgeCheck, MapPin, Package, Star } from "lucide-react";
+import { Layers3, MapPin, Package } from "lucide-react";
 import type { Chef } from "@/services/api/chefs";
 
 export function ChefStatsRow({ chef }: { chef: Chef }) {
-  const stats = chef.catalogBacked
-    ? [
-        {
-          icon: Package,
-          value: chef.activeDishCount,
-          label: "Active Dishes",
-        },
-        {
-          icon: MapPin,
-          value: chef.distanceKm > 0 ? `${chef.distanceKm} km` : "Nearby",
-          label: "Distance",
-        },
-        { icon: BadgeCheck, value: "Active", label: "Kitchen Status" },
-      ]
-    : [
-        {
-          icon: Award,
-          value: `${chef.experienceYears} yrs`,
-          label: "Experience",
-        },
-        {
-          icon: Package,
-          value: `${chef.ordersDelivered}+`,
-          label: "Orders Delivered",
-        },
-        { icon: Star, value: chef.rating, label: "Avg. Rating" },
-      ];
+  const stats = [
+    {
+      icon: Package,
+      value: chef.activeDishCount,
+      label: "Available dishes",
+    },
+    {
+      icon: Layers3,
+      value: chef.specialties.length,
+      label: "Menu categories",
+    },
+    {
+      icon: MapPin,
+      value: chef.distanceKm > 0 ? `${chef.distanceKm} km` : "—",
+      label: "From your address",
+    },
+  ];
 
   return (
-    <div className="mt-4 grid grid-cols-3 gap-2.5">
+    <dl className="mt-4 grid grid-cols-3 gap-2.5">
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="rounded-xl border border-border bg-card px-3 py-3 text-center"
+          className="rounded-xl border border-border bg-white px-3 py-3 text-center shadow-[var(--shadow-card)]"
         >
-          <stat.icon className="mx-auto h-5 w-5 text-primary" />
-          <p className="mt-1 font-display text-lg font-bold text-ink">
+          <dt className="text-[0.68rem] leading-4 text-muted-foreground">
+            <stat.icon className="mx-auto mb-1 h-5 w-5 text-primary" aria-hidden="true" />
+            {stat.label}
+          </dt>
+          <dd className="order-first font-display text-lg font-bold text-ink">
             {stat.value}
-          </p>
-          <p className="text-[11px] text-muted-foreground">{stat.label}</p>
+          </dd>
         </div>
       ))}
-    </div>
+    </dl>
   );
 }
 

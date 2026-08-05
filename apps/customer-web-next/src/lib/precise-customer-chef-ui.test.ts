@@ -24,9 +24,11 @@ test("shared customer and chef palette removes espresso brown", () => {
   assert.match(theme, /--color-black:\s*#000000/i);
 });
 
-test("buttons and tabs use contrast red with the requested hover state", () => {
+test("buttons use white surfaces with one flame-red border and the requested hover state", () => {
   assert.match(theme, /button, \[role="tab"\]/);
-  assert.match(theme, /background:\s*var\(--color-contrast-red\)\s*!important/);
+  assert.match(theme, /border:\s*1px solid var\(--color-flame-red\)\s*!important/);
+  assert.match(theme, /background:\s*var\(--color-white\)\s*!important/);
+  assert.match(theme, /color:\s*var\(--color-black\)\s*!important/);
   assert.match(theme, /background:\s*var\(--color-flame-red\)\s*!important/);
   assert.match(theme, /color:\s*var\(--color-white\)\s*!important/);
   assert.match(theme, /font-weight:\s*700\s*!important/);

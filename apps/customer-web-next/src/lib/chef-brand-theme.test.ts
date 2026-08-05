@@ -12,12 +12,13 @@ const pageHeader = readFileSync(
 );
 const theme = readFileSync(new URL("../craves-theme.css", import.meta.url), "utf8");
 
-test("chef workspace uses the canonical Craves brand tokens", () => {
-  for (const color of ["#f62e18", "#261a15", "#fff4e8", "#f5b400"]) {
+test("chef workspace uses the approved white, contrast-red and flame-red palette", () => {
+  for (const color of ["#f62e18", "#c92716", "#000000", "#ffffff"]) {
     assert.match(theme, new RegExp(color, "i"));
   }
-  assert.match(pageHeader, /bg-ink/);
-  assert.match(pageHeader, /text-\[#F5B400\]/);
+  assert.doesNotMatch(theme, /#261a15/i);
+  assert.match(pageHeader, /bg-white/);
+  assert.match(pageHeader, /text-black/);
   assert.match(dashboard, /text-primary/);
   assert.match(dashboard, /bg-secondary/);
   assert.doesNotMatch(

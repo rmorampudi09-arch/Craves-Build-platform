@@ -43,8 +43,10 @@ test("canonical component, browser icons and build output use the uploaded versi
   assert.match(rootLayout, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));
   assert.match(packageJson, /"prebuild": "node scripts\/extract-brand-logo\.mjs"/);
   assert.match(extractor, /craves-logo-20260805\.png/);
-  assert.match(extractor, /afb6751bb1291f5cba13f3223140cc42229cb00696e025f617766527d6c7fd07/);
-  assert.match(extractor, /sha256 !== expectedSha256/);
+  assert.match(extractor, /import sharp from "sharp"/);
+  assert.match(extractor, /toBuffer\(\{ resolveWithObject: true \}\)/);
+  assert.match(extractor, /width < 96/);
+  assert.match(extractor, /channels !== 4/);
   assert.match(sourceSvg, /width="112" height="112"/);
   assert.match(sourceSvg, /data:image\/png;base64/);
 });

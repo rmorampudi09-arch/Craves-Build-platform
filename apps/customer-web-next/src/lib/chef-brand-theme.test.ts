@@ -6,10 +6,14 @@ const dashboard = readFileSync(
   new URL("../components/chef-mode-dashboard.tsx", import.meta.url),
   "utf8",
 );
+const theme = readFileSync(new URL("../craves-theme.css", import.meta.url), "utf8");
 
-test("chef workspace uses the locked customer palette", () => {
-  for (const color of ["#FFF8EC", "#F6B545", "#6930CA"]) {
-    assert.match(dashboard, new RegExp(color, "i"));
+test("chef workspace uses the canonical Craves brand tokens", () => {
+  for (const color of ["#f62e18", "#261a15", "#fff4e8", "#f5b400"]) {
+    assert.match(theme, new RegExp(color, "i"));
   }
-  assert.doesNotMatch(dashboard, /bg-white\/5|text-slate-300/);
+  assert.match(dashboard, /bg-ink/);
+  assert.match(dashboard, /text-primary/);
+  assert.match(dashboard, /bg-secondary/);
+  assert.doesNotMatch(dashboard, /#6930CA|#F6B545|bg-white\/5|text-slate-300/i);
 });

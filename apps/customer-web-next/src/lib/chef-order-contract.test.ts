@@ -3,7 +3,9 @@ import test from "node:test";
 import {
   isCanonicalUuid,
   parseChefOrder,
+  parseChefOrderResponse,
   parseChefOrders,
+  parseChefOrdersResponse,
 } from "./chef-order-contract.ts";
 
 const order = {
@@ -83,6 +85,27 @@ test("accepts nullable legacy snapshot labels from the Order Service schema", ()
   assert.equal(parsed?.items[0]?.foodType, null);
 });
 
+test("uses createdAt for legacy rows without updatedAt", () => {
+  const { updatedAt: _updatedAt, ...historical } = order;
+  const parsed = parseChefOrder(historical);
+  assert.equal(parsed?.updatedAt, order.createdAt);
+});
+
+test("accepts direct, Spring Page and named deployed list envelopes", () => {
+  assert.equal(parseChefOrdersResponse([order])?.length, 1);
+  assert.equal(parseChefOrdersResponse({ content: [order] })?.length, 1);
+  assert.equal(parseChefOrdersResponse({ orders: [order] })?.length, 1);
+  assert.equal(parseChefOrdersResponse({ data: [order] })?.length, 1);
+  assert.equal(parseChefOrdersResponse({ data: { orders: [order] } })?.length, 1);
+});
+
+test("accepts direct and named deployed detail envelopes", () => {
+  assert.equal(parseChefOrderResponse(order)?.id, order.id);
+  assert.equal(parseChefOrderResponse({ order })?.id, order.id);
+  assert.equal(parseChefOrderResponse({ data: order })?.id, order.id);
+  assert.equal(parseChefOrderResponse({ data: { order } })?.id, order.id);
+});
+
 test("rejects unknown order status and malformed ids", () => {
   assert.equal(parseChefOrder({ ...order, status: "PROVIDER_INTERNAL" }), null);
   assert.equal(parseChefOrder({ ...order, id: "bad" }), null);
@@ -92,4 +115,5 @@ test("rejects unknown order status and malformed ids", () => {
 test("validates complete chef order arrays", () => {
   assert.equal(parseChefOrders([order])?.length, 1);
   assert.equal(parseChefOrders([order, { ...order, id: "bad" }]), null);
+  assert.equal(parseChefOrdersResponse({ unexpected: [order] }), null);
 });

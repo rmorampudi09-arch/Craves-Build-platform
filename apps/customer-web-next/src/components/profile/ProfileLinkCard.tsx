@@ -8,23 +8,34 @@ interface ProfileLinkCardProps {
   subtitle: string;
 }
 
-/** Tappable row: icon, title, subtitle, chevron — used for "My wishlist" and "My orders". */
-export function ProfileLinkCard({ to, icon: Icon, title, subtitle }: ProfileLinkCardProps) {
+export function ProfileLinkCard({
+  to,
+  icon: Icon,
+  title,
+  subtitle,
+}: ProfileLinkCardProps) {
   return (
     <Link
       to={to}
-      className="flex items-center justify-between rounded-2xl border border-border bg-card p-5 hover:border-primary"
+      className="craves-surface group flex min-h-20 items-center justify-between gap-4 p-4 transition-colors hover:border-primary hover:bg-secondary"
     >
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <Icon className="h-5 w-5" />
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-contrast-red">
+          <Icon className="h-5 w-5" aria-hidden="true" />
         </div>
-        <div>
-          <h2 className="font-display text-base font-bold text-ink">{title}</h2>
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        <div className="min-w-0">
+          <h2 className="font-display text-base font-semibold text-ink">
+            {title}
+          </h2>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">
+            {subtitle}
+          </p>
         </div>
       </div>
-      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+      <ChevronRight
+        className="h-5 w-5 shrink-0 text-grey-400 transition-transform group-hover:translate-x-1 group-hover:text-primary"
+        aria-hidden="true"
+      />
     </Link>
   );
 }

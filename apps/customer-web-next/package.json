@@ -5,7 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "scripts": {
+    "predev": "node scripts/extract-brand-logo.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/extract-brand-logo.mjs",
     "build": "next build",
     "standalone:prepare": "node scripts/prepare-standalone.mjs",
     "start": "npm run standalone:prepare && node .next/standalone/server.js",

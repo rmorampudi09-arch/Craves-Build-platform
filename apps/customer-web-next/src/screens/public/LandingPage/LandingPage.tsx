@@ -8,13 +8,10 @@ import { WhyCravesSection } from "@/components/sections/WhyCravesSection";
 import { HowItWorksSection } from "@/components/sections/HowItWorksSection";
 import { WhatMakesSpecialSection } from "@/components/sections/WhatMakesSpecialSection";
 import { BecomeChefCtaSection } from "@/components/sections/BecomeChefCtaSection";
-import { TestimonialsSection } from "@/components/sections/TestimonialsSection";
-import { StatsSection } from "@/components/sections/StatsSection";
 import { FooterSection } from "@/components/sections/FooterSection";
 import {
   getAddress,
   loadSession,
-  clearSession,
   type CravesAddress,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
@@ -32,18 +29,19 @@ function LandingPage() {
   const [authAccountMode, setAuthAccountMode] =
     useState<AccountMode>("customer");
   const [locOpen, setLocOpen] = useState(false);
-  const [user, setUser] = useState<CravesUser | null>(null);
   const [address, setAddress] = useState<CravesAddress | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
     let active = true;
     void loadSession().then((current) => {
       if (!active) return;
-      if (current) navigate({ to: "/home", replace: true });
-      else {
-        setUser(null);
-        setAddress(getAddress());
+      if (current) {
+        navigate({ to: "/home", replace: true });
+        return;
       }
+      setAddress(getAddress());
+      setCheckingSession(false);
     });
     return () => {
       active = false;
@@ -59,31 +57,45 @@ function LandingPage() {
     setAuthOpen(true);
   };
 
-  const handleLogout = async () => {
-    await clearSession();
-    setUser(null);
-  };
-
   const locationLabel = address
-    ? `${address.city}${address.mandal ? `, ${address.mandal}` : ""}`
-    : "Select Location";
+    ? [address.mandal, address.city].filter(Boolean).join(", ")
+    : "Choose your delivery location";
+
+  if (checkingSession) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-cream px-4">
+        <div className="text-center" role="status" aria-live="polite">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-border border-t-primary" />
+          <p className="mt-4 text-sm font-medium text-muted-foreground">
+            Opening Craves…
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-cream">
-      <HeroSection
-        user={user}
-        locationLabel={locationLabel}
-        onOpenLocation={() => setLocOpen(true)}
-        onOpenAuth={openAuth}
-        onBecomeChef={() => openAuth("register", "chef")}
-        onLogout={handleLogout}
-      />
-      <WhyCravesSection />
-      <HowItWorksSection />
-      <WhatMakesSpecialSection />
-      <BecomeChefCtaSection onBecomeChef={() => openAuth("register", "chef")} />
-      <TestimonialsSection />
-      <StatsSection />
+    <div className="min-h-screen bg-cream text-ink">
+      <main>
+        <HeroSection
+          locationLabel={locationLabel}
+          onOpenLocation={() => setLocOpen(true)}
+          onOpenAuth={openAuth}
+          onBecomeChef={() => openAuth("register", "chef")}
+        />
+        <div id="why-craves" className="scroll-mt-20">
+          <WhyCravesSection />
+        </div>
+        <div id="how-it-works" className="scroll-mt-20">
+          <HowItWorksSection />
+        </div>
+        <WhatMakesSpecialSection />
+        <div id="become-a-chef" className="scroll-mt-20">
+          <BecomeChefCtaSection
+            onBecomeChef={() => openAuth("register", "chef")}
+          />
+        </div>
+      </main>
       <FooterSection />
 
       <AuthModal
@@ -93,7 +105,6 @@ function LandingPage() {
         onClose={() => setAuthOpen(false)}
         onSwitchMode={setAuthMode}
         onAuthenticated={(authenticatedUser, accountMode) => {
-          setUser(authenticatedUser);
           navigate({
             to:
               accountMode === "chef"

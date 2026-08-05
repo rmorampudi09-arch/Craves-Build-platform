@@ -16,11 +16,11 @@ const dimensions: Record<LogoSize, number> = {
 };
 
 /**
- * Approved Craves red rounded-square logo with pure-white lettering.
+ * Single canonical Craves logo for customer and chef web experiences.
  *
- * The previous SVG wrapped a base64 PNG inside an SVG <image>. Some production
- * image paths did not render that nested data URI reliably. Serve the real PNG
- * directly and bypass Next.js image optimisation for this tiny local asset.
+ * The versioned path prevents browsers and edge caches from retaining an older
+ * logo after deployment. The PNG is deterministically extracted from the
+ * approved cropped source during development and production builds.
  */
 export function CravesLogo({
   size = "md",
@@ -32,7 +32,7 @@ export function CravesLogo({
 
   return (
     <Image
-      src="/brand/craves-logo.png"
+      src="/brand/craves-logo-20260805.png"
       width={dimension}
       height={dimension}
       alt={decorative ? "" : "Craves"}

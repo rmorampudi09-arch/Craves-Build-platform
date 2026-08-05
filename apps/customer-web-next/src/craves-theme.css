@@ -1,3 +1,20 @@
+@theme inline {
+  --color-flame-red: #f62e18;
+  --color-contrast-red: #c92716;
+  --color-espresso: #261a15;
+  --color-cream: #fff4e8;
+  --color-white: #ffffff;
+  --color-gold: #f5b400;
+  --color-grey-50: #f8f8f7;
+  --color-grey-200: #e5e5e2;
+  --color-grey-400: #9a9a95;
+  --color-grey-600: #52524c;
+  --color-success: #0e7c3a;
+  --color-warning: #b7791f;
+  --color-error: #c92716;
+  --color-info: #1e5ba8;
+}
+
 :root {
   color-scheme: light;
 

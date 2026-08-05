@@ -36,19 +36,20 @@ test("canonical component, browser icons and build output use the uploaded versi
   const rootLayout = source("../app/layout.tsx");
   const packageJson = source("../../package.json");
   const extractor = source("../../scripts/extract-brand-logo.mjs");
-  const sourceSvg = source("../../public/brand/craves-logo.svg");
+  const compatibilitySvg = source("../../public/brand/craves-logo.svg");
 
   assert.match(logo, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));
   assert.match(logo, /unoptimized/);
   assert.match(rootLayout, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));
   assert.match(packageJson, /"prebuild": "node scripts\/extract-brand-logo\.mjs"/);
-  assert.match(extractor, /craves-logo-20260805\.png/);
+  assert.match(extractor, /craves-logo-20260805\.base64\.00/);
+  assert.match(extractor, /craves-logo-20260805\.base64\.04/);
+  assert.match(extractor, /afb6751bb1291f5cba13f3223140cc42229cb00696e025f617766527d6c7fd07/);
   assert.match(extractor, /import sharp from "sharp"/);
-  assert.match(extractor, /toBuffer\(\{ resolveWithObject: true \}\)/);
-  assert.match(extractor, /width < 96/);
+  assert.match(extractor, /width !== 112/);
   assert.match(extractor, /channels !== 4/);
-  assert.match(sourceSvg, /width="112" height="112"/);
-  assert.match(sourceSvg, /data:image\/png;base64/);
+  assert.match(compatibilitySvg, /craves-logo-20260805\.png/);
+  assert.doesNotMatch(compatibilitySvg, /data:image\/png;base64/);
 });
 
 test("customer address BFF targets the documented APIM collection route", () => {

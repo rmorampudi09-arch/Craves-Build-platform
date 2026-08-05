@@ -1,44 +1,37 @@
 import { Star } from "lucide-react";
 import type { Dish } from "@/services/api/dishes";
 
-/** Veg (green circle-in-square) / non-veg (red triangle-in-square) mark, Swiggy/Zomato-style. */
-function VegMark({ veg }: { veg: boolean }) {
+function FoodMark({ veg }: { veg: boolean }) {
   return (
     <span
-      className={`inline-flex h-5 w-5 items-center justify-center rounded border-2 bg-white align-middle ${
-        veg ? "border-green-600" : "border-red-600"
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 bg-white align-middle ${
+        veg ? "border-success" : "border-error"
       }`}
       aria-label={veg ? "Vegetarian" : "Non-vegetarian"}
     >
-      {veg ? (
-        <span className="h-2.5 w-2.5 rounded-full bg-green-600" />
-      ) : (
-        <span
-          className="h-0 w-0 border-x-[5px] border-b-[8px] border-x-transparent border-b-red-600"
-          style={{ marginBottom: 1 }}
-        />
-      )}
+      <span className={`h-2.5 w-2.5 rounded-full ${veg ? "bg-success" : "bg-error"}`} />
     </span>
   );
 }
 
-/** Name + veg mark, rating chip, and review count — the title row of the dish page. */
 export function DishInfoSummary({ dish }: { dish: Dish }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <h1 className="flex items-center gap-2 font-display text-2xl font-bold text-ink md:text-3xl">
-          {dish.name} <VegMark veg={dish.veg} />
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">{dish.desc}</p>
-        <p className="mt-2 flex items-center gap-1.5 text-sm text-ink">
-          <Star className="h-4 w-4 fill-primary text-primary" />
-          <span className="font-semibold">{dish.rating}</span>
-          {dish.reviewCount && (
-            <span className="text-muted-foreground">· {dish.reviewCount} Reviews</span>
-          )}
+    <div>
+      <p className="craves-overline text-primary">{dish.category}</p>
+      <h1 className="mt-2 flex items-start gap-2 font-display text-3xl font-bold leading-tight tracking-[-0.04em] text-ink md:text-4xl">
+        <span>{dish.name}</span>
+        <FoodMark veg={dish.veg} />
+      </h1>
+      <p className="mt-3 text-base leading-6 text-muted-foreground">{dish.desc}</p>
+      {dish.rating > 0 && (
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-ink">
+          <Star className="h-4 w-4 fill-[#F5B400] text-[#F5B400]" aria-hidden="true" />
+          <span className="font-semibold">{dish.rating.toFixed(1)}</span>
+          {dish.reviewCount ? (
+            <span className="text-muted-foreground">· {dish.reviewCount} verified reviews</span>
+          ) : null}
         </p>
-      </div>
+      )}
     </div>
   );
 }

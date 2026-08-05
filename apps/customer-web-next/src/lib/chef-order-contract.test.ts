@@ -86,7 +86,7 @@ test("accepts nullable legacy snapshot labels from the Order Service schema", ()
 });
 
 test("uses createdAt for legacy rows without updatedAt", () => {
-  const { updatedAt: _updatedAt, ...historical } = order;
+  const historical = { ...order, updatedAt: undefined };
   const parsed = parseChefOrder(historical);
   assert.equal(parsed?.updatedAt, order.createdAt);
 });

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { ChefAccessBoundary } from "@/components/chef-access-boundary";
 import { ChefOrderDetails } from "@/components/chef-order-details";
+import { ChefPageHeader } from "@/components/chef-page-header";
 
 export const metadata = {
   title: "Chef order | Craves",
@@ -14,17 +14,13 @@ export default async function ChefOrderPage({
 }) {
   const { orderId } = await params;
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-5 py-12 sm:px-8">
-      <Link
-        href="/chef/orders"
-        className="text-sm font-semibold text-[#F6B545]"
-      >
-        ← Chef orders
-      </Link>
-      <h1 className="mt-5 text-4xl font-bold text-white sm:text-5xl">
-        Order details
-      </h1>
-      <div className="mt-8">
+    <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-6 md:py-8">
+      <ChefPageHeader
+        eyebrow={`Order #${orderId.slice(-8).toUpperCase()}`}
+        title="Order detail and kitchen actions"
+        description="Review the backend snapshot, customer fulfilment details, charges and the chef transitions currently allowed by Order Service."
+      />
+      <div className="mt-6">
         <ChefAccessBoundary>
           <ChefOrderDetails orderId={orderId} />
         </ChefAccessBoundary>

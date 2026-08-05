@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isCanonicalUuid, parseChefOrder } from "@/lib/chef-order-contract";
+import {
+  isCanonicalUuid,
+  parseChefOrderResponse,
+} from "@/lib/chef-order-contract";
 import { isSameOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +35,7 @@ export async function POST(
       ? raw.reason.trim().slice(0, 500)
       : null;
   const actionId = typeof raw?.actionId === "string" ? raw.actionId : "";
-  if (!isCanonicalUuid(actionId)) {
+  if (!reason || reason.length < 3 || !isCanonicalUuid(actionId)) {
     return NextResponse.json(
       { code: "INVALID_REJECTION_REQUEST" },
       { status: 400 },
@@ -73,6 +76,10 @@ export async function POST(
               : upstream.status === 409
                 ? "CHEF_REJECTION_CONFLICT"
                 : "CHEF_REJECTION_FAILED",
+          message:
+            upstream.status === 409
+              ? "The order state changed or the rejection window is no longer valid."
+              : "The order could not be rejected.",
         },
         { status: upstream.status },
       );
@@ -81,10 +88,13 @@ export async function POST(
       }
       return response;
     }
-    const order = parseChefOrder(await upstream.json().catch(() => null));
-    if (!order) {
+    const order = parseChefOrderResponse(await upstream.json().catch(() => null));
+    if (!order || order.id.toLowerCase() !== orderId.toLowerCase()) {
       return NextResponse.json(
-        { code: "INVALID_CHEF_ORDER_RESPONSE" },
+        {
+          code: "INVALID_CHEF_ORDER_RESPONSE",
+          message: "Order Service returned an invalid rejected-order response.",
+        },
         { status: 502 },
       );
     }
@@ -98,6 +108,9 @@ export async function POST(
         code: timedOut
           ? "CHEF_REJECTION_TIMEOUT"
           : "CHEF_REJECTION_UNAVAILABLE",
+        message: timedOut
+          ? "Order rejection took too long to respond."
+          : "Order rejection is temporarily unavailable.",
       },
       { status: timedOut ? 504 : 503 },
     );

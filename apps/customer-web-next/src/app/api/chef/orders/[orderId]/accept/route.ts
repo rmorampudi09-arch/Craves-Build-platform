@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isCanonicalUuid, parseChefOrder } from "@/lib/chef-order-contract";
+import {
+  isCanonicalUuid,
+  parseChefOrderResponse,
+} from "@/lib/chef-order-contract";
 import { isSameOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
@@ -83,6 +86,10 @@ export async function POST(
               : upstream.status === 409
                 ? "CHEF_ACCEPTANCE_CONFLICT"
                 : "CHEF_ACCEPTANCE_FAILED",
+          message:
+            upstream.status === 409
+              ? "The order state changed or the acceptance window is no longer valid."
+              : "The order could not be accepted.",
         },
         { status: upstream.status },
       );
@@ -91,10 +98,13 @@ export async function POST(
       }
       return response;
     }
-    const order = parseChefOrder(await upstream.json().catch(() => null));
-    if (!order) {
+    const order = parseChefOrderResponse(await upstream.json().catch(() => null));
+    if (!order || order.id.toLowerCase() !== orderId.toLowerCase()) {
       return NextResponse.json(
-        { code: "INVALID_CHEF_ORDER_RESPONSE" },
+        {
+          code: "INVALID_CHEF_ORDER_RESPONSE",
+          message: "Order Service returned an invalid accepted-order response.",
+        },
         { status: 502 },
       );
     }
@@ -108,6 +118,9 @@ export async function POST(
         code: timedOut
           ? "CHEF_ACCEPTANCE_TIMEOUT"
           : "CHEF_ACCEPTANCE_UNAVAILABLE",
+        message: timedOut
+          ? "Order acceptance took too long to respond."
+          : "Order acceptance is temporarily unavailable.",
       },
       { status: timedOut ? 504 : 503 },
     );

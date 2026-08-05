@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { ImageIcon } from "lucide-react";
 import { ChefAccessBoundary } from "@/components/chef-access-boundary";
 import { ChefMenuManager } from "@/components/chef-menu-manager";
+import { ChefPageHeader } from "@/components/chef-page-header";
 
 export const metadata = {
   title: "Chef menu | Craves",
@@ -9,26 +11,22 @@ export const metadata = {
 
 export default function ChefMenuPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-5 py-12 sm:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <Link href="/chef" className="text-sm font-semibold text-[#F6B545]">
-          ← Chef mode
-        </Link>
-        <Link
-          href="/chef/menu/media"
-          className="rounded-full border border-[#F6B545] px-4 py-2 text-sm font-bold text-[#F6B545]"
-        >
-          Images and availability
-        </Link>
-      </div>
-      <h1 className="mt-5 text-4xl font-bold text-white sm:text-5xl">
-        Menu management
-      </h1>
-      <p className="mt-4 max-w-3xl text-slate-300">
-        Create and edit dishes owned by your Catalog kitchen. Pricing and status
-        are persisted only by Catalog Service.
-      </p>
-      <div className="mt-8">
+    <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-6 md:py-8">
+      <ChefPageHeader
+        eyebrow="Catalog menu"
+        title="Dishes, prices and preparation"
+        description="Create and edit only the menu records owned by your Catalog kitchen. Price, status, food type, preparation details and availability are persisted by Catalog Service."
+        action={
+          <Link
+            href="/chef/menu/media"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/30 px-4 text-sm font-semibold text-white hover:bg-white/10"
+          >
+            <ImageIcon className="h-4 w-4" aria-hidden="true" />
+            Images and availability
+          </Link>
+        }
+      />
+      <div className="mt-6">
         <ChefAccessBoundary>
           <ChefMenuManager />
         </ChefAccessBoundary>

@@ -72,6 +72,12 @@ const STATUSES = new Set<ChefOrderStatus>([
   "REFUND_FAILED",
 ]);
 
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 export function isCanonicalUuid(value: unknown): value is string {
   return typeof value === "string" && CANONICAL_UUID.test(value);
 }
@@ -101,26 +107,29 @@ function money(value: unknown): number | null {
     : null;
 }
 
+function integer(value: unknown, min: number, max: number): number | null {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(number) && number >= min && number <= max
+    ? number
+    : null;
+}
+
 function parseItem(value: unknown): ChefOrderItem | null {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Record<string, unknown>;
+  const raw = record(value);
+  if (!raw) return null;
   const id = text(raw.id, 64);
   const menuItemId = text(raw.menuItemId, 64);
   const itemName = text(raw.itemName, 180);
   const unitPrice = money(raw.unitPrice);
   const lineTotal = money(raw.lineTotal);
-  const quantity =
-    typeof raw.quantity === "number" && Number.isInteger(raw.quantity)
-      ? raw.quantity
-      : 0;
+  const quantity = integer(raw.quantity, 1, 100);
   if (
     !isCanonicalUuid(id) ||
     !isCanonicalUuid(menuItemId) ||
     !itemName ||
     unitPrice === null ||
     lineTotal === null ||
-    quantity < 1 ||
-    quantity > 100
+    quantity === null
   ) {
     return null;
   }
@@ -137,8 +146,8 @@ function parseItem(value: unknown): ChefOrderItem | null {
 }
 
 function parseAddress(value: unknown): ChefDeliveryAddress | null {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Record<string, unknown>;
+  const raw = record(value);
+  if (!raw) return null;
   const recipientName = text(raw.recipientName, 160);
   const contactPhoneNumber = text(raw.contactPhoneNumber, 24);
   const addressLine1 = text(raw.addressLine1, 250);
@@ -169,13 +178,15 @@ function parseAddress(value: unknown): ChefDeliveryAddress | null {
 }
 
 export function parseChefOrder(value: unknown): ChefOrder | null {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Record<string, unknown>;
+  const raw = record(value);
+  if (!raw) return null;
   const id = text(raw.id, 64);
   const status = text(raw.status, 40) as ChefOrderStatus | null;
   const currency = text(raw.currency, 3);
   const createdAt = instant(raw.createdAt);
-  const updatedAt = instant(raw.updatedAt);
+  // Older Order Service rows can pre-date the updated_at backfill. Using the
+  // creation timestamp preserves ordering without inventing a workflow event.
+  const updatedAt = instant(raw.updatedAt) ?? createdAt;
   const amounts = [
     raw.foodSubtotal,
     raw.platformFee,
@@ -183,9 +194,8 @@ export function parseChefOrder(value: unknown): ChefOrder | null {
     raw.deliveryFee,
     raw.grandTotal,
   ].map(money);
-  const items = (Array.isArray(raw.items) ? raw.items.slice(0, 100) : []).map(
-    parseItem,
-  );
+  const rawItems = Array.isArray(raw.items) ? raw.items.slice(0, 100) : [];
+  const items = rawItems.map(parseItem);
   if (
     !isCanonicalUuid(id) ||
     !status ||
@@ -198,18 +208,12 @@ export function parseChefOrder(value: unknown): ChefOrder | null {
   ) {
     return null;
   }
-  const prepTimeMinutes =
-    typeof raw.prepTimeMinutes === "number" &&
-    Number.isInteger(raw.prepTimeMinutes) &&
-    raw.prepTimeMinutes >= 1 &&
-    raw.prepTimeMinutes <= 1440
-      ? raw.prepTimeMinutes
-      : null;
+  const prepTimeMinutes = integer(raw.prepTimeMinutes, 1, 1_440);
   return {
     id,
     kitchenName: optional(raw.kitchenName, 180),
     status,
-    currency,
+    currency: currency.toUpperCase(),
     foodSubtotal: amounts[0]!,
     platformFee: amounts[1]!,
     taxAmount: amounts[2]!,
@@ -230,6 +234,41 @@ export function parseChefOrders(value: unknown): ChefOrder[] | null {
   return orders.some((order) => order === null)
     ? null
     : (orders as ChefOrder[]);
+}
+
+/**
+ * APIM and older deployed BFF revisions have returned either a direct JSON
+ * array, Spring Page `{ content: [...] }`, or named `{ orders: [...] }` /
+ * `{ data: [...] }` envelopes. All variants still pass the same strict order
+ * allow-list; unknown fields such as identity, checkout and pickup snapshots
+ * are discarded.
+ */
+export function parseChefOrdersResponse(value: unknown): ChefOrder[] | null {
+  if (Array.isArray(value)) return parseChefOrders(value);
+  const wrapper = record(value);
+  if (!wrapper) return null;
+  for (const key of ["orders", "content", "data"] as const) {
+    const candidate = wrapper[key];
+    if (Array.isArray(candidate)) return parseChefOrders(candidate);
+  }
+  const data = record(wrapper.data);
+  if (data) {
+    for (const key of ["orders", "content"] as const) {
+      if (Array.isArray(data[key])) return parseChefOrders(data[key]);
+    }
+  }
+  return null;
+}
+
+export function parseChefOrderResponse(value: unknown): ChefOrder | null {
+  const direct = parseChefOrder(value);
+  if (direct) return direct;
+  const wrapper = record(value);
+  if (!wrapper) return null;
+  const order = parseChefOrder(wrapper.order);
+  if (order) return order;
+  const data = record(wrapper.data);
+  return parseChefOrder(data?.order ?? wrapper.data);
 }
 
 export function formatChefOrderStatus(status: ChefOrderStatus): string {

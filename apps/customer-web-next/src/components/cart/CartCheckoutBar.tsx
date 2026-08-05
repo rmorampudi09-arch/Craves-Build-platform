@@ -22,7 +22,7 @@ export function CartCheckoutBar({
   onContinue,
 }: CartCheckoutBarProps) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 shadow-[0_-8px_32px_rgba(38,26,21,0.08)] backdrop-blur-xl">
+    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl">
       <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3 md:px-6">
         <div className="min-w-0">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">

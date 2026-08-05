@@ -34,3 +34,16 @@ test("address APIM pipeline is guarded and proves GET and POST routing", () => {
   assert.match(pipeline, /GET=\$LIST_CODE POST=\$CREATE_CODE/);
   assert.match(pipeline, /expected HTTP 401 without a token/i);
 });
+
+test("address APIM configuration reuses matching live operations safely", () => {
+  const script = source(
+    "../../../../scripts/apim/configure-customer-addresses-apim.sh",
+  );
+
+  assert.match(script, /az apim api operation list/);
+  assert.match(script, /Reusing existing APIM operation/);
+  assert.match(script, /CONFIGURED_OPERATION_IDS/);
+  assert.match(script, /Multiple APIM operations already use/);
+  assert.match(script, /refusing to overwrite it/);
+  assert.doesNotMatch(script, /az apim api operation delete/);
+});

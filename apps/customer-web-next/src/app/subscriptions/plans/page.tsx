@@ -4,7 +4,7 @@ import { SubscriptionPlanBrowser } from "@/components/subscription-plan-browser"
 export const metadata = { title: "Meal subscriptions | Craves", robots: { index: true, follow: true } };
 
 export default function SubscriptionPlansPage() {
-  return <main className="mx-auto min-h-screen max-w-7xl px-5 py-12 sm:px-8">
+  return <main className="mx-auto min-h-screen max-w-7xl bg-[#0B1426] px-5 py-12 text-white sm:px-8">
     <Link href="/" className="text-sm font-semibold text-[#F6B545]">← Craves home</Link>
     <p className="mt-8 text-sm font-bold uppercase tracking-[0.22em] text-[#F6B545]">Meal subscriptions</p>
     <h1 className="mt-4 max-w-4xl text-4xl font-bold text-white sm:text-6xl">Choose an active home-food plan.</h1>

@@ -1,16 +1,18 @@
-import type { HTMLAttributes } from "react";
+import Image from "next/image";
 
 type LogoSize = "sm" | "md" | "lg";
 
-interface CravesLogoProps extends Omit<HTMLAttributes<HTMLImageElement>, "children"> {
+interface CravesLogoProps {
   size?: LogoSize;
   decorative?: boolean;
+  className?: string;
+  priority?: boolean;
 }
 
-const sizeClass: Record<LogoSize, string> = {
-  sm: "h-8 w-8",
-  md: "h-10 w-10",
-  lg: "h-14 w-14",
+const dimensions: Record<LogoSize, number> = {
+  sm: 32,
+  md: 40,
+  lg: 56,
 };
 
 /**
@@ -21,15 +23,19 @@ export function CravesLogo({
   size = "md",
   decorative = false,
   className = "",
-  ...props
+  priority = false,
 }: CravesLogoProps) {
+  const dimension = dimensions[size];
+
   return (
-    <img
+    <Image
       src="/brand/craves-logo.svg"
+      width={dimension}
+      height={dimension}
       alt={decorative ? "" : "Craves"}
       aria-hidden={decorative || undefined}
-      className={`${sizeClass[size]} shrink-0 object-contain ${className}`.trim()}
-      {...props}
+      priority={priority}
+      className={`shrink-0 object-contain ${className}`.trim()}
     />
   );
 }

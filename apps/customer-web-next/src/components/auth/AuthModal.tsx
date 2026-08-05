@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ChefHat, UserRound, X } from "lucide-react";
 import {
   type ConfirmationResult,
@@ -9,10 +9,14 @@ import {
 } from "firebase/auth";
 import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import {
+  loadSession,
   setSessionIdentity,
+  setSessionProfile,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
 import type { CravesIdentity } from "@/lib/auth-contract";
+import { parseCustomerProfile } from "@/lib/profile-contract";
+import { CravesLogo } from "@/components/brand/CravesLogo";
 
 type Mode = "login" | "register";
 export type AccountMode = "customer" | "chef";
@@ -26,6 +30,8 @@ interface AuthModalProps {
   onAuthenticated?: (user: CravesUser, accountMode: AccountMode) => void;
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function AuthModal({
   open,
   mode,
@@ -34,8 +40,11 @@ export function AuthModal({
   onSwitchMode,
   onAuthenticated,
 }: AuthModalProps) {
+  const fieldPrefix = useId();
   const [phone, setPhone] = useState("");
-  const [username, setUsername] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
   const [accountMode, setAccountMode] =
     useState<AccountMode>(initialAccountMode);
   const [otp, setOtp] = useState("");
@@ -58,6 +67,15 @@ export function AuthModal({
     if (open) setAccountMode(initialAccountMode);
   }, [initialAccountMode, open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) handleClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   if (!open) return null;
 
   const reset = () => {
@@ -65,7 +83,9 @@ export function AuthModal({
     verifier.current = null;
     confirmation.current = null;
     setPhone("");
-    setUsername("");
+    setFirstName("");
+    setLastName("");
+    setEmail("");
     setAccountMode(initialAccountMode);
     setOtp("");
     setOtpSent(false);
@@ -94,14 +114,25 @@ export function AuthModal({
     return instance;
   }
 
+  function validateRegistration(): string | null {
+    if (firstName.trim().length < 2)
+      return "Enter your first name using at least two characters.";
+    if (lastName.trim().length < 1) return "Enter your last name.";
+    if (email.trim() && !EMAIL_PATTERN.test(email.trim()))
+      return "Enter a valid email address or leave it blank.";
+    return null;
+  }
+
   const handleGenerateOtp = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     setInfo(null);
     if (!/^\d{10}$/.test(phone))
-      return setError("Enter a valid 10-digit mobile number");
-    if (mode === "register" && username.trim().length < 2)
-      return setError("Please enter your full name");
+      return setError("Enter a valid 10-digit mobile number.");
+    if (mode === "register") {
+      const validationError = validateRegistration();
+      if (validationError) return setError(validationError);
+    }
     setBusy(true);
     try {
       const { auth } = getFirebaseBrowserClient();
@@ -150,19 +181,37 @@ export function AuthModal({
       } | null;
       if (!response.ok || !body?.identity)
         throw new Error(body?.message ?? "Sign-in failed.");
+
       let user = setSessionIdentity(body.identity);
 
       if (mode === "register") {
-        const parts = username.trim().split(/\s+/);
-        const firstName = parts.shift() ?? "Customer";
-        const lastName = parts.join(" ") || "Customer";
         const profileResponse = await fetch("/api/customer/profile", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify({ firstName, lastName, email: null }),
-        }).catch(() => null);
-        if (profileResponse?.ok) user = { ...user, username: username.trim() };
+          body: JSON.stringify({
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            email: email.trim() || null,
+          }),
+        });
+        const rawProfile = await profileResponse.json().catch(() => null);
+        if (!profileResponse.ok) {
+          const message =
+            rawProfile &&
+            typeof rawProfile === "object" &&
+            "message" in rawProfile &&
+            typeof rawProfile.message === "string"
+              ? rawProfile.message
+              : "Your verified phone was saved, but the profile could not be completed. Please try again.";
+          throw new Error(message);
+        }
+        const profile = parseCustomerProfile(rawProfile);
+        if (!profile)
+          throw new Error("Craves returned an invalid profile response.");
+        user = setSessionProfile(profile) ?? user;
+      } else {
+        user = (await loadSession()) ?? user;
       }
 
       onAuthenticated?.(user, accountMode);
@@ -186,142 +235,239 @@ export function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[#261A15]/70 px-0 md:items-center md:px-4"
       onClick={handleClose}
+      role="presentation"
     >
-      <div
-        className="relative max-h-[95vh] w-full max-w-md overflow-y-auto rounded-2xl bg-cream shadow-2xl"
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${fieldPrefix}-title`}
+        className="relative max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-white shadow-[var(--shadow-pop)] md:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-xl font-bold text-ink">
-            {mode === "login" ? "Login" : "Sign Up"}
-          </h2>
+        <header className="flex items-center justify-between border-b border-border px-6 py-4">
+          <div className="flex items-center gap-3">
+            <CravesLogo size="sm" />
+            <div>
+              <p className="craves-overline">
+                {mode === "login" ? "Welcome back" : "Create your account"}
+              </p>
+              <h2
+                id={`${fieldPrefix}-title`}
+                className="font-display text-xl font-semibold text-ink"
+              >
+                {mode === "login" ? "Sign in to Craves" : "Join Craves"}
+              </h2>
+            </div>
+          </div>
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-full p-1 text-ink hover:bg-black/5"
-            aria-label="Close"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-secondary"
+            aria-label="Close sign-in dialog"
+            disabled={busy}
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
-        </div>
+        </header>
+
         <div className="px-6 py-6">
-          <h3 className="text-2xl font-bold text-ink">
-            Welcome to <span className="text-primary">CRAVES</span>
-          </h3>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            Your OTP is verified by Firebase. Craves access and refresh tokens
-            stay in secure HTTP-only cookies.
+          <p className="text-sm leading-6 text-muted-foreground">
+            Your phone is verified with Firebase. Craves keeps the application
+            session in secure HTTP-only cookies.
           </p>
-          <fieldset className="mt-5" disabled={otpSent || busy}>
-            <legend className="text-xs font-bold uppercase tracking-wide text-ink">
-              {mode === "register" ? "I want to register as" : "Continue as"}
+
+          <fieldset className="mt-6" disabled={otpSent || busy}>
+            <legend className="craves-overline text-ink">
+              {mode === "register" ? "Register as" : "Continue as"}
             </legend>
-            <div className="mt-2 grid grid-cols-2 gap-3">
+            <div className="mt-3 grid grid-cols-2 gap-3">
               <button
                 type="button"
                 aria-pressed={accountMode === "customer"}
                 onClick={() => setAccountMode("customer")}
-                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition ${accountMode === "customer" ? "border-primary bg-primary/10 text-primary" : "border-border bg-white text-ink"}`}
+                className={`flex min-h-12 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-semibold transition-colors ${
+                  accountMode === "customer"
+                    ? "border-primary bg-secondary text-ink"
+                    : "border-border bg-white text-muted-foreground hover:border-primary"
+                }`}
               >
-                <UserRound className="h-4 w-4" /> Customer
+                <UserRound className="h-5 w-5" aria-hidden="true" /> Customer
               </button>
               <button
                 type="button"
                 aria-pressed={accountMode === "chef"}
                 onClick={() => setAccountMode("chef")}
-                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition ${accountMode === "chef" ? "border-primary bg-primary/10 text-primary" : "border-border bg-white text-ink"}`}
+                className={`flex min-h-12 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-semibold transition-colors ${
+                  accountMode === "chef"
+                    ? "border-primary bg-secondary text-ink"
+                    : "border-border bg-white text-muted-foreground hover:border-primary"
+                }`}
               >
-                <ChefHat className="h-4 w-4" /> Home Chef
+                <ChefHat className="h-5 w-5" aria-hidden="true" /> Home Chef
               </button>
             </div>
             {accountMode === "chef" && (
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                You will continue to chef application or chef mode after OTP.
-                Chef access is granted only after admin approval.
+              <p className="mt-3 rounded-lg bg-secondary p-3 text-xs leading-5 text-muted-foreground">
+                After OTP verification, new chefs continue to the application
+                form. Chef tools unlock only after admin approval.
               </p>
             )}
           </fieldset>
+
           <form
             onSubmit={otpSent ? handleVerify : handleGenerateOtp}
             className="mt-6 space-y-4"
           >
-            <div className="flex items-stretch overflow-hidden rounded-lg border border-border bg-white">
-              <span className="flex items-center gap-1 border-r border-border px-3 text-sm font-medium text-ink">
-                🇮🇳 <span>+91</span>
-              </span>
-              <input
-                type="tel"
-                inputMode="numeric"
-                maxLength={10}
-                placeholder="Enter mobile number"
-                value={phone}
-                onChange={(event) =>
-                  setPhone(event.target.value.replace(/\D/g, ""))
-                }
-                className="w-full bg-white px-3 py-3 text-sm text-ink outline-none placeholder:text-muted-foreground"
-                disabled={otpSent || busy}
-                autoComplete="tel"
-                required
-              />
-            </div>
             {mode === "register" && !otpSent && (
-              <input
-                type="text"
-                placeholder="Enter full name"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                className="w-full rounded-lg border border-border bg-white px-3 py-3 text-sm text-ink outline-none placeholder:text-muted-foreground"
-                disabled={busy}
-                required
-              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label
+                  htmlFor={`${fieldPrefix}-first-name`}
+                  className="text-sm font-semibold text-ink"
+                >
+                  First name <span className="text-destructive">*</span>
+                  <input
+                    id={`${fieldPrefix}-first-name`}
+                    type="text"
+                    autoComplete="given-name"
+                    maxLength={100}
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-[#9A9A95] focus:border-primary"
+                    disabled={busy}
+                    required
+                  />
+                </label>
+                <label
+                  htmlFor={`${fieldPrefix}-last-name`}
+                  className="text-sm font-semibold text-ink"
+                >
+                  Last name <span className="text-destructive">*</span>
+                  <input
+                    id={`${fieldPrefix}-last-name`}
+                    type="text"
+                    autoComplete="family-name"
+                    maxLength={100}
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-[#9A9A95] focus:border-primary"
+                    disabled={busy}
+                    required
+                  />
+                </label>
+              </div>
             )}
+
+            {mode === "register" && !otpSent && (
+              <label
+                htmlFor={`${fieldPrefix}-email`}
+                className="block text-sm font-semibold text-ink"
+              >
+                Email <span className="font-normal text-muted-foreground">(optional)</span>
+                <input
+                  id={`${fieldPrefix}-email`}
+                  type="email"
+                  autoComplete="email"
+                  maxLength={320}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-[#9A9A95] focus:border-primary"
+                  disabled={busy}
+                />
+              </label>
+            )}
+
+            <label
+              htmlFor={`${fieldPrefix}-phone`}
+              className="block text-sm font-semibold text-ink"
+            >
+              Mobile number <span className="text-destructive">*</span>
+              <span className="mt-2 flex min-h-12 overflow-hidden rounded-lg border border-border bg-white focus-within:border-primary">
+                <span className="flex items-center border-r border-border px-3 text-sm font-semibold text-ink">
+                  +91
+                </span>
+                <input
+                  id={`${fieldPrefix}-phone`}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="10-digit mobile number"
+                  value={phone}
+                  onChange={(event) =>
+                    setPhone(event.target.value.replace(/\D/g, ""))
+                  }
+                  className="w-full bg-white px-3 text-base text-ink outline-none placeholder:text-[#9A9A95]"
+                  disabled={otpSent || busy}
+                  autoComplete="tel-national"
+                  required
+                />
+              </span>
+            </label>
+
             {!otpSent && (
               <div
                 id="craves-recaptcha"
-                className="min-h-20 overflow-hidden rounded-lg bg-white p-2"
+                className="min-h-20 overflow-hidden rounded-lg border border-border bg-white p-2"
               />
             )}
+
             {otpSent && (
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="Enter OTP"
-                value={otp}
-                onChange={(event) =>
-                  setOtp(event.target.value.replace(/\D/g, ""))
-                }
-                className="w-full rounded-lg border border-border bg-white px-3 py-3 text-center text-lg tracking-[0.4em] text-ink outline-none placeholder:text-muted-foreground"
-                autoComplete="one-time-code"
-                autoFocus
-                required
-              />
+              <label
+                htmlFor={`${fieldPrefix}-otp`}
+                className="block text-sm font-semibold text-ink"
+              >
+                Six-digit OTP
+                <input
+                  id={`${fieldPrefix}-otp`}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={otp}
+                  onChange={(event) =>
+                    setOtp(event.target.value.replace(/\D/g, ""))
+                  }
+                  className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-center text-lg tracking-[0.32em] text-ink placeholder:text-[#9A9A95] focus:border-primary"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  required
+                />
+              </label>
             )}
+
             {error && (
-              <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+              <p
+                role="alert"
+                className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm font-medium text-destructive"
+              >
                 {error}
               </p>
             )}
             {info && !error && (
-              <p className="rounded-md bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+              <p
+                role="status"
+                className="rounded-lg border border-[#1E5BA8]/20 bg-[#1E5BA8]/5 px-3 py-2 text-sm font-medium text-[#1E5BA8]"
+              >
                 {info}
               </p>
             )}
+
             <button
               type="submit"
               disabled={busy}
-              className="btn-primary w-full justify-center rounded-lg py-3 text-base disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn-primary w-full"
             >
               {busy
                 ? "Please wait…"
                 : otpSent
                   ? mode === "login"
-                    ? "Login"
-                    : "Sign Up"
-                  : "Generate OTP"}
+                    ? "Sign in"
+                    : "Verify and create account"
+                  : "Send OTP"}
             </button>
+
             {otpSent && (
               <button
                 type="button"
@@ -332,39 +478,40 @@ export function AuthModal({
                   setOtpSent(false);
                   setInfo("Request a new OTP.");
                 }}
-                className="w-full text-sm font-semibold text-primary hover:underline"
+                className="min-h-11 w-full text-sm font-semibold text-contrast-red underline-offset-4 hover:underline"
               >
                 Use another number
               </button>
             )}
           </form>
+
           <p className="mt-6 text-center text-sm text-muted-foreground">
             {mode === "login" ? (
               <>
-                Don&apos;t have an account?{" "}
+                New to Craves?{" "}
                 <button
                   type="button"
                   onClick={() => switchTo("register")}
-                  className="font-semibold text-primary hover:underline"
+                  className="font-semibold text-contrast-red underline-offset-4 hover:underline"
                 >
-                  Sign Up
+                  Create an account
                 </button>
               </>
             ) : (
               <>
-                Already have an account?{" "}
+                Already registered?{" "}
                 <button
                   type="button"
                   onClick={() => switchTo("login")}
-                  className="font-semibold text-primary hover:underline"
+                  className="font-semibold text-contrast-red underline-offset-4 hover:underline"
                 >
-                  Login
+                  Sign in
                 </button>
               </>
             )}
           </p>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

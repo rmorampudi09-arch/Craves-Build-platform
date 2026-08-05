@@ -3,12 +3,19 @@
 import type { CravesIdentity } from "@/lib/auth-contract";
 import type { CustomerAddress } from "@/lib/address-contract";
 import { selectActiveDeliveryAddress } from "@/lib/address-selection";
+import {
+  parseCustomerProfile,
+  type CustomerProfile,
+} from "@/lib/profile-contract";
 
 export type CravesUser = {
   id: string;
   phone: string;
   phoneNumber: string;
   username: string;
+  firstName: string | null;
+  lastName: string | null;
+  profileComplete: boolean;
   createdAt: number;
   email?: string;
   roles: string[];
@@ -35,11 +42,15 @@ const listeners = new Set<() => void>();
 
 function fromIdentity(identity: CravesIdentity): CravesUser {
   const digits = identity.phoneNumber.replace(/\D/g, "");
+  const displayName = identity.displayName?.trim() || identity.phoneNumber;
   return {
     id: identity.id,
     phone: digits.length > 10 ? digits.slice(-10) : digits,
     phoneNumber: identity.phoneNumber,
-    username: identity.displayName?.trim() || "Craves Customer",
+    username: displayName,
+    firstName: null,
+    lastName: null,
+    profileComplete: false,
     createdAt: Date.now(),
     email: identity.email ?? undefined,
     roles: identity.roles,
@@ -51,8 +62,58 @@ function notify() {
   for (const listener of listeners) listener();
 }
 
+function withCustomerProfile(
+  current: CravesUser,
+  profile: CustomerProfile,
+): CravesUser {
+  const username = `${profile.firstName} ${profile.lastName}`.trim();
+  return {
+    ...current,
+    username,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    profileComplete: true,
+    email: profile.email ?? undefined,
+    phone: profile.registeredPhoneNumber.replace(/\D/g, "").slice(-10),
+    phoneNumber: profile.registeredPhoneNumber,
+  };
+}
+
+async function hydrateCustomerProfile(
+  current: CravesUser,
+): Promise<CravesUser> {
+  const isCustomer = current.roles.some(
+    (role) => role.toUpperCase() === "CUSTOMER",
+  );
+  if (!isCustomer) return current;
+
+  const response = await fetch("/api/customer/profile", {
+    cache: "no-store",
+    credentials: "same-origin",
+  }).catch(() => null);
+  if (!response?.ok) return current;
+
+  const profile = parseCustomerProfile(
+    await response.json().catch(() => null),
+  );
+  if (!profile) return current;
+
+  session = withCustomerProfile(current, profile);
+  notify();
+  return session;
+}
+
 export function setSessionIdentity(identity: CravesIdentity): CravesUser {
   session = fromIdentity(identity);
+  notify();
+  return session;
+}
+
+export function setSessionProfile(
+  profile: CustomerProfile,
+): CravesUser | null {
+  if (!session) return null;
+  session = withCustomerProfile(session, profile);
   notify();
   return session;
 }
@@ -84,7 +145,8 @@ export async function loadSession(): Promise<CravesUser | null> {
     .json()
     .catch(() => null)) as CravesIdentity | null;
   if (!identity?.id) return null;
-  return setSessionIdentity(identity);
+  const current = setSessionIdentity(identity);
+  return hydrateCustomerProfile(current);
 }
 
 /**
@@ -104,7 +166,9 @@ export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
     const body = (await response.json().catch(() => null)) as {
       identity?: CravesIdentity;
     } | null;
-    return body?.identity?.id ? setSessionIdentity(body.identity) : null;
+    if (!body?.identity?.id) return null;
+    const current = setSessionIdentity(body.identity);
+    return hydrateCustomerProfile(current);
   })().finally(() => {
     roleSynchronization = null;
   });

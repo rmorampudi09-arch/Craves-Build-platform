@@ -1,30 +1,41 @@
-import { MapPin, Edit2 } from "lucide-react";
+import { Edit2, MapPin } from "lucide-react";
 
 interface AddressCardProps {
   addressLine: string;
   onEdit: () => void;
 }
 
-/** "Address details" card with the saved delivery address and an Edit button. */
 export function AddressCard({ addressLine, onEdit }: AddressCardProps) {
   return (
-    <section className="mt-4 rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <MapPin className="h-5 w-5" />
+    <section
+      aria-labelledby="profile-address-title"
+      className="craves-surface p-4"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-contrast-red">
+            <MapPin className="h-5 w-5" aria-hidden="true" />
           </div>
-          <div>
-            <h2 className="font-display text-base font-bold text-ink">Address details</h2>
-            <p className="mt-1 text-sm text-ink/80">{addressLine}</p>
+          <div className="min-w-0">
+            <h2
+              id="profile-address-title"
+              className="font-display text-base font-semibold text-ink"
+            >
+              Default delivery address
+            </h2>
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">
+              {addressLine}
+            </p>
           </div>
         </div>
         <button
           type="button"
           onClick={onEdit}
-          className="flex shrink-0 items-center gap-1 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink hover:border-primary"
+          className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-ink transition-colors hover:border-primary hover:bg-secondary"
+          aria-label="Edit delivery addresses"
         >
-          <Edit2 className="h-3.5 w-3.5" /> Edit
+          <Edit2 className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden sm:inline">Edit</span>
         </button>
       </div>
     </section>

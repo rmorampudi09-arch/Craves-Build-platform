@@ -58,6 +58,7 @@ test("checkout shows only the current address and manages all addresses in a dia
   assert.match(checkout, /CheckoutAddressDialog/);
   assert.match(checkout, /Only the address selected for this checkout is shown here/);
   assert.match(checkout, /Manage address/);
+  assert.match(checkout, /onAddressesChange=\{setAddresses\}/);
   assert.doesNotMatch(checkout, /<fieldset/);
   assert.doesNotMatch(checkout, /addresses\.map/);
 

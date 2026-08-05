@@ -45,6 +45,11 @@ for SCOPE_URL in \
   [[ "$POLICY" != *'set-backend-service backend-id='* ]] || fail "Inherited backend-id policy cannot be safely overridden"
 done
 
+route_shape() {
+  local TEMPLATE="$1"
+  jq -nr --arg template "$TEMPLATE" '$template | ltrimstr("/") | gsub("\\{[^/{}]+\\}"; "{}")'
+}
+
 # Resolve an operation by HTTP method and route shape before writing it.
 # APIM operation IDs are operator-defined and may differ between earlier runs.
 # Route-shape matching also treats /addresses/{id} and
@@ -93,7 +98,7 @@ resolve_operation_id() {
 
 put_operation() {
   local DESIRED_ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" PARAMS="$5" STATUS="$6"
-  local EFFECTIVE_ID BODY RENDERED POLICY_BODY OPERATION_JSON POLICY ACTUAL_METHOD ACTUAL_TEMPLATE
+  local EFFECTIVE_ID BODY RENDERED POLICY_BODY OPERATION_JSON POLICY ACTUAL_METHOD ACTUAL_TEMPLATE EXPECTED_SHAPE ACTUAL_SHAPE
 
   EFFECTIVE_ID=$(resolve_operation_id "$DESIRED_ID" "$METHOD" "$TEMPLATE")
   BODY=$(mktemp)
@@ -118,7 +123,9 @@ JSON
     -o json)
   ACTUAL_METHOD=$(jq -r '.method // "" | ascii_upcase' <<<"$OPERATION_JSON")
   ACTUAL_TEMPLATE=$(jq -r '.urlTemplate // ""' <<<"$OPERATION_JSON")
-  [[ "$ACTUAL_METHOD" == "${METHOD^^}" && "$ACTUAL_TEMPLATE" == "$TEMPLATE" ]] || fail "Operation $EFFECTIVE_ID route verification failed"
+  EXPECTED_SHAPE=$(route_shape "$TEMPLATE")
+  ACTUAL_SHAPE=$(route_shape "$ACTUAL_TEMPLATE")
+  [[ "$ACTUAL_METHOD" == "${METHOD^^}" && "$ACTUAL_SHAPE" == "$EXPECTED_SHAPE" ]] || fail "Operation $EFFECTIVE_ID route verification failed"
 
   POLICY=$(az rest --method get --url "${MGMT}/operations/${EFFECTIVE_ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
   [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Authorization"* && "$POLICY" == *"no-store"* ]] || fail "Operation $EFFECTIVE_ID policy verification failed"

@@ -1,26 +1,31 @@
 import { ArrowLeft } from "lucide-react";
+import { CravesLogo } from "@/components/brand/CravesLogo";
 
 interface TrackingHeaderProps {
   orderId: string;
   onBack: () => void;
 }
 
-/** Sticky "back + Track Order title + short order id" header. */
 export function TrackingHeader({ orderId, onBack }: TrackingHeaderProps) {
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-cream/95 backdrop-blur">
-      <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
+    <header className="sticky top-0 z-30 border-b border-border bg-white/95 backdrop-blur-xl">
+      <div className="mx-auto flex min-h-18 max-w-5xl items-center gap-3 px-4 py-3 md:px-6">
         <button
           type="button"
           onClick={onBack}
-          className="rounded-full border border-border bg-white p-2 text-ink hover:border-primary"
-          aria-label="Back"
+          className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-white text-ink transition-colors hover:border-primary"
+          aria-label="Back to orders"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </button>
-        <div>
-          <h1 className="font-display text-lg font-bold text-ink">Track Order</h1>
-          <p className="text-[11px] text-muted-foreground">#{orderId.slice(-6).toUpperCase()}</p>
+        <CravesLogo size="sm" decorative />
+        <div className="min-w-0">
+          <h1 className="truncate font-display text-lg font-bold tracking-[-0.03em] text-ink">
+            Track order
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Order #{orderId.slice(-8).toUpperCase()}
+          </p>
         </div>
       </div>
     </header>

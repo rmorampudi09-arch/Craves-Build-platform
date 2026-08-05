@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 type LogoSize = "sm" | "md" | "lg";
 
 interface CravesLogoProps {
@@ -16,8 +14,12 @@ const dimensions: Record<LogoSize, number> = {
 };
 
 /**
- * Exact Craves red rounded-square brand asset with pure-white lettering and a
- * transparent exterior. Use this component instead of ad-hoc text logos.
+ * Canonical Craves red rounded-square brand asset.
+ *
+ * This intentionally uses a plain img element instead of Next.js image
+ * optimization. The logo is a local SVG that embeds the approved raster mark;
+ * serving it directly removes the optimizer route as a runtime dependency and
+ * makes the public asset URL independently verifiable after deployment.
  */
 export function CravesLogo({
   size = "md",
@@ -28,13 +30,16 @@ export function CravesLogo({
   const dimension = dimensions[size];
 
   return (
-    <Image
-      src="/brand/craves-logo.svg"
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/craves-logo.svg?v=20260805"
       width={dimension}
       height={dimension}
       alt={decorative ? "" : "Craves"}
       aria-hidden={decorative || undefined}
-      priority={priority}
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : "auto"}
+      decoding="async"
       className={`shrink-0 object-contain ${className}`.trim()}
     />
   );

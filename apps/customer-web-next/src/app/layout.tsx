@@ -16,6 +16,8 @@ const bodyFont = Inter({
   variable: "--font-craves-body",
 });
 
+const canonicalLogo = "/brand/craves-logo-20260805.png";
+
 export const metadata: Metadata = {
   title: {
     default: "Craves — Homemade Meals from Trusted Home Chefs",
@@ -26,7 +28,9 @@ export const metadata: Metadata = {
   authors: [{ name: "Craves" }],
   robots: { index: true, follow: true },
   icons: {
-    icon: "/brand/craves-logo.svg",
+    icon: canonicalLogo,
+    shortcut: canonicalLogo,
+    apple: canonicalLogo,
   },
 };
 

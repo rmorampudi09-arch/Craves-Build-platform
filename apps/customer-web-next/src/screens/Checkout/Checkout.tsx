@@ -373,14 +373,7 @@ export default function CheckoutPage() {
         selectedId={selectedId}
         onClose={() => setAddressDialogOpen(false)}
         onSelect={setSelectedId}
-        onAddressesChange={(nextAddresses) => {
-          setAddresses(nextAddresses);
-          if (!nextAddresses.some((address) => address.id === selectedId)) {
-            const preferred =
-              nextAddresses.find((address) => address.isDefault) ?? nextAddresses[0];
-            setSelectedId(preferred?.id ?? "");
-          }
-        }}
+        onAddressesChange={setAddresses}
       />
     </div>
   );

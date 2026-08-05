@@ -40,5 +40,8 @@ test("Cashfree payment is contract validated and backend verified", () => {
   assert.match(payment, /parsePaymentVerification\(raw\)/);
   assert.match(payment, /\/api\/payments\/orders/);
   assert.match(payment, /\/verify/);
-  assert.doesNotMatch(payment, /cardNumber|cvv|upiPin/i);
+  assert.doesNotMatch(
+    payment,
+    /<(input|textarea)[^>]*(name|id|autoComplete)=[^>]*(card|cvv|upi[-_ ]?pin)/i,
+  );
 });

@@ -25,7 +25,7 @@ function address(id: string, active: boolean, isDefault: boolean): CustomerAddre
   };
 }
 
-test("selects the active default delivery address", () => {
+test("selects the active default delivery-ready address", () => {
   const selected = selectActiveDeliveryAddress([
     address("inactive-default", false, true),
     address("active-other", true, false),
@@ -34,12 +34,22 @@ test("selects the active default delivery address", () => {
   assert.equal(selected?.id, "active-default");
 });
 
-test("falls back to the first active address", () => {
+test("falls back to the first active delivery-ready address", () => {
   const selected = selectActiveDeliveryAddress([
     address("inactive", false, false),
     address("active", true, false),
   ]);
   assert.equal(selected?.id, "active");
+});
+
+test("does not select an incomplete legacy address for checkout", () => {
+  const legacy = address("legacy", true, true);
+  legacy.areaName = null;
+  legacy.postalCode = null;
+  legacy.latitude = null;
+  legacy.longitude = null;
+
+  assert.equal(selectActiveDeliveryAddress([legacy]), null);
 });
 
 test("returns null when no active delivery address exists", () => {

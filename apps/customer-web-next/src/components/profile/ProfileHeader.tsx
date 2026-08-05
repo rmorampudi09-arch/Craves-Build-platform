@@ -1,19 +1,30 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
-import cravesLogo from "@/assets/images/craves-logo.png";
-import { assetUrl } from "@/lib/asset-url";
+import { CravesLogo } from "@/components/brand/CravesLogo";
 
-/** Simple back + logo + "My Profile" header. */
 export function ProfileHeader() {
   return (
-    <header className="border-b border-border bg-cream/90">
-      <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4">
-        <Link to="/home" className="rounded-full p-2 hover:bg-black/5" aria-label="Back to home">
-          <ArrowLeft className="h-5 w-5 text-ink" />
+    <header className="sticky top-0 z-40 border-b border-border bg-white/95 backdrop-blur">
+      <div className="mx-auto flex min-h-16 max-w-3xl items-center gap-3 px-4 md:px-6">
+        <Link
+          to="/home"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-secondary"
+          aria-label="Back to home"
+        >
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Link>
-        <Link to="/home" className="flex items-center gap-2">
-          <img src={assetUrl(cravesLogo)} alt="Craves" width={36} height={36} className="h-9 w-9" />
-          <span className="font-display text-lg font-bold text-primary">MY Profile</span>
+        <Link
+          to="/home"
+          className="flex min-h-11 items-center gap-3 rounded-lg pr-3"
+          aria-label="Craves home"
+        >
+          <CravesLogo size="sm" decorative />
+          <div>
+            <p className="craves-overline">Craves account</p>
+            <span className="font-display text-lg font-semibold text-ink">
+              Profile
+            </span>
+          </div>
         </Link>
       </div>
     </header>

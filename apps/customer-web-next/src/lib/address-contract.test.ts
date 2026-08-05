@@ -64,6 +64,7 @@ test("keeps pre-location-migration addresses visible but not checkout eligible",
   assert.equal(parsed.recipientName, null);
   assert.equal(parsed.areaName, null);
   assert.equal(parsed.latitude, null);
+  assert.equal(parsed.active, false);
   assert.equal(isDeliveryReadyAddress(parsed), false);
 });
 

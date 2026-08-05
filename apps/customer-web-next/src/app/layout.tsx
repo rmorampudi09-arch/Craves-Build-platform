@@ -1,9 +1,20 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
-import "@fontsource/poppins/500.css";
-import "@fontsource/poppins/600.css";
-import "@fontsource/poppins/700.css";
 import "../styles.css";
+import "../craves-theme.css";
+
+const displayFont = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-craves-display",
+});
+
+const bodyFont = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-craves-body",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -14,17 +25,26 @@ export const metadata: Metadata = {
     "Discover fresh homemade meals from trusted home chefs near you, delivered through Craves.",
   authors: [{ name: "Craves" }],
   robots: { index: true, follow: true },
+  icons: {
+    icon: "/brand/craves-logo-512.png",
+    apple: "/brand/craves-logo-1024.png",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#FFF8EC",
+  themeColor: "#F62E18",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className={`${displayFont.variable} ${bodyFont.variable}`}
+    >
       <body>{children}</body>
     </html>
   );

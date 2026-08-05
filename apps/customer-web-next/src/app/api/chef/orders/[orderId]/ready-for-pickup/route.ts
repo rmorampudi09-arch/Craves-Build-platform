@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isCanonicalUuid, parseChefOrder } from "@/lib/chef-order-contract";
+import {
+  isCanonicalUuid,
+  parseChefOrderResponse,
+} from "@/lib/chef-order-contract";
 import { isSameOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +57,10 @@ export async function POST(
               : upstream.status === 409
                 ? "READY_FOR_PICKUP_CONFLICT"
                 : "READY_FOR_PICKUP_FAILED",
+          message:
+            upstream.status === 409
+              ? "The order state changed and can no longer be marked ready for pickup."
+              : "The order could not be marked ready for pickup.",
         },
         { status: upstream.status },
       );
@@ -62,10 +69,13 @@ export async function POST(
       }
       return response;
     }
-    const order = parseChefOrder(await upstream.json().catch(() => null));
-    if (!order) {
+    const order = parseChefOrderResponse(await upstream.json().catch(() => null));
+    if (!order || order.id.toLowerCase() !== orderId.toLowerCase()) {
       return NextResponse.json(
-        { code: "INVALID_CHEF_ORDER_RESPONSE" },
+        {
+          code: "INVALID_CHEF_ORDER_RESPONSE",
+          message: "Order Service returned an invalid ready-order response.",
+        },
         { status: 502 },
       );
     }
@@ -79,6 +89,9 @@ export async function POST(
         code: timedOut
           ? "READY_FOR_PICKUP_TIMEOUT"
           : "READY_FOR_PICKUP_UNAVAILABLE",
+        message: timedOut
+          ? "Ready-for-pickup update took too long to respond."
+          : "Ready-for-pickup update is temporarily unavailable.",
       },
       { status: timedOut ? 504 : 503 },
     );

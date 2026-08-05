@@ -14,10 +14,17 @@ if (!match) {
 
 const png = Buffer.from(match[1], "base64");
 const signature = png.subarray(0, 8).toString("hex");
-if (signature !== "89504e470d0a1a0a" || png.length < 10_000) {
-  throw new Error("Extracted Craves logo is not a valid production PNG");
+const width = png.length >= 24 ? png.readUInt32BE(16) : 0;
+const height = png.length >= 24 ? png.readUInt32BE(20) : 0;
+if (
+  signature !== "89504e470d0a1a0a"
+  || width < 128
+  || height < 128
+  || width !== height
+) {
+  throw new Error("Extracted Craves logo is not a valid square production PNG");
 }
 
 await mkdir(dirname(targetPath), { recursive: true });
 await writeFile(targetPath, png);
-console.log(`Prepared approved Craves logo: ${png.length} bytes`);
+console.log(`Prepared approved Craves logo: ${width}x${height}, ${png.length} bytes`);

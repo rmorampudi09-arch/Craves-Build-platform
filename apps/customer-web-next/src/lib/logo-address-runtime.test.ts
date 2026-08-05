@@ -40,6 +40,7 @@ test("address APIM configuration safely reuses pre-existing route operations", (
     "../../../../scripts/apim/configure-customer-addresses-apim.sh",
   );
 
+  assert.match(script, /az apim api operation list/);
   assert.match(script, /resolve_operation_id/);
   assert.match(script, /route_shape/);
   assert.match(script, /Reusing existing APIM operation/);

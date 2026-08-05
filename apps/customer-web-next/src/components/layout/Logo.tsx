@@ -8,7 +8,12 @@ import { CravesLogo } from "@/components/brand/CravesLogo";
  * rounded-square asset used elsewhere in the application. Keep every caller on
  * the single approved asset instead.
  */
-export function Logo({ light: _light = false }: { light?: boolean }) {
+export function Logo(props: { light?: boolean }) {
+  // Preserve the existing component API while keeping one identical logo in
+  // light and standard layouts. The approved asset already supplies its own
+  // red background and white lettering.
+  void props.light;
+
   return (
     <span className="inline-flex items-center" aria-label="Craves">
       <CravesLogo size="lg" decorative priority className="h-14 w-14" />

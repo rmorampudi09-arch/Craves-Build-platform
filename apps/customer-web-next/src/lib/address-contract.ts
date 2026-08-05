@@ -215,6 +215,14 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
     return null;
   }
 
+  const deliveryReady = Boolean(
+    recipientName
+    && areaName
+    && postalCode
+    && latitude !== null
+    && longitude !== null
+  );
+
   return {
     id,
     addressLabel: addressLabel as AddressLabel,
@@ -230,7 +238,9 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
     latitude,
     longitude,
     isDefault: raw.isDefault,
-    active: raw.active,
+    // Older rows remain visible in address management, but exposing them as
+    // active would let checkout screens select an incomplete delivery address.
+    active: raw.active && deliveryReady,
     createdAt,
     updatedAt,
   };

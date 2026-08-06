@@ -11,6 +11,8 @@ import { safeReturnPath } from "@/lib/auth-contract";
 
 type Stage = "phone" | "otp" | "creating-session" | "done";
 
+const RESEND_DELAY_SECONDS = 30;
+
 export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
   const destination = safeReturnPath(returnTo);
   const chefJourney = destination.startsWith("/chef");
@@ -21,6 +23,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
     "Use your mobile number to receive a one-time password.",
   );
   const [busy, setBusy] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
   const confirmation = useRef<ConfirmationResult | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
 
@@ -31,6 +34,15 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
     },
     [],
   );
+
+  useEffect(() => {
+    if (stage !== "otp" || resendIn <= 0) return;
+    const timer = window.setTimeout(
+      () => setResendIn((current) => Math.max(0, current - 1)),
+      1_000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [resendIn, stage]);
 
   async function recaptcha(): Promise<RecaptchaVerifier> {
     if (verifier.current) return verifier.current;
@@ -47,8 +59,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
     return instance;
   }
 
-  async function requestOtp(event: FormEvent) {
-    event.preventDefault();
+  async function sendOtp(isResend: boolean) {
     const normalized = phone.replace(/[\s()-]/g, "");
     if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
       setMessage(
@@ -56,8 +67,13 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
       );
       return;
     }
+
     setBusy(true);
-    setMessage("Requesting OTP securely through Firebase...");
+    setMessage(
+      isResend
+        ? "Requesting a new OTP securely through Firebase..."
+        : "Requesting OTP securely through Firebase...",
+    );
     try {
       const { auth } = getFirebaseBrowserClient();
       confirmation.current = await signInWithPhoneNumber(
@@ -65,8 +81,14 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
         normalized,
         await recaptcha(),
       );
+      setOtp("");
       setStage("otp");
-      setMessage("OTP sent. Enter the six-digit code.");
+      setResendIn(RESEND_DELAY_SECONDS);
+      setMessage(
+        isResend
+          ? "A new OTP was sent. Enter the latest six-digit code."
+          : "OTP sent. Enter the six-digit code.",
+      );
     } catch (error) {
       verifier.current?.clear();
       verifier.current = null;
@@ -77,11 +99,21 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
       setMessage(
         code.includes("too-many-requests")
           ? "Too many OTP attempts. Please try again later."
-          : "OTP could not be sent. Check the number and try again.",
+          : "OTP could not be sent. Complete the security check and try again.",
       );
     } finally {
       setBusy(false);
     }
+  }
+
+  async function requestOtp(event: FormEvent) {
+    event.preventDefault();
+    await sendOtp(false);
+  }
+
+  async function resendOtp() {
+    if (busy || resendIn > 0) return;
+    await sendOtp(true);
   }
 
   async function verifyOtp(event: FormEvent) {
@@ -121,6 +153,18 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
     }
   }
 
+  function useAnotherNumber() {
+    verifier.current?.clear();
+    verifier.current = null;
+    confirmation.current = null;
+    setOtp("");
+    setResendIn(0);
+    setStage("phone");
+    setMessage("Request a new OTP.");
+  }
+
+  const otpStage = stage !== "phone";
+
   return (
     <section className="w-full rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 shadow-2xl shadow-black/30 sm:p-8">
       <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">
@@ -134,74 +178,89 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
         mode. Craves tokens stay in secure HTTP-only cookies.
       </p>
 
-      {stage === "phone" ? (
-        <form className="mt-7 space-y-4" onSubmit={requestOtp}>
-          <label
-            className="block text-left text-sm font-semibold"
-            htmlFor="phone"
-          >
-            Mobile number
-          </label>
-          <input
-            id="phone"
-            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-[#6930CA]"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            autoComplete="tel"
-            inputMode="tel"
-            required
-          />
-          <div
-            id="craves-recaptcha"
-            className="min-h-20 overflow-hidden rounded-2xl bg-white p-2"
-          />
+      <form
+        className="mt-7 space-y-4"
+        onSubmit={otpStage ? verifyOtp : requestOtp}
+      >
+        {otpStage ? (
+          <>
+            <label
+              className="block text-left text-sm font-semibold"
+              htmlFor="otp"
+            >
+              Six-digit OTP
+            </label>
+            <input
+              id="otp"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-center text-2xl tracking-[0.45em] outline-none ring-0 focus:border-[#F62E18] focus:outline-none focus:ring-0 focus-visible:border-[#F62E18] focus-visible:outline-none focus-visible:ring-0"
+              value={otp}
+              onChange={(event) =>
+                setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              required
+            />
+          </>
+        ) : (
+          <>
+            <label
+              className="block text-left text-sm font-semibold"
+              htmlFor="phone"
+            >
+              Mobile number
+            </label>
+            <input
+              id="phone"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-[#6930CA]"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              autoComplete="tel"
+              inputMode="tel"
+              required
+            />
+          </>
+        )}
+
+        <div
+          id="craves-recaptcha"
+          className="min-h-20 overflow-hidden rounded-2xl bg-white p-2"
+        />
+
+        {otpStage ? (
+          <>
+            <button
+              className="w-full rounded-full bg-[#6930CA] px-5 py-3 font-semibold text-white disabled:opacity-50"
+              disabled={busy || stage === "done"}
+            >
+              {busy ? "Signing in..." : "Verify OTP"}
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-full border border-[#F62E18] bg-white px-5 py-3 font-semibold text-black"
+              disabled={busy || resendIn > 0 || stage === "done"}
+              onClick={() => void resendOtp()}
+            >
+              {resendIn > 0 ? `Resend OTP in ${resendIn}s` : "Resend OTP"}
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-full border border-[#6930CA] px-5 py-3 font-semibold text-[#6930CA]"
+              disabled={busy}
+              onClick={useAnotherNumber}
+            >
+              Use another number
+            </button>
+          </>
+        ) : (
           <button
             className="w-full rounded-full bg-[#6930CA] px-5 py-3 font-semibold text-white disabled:opacity-50"
             disabled={busy}
           >
             {busy ? "Requesting OTP..." : "Send OTP"}
           </button>
-        </form>
-      ) : (
-        <form className="mt-7 space-y-4" onSubmit={verifyOtp}>
-          <label
-            className="block text-left text-sm font-semibold"
-            htmlFor="otp"
-          >
-            Six-digit OTP
-          </label>
-          <input
-            id="otp"
-            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-center text-2xl tracking-[0.45em] outline-none focus:border-[#6930CA]"
-            value={otp}
-            onChange={(event) =>
-              setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
-            }
-            autoComplete="one-time-code"
-            inputMode="numeric"
-            required
-          />
-          <button
-            className="w-full rounded-full bg-[#6930CA] px-5 py-3 font-semibold text-white disabled:opacity-50"
-            disabled={busy || stage === "done"}
-          >
-            {busy ? "Signing in..." : "Verify OTP"}
-          </button>
-          <button
-            type="button"
-            className="w-full rounded-full border border-[#6930CA] px-5 py-3 font-semibold text-[#6930CA]"
-            disabled={busy}
-            onClick={() => {
-              confirmation.current = null;
-              setOtp("");
-              setStage("phone");
-              setMessage("Request a new OTP.");
-            }}
-          >
-            Use another number
-          </button>
-        </form>
-      )}
+        )}
+      </form>
 
       <p
         aria-live="polite"

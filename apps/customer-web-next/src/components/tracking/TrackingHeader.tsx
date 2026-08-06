@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 
 interface TrackingHeaderProps {
   orderId: string;
@@ -27,6 +28,9 @@ export function TrackingHeader({ orderId, onBack }: TrackingHeaderProps) {
             Order #{orderId.slice(-8).toUpperCase()}
           </p>
         </div>
+      </div>
+      <div className="mx-auto max-w-5xl px-4 pb-3 md:px-6">
+        <PersistentCustomerServiceNav />
       </div>
     </header>
   );

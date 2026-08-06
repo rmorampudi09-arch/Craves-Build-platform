@@ -31,6 +31,13 @@ body .chef-panel-theme :is(button, a, [role="button"], [role="tab"]) {
   border-color: transparent !important;
 }
 
+:where(a, button, input, select, textarea, [tabindex]):focus {
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-color: transparent !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--color-grey-400) !important;
   outline-offset: 2px !important;

@@ -165,14 +165,30 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   }
 });
 
-test("signed-in navigation exposes the implemented backend services", () => {
-  const contents = source("../components/home/BrowseHeader.tsx");
+test("signed-in service navigation persists from the root layout with white idle tabs", () => {
+  const navigation = source(
+    "../components/navigation/PersistentCustomerServiceNav.tsx",
+  );
+  const layout = source("../app/layout.tsx");
+  const homeHeader = source("../components/home/BrowseHeader.tsx");
+
   for (const route of [
+    "/home",
     "/orders",
     "/subscriptions",
     "/notifications",
     "/chef",
   ]) {
-    assert.match(contents, new RegExp(route.replace("/", "\\/")));
+    assert.match(navigation, new RegExp(route.replace("/", "\\/")));
   }
+
+  assert.match(layout, /<PersistentCustomerServiceNav \/>/);
+  assert.match(navigation, /data-customer-service-navigation="persistent"/);
+  assert.match(navigation, /border-\[#F62E18\] bg-white/);
+  assert.match(navigation, /text-black/);
+  assert.match(navigation, /hover:bg-\[#F62E18\]/);
+  assert.match(navigation, /hover:font-bold/);
+  assert.match(navigation, /hover:text-white/);
+  assert.doesNotMatch(navigation, /bg-\[#C92716\]/);
+  assert.doesNotMatch(homeHeader, /aria-label="Customer services"/);
 });

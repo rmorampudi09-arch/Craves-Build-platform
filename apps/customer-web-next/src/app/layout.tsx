@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
+import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import "../styles.css";
 import "../craves-theme.css";
 
@@ -48,7 +49,10 @@ export default function RootLayout({
       lang="en"
       className={`${displayFont.variable} ${bodyFont.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <PersistentCustomerServiceNav />
+        {children}
+      </body>
     </html>
   );
 }

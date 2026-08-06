@@ -165,7 +165,7 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   }
 });
 
-test("signed-in service navigation persists from the root layout with white idle tabs", () => {
+test("customer navigation stays inside customer page headers instead of above the website", () => {
   const navigation = source(
     "../components/navigation/PersistentCustomerServiceNav.tsx",
   );
@@ -182,13 +182,30 @@ test("signed-in service navigation persists from the root layout with white idle
     assert.match(navigation, new RegExp(route.replace("/", "\\/")));
   }
 
-  assert.match(layout, /<PersistentCustomerServiceNav \/>/);
-  assert.match(navigation, /data-customer-service-navigation="persistent"/);
+  assert.doesNotMatch(layout, /PersistentCustomerServiceNav/);
+  assert.match(homeHeader, /lg:grid-cols-\[minmax\(18rem,1fr\)_auto\]/);
+  assert.match(homeHeader, /<PersistentCustomerServiceNav/);
+
+  for (const customerSurface of [
+    "../screens/OrderHistory/OrderHistory.tsx",
+    "../screens/Notifications/Notifications.tsx",
+    "../app/subscriptions/page.tsx",
+    "../components/profile/ProfileHeader.tsx",
+    "../components/cart/CartHeader.tsx",
+    "../components/checkout/CheckoutHeader.tsx",
+    "../components/tracking/TrackingHeader.tsx",
+    "../screens/public/FoodDetails/FoodDetails.tsx",
+    "../screens/public/ChefProfile/ChefProfile.tsx",
+    "../screens/OrderSuccess/OrderSuccess.tsx",
+  ]) {
+    assert.match(source(customerSurface), /PersistentCustomerServiceNav/, customerSurface);
+  }
+
+  assert.match(navigation, /data-customer-service-navigation="embedded"/);
   assert.match(navigation, /border-\[#F62E18\] bg-white/);
   assert.match(navigation, /text-black/);
   assert.match(navigation, /hover:bg-\[#F62E18\]/);
   assert.match(navigation, /hover:font-bold/);
   assert.match(navigation, /hover:text-white/);
   assert.doesNotMatch(navigation, /bg-\[#C92716\]/);
-  assert.doesNotMatch(homeHeader, /aria-label="Customer services"/);
 });

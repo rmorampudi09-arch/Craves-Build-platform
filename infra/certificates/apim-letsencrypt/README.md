@@ -160,7 +160,7 @@ The scheduled pipeline runs weekly and follows this logic:
 9. Compare the imported certificate SHA-256 fingerprint with the issued certificate.
 10. Delete all temporary certificate material.
 
-APIM can take up to one or two days to automatically synchronize a new Key Vault certificate version. Use **Sync certificates** in the APIM Custom domains page when an immediate refresh is required.
+When the APIM binding uses the versionless Key Vault secret reference, APIM normally obtains a newer certificate version within four hours. Use **Sync certificates** in the APIM Custom domains page when an immediate refresh is required.
 
 ## Local static validation
 

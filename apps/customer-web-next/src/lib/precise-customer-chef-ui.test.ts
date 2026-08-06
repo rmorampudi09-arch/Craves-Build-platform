@@ -10,6 +10,7 @@ const theme = source("../craves-theme.css");
 const hero = source("../components/sections/HeroSection.tsx");
 const welcome = source("../components/home/WelcomeBanner.tsx");
 const checkout = source("../screens/Checkout/Checkout.tsx");
+const orders = source("../screens/OrderHistory/OrderHistory.tsx");
 const addressDialog = source("../components/checkout/CheckoutAddressDialog.tsx");
 const chefActions = source("../components/chef-order-actions.tsx");
 const mealPlans = source("../components/subscription-plan-browser.tsx");
@@ -24,9 +25,13 @@ test("shared customer and chef palette removes espresso brown", () => {
   assert.match(theme, /--color-black:\s*#000000/i);
 });
 
-test("buttons use white surfaces with one flame-red border and the requested hover state", () => {
+test("buttons use white surfaces without logo-colored borders and keep the requested hover state", () => {
   assert.match(theme, /button, \[role="tab"\]/);
-  assert.match(theme, /border:\s*1px solid var\(--color-flame-red\)\s*!important/);
+  assert.match(theme, /border:\s*1px solid transparent\s*!important/);
+  assert.doesNotMatch(
+    theme,
+    /border:\s*1px solid var\(--color-flame-red\)\s*!important/,
+  );
   assert.match(theme, /background:\s*var\(--color-white\)\s*!important/);
   assert.match(theme, /color:\s*var\(--color-black\)\s*!important/);
   assert.match(theme, /background:\s*var\(--color-flame-red\)\s*!important/);
@@ -72,10 +77,22 @@ test("checkout shows only the current address and manages all addresses in a dia
   assert.match(addressDialog, /Save and use this address/);
 });
 
-test("chef accept and reject fields use one border with no focus outline or ring", () => {
+test("customer orders page uses a white page surface", () => {
+  assert.match(orders, /min-h-screen bg-white pb-20 text-ink/);
+  assert.doesNotMatch(orders, /min-h-screen bg-cream pb-20 text-ink/);
+});
+
+test("chef accept and reject fields use one neutral border with no focus outline or ring", () => {
   assert.match(chefActions, /data-craves-single-border="true"/);
   assert.match(chefActions, /border border-border/);
   assert.match(chefActions, /focus:outline-none focus:ring-0/);
   assert.match(theme, /outline:\s*none\s*!important/);
-  assert.match(theme, /border:\s*1px solid var\(--color-flame-red\)\s*!important/);
+  assert.match(
+    theme,
+    /border:\s*1px solid var\(--color-grey-200\)\s*!important/,
+  );
+  assert.doesNotMatch(
+    theme,
+    /border:\s*1px solid var\(--color-flame-red\)\s*!important/,
+  );
 });

@@ -2,6 +2,9 @@ name: Dispatch CRAVES v4 Android Build
 
 on:
   workflow_dispatch:
+  issues:
+    types:
+      - reopened
   schedule:
     - cron: "*/5 * * * *"
 

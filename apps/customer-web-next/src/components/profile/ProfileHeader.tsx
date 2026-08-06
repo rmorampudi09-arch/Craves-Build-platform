@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 
 export function ProfileHeader() {
   return (
@@ -26,6 +27,9 @@ export function ProfileHeader() {
             </span>
           </div>
         </Link>
+      </div>
+      <div className="mx-auto max-w-3xl px-4 pb-3 md:px-6">
+        <PersistentCustomerServiceNav />
       </div>
     </header>
   );

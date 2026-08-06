@@ -38,8 +38,9 @@ const InputOTPSlot = React.forwardRef<
   return (
     <div
       ref={ref}
+      data-active={isActive ? "true" : "false"}
       className={cn(
-        "relative -ml-px flex h-9 w-9 items-center justify-center border border-input text-sm shadow-sm transition-colors first:ml-0 first:rounded-l-md last:rounded-r-md",
+        "craves-otp-slot relative -ml-px flex h-9 w-9 items-center justify-center border border-input text-sm transition-colors first:ml-0 first:rounded-l-md last:rounded-r-md",
         isActive && "z-10 border-[#F62E18]",
         className,
       )}

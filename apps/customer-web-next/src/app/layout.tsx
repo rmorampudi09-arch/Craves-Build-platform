@@ -3,6 +3,7 @@ import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 import "../styles.css";
 import "../craves-theme.css";
+import "../otp-overrides.css";
 
 const displayFont = Plus_Jakarta_Sans({
   subsets: ["latin"],

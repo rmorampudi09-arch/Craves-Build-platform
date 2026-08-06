@@ -19,6 +19,7 @@ import { parseCustomerProfile } from "@/lib/profile-contract";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 
 type Mode = "login" | "register";
+type RecaptchaMode = "visible" | "invisible";
 export type AccountMode = "customer" | "chef";
 
 interface AuthModalProps {
@@ -57,9 +58,13 @@ export function AuthModal({
   const confirmation = useRef<ConfirmationResult | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
 
-  const reset = useCallback(() => {
+  const clearVerifier = useCallback(() => {
     verifier.current?.clear();
     verifier.current = null;
+  }, []);
+
+  const reset = useCallback(() => {
+    clearVerifier();
     confirmation.current = null;
     setPhone("");
     setFirstName("");
@@ -72,20 +77,14 @@ export function AuthModal({
     setResendIn(0);
     setError(null);
     setInfo(null);
-  }, [initialAccountMode]);
+  }, [clearVerifier, initialAccountMode]);
 
   const handleClose = useCallback(() => {
     reset();
     onClose();
   }, [onClose, reset]);
 
-  useEffect(
-    () => () => {
-      verifier.current?.clear();
-      verifier.current = null;
-    },
-    [],
-  );
+  useEffect(() => () => clearVerifier(), [clearVerifier]);
 
   useEffect(() => {
     if (open) setAccountMode(initialAccountMode);
@@ -111,16 +110,25 @@ export function AuthModal({
 
   if (!open) return null;
 
-  async function recaptcha(): Promise<RecaptchaVerifier> {
-    if (verifier.current) return verifier.current;
+  async function recaptcha(mode: RecaptchaMode): Promise<RecaptchaVerifier> {
+    clearVerifier();
     const { auth } = getFirebaseBrowserClient();
-    const instance = new RecaptchaVerifier(auth, "craves-recaptcha", {
-      size: "normal",
-      callback: () =>
-        setInfo("Security check completed. You can request the OTP."),
-      "expired-callback": () =>
-        setInfo("The security check expired. Complete it again."),
-    });
+    const visible = mode === "visible";
+    const instance = new RecaptchaVerifier(
+      auth,
+      visible ? "craves-recaptcha" : "craves-recaptcha-resend",
+      {
+        size: visible ? "normal" : "invisible",
+        callback: () => {
+          if (visible)
+            setInfo("Security check completed. You can request the OTP.");
+        },
+        "expired-callback": () => {
+          if (visible)
+            setInfo("The security check expired. Complete it again.");
+        },
+      },
+    );
     await instance.render();
     verifier.current = instance;
     return instance;
@@ -156,8 +164,9 @@ export function AuthModal({
       confirmation.current = await signInWithPhoneNumber(
         auth,
         `+91${phone}`,
-        await recaptcha(),
+        await recaptcha(isResend ? "invisible" : "visible"),
       );
+      clearVerifier();
       setOtp("");
       setOtpSent(true);
       setResendIn(RESEND_DELAY_SECONDS);
@@ -167,8 +176,7 @@ export function AuthModal({
           : "OTP sent securely through Firebase.",
       );
     } catch (caught) {
-      verifier.current?.clear();
-      verifier.current = null;
+      clearVerifier();
       const code =
         caught && typeof caught === "object" && "code" in caught
           ? String(caught.code)
@@ -267,8 +275,7 @@ export function AuthModal({
   };
 
   const useAnotherNumber = () => {
-    verifier.current?.clear();
-    verifier.current = null;
+    clearVerifier();
     confirmation.current = null;
     setOtp("");
     setOtpSent(false);
@@ -450,9 +457,16 @@ export function AuthModal({
               </span>
             </label>
 
+            {!otpSent && (
+              <div
+                id="craves-recaptcha"
+                className="min-h-20 overflow-hidden rounded-lg border border-border bg-white p-2"
+              />
+            )}
             <div
-              id="craves-recaptcha"
-              className="min-h-20 overflow-hidden rounded-lg border border-border bg-white p-2"
+              id="craves-recaptcha-resend"
+              className="hidden"
+              aria-hidden="true"
             />
 
             {otpSent && (
@@ -471,7 +485,7 @@ export function AuthModal({
                   onChange={(event) =>
                     setOtp(event.target.value.replace(/\D/g, ""))
                   }
-                  className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-center text-lg tracking-widest text-ink outline-none ring-0 placeholder:text-grey-400 focus:border-[#F62E18] focus:outline-none focus:ring-0 focus-visible:border-[#F62E18] focus-visible:outline-none focus-visible:ring-0"
+                  className="craves-otp-field mt-2 min-h-12 w-full rounded-lg bg-white px-3 text-center text-lg tracking-widest text-ink placeholder:text-grey-400"
                   autoComplete="one-time-code"
                   autoFocus
                   required

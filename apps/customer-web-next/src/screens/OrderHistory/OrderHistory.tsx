@@ -152,7 +152,7 @@ export default function OrdersPage() {
   }, [orders, view]);
 
   return (
-    <div className="min-h-screen bg-cream pb-20 text-ink">
+    <div className="min-h-screen bg-white pb-20 text-ink">
       <header className="sticky top-0 z-30 border-b border-border bg-white/95 backdrop-blur-xl">
         <div className="mx-auto flex min-h-18 max-w-6xl items-center gap-3 px-4 py-3 md:px-6">
           <Link to="/home" className="flex min-h-11 items-center gap-3 rounded-lg">

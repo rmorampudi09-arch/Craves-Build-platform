@@ -1,10 +1,5 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
-  Bell,
-  CalendarRange,
-  ChefHat,
-  ClipboardList,
-  Home,
   LogOut,
   MapPin,
   Search,
@@ -25,14 +20,6 @@ interface BrowseHeaderProps {
   onSearchTermChange: (value: string) => void;
 }
 
-const serviceLinks = [
-  { to: "/home", label: "Discover", icon: Home },
-  { to: "/orders", label: "Orders", icon: ClipboardList },
-  { to: "/subscriptions", label: "Meal plans", icon: CalendarRange },
-  { to: "/notifications", label: "Updates", icon: Bell },
-  { to: "/chef", label: "Chef mode", icon: ChefHat },
-] as const;
-
 const actionLinkClass =
   "border-[#C92716] bg-[#C92716] text-black transition-colors hover:border-[#F62E18] hover:bg-[#F62E18] hover:font-bold hover:text-white focus-visible:border-[#F62E18] focus-visible:bg-[#F62E18] focus-visible:font-bold focus-visible:text-white";
 
@@ -46,7 +33,6 @@ export function BrowseHeader({
   searchTerm,
   onSearchTermChange,
 }: BrowseHeaderProps) {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const firstName = user.firstName || user.username.split(" ")[0] || "there";
 
   return (
@@ -106,7 +92,7 @@ export function BrowseHeader({
           </div>
         </div>
 
-        <div className="grid gap-3 pb-3 lg:grid-cols-[minmax(18rem,1fr)_auto] lg:items-center">
+        <div className="pb-3">
           <label className="flex min-h-12 items-center gap-3 rounded-xl border border-border bg-white px-4 focus-within:border-[#F62E18]">
             <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="sr-only">Search dishes or kitchens</span>
@@ -119,24 +105,6 @@ export function BrowseHeader({
               autoComplete="off"
             />
           </label>
-
-          <nav className="flex gap-2 overflow-x-auto pb-1 lg:pb-0" aria-label="Customer services">
-            {serviceLinks.map((link) => {
-              const active = pathname === link.to || (link.to !== "/home" && pathname.startsWith(link.to));
-              return (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  aria-current={active ? "page" : undefined}
-                  className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${actionLinkClass} ${
-                    active ? "ring-2 ring-[#F62E18] ring-offset-2" : ""
-                  }`}
-                >
-                  <link.icon className="h-4 w-4" aria-hidden="true" /> {link.label}
-                </Link>
-              );
-            })}
-          </nav>
         </div>
 
         <button

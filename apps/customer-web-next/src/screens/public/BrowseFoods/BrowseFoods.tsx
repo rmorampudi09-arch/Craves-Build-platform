@@ -172,7 +172,7 @@ function BrowseFoodsPage() {
 
   if (!user) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-cream">
+      <main className="flex min-h-screen items-center justify-center bg-white">
         <p className="text-sm font-medium text-muted-foreground" role="status">
           Loading your Craves session…
         </p>
@@ -181,7 +181,7 @@ function BrowseFoodsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-cream pb-24 text-ink">
+    <div className="min-h-screen bg-white pb-24 text-ink">
       <BrowseHeader
         user={user}
         locationLabel={locationLabel}

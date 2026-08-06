@@ -31,6 +31,7 @@ interface AuthModalProps {
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const RESEND_DELAY_SECONDS = 30;
 
 export function AuthModal({
   open,
@@ -50,6 +51,7 @@ export function AuthModal({
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const confirmation = useRef<ConfirmationResult | null>(null);
@@ -67,6 +69,7 @@ export function AuthModal({
     setOtp("");
     setOtpSent(false);
     setBusy(false);
+    setResendIn(0);
     setError(null);
     setInfo(null);
   }, [initialAccountMode]);
@@ -87,6 +90,15 @@ export function AuthModal({
   useEffect(() => {
     if (open) setAccountMode(initialAccountMode);
   }, [initialAccountMode, open]);
+
+  useEffect(() => {
+    if (!otpSent || resendIn <= 0) return;
+    const timer = window.setTimeout(
+      () => setResendIn((current) => Math.max(0, current - 1)),
+      1_000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [otpSent, resendIn]);
 
   useEffect(() => {
     if (!open) return;
@@ -123,16 +135,21 @@ export function AuthModal({
     return null;
   }
 
-  const handleGenerateOtp = async (event: React.FormEvent) => {
-    event.preventDefault();
+  async function sendOtp(isResend: boolean) {
     setError(null);
     setInfo(null);
-    if (!/^\d{10}$/.test(phone))
-      return setError("Enter a valid 10-digit mobile number.");
+    if (!/^\d{10}$/.test(phone)) {
+      setError("Enter a valid 10-digit mobile number.");
+      return;
+    }
     if (mode === "register") {
       const validationError = validateRegistration();
-      if (validationError) return setError(validationError);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
     }
+
     setBusy(true);
     try {
       const { auth } = getFirebaseBrowserClient();
@@ -141,8 +158,14 @@ export function AuthModal({
         `+91${phone}`,
         await recaptcha(),
       );
+      setOtp("");
       setOtpSent(true);
-      setInfo("OTP sent securely through Firebase.");
+      setResendIn(RESEND_DELAY_SECONDS);
+      setInfo(
+        isResend
+          ? "A new OTP was sent. Enter the latest six-digit code."
+          : "OTP sent securely through Firebase.",
+      );
     } catch (caught) {
       verifier.current?.clear();
       verifier.current = null;
@@ -153,11 +176,21 @@ export function AuthModal({
       setError(
         code.includes("too-many-requests")
           ? "Too many OTP attempts. Please try again later."
-          : "OTP could not be sent. Check the number and try again.",
+          : "OTP could not be sent. Complete the security check and try again.",
       );
     } finally {
       setBusy(false);
     }
+  }
+
+  const handleGenerateOtp = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await sendOtp(false);
+  };
+
+  const handleResendOtp = async () => {
+    if (busy || resendIn > 0) return;
+    await sendOtp(true);
   };
 
   const handleVerify = async (event: React.FormEvent) => {
@@ -231,6 +264,17 @@ export function AuthModal({
   const switchTo = (next: Mode) => {
     reset();
     onSwitchMode(next);
+  };
+
+  const useAnotherNumber = () => {
+    verifier.current?.clear();
+    verifier.current = null;
+    confirmation.current = null;
+    setOtp("");
+    setOtpSent(false);
+    setResendIn(0);
+    setError(null);
+    setInfo("Request a new OTP.");
   };
 
   return (
@@ -406,12 +450,10 @@ export function AuthModal({
               </span>
             </label>
 
-            {!otpSent && (
-              <div
-                id="craves-recaptcha"
-                className="min-h-20 overflow-hidden rounded-lg border border-border bg-white p-2"
-              />
-            )}
+            <div
+              id="craves-recaptcha"
+              className="min-h-20 overflow-hidden rounded-lg border border-border bg-white p-2"
+            />
 
             {otpSent && (
               <label
@@ -429,7 +471,7 @@ export function AuthModal({
                   onChange={(event) =>
                     setOtp(event.target.value.replace(/\D/g, ""))
                   }
-                  className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-center text-lg tracking-widest text-ink placeholder:text-grey-400 focus:border-primary"
+                  className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-center text-lg tracking-widest text-ink outline-none ring-0 placeholder:text-grey-400 focus:border-[#F62E18] focus:outline-none focus:ring-0 focus-visible:border-[#F62E18] focus-visible:outline-none focus-visible:ring-0"
                   autoComplete="one-time-code"
                   autoFocus
                   required
@@ -469,19 +511,26 @@ export function AuthModal({
             </button>
 
             {otpSent && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  confirmation.current = null;
-                  setOtp("");
-                  setOtpSent(false);
-                  setInfo("Request a new OTP.");
-                }}
-                className="min-h-11 w-full text-sm font-semibold text-contrast-red underline-offset-4 hover:underline"
-              >
-                Use another number
-              </button>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={busy || resendIn > 0}
+                  onClick={() => void handleResendOtp()}
+                  className="min-h-11 w-full rounded-lg border border-[#F62E18] bg-white px-4 text-sm font-semibold text-black"
+                >
+                  {resendIn > 0
+                    ? `Resend OTP in ${resendIn}s`
+                    : "Resend OTP"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={useAnotherNumber}
+                  className="min-h-11 w-full rounded-lg border border-[#F62E18] bg-white px-4 text-sm font-semibold text-black"
+                >
+                  Use another number
+                </button>
+              </div>
             )}
           </form>
 

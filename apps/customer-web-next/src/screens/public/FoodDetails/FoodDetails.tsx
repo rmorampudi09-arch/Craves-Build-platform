@@ -1,5 +1,6 @@
 import { getRouteApi, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import { loadSession } from "@/services/auth/cravesAuth";
 import {
   getDish,
@@ -141,6 +142,11 @@ function DishDetailPage() {
         dish={dish}
         onBack={() => navigate({ to: "/home" })}
       />
+      <div className="border-b border-border bg-white">
+        <div className="mx-auto max-w-3xl px-4 py-3 md:px-6">
+          <PersistentCustomerServiceNav />
+        </div>
+      </div>
       <main className="mx-auto max-w-3xl px-4 pt-6 md:px-6">
         <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-start">
           <DishInfoSummary dish={dish} />

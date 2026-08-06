@@ -1,5 +1,6 @@
 import { getRouteApi, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import {
   getChef,
   getDishesByChef,
@@ -115,6 +116,11 @@ function ChefProfilePage() {
   return (
     <div className="min-h-screen bg-cream pb-10">
       <ChefProfileHeader onBack={() => navigate({ to: "/home" })} />
+      <div className="border-b border-border bg-white">
+        <div className="mx-auto max-w-3xl px-4 py-3 md:px-6">
+          <PersistentCustomerServiceNav />
+        </div>
+      </div>
       <main className="mx-auto max-w-3xl px-4 pt-6 md:px-6">
         <ChefProfileHero chef={chef} />
         <ChefStatsRow chef={chef} />

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 
 export function CartHeader({ onBack }: { onBack: () => void }) {
   return (
@@ -21,6 +22,9 @@ export function CartHeader({ onBack }: { onBack: () => void }) {
             <span className="block text-xs text-muted-foreground">Live items and backend totals</span>
           </span>
         </Link>
+      </div>
+      <div className="mx-auto max-w-5xl px-4 pb-3 md:px-6">
+        <PersistentCustomerServiceNav />
       </div>
     </header>
   );

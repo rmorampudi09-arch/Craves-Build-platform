@@ -116,7 +116,7 @@ h6 {
 }
 
 :where(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-nav-link) {
-  border: 1px solid var(--color-flame-red) !important;
+  border: 1px solid transparent !important;
   background: var(--color-white) !important;
   color: var(--color-black) !important;
   box-shadow: none !important;
@@ -129,7 +129,7 @@ h6 {
 
 :where(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-nav-link):not(:disabled):hover,
 :where(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-nav-link):not(:disabled):focus-visible {
-  border: 1px solid var(--color-flame-red) !important;
+  border: 1px solid transparent !important;
   background: var(--color-flame-red) !important;
   color: var(--color-white) !important;
   font-weight: 700 !important;
@@ -148,12 +148,17 @@ h6 {
   justify-content: center;
   gap: 0.5rem;
   min-height: 2.75rem;
-  border: 1px solid var(--color-flame-red);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   padding: 0.75rem 1.5rem;
   font-family: var(--font-sans-family);
   font-size: 0.9375rem;
   line-height: 1.375rem;
+}
+
+:where(input, textarea, select):focus,
+:where(input, textarea, select):focus-visible {
+  border-color: var(--color-grey-200) !important;
 }
 
 /* Remove the former dark-brown surfaces without turning normal text white. */
@@ -223,14 +228,14 @@ h6 {
 }
 
 .chef-panel-customer-link {
-  border: 1px solid var(--color-flame-red) !important;
+  border: 1px solid transparent !important;
   background: var(--color-white) !important;
   color: var(--color-black) !important;
 }
 
 .chef-panel-customer-link:hover,
 .chef-panel-customer-link:focus-visible {
-  border: 1px solid var(--color-flame-red) !important;
+  border: 1px solid transparent !important;
   background: var(--color-flame-red) !important;
   color: var(--color-white) !important;
   font-weight: 700 !important;
@@ -238,7 +243,7 @@ h6 {
 
 .chef-panel-theme :is(button, a)[class*="bg-[#6930CA]"],
 .chef-panel-theme :is(button, a)[class*="bg-[#F6B545]"] {
-  border: 1px solid var(--color-flame-red) !important;
+  border: 1px solid transparent !important;
   background: var(--color-white) !important;
   box-shadow: none !important;
   color: var(--color-black) !important;
@@ -247,7 +252,7 @@ h6 {
 
 .chef-panel-theme :is(button, a)[class*="bg-[#6930CA]"]:not(:disabled):hover,
 .chef-panel-theme :is(button, a)[class*="bg-[#F6B545]"]:not(:disabled):hover {
-  border: 1px solid var(--color-flame-red) !important;
+  border: 1px solid transparent !important;
   background: var(--color-flame-red) !important;
   color: var(--color-white) !important;
   font-weight: 700 !important;
@@ -263,7 +268,7 @@ h6 {
 
 .chef-panel-theme :is(input, textarea, select):focus,
 .chef-panel-theme :is(input, textarea, select):focus-visible {
-  border: 1px solid var(--color-flame-red) !important;
+  border: 1px solid var(--color-grey-200) !important;
   box-shadow: none !important;
   outline: none !important;
 }

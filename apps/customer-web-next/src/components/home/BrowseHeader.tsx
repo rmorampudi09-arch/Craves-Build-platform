@@ -7,6 +7,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import type { CravesUser } from "@/services/auth/cravesAuth";
 
 interface BrowseHeaderProps {
@@ -92,7 +93,7 @@ export function BrowseHeader({
           </div>
         </div>
 
-        <div className="pb-3">
+        <div className="grid gap-3 pb-3 lg:grid-cols-[minmax(18rem,1fr)_auto] lg:items-center">
           <label className="flex min-h-12 items-center gap-3 rounded-xl border border-border bg-white px-4 focus-within:border-[#F62E18]">
             <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="sr-only">Search dishes or kitchens</span>
@@ -105,6 +106,7 @@ export function BrowseHeader({
               autoComplete="off"
             />
           </label>
+          <PersistentCustomerServiceNav className="lg:justify-end lg:pb-0" />
         </div>
 
         <button

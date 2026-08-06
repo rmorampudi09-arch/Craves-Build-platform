@@ -25,6 +25,7 @@ variables:
   resourceGroup: rg-craves-prodlow-centralindia
   apexDnsZoneName: _acme-challenge.craves.in
   wwwDnsZoneName: _acme-challenge.www.craves.in
+  parentDnsServer: ns51.domaincontrol.com
   keyVaultName: kvcravesprodlowl3ing6
   keyVaultCertificateName: craves-web-tls
   containerAppEnvironmentName: cae-craves-prodlow-l3ing6
@@ -89,6 +90,7 @@ steps:
         export RESOURCE_GROUP='$(resourceGroup)'
         export APEX_DNS_ZONE_NAME='$(apexDnsZoneName)'
         export WWW_DNS_ZONE_NAME='$(wwwDnsZoneName)'
+        export PARENT_DNS_SERVER='$(parentDnsServer)'
         export KEY_VAULT_NAME='$(keyVaultName)'
         export KEY_VAULT_CERTIFICATE_NAME='$(keyVaultCertificateName)'
         export CONTAINER_APP_ENVIRONMENT_NAME='$(containerAppEnvironmentName)'

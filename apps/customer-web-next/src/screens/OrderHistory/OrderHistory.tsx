@@ -12,6 +12,7 @@ import {
   ReceiptText,
   Utensils,
 } from "lucide-react";
+import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import {
   formatOrderStatus,
   parseCustomerOrders,
@@ -177,6 +178,9 @@ export default function OrdersPage() {
               aria-hidden="true"
             />
           </button>
+        </div>
+        <div className="mx-auto max-w-6xl px-4 pb-3 md:px-6">
+          <PersistentCustomerServiceNav />
         </div>
       </header>
 

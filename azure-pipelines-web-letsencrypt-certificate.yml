@@ -33,6 +33,7 @@ variables:
   apexHostname: craves.in
   wwwHostname: www.craves.in
   containerAppDefaultHostname: ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
+  containerAppCertificateApiVersion: 2024-02-02-preview
   acmeShVersion: 3.1.4
   renewBeforeDays: 30
   dnsPropagationSeconds: 90
@@ -58,11 +59,13 @@ steps:
       fi
 
       bash -n infra/certificates/web-letsencrypt/renew-web-certificate.sh
+      bash -n infra/certificates/web-letsencrypt/run-web-certificate.sh
       shellcheck infra/certificates/web-letsencrypt/renew-web-certificate.sh
+      shellcheck infra/certificates/web-letsencrypt/run-web-certificate.sh
     displayName: Validate customer web certificate automation
 
   - task: AzureCLI@2
-    displayName: Issue or renew customer web certificate
+    displayName: Issue, recover or synchronize customer web certificate
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -98,10 +101,11 @@ steps:
         export APEX_HOSTNAME='$(apexHostname)'
         export WWW_HOSTNAME='$(wwwHostname)'
         export CONTAINER_APP_DEFAULT_HOSTNAME='$(containerAppDefaultHostname)'
+        export CONTAINER_APP_CERTIFICATE_API_VERSION='$(containerAppCertificateApiVersion)'
         export LETSENCRYPT_CONTACT_EMAIL='${{ parameters.letsEncryptContactEmail }}'
         export ACME_SH_VERSION='$(acmeShVersion)'
         export RENEW_BEFORE_DAYS='$(renewBeforeDays)'
         export DNS_PROPAGATION_SECONDS='$(dnsPropagationSeconds)'
         export FORCE_ISSUE="$force_issue"
 
-        bash infra/certificates/web-letsencrypt/renew-web-certificate.sh
+        bash infra/certificates/web-letsencrypt/run-web-certificate.sh

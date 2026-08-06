@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import "../styles.css";
 import "../craves-theme.css";
 import "../otp-overrides.css";
+import "../control-border-overrides.css";
 
 const displayFont = Plus_Jakarta_Sans({
   subsets: ["latin"],

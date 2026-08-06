@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   type ConfirmationResult,
   RecaptchaVerifier,
@@ -10,6 +10,7 @@ import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import { safeReturnPath } from "@/lib/auth-contract";
 
 type Stage = "phone" | "otp" | "creating-session" | "done";
+type RecaptchaMode = "visible" | "invisible";
 
 const RESEND_DELAY_SECONDS = 30;
 
@@ -27,13 +28,12 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
   const confirmation = useRef<ConfirmationResult | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
 
-  useEffect(
-    () => () => {
-      verifier.current?.clear();
-      verifier.current = null;
-    },
-    [],
-  );
+  const clearVerifier = useCallback(() => {
+    verifier.current?.clear();
+    verifier.current = null;
+  }, []);
+
+  useEffect(() => () => clearVerifier(), [clearVerifier]);
 
   useEffect(() => {
     if (stage !== "otp" || resendIn <= 0) return;
@@ -44,16 +44,25 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
     return () => window.clearTimeout(timer);
   }, [resendIn, stage]);
 
-  async function recaptcha(): Promise<RecaptchaVerifier> {
-    if (verifier.current) return verifier.current;
+  async function recaptcha(mode: RecaptchaMode): Promise<RecaptchaVerifier> {
+    clearVerifier();
     const { auth } = getFirebaseBrowserClient();
-    const instance = new RecaptchaVerifier(auth, "craves-recaptcha", {
-      size: "normal",
-      callback: () =>
-        setMessage("Security check completed. You can request the OTP."),
-      "expired-callback": () =>
-        setMessage("The security check expired. Complete it again."),
-    });
+    const visible = mode === "visible";
+    const instance = new RecaptchaVerifier(
+      auth,
+      visible ? "craves-recaptcha" : "craves-recaptcha-resend",
+      {
+        size: visible ? "normal" : "invisible",
+        callback: () => {
+          if (visible)
+            setMessage("Security check completed. You can request the OTP.");
+        },
+        "expired-callback": () => {
+          if (visible)
+            setMessage("The security check expired. Complete it again.");
+        },
+      },
+    );
     await instance.render();
     verifier.current = instance;
     return instance;
@@ -79,8 +88,9 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
       confirmation.current = await signInWithPhoneNumber(
         auth,
         normalized,
-        await recaptcha(),
+        await recaptcha(isResend ? "invisible" : "visible"),
       );
+      clearVerifier();
       setOtp("");
       setStage("otp");
       setResendIn(RESEND_DELAY_SECONDS);
@@ -90,8 +100,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
           : "OTP sent. Enter the six-digit code.",
       );
     } catch (error) {
-      verifier.current?.clear();
-      verifier.current = null;
+      clearVerifier();
       const code =
         error && typeof error === "object" && "code" in error
           ? String(error.code)
@@ -154,8 +163,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
   }
 
   function useAnotherNumber() {
-    verifier.current?.clear();
-    verifier.current = null;
+    clearVerifier();
     confirmation.current = null;
     setOtp("");
     setResendIn(0);
@@ -192,7 +200,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
             </label>
             <input
               id="otp"
-              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-center text-2xl tracking-[0.45em] outline-none ring-0 focus:border-[#F62E18] focus:outline-none focus:ring-0 focus-visible:border-[#F62E18] focus-visible:outline-none focus-visible:ring-0"
+              className="craves-otp-field w-full rounded-2xl bg-white px-4 py-3 text-center text-2xl tracking-[0.45em]"
               value={otp}
               onChange={(event) =>
                 setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
@@ -222,9 +230,16 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
           </>
         )}
 
+        {!otpStage && (
+          <div
+            id="craves-recaptcha"
+            className="min-h-20 overflow-hidden rounded-2xl bg-white p-2"
+          />
+        )}
         <div
-          id="craves-recaptcha"
-          className="min-h-20 overflow-hidden rounded-2xl bg-white p-2"
+          id="craves-recaptcha-resend"
+          className="hidden"
+          aria-hidden="true"
         />
 
         {otpStage ? (

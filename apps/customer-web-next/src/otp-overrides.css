@@ -29,3 +29,15 @@ input.craves-otp-field:focus-visible {
 .craves-otp-slot[data-active="true"] {
   border-color: #f62e18 !important;
 }
+
+#craves-recaptcha-resend.hidden {
+  position: fixed !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  display: block !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

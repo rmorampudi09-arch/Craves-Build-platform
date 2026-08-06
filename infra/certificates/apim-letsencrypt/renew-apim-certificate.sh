@@ -40,7 +40,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'fail "Certificate automation failed near line $LINENO."' ERR
 
-for command_name in az curl dig git jq openssl tar; do
+for command_name in az dig git openssl; do
   require_command "$command_name"
 done
 

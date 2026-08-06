@@ -185,11 +185,12 @@ log "Obtaining an Azure Resource Manager bearer token for the DNS challenge."
 export AZUREDNS_SUBSCRIPTIONID="$SUBSCRIPTION_ID"
 export AZUREDNS_TENANTID="$TENANT_ID"
 export AZUREDNS_MANAGEDIDENTITY="false"
-export AZUREDNS_BEARERTOKEN="$(az account get-access-token \
+AZUREDNS_BEARERTOKEN="$(az account get-access-token \
   --resource https://management.azure.com/ \
   --query accessToken \
   --output tsv \
   --only-show-errors)"
+export AZUREDNS_BEARERTOKEN
 
 [[ -n "$AZUREDNS_BEARERTOKEN" ]] || fail "Azure DNS bearer token could not be obtained."
 

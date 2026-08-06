@@ -96,4 +96,4 @@ steps:
         export DNS_PROPAGATION_SECONDS='$(dnsPropagationSeconds)'
         export FORCE_ISSUE="$force_issue"
 
-        infra/certificates/apim-letsencrypt/renew-apim-certificate.sh
+        bash infra/certificates/apim-letsencrypt/renew-apim-certificate.sh

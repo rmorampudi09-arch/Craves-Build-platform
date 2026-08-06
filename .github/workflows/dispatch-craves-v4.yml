@@ -20,6 +20,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            // Trigger number 2 for CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0.
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,

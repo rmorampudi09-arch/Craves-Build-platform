@@ -49,6 +49,7 @@ for env_name in \
   RESOURCE_GROUP \
   APEX_DNS_ZONE_NAME \
   WWW_DNS_ZONE_NAME \
+  PARENT_DNS_SERVER \
   KEY_VAULT_NAME \
   KEY_VAULT_CERTIFICATE_NAME \
   CONTAINER_APP_ENVIRONMENT_NAME \
@@ -96,20 +97,38 @@ ACTIVE_SUBSCRIPTION_ID="$(az account show --query id --output tsv --only-show-er
 TENANT_ID="$(az account show --query tenantId --output tsv --only-show-errors)"
 [[ -n "$TENANT_ID" ]] || fail "Azure tenant ID could not be resolved."
 
-log "Validating Azure DNS zones, Key Vault and Container Apps resources."
+log "Validating Azure DNS zones, authoritative delegations, Key Vault and Container Apps resources."
 for dns_zone in "$APEX_DNS_ZONE_NAME" "$WWW_DNS_ZONE_NAME"; do
-  az network dns zone show \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$dns_zone" \
-    --only-show-errors \
-    --output none
+  mapfile -t expected_name_servers < <(
+    az network dns zone show \
+      --resource-group "$RESOURCE_GROUP" \
+      --name "$dns_zone" \
+      --query 'nameServers[]' \
+      --output tsv \
+      --only-show-errors | sed 's/\.$//' | sort -u
+  )
+
+  [[ "${#expected_name_servers[@]}" -eq 4 ]] || \
+    fail "Expected four Azure DNS nameservers on zone ${dns_zone}."
 
   mapfile -t delegated_name_servers < <(
-    dig +short NS "$dns_zone" | sed 's/\.$//' | sort -u
+    dig @"$PARENT_DNS_SERVER" \
+      "$dns_zone" \
+      NS \
+      +norecurse \
+      +noall \
+      +authority 2>/dev/null | \
+    awk '$4 == "NS" {print $5}' | \
+    sed 's/\.$//' | \
+    sort -u
   )
 
   [[ "${#delegated_name_servers[@]}" -eq 4 ]] || \
-    fail "Expected four delegated Azure DNS nameservers for ${dns_zone}."
+    fail "Expected four delegated nameservers for ${dns_zone} from ${PARENT_DNS_SERVER}."
+
+  [[ "$(printf '%s\n' "${delegated_name_servers[@]}")" == \
+     "$(printf '%s\n' "${expected_name_servers[@]}")" ]] || \
+    fail "Parent DNS delegation for ${dns_zone} does not match its Azure DNS zone."
 
   for name_server in "${delegated_name_servers[@]}"; do
     case "$name_server" in

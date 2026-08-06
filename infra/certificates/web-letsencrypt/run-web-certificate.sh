@@ -174,13 +174,15 @@ JSON
 print_existing_certificate_summary() {
   local certificate_id environment_certificate_id certificate_not_after certificate_fingerprint
 
-  az keyvault certificate download \
-    --vault-name "$KEY_VAULT_NAME" \
-    --name "$KEY_VAULT_CERTIFICATE_NAME" \
-    --file "$CURRENT_CERT_FILE" \
-    --encoding PEM \
-    --only-show-errors \
-    --output none
+  if [[ ! -s "$CURRENT_CERT_FILE" ]]; then
+    az keyvault certificate download \
+      --vault-name "$KEY_VAULT_NAME" \
+      --name "$KEY_VAULT_CERTIFICATE_NAME" \
+      --file "$CURRENT_CERT_FILE" \
+      --encoding PEM \
+      --only-show-errors \
+      --output none
+  fi
 
   certificate_not_after="$(openssl x509 -in "$CURRENT_CERT_FILE" -noout -enddate | cut -d= -f2-)"
   certificate_fingerprint="$(openssl x509 \

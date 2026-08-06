@@ -33,11 +33,19 @@ test("customer and chef button-like controls have transparent borders", () => {
   );
 });
 
-test("focus rings and OTP edges use neutral grey only", () => {
+test("mouse and keyboard focus rings cannot restore a logo colour", () => {
+  assert.match(
+    overrides,
+    /\[tabindex\]\):focus\s*\{[\s\S]*--tw-ring-color:\s*transparent\s*!important/,
+  );
   assert.match(
     overrides,
     /outline:\s*2px solid var\(--color-grey-400\)\s*!important/,
   );
+  assert.doesNotMatch(overrides, /outline:[^;]*(?:#f62e18|#c92716|#6930ca)/i);
+});
+
+test("OTP edges use neutral grey only", () => {
   assert.match(
     overrides,
     /input\.craves-otp-field[\s\S]*border-color:\s*var\(--color-grey-200\)\s*!important/,
@@ -46,5 +54,4 @@ test("focus rings and OTP edges use neutral grey only", () => {
     overrides,
     /\.craves-otp-slot\[data-active="true"\][\s\S]*border-color:\s*var\(--color-grey-400\)\s*!important/,
   );
-  assert.doesNotMatch(overrides, /outline:[^;]*(?:#f62e18|#c92716|#6930ca)/i);
 });

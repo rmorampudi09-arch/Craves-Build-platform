@@ -1,5 +1,6 @@
 name: CRAVES Mobile Phase 1 CI
 
+# Explicit retrigger after Expo SDK 56 dependency alignment.
 on:
   push:
     branches:

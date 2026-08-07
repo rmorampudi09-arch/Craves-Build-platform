@@ -165,7 +165,9 @@ steps:
                 --only-show-errors 2>/dev/null || true)
             fi
 
-            echo "Attempt $attempt/60 latest=$latest ready=$ready running=$running health=$health image=$latest_image"
+            # IMPORTANT: progress belongs on stderr because callers capture stdout
+            # to obtain only the revision name.
+            echo "Attempt $attempt/60 latest=$latest ready=$ready running=$running health=$health image=$latest_image" >&2
 
             if [[ "$latest_image" == "$expected_image" \
               && "$latest" == "$ready" \
@@ -185,7 +187,7 @@ steps:
                   --type console \
                   --tail 200 \
                   --format text \
-                  --only-show-errors || true
+                  --only-show-errors >&2 || true
               fi
               return 1
             fi

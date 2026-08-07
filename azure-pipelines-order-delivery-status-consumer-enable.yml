@@ -472,8 +472,6 @@ steps:
           jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$FINAL"
         }
 
-        [[ "${$(final_value CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED),,}" == 'true' ]] 2>/dev/null || true
-
         FINAL_ENABLED=$(final_value CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED)
         FINAL_SUB=$(final_value CRAVES_DELIVERY_STATUS_SUBSCRIPTION)
         FINAL_FQNS=$(final_value CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE)

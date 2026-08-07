@@ -1,0 +1,101 @@
+.page {
+  --landing-red: #f62e18;
+  --landing-red-hover: #df2412;
+  --landing-ink: #111111;
+  --landing-muted: #6e7378;
+  --landing-soft: #f6f7f8;
+  --landing-line: #e6e8ea;
+  background: #ffffff;
+  color: var(--landing-ink);
+}
+
+.primaryCta {
+  border: 1px solid transparent !important;
+  border-radius: 9999px !important;
+  background: var(--landing-red) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.primaryCta:not(:disabled):hover,
+.primaryCta:not(:disabled):focus-visible {
+  border-color: transparent !important;
+  background: var(--landing-red-hover) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.secondaryCta {
+  border: 1px solid var(--landing-line) !important;
+  border-radius: 9999px !important;
+  background: #ffffff !important;
+  color: var(--landing-ink) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.secondaryCta:not(:disabled):hover,
+.secondaryCta:not(:disabled):focus-visible {
+  border-color: var(--landing-red) !important;
+  background: #ffffff !important;
+  color: var(--landing-red) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.textButton {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--landing-ink) !important;
+  box-shadow: none !important;
+}
+
+.textButton:not(:disabled):hover,
+.textButton:not(:disabled):focus-visible {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--landing-red) !important;
+  box-shadow: none !important;
+}
+
+.storeButton {
+  border: 1px solid #111111 !important;
+  border-radius: 0.75rem !important;
+  background: #111111 !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.storeButton:disabled {
+  cursor: default !important;
+  opacity: 1 !important;
+}
+
+.sticker {
+  border: 1px solid var(--landing-line);
+  background: #ffffff;
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.08);
+}
+
+.darkCard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1a1a1a;
+}
+
+.footerLink {
+  color: #c7c9cc;
+  transition: color 120ms ease;
+}
+
+.footerLink:hover,
+.footerLink:focus-visible {
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footerLink {
+    transition: none;
+  }
+}

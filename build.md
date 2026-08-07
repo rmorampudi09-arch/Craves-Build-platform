@@ -20,13 +20,16 @@
 
 - **P00 — Execution Documents and Source Lock: DONE**.
 - **P01 — Repository Architecture Inventory: DONE**.
+- **P02 — APIM/OpenAPI Contract Inventory: DONE**.
 - P01 started from branch HEAD `64dfbd18820b2644ee0263d5fffcefbd62172dfe`.
 - P01 completion commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`.
-- Next phase in sequence: **P02 — APIM/OpenAPI Contract Inventory**.
+- P02 inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`.
+- P02 evidence: `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`.
+- Next phase in sequence: **P03 — Runtime Configuration and Environment Boundary**.
 - Next phase authorization: **NONE AUTHORIZED**.
 - Required action: stop and wait for the user to explicitly start/continue the next phase.
 
-P01 was an architecture/documentation audit only. It did not modify mobile product code, backend code, APIM definitions, infrastructure, or native build configuration.
+P02 was a repository contract/documentation audit only. It did not modify mobile product code, backend code, APIM definitions, infrastructure, or native build configuration. P02 classified all 8 currently consumed mobile HTTP operations from static repository evidence: 3 `CONTRACT_ONLY`, 5 `BLOCKED`, and 0 runtime-verified operations. Missing contracts and route/version mismatches are intentionally visible rather than inferred.
 
 ---
 
@@ -64,7 +67,7 @@ Successful checks:
 
 Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is now the correct implementation-phase policy.
 
-No mobile product source changed during P00 or P01, so the latest product-code CI evidence remains the successful run above. P01 changed only this ledger and therefore does not require a new application CI run.
+No mobile product source changed during P00, P01, or P02, so the latest product-code CI evidence remains the successful run above. P02 changed documentation only and therefore does not create a new application-runtime verification claim.
 
 ---
 
@@ -137,7 +140,7 @@ Key files:
 - `apps/mobile/src/core/http/apiError.ts`
 - `apps/mobile/src/core/http/correlation.ts`
 
-The central client/error/correlation architecture exists. Full APIM capability inventory and every feature wrapper are still pending.
+The central client/error/correlation architecture exists. P02 completed the static inventory of all currently consumed mobile operations; unresolved APIM/OpenAPI/backend contracts remain explicitly classified in `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`. Future feature wrappers still require exact contracts before implementation.
 
 ### 4.6 Token/session security — IMPLEMENTED FOR CURRENT AUTH FLOW
 
@@ -155,7 +158,7 @@ Verified implementation behavior:
 - one in-flight refresh promise guard,
 - local secure credentials cleared on refresh failure/logout.
 
-This matches the guide’s session-storage model. Wider application cache cleanup and role-transition auditing remain later phases.
+This matches the guide’s session-storage model. P02 found that the corresponding current backend/APIM refresh contract is not runtime-verified and is `CONTRACT_ONLY`; wider application cache cleanup and role-transition auditing remain later phases.
 
 ### 4.7 Authentication UI/components — IMPLEMENTED FOUNDATION, FINAL VISUAL QA PENDING
 
@@ -207,7 +210,7 @@ Currently coded exact paths include:
 
 The current auth implementation exchanges Firebase identity for the CRAVES session, maps selected Firebase/network errors, restores sessions, and performs best-effort remote logout followed by mandatory local credential clearing.
 
-**Important:** Before any future change, these paths/models must be revalidated against the current repository APIM/OpenAPI contract. Existing code presence alone is not permission to invent adjacent auth endpoints.
+**P02 contract result:** Firebase exchange, refresh, and logout are `CONTRACT_ONLY`; `/api/v1/auth/me` is `BLOCKED`. Existing mobile code presence is not evidence that these routes are currently runnable. See the P02 inventory before any later contract-dependent change.
 
 ### 4.10 Customer profile completion — IMPLEMENTED ONLY FOR AUTH/ONBOARDING HANDOFF
 
@@ -222,7 +225,7 @@ Currently coded paths:
 
 `CustomerRegistrationScreen.tsx` and `AccountRouterScreen.tsx` use the profile capability to decide whether customer profile completion is needed.
 
-This does **not** mean the master-guide Customer Profile/Edit Profile experiences are complete.
+P02 classifies both current customer-profile operations as `BLOCKED` pending an authoritative repository contract/backend mapping. This does **not** mean the master-guide Customer Profile/Edit Profile experiences are complete.
 
 ### 4.11 Chef application/onboarding handoff — IMPLEMENTED ONLY FOR AUTH/ACCOUNT STATUS
 
@@ -236,7 +239,7 @@ Current screens include:
 - `ChefRegistrationScreen.tsx`
 - `ChefAccountStatusScreen.tsx`
 
-This covers the auth-time chef application/status handoff only. It does **not** mean Chef Dashboard, Orders, Menu, Analytics, Profile, Business, Payout, Subscription, or Preferences are complete.
+P02 classifies both current chef-application operations as `BLOCKED`: an APIM policy template exists, but exact operation/backend/schema evidence is insufficient. This covers the auth-time chef application/status handoff code only. It does **not** mean Chef Dashboard, Orders, Menu, Analytics, Profile, Business, Payout, Subscription, or Preferences are complete.
 
 ### 4.12 Account router — IMPLEMENTED AS TEMPORARY AUTH COMPLETION ROUTER
 
@@ -416,7 +419,7 @@ The granular `phases.md` was introduced after the existing auth foundation was w
 |---|---|---|
 | P00 Execution Documents | **DONE** | `plan.md`, `phases.md`, `build.md`, and `agent.md` committed; source hierarchy and execution policy locked. |
 | P01 Repository Inventory | **DONE** | Formal repository architecture audit recorded in this ledger; current entry/navigation/provider/store/query/config/HTTP/security/Firebase/design/native/test/CI ownership is documented and duplicate architecture was checked. |
-| P02 APIM/OpenAPI Inventory | NOT STARTED | No full feature-by-feature contract inventory is recorded yet. |
+| P02 APIM/OpenAPI Inventory | **DONE** | `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md` inventories all 8 currently consumed mobile HTTP operations, route-key/auth expectations, path/source mismatches, validation gaps, and static classifications: 3 `CONTRACT_ONLY`, 5 `BLOCKED`, 0 runtime-verified. |
 | P03 Runtime Config | PARTIAL | Foundation exists; full environment/feature-flag audit pending. |
 | P04 Design Tokens | PARTIAL | Foundation exists; global/reference audit pending. |
 | P05 Motion Baseline | NOT STARTED | No accepted full shared motion/reduced-motion phase yet. |
@@ -433,12 +436,12 @@ The granular `phases.md` was introduced after the existing auth foundation was w
 | P16 Chef Email Sign-In | PARTIAL / implemented | Shared role-aware email flow exists; reference-specific acceptance pending. |
 | P17 OTP | PARTIAL / implemented | Verification/resend behavior exists; granular acceptance audit pending. |
 | P18 Password Recovery | PARTIAL / implemented | Recovery screens/service exist; acceptance audit pending. |
-| P19 Firebase→CRAVES Exchange | PARTIAL / implemented | Auth exchange code exists; full contract inventory must reconfirm. |
-| P20 Session Restore/Refresh | PARTIAL / implemented | Session manager/bootstrap exists. |
-| P21 Identity/Role Resolution | PARTIAL / implemented | `/me` and account routing exist; full role shell not yet connected. |
-| P22 Customer Registration | PARTIAL / implemented | Auth-time profile completion exists. |
-| P23 Chef Application Status | PARTIAL / implemented | Auth-time application/status exists. |
-| P24 Logout Cleanup | PARTIAL / implemented | Auth/local cleanup exists; full cross-feature cache cleanup cannot be complete until those features exist. |
+| P19 Firebase→CRAVES Exchange | PARTIAL / implemented | Auth exchange code exists; P02 classifies the corresponding current contract as `CONTRACT_ONLY`, so later runtime completion still requires aligned backend/APIM evidence. |
+| P20 Session Restore/Refresh | PARTIAL / implemented | Session manager/bootstrap exists; P02 records the refresh route as `CONTRACT_ONLY`. |
+| P21 Identity/Role Resolution | PARTIAL / implemented | `/me` and account routing code exist; P02 classifies the exact `/api/v1/auth/me` contract as `BLOCKED`. |
+| P22 Customer Registration | PARTIAL / implemented | Auth-time profile completion code exists; P02 classifies customer profile GET/PUT contracts as `BLOCKED`. |
+| P23 Chef Application Status | PARTIAL / implemented | Auth-time application/status code exists; P02 classifies chef application GET/POST contracts as `BLOCKED`. |
+| P24 Logout Cleanup | PARTIAL / implemented | Auth/local cleanup exists; P02 records the logout route as `CONTRACT_ONLY`; full cross-feature cache cleanup cannot be complete until those features exist. |
 | P25 onward | NOT STARTED | Product marketplace/customer/chef experiences have not been accepted under this rebuild protocol. |
 
 A future phase may upgrade an existing `PARTIAL` item to `DONE` by auditing it against the exact guide reference/contracts and completing any missing tests/behavior. Do not rewrite already-correct code merely to make the status label change.
@@ -449,7 +452,8 @@ A future phase may upgrade an existing `PARTIAL` item to `DONE` by auditing it a
 
 The following must **not** be described as complete at this point:
 
-- P02 full APIM/OpenAPI contract inventory,
+- runtime/backend/APIM resolution of the `CONTRACT_ONLY` and `BLOCKED` routes identified by P02,
+- restoration/approval of the missing authoritative full APIM/OpenAPI contract,
 - Customer Home refs 5/6,
 - Discover Chefs refs 7/8,
 - Orders refs 9/10 and order child flows,
@@ -542,10 +546,30 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 - Blockers: none.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
+### P02 — APIM/OpenAPI Contract Inventory
+
+- Status: **DONE**
+- Started from commit: `5b40ca380f6a8e0a6d3f0ddd9fa6cf262ac3787f`
+- Inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`
+- Guide references: global API/integration/authentication/state/validation rules only; no screen reference was implemented.
+- Changed files: `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`, `build.md`.
+- APIM/contracts used: current mobile consumers under `apps/mobile/src/**`; current backend evidence under `apps/api/**`; APIM evidence under `infra/apim/**`; `docs/CRV-AUTH-001-auth-service-LLD.md`; `main` used only as reference where expected paths were absent.
+- Behavior completed: **No product behavior changed.** All 8 currently consumed mobile HTTP operations were inventoried with method/path, contract/backend/APIM evidence, auth expectation, route-key expectation, status, and mitigation.
+- Classification: **0 `VERIFIED`, 3 `CONTRACT_ONLY`, 5 `BLOCKED`**. P02 makes no runtime-verification claim.
+- Key gaps recorded: missing `infra/apim/full/openapi.yaml`; expected `backend/functions/src/functions/**`, `mobile/src/services/api/**`, and `infra/apim/policies/**` layouts do not match current repository layout; mobile `/api/v1/...` vs current Express `/api/auth/...` auth path mismatch; refresh/logout backend handlers are `501` stubs; `/auth/me`, customer profile, and exact chef application operation evidence is incomplete; chef APIM policy contains placeholder backend/function-key values.
+- Route-key result: no client route key/subscription key requirement was found for the 8 consumed operations; the Chef APIM template's downstream `x-functions-key` injection is not treated as a mobile route key.
+- Tests/checks: static repository audit and cross-branch reference checks only. No API runtime calls, device tests, APK build, or new product CI run were performed or claimed because P02 changed documentation only.
+- Visual QA: not applicable; no UI changed.
+- APK built: **No**.
+- Backend/APIM/infrastructure code changed: **No**.
+- Product source changed: **No**.
+- Blockers: unresolved API contracts remain explicitly recorded in the P02 inventory; they do not invalidate completion of the inventory phase.
+- Next phase: **NONE AUTHORIZED — waiting for user**.
+
 ---
 
 ## 12. Current Next Step
 
 **Stop here.**
 
-P01 is complete. P02 — APIM/OpenAPI Contract Inventory is the next phase in `phases.md`, but it is **not authorized** by completion of P01. Begin P02 only after the user explicitly says to continue/start the next phase.
+P02 is complete. P03 — Runtime Configuration and Environment Boundary is the next phase in `phases.md`, but it is **not authorized** by completion of P02. Begin P03 only after the user explicitly says to continue/start the next phase.

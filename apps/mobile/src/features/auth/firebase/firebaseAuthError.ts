@@ -77,3 +77,38 @@ export function mapFirebaseAuthError(error: unknown): AppApiError {
 
   return new AppApiError('FIREBASE_AUTH_FAILED', 'Authentication could not be completed.');
 }
+
+/**
+ * Password recovery must never reveal whether an email is registered, disabled,
+ * or otherwise account-specific. A null result means the caller should complete
+ * the same neutral success path used for a successful provider request.
+ */
+export function mapPasswordRecoveryFirebaseError(error: unknown): AppApiError | null {
+  const mapped = mapFirebaseAuthError(error);
+
+  if (mapped.code === 'INVALID_CREDENTIALS' || mapped.code === 'ACCOUNT_DISABLED') {
+    return null;
+  }
+
+  if (mapped.code === 'OTP_RATE_LIMITED') {
+    return new AppApiError(
+      'PASSWORD_RECOVERY_RATE_LIMITED',
+      'Too many password recovery requests. Please wait before trying again.',
+      undefined,
+      undefined,
+      true,
+    );
+  }
+
+  if (mapped.code === 'NETWORK_ERROR') {
+    return mapped;
+  }
+
+  return new AppApiError(
+    'PASSWORD_RECOVERY_FAILED',
+    'We could not process password recovery right now. Please try again.',
+    undefined,
+    undefined,
+    true,
+  );
+}

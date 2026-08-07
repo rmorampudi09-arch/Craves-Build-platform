@@ -1,3 +1,4 @@
+import {AppApiError} from '../../../core/http/apiError';
 import {publicApiClient} from '../../../core/http/transport';
 import {refreshTokenStore} from '../../../core/security/refreshTokenStore';
 import {tokenMemory} from '../../../core/security/tokenMemory';
@@ -148,19 +149,83 @@ describe('sessionManager', () => {
     expect(saveMock).toHaveBeenCalledTimes(1);
   });
 
-  it('clears local credentials when refresh rotation fails', async () => {
+  it('clears and invalidates a backend-rejected refresh credential', async () => {
     tokenMemory.set('stale-access-token', 900);
+    loadMock.mockResolvedValue({
+      refreshToken: 'rejected-refresh-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    postMock.mockRejectedValueOnce(
+      new AppApiError(
+        'INVALID_REFRESH_TOKEN',
+        'Your session could not be verified. Please sign in again.',
+        401,
+      ),
+    );
+    const listener = jest.fn();
+    const unsubscribe = sessionManager.subscribeInvalidation(listener);
+
+    await expect(sessionManager.refresh()).resolves.toBeNull();
+
+    expect(tokenMemory.get()).toBeNull();
+    expect(clearMock).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith('rejected_refresh_credential');
+    unsubscribe();
+  });
+
+  it('preserves the saved refresh credential after a transient refresh failure', async () => {
+    tokenMemory.set('still-usable-access-token', 900);
+    loadMock.mockResolvedValue({
+      refreshToken: 'saved-refresh-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    const networkError = new AppApiError(
+      'NETWORK_ERROR',
+      'We could not reach Craves. Check your connection and try again.',
+      undefined,
+      undefined,
+      true,
+    );
+    postMock.mockRejectedValueOnce(networkError);
+
+    await expect(sessionManager.refresh()).rejects.toBe(networkError);
+
+    expect(clearMock).not.toHaveBeenCalled();
+    expect(tokenMemory.get()).toBe('still-usable-access-token');
+  });
+
+  it('invalidates an authenticated runtime session that has no refresh credential', async () => {
+    tokenMemory.set('access-token', 900);
+    loadMock.mockResolvedValue(null);
+    const listener = jest.fn();
+    const unsubscribe = sessionManager.subscribeInvalidation(listener);
+
+    await expect(sessionManager.refresh()).resolves.toBeNull();
+
+    expect(tokenMemory.get()).toBeNull();
+    expect(listener).toHaveBeenCalledWith('missing_refresh_credential');
+    unsubscribe();
+  });
+
+  it('invalidates when rotated refresh state cannot be persisted', async () => {
     loadMock.mockResolvedValue({
       refreshToken: 'old-refresh-token',
       expiresAt: '2099-01-01T00:00:00.000Z',
     });
-    const refreshError = new Error('refresh failed');
-    postMock.mockRejectedValueOnce(refreshError);
+    postMock.mockResolvedValue({
+      data: createTokenPair('new-access-token', 'new-refresh-token'),
+    });
+    const persistenceError = new Error('secure-store unavailable');
+    saveMock.mockRejectedValueOnce(persistenceError);
+    const listener = jest.fn();
+    const unsubscribe = sessionManager.subscribeInvalidation(listener);
 
-    await expect(sessionManager.refresh()).rejects.toBe(refreshError);
+    await expect(sessionManager.refresh()).rejects.toBe(persistenceError);
 
     expect(tokenMemory.get()).toBeNull();
     expect(clearMock).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith('refresh_persistence_failed');
+    unsubscribe();
   });
 
   it('clears memory and secure refresh state on local logout cleanup', async () => {

@@ -15,6 +15,7 @@ describe('tokenMemory', () => {
     tokenMemory.clear();
     expect(tokenMemory.get()).toBeNull();
     expect(tokenMemory.isFresh()).toBe(false);
+    expect(tokenMemory.millisecondsUntilRefresh()).toBeNull();
   });
 
   it('marks the token stale before server expiry using the safety window', () => {
@@ -23,15 +24,25 @@ describe('tokenMemory', () => {
 
     tokenMemory.set('access-token', 60);
     expect(tokenMemory.isFresh()).toBe(true);
+    expect(tokenMemory.millisecondsUntilRefresh()).toBe(30_000);
 
     nowSpy.mockReturnValue(now + 31_000);
     expect(tokenMemory.isFresh()).toBe(false);
+    expect(tokenMemory.millisecondsUntilRefresh()).toBe(0);
   });
 
-  it('treats short-lived tokens as immediately stale while retaining no persisted copy', () => {
+  it('treats short-lived tokens as immediately due for silent refresh', () => {
     tokenMemory.set('short-token', 20);
 
     expect(tokenMemory.get()).toBe('short-token');
     expect(tokenMemory.isFresh()).toBe(false);
+    expect(tokenMemory.millisecondsUntilRefresh()).toBe(0);
+  });
+
+  it('treats invalid lifetime metadata as immediately due for refresh', () => {
+    tokenMemory.set('invalid-lifetime-token', Number.NaN);
+
+    expect(tokenMemory.isFresh()).toBe(false);
+    expect(tokenMemory.millisecondsUntilRefresh()).toBe(0);
   });
 });

@@ -61,7 +61,7 @@ function createTokenPair(): AuthTokenResponse {
   };
 }
 
-describe('authService P19 Firebase to CRAVES exchange', () => {
+describe('authService Firebase to CRAVES exchange and restore cleanup', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     acceptTokenPairMock.mockResolvedValue(undefined);
@@ -140,6 +140,15 @@ describe('authService P19 Firebase to CRAVES exchange', () => {
     await expect(
       authService.emailLogin('person@example.com', 'password'),
     ).rejects.toMatchObject({code: 'PHONE_VERIFICATION_REQUIRED'});
+
+    expect(clearLocalMock).toHaveBeenCalledTimes(1);
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards retained local authentication before leaving startup recovery', async () => {
+    clearLocalMock.mockRejectedValueOnce(new Error('secure-store unavailable'));
+
+    await expect(authService.discardRestoredSession()).resolves.toBeUndefined();
 
     expect(clearLocalMock).toHaveBeenCalledTimes(1);
     expect(signOutMock).toHaveBeenCalledTimes(1);

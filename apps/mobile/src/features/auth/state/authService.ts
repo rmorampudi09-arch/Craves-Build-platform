@@ -31,6 +31,9 @@ export const authService = {
       throw toAppApiError(error);
     }
   },
+  async discardRestoredSession(): Promise<void> {
+    await clearPartialAuthentication();
+  },
   async beginPhone(role: AuthRole, e164Phone: string): Promise<{role: AuthRole; phone: string}> {
     try {
       await firebaseAuth.beginPhoneSignIn(e164Phone);
@@ -82,7 +85,7 @@ export const authService = {
     } catch {
       // Remote revocation is best-effort on logout; local credentials are always cleared below.
     } finally {
-      await Promise.allSettled([sessionManager.clearLocal(), firebaseAuth.signOut()]);
+      await clearPartialAuthentication();
     }
   },
 };

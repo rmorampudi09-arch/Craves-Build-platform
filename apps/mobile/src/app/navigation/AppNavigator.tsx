@@ -4,6 +4,7 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import type {RootStackParamList} from './types';
 import {useAppSelector} from '../store/hooks';
 import {useBootstrap} from '../../features/auth/hooks/useBootstrap';
+import {useSessionLifecycle} from '../../features/auth/hooks/useSessionLifecycle';
 import {SplashScreen} from '../../features/auth/screens/SplashScreen';
 import {RoleSelectionScreen} from '../../features/auth/screens/RoleSelectionScreen';
 import {PhoneSignInScreen} from '../../features/auth/screens/PhoneSignInScreen';
@@ -62,6 +63,7 @@ function ChefAccountNavigator() {
 
 export function AppNavigator() {
   const status = useBootstrap();
+  useSessionLifecycle();
   const auth = useAppSelector(state => state.auth);
 
   if (status === 'idle' || status === 'restoring') {

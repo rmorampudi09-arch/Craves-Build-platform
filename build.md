@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P24 have dedicated evidence under `docs/mobile-ui-rebuild/`; prior phase details remain there when this living ledger is compacted.
+**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P25 have dedicated evidence under `docs/mobile-ui-rebuild/`; prior phase details remain there when this living ledger is compacted.
 
 ---
 
@@ -45,20 +45,22 @@
 - **P22 — Customer Registration/Profile Completion: DONE** at implementation/static-contract level.
 - **P23 — Chef Application Submission / Status: DONE** at implementation/static-contract level.
 - **P24 — Logout, Revoke, and Role-State Cleanup: DONE** at implementation/static-contract level.
+- **P25 — Customer Root Shell and Bottom Tabs: DONE** at implementation/static-navigation level; later Customer product screens remain unaccepted until their owning phases.
 
-P24 completion evidence:
+P25 completion evidence:
 
-- Started from commit: `f3c165071f47a95c9cb0dda3a97c270d5d53c447`.
-- Validated implementation commit: `4fab42f9184ffda34121adf2f8331247d946a79f`.
-- Evidence commit: `8836009e0218f028713ce486d72c77a651c0b21b`.
-- Evidence: `docs/mobile-ui-rebuild/P24_LOGOUT_REVOKE_ROLE_STATE_CLEANUP.md`.
-- CI run: `31225688358` — **SUCCESS**.
+- Started from commit: `85545d24c8f05a88ad2b7f7cffcaa6fe08438bfb`.
+- Initial implementation commit: `40d31af0b8ac9045b9031991b041ddac4a85d153`.
+- Validated implementation commit: `f3b6f9458f2c5e42c58989dbe6115fd382102f85`.
+- Evidence commit: `9933e62208e7855d7672af5a211738cfa151a235`.
+- Evidence: `docs/mobile-ui-rebuild/P25_CUSTOMER_ROOT_SHELL_BOTTOM_TABS.md`.
+- CI run: `31226669633` — **SUCCESS**.
 
-**Next phase in sequence:** **P25 — Customer Root Shell and Bottom Tabs**.
+**Next phase in sequence:** **P26 — Customer Bottom-Nav Scroll Hide/Reveal**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P25 until the user explicitly authorizes the next phase.
+**Required action:** Stop. Do not pre-implement P26 until the user explicitly authorizes the next phase.
 
 ---
 
@@ -68,9 +70,9 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31225688358`
-- Head SHA: `4fab42f9184ffda34121adf2f8331247d946a79f`
-- Phase: **P24 — Logout, Revoke, and Role-State Cleanup**
+- GitHub Actions run ID: `31226669633`
+- Head SHA: `f3b6f9458f2c5e42c58989dbe6115fd382102f85`
+- Phase: **P25 — Customer Root Shell and Bottom Tabs**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -80,60 +82,68 @@ Successful checks:
 3. `npm ci`,
 4. strict TypeScript (`tsc --noEmit`),
 5. ESLint with zero warnings,
-6. Jest including focused P24 logout/revoke/cache/role-state tests and prior regressions,
+6. Jest including focused P25 customer-tab/navigation-policy tests and prior regressions,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
+
+The initial P25 run `31226522662` failed only because ESLint correctly rejected an inline tab-icon renderer with `react/no-unstable-nested-components`. The final implementation moved those renderers to stable module-level functions and the complete validation suite then passed.
 
 This workflow intentionally does **not** perform Java/Gradle/APK packaging. That remains the implementation-phase policy.
 
 ---
 
-## 3. P24 Accepted Logout Boundary
+## 3. P25 Accepted Customer Shell Boundary
 
-P24 accepts this bounded flow:
+P25 accepts this bounded transition:
 
-`authenticated Customer/Chef state` → best-effort `POST /api/v1/auth/logout` using the stored refresh credential → unconditional local CRAVES credential cleanup → Firebase provider sign-out → private TanStack Query cleanup → mutation-state cleanup → Redux auth/role reset → authenticated navigator subtree unmounted → fresh anonymous Auth root.
+`authenticated Customer + backend-resolved READY onboarding state` → existing authenticated root gate → `CustomerRootNavigator` → typed **Home / Chefs / Orders / Profile** bottom tabs → independent typed native stack per tab.
 
 Accepted behavior:
 
-- Remote revoke failure, timeout, or offline state cannot block local logout.
-- Access/session material continues to use the P10 ownership model: access token in process memory and refresh credential in encrypted secure storage.
-- Existing `authApi.logout()` remains the exact API wrapper. No endpoint or payload was invented.
-- `authService.logout()` remains the provider/session cleanup boundary and always performs local cleanup after the best-effort remote call.
-- `logoutCoordinator.ts` is the single app-state cleanup path used by the current Customer and Chef sign-out controls.
-- Private queries are canceled and removed; removal still executes if cancellation rejects.
-- Pending/retained mutation-cache state is cleared on logout.
-- If targeted private-query cleanup cannot finish, logout fails closed by discarding the broader query cache rather than retaining private server state.
-- Public query data can remain only when targeted private cleanup succeeds.
-- `signedOut` clears identity, account resolution, error state, and resets prior Chef role intent to the anonymous Customer default.
-- Existing `AppNavigator` root gating unmounts the authenticated navigator when `signedOut` is dispatched. Android Back therefore cannot return to the old authenticated stack.
+- The existing single `NavigationContainer` remains authoritative; no parallel navigation system was added.
+- A Customer whose onboarding status is `PROFILE_REQUIRED` remains in the existing registration flow.
+- A Customer whose onboarding status is `READY` enters the Customer shell.
+- Home, Chefs, Orders, and Profile are typed bottom-tab routes in the required order.
+- Each tab owns an independent typed native stack so later product child routes can be added without resetting sibling tab state.
+- `popToTopOnBlur` remains disabled, preserving each tab stack across tab changes.
+- Active-tab tint uses shared Flame Red `#F62E18`; inactive tint uses the shared muted-text token.
+- The shell remains under the existing `SafeAreaProvider`; the tab bar does not impose a fixed bottom offset or fixed height that would bypass Android navigation/gesture insets.
+- The tab bar hides for the keyboard/IME.
+- Customer tab routes resolve to the non-immersive Customer chrome policy while authentication/account-resolution routes remain immersive.
+- Existing shared icon infrastructure was extended with Home and Orders icons rather than creating a second icon system.
+- P26 scroll-driven hide/reveal behavior was **not** implemented.
 
-No parallel navigation reset, auth service, store, token mechanism, or query architecture was introduced.
+### Product-screen boundary
+
+P25 does **not** accept Customer Home, Chefs discovery, My Orders, or Customer Profile as completed product/reference screens. Until their owning phases replace these roots, each tab stack reuses the already-accepted `CustomerAccountStatusScreen` with its real P24 logout path. This avoids fake marketplace data, empty handlers, or falsely claiming later reference screens as complete.
+
+No View Cart/cart domain, discovery/catalog data, orders domain, profile product UI, transactional flows, or Chef product shell was introduced.
 
 ---
 
-## 4. P24 Changed Files
+## 4. P25 Changed Files
 
-Validated P24 implementation changes are limited to:
+Validated P25 implementation changes are limited to:
 
-- `apps/mobile/src/app/query/queryCache.ts`
+- `apps/mobile/src/app/navigation/AppNavigator.tsx`
+- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
+- `apps/mobile/src/app/navigation/customerTabs.ts`
+- `apps/mobile/src/app/navigation/customerTabs.test.ts`
+- `apps/mobile/src/app/navigation/navigationPolicy.ts`
+- `apps/mobile/src/app/navigation/navigationPolicy.test.ts`
+- `apps/mobile/src/app/navigation/types.ts`
 - `apps/mobile/src/features/auth/screens/CustomerAccountStatusScreen.tsx`
-- `apps/mobile/src/features/auth/screens/ChefAccountStatusScreen.tsx`
-- `apps/mobile/src/features/auth/state/authSlice.ts`
-- `apps/mobile/src/features/auth/state/logoutCoordinator.ts`
-- `apps/mobile/src/features/auth/state/logoutCoordinator.test.ts`
-- `apps/mobile/src/features/auth/state/authLogout.test.ts`
-- `apps/mobile/src/features/auth/state/logoutState.test.ts`
+- `apps/mobile/src/shared/components/Icon.tsx`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P24_LOGOUT_REVOKE_ROLE_STATE_CLEANUP.md`
+- `docs/mobile-ui-rebuild/P25_CUSTOMER_ROOT_SHELL_BOTTOM_TABS.md`
 
-No backend, OpenAPI, APIM, infrastructure, Android native build configuration, Customer product shell, bottom tabs, cart/product domain, Chef operational product UI, or P25+ behavior was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, or P26+ behavior was changed.
 
 ---
 
-## 5. Current Architecture Ownership After P24
+## 5. Current Architecture Ownership After P25
 
 ### Authentication/session
 
@@ -151,32 +161,39 @@ No backend, OpenAPI, APIM, infrastructure, Android native build configuration, C
 
 - Redux auth state owns requested role, authenticated identity, and onboarding/account resolution.
 - TanStack Query owns server state; private cache cleanup remains centralized through `app/query/queryCache.ts`.
-- P24 clears private query data and mutation state before completing anonymous-root transition.
-- Root navigation remains conditional on `auth.bootstrapStatus`; no stale authenticated navigator is retained after `signedOut`.
+- Root navigation remains conditional on `auth.bootstrapStatus`; logout still unmounts the authenticated navigator subtree.
+- P25 adds one Customer bottom-tab navigator inside the existing root navigation container.
+- Home, Chefs, Orders, and Profile each own a nested typed native stack and preserve stack state on tab changes.
+- Product routes are added to those stacks only by their owning later phases.
 
 ### Account/onboarding authority
 
 - P21 account resolution remains authoritative for Customer/Chef authorization.
 - P22 Customer profile completion and P23 Chef application/status behavior remain unchanged.
-- P24 does not alter backend role authority; it only removes local role/session/private state on logout.
+- `CUSTOMER + READY` now routes to the P25 Customer shell; `CUSTOMER + PROFILE_REQUIRED` remains in registration.
+- Chef routing remains unchanged by P25.
 
 ### Later-phase boundaries
 
-- **P25 onward** owns customer/chef product shells and marketplace functionality.
-- Chef KYC proof upload remains outside the accepted auth/onboarding/logout phases.
-- Later customer profile product-screen phases own the full Customer Profile/Edit Profile references.
+- **P26** owns Customer bottom-navigation scroll hide/reveal behavior.
+- Later Customer phases own Home, Chefs discovery, Orders, Profile and their real API-backed product compositions.
+- Chef KYC proof upload and Chef operational/product screens remain outside P25.
 
 ---
 
-## 6. Current Auth / Onboarding Contract Status
+## 6. Current Contract Status
 
-- `POST /api/v1/auth/firebase/exchange` — accepted by P19 at static repository contract/implementation level.
-- `POST /api/v1/auth/refresh` — accepted by P20 at static repository contract/implementation level.
-- `GET /api/v1/auth/me` — accepted by P21 and reused as Chef approval authority in P23.
-- `GET /api/v1/customer/profile` / `PUT /api/v1/customer/profile` — accepted by P21/P22 at current static implementation level.
-- `GET /api/v1/chef/application` / `POST /api/v1/chef/application` — accepted by P23 at current static implementation level.
-- `POST /api/v1/auth/logout` — **accepted by P24** as best-effort remote refresh-session revocation before unconditional local cleanup.
-- `POST /api/v1/chef/application/proof-files` — backend route exists but remains outside P23/P24 acceptance.
+Authentication/profile/onboarding contracts accepted before P25 remain unchanged:
+
+- `POST /api/v1/auth/firebase/exchange` — P19.
+- `POST /api/v1/auth/refresh` — P20.
+- `GET /api/v1/auth/me` — P21/P23 authority.
+- `GET /api/v1/customer/profile` / `PUT /api/v1/customer/profile` — P21/P22.
+- `GET /api/v1/chef/application` / `POST /api/v1/chef/application` — P23.
+- `POST /api/v1/auth/logout` — P24.
+- `POST /api/v1/chef/application/proof-files` — backend route exists but remains outside accepted P23–P25 behavior.
+
+**P25 uses no new APIM/backend contract.** It is a navigation-shell phase only.
 
 Live APIM/device runtime certification is not claimed by these static implementation phases unless a later evidence record explicitly says so.
 
@@ -193,21 +210,23 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P22 Customer Registration/Profile Completion | **DONE** | Exact profile completion and server-confirmed state transition; CI `31221757744`. |
 | P23 Chef Application Submission / Status | **DONE** | Backend-driven application/status flow and approved-role recheck; CI `31222819644`. |
 | P24 Logout/Revoke/Role-State Cleanup | **DONE** | Best-effort revoke, unconditional local credential cleanup, private cache/mutation cleanup, role reset, fresh Auth root; CI `31225688358`. |
-| P25 onward | **NOT STARTED / not accepted** | No later product phase is authorized by this record. |
+| P25 Customer Root Shell/Bottom Tabs | **DONE** | Typed four-tab Customer shell, nested stack preservation, Flame Red active state, safe-area-compatible bottom tabs; CI `31226669633`. |
+| P26 onward | **NOT STARTED / not accepted** | No later phase is authorized by this record. |
 
 ---
 
-## 8. Explicitly Not Complete After P24
+## 8. Explicitly Not Complete After P25
 
 Do not describe any of the following as complete:
 
-- P25 Customer root shell/bottom tabs or later customer product phases,
+- P26 Customer bottom-nav scroll hide/reveal,
+- Customer Home/Discovery/Chefs/Orders/Profile product screens merely because the P25 tab shell now exists,
+- authoritative cart/View Cart/cart synchronization,
 - Chef KYC proof-file upload,
 - Chef operational/product screens,
-- authoritative cart/View Cart/cart synchronization,
 - authenticated product/resource deep links and notification routing,
 - checkout/payment end-to-end flow,
-- live APIM/device runtime certification of P19–P24 auth/profile/onboarding/logout operations,
+- live APIM/device runtime certification of P19–P25 flows,
 - physical-device pixel-perfect certification of accepted auth references or remaining references,
 - full lifecycle/accessibility/performance/security audits,
 - 52-reference visual certification,

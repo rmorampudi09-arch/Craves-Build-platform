@@ -87,9 +87,7 @@ export function PhoneSignInScreen({navigation, route}: Props) {
           accessibilityLabel="Phone number"
           disabled={busy}
           error={validationError}
-          onSubmitEditing={() => {
-            void submit();
-          }}
+          onSubmitEditing={submit}
         />
         {requestError ? (
           <Text accessibilityRole="alert" style={styles.requestError}>

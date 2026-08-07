@@ -21,12 +21,15 @@ describe('customerBottomNavScroll', () => {
     let state = createCustomerBottomNavScrollState();
 
     state = reduceCustomerBottomNavScroll(state, 9);
-    state = reduceCustomerBottomNavScroll(state, 14);
+    state = reduceCustomerBottomNavScroll(
+      state,
+      CUSTOMER_BOTTOM_NAV_DIRECTION_THRESHOLD - 1,
+    );
     expect(state.visibility).toBe('visible');
 
     state = reduceCustomerBottomNavScroll(
       state,
-      9 + CUSTOMER_BOTTOM_NAV_DIRECTION_THRESHOLD,
+      CUSTOMER_BOTTOM_NAV_DIRECTION_THRESHOLD,
     );
     expect(state.visibility).toBe('hidden');
     expect(state.direction).toBe('down');

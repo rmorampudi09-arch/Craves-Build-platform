@@ -1,14 +1,17 @@
 import {
-  ArrowRight,
   ChefHat,
+  Heart,
+  House,
   MapPin,
   Menu,
-  ShieldCheck,
   Sparkles,
+  Truck,
   X,
 } from "lucide-react";
 import { useState } from "react";
+
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import styles from "@/screens/public/LandingPage/LandingV2.module.css";
 
 interface HeroSectionProps {
   locationLabel: string;
@@ -18,12 +21,32 @@ interface HeroSectionProps {
 }
 
 const links = [
-  { href: "#why-craves", label: "Why Craves" },
   { href: "#how-it-works", label: "How it works" },
-  { href: "#become-a-chef", label: "Become a chef" },
+  { href: "#why-craves", label: "Our mission" },
+  { href: "#become-a-chef", label: "For chefs" },
 ] as const;
 
-/** Public landing hero. Business records are never fabricated on this surface. */
+function Sticker({
+  className,
+  icon: Icon,
+  label,
+}: {
+  className: string;
+  icon: typeof Heart;
+  label: string;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`${styles.sticker} absolute hidden items-center gap-2 rounded-2xl px-4 py-3 text-xs font-semibold text-[#111111] lg:flex ${className}`}
+    >
+      <Icon className="h-5 w-5 text-[#F62E18]" strokeWidth={1.8} />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/** Public landing hero. Authentication and location flows remain backend-connected. */
 export function HeroSection({
   locationLabel,
   onOpenLocation,
@@ -33,54 +56,55 @@ export function HeroSection({
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <section className="relative isolate overflow-hidden bg-white text-black">
-      <header className="relative z-30 border-b border-border bg-white/95 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-20 max-w-7xl items-center gap-4 px-4 md:px-6">
-          <a href="#top" className="flex items-center gap-3" aria-label="Craves home">
+    <section className="relative isolate overflow-hidden bg-white text-[#111111]">
+      <header className="relative z-40 border-b border-[#E6E8EA] bg-white/95 backdrop-blur-xl">
+        <div className="mx-auto flex min-h-[5.75rem] max-w-7xl items-center gap-4 px-4 md:px-6">
+          <a href="#top" aria-label="Craves home" className="shrink-0">
             <CravesLogo size="md" priority />
-            <span className="hidden sm:block">
-              <span className="block font-display text-xl font-bold tracking-[-0.04em] text-black">
-                Craves
-              </span>
-              <span className="block text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-black/60">
-                Food from home
-              </span>
-            </span>
           </a>
 
-          <nav className="ml-auto hidden items-center gap-8 lg:flex" aria-label="Public navigation">
+          <nav
+            className="ml-auto hidden items-center gap-8 lg:flex"
+            aria-label="Public navigation"
+          >
             {links.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
-                className="min-h-11 content-center text-sm font-semibold text-black/75 transition-colors hover:text-[#C92716]"
+                className="text-sm font-semibold text-[#111111] transition-colors hover:text-[#F62E18]"
               >
                 {link.label}
               </a>
             ))}
           </nav>
 
-          <div className="ml-auto hidden items-center gap-3 sm:flex lg:ml-5">
+          <div className="ml-auto hidden items-center gap-2 sm:flex lg:ml-5">
+            <a
+              href="#download-app"
+              className={`${styles.secondaryCta} inline-flex min-h-11 items-center justify-center px-5 text-sm font-semibold`}
+            >
+              Get the app
+            </a>
             <button
               type="button"
               onClick={() => onOpenAuth("login")}
-              className="min-h-11 rounded-lg border px-4 text-sm"
+              className={`${styles.textButton} min-h-11 px-3 text-sm font-semibold`}
             >
               Sign in
             </button>
             <button
               type="button"
               onClick={() => onOpenAuth("register")}
-              className="btn-primary min-h-11 px-5"
+              className={`${styles.primaryCta} min-h-11 px-5 text-sm font-semibold`}
             >
-              Create account
+              Order now
             </button>
           </div>
 
           <button
             type="button"
             onClick={() => setMenuOpen((open) => !open)}
-            className="ml-auto flex h-11 w-11 items-center justify-center rounded-lg border sm:hidden"
+            className={`${styles.secondaryCta} ml-auto flex h-11 w-11 items-center justify-center p-0 sm:hidden`}
             aria-label={menuOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={menuOpen}
           >
@@ -89,32 +113,48 @@ export function HeroSection({
         </div>
 
         {menuOpen && (
-          <nav className="border-t border-border bg-white px-4 py-4 sm:hidden" aria-label="Mobile public navigation">
+          <nav
+            className="border-t border-[#E6E8EA] bg-white px-4 py-4 sm:hidden"
+            aria-label="Mobile public navigation"
+          >
             <div className="mx-auto grid max-w-7xl gap-2">
               {links.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
                   onClick={() => setMenuOpen(false)}
-                  className="min-h-11 rounded-lg px-3 py-3 text-sm font-semibold text-black hover:bg-grey-50"
+                  className="rounded-xl px-3 py-3 text-sm font-semibold text-[#111111] hover:bg-[#F6F7F8]"
                 >
                   {link.label}
                 </a>
               ))}
+              <a
+                href="#download-app"
+                onClick={() => setMenuOpen(false)}
+                className="rounded-xl px-3 py-3 text-sm font-semibold text-[#111111] hover:bg-[#F6F7F8]"
+              >
+                Get the app
+              </a>
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => onOpenAuth("login")}
-                  className="min-h-11 rounded-lg border text-sm"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenAuth("login");
+                  }}
+                  className={`${styles.secondaryCta} min-h-11 text-sm font-semibold`}
                 >
                   Sign in
                 </button>
                 <button
                   type="button"
-                  onClick={() => onOpenAuth("register")}
-                  className="btn-primary min-h-11"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenAuth("register");
+                  }}
+                  className={`${styles.primaryCta} min-h-11 text-sm font-semibold`}
                 >
-                  Join Craves
+                  Order now
                 </button>
               </div>
             </div>
@@ -122,83 +162,103 @@ export function HeroSection({
         )}
       </header>
 
-      <div id="top" className="relative min-h-[42rem] overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-70"
-          style={{
-            backgroundImage:
-              "url('/landing/craves-chef-hero-reference.jpg')",
-          }}
-          aria-hidden="true"
-        />
-        <div className="absolute inset-0 bg-white/60" aria-hidden="true" />
+      <div id="top" className="relative min-h-[46rem] overflow-hidden bg-white">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-5 select-none text-center font-display text-[clamp(8rem,24vw,22rem)] font-bold leading-none tracking-[-0.08em]"
-          style={{ color: "rgba(246, 46, 24, 0.08)" }}
+          className="pointer-events-none absolute left-1/2 top-[9rem] -translate-x-1/2 select-none whitespace-nowrap font-display text-[clamp(8rem,22vw,20rem)] font-bold leading-none tracking-[-0.08em] text-[#F62E18]/[0.04]"
         >
           craves
         </div>
 
-        <div className="relative z-10 mx-auto grid min-h-[42rem] max-w-7xl items-center px-4 py-16 md:px-6 lg:grid-cols-[minmax(0,42rem)_1fr] lg:py-24">
-          <div>
-            <p className="craves-overline flex items-center gap-2 text-[#C92716]">
-              <Sparkles className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-              Trusted home-chef marketplace
+        <div
+          aria-hidden="true"
+          className="absolute right-[5%] top-24 hidden grid-cols-3 gap-3 lg:grid"
+        >
+          {Array.from({ length: 9 }).map((_, index) => (
+            <span key={index} className="h-1.5 w-1.5 rounded-full bg-[#F62E18]/70" />
+          ))}
+        </div>
+        <Sparkles
+          aria-hidden="true"
+          className="absolute right-[13%] top-44 hidden h-8 w-8 text-[#F62E18] lg:block"
+        />
+
+        <Sticker
+          className="right-[18%] top-20 -rotate-3"
+          icon={ChefHat}
+          label="Made with love"
+        />
+        <Sticker
+          className="right-[10%] top-[31rem] rotate-3"
+          icon={Truck}
+          label="From chef to door"
+        />
+        <Sticker
+          className="right-[23%] top-[24rem] -rotate-2"
+          icon={House}
+          label="Home cooked happiness"
+        />
+
+        <div className="relative z-10 mx-auto flex min-h-[40rem] max-w-7xl items-center px-4 pb-32 pt-16 md:px-6 lg:pb-36 lg:pt-20">
+          <div className="max-w-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#F62E18]">
+              Hyderabad • food from home
             </p>
-            <h1 className="mt-5 max-w-3xl font-display text-5xl font-bold leading-[1.04] tracking-[-0.055em] text-black md:text-6xl lg:text-7xl">
-              Homemade food,
-              <span className="block text-[#C92716]">closer than you think.</span>
+            <h1 className="mt-5 font-display text-5xl font-bold leading-[1.02] tracking-[-0.055em] text-[#111111] md:text-7xl lg:text-[5rem]">
+              Good food.
+              <span className="block">Real impact.</span>
             </h1>
-            <p className="mt-6 max-w-2xl text-base leading-7 text-black/70 md:text-lg md:leading-8">
-              Discover active kitchens and available dishes around your saved delivery address. Every menu item, price and kitchen shown after sign-in comes from the Craves backend.
+            <p className="mt-7 max-w-xl text-base leading-7 text-[#6E7378] md:text-xl md:leading-8">
+              Every order supports a home chef and their family. Discover real,
+              home-cooked meals made by people in your community — fresh,
+              personal and delivered with care.
             </p>
 
-            <div className="mt-8 flex max-w-xl flex-col gap-3 rounded-2xl border border-grey-200 bg-white/90 p-3 shadow-[var(--shadow-card)] sm:flex-row">
+            <div className="mt-8 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={onOpenLocation}
-                className="flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-xl px-4 text-left text-sm"
+                onClick={() => onOpenAuth("login")}
+                className={`${styles.primaryCta} min-h-12 px-6 text-sm font-semibold`}
               >
-                <MapPin className="h-5 w-5 shrink-0 text-[#C92716]" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block text-[0.68rem] uppercase tracking-[0.08em] text-black/55">
-                    Delivery area
-                  </span>
-                  <span className="block truncate text-black">{locationLabel}</span>
-                </span>
+                Explore home chefs
               </button>
-              <button
-                type="button"
-                onClick={() => onOpenAuth("register")}
-                className="btn-primary min-h-12 shrink-0 px-6"
-              >
-                Start ordering <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-2">
-              <div className="flex items-start gap-3 rounded-xl border border-grey-200 bg-white/90 p-4 text-black shadow-[var(--shadow-card)]">
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#C92716]" aria-hidden="true" />
-                <div>
-                  <p className="text-sm font-semibold text-black">Phone-first secure access</p>
-                  <p className="mt-1 text-xs leading-5 text-black/65">Firebase OTP verifies the number; Craves controls roles and sessions.</p>
-                </div>
-              </div>
               <button
                 type="button"
                 onClick={onBecomeChef}
-                className="flex min-h-20 items-start gap-3 rounded-xl border border-grey-200 bg-white/90 p-4 text-left shadow-[var(--shadow-card)]"
+                className={`${styles.secondaryCta} min-h-12 px-6 text-sm font-semibold`}
               >
-                <ChefHat className="mt-0.5 h-5 w-5 shrink-0 text-[#C92716]" aria-hidden="true" />
-                <span>
-                  <span className="block text-sm text-black">Cook with Craves</span>
-                  <span className="mt-1 block text-xs leading-5 text-black/65">Apply as a home chef and continue after admin approval.</span>
-                </span>
+                Become a chef
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={onOpenLocation}
+              className={`${styles.secondaryCta} mt-5 inline-flex min-h-11 max-w-full items-center gap-3 px-4 text-left text-sm`}
+            >
+              <MapPin className="h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />
+              <span className="min-w-0 truncate">
+                Delivery location: <span className="font-semibold">{locationLabel}</span>
+              </span>
+            </button>
+
+            <p className="mt-5 text-xs font-medium text-[#6E7378]">
+              Made with love&nbsp;&nbsp;•&nbsp;&nbsp;From chef to door&nbsp;&nbsp;•&nbsp;&nbsp;Home cooked happiness
+            </p>
           </div>
         </div>
+
+        <svg
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-28 w-full"
+          viewBox="0 0 1440 120"
+          preserveAspectRatio="none"
+        >
+          <path
+            d="M0 46C250 118 410 8 690 54c290 48 430 15 750-28v94H0V46Z"
+            fill="#F6F7F8"
+          />
+        </svg>
       </div>
     </section>
   );

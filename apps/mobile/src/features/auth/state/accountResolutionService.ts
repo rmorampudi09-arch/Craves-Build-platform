@@ -57,17 +57,16 @@ async function resolveChef(identity: Identity): Promise<AccountResolution> {
   requireRole(identity, 'CUSTOMER');
   const application = await profileApi.getChefApplication();
   const hasChefRole = identity.roles.includes('CHEF');
-  const applicationApproved = application.status === 'APPROVED';
 
-  if (hasChefRole !== applicationApproved) {
-    throw new AppApiError(
-      'CHEF_AUTHORIZATION_STATUS_MISMATCH',
-      'We could not verify your Chef access. Please try again or contact Craves support.',
-      409,
-    );
-  }
+  if (application.status === 'APPROVED') {
+    if (!hasChefRole) {
+      throw new AppApiError(
+        'CHEF_AUTHORIZATION_STATUS_MISMATCH',
+        'We could not verify your Chef access. Please try again or contact Craves support.',
+        409,
+      );
+    }
 
-  if (hasChefRole) {
     requireRole(identity, 'CHEF');
     return {
       flow: 'CHEF',
@@ -75,6 +74,14 @@ async function resolveChef(identity: Identity): Promise<AccountResolution> {
       authorizedRole: 'CHEF',
       onboardingStatus: 'APPROVED',
     };
+  }
+
+  if (hasChefRole) {
+    throw new AppApiError(
+      'CHEF_AUTHORIZATION_STATUS_MISMATCH',
+      'We could not verify your Chef access. Please try again or contact Craves support.',
+      409,
+    );
   }
 
   return {

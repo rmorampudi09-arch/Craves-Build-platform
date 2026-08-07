@@ -26,6 +26,7 @@
 - **P05 — Shared Motion and Reduced-Motion Baseline: DONE**.
 - **P06 — Shared Interaction Primitives: DONE**.
 - **P07 — Shared Screen/Lifecycle Primitives: DONE**.
+- **P08 — Query/Store Provider and Cache Rules: DONE**.
 - P01 started from branch HEAD `64dfbd18820b2644ee0263d5fffcefbd62172dfe`.
 - P01 completion commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`.
 - P02 inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`.
@@ -50,11 +51,15 @@
 - P07 implementation completion commit: `4a55e1377e3e3dd2fee08a30b5d3e874d32c1680`.
 - P07 evidence: `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md` (artifact commit `db60cbf5670fc5ee9e273e8197a3a9cc3ef29ea0`).
 - P07 CI run: `31201252609` — **SUCCESS**.
-- Next phase in sequence: **P08 — Query/Store Provider and Cache Rules**.
+- P08 started from P07 record HEAD `6b41ad1f72b1d9723e7abe0f140ddf959cdc680c`.
+- P08 validated implementation completion commit: `c87828bf0d8378cd6dcd5738a36a4db2850d5d0c`.
+- P08 evidence: `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md` (artifact commit `4554112cf598a7ad660c1450bbb8a332bcf58163`).
+- P08 CI run: `31205887901` — **SUCCESS**.
+- Next phase in sequence: **P09 — Typed HTTP Client Foundation**.
 - Next phase authorization: **NONE AUTHORIZED**.
 - Required action: stop and wait for the user to explicitly start/continue the next phase.
 
-P07 establishes the shared cross-feature screen/lifecycle layer for runtime safe-area and keyboard-aware screens, section/list skeletons, recoverable/terminal/offline/permission states, retry actions, and a `ContentLifecycle` policy that keeps already-valid content mounted during safe background refresh. The auth `AuthShell` now consumes the shared `ScreenShell` rather than owning a duplicate shell implementation. No P08 cache-rule work, marketplace screen, API, backend/APIM, storage, or product flow was implemented.
+P08 keeps TanStack Query as the single server-state/cache layer and Redux Toolkit as the single global app-state layer, moves QueryClient construction/defaults into the dedicated application query boundary, establishes deterministic public/private contextual cache keys, provides scoped private-query cancellation/removal, and defines finite cache/paging conventions. No server collection was copied into Redux, no P09 HTTP behavior was changed, and no backend/APIM/infrastructure/product-screen work was introduced.
 
 ---
 
@@ -75,8 +80,8 @@ The rebuild diff from that baseline is confined to the new mobile application an
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
-- GitHub Actions run ID: `31201252609`
-- Head SHA: `4a55e1377e3e3dd2fee08a30b5d3e874d32c1680`
+- GitHub Actions run ID: `31205887901`
+- Head SHA: `c87828bf0d8378cd6dcd5738a36a4db2850d5d0c`
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -86,13 +91,13 @@ Successful checks:
 3. `npm ci`,
 4. strict TypeScript check (`tsc --noEmit`),
 5. ESLint (`--max-warnings=0`),
-6. Jest,
+6. Jest including the P08 query/cache regression suite,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
 
 Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is the correct implementation-phase policy.
 
-P07 added the shared screen/lifecycle primitives, migrated the existing auth shell to the shared safe-area/keyboard owner, and added focused lifecycle regression coverage without changing auth transport behavior. Run `31201252609` is the accepted P07 code-level validation evidence. It does not claim individual reference/device visual certification, backend runtime validation, Gradle packaging, or APK verification.
+P08 centralized the existing TanStack Query defaults, added stable public/private query-key and private-cache-clearing rules, added finite query/paging policy, and added focused regression coverage without changing HTTP/auth/backend behavior. Run `31205887901` is the accepted P08 code-level validation evidence. It does not claim feature-specific API pagination contracts, logout/role-transition orchestration, backend runtime validation, Gradle packaging, or APK verification.
 
 ---
 
@@ -124,6 +129,10 @@ Key files include:
 
 - `apps/mobile/App.tsx`
 - `apps/mobile/src/app/providers/AppProviders.tsx`
+- `apps/mobile/src/app/query/queryClient.ts`
+- `apps/mobile/src/app/query/queryPolicy.ts`
+- `apps/mobile/src/app/query/queryKeys.ts`
+- `apps/mobile/src/app/query/queryCache.ts`
 - `apps/mobile/src/app/store/store.ts`
 - `apps/mobile/src/app/store/hooks.ts`
 - `apps/mobile/src/app/navigation/AppNavigator.tsx`
@@ -215,7 +224,7 @@ Key files:
 - `apps/mobile/src/core/http/apiError.ts`
 - `apps/mobile/src/core/http/correlation.ts`
 
-The central client/error/correlation architecture exists. P02 completed the static inventory of all currently consumed mobile operations; unresolved APIM/OpenAPI/backend contracts remain explicitly classified in `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`. Future feature wrappers still require exact contracts before implementation.
+The central client/error/correlation architecture exists. P02 completed the static inventory of all currently consumed mobile operations; unresolved APIM/OpenAPI/backend contracts remain explicitly classified in `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`. Future feature wrappers still require exact contracts before implementation. P08 did not alter this layer; P09 owns its formal typed-client acceptance.
 
 ### 4.7 Token/session security — IMPLEMENTED FOR CURRENT AUTH FLOW
 
@@ -233,7 +242,7 @@ Verified implementation behavior:
 - one in-flight refresh promise guard,
 - local secure credentials cleared on refresh failure/logout.
 
-This matches the guide’s session-storage model. P02 found that the corresponding current backend/APIM refresh contract is not runtime-verified and is `CONTRACT_ONLY`; wider application cache cleanup and role-transition auditing remain later phases.
+This matches the guide’s session-storage model. P02 found that the corresponding current backend/APIM refresh contract is not runtime-verified and is `CONTRACT_ONLY`; wider application cache cleanup and role-transition orchestration remain assigned to P24 even though P08 now provides the accepted private-query clearing mechanism.
 
 ### 4.8 Authentication UI/components — IMPLEMENTED FOUNDATION, FINAL VISUAL QA PENDING
 
@@ -379,7 +388,36 @@ Accepted P07 behavior includes:
 - accessibility progress/alert/header semantics and skeleton exclusion from accessibility traversal,
 - existing auth `AuthShell` migrated onto the shared `ScreenShell` without changing auth transport behavior.
 
-P07 is presentation/lifecycle infrastructure only. TanStack Query cache keys, stale-time/retry rules, invalidation/private-cache clearing, paging conventions, and store/query ownership audits remain P08.
+P07 is presentation/lifecycle infrastructure only. P08 now owns and has accepted the query/store/cache foundation; later feature phases must consume it rather than create feature-local server-state architectures.
+
+### 4.16 Query/store provider and cache rules — IMPLEMENTED / P08 ACCEPTED
+
+Key files:
+
+- `apps/mobile/src/app/providers/AppProviders.tsx`
+- `apps/mobile/src/app/query/queryClient.ts`
+- `apps/mobile/src/app/query/queryPolicy.ts`
+- `apps/mobile/src/app/query/queryKeys.ts`
+- `apps/mobile/src/app/query/queryCache.ts`
+- `apps/mobile/src/app/query/index.ts`
+- `apps/mobile/src/app/query/queryFoundation.test.ts`
+- `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md`
+
+Accepted P08 behavior includes:
+
+- one application TanStack Query client and one Redux Toolkit store; no parallel state architecture,
+- server collections assigned to TanStack Query rather than arbitrary Redux arrays,
+- shared query defaults with 30-second stale time, 10-minute finite query GC, one read retry, reconnect refetch, and mutation retry disabled,
+- versioned public/private cache-key builders,
+- private keys requiring authenticated user and Customer/Chef role context,
+- optional location/filter/entity/paging context encoded into query identity,
+- recursive key canonicalization so equivalent filter/paging objects produce stable equivalent keys,
+- scoped private-query cancellation/removal by user and/or role while public cache remains untouched,
+- bounded paging convention: default request size 20, max request size 50, max retained future paginated pages 8,
+- no feature-specific cursor/page contract invented where P02 has not established an exact contract,
+- no logout/role-transition orchestration pulled forward from P24.
+
+P08 changes query/cache ownership only. Typed HTTP transport hardening remains P09; session security remains P10; logout/revoke/full role-state cleanup remains P24.
 
 ---
 
@@ -403,7 +441,7 @@ P01 formally audited the current mobile source against the full master guide's r
 - the single Redux `Provider`,
 - the single TanStack `QueryClientProvider`.
 
-The current query client is created once for the application lifetime with default query retry/staleness/reconnect rules and mutation retry disabled. Future cache policy work must extend this provider rather than add a second query client.
+P08 retains one application-lifetime `appQueryClient` but moves its construction/defaults into `apps/mobile/src/app/query/queryClient.ts` with policy in `queryPolicy.ts`. Future feature cache behavior must extend this query boundary rather than add a second query client.
 
 ### 5.3 Navigation ownership
 
@@ -421,13 +459,17 @@ No second navigation container or alternate route framework was found in the cur
 - `apps/mobile/src/app/store/hooks.ts` owns typed Redux access hooks.
 - `apps/mobile/src/features/auth/state/authSlice.ts` owns current bootstrap status, selected role, identity, and auth error state.
 
-Future global slices must extend this store. Server collections must remain in the query/cache layer instead of being copied into arbitrary Redux arrays.
+P08 formally accepts this ownership rule: future true cross-screen client/global slices extend this store, while server collections remain in the query/cache layer instead of being copied into arbitrary Redux arrays.
 
 ### 5.5 Server/query state ownership
 
-- TanStack Query is installed and the single `QueryClient` is owned by `AppProviders.tsx`.
-- No second server-state cache was found.
-- The current auth foundation primarily uses imperative service calls because the implemented scope is authentication/bootstrap; marketplace query keys, pagination policies, and private-cache cleanup are intentionally pending P08 and later feature phases.
+- TanStack Query is installed and the single `QueryClientProvider` remains owned by `AppProviders.tsx`.
+- `apps/mobile/src/app/query/queryClient.ts` owns the single application query client.
+- `queryPolicy.ts` owns shared stale/GC/retry and bounded paging conventions.
+- `queryKeys.ts` owns stable versioned public/private query identity and result-defining user/role/location/filter/entity/paging context.
+- `queryCache.ts` owns controlled private-query cancellation/removal.
+- No second server-state cache was introduced.
+- The current auth foundation still primarily uses imperative service calls because its implemented scope predates marketplace query phases. Later server-backed feature modules must consume this P08 query foundation.
 
 ### 5.6 Runtime configuration ownership
 
@@ -445,6 +487,8 @@ Future runtime values/flags must extend the established configuration boundary r
 - `apps/mobile/src/core/http/correlation.ts` owns correlation ID generation.
 - `apps/mobile/src/features/auth/api/profileApi.ts` correctly uses the central authenticated client.
 - `apps/mobile/src/features/auth/api/authApi.ts` and `sessionManager.ts` use narrowly scoped raw Axios calls for pre-session token exchange, refresh-token rotation, and logout/revocation flows where routing through the bearer-refresh interceptor would be inappropriate or recursive. These are bounded auth exceptions, not a second general API architecture.
+
+P08 did not change any of these transport rules; P09 owns their formal typed HTTP-client audit/hardening.
 
 ### 5.8 Session and secure-storage ownership
 
@@ -496,10 +540,11 @@ Customer and Chef marketplace feature families have not yet been added in this r
 - `apps/mobile/src/core/config/runtimeConfig.test.ts` covers the P03 runtime environment/configuration boundary.
 - `apps/mobile/src/design/tokens.test.ts` covers P04 brand, spacing, semantic-color, touch-target, dynamic-type, and safe-area token invariants used by shared primitives.
 - `apps/mobile/src/design/motion.test.ts` covers P05 duration, transform/opacity, reduced-motion, critical-delay, and large-list motion invariants used by shared interaction behavior.
+- `apps/mobile/src/app/query/queryFoundation.test.ts` covers P08 query defaults, deterministic contextual keys, private user/role scope matching and cache clearing, public-cache preservation, and bounded paging policy.
 - `apps/mobile/jest.config.js` owns Jest setup and transform rules.
 - `apps/mobile/tsconfig.json` extends the React Native TypeScript configuration and includes all TypeScript source/test files.
 
-Coverage is intentionally small and is not sufficient for later customer/chef features. P07 acceptance additionally relies on strict type checking, zero-warning linting, the focused lifecycle regression suite, production bundling, and the existing design/motion invariant suites; it does not claim exhaustive screen testing.
+Coverage is intentionally small and is not sufficient for later customer/chef features. P08 acceptance additionally relies on strict type checking, zero-warning linting, the focused query/cache regression suite, production bundling, and the backend/APIM source guard; it does not claim exhaustive feature testing.
 
 ### 5.13 Android native ownership
 
@@ -527,17 +572,17 @@ Installed baseline libraries that are not yet exercised by the auth-only impleme
 
 ### 5.16 Deferred cleanup/refinement notes
 
-These findings do **not** block P01–P07 completion, but later owning phases should address them deliberately:
+These findings do **not** block P01–P08 completion, but later owning phases should address them deliberately:
 
 1. `src/core/http/apiError.ts` imports the `ApiErrorResponse` transport type from `features/auth/domain/types`. Even though it is type-only, shared core HTTP infrastructure should not depend inward on the auth feature. P09 should move/define the generic API error response at a core/shared transport boundary.
-2. The `QueryClient` is intentionally private inside `AppProviders.tsx`; once private server state exists, P08/P24 must provide a controlled cache-clearing/invalidation boundary for logout and role switching rather than creating another query client.
+2. P08 now provides `clearPrivateQueryCache(...)` and stable private query ownership. P24 must wire the accepted mechanism into logout/revoke/role-transition cleanup when the full authenticated feature state exists; P08 intentionally does not pull that orchestration forward.
 3. `AppNavigator.tsx` is currently auth-only and `AccountRouterScreen.tsx` performs temporary account-resolution orchestration. P11 and the account-resolution phases must evolve these existing owners instead of creating separate root navigators.
 4. Android Kotlin files are physically under `android/app/src/main/java/com/cravesmobile/` while declaring package `com.cravesapp`. The declarations/application ID are consistent at runtime, but the directory should be normalized in a future native-configuration cleanup for maintainability.
 5. Android release currently uses the debug signing configuration. Production signing is a final release-readiness concern and must not be introduced during intermediate UI phases.
 6. Historical write-capable Phase 1 bootstrap/dependency/implementation workflows remain in the repository. They are quarantined as legacy helpers; a later repository-hygiene change may retire them, but they must not be triggered/edited as part of normal phased implementation.
-7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P07 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
+7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P08 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
 
-**Current foundation blocker status:** none for P07. The unresolved P02 backend/APIM contracts remain visible and unchanged.
+**Current foundation blocker status:** none for P08. The unresolved P02 backend/APIM contracts remain visible and unchanged.
 
 ---
 
@@ -551,9 +596,10 @@ Known tests currently include:
 - `apps/mobile/src/core/config/runtimeConfig.test.ts` — runtime environment/base URL validation and failure behavior,
 - `apps/mobile/src/design/tokens.test.ts` — P04 brand, spacing, semantic, touch, dynamic-type, and safe-area token invariants,
 - `apps/mobile/src/design/motion.test.ts` — P05 shared duration, property, reduced-motion, critical-delay, and bounded-list invariants,
+- `apps/mobile/src/app/query/queryFoundation.test.ts` — P08 query/client defaults, cache-key stability/context, private-cache scope clearing, public-cache preservation, and bounded paging conventions,
 - `apps/mobile/src/utils/validation.test.ts` — current validation helpers.
 
-CI run `31201252609` is green for the accepted P07 implementation: strict TypeScript, ESLint, the current Jest suite including the P07 lifecycle regression tests, production Android JavaScript bundle generation, and the backend/APIM/infrastructure guard all pass. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
+CI run `31205887901` is green for the accepted P08 implementation: strict TypeScript, ESLint, the current Jest suite including P08 query/cache regression tests, production Android JavaScript bundle generation, and the backend/APIM/infrastructure guard all pass. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
 
 ---
 
@@ -571,8 +617,8 @@ The granular `phases.md` was introduced after the existing auth foundation was w
 | P05 Motion Baseline | **DONE** | `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md` records the accepted shared motion vocabulary, platform reduced-motion preference boundary, critical-flow zero-delay rule, bounded-list guard, focused tests, and successful CI. |
 | P06 Shared Interaction Primitives | **DONE** | Shared Button/IconButton/PressableCard/InputField/Chip/SegmentedControl/Badge/LoadingIndicator layer accepted; auth button/input compatibility wrappers and RoleSelector migrated; evidence in `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md`; CI run `31199569464` **SUCCESS**. |
 | P07 Shared Lifecycle Primitives | **DONE** | Shared ScreenShell/Skeleton/LifecycleStates/ContentLifecycle layer accepted; auth shell migrated to the shared screen owner; focused refresh-preservation regression tests added; evidence in `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md`; CI run `31201252609` **SUCCESS**. |
-| P08 Query/Store Cache Rules | PARTIAL | Providers/dependencies exist; feature cache rules not audited. |
-| P09 Typed HTTP Client | PARTIAL | Foundation exists; full retry/cancellation/contract audit pending. |
+| P08 Query/Store Cache Rules | **DONE** | Single QueryClient/Redux ownership retained; deterministic public/private contextual query keys, scoped private-cache clearing, finite GC and bounded paging policy accepted; evidence in `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md`; CI run `31205887901` **SUCCESS**. |
+| P09 Typed HTTP Client | PARTIAL | Foundation exists; full typed transport/retry/cancellation/contract audit pending. |
 | P10 Session Token Security | PARTIAL / strong foundation | Memory/secure-store/refresh implementation exists and CI passes; later full security audit still required. |
 | P11 Root Navigation | PARTIAL | Auth stack exists; Customer/Chef/Transactional/Modal domains incomplete. |
 | P12 Role Selection | PARTIAL / implemented | Functional code exists; final visual/device acceptance pending. |
@@ -587,7 +633,7 @@ The granular `phases.md` was introduced after the existing auth foundation was w
 | P21 Identity/Role Resolution | PARTIAL / implemented | `/me` and account routing code exist; P02 classifies the exact `/api/v1/auth/me` contract as `BLOCKED`. |
 | P22 Customer Registration | PARTIAL / implemented | Auth-time profile completion code exists; P02 classifies customer profile GET/PUT contracts as `BLOCKED`. |
 | P23 Chef Application Status | PARTIAL / implemented | Auth-time application/status code exists; P02 classifies chef application GET/POST contracts as `BLOCKED`. |
-| P24 Logout Cleanup | PARTIAL / implemented | Auth/local cleanup exists; P02 records the logout route as `CONTRACT_ONLY`; full cross-feature cache cleanup cannot be complete until those features exist. |
+| P24 Logout Cleanup | PARTIAL / implemented | Auth/local cleanup exists and P08 supplies the private-query clearing mechanism; P02 records the logout route as `CONTRACT_ONLY`; full cross-feature cache/role cleanup cannot be complete until those features exist. |
 | P25 onward | NOT STARTED | Product marketplace/customer/chef experiences have not been accepted under this rebuild protocol. |
 
 A future phase may upgrade an existing `PARTIAL` item to `DONE` by auditing it against the exact guide reference/contracts and completing any missing tests/behavior. Do not rewrite already-correct code merely to make the status label change.
@@ -601,7 +647,8 @@ The following must **not** be described as complete at this point:
 - runtime/backend/APIM resolution of the `CONTRACT_ONLY` and `BLOCKED` routes identified by P02,
 - restoration/approval of the missing authoritative full APIM/OpenAPI contract,
 - an approved production feature-flag/remote-config provider/key contract for future flag-controlled features,
-- P08 Query/Store Provider and Cache Rules acceptance,
+- P09 Typed HTTP Client Foundation acceptance,
+- P10 Session Token Security full acceptance,
 - per-screen/reference visual certification of the P04 token, P05 motion, P06 interaction, and P07 lifecycle foundations,
 - Customer Home refs 5/6,
 - Discover Chefs refs 7/8,
@@ -800,10 +847,27 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 - Blockers: none to P07 acceptance.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
+### P08 — Query/Store Provider and Cache Rules
+
+- Status: **DONE**
+- Started from commit: `6b41ad1f72b1d9723e7abe0f140ddf959cdc680c`
+- Validated implementation completion commit: `c87828bf0d8378cd6dcd5738a36a4db2850d5d0c`
+- Evidence: `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md` (artifact commit `4554112cf598a7ad660c1450bbb8a332bcf58163`).
+- Guide references: full master-guide global State Management, networking/cache, performance, privacy, pagination, logout/role-isolation, and derived/server-state ownership rules; no individual reference screen was implemented.
+- Changed implementation/evidence files: `apps/mobile/src/app/providers/AppProviders.tsx`; `apps/mobile/src/app/query/queryClient.ts`, `queryPolicy.ts`, `queryKeys.ts`, `queryCache.ts`, `index.ts`, `queryFoundation.test.ts`; `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md`; `build.md` updated only as the completion ledger.
+- APIM/contracts used: **None.** No new endpoint, route key, request/response model, backend pagination field, auth contract, HTTP transport behavior, backend/APIM/infrastructure source, or product screen was introduced. P02 classifications remain unchanged.
+- Behavior completed: retained the established single TanStack Query/Redux architecture; moved query-client creation/default policy into the dedicated app query owner; defined stable versioned public/private contextual query keys including relevant user/role/location/filter/entity/paging context; canonicalized nested key records; added controlled scoped/all private query cancellation/removal while preserving public data; added finite 10-minute query GC and shared bounded page-size/retained-page conventions; preserved the rule that server collections do not become arbitrary Redux arrays. Logout/role-transition integration remains P24.
+- Tests/checks: GitHub Actions run `31205887901` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest including P08 query/cache regression coverage, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed. Earlier candidate commits that failed TypeScript/test-lifecycle validation were corrected before acceptance.
+- Visual QA: not applicable; P08 changes no reference-screen layout or visual behavior.
+- APK built: **No**, per the implementation-phase policy.
+- Backend/APIM/infrastructure source changed: **No**.
+- Blockers: none to P08 acceptance.
+- Next phase: **NONE AUTHORIZED — waiting for user**.
+
 ---
 
 ## 12. Current Next Step
 
 **Stop here.**
 
-P07 is complete. P08 — Query/Store Provider and Cache Rules is the next phase in `phases.md`, but it is **not authorized** by completion of P07. Begin P08 only after the user explicitly says to continue/start the next phase.
+P08 is complete. P09 — Typed HTTP Client Foundation is the next phase in `phases.md`, but it is **not authorized** by completion of P08. Begin P09 only after the user explicitly says to continue/start the next phase.

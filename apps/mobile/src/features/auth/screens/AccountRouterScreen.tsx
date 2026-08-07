@@ -1,3 +1,132 @@
-import React,{useEffect,useState}from'react';import{ActivityIndicator,StyleSheet,Text,View}from'react-native';import type{NativeStackScreenProps}from'@react-navigation/native-stack';import type{RootStackParamList}from'../../../app/navigation/types';import{profileApi}from'../api/profileApi';import{useAppSelector}from'../../../app/store/hooks';import{toAppApiError}from'../../../core/http/apiError';import{colors}from'../../../design/tokens';
-type Props=NativeStackScreenProps<RootStackParamList,'AccountRouter'>;
-export function AccountRouterScreen({navigation}:Props){const role=useAppSelector(s=>s.auth.selectedRole);const identity=useAppSelector(s=>s.auth.identity);const[message,setMessage]=useState('Loading your Craves account…');useEffect(()=>{let active=true;(async()=>{if(!identity||!active)return;if(identity.status==='SUSPENDED'){setMessage('This account is currently suspended.');return;}if(role==='CHEF'){try{const app=await profileApi.getChefApplication();if(!active)return;if(app.status==='NOT_SUBMITTED')navigation.replace('ChefRegistration');else navigation.replace('ChefAccountStatus',{status:app.status});}catch(e){if(active)setMessage(toAppApiError(e).message)}}else{try{await profileApi.getCustomerProfile();if(active)navigation.replace('CustomerAccountStatus');}catch(e){const err=toAppApiError(e);if(!active)return;if(err.status===404)navigation.replace('CustomerRegistration');else setMessage(err.message)}}})();return()=>{active=false}},[identity,navigation,role]);return <View style={s.root}><ActivityIndicator color={colors.flameRed} size="large"/><Text style={s.text}>{message}</Text></View>};const s=StyleSheet.create({root:{flex:1,alignItems:'center',justifyContent:'center',backgroundColor:colors.cream,padding:24},text:{marginTop:16,fontSize:14,color:colors.mutedText,textAlign:'center'}});
+import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {ActivityIndicator, StyleSheet, Text, View} from 'react-native';
+import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
+import {toAppApiError} from '../../../core/http/apiError';
+import {colors, spacing} from '../../../design/tokens';
+import {PrimaryButton} from '../components/PrimaryButton';
+import {accountResolutionService} from '../state/accountResolutionService';
+import {authService} from '../state/authService';
+import {authActions} from '../state/authSlice';
+
+export function AccountRouterScreen() {
+  const dispatch = useAppDispatch();
+  const requestedRole = useAppSelector(state => state.auth.selectedRole);
+  const mounted = useRef(true);
+  const requestInFlight = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const resolveAccount = useCallback(async () => {
+    if (requestInFlight.current) {
+      return;
+    }
+
+    requestInFlight.current = true;
+    setBusy(true);
+    setError(null);
+
+    try {
+      const result = await accountResolutionService.resolve(requestedRole);
+      if (mounted.current) {
+        dispatch(authActions.accountResolved(result));
+      }
+    } catch (caught) {
+      if (mounted.current) {
+        setError(toAppApiError(caught).message);
+      }
+    } finally {
+      requestInFlight.current = false;
+      if (mounted.current) {
+        setBusy(false);
+      }
+    }
+  }, [dispatch, requestedRole]);
+
+  useEffect(() => {
+    resolveAccount();
+  }, [resolveAccount]);
+
+  const signOut = async () => {
+    if (signingOut || requestInFlight.current) {
+      return;
+    }
+
+    setSigningOut(true);
+    try {
+      await authService.logout();
+      if (mounted.current) {
+        dispatch(authActions.signedOut());
+      }
+    } finally {
+      if (mounted.current) {
+        setSigningOut(false);
+      }
+    }
+  };
+
+  return (
+    <View style={styles.root}>
+      {busy ? <ActivityIndicator color={colors.flameRed} size="large" /> : null}
+      <Text style={styles.title}>
+        {error ? 'We could not verify your account' : 'Checking your Craves account…'}
+      </Text>
+      <Text style={styles.text}>
+        {error ??
+          'We are securely confirming your account role and onboarding status.'}
+      </Text>
+      {error ? (
+        <View style={styles.actions}>
+          <PrimaryButton
+            label="Try again"
+            disabled={busy || signingOut}
+            loading={busy}
+            onPress={resolveAccount}
+          />
+          <PrimaryButton
+            variant="outline"
+            label="Sign out"
+            disabled={busy || signingOut}
+            loading={signingOut}
+            onPress={signOut}
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.cream,
+    padding: spacing.xl,
+  },
+  title: {
+    marginTop: spacing.md,
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.espressoBrown,
+    textAlign: 'center',
+  },
+  text: {
+    marginTop: spacing.sm,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.mutedText,
+    textAlign: 'center',
+  },
+  actions: {
+    alignSelf: 'stretch',
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+});

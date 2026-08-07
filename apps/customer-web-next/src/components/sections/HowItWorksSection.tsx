@@ -4,7 +4,7 @@ import { howItWorksSteps } from "@/constants/landingContent";
 /** "How Craves Works" — the 4-step choose/order/cook/deliver flow. */
 export function HowItWorksSection() {
   return (
-    <section className="bg-cream-deep py-20">
+    <section className="bg-white py-20">
       <div className="mx-auto max-w-7xl px-6">
         <div className="text-center">
           <h2 className="text-4xl font-bold text-ink md:text-5xl">How Craves Works</h2>

@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           test -d apps/mobile
-          cat .phase1/chunk01.b64 .phase1/chunk02.b64 .phase1/chunk03.b64 .phase1/chunk04.b64 .phase1/chunk05.b64 .phase1/chunk06.b64 .phase1/chunk07.b64 .phase1/chunk08.b64 .phase1/chunk09.b64 | tr -d '\n\r' | base64 -d > /tmp/phase1-overlay.tar.gz
+          cat .phase1/chunk01.b64 .phase1/chunk02.b64 .phase1/chunk03.b64 .phase1/chunk04.b64 .phase1/chunk05.b64 .phase1/chunk06.b64 .phase1/chunk07a.b64 .phase1/chunk07b.b64 .phase1/chunk08.b64 .phase1/chunk09.b64 | tr -d '\n\r' | base64 -d > /tmp/phase1-overlay.tar.gz
           echo '815999af83cea5086e7de61791a4b8720568d23a7d4b9c324b8a060613d3a3f6  /tmp/phase1-overlay.tar.gz' | sha256sum -c -
           tar -xzf /tmp/phase1-overlay.tar.gz -C apps/mobile
 
@@ -54,7 +54,7 @@ jobs:
           app.write_text(text)
           PY
 
-      - name: Add Android native splash theme
+      - name: Add Android native splash colors
         shell: bash
         run: |
           set -euo pipefail
@@ -65,7 +65,7 @@ jobs:
           if 'windowSplashScreenBackground' not in text:
               text = text.replace(
                   '<item name="android:editTextBackground">@drawable/rn_edit_text_material</item>',
-                  '<item name="android:editTextBackground">@drawable/rn_edit_text_material</item>\n        <item name="android:windowSplashScreenBackground">#FFF7F1</item>\n        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>\n        <item name="android:windowSplashScreenIconBackgroundColor">#FFF7F1</item>\n        <item name="android:postSplashScreenTheme">@style/AppTheme</item>'
+                  '<item name="android:editTextBackground">@drawable/rn_edit_text_material</item>\n        <item name="android:windowSplashScreenBackground">#FFF7F1</item>\n        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>\n        <item name="android:windowSplashScreenIconBackgroundColor">#FFF7F1</item>'
               )
           p.write_text(text)
           PY

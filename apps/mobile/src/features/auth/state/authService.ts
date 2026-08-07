@@ -2,7 +2,10 @@ import {AppApiError, toAppApiError} from '../../../core/http/apiError';
 import {sessionManager} from '../api/sessionManager';
 import {authApi} from '../api/authApi';
 import {firebaseAuth} from '../firebase/firebaseAuth';
-import {mapFirebaseAuthError} from '../firebase/firebaseAuthError';
+import {
+  mapFirebaseAuthError,
+  mapPasswordRecoveryFirebaseError,
+} from '../firebase/firebaseAuthError';
 import type {AuthRole, AuthTokenResponse} from '../domain/types';
 
 async function exchangeAndPersist(firebaseIdToken: string): Promise<AuthTokenResponse> {
@@ -56,7 +59,12 @@ export const authService = {
     try {
       await firebaseAuth.sendPasswordReset(email);
     } catch (error) {
-      throw mapFirebaseAuthError(error);
+      const mapped = mapPasswordRecoveryFirebaseError(error);
+      if (mapped) {
+        throw mapped;
+      }
+      // Account-specific provider outcomes intentionally resolve through the same
+      // neutral success path as an accepted password-reset request.
     }
   },
   async logout(): Promise<void> {

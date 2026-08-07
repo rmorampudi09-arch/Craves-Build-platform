@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical ledger preservation:** The complete ledger state through P12 is preserved byte-for-byte at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. Earlier archives through P09 and P08 remain under `docs/mobile-ui-rebuild/`. P10–P13 also have dedicated evidence documents.
+**Historical ledger preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. Earlier archives remain under `docs/mobile-ui-rebuild/`. P10–P14 have dedicated evidence documents, including `P13_CUSTOMER_PHONE_SIGN_IN_VISUAL_INTERACTION.md` and `P14_CHEF_PHONE_SIGN_IN_VISUAL_INTERACTION.md`.
 
 ---
 
@@ -34,20 +34,21 @@
 - **P11 — Root Navigation and Typed Route Policy: DONE**.
 - **P12 — Role Selection UI and State: DONE**.
 - **P13 — Customer Phone Sign-In Visual + Interaction: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
+- **P14 — Chef Phone Sign-In Visual + Interaction: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
 
-P13 completion evidence:
+P14 completion evidence:
 
-- Started from P12 record HEAD: `5f223a9376ecfee6f484a58e99522607e968e56b`.
-- Primary P13 implementation commit: `68753493e98cfcc6c453cd86baf866ac519a9ab4`.
-- Validated P13 implementation commit: `40e43930c1026b3805332e9d41e75fefc2457b17`.
-- Evidence: `docs/mobile-ui-rebuild/P13_CUSTOMER_PHONE_SIGN_IN_VISUAL_INTERACTION.md`.
-- CI run: `31211607174` — **SUCCESS**.
+- Started from P13 record HEAD: `95da34c3069aeda9a52888924a3df42f8b0dcce9`.
+- Primary P14 implementation commit: `25568bf0284389ad1ad19bfbacffa46566731b9c`.
+- Validated P14 implementation commit: `2735e0fa0d352863cda16ac480939b1862c1b483`.
+- Evidence: `docs/mobile-ui-rebuild/P14_CHEF_PHONE_SIGN_IN_VISUAL_INTERACTION.md`.
+- CI run: `31212292710` — **SUCCESS**.
 
-**Next phase in sequence:** **P14 — Chef Phone Sign-In Visual + Interaction**.
+**Next phase in sequence:** **P15 — Customer Email/Password Sign-In**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop and wait for the user to explicitly start/continue P14. Do not pre-implement P14.
+**Required action:** Stop and wait for the user to explicitly start/continue P15. Do not pre-implement P15.
 
 ---
 
@@ -57,9 +58,9 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31211607174`
-- Head SHA: `40e43930c1026b3805332e9d41e75fefc2457b17`
-- Phase: **P13 — Customer Phone Sign-In Visual + Interaction**
+- GitHub Actions run ID: `31212292710`
+- Head SHA: `2735e0fa0d352863cda16ac480939b1862c1b483`
+- Phase: **P14 — Chef Phone Sign-In Visual + Interaction**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -69,54 +70,51 @@ Successful checks:
 3. `npm ci`,
 4. strict TypeScript (`tsc --noEmit`),
 5. ESLint with `--max-warnings=0`,
-6. Jest including P13 phone-policy tests and all prior regressions,
+6. Jest including P14 Chef-role/submission coverage and prior regressions,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
 
-The first P13 CI attempt (`31211527038`) failed only because the keyboard-submit handler triggered one `no-void` lint warning. Commit `40e43930c1026b3805332e9d41e75fefc2457b17` corrected that warning; the complete gate then passed.
-
-This workflow intentionally does **not** perform Java/Gradle/APK packaging. That remains the correct implementation-phase policy.
+This workflow intentionally does **not** perform Java/Gradle/APK packaging. That remains the implementation-phase policy.
 
 ---
 
-## 3. P13 Accepted Customer Phone Sign-In Boundary
+## 3. P14 Accepted Chef Phone Sign-In Boundary
 
-Guide scope: Screen 01 / Reference Image 01 — Customer Phone Number Sign-In, full-guide pages 23–25 (`image1.jpeg`).
+Guide scope: Screen 02 / Reference Image 02 — Chef Phone Number Sign-In, full-guide pages 26–27 (`image2.jpeg`).
 
-Key implementation files:
+Key P14 implementation files:
 
 - `apps/mobile/src/features/auth/screens/PhoneSignInScreen.tsx`
-- `apps/mobile/src/features/auth/components/RoleSelector.tsx`
 - `apps/mobile/src/features/auth/domain/phoneSignInPolicy.ts`
 - `apps/mobile/src/features/auth/domain/phoneSignInPolicy.test.ts`
 
-Accepted P13 behavior:
+Accepted P14 behavior:
 
-- Existing shared auth shell, Customer hero/art, segmented role selector, auth card, phone input, Continue CTA, email/password alternative, and security note remain the reference-aligned composition; P13 does not redesign the screen.
-- P11 immersive auth policy remains authoritative: bottom navigation, View Cart, and authenticated header actions are absent.
-- P12 selected-role ownership remains authoritative; phone -> OTP and phone -> email preserve the typed current-attempt role.
-- India is the explicit currently supported phone-country boundary (`IN`, `+91`, 10 national digits). No unsupported country capability is invented.
-- Local and `+91`/E.164-style pasted phone values are sanitized safely, capped to 10 national digits, validated through the existing shared Zod schema, and submitted as E.164.
-- Continue remains disabled until the phone is valid and enters loading/disabled state during Firebase verification initiation.
-- Keyboard Done submits the same validated action.
-- Phone field, role selector, and alternate-login control are disabled during an active verification request to avoid state mutation while the submission snapshot is in flight.
-- A synchronous request gate prevents rapid duplicate OTP-initiation taps even before React can finish the loading-state re-render.
-- Local format errors and Firebase/request errors are presented separately and accessibly.
-- No fake OTP success path, empty handler, TODO, mock delay, or fabricated API response exists.
+- Reuses the same role-aware phone screen and Firebase transport accepted in P13; no duplicate Chef authentication stack is introduced.
+- Existing `AuthHero` continues to supply the Chef-specific illustration/header when the selected role is `CHEF`.
+- Chef-specific phone guidance now instructs the user to use the number linked to the Chef account and explains that Chef access is checked after verification.
+- Chef-specific Continue accessibility guidance is provided without changing the accepted Customer wording.
+- The phone submission is captured once as a typed `{role, phone}` snapshot with E.164 normalization before verification starts.
+- The same snapshot is passed to Firebase initiation and `OtpVerification`, preserving Chef role through the OTP boundary.
+- Phone -> email/password navigation preserves the selected Chef role.
+- P13 validation, loading/disabled state, keyboard submit, request-error mapping, India/+91 boundary, and synchronous duplicate-request guard are reused unchanged.
+- Auth route policy keeps Customer/Chef bottom navigation, View Cart, and authenticated header controls absent.
+- Tests explicitly cover Chef role + normalized-phone submission and retain a Customer snapshot regression guard.
+- No fake OTP success, TODO, empty handler, mock delay, or fabricated backend response was added.
 
-### P13 exact authentication/API boundary
+### P14 exact authentication/API boundary
 
-No APIM endpoint is added or changed by P13.
+No APIM endpoint is added or changed by P14.
 
-The phone-verification initiation chain is:
+The existing initiation chain remains:
 
-`PhoneSignInScreen.submit()` -> `authService.beginPhone(role, e164Phone)` -> `firebaseAuth.beginPhoneSignIn(e164Phone)` -> React Native Firebase `signInWithPhoneNumber(getAuth(), e164Phone)`.
+`PhoneSignInScreen.submit()` -> `createPhoneSignInSubmission(role, phone)` -> `authService.beginPhone(role, e164Phone)` -> `firebaseAuth.beginPhoneSignIn(e164Phone)` -> React Native Firebase `signInWithPhoneNumber(getAuth(), e164Phone)` -> typed `OtpVerification` route params.
 
-The Firebase confirmation object remains owned by the existing Firebase auth module for the later OTP phase. `POST /api/v1/auth/firebase/exchange` is not called by P13; P19 owns its granular acceptance and P02 still classifies the current repository evidence for that route as `CONTRACT_ONLY`.
+P17 owns OTP verification/resend acceptance. P19 owns Firebase-to-Craves session exchange. P21/P23 own authoritative backend identity, Chef-role authorization, application/approval-status resolution, and routing of unapproved/suspended/incomplete Chef accounts. P14 does not treat the UI-selected Chef role as backend authorization.
 
 ---
 
-## 4. Current Architecture Ownership After P13
+## 4. Current Architecture Ownership After P14
 
 ### Navigation
 
@@ -130,15 +128,16 @@ The Firebase confirmation object remains owned by the existing Firebase auth mod
 - Shared current-attempt role: `features/auth/state/authSlice.ts` (`auth.selectedRole`).
 - Auth-route role synchronization: `features/auth/hooks/useAuthAttemptRole.ts`.
 - Role UI: `features/auth/components/RoleSelector.tsx`.
-- Role-aware auth art/copy: `features/auth/components/AuthHero.tsx` and role-aware screen copy.
-- Role remains process-memory/current-attempt state; user selection is not backend authorization.
+- Role-aware auth art: `features/auth/components/AuthHero.tsx`.
+- Role-aware phone guidance/submission snapshot: `features/auth/domain/phoneSignInPolicy.ts`.
+- Role remains current-attempt client state; backend authorization remains later-phase work.
 
 ### Phone sign-in policy
 
-- Current supported-country metadata, phone sanitization/validation adaptation, E.164 normalization, and synchronous duplicate-request gate: `features/auth/domain/phoneSignInPolicy.ts`.
-- Existing shared base schema remains in `utils/validation.ts`.
-- Native Firebase phone verification remains in `features/auth/firebase/firebaseAuth.ts`.
-- Auth orchestration remains in `features/auth/state/authService.ts`.
+- Supported-country metadata, phone sanitization/validation adaptation, E.164 normalization, role-aware phone copy, typed submission snapshot, and synchronous duplicate-request gate: `features/auth/domain/phoneSignInPolicy.ts`.
+- Shared base schema: `utils/validation.ts`.
+- Native Firebase phone verification: `features/auth/firebase/firebaseAuth.ts`.
+- Auth orchestration: `features/auth/state/authService.ts`.
 
 ### Session/security
 
@@ -147,18 +146,17 @@ The Firebase confirmation object remains owned by the existing Firebase auth mod
 - Token acceptance/restore/refresh/local-clear owner: `features/auth/api/sessionManager.ts`.
 - Authenticated bearer injection and one-shot 401 replay: accepted P09 `core/http/apiClient.ts` boundary.
 
-### Later-phase boundaries not pulled into P13
+### Later-phase boundaries not pulled into P14
 
-- P14 owns Chef Phone Sign-In reference/interaction acceptance.
 - P15/P16 own Customer/Chef Email Sign-In acceptance.
 - P17 owns OTP verification/resend granular acceptance.
 - P18 owns password recovery.
 - P19 owns Firebase-to-Craves exchange acceptance against the exact approved contract.
 - P20 owns startup restore/silent-refresh lifecycle UX.
 - P21 owns authoritative backend identity/role/onboarding resolution.
+- P22/P23 own customer completion and Chef application/status flows.
 - P24 owns full logout/revoke plus private cache/store/role cleanup orchestration.
-- P25/P26 own Customer bottom-tab product shell behavior.
-- P29 owns View Cart UI/animation/synchronization.
+- P25 onward owns product-shell and marketplace functionality.
 
 ---
 
@@ -175,7 +173,7 @@ Current coded paths remain governed by P02, including:
 - `GET /api/v1/chef/application` — `BLOCKED`
 - `POST /api/v1/chef/application` — `BLOCKED`
 
-P13 does not invent, alter, or runtime-verify any of these routes or payloads.
+P14 does not invent, alter, or claim runtime verification of these routes or payloads.
 
 ---
 
@@ -187,9 +185,9 @@ P13 does not invent, alter, or runtime-verify any of these routes or payloads.
 | P10 Session Token Security | **DONE** | Secure token boundary accepted; CI `31208468433`. |
 | P11 Root Navigation | **DONE** | Typed route/chrome/deep-link policy accepted; CI `31209520350`. |
 | P12 Role Selection | **DONE** | Shared current-attempt role and auth-route synchronization accepted; CI `31210359665`. |
-| P13 Customer Phone Sign-In | **DONE** | Customer phone validation, keyboard, loading/error, duplicate guard, native Firebase initiation and focused tests accepted; CI `31211607174`. Device pixel-certification deferred. |
-| P14 Chef Phone Sign-In | PARTIAL / existing baseline | Existing shared role-aware code only; phase-specific/reference acceptance not authorized. |
-| P15 Customer Email Sign-In | PARTIAL / existing baseline | Granular acceptance pending. |
+| P13 Customer Phone Sign-In | **DONE** | Customer phone validation, request guard, native Firebase initiation and focused tests accepted; CI `31211607174`. Device pixel-certification deferred. |
+| P14 Chef Phone Sign-In | **DONE** | Chef-specific role/copy/submission acceptance through the shared phone-auth engine; CI `31212292710`. Device pixel-certification deferred. |
+| P15 Customer Email Sign-In | PARTIAL / existing baseline | Granular acceptance pending; not authorized yet. |
 | P16 Chef Email Sign-In | PARTIAL / existing baseline | Granular acceptance pending. |
 | P17 OTP | PARTIAL / existing baseline | Granular verification/resend acceptance pending. |
 | P18 Password Recovery | PARTIAL / existing baseline | Granular acceptance pending. |
@@ -203,19 +201,18 @@ P13 does not invent, alter, or runtime-verify any of these routes or payloads.
 
 ---
 
-## 7. Explicitly Not Complete After P13
+## 7. Explicitly Not Complete After P14
 
 Do not describe any of the following as complete:
 
-- P14 Chef Phone Sign-In reference/device acceptance,
 - P15/P16 email sign-in reference/device acceptance,
 - P17 OTP and P18 password-recovery granular acceptance,
 - runtime/backend/APIM resolution of P02 `CONTRACT_ONLY` and `BLOCKED` routes,
 - authoritative full APIM/OpenAPI restoration,
-- full P19/P20/P21/P24 auth lifecycle acceptance,
-- physical-device pixel-perfect certification of Reference Image 01 or the remaining reference set,
-- Customer product refs beyond the accepted auth phase,
-- Chef product refs,
+- full P19/P20/P21/P22/P23/P24 auth/account lifecycle acceptance,
+- physical-device pixel-perfect certification of References 01–02 or the remaining reference set,
+- Customer product refs beyond the accepted auth phases,
+- Chef product refs beyond the accepted Chef phone-auth visual state,
 - Customer/chef bottom-tab product shells,
 - View Cart authoritative UI/cart synchronization,
 - authenticated product/resource deep links and notification routing,
@@ -249,24 +246,33 @@ Preserve useful prior history under `docs/mobile-ui-rebuild/` before compacting 
 
 ---
 
-## 9. P13 Phase History
+## 9. Recent Phase History
 
 ### P13 — Customer Phone Sign-In Visual + Interaction
 
 - Status: **DONE** at implementation level.
 - Started from commit: `5f223a9376ecfee6f484a58e99522607e968e56b`.
-- Primary implementation commit: `68753493e98cfcc6c453cd86baf866ac519a9ab4`.
-- Validated implementation completion commit: `40e43930c1026b3805332e9d41e75fefc2457b17`.
+- Validated implementation commit: `40e43930c1026b3805332e9d41e75fefc2457b17`.
 - Evidence: `docs/mobile-ui-rebuild/P13_CUSTOMER_PHONE_SIGN_IN_VISUAL_INTERACTION.md`.
-- Guide references: Screen 01 / Reference Image 01, pages 23–25.
-- Changed implementation files: `PhoneSignInScreen.tsx`, `RoleSelector.tsx`, `phoneSignInPolicy.ts`, `phoneSignInPolicy.test.ts`.
-- API/contracts used: existing native React Native Firebase phone sign-in only; no new/changed APIM route. Backend exchange remains P19.
-- Behavior completed: India/+91 phone boundary, paste-safe normalization, existing Zod validation, E.164 submission, disabled/loading states, keyboard submit, separate request error, synchronous duplicate-request gate, role-preserving OTP/email navigation, active-request control locking.
-- Tests/checks: GitHub Actions run `31211607174` — **SUCCESS**.
-- Visual QA: reference/code traceability completed without redesign; no physical-device pixel-perfect screenshot claim. Later visual-QA gates remain authoritative for final certification.
+- CI: `31211607174` — **SUCCESS**.
+- Visual QA: final device/reference certification deferred.
+
+### P14 — Chef Phone Sign-In Visual + Interaction
+
+- Status: **DONE** at implementation level.
+- Started from commit: `95da34c3069aeda9a52888924a3df42f8b0dcce9`.
+- Primary implementation commit: `25568bf0284389ad1ad19bfbacffa46566731b9c`.
+- Validated implementation commit: `2735e0fa0d352863cda16ac480939b1862c1b483`.
+- Evidence: `docs/mobile-ui-rebuild/P14_CHEF_PHONE_SIGN_IN_VISUAL_INTERACTION.md`.
+- Guide reference: Screen 02 / Reference Image 02, pages 26–27 (`image2.jpeg`).
+- Changed implementation files: `PhoneSignInScreen.tsx`, `phoneSignInPolicy.ts`, `phoneSignInPolicy.test.ts`.
+- API/contracts used: existing native React Native Firebase phone sign-in only; no new/changed APIM route. Backend exchange/identity/approval remain later phases.
+- Behavior completed: Chef-specific sign-in guidance, role-preserving normalized submission snapshot, role-preserving OTP/email navigation, reuse of P13 validation/loading/error/duplicate-request controls, and Customer regression protection.
+- Tests/checks: GitHub Actions run `31212292710` — **SUCCESS**.
+- Visual QA: guide/code traceability completed without redesign; physical-device pixel-perfect screenshot certification deferred.
 - APK built: **No**, per implementation-phase policy.
 - Backend/APIM/infrastructure source changed: **No**.
-- Blockers: none to P13 implementation acceptance; P02 later-phase contract blockers remain.
+- Blockers: none to P14 implementation acceptance; P02 later-phase contract blockers remain.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
 ---
@@ -275,4 +281,4 @@ Preserve useful prior history under `docs/mobile-ui-rebuild/` before compacting 
 
 **Stop here.**
 
-P13 is complete at the authorized implementation boundary. **P14 — Chef Phone Sign-In Visual + Interaction** is next in `phases.md`, but it is **not authorized** by completion of P13. Begin P14 only after the user explicitly says to continue/start the next phase.
+P14 is complete at the authorized implementation boundary. **P15 — Customer Email/Password Sign-In** is next in `phases.md`, but it is **not authorized** by completion of P14. Begin P15 only after the user explicitly says to continue/start the next phase.

@@ -1,5 +1,10 @@
 import {createSlice, PayloadAction} from '@reduxjs/toolkit';
-import type {AccountResolution, AuthRole, Identity} from '../domain/types';
+import type {
+  AccountResolution,
+  AuthRole,
+  ChefOnboardingStatus,
+  Identity,
+} from '../domain/types';
 
 export type BootstrapStatus = 'idle' | 'restoring' | 'anonymous' | 'authenticated' | 'error';
 
@@ -60,6 +65,14 @@ const authSlice = createSlice({
         state.accountResolution = {
           ...state.accountResolution,
           onboardingStatus: 'READY',
+        };
+      }
+    },
+    chefApplicationStatusObserved(state, action: PayloadAction<ChefOnboardingStatus>) {
+      if (state.accountResolution?.flow === 'CHEF_ONBOARDING') {
+        state.accountResolution = {
+          ...state.accountResolution,
+          onboardingStatus: action.payload,
         };
       }
     },

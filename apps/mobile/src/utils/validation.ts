@@ -37,19 +37,31 @@ export const customerRegistrationSchema = z.object({
   email: z.union([z.literal(''), customerProfileEmailSchema]),
 });
 
+const chefRequiredText = (label: string, max: number) =>
+  z
+    .string()
+    .trim()
+    .min(1, `${label} is required.`)
+    .max(max, `${label} must be ${max} characters or fewer.`);
+
+const chefOptionalText = (label: string, max: number) =>
+  z.string().trim().max(max, `${label} must be ${max} characters or fewer.`);
+
 export const chefRegistrationSchema = z.object({
-  email: emailSchema,
-  firstName: z.string().trim().min(1, 'First name is required.').max(80),
-  lastName: z.string().trim().min(1, 'Last name is required.').max(80),
-  addressLine1: z.string().trim().min(3, 'Address is required.').max(180),
-  addressLine2: z.string().trim().max(180).optional(),
-  landmark: z.string().trim().max(120).optional(),
-  city: z.string().trim().min(2, 'City is required.').max(80),
-  state: z.string().trim().min(2, 'State is required.').max(80),
-  postalCode: z.union([
-    z.literal(''),
-    z.string().trim().regex(/^\d{6}$/, 'Enter a valid 6-digit pincode.'),
-  ]),
+  email: z
+    .string()
+    .trim()
+    .min(1, 'Email is required.')
+    .max(255, 'Email must be 255 characters or fewer.')
+    .email('Enter a valid email address.'),
+  firstName: chefRequiredText('First name', 100),
+  lastName: chefRequiredText('Last name', 100),
+  addressLine1: chefRequiredText('Address', 255),
+  addressLine2: chefOptionalText('Address line 2', 255),
+  landmark: chefOptionalText('Landmark', 255),
+  city: chefRequiredText('City', 120),
+  state: chefRequiredText('State', 120),
+  postalCode: chefOptionalText('Postal code', 20),
 });
 
 export function toIndianE164(phoneNumber: string): string {

@@ -20,6 +20,13 @@ const chefResolution: AccountResolution = {
   onboardingStatus: 'APPROVED',
 };
 
+const chefPendingResolution: AccountResolution = {
+  flow: 'CHEF_ONBOARDING',
+  requestedRole: 'CHEF',
+  authorizedRole: 'CUSTOMER',
+  onboardingStatus: 'PENDING',
+};
+
 const customerProfileRequiredResolution: AccountResolution = {
   flow: 'CUSTOMER',
   requestedRole: 'CUSTOMER',
@@ -89,6 +96,40 @@ describe('auth role selection and account resolution state', () => {
       authActions.accountResolved({identity: chefIdentity, resolution: chefResolution}),
     );
     const unchanged = authReducer(resolved, authActions.customerProfileCompleted());
+
+    expect(unchanged.accountResolution).toEqual(chefResolution);
+  });
+
+  it('updates only a Chef onboarding resolution from an observed backend application status', () => {
+    const initial = authReducer(undefined, {type: '@@INIT'});
+    const resolved = authReducer(
+      initial,
+      authActions.accountResolved({
+        identity: chefIdentity,
+        resolution: chefPendingResolution,
+      }),
+    );
+    const rejected = authReducer(
+      resolved,
+      authActions.chefApplicationStatusObserved('REJECTED'),
+    );
+
+    expect(rejected.accountResolution).toEqual({
+      ...chefPendingResolution,
+      onboardingStatus: 'REJECTED',
+    });
+  });
+
+  it('does not let a Chef onboarding status observation alter approved Chef authority', () => {
+    const initial = authReducer(undefined, {type: '@@INIT'});
+    const resolved = authReducer(
+      initial,
+      authActions.accountResolved({identity: chefIdentity, resolution: chefResolution}),
+    );
+    const unchanged = authReducer(
+      resolved,
+      authActions.chefApplicationStatusObserved('REJECTED'),
+    );
 
     expect(unchanged.accountResolution).toEqual(chefResolution);
   });

@@ -8,6 +8,9 @@ function source(relativePath: string): string {
 
 const theme = source("../craves-theme.css");
 const hero = source("../components/sections/HeroSection.tsx");
+const footer = source("../components/sections/FooterSection.tsx");
+const howItWorks = source("../components/sections/HowItWorksSection.tsx");
+const landing = source("../screens/public/LandingPage/LandingPage.tsx");
 const welcome = source("../components/home/WelcomeBanner.tsx");
 const checkout = source("../screens/Checkout/Checkout.tsx");
 const orders = source("../screens/OrderHistory/OrderHistory.tsx");
@@ -41,10 +44,22 @@ test("buttons use white surfaces without logo-colored borders and keep the reque
   assert.match(theme, /font-weight:\s*700\s*!important/);
 });
 
-test("landing hero is solid flame red with no picture or gradient overlay", () => {
-  assert.match(hero, /bg-\[#F62E18\]/);
-  assert.doesNotMatch(hero, /hero-food|heroFood|assetUrl\(/);
-  assert.doesNotMatch(hero, /<img|linear-gradient|blur-/);
+test("landing hero uses the supplied chef artwork on a white surface with logo-red ghost word", () => {
+  assert.match(hero, /craves-chef-hero-reference\.jpg/);
+  assert.match(hero, /bg-white text-black/);
+  assert.match(hero, /rgba\(246, 46, 24, 0\.08\)/);
+  assert.match(hero, /<CravesLogo size="md" priority \/>/);
+  assert.doesNotMatch(hero, /min-h-\[46rem\].*bg-\[#F62E18\].*text-white/);
+});
+
+test("public landing surface and footer reference stay white without replacing the canonical logo", () => {
+  assert.match(landing, /min-h-screen bg-white text-ink/);
+  assert.match(landing, /items-center justify-center bg-white px-4/);
+  assert.match(howItWorks, /section className="bg-white py-20"/);
+  assert.match(footer, /craves-footer-reference\.jpg/);
+  assert.match(footer, /<CravesLogo size="lg" \/>/);
+  assert.match(footer, /bg-white\/75/);
+  assert.doesNotMatch(landing, /min-h-screen bg-cream text-ink/);
 });
 
 test("welcome banner is solid contrast red with white copy", () => {

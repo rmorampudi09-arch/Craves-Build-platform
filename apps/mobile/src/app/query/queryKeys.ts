@@ -1,5 +1,9 @@
 export type QueryRoleScope = 'CUSTOMER' | 'CHEF';
 
+export interface QueryKeyRecord {
+  readonly [key: string]: QueryKeyValue;
+}
+
 export type QueryKeyValue =
   | string
   | number
@@ -7,8 +11,6 @@ export type QueryKeyValue =
   | null
   | readonly QueryKeyValue[]
   | QueryKeyRecord;
-
-export type QueryKeyRecord = Readonly<Record<string, QueryKeyValue>>;
 
 export interface PublicQueryContext {
   locationKey?: string;

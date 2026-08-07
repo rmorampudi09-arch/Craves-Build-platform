@@ -1,5 +1,5 @@
 import {createSlice, PayloadAction} from '@reduxjs/toolkit';
-import type {AuthRole, Identity} from '../domain/types';
+import type {AccountResolution, AuthRole, Identity} from '../domain/types';
 
 export type BootstrapStatus = 'idle' | 'restoring' | 'anonymous' | 'authenticated' | 'error';
 
@@ -7,6 +7,7 @@ export interface AuthState {
   bootstrapStatus: BootstrapStatus;
   selectedRole: AuthRole;
   identity: Identity | null;
+  accountResolution: AccountResolution | null;
   lastErrorCode: string | null;
 }
 
@@ -14,6 +15,7 @@ const initialState: AuthState = {
   bootstrapStatus: 'idle',
   selectedRole: 'CUSTOMER',
   identity: null,
+  accountResolution: null,
   lastErrorCode: null,
 };
 
@@ -21,30 +23,48 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    bootstrapReset(state) { state.bootstrapStatus = 'idle'; state.lastErrorCode = null; },
+    bootstrapReset(state) {
+      state.bootstrapStatus = 'idle';
+      state.accountResolution = null;
+      state.lastErrorCode = null;
+    },
     bootstrapStarted(state) {
       state.bootstrapStatus = 'restoring';
+      state.accountResolution = null;
       state.lastErrorCode = null;
     },
     bootstrapAnonymous(state) {
       state.bootstrapStatus = 'anonymous';
       state.identity = null;
+      state.accountResolution = null;
     },
     authenticated(state, action: PayloadAction<Identity>) {
       state.bootstrapStatus = 'authenticated';
       state.identity = action.payload;
+      state.accountResolution = null;
+      state.lastErrorCode = null;
+    },
+    accountResolved(
+      state,
+      action: PayloadAction<{identity: Identity; resolution: AccountResolution}>,
+    ) {
+      state.identity = action.payload.identity;
+      state.accountResolution = action.payload.resolution;
       state.lastErrorCode = null;
     },
     bootstrapFailed(state, action: PayloadAction<string>) {
       state.bootstrapStatus = 'error';
+      state.accountResolution = null;
       state.lastErrorCode = action.payload;
     },
     roleSelected(state, action: PayloadAction<AuthRole>) {
       state.selectedRole = action.payload;
+      state.accountResolution = null;
     },
     signedOut(state) {
       state.bootstrapStatus = 'anonymous';
       state.identity = null;
+      state.accountResolution = null;
       state.lastErrorCode = null;
     },
   },

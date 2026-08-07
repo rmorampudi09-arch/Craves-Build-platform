@@ -1,0 +1,91 @@
+name: CRAVES Mobile Phase 1 Implement
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/mobile-phase1-implement.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout rebuild branch
+        uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+          fetch-depth: 0
+
+      - name: Reconstruct Phase 1 source overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d apps/mobile
+          cat .phase1/chunk01.b64 .phase1/chunk02.b64 .phase1/chunk03.b64 .phase1/chunk04.b64 .phase1/chunk05.b64 .phase1/chunk06.b64 .phase1/chunk07.b64 .phase1/chunk08.b64 .phase1/chunk09.b64 | tr -d '\n\r' | base64 -d > /tmp/phase1-overlay.tar.gz
+          echo '815999af83cea5086e7de61791a4b8720568d23a7d4b9c324b8a060613d3a3f6  /tmp/phase1-overlay.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/phase1-overlay.tar.gz -C apps/mobile
+
+      - name: Wire Firebase Android plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('apps/mobile/android/build.gradle')
+          text = root.read_text()
+          marker = 'classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")'
+          plugin = 'classpath("com.google.gms:google-services:4.5.0")'
+          if plugin not in text:
+              text = text.replace(marker, marker + '\n        ' + plugin)
+          root.write_text(text)
+
+          app = Path('apps/mobile/android/app/build.gradle')
+          text = app.read_text()
+          plugin_line = 'apply plugin: "com.google.gms.google-services"'
+          if plugin_line not in text:
+              text = text.replace('apply plugin: "com.facebook.react"', 'apply plugin: "com.facebook.react"\n' + plugin_line)
+          app.write_text(text)
+          PY
+
+      - name: Add Android native splash theme
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('apps/mobile/android/app/src/main/res/values/styles.xml')
+          text = p.read_text()
+          if 'windowSplashScreenBackground' not in text:
+              text = text.replace(
+                  '<item name="android:editTextBackground">@drawable/rn_edit_text_material</item>',
+                  '<item name="android:editTextBackground">@drawable/rn_edit_text_material</item>\n        <item name="android:windowSplashScreenBackground">#FFF7F1</item>\n        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>\n        <item name="android:windowSplashScreenIconBackgroundColor">#FFF7F1</item>\n        <item name="android:postSplashScreenTheme">@style/AppTheme</item>'
+              )
+          p.write_text(text)
+          PY
+
+      - name: Enforce mobile-only source change
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --name-only | grep -E '^(services/|openapi/|infra/|apps/api/)'; then
+            echo 'Backend or infrastructure change detected. Refusing Phase 1 commit.' >&2
+            exit 1
+          fi
+
+      - name: Commit Phase 1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .phase1
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/mobile .phase1
+          git commit -m 'Implement Phase 1 auth and secure session from scratch'
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

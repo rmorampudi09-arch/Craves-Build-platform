@@ -13,16 +13,12 @@ export function useSessionLifecycle(): void {
   const dispatch = useAppDispatch();
   const status = useAppSelector(state => state.auth.bootstrapStatus);
 
-  useEffect(() => {
-    return sessionManager.subscribeInvalidation(() => {
-      dispatch(authActions.signedOut());
-    });
-  }, [dispatch]);
+  useEffect(() => sessionManager.subscribeInvalidation(() => {
+    dispatch(authActions.signedOut());
+  }), [dispatch]);
 
   useEffect(() => {
-    if (status !== 'authenticated') {
-      return;
-    }
+    if (status !== 'authenticated') return;
 
     let mounted = true;
     let appState: AppStateStatus = AppState.currentState;
@@ -36,40 +32,31 @@ export function useSessionLifecycle(): void {
     }
 
     function schedule(overrideDelayMs?: number) {
-      if (!mounted || appState !== 'active') {
-        return;
-      }
+      if (!mounted || appState !== 'active') return;
       clearTimer();
       const dueInMs = tokenMemory.millisecondsUntilRefresh();
       if (dueInMs === null) {
         dispatch(authActions.signedOut());
         return;
       }
-      timer = setTimeout(
-        () => void runRefresh(),
-        Math.max(MIN_TIMER_DELAY_MS, overrideDelayMs ?? dueInMs),
-      );
+      timer = setTimeout(() => {
+        runRefresh();
+      }, Math.max(MIN_TIMER_DELAY_MS, overrideDelayMs ?? dueInMs));
     }
 
     async function runRefresh() {
-      if (!mounted || appState !== 'active') {
-        return;
-      }
+      if (!mounted || appState !== 'active') return;
       clearTimer();
       try {
         const tokens = await sessionManager.refresh();
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         if (!tokens) {
           dispatch(authActions.signedOut());
           return;
         }
         schedule();
       } catch (error) {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         const normalized = toAppApiError(error);
         if (normalized.retriable || !normalized.status || normalized.status >= 500) {
           schedule(RETRY_DELAY_MS);
@@ -80,7 +67,6 @@ export function useSessionLifecycle(): void {
     }
 
     schedule();
-
     const subscription = AppState.addEventListener('change', nextState => {
       const wasInactive = appState !== 'active';
       appState = nextState;
@@ -88,13 +74,9 @@ export function useSessionLifecycle(): void {
         clearTimer();
         return;
       }
-      if (wasInactive) {
-        if (tokenMemory.isFresh()) {
-          schedule();
-        } else {
-          void runRefresh();
-        }
-      }
+      if (!wasInactive) return;
+      if (tokenMemory.isFresh()) schedule();
+      else runRefresh();
     });
 
     return () => {

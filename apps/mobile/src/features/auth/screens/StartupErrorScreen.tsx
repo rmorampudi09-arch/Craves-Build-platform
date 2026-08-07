@@ -38,7 +38,7 @@ export function StartupErrorScreen() {
           variant="outline"
           label="Go to sign in"
           loading={leavingRestore}
-          onPress={() => void handleSignIn()}
+          onPress={handleSignIn}
         />
       </AuthCard>
     </AuthShell>

@@ -59,7 +59,7 @@ export function ChefAccountStatusScreen({navigation, route}: Props) {
   }, [dispatch, navigation]);
 
   useEffect(() => {
-    void refreshStatus();
+    refreshStatus().catch(() => undefined);
   }, [refreshStatus]);
 
   const content =
@@ -126,13 +126,13 @@ export function ChefAccountStatusScreen({navigation, route}: Props) {
           variant={status === 'PENDING' || status === 'APPROVED' ? 'primary' : 'outline'}
           label="Refresh status"
           loading={refreshing}
-          onPress={() => void refreshStatus()}
+          onPress={refreshStatus}
         />
         <PrimaryButton
           variant="outline"
           label="Sign out"
           disabled={refreshing}
-          onPress={() => void logout()}
+          onPress={logout}
         />
       </AuthCard>
     </AuthShell>

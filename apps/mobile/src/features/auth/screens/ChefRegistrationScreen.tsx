@@ -97,7 +97,7 @@ export function ChefRegistrationScreen({navigation}: Props) {
 
   useEffect(() => {
     if (isRejectedApplication) {
-      void loadRejectedApplication();
+      loadRejectedApplication().catch(() => undefined);
     }
   }, [isRejectedApplication, loadRejectedApplication]);
 

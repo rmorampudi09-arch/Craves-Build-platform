@@ -23,6 +23,7 @@
 - **P02 — APIM/OpenAPI Contract Inventory: DONE**.
 - **P03 — Runtime Configuration and Environment Boundary: DONE**.
 - **P04 — Design Token Baseline: DONE**.
+- **P05 — Shared Motion and Reduced-Motion Baseline: DONE**.
 - P01 started from branch HEAD `64dfbd18820b2644ee0263d5fffcefbd62172dfe`.
 - P01 completion commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`.
 - P02 inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`.
@@ -35,11 +36,15 @@
 - P04 implementation completion commit: `ae15a1702923e68dbd3b3582d664e500ec723927`.
 - P04 evidence: `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md`.
 - P04 CI run: `31196834196` — **SUCCESS**.
-- Next phase in sequence: **P05 — Shared Motion and Reduced-Motion Baseline**.
+- P05 started from branch HEAD `783b29224661a969405837c2a1ef7f5a477b427c`.
+- P05 implementation completion commit: `53f27fd405208cdd6b740124c0901857d04bd8fd`.
+- P05 evidence: `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md`.
+- P05 CI run: `31197890099` — **SUCCESS**.
+- Next phase in sequence: **P06 — Shared Interaction Primitives**.
 - Next phase authorization: **NONE AUTHORIZED**.
 - Required action: stop and wait for the user to explicitly start/continue the next phase.
 
-P04 extended the existing single design-token owner instead of introducing a parallel theme. The baseline now centralizes the locked Flame Red/Espresso Brown brand values, warm/base surfaces, semantic colors, 4 dp spacing rhythm, radii, border widths, typography and font-weight vocabulary, icon sizes, Android-first touch targets, safe-area content clearances, dynamic-type policy, and restrained elevation/shadow definitions. Existing auth foundation components were migrated only where they carried those same baseline values. No navigation, API, backend/APIM, storage, authentication contract, screen phase, or P05 motion convention was introduced.
+P05 extends the existing single design-system foundation with a shared motion vocabulary rather than introducing a parallel animation system. It defines restrained durations, easing curves, spring conventions, transform/opacity-only intent primitives for press/chip-tab/bounded list changes/bottom navigation/View Cart/modal/skeleton behavior, a platform reduced-motion preference hook, immediate low-motion resolution, zero animation delay for authentication/payment/error navigation, and a bounded-list guard that prevents whole-large-list animation. No P06 interaction component, navigation shell, marketplace screen, API, backend/APIM, storage, or product flow was implemented.
 
 ---
 
@@ -60,8 +65,8 @@ The rebuild diff from that baseline is confined to the new mobile application an
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
-- GitHub Actions run ID: `31196834196`
-- Head SHA: `ae15a1702923e68dbd3b3582d664e500ec723927`
+- GitHub Actions run ID: `31197890099`
+- Head SHA: `53f27fd405208cdd6b740124c0901857d04bd8fd`
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -77,7 +82,7 @@ Successful checks:
 
 Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is the correct implementation-phase policy.
 
-P04 changed the shared design-token baseline, added focused token tests, and migrated only current foundation consumers of those baseline values. Run `31196834196` is the accepted P04 code-level validation evidence. It does not claim device/reference visual certification, backend runtime validation, Gradle packaging, or APK verification.
+P05 added the shared motion/reduced-motion foundation and focused motion-policy tests. Run `31197890099` is the accepted P05 code-level validation evidence. It does not claim device/reference visual certification, backend runtime validation, Gradle packaging, or APK verification.
 
 ---
 
@@ -164,11 +169,35 @@ Accepted P04 baseline includes:
 - safe-area content/floating clearances that remain additive to runtime `react-native-safe-area-context` device insets,
 - restrained shared `none`, `card`, and `primaryAction` elevation/shadow definitions.
 
-Existing foundation adoption in P04 is intentionally narrow: `Icon.tsx`, `AuthCard.tsx`, `PrimaryButton.tsx`, `InputField.tsx`, and `AuthShell.tsx` now consume the relevant shared baseline values instead of carrying equivalent raw/default values. No P05 motion system or later reusable interaction-component phase was started.
+Existing foundation adoption in P04 is intentionally narrow: `Icon.tsx`, `AuthCard.tsx`, `PrimaryButton.tsx`, `InputField.tsx`, and `AuthShell.tsx` consume the relevant shared baseline values instead of carrying equivalent raw/default values.
 
 All 52 references have **not** been visually certified against the token baseline; reference/device visual certification remains in the later screen and QA phases.
 
-### 4.5 HTTP/error/correlation foundation — IMPLEMENTED FOUNDATION
+### 4.5 Shared motion and reduced-motion baseline — IMPLEMENTED / P05 ACCEPTED
+
+Key files:
+
+- `apps/mobile/src/design/motion.ts`
+- `apps/mobile/src/design/reducedMotion.ts`
+- `apps/mobile/src/design/motion.test.ts`
+- `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md`
+
+Accepted P05 baseline includes:
+
+- shared durations for press, selection, bounded item insertion/removal, bottom navigation, View Cart, modal transitions, and skeleton cycles,
+- standard/enter/exit cubic-bezier conventions,
+- restrained feedback/settle spring conventions with overshoot clamped,
+- intent-level motion definitions restricted to opacity and transform,
+- platform reduced-motion preference tracking through React Native `AccessibilityInfo`,
+- conservative reduced-motion startup behavior until the platform preference resolves,
+- immediate reduced-motion equivalents with springs and continuous shimmer disabled,
+- explicit zero animation delay for authentication navigation, payment navigation, and error presentation,
+- whole-large-list animation disabled by shared policy,
+- bounded visible list-change animation via `shouldAnimateListChanges`.
+
+P05 defines the baseline only. It intentionally does not convert existing auth controls into P06 shared interaction primitives, does not implement View Cart/bottom navigation/modal product surfaces, and does not claim screen-level motion/device certification.
+
+### 4.6 HTTP/error/correlation foundation — IMPLEMENTED FOUNDATION
 
 Key files:
 
@@ -178,7 +207,7 @@ Key files:
 
 The central client/error/correlation architecture exists. P02 completed the static inventory of all currently consumed mobile operations; unresolved APIM/OpenAPI/backend contracts remain explicitly classified in `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`. Future feature wrappers still require exact contracts before implementation.
 
-### 4.6 Token/session security — IMPLEMENTED FOR CURRENT AUTH FLOW
+### 4.7 Token/session security — IMPLEMENTED FOR CURRENT AUTH FLOW
 
 Key files:
 
@@ -196,7 +225,7 @@ Verified implementation behavior:
 
 This matches the guide’s session-storage model. P02 found that the corresponding current backend/APIM refresh contract is not runtime-verified and is `CONTRACT_ONLY`; wider application cache cleanup and role-transition auditing remain later phases.
 
-### 4.7 Authentication UI/components — IMPLEMENTED FOUNDATION, FINAL VISUAL QA PENDING
+### 4.8 Authentication UI/components — IMPLEMENTED FOUNDATION, FINAL VISUAL QA PENDING
 
 Current shared auth components include:
 
@@ -222,7 +251,7 @@ Current auth screens include:
 
 These implement the current role-aware authentication foundation, but no pixel-perfect claim is recorded until final reference/device QA.
 
-### 4.8 Firebase authentication — IMPLEMENTED FOR CURRENT AUTH FLOW
+### 4.9 Firebase authentication — IMPLEMENTED FOR CURRENT AUTH FLOW
 
 Key file:
 
@@ -230,7 +259,7 @@ Key file:
 
 Current flow supports native Firebase phone sign-in/OTP and Firebase email/password/password-reset operations used by the auth service.
 
-### 4.9 CRAVES Auth Service integration — IMPLEMENTED FOR CURRENT AUTH FLOW
+### 4.10 CRAVES Auth Service integration — IMPLEMENTED FOR CURRENT AUTH FLOW
 
 Key files:
 
@@ -248,7 +277,7 @@ The current auth implementation exchanges Firebase identity for the CRAVES sessi
 
 **P02 contract result:** Firebase exchange, refresh, and logout are `CONTRACT_ONLY`; `/api/v1/auth/me` is `BLOCKED`. Existing mobile code presence is not evidence that these routes are currently runnable. See the P02 inventory before any later contract-dependent change.
 
-### 4.10 Customer profile completion — IMPLEMENTED ONLY FOR AUTH/ONBOARDING HANDOFF
+### 4.11 Customer profile completion — IMPLEMENTED ONLY FOR AUTH/ONBOARDING HANDOFF
 
 Key file:
 
@@ -263,7 +292,7 @@ Currently coded paths:
 
 P02 classifies both current customer-profile operations as `BLOCKED` pending an authoritative repository contract/backend mapping. This does **not** mean the master-guide Customer Profile/Edit Profile experiences are complete.
 
-### 4.11 Chef application/onboarding handoff — IMPLEMENTED ONLY FOR AUTH/ACCOUNT STATUS
+### 4.12 Chef application/onboarding handoff — IMPLEMENTED ONLY FOR AUTH/ACCOUNT STATUS
 
 Current coded paths:
 
@@ -277,7 +306,7 @@ Current screens include:
 
 P02 classifies both current chef-application operations as `BLOCKED`: an APIM policy template exists, but exact operation/backend/schema evidence is insufficient. This covers the auth-time chef application/status handoff code only. It does **not** mean Chef Dashboard, Orders, Menu, Analytics, Profile, Business, Payout, Subscription, or Preferences are complete.
 
-### 4.12 Account router — IMPLEMENTED AS TEMPORARY AUTH COMPLETION ROUTER
+### 4.13 Account router — IMPLEMENTED AS TEMPORARY AUTH COMPLETION ROUTER
 
 `AccountRouterScreen.tsx` resolves profile/application state after authentication.
 
@@ -369,10 +398,11 @@ No second Firebase Auth wrapper or web-auth implementation was found in the curr
 ### 5.10 Design-system ownership
 
 - `apps/mobile/src/design/tokens.ts` is the single current design-token source. P04 accepts it for brand colors, warm/semantic surfaces, semantic status/text colors, spacing, radii, border widths, typography/font weights, icon sizes, touch targets, safe-area content clearances, dynamic type, and elevation/shadow definitions.
+- `apps/mobile/src/design/motion.ts` is the single shared motion-convention source accepted by P05; `apps/mobile/src/design/reducedMotion.ts` owns the platform reduced-motion preference boundary for future animated consumers.
 - `apps/mobile/src/shared/components/Icon.tsx` is the current cross-feature shared component and consumes the shared icon/color baseline.
 - Auth-specific visual primitives remain under `apps/mobile/src/features/auth/components` because they are feature-scoped today.
 
-There is no competing ThemeProvider or duplicate color-token system. Later design phases must extend this token system instead of creating a parallel theme architecture.
+There is no competing ThemeProvider, duplicate color-token system, or second accepted motion vocabulary. Later design/component phases must extend these owners instead of creating parallel theme/animation architecture.
 
 ### 5.11 Feature/module ownership
 
@@ -395,6 +425,7 @@ Customer and Chef marketplace feature families have not yet been added in this r
 - `apps/mobile/src/core/security/tokenMemory.test.ts` covers access-token memory behavior.
 - `apps/mobile/src/core/config/runtimeConfig.test.ts` covers the P03 runtime environment/configuration boundary.
 - `apps/mobile/src/design/tokens.test.ts` covers P04 brand, spacing, semantic-color, touch-target, dynamic-type, and safe-area token invariants.
+- `apps/mobile/src/design/motion.test.ts` covers P05 duration, transform/opacity, reduced-motion, critical-delay, and large-list motion invariants.
 - `apps/mobile/jest.config.js` owns Jest setup and transform rules.
 - `apps/mobile/tsconfig.json` extends the React Native TypeScript configuration and includes all TypeScript source/test files.
 
@@ -420,13 +451,13 @@ Coverage is intentionally small and is not sufficient for later customer/chef fe
 
 ### 5.15 Duplicate/dead architecture result
 
-No active duplicate runtime navigation container, Redux store, TanStack Query client, general authenticated HTTP client, secure-token store, Firebase Auth wrapper, runtime configuration owner, or design-token system was found in the current `apps/mobile` source.
+No active duplicate runtime navigation container, Redux store, TanStack Query client, general authenticated HTTP client, secure-token store, Firebase Auth wrapper, runtime configuration owner, design-token system, or accepted motion baseline was found in the current `apps/mobile` source.
 
 Installed baseline libraries that are not yet exercised by the auth-only implementation (for example bottom tabs, FlashList, React Hook Form/Zod, AsyncStorage for approved non-sensitive persistence, and animation/media helpers) are reserved dependencies, not parallel architecture. Future phases must reuse them where appropriate rather than add competing libraries without approval.
 
 ### 5.16 Deferred cleanup/refinement notes
 
-These findings do **not** block P01–P04 completion, but later owning phases should address them deliberately:
+These findings do **not** block P01–P05 completion, but later owning phases should address them deliberately:
 
 1. `src/core/http/apiError.ts` imports the `ApiErrorResponse` transport type from `features/auth/domain/types`. Even though it is type-only, shared core HTTP infrastructure should not depend inward on the auth feature. P09 should move/define the generic API error response at a core/shared transport boundary.
 2. The `QueryClient` is intentionally private inside `AppProviders.tsx`; once private server state exists, P08/P24 must provide a controlled cache-clearing/invalidation boundary for logout and role switching rather than creating another query client.
@@ -434,9 +465,9 @@ These findings do **not** block P01–P04 completion, but later owning phases sh
 4. Android Kotlin files are physically under `android/app/src/main/java/com/cravesmobile/` while declaring package `com.cravesapp`. The declarations/application ID are consistent at runtime, but the directory should be normalized in a future native-configuration cleanup for maintainability.
 5. Android release currently uses the debug signing configuration. Production signing is a final release-readiness concern and must not be introduced during intermediate UI phases.
 6. Historical write-capable Phase 1 bootstrap/dependency/implementation workflows remain in the repository. They are quarantined as legacy helpers; a later repository-hygiene change may retire them, but they must not be triggered/edited as part of normal phased implementation.
-7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P04 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
+7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P05 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
 
-**Current foundation blocker status:** none for P04. The unresolved P02 backend/APIM contracts remain visible and unchanged.
+**Current foundation blocker status:** none for P05. The unresolved P02 backend/APIM contracts remain visible and unchanged.
 
 ---
 
@@ -448,9 +479,10 @@ Known tests currently include:
 - `apps/mobile/src/core/security/tokenMemory.test.ts` — token-memory behavior,
 - `apps/mobile/src/core/config/runtimeConfig.test.ts` — runtime environment/base URL validation and failure behavior,
 - `apps/mobile/src/design/tokens.test.ts` — P04 brand, spacing, semantic, touch, dynamic-type, and safe-area token invariants,
+- `apps/mobile/src/design/motion.test.ts` — P05 shared duration, property, reduced-motion, critical-delay, and bounded-list invariants,
 - `apps/mobile/src/utils/validation.test.ts` — current validation helpers.
 
-CI run `31196834196` is green for the accepted P04 implementation. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
+CI run `31197890099` is green for the accepted P05 implementation. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
 
 ---
 
@@ -465,7 +497,7 @@ The granular `phases.md` was introduced after the existing auth foundation was w
 | P02 APIM/OpenAPI Inventory | **DONE** | `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md` inventories all 8 currently consumed mobile HTTP operations, route-key/auth expectations, path/source mismatches, validation gaps, and static classifications: 3 `CONTRACT_ONLY`, 5 `BLOCKED`, 0 runtime-verified. |
 | P03 Runtime Config | **DONE** | Runtime schema/base URL validation, Android `react-native-config` injection, non-secret `.env.example`, Firebase Android audit, explicit remote-config/feature-flag boundary, focused tests, and successful CI are recorded in `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`. |
 | P04 Design Tokens | **DONE** | `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md` records the accepted single token baseline for brand/warm/semantic colors, spacing, radius, typography, borders/elevation, icon/touch sizes, safe-area clearances, dynamic type, focused tests, and successful CI. |
-| P05 Motion Baseline | NOT STARTED | No accepted full shared motion/reduced-motion phase yet. |
+| P05 Motion Baseline | **DONE** | `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md` records the accepted shared motion vocabulary, platform reduced-motion preference boundary, critical-flow zero-delay rule, bounded-list guard, focused tests, and successful CI. |
 | P06 Shared Interaction Primitives | PARTIAL | Auth primitives exist only. |
 | P07 Shared Lifecycle Primitives | PARTIAL | Auth/startup states exist; app-wide lifecycle primitives pending. |
 | P08 Query/Store Cache Rules | PARTIAL | Providers/dependencies exist; feature cache rules not audited. |
@@ -498,8 +530,8 @@ The following must **not** be described as complete at this point:
 - runtime/backend/APIM resolution of the `CONTRACT_ONLY` and `BLOCKED` routes identified by P02,
 - restoration/approval of the missing authoritative full APIM/OpenAPI contract,
 - an approved production feature-flag/remote-config provider/key contract for future flag-controlled features,
-- P05 Shared Motion and Reduced-Motion Baseline acceptance,
-- per-screen/reference visual certification of the P04 token baseline,
+- P06 Shared Interaction Primitives acceptance,
+- per-screen/reference visual certification of the P04 token baseline and P05 motion baseline,
 - Customer Home refs 5/6,
 - Discover Chefs refs 7/8,
 - Orders refs 9/10 and order child flows,
@@ -646,10 +678,27 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 - Blockers: none to P04 acceptance.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
+### P05 — Shared Motion and Reduced-Motion Baseline
+
+- Status: **DONE**
+- Started from commit: `783b29224661a969405837c2a1ef7f5a477b427c`
+- Completed implementation at commit: `53f27fd405208cdd6b740124c0901857d04bd8fd`
+- Evidence: `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md`.
+- Guide references: full 183-page master guide page 14 Animation Guidelines plus global UX/performance/accessibility rules requiring consistent motion, transform/opacity preference, reduced-motion equivalents, smooth mid-range Android behavior, and no animation that delays critical navigation/error handling. No individual screen reference was implemented.
+- Changed implementation/evidence files: `apps/mobile/src/design/motion.ts`, `apps/mobile/src/design/reducedMotion.ts`, `apps/mobile/src/design/motion.test.ts`, `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md`; `build.md` updated only as the completion ledger.
+- APIM/contracts used: **None.** P05 is a client design-system foundation phase. No endpoint, route key, request/response model, auth contract, backend/APIM/infrastructure source, or environment behavior changed. P02 classifications remain unchanged.
+- Behavior completed: added a single intent-level motion vocabulary for press/chip-tab/bounded list insertion-removal/bottom navigation/View Cart/modal/skeleton behavior; standardized short durations, cubic-bezier curves, and restrained springs; restricted shared transition properties to opacity/transform; added platform reduced-motion preference tracking with a conservative startup default; added immediate low-motion resolution disabling springs/continuous shimmer; fixed critical auth/payment/error animation delays at zero; prevented whole-large-list animation and bounded list-item change animation.
+- Tests/checks: GitHub Actions run `31197890099` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest including the new P05 motion invariant suite, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
+- Visual QA: no screen/reference was implemented in P05; device-level reduced-motion and reference animation certification remains in later component/screen/QA phases.
+- APK built: **No**, per the implementation-phase policy.
+- Backend/APIM/infrastructure source changed: **No**.
+- Blockers: none to P05 acceptance.
+- Next phase: **NONE AUTHORIZED — waiting for user**.
+
 ---
 
 ## 12. Current Next Step
 
 **Stop here.**
 
-P04 is complete. P05 — Shared Motion and Reduced-Motion Baseline is the next phase in `phases.md`, but it is **not authorized** by completion of P04. Begin P05 only after the user explicitly says to continue/start the next phase.
+P05 is complete. P06 — Shared Interaction Primitives is the next phase in `phases.md`, but it is **not authorized** by completion of P05. Begin P06 only after the user explicitly says to continue/start the next phase.

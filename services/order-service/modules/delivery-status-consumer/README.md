@@ -145,18 +145,61 @@ The pipeline verifies:
 - Order Service Java 21 build/tests;
 - Notification Service compatibility build/tests;
 - all event JSON schemas;
-- fail-closed application and deployment defaults.
+- fail-closed source defaults;
+- runtime-preserving routine deployment controls.
+
+## Service Bus subscription activation safety
+
+`azure-pipelines-order-delivery-status-consumer-enable.yml` owns the one-time Order delivery-status subscription preparation and consumer activation.
+
+For a missing subscription it performs this order:
+
+```text
+verify Order + Integration safety state
+  -> verify active Order secretRefs are Key Vault-backed
+  -> create order-service-delivery-status-changed as Disabled
+  -> create delivery-status-changed-only SQL filter
+  -> verify exact filter expression
+  -> remove $Default rule
+  -> verify Azure Service Bus Data Receiver, including inherited RBAC
+  -> activate subscription
+  -> enable only the four Order delivery-status consumer settings
+  -> verify new revision health
+  -> verify unrelated env/config/identity/secret metadata are unchanged
+```
+
+The filter expression is:
+
+```text
+eventType = 'DELIVERY_STATUS_CHANGED' OR event_type = 'DELIVERY_STATUS_CHANGED'
+```
+
+The pipeline deliberately does **not** enable:
+
+```text
+CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED
+CRAVES_DELIVERY_COMMAND_ENABLED
+CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED
+CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED
+BORZO_API_ENABLED
+```
+
+It requires those Integration/provider controls to remain false or absent before enabling the downstream Order consumer.
+
+The subscription is created Disabled first. If Order lacks `Azure Service Bus Data Receiver`, the pipeline stops before enabling the consumer and leaves the newly created subscription Disabled. The output prints the managed-identity principal ID and exact subscription scope required for the one-time RBAC assignment.
 
 ## Deployment and activation order
 
 1. Merge only after branch CI succeeds.
-2. Run `azure-pipelines-order-service.yml` from merged `main`.
-3. Confirm Flyway V9 and `CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=false`.
-4. Run `azure-pipelines-order-delivery-status-consumer-enable.yml`.
-5. Resolve any one-time Service Bus Receiver role requirement and rerun.
-6. Run `azure-pipelines-integration-delivery-status-publisher-enable.yml` only after the Order consumer is healthy and its DLQ is empty.
-7. Validate one synthetic event before enabling webhook/tracking/provider execution.
-8. Add the APIM route for the customer delivery-status endpoint.
+2. Deploy Order code from merged `main` when required and confirm Flyway V9 is present.
+3. Run `azure-pipelines-delivery-status-rollout-status.yml`.
+4. If the filtered subscription is missing, run `azure-pipelines-order-delivery-status-consumer-enable.yml`.
+5. If the activation pipeline reports missing `Azure Service Bus Data Receiver`, grant that role once to the Order system-assigned managed identity at the printed subscription scope or an approved parent scope, then rerun.
+6. Confirm the Order consumer is healthy and the delivery-status subscription DLQ is empty.
+7. Validate one synthetic `DELIVERY_STATUS_CHANGED` event, including duplicate/stale/terminal behavior.
+8. Run `azure-pipelines-integration-delivery-status-publisher-enable.yml` only after the downstream consumer validation passes.
+9. Add/verify the APIM route for the customer delivery-status endpoint.
+10. Keep webhook processing, tracking reconciliation and Borzo disabled until their later controlled activation stages.
 
 ## Rollback
 
@@ -175,10 +218,12 @@ Rollback disables:
 
 It never deletes durable event, inbox, history, notification or provider-audit data.
 
+The consumer-enable pipeline also has a narrow automatic rollback for its four Order consumer configuration values when the new revision or preservation checks fail. A subscription created by that run is left Disabled rather than deleted so that diagnostic evidence is preserved.
+
 ## Manual steps
 
-- Azure DevOps: register the new YAML pipelines if they are not automatically visible.
-- Azure RBAC: grant `Azure Service Bus Data Receiver` to the Order Container App managed identity when the activation pipeline reports the exact scope.
-- APIM: add the new GET operation only after the merged Order revision is deployed.
-- No secret value should be pasted into chat or pipeline YAML.
-- No new paid Azure SKU is required; the activation pipeline creates one subscription inside the existing Service Bus namespace.
+- Azure DevOps: register the YAML pipelines if they are not already visible as Azure DevOps Pipeline objects.
+- Azure RBAC: when reported by the activation pipeline, grant `Azure Service Bus Data Receiver` to the Order Container App system-assigned managed identity at the printed Service Bus subscription scope or an approved parent scope.
+- APIM: add/verify the customer delivery-status GET operation only after the Order consumer path is proven.
+- Do not paste secret values into chat, pipeline YAML or Azure DevOps plain-text variables.
+- No new paid Azure SKU is required; the activation uses one subscription inside the existing Service Bus namespace.

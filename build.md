@@ -22,6 +22,7 @@
 - **P01 — Repository Architecture Inventory: DONE**.
 - **P02 — APIM/OpenAPI Contract Inventory: DONE**.
 - **P03 — Runtime Configuration and Environment Boundary: DONE**.
+- **P04 — Design Token Baseline: DONE**.
 - P01 started from branch HEAD `64dfbd18820b2644ee0263d5fffcefbd62172dfe`.
 - P01 completion commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`.
 - P02 inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`.
@@ -30,11 +31,15 @@
 - P03 implementation completion commit: `57f371cc3851c78daa6a0bd6b28521f0c62babb2`.
 - P03 evidence: `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`.
 - P03 CI run: `31194872495` — **SUCCESS**.
-- Next phase in sequence: **P04 — Design Token Baseline**.
+- P04 started from branch HEAD `3a221d71819dc1bb079f01bbcfc5428fc65ca521`.
+- P04 implementation completion commit: `ae15a1702923e68dbd3b3582d664e500ec723927`.
+- P04 evidence: `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md`.
+- P04 CI run: `31196834196` — **SUCCESS**.
+- Next phase in sequence: **P05 — Shared Motion and Reduced-Motion Baseline**.
 - Next phase authorization: **NONE AUTHORIZED**.
 - Required action: stop and wait for the user to explicitly start/continue the next phase.
 
-P03 hardened the existing single mobile runtime-configuration boundary without creating a parallel system. The APIM/API base URL and environment identity are externally injected, required/invalid runtime values fail clearly, production endpoint values were removed from committed example/test configuration, Android now applies the existing `react-native-config` dotenv bridge, Firebase Android wiring was statically verified, and the absence of a current feature-flag/remote-config provider or consumer was recorded explicitly rather than inventing keys or rollout behavior. P03 did not modify backend/APIM/infrastructure source and did not begin P04.
+P04 extended the existing single design-token owner instead of introducing a parallel theme. The baseline now centralizes the locked Flame Red/Espresso Brown brand values, warm/base surfaces, semantic colors, 4 dp spacing rhythm, radii, border widths, typography and font-weight vocabulary, icon sizes, Android-first touch targets, safe-area content clearances, dynamic-type policy, and restrained elevation/shadow definitions. Existing auth foundation components were migrated only where they carried those same baseline values. No navigation, API, backend/APIM, storage, authentication contract, screen phase, or P05 motion convention was introduced.
 
 ---
 
@@ -55,8 +60,8 @@ The rebuild diff from that baseline is confined to the new mobile application an
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
-- GitHub Actions run ID: `31194872495`
-- Head SHA: `57f371cc3851c78daa6a0bd6b28521f0c62babb2`
+- GitHub Actions run ID: `31196834196`
+- Head SHA: `ae15a1702923e68dbd3b3582d664e500ec723927`
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -72,7 +77,7 @@ Successful checks:
 
 Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is the correct implementation-phase policy.
 
-P03 changed mobile runtime/native configuration and added focused tests, so run `31194872495` is the accepted P03 code-level validation evidence. It does not claim device runtime, backend runtime, Gradle packaging, or APK verification.
+P04 changed the shared design-token baseline, added focused token tests, and migrated only current foundation consumers of those baseline values. Run `31196834196` is the accepted P04 code-level validation evidence. It does not claim device/reference visual certification, backend runtime validation, Gradle packaging, or APK verification.
 
 ---
 
@@ -136,23 +141,32 @@ Accepted P03 behavior:
 
 No backend route, APIM policy, secret, or environment-specific production value was introduced by P03.
 
-### 4.4 Shared design-token foundation — IMPLEMENTED FOUNDATION
+### 4.4 Shared design-token baseline — IMPLEMENTED / P04 ACCEPTED
 
-Key file:
+Key files:
 
 - `apps/mobile/src/design/tokens.ts`
+- `apps/mobile/src/design/tokens.test.ts`
+- `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md`
 
-Current tokens include:
+Accepted P04 baseline includes:
 
-- Flame Red `#F62E18`,
-- Espresso Brown `#261A15`,
-- cream/warm surfaces,
-- text/semantic/border colors,
-- spacing,
-- radii,
-- typography sizing.
+- locked Flame Red `#F62E18` and Espresso Brown `#261A15`,
+- warm/base/muted semantic surfaces,
+- primary/secondary/placeholder text colors,
+- distinct success/warning/error/information semantic colors,
+- a 4 dp shared spacing rhythm,
+- shared radii and standard/focus/strong border widths,
+- typography sizes and shared font-weight vocabulary,
+- dynamic type policy with React Native font scaling enabled and no fixed token line-height that would clip scaled text,
+- shared icon sizes,
+- Android-first `48 dp` minimum and `56 dp` comfortable interaction targets,
+- safe-area content/floating clearances that remain additive to runtime `react-native-safe-area-context` device insets,
+- restrained shared `none`, `card`, and `primaryAction` elevation/shadow definitions.
 
-This is only a foundation; all 52 references have **not** yet been visually certified against these tokens. P04 has not been started under the granular phase protocol.
+Existing foundation adoption in P04 is intentionally narrow: `Icon.tsx`, `AuthCard.tsx`, `PrimaryButton.tsx`, `InputField.tsx`, and `AuthShell.tsx` now consume the relevant shared baseline values instead of carrying equivalent raw/default values. No P05 motion system or later reusable interaction-component phase was started.
+
+All 52 references have **not** been visually certified against the token baseline; reference/device visual certification remains in the later screen and QA phases.
 
 ### 4.5 HTTP/error/correlation foundation — IMPLEMENTED FOUNDATION
 
@@ -354,8 +368,8 @@ No second Firebase Auth wrapper or web-auth implementation was found in the curr
 
 ### 5.10 Design-system ownership
 
-- `apps/mobile/src/design/tokens.ts` is the current shared design-token source for Flame Red, Espresso Brown, warm surfaces, semantic colors, spacing, radii, and typography sizes.
-- `apps/mobile/src/shared/components/Icon.tsx` is the current cross-feature shared component.
+- `apps/mobile/src/design/tokens.ts` is the single current design-token source. P04 accepts it for brand colors, warm/semantic surfaces, semantic status/text colors, spacing, radii, border widths, typography/font weights, icon sizes, touch targets, safe-area content clearances, dynamic type, and elevation/shadow definitions.
+- `apps/mobile/src/shared/components/Icon.tsx` is the current cross-feature shared component and consumes the shared icon/color baseline.
 - Auth-specific visual primitives remain under `apps/mobile/src/features/auth/components` because they are feature-scoped today.
 
 There is no competing ThemeProvider or duplicate color-token system. Later design phases must extend this token system instead of creating a parallel theme architecture.
@@ -380,6 +394,7 @@ Customer and Chef marketplace feature families have not yet been added in this r
 - `apps/mobile/__tests__/App.test.tsx` is the current root render test.
 - `apps/mobile/src/core/security/tokenMemory.test.ts` covers access-token memory behavior.
 - `apps/mobile/src/core/config/runtimeConfig.test.ts` covers the P03 runtime environment/configuration boundary.
+- `apps/mobile/src/design/tokens.test.ts` covers P04 brand, spacing, semantic-color, touch-target, dynamic-type, and safe-area token invariants.
 - `apps/mobile/jest.config.js` owns Jest setup and transform rules.
 - `apps/mobile/tsconfig.json` extends the React Native TypeScript configuration and includes all TypeScript source/test files.
 
@@ -411,7 +426,7 @@ Installed baseline libraries that are not yet exercised by the auth-only impleme
 
 ### 5.16 Deferred cleanup/refinement notes
 
-These findings do **not** block P01, P02, or P03 completion, but later owning phases should address them deliberately:
+These findings do **not** block P01–P04 completion, but later owning phases should address them deliberately:
 
 1. `src/core/http/apiError.ts` imports the `ApiErrorResponse` transport type from `features/auth/domain/types`. Even though it is type-only, shared core HTTP infrastructure should not depend inward on the auth feature. P09 should move/define the generic API error response at a core/shared transport boundary.
 2. The `QueryClient` is intentionally private inside `AppProviders.tsx`; once private server state exists, P08/P24 must provide a controlled cache-clearing/invalidation boundary for logout and role switching rather than creating another query client.
@@ -419,9 +434,9 @@ These findings do **not** block P01, P02, or P03 completion, but later owning ph
 4. Android Kotlin files are physically under `android/app/src/main/java/com/cravesmobile/` while declaring package `com.cravesapp`. The declarations/application ID are consistent at runtime, but the directory should be normalized in a future native-configuration cleanup for maintainability.
 5. Android release currently uses the debug signing configuration. Production signing is a final release-readiness concern and must not be introduced during intermediate UI phases.
 6. Historical write-capable Phase 1 bootstrap/dependency/implementation workflows remain in the repository. They are quarantined as legacy helpers; a later repository-hygiene change may retire them, but they must not be triggered/edited as part of normal phased implementation.
-7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P03 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
+7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P04 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
 
-**Current foundation blocker status:** none for P03. The unresolved P02 backend/APIM contracts remain visible and unchanged.
+**Current foundation blocker status:** none for P04. The unresolved P02 backend/APIM contracts remain visible and unchanged.
 
 ---
 
@@ -432,9 +447,10 @@ Known tests currently include:
 - `apps/mobile/__tests__/App.test.tsx` — basic root render,
 - `apps/mobile/src/core/security/tokenMemory.test.ts` — token-memory behavior,
 - `apps/mobile/src/core/config/runtimeConfig.test.ts` — runtime environment/base URL validation and failure behavior,
+- `apps/mobile/src/design/tokens.test.ts` — P04 brand, spacing, semantic, touch, dynamic-type, and safe-area token invariants,
 - `apps/mobile/src/utils/validation.test.ts` — current validation helpers.
 
-CI run `31194872495` is green for the accepted P03 implementation. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
+CI run `31196834196` is green for the accepted P04 implementation. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
 
 ---
 
@@ -448,7 +464,7 @@ The granular `phases.md` was introduced after the existing auth foundation was w
 | P01 Repository Inventory | **DONE** | Formal repository architecture audit recorded in this ledger; current entry/navigation/provider/store/query/config/HTTP/security/Firebase/design/native/test/CI ownership is documented and duplicate architecture was checked. |
 | P02 APIM/OpenAPI Inventory | **DONE** | `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md` inventories all 8 currently consumed mobile HTTP operations, route-key/auth expectations, path/source mismatches, validation gaps, and static classifications: 3 `CONTRACT_ONLY`, 5 `BLOCKED`, 0 runtime-verified. |
 | P03 Runtime Config | **DONE** | Runtime schema/base URL validation, Android `react-native-config` injection, non-secret `.env.example`, Firebase Android audit, explicit remote-config/feature-flag boundary, focused tests, and successful CI are recorded in `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`. |
-| P04 Design Tokens | PARTIAL | Foundation exists; global/reference audit pending. |
+| P04 Design Tokens | **DONE** | `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md` records the accepted single token baseline for brand/warm/semantic colors, spacing, radius, typography, borders/elevation, icon/touch sizes, safe-area clearances, dynamic type, focused tests, and successful CI. |
 | P05 Motion Baseline | NOT STARTED | No accepted full shared motion/reduced-motion phase yet. |
 | P06 Shared Interaction Primitives | PARTIAL | Auth primitives exist only. |
 | P07 Shared Lifecycle Primitives | PARTIAL | Auth/startup states exist; app-wide lifecycle primitives pending. |
@@ -482,7 +498,8 @@ The following must **not** be described as complete at this point:
 - runtime/backend/APIM resolution of the `CONTRACT_ONLY` and `BLOCKED` routes identified by P02,
 - restoration/approval of the missing authoritative full APIM/OpenAPI contract,
 - an approved production feature-flag/remote-config provider/key contract for future flag-controlled features,
-- P04 Design Token Baseline acceptance,
+- P05 Shared Motion and Reduced-Motion Baseline acceptance,
+- per-screen/reference visual certification of the P04 token baseline,
 - Customer Home refs 5/6,
 - Discover Chefs refs 7/8,
 - Orders refs 9/10 and order child flows,
@@ -612,10 +629,27 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 - Blockers: none to P03 acceptance. Future flag-controlled product behavior requires an approved centralized provider and exact key/default/rollout contract before implementation.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
+### P04 — Design Token Baseline
+
+- Status: **DONE**
+- Started from commit: `3a221d71819dc1bb079f01bbcfc5428fc65ca521`
+- Completed implementation at commit: `ae15a1702923e68dbd3b3582d664e500ec723927`
+- Evidence: `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md`.
+- Guide references: full 183-page master guide global UI standards: brand tokens, warm surfaces, semantic colors, tokenized spacing/radius/typography/icon/elevation/borders, safe-area-aware layout, Android interaction sizing, scalable text, and restrained shadows/borders. No individual screen reference was implemented.
+- Changed implementation/evidence files: `apps/mobile/src/design/tokens.ts`, `apps/mobile/src/design/tokens.test.ts`, `apps/mobile/src/shared/components/Icon.tsx`, `apps/mobile/src/features/auth/components/AuthCard.tsx`, `apps/mobile/src/features/auth/components/PrimaryButton.tsx`, `apps/mobile/src/features/auth/components/InputField.tsx`, `apps/mobile/src/features/auth/components/AuthShell.tsx`, `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md`; `build.md` updated only as the completion ledger.
+- APIM/contracts used: **None.** P04 is a design-system foundation phase and introduces no network/backend behavior. P02 route classifications and blockers are unchanged.
+- Behavior completed: retained the existing single token system; locked Flame Red/Espresso Brown; normalized warm/semantic surfaces, semantic status/text colors, 4 dp spacing, radii, border widths, typography/font-weight vocabulary, icon sizes, Android-first touch targets, safe-area content clearances, dynamic-type policy, and shared elevation/shadow definitions; migrated current foundation consumers only where they carried those baseline values.
+- Tests/checks: GitHub Actions run `31196834196` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest including the new design-token invariant suite, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
+- Visual QA: final reference/device visual certification intentionally deferred. P04 does not claim pixel-perfect certification of any reference image.
+- APK built: **No**, per the implementation-phase policy.
+- Backend/APIM/infrastructure source changed: **No**.
+- Blockers: none to P04 acceptance.
+- Next phase: **NONE AUTHORIZED — waiting for user**.
+
 ---
 
 ## 12. Current Next Step
 
 **Stop here.**
 
-P03 is complete. P04 — Design Token Baseline is the next phase in `phases.md`, but it is **not authorized** by completion of P03. Begin P04 only after the user explicitly says to continue/start the next phase.
+P04 is complete. P05 — Shared Motion and Reduced-Motion Baseline is the next phase in `phases.md`, but it is **not authorized** by completion of P04. Begin P05 only after the user explicitly says to continue/start the next phase.

@@ -137,7 +137,7 @@ function CartPage() {
   const currency = cartCurrency();
 
   return (
-    <div className="min-h-screen bg-cream pb-32 text-ink">
+    <div className="min-h-screen bg-white pb-32 text-ink">
       <CartHeader onBack={() => navigate({ to: "/home" })} />
       <main className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
         <div className="mb-6">

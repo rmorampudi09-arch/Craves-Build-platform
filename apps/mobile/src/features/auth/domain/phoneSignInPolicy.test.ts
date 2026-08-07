@@ -49,6 +49,13 @@ describe('phone sign-in policy', () => {
     });
   });
 
+  it('keeps the accepted Customer submission snapshot unchanged', () => {
+    expect(createPhoneSignInSubmission('CUSTOMER', '9876543210')).toEqual({
+      role: 'CUSTOMER',
+      phone: '+919876543210',
+    });
+  });
+
   it('guards a phone verification request against duplicate submission until release', () => {
     const gate = createPhoneRequestGate();
 

@@ -55,12 +55,15 @@ jobs:
           npm install
           npm install @react-navigation/native @react-navigation/native-stack @react-navigation/bottom-tabs react-native-screens react-native-safe-area-context react-native-gesture-handler react-native-reanimated @reduxjs/toolkit react-redux @tanstack/react-query axios react-hook-form zod @hookform/resolvers @react-native-async-storage/async-storage @react-native-firebase/app @react-native-firebase/auth react-native-svg @react-native-vector-icons/material-design-icons lottie-react-native @shopify/flash-list react-native-config
 
-      - name: Install Expo modules and SecureStore in bare React Native
+      - name: Install Expo SDK 56 and SecureStore in bare React Native
         shell: bash
+        env:
+          CI: '1'
         run: |
           set -euo pipefail
           cd apps/mobile
-          npx --yes install-expo-modules@latest
+          npm install expo@~56.0.12
+          printf 'y\n' | npx --yes install-expo-modules@latest
           npx expo install expo-secure-store
 
       - name: Commit clean native foundation

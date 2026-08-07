@@ -25,6 +25,7 @@
 - **P04 — Design Token Baseline: DONE**.
 - **P05 — Shared Motion and Reduced-Motion Baseline: DONE**.
 - **P06 — Shared Interaction Primitives: DONE**.
+- **P07 — Shared Screen/Lifecycle Primitives: DONE**.
 - P01 started from branch HEAD `64dfbd18820b2644ee0263d5fffcefbd62172dfe`.
 - P01 completion commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`.
 - P02 inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`.
@@ -45,11 +46,15 @@
 - P06 implementation completion commit: `6d9578c1b2d60362ee124f162e4d046d7b471fdc`.
 - P06 evidence: `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md` (artifact commit `a7ec9fcf2fbef7dfab2537b9001497fc63f42b14`).
 - P06 CI run: `31199569464` — **SUCCESS**.
-- Next phase in sequence: **P07 — Shared Screen/Lifecycle Primitives**.
+- P07 started from P06 completion HEAD `3544af1539fa2e3fc18c22c26aee52a5fa747485`.
+- P07 implementation completion commit: `4a55e1377e3e3dd2fee08a30b5d3e874d32c1680`.
+- P07 evidence: `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md` (artifact commit `db60cbf5670fc5ee9e273e8197a3a9cc3ef29ea0`).
+- P07 CI run: `31201252609` — **SUCCESS**.
+- Next phase in sequence: **P08 — Query/Store Provider and Cache Rules**.
 - Next phase authorization: **NONE AUTHORIZED**.
 - Required action: stop and wait for the user to explicitly start/continue the next phase.
 
-P06 establishes the shared cross-feature interaction layer for buttons, icon buttons, pressable cards, inputs/validation, chips, segmented controls, badges, and loading indicators. It promotes the existing auth button/input interaction behavior into shared owners while retaining thin auth compatibility wrappers, migrates the role selector to the shared segmented control, centralizes minimum touch targets, press feedback, disabled/loading guards, scalable text and screen-reader roles/states, and reuses the P05 reduced-motion preference for non-essential press transforms. No P07 lifecycle primitive, marketplace screen, API, backend/APIM, storage, or product flow was implemented.
+P07 establishes the shared cross-feature screen/lifecycle layer for runtime safe-area and keyboard-aware screens, section/list skeletons, recoverable/terminal/offline/permission states, retry actions, and a `ContentLifecycle` policy that keeps already-valid content mounted during safe background refresh. The auth `AuthShell` now consumes the shared `ScreenShell` rather than owning a duplicate shell implementation. No P08 cache-rule work, marketplace screen, API, backend/APIM, storage, or product flow was implemented.
 
 ---
 
@@ -70,8 +75,8 @@ The rebuild diff from that baseline is confined to the new mobile application an
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
-- GitHub Actions run ID: `31199569464`
-- Head SHA: `6d9578c1b2d60362ee124f162e4d046d7b471fdc`
+- GitHub Actions run ID: `31201252609`
+- Head SHA: `4a55e1377e3e3dd2fee08a30b5d3e874d32c1680`
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -87,7 +92,7 @@ Successful checks:
 
 Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is the correct implementation-phase policy.
 
-P06 added the shared interaction primitives and migrated the existing auth button/input/role-selection consumers onto that shared layer without changing auth transport behavior. Run `31199569464` is the accepted P06 code-level validation evidence. It does not claim individual reference/device visual certification, backend runtime validation, Gradle packaging, or APK verification.
+P07 added the shared screen/lifecycle primitives, migrated the existing auth shell to the shared safe-area/keyboard owner, and added focused lifecycle regression coverage without changing auth transport behavior. Run `31201252609` is the accepted P07 code-level validation evidence. It does not claim individual reference/device visual certification, backend runtime validation, Gradle packaging, or APK verification.
 
 ---
 
@@ -236,7 +241,7 @@ Current auth components include:
 
 - `AuthCard.tsx`
 - `AuthHero.tsx`
-- `AuthShell.tsx`
+- `AuthShell.tsx` — composes the P07 shared `ScreenShell`,
 - `InputField.tsx` — thin compatibility wrapper over the P06 shared input,
 - `PrimaryButton.tsx` — thin compatibility wrapper over the P06 shared button,
 - `RoleSelector.tsx` — composes the P06 shared segmented control,
@@ -345,7 +350,36 @@ Accepted P06 behavior includes:
 - typed segmented-control options,
 - auth compatibility wrappers that preserve existing screen spacing rather than duplicate interaction logic.
 
-P06 does not implement P07 screen shells, skeleton/error/offline/permission/retry lifecycle primitives, any Customer/Chef marketplace screen, or any network/storage behavior.
+P06 owns interaction controls only. P07 now owns the shared screen/lifecycle layer; Customer/Chef marketplace screens and network/storage/cache policies remain later work.
+
+### 4.15 Shared screen/lifecycle primitives — IMPLEMENTED / P07 ACCEPTED
+
+Key files:
+
+- `apps/mobile/src/shared/components/ScreenShell.tsx`
+- `apps/mobile/src/shared/components/Skeleton.tsx`
+- `apps/mobile/src/shared/components/LifecycleStates.tsx`
+- `apps/mobile/src/shared/components/ContentLifecycle.tsx`
+- `apps/mobile/src/shared/components/index.ts`
+- `apps/mobile/src/features/auth/components/AuthShell.tsx`
+- `apps/mobile/__tests__/LifecyclePrimitives.test.tsx`
+- `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md`
+
+Accepted P07 behavior includes:
+
+- reusable runtime safe-area handling through `react-native-safe-area-context`,
+- reusable keyboard avoidance and optional scroll handling,
+- static section/list skeletons that do not force continuous shimmer,
+- reusable recoverable error, terminal, offline, permission, and retry presentation,
+- retry/actions built on the accepted P06 interaction layer rather than a duplicate button family,
+- initial no-content loading via caller-provided skeletons,
+- prior valid content kept mounted during safe background refresh,
+- optional inline offline/recoverable notices above retained valid content,
+- no generic full-screen spinner forced on every query,
+- accessibility progress/alert/header semantics and skeleton exclusion from accessibility traversal,
+- existing auth `AuthShell` migrated onto the shared `ScreenShell` without changing auth transport behavior.
+
+P07 is presentation/lifecycle infrastructure only. TanStack Query cache keys, stale-time/retry rules, invalidation/private-cache clearing, paging conventions, and store/query ownership audits remain P08.
 
 ---
 
@@ -434,10 +468,10 @@ No second Firebase Auth wrapper or web-auth implementation was found in the curr
 
 - `apps/mobile/src/design/tokens.ts` is the single current design-token source. P04 accepts it for brand colors, warm/semantic surfaces, semantic status/text colors, spacing, radii, border widths, typography/font weights, icon sizes, touch targets, safe-area content clearances, dynamic type, and elevation/shadow definitions; P06 extends its semantic status surfaces for shared badges rather than introducing component-local status colors.
 - `apps/mobile/src/design/motion.ts` is the single shared motion-convention source accepted by P05; `apps/mobile/src/design/reducedMotion.ts` owns the platform reduced-motion preference boundary consumed by P06 actionable primitives where non-essential scale feedback exists.
-- `apps/mobile/src/shared/components` now owns the cross-feature `Icon`, `Button`, `IconButton`, `PressableCard`, `InputField`, `Chip`, `SegmentedControl`, `Badge`, and `LoadingIndicator` primitives plus their barrel export.
-- Auth `PrimaryButton` and `InputField` remain as thin feature-compatibility wrappers over the shared components, and `RoleSelector` composes the shared segmented control. Auth-specific shells/visual compositions remain feature-scoped.
+- `apps/mobile/src/shared/components` owns the cross-feature interaction primitives from P06 plus the P07 `ScreenShell`, skeletons, lifecycle notices/states, retry control, and `ContentLifecycle` policy through the same shared barrel.
+- Auth `PrimaryButton` and `InputField` remain thin feature-compatibility wrappers over shared controls, `RoleSelector` composes the shared segmented control, and `AuthShell` composes the P07 shared `ScreenShell`. Auth-specific compositions remain feature-scoped.
 
-There is no competing ThemeProvider, duplicate color-token system, second accepted motion vocabulary, or parallel interaction-component stack. Later design/component phases must extend these owners instead of creating parallel theme/animation/component architecture.
+There is no competing ThemeProvider, duplicate color-token system, second accepted motion vocabulary, parallel interaction-component stack, or parallel screen/lifecycle primitive stack. Later phases must extend these owners instead of creating parallel theme/animation/component/lifecycle architecture.
 
 ### 5.11 Feature/module ownership
 
@@ -457,14 +491,15 @@ Customer and Chef marketplace feature families have not yet been added in this r
 
 - `apps/mobile/src/utils/validation.ts` is the current validation-helper boundary with focused unit coverage.
 - `apps/mobile/__tests__/App.test.tsx` is the current root render test.
+- `apps/mobile/__tests__/LifecyclePrimitives.test.tsx` covers P07 initial loading, retained-content background refresh, and reusable lifecycle primitives.
 - `apps/mobile/src/core/security/tokenMemory.test.ts` covers access-token memory behavior.
 - `apps/mobile/src/core/config/runtimeConfig.test.ts` covers the P03 runtime environment/configuration boundary.
-- `apps/mobile/src/design/tokens.test.ts` covers P04 brand, spacing, semantic-color, touch-target, dynamic-type, and safe-area token invariants used by P06 primitives.
-- `apps/mobile/src/design/motion.test.ts` covers P05 duration, transform/opacity, reduced-motion, critical-delay, and large-list motion invariants used by P06 interaction feedback.
+- `apps/mobile/src/design/tokens.test.ts` covers P04 brand, spacing, semantic-color, touch-target, dynamic-type, and safe-area token invariants used by shared primitives.
+- `apps/mobile/src/design/motion.test.ts` covers P05 duration, transform/opacity, reduced-motion, critical-delay, and large-list motion invariants used by shared interaction behavior.
 - `apps/mobile/jest.config.js` owns Jest setup and transform rules.
 - `apps/mobile/tsconfig.json` extends the React Native TypeScript configuration and includes all TypeScript source/test files.
 
-Coverage is intentionally small and is not sufficient for later customer/chef features. P06 acceptance additionally relies on strict type checking, zero-warning linting, production bundling, and the existing design/motion invariant suites; it does not claim exhaustive component-render testing.
+Coverage is intentionally small and is not sufficient for later customer/chef features. P07 acceptance additionally relies on strict type checking, zero-warning linting, the focused lifecycle regression suite, production bundling, and the existing design/motion invariant suites; it does not claim exhaustive screen testing.
 
 ### 5.13 Android native ownership
 
@@ -486,13 +521,13 @@ Coverage is intentionally small and is not sufficient for later customer/chef fe
 
 ### 5.15 Duplicate/dead architecture result
 
-No active duplicate runtime navigation container, Redux store, TanStack Query client, general authenticated HTTP client, secure-token store, Firebase Auth wrapper, runtime configuration owner, design-token system, accepted motion baseline, or shared interaction-component system was found in the current `apps/mobile` source.
+No active duplicate runtime navigation container, Redux store, TanStack Query client, general authenticated HTTP client, secure-token store, Firebase Auth wrapper, runtime configuration owner, design-token system, accepted motion baseline, shared interaction-component system, or shared screen/lifecycle primitive system was found in the current `apps/mobile` source.
 
 Installed baseline libraries that are not yet exercised by the auth-only implementation (for example bottom tabs, FlashList, React Hook Form/Zod, AsyncStorage for approved non-sensitive persistence, and animation/media helpers) are reserved dependencies, not parallel architecture. Future phases must reuse them where appropriate rather than add competing libraries without approval.
 
 ### 5.16 Deferred cleanup/refinement notes
 
-These findings do **not** block P01–P06 completion, but later owning phases should address them deliberately:
+These findings do **not** block P01–P07 completion, but later owning phases should address them deliberately:
 
 1. `src/core/http/apiError.ts` imports the `ApiErrorResponse` transport type from `features/auth/domain/types`. Even though it is type-only, shared core HTTP infrastructure should not depend inward on the auth feature. P09 should move/define the generic API error response at a core/shared transport boundary.
 2. The `QueryClient` is intentionally private inside `AppProviders.tsx`; once private server state exists, P08/P24 must provide a controlled cache-clearing/invalidation boundary for logout and role switching rather than creating another query client.
@@ -500,9 +535,9 @@ These findings do **not** block P01–P06 completion, but later owning phases sh
 4. Android Kotlin files are physically under `android/app/src/main/java/com/cravesmobile/` while declaring package `com.cravesapp`. The declarations/application ID are consistent at runtime, but the directory should be normalized in a future native-configuration cleanup for maintainability.
 5. Android release currently uses the debug signing configuration. Production signing is a final release-readiness concern and must not be introduced during intermediate UI phases.
 6. Historical write-capable Phase 1 bootstrap/dependency/implementation workflows remain in the repository. They are quarantined as legacy helpers; a later repository-hygiene change may retire them, but they must not be triggered/edited as part of normal phased implementation.
-7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P06 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
+7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P07 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
 
-**Current foundation blocker status:** none for P06. The unresolved P02 backend/APIM contracts remain visible and unchanged.
+**Current foundation blocker status:** none for P07. The unresolved P02 backend/APIM contracts remain visible and unchanged.
 
 ---
 
@@ -511,13 +546,14 @@ These findings do **not** block P01–P06 completion, but later owning phases sh
 Known tests currently include:
 
 - `apps/mobile/__tests__/App.test.tsx` — basic root render,
+- `apps/mobile/__tests__/LifecyclePrimitives.test.tsx` — P07 initial loading, retained valid content during background refresh, and shared lifecycle primitive rendering,
 - `apps/mobile/src/core/security/tokenMemory.test.ts` — token-memory behavior,
 - `apps/mobile/src/core/config/runtimeConfig.test.ts` — runtime environment/base URL validation and failure behavior,
 - `apps/mobile/src/design/tokens.test.ts` — P04 brand, spacing, semantic, touch, dynamic-type, and safe-area token invariants,
 - `apps/mobile/src/design/motion.test.ts` — P05 shared duration, property, reduced-motion, critical-delay, and bounded-list invariants,
 - `apps/mobile/src/utils/validation.test.ts` — current validation helpers.
 
-CI run `31199569464` is green for the accepted P06 implementation: strict TypeScript, ESLint, the current Jest suite, production Android JavaScript bundle generation, and the backend/APIM/infrastructure guard all pass. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
+CI run `31201252609` is green for the accepted P07 implementation: strict TypeScript, ESLint, the current Jest suite including the P07 lifecycle regression tests, production Android JavaScript bundle generation, and the backend/APIM/infrastructure guard all pass. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
 
 ---
 
@@ -534,7 +570,7 @@ The granular `phases.md` was introduced after the existing auth foundation was w
 | P04 Design Tokens | **DONE** | `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md` records the accepted single token baseline for brand/warm/semantic colors, spacing, radius, typography, borders/elevation, icon/touch sizes, safe-area clearances, dynamic type, focused tests, and successful CI. |
 | P05 Motion Baseline | **DONE** | `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md` records the accepted shared motion vocabulary, platform reduced-motion preference boundary, critical-flow zero-delay rule, bounded-list guard, focused tests, and successful CI. |
 | P06 Shared Interaction Primitives | **DONE** | Shared Button/IconButton/PressableCard/InputField/Chip/SegmentedControl/Badge/LoadingIndicator layer accepted; auth button/input compatibility wrappers and RoleSelector migrated; evidence in `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md`; CI run `31199569464` **SUCCESS**. |
-| P07 Shared Lifecycle Primitives | PARTIAL | Auth/startup states exist; app-wide lifecycle primitives pending. |
+| P07 Shared Lifecycle Primitives | **DONE** | Shared ScreenShell/Skeleton/LifecycleStates/ContentLifecycle layer accepted; auth shell migrated to the shared screen owner; focused refresh-preservation regression tests added; evidence in `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md`; CI run `31201252609` **SUCCESS**. |
 | P08 Query/Store Cache Rules | PARTIAL | Providers/dependencies exist; feature cache rules not audited. |
 | P09 Typed HTTP Client | PARTIAL | Foundation exists; full retry/cancellation/contract audit pending. |
 | P10 Session Token Security | PARTIAL / strong foundation | Memory/secure-store/refresh implementation exists and CI passes; later full security audit still required. |
@@ -565,8 +601,8 @@ The following must **not** be described as complete at this point:
 - runtime/backend/APIM resolution of the `CONTRACT_ONLY` and `BLOCKED` routes identified by P02,
 - restoration/approval of the missing authoritative full APIM/OpenAPI contract,
 - an approved production feature-flag/remote-config provider/key contract for future flag-controlled features,
-- P07 Shared Screen/Lifecycle Primitives acceptance,
-- per-screen/reference visual certification of the P04 token, P05 motion, and P06 interaction foundations,
+- P08 Query/Store Provider and Cache Rules acceptance,
+- per-screen/reference visual certification of the P04 token, P05 motion, P06 interaction, and P07 lifecycle foundations,
 - Customer Home refs 5/6,
 - Discover Chefs refs 7/8,
 - Orders refs 9/10 and order child flows,
@@ -578,7 +614,7 @@ The following must **not** be described as complete at this point:
 - customer bottom-nav scroll behavior,
 - authoritative full cart/View Cart system,
 - checkout/payment end-to-end flow,
-- full lifecycle/offline/error state matrix,
+- full screen-by-screen lifecycle/offline/error state matrix,
 - full accessibility/performance/security audits,
 - 52-reference device visual certification,
 - final production signing/release build.
@@ -747,10 +783,27 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 - Blockers: none to P06 acceptance.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
+### P07 — Shared Screen/Lifecycle Primitives
+
+- Status: **DONE**
+- Started from commit: `3544af1539fa2e3fc18c22c26aee52a5fa747485`
+- Completed implementation at commit: `4a55e1377e3e3dd2fee08a30b5d3e874d32c1680`
+- Evidence: `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md` (artifact commit `db60cbf5670fc5ee9e273e8197a3a9cc3ef29ea0`).
+- Guide references: global UI/UX/responsive/accessibility/lifecycle requirements from the full 183-page master guide for runtime safe areas, keyboard handling, skeleton loading, recoverable/terminal/offline/permission states, retry behavior, preserving valid content during background refresh, and avoiding unnecessary full-screen spinners. No individual reference screen was implemented.
+- Changed implementation/evidence files: `apps/mobile/src/shared/components/ScreenShell.tsx`, `Skeleton.tsx`, `LifecycleStates.tsx`, `ContentLifecycle.tsx`, `index.ts`; `apps/mobile/src/features/auth/components/AuthShell.tsx`; `apps/mobile/__tests__/LifecyclePrimitives.test.tsx`; `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md`; `build.md` updated only as the completion ledger.
+- APIM/contracts used: **None.** P07 is a client shared screen/lifecycle foundation phase. No endpoint, route key, request/response model, auth contract, query/cache rule, persisted-data rule, backend/APIM/infrastructure source, or environment behavior changed. P02 classifications remain unchanged.
+- Behavior completed: added the reusable `ScreenShell` with runtime safe-area, keyboard avoidance, optional scrolling and status-bar handling; static section/list skeleton primitives; recoverable error/offline notices; terminal and permission states; shared retry control; and `ContentLifecycle` orchestration that reserves skeletons for initial no-content loading while keeping already-valid content mounted during background refresh. Existing auth `AuthShell` now composes the shared shell without changing auth behavior.
+- Tests/checks: GitHub Actions run `31201252609` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest including focused P07 lifecycle regression tests, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
+- Visual QA: P07 implements shared infrastructure only; no individual master-guide reference screen is claimed complete. Final device-level safe-area/keyboard/accessibility behavior and per-reference visual certification remain later screen/QA work.
+- APK built: **No**, per the implementation-phase policy.
+- Backend/APIM/infrastructure source changed: **No**.
+- Blockers: none to P07 acceptance.
+- Next phase: **NONE AUTHORIZED — waiting for user**.
+
 ---
 
 ## 12. Current Next Step
 
 **Stop here.**
 
-P06 is complete. P07 — Shared Screen/Lifecycle Primitives is the next phase in `phases.md`, but it is **not authorized** by completion of P06. Begin P07 only after the user explicitly says to continue/start the next phase.
+P07 is complete. P08 — Query/Store Provider and Cache Rules is the next phase in `phases.md`, but it is **not authorized** by completion of P07. Begin P08 only after the user explicitly says to continue/start the next phase.

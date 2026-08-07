@@ -20,6 +20,13 @@ const chefResolution: AccountResolution = {
   onboardingStatus: 'APPROVED',
 };
 
+const customerProfileRequiredResolution: AccountResolution = {
+  flow: 'CUSTOMER',
+  requestedRole: 'CUSTOMER',
+  authorizedRole: 'CUSTOMER',
+  onboardingStatus: 'PROFILE_REQUIRED',
+};
+
 describe('auth role selection and account resolution state', () => {
   it('defaults a new anonymous auth attempt to Customer', () => {
     const state = authReducer(undefined, {type: '@@INIT'});
@@ -56,6 +63,34 @@ describe('auth role selection and account resolution state', () => {
 
     expect(resolved.identity).toEqual(chefIdentity);
     expect(resolved.accountResolution).toEqual(chefResolution);
+  });
+
+  it('moves only a server-confirmed customer profile-required resolution to ready', () => {
+    const initial = authReducer(undefined, {type: '@@INIT'});
+    const resolved = authReducer(
+      initial,
+      authActions.accountResolved({
+        identity: chefIdentity,
+        resolution: customerProfileRequiredResolution,
+      }),
+    );
+    const completed = authReducer(resolved, authActions.customerProfileCompleted());
+
+    expect(completed.accountResolution).toEqual({
+      ...customerProfileRequiredResolution,
+      onboardingStatus: 'READY',
+    });
+  });
+
+  it('does not let customer profile completion mutate Chef authority', () => {
+    const initial = authReducer(undefined, {type: '@@INIT'});
+    const resolved = authReducer(
+      initial,
+      authActions.accountResolved({identity: chefIdentity, resolution: chefResolution}),
+    );
+    const unchanged = authReducer(resolved, authActions.customerProfileCompleted());
+
+    expect(unchanged.accountResolution).toEqual(chefResolution);
   });
 
   it('clears a prior resolution when a new authentication result is accepted', () => {

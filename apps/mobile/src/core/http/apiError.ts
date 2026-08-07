@@ -4,6 +4,7 @@ import {isRetriableFailure} from './requestPolicy';
 interface BackendErrorPayload {
   code?: unknown;
   message?: unknown;
+  details?: unknown;
 }
 
 const stackTracePattern =
@@ -17,6 +18,7 @@ export class AppApiError extends Error {
     readonly correlationId?: string,
     readonly retriable = false,
     readonly cancelled = false,
+    readonly details: readonly string[] = [],
   ) {
     super(message);
     this.name = 'AppApiError';
@@ -67,6 +69,17 @@ function safeBackendMessage(value: unknown): string | undefined {
     return undefined;
   }
   return message;
+}
+
+function safeBackendDetails(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(detail => safeBackendMessage(detail))
+    .filter((detail): detail is string => Boolean(detail))
+    .slice(0, 10);
 }
 
 function publicHttpMessage(status: number, backendMessage?: string): string {
@@ -133,6 +146,7 @@ export function toAppApiError(error: unknown): AppApiError {
 
     const code = normalizedBackendCode(error.response?.data?.code, status);
     const backendMessage = safeBackendMessage(error.response?.data?.message);
+    const details = safeBackendDetails(error.response?.data?.details);
     const message = status
       ? publicHttpMessage(status, backendMessage)
       : 'We could not reach Craves. Check your connection and try again.';
@@ -143,6 +157,8 @@ export function toAppApiError(error: unknown): AppApiError {
       status,
       correlationId,
       isRetriableFailure(status, error.code),
+      false,
+      details,
     );
   }
 

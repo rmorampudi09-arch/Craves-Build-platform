@@ -123,6 +123,33 @@ describe('typed HTTP client foundation', () => {
     expect(normalized.message).toBe('Enter a valid phone number.');
   });
 
+  it('preserves only bounded safe validation details for field reconciliation', () => {
+    const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+    const normalized = toAppApiError(
+      new AxiosError('validation', 'ERR_BAD_REQUEST', config, undefined, {
+        data: {
+          code: 'VALIDATION_FAILED',
+          message: 'Request validation failed',
+          details: [
+            'firstName: must not be blank',
+            'email: must be a well-formed email address',
+            'java.lang.IllegalStateException at Service.run',
+          ],
+        },
+        status: 400,
+        statusText: 'Bad Request',
+        headers: new AxiosHeaders(),
+        config,
+      }),
+    );
+
+    expect(normalized.code).toBe('VALIDATION_FAILED');
+    expect(normalized.details).toEqual([
+      'firstName: must not be blank',
+      'email: must be a well-formed email address',
+    ]);
+  });
+
   it('coalesces only explicitly keyed in-flight requests and releases the key afterward', async () => {
     let resolveRequest: ((value: string) => void) | undefined;
     const task = jest.fn(

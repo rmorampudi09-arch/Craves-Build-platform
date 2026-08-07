@@ -52,6 +52,17 @@ const authSlice = createSlice({
       state.accountResolution = action.payload.resolution;
       state.lastErrorCode = null;
     },
+    customerProfileCompleted(state) {
+      if (
+        state.accountResolution?.flow === 'CUSTOMER' &&
+        state.accountResolution.onboardingStatus === 'PROFILE_REQUIRED'
+      ) {
+        state.accountResolution = {
+          ...state.accountResolution,
+          onboardingStatus: 'READY',
+        };
+      }
+    },
     bootstrapFailed(state, action: PayloadAction<string>) {
       state.bootstrapStatus = 'error';
       state.accountResolution = null;

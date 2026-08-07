@@ -24,6 +24,7 @@
 - **P03 — Runtime Configuration and Environment Boundary: DONE**.
 - **P04 — Design Token Baseline: DONE**.
 - **P05 — Shared Motion and Reduced-Motion Baseline: DONE**.
+- **P06 — Shared Interaction Primitives: DONE**.
 - P01 started from branch HEAD `64dfbd18820b2644ee0263d5fffcefbd62172dfe`.
 - P01 completion commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`.
 - P02 inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`.
@@ -40,11 +41,15 @@
 - P05 implementation completion commit: `53f27fd405208cdd6b740124c0901857d04bd8fd`.
 - P05 evidence: `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md`.
 - P05 CI run: `31197890099` — **SUCCESS**.
-- Next phase in sequence: **P06 — Shared Interaction Primitives**.
+- P06 started from P05 implementation HEAD `53f27fd405208cdd6b740124c0901857d04bd8fd`.
+- P06 implementation completion commit: `6d9578c1b2d60362ee124f162e4d046d7b471fdc`.
+- P06 evidence: `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md` (artifact commit `a7ec9fcf2fbef7dfab2537b9001497fc63f42b14`).
+- P06 CI run: `31199569464` — **SUCCESS**.
+- Next phase in sequence: **P07 — Shared Screen/Lifecycle Primitives**.
 - Next phase authorization: **NONE AUTHORIZED**.
 - Required action: stop and wait for the user to explicitly start/continue the next phase.
 
-P05 extends the existing single design-system foundation with a shared motion vocabulary rather than introducing a parallel animation system. It defines restrained durations, easing curves, spring conventions, transform/opacity-only intent primitives for press/chip-tab/bounded list changes/bottom navigation/View Cart/modal/skeleton behavior, a platform reduced-motion preference hook, immediate low-motion resolution, zero animation delay for authentication/payment/error navigation, and a bounded-list guard that prevents whole-large-list animation. No P06 interaction component, navigation shell, marketplace screen, API, backend/APIM, storage, or product flow was implemented.
+P06 establishes the shared cross-feature interaction layer for buttons, icon buttons, pressable cards, inputs/validation, chips, segmented controls, badges, and loading indicators. It promotes the existing auth button/input interaction behavior into shared owners while retaining thin auth compatibility wrappers, migrates the role selector to the shared segmented control, centralizes minimum touch targets, press feedback, disabled/loading guards, scalable text and screen-reader roles/states, and reuses the P05 reduced-motion preference for non-essential press transforms. No P07 lifecycle primitive, marketplace screen, API, backend/APIM, storage, or product flow was implemented.
 
 ---
 
@@ -65,8 +70,8 @@ The rebuild diff from that baseline is confined to the new mobile application an
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
-- GitHub Actions run ID: `31197890099`
-- Head SHA: `53f27fd405208cdd6b740124c0901857d04bd8fd`
+- GitHub Actions run ID: `31199569464`
+- Head SHA: `6d9578c1b2d60362ee124f162e4d046d7b471fdc`
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -82,7 +87,7 @@ Successful checks:
 
 Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is the correct implementation-phase policy.
 
-P05 added the shared motion/reduced-motion foundation and focused motion-policy tests. Run `31197890099` is the accepted P05 code-level validation evidence. It does not claim device/reference visual certification, backend runtime validation, Gradle packaging, or APK verification.
+P06 added the shared interaction primitives and migrated the existing auth button/input/role-selection consumers onto that shared layer without changing auth transport behavior. Run `31199569464` is the accepted P06 code-level validation evidence. It does not claim individual reference/device visual certification, backend runtime validation, Gradle packaging, or APK verification.
 
 ---
 
@@ -195,7 +200,7 @@ Accepted P05 baseline includes:
 - whole-large-list animation disabled by shared policy,
 - bounded visible list-change animation via `shouldAnimateListChanges`.
 
-P05 defines the baseline only. It intentionally does not convert existing auth controls into P06 shared interaction primitives, does not implement View Cart/bottom navigation/modal product surfaces, and does not claim screen-level motion/device certification.
+P05 defines the baseline only. P06 now consumes that baseline for shared interaction feedback; View Cart/bottom-navigation/modal product surfaces and screen-level motion/device certification remain later-phase work.
 
 ### 4.6 HTTP/error/correlation foundation — IMPLEMENTED FOUNDATION
 
@@ -227,14 +232,14 @@ This matches the guide’s session-storage model. P02 found that the correspondi
 
 ### 4.8 Authentication UI/components — IMPLEMENTED FOUNDATION, FINAL VISUAL QA PENDING
 
-Current shared auth components include:
+Current auth components include:
 
 - `AuthCard.tsx`
 - `AuthHero.tsx`
 - `AuthShell.tsx`
-- `InputField.tsx`
-- `PrimaryButton.tsx`
-- `RoleSelector.tsx`
+- `InputField.tsx` — thin compatibility wrapper over the P06 shared input,
+- `PrimaryButton.tsx` — thin compatibility wrapper over the P06 shared button,
+- `RoleSelector.tsx` — composes the P06 shared segmented control,
 - `ScreenHeader.tsx`
 - `SecurityNote.tsx`
 
@@ -311,6 +316,36 @@ P02 classifies both current chef-application operations as `BLOCKED`: an APIM po
 `AccountRouterScreen.tsx` resolves profile/application state after authentication.
 
 The present `CustomerAccountStatusScreen.tsx` explicitly says the customer marketplace shell is connected in a later implementation phase. Therefore the marketplace/customer screen implementation is not complete and must not be inferred from successful authentication.
+
+### 4.14 Shared interaction primitives — IMPLEMENTED / P06 ACCEPTED
+
+Key files:
+
+- `apps/mobile/src/shared/components/Button.tsx`
+- `apps/mobile/src/shared/components/IconButton.tsx`
+- `apps/mobile/src/shared/components/PressableCard.tsx`
+- `apps/mobile/src/shared/components/InputField.tsx`
+- `apps/mobile/src/shared/components/Chip.tsx`
+- `apps/mobile/src/shared/components/SegmentedControl.tsx`
+- `apps/mobile/src/shared/components/Badge.tsx`
+- `apps/mobile/src/shared/components/LoadingIndicator.tsx`
+- `apps/mobile/src/shared/components/index.ts`
+- `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md`
+
+Accepted P06 behavior includes:
+
+- shared 48/56 dp interaction targets from the P04 token system,
+- immediate press-state feedback on actionable primitives,
+- reduced-motion-aware suppression of non-essential scale feedback,
+- disabled/loading duplicate-submission protection and accessibility busy/disabled state,
+- accessible button/progress/alert/selected semantics,
+- scalable text on labels, validation messages and status indicators,
+- shared input label/helper/error and trailing-action behavior,
+- semantic badge surfaces owned by the token layer,
+- typed segmented-control options,
+- auth compatibility wrappers that preserve existing screen spacing rather than duplicate interaction logic.
+
+P06 does not implement P07 screen shells, skeleton/error/offline/permission/retry lifecycle primitives, any Customer/Chef marketplace screen, or any network/storage behavior.
 
 ---
 
@@ -397,19 +432,19 @@ No second Firebase Auth wrapper or web-auth implementation was found in the curr
 
 ### 5.10 Design-system ownership
 
-- `apps/mobile/src/design/tokens.ts` is the single current design-token source. P04 accepts it for brand colors, warm/semantic surfaces, semantic status/text colors, spacing, radii, border widths, typography/font weights, icon sizes, touch targets, safe-area content clearances, dynamic type, and elevation/shadow definitions.
-- `apps/mobile/src/design/motion.ts` is the single shared motion-convention source accepted by P05; `apps/mobile/src/design/reducedMotion.ts` owns the platform reduced-motion preference boundary for future animated consumers.
-- `apps/mobile/src/shared/components/Icon.tsx` is the current cross-feature shared component and consumes the shared icon/color baseline.
-- Auth-specific visual primitives remain under `apps/mobile/src/features/auth/components` because they are feature-scoped today.
+- `apps/mobile/src/design/tokens.ts` is the single current design-token source. P04 accepts it for brand colors, warm/semantic surfaces, semantic status/text colors, spacing, radii, border widths, typography/font weights, icon sizes, touch targets, safe-area content clearances, dynamic type, and elevation/shadow definitions; P06 extends its semantic status surfaces for shared badges rather than introducing component-local status colors.
+- `apps/mobile/src/design/motion.ts` is the single shared motion-convention source accepted by P05; `apps/mobile/src/design/reducedMotion.ts` owns the platform reduced-motion preference boundary consumed by P06 actionable primitives where non-essential scale feedback exists.
+- `apps/mobile/src/shared/components` now owns the cross-feature `Icon`, `Button`, `IconButton`, `PressableCard`, `InputField`, `Chip`, `SegmentedControl`, `Badge`, and `LoadingIndicator` primitives plus their barrel export.
+- Auth `PrimaryButton` and `InputField` remain as thin feature-compatibility wrappers over the shared components, and `RoleSelector` composes the shared segmented control. Auth-specific shells/visual compositions remain feature-scoped.
 
-There is no competing ThemeProvider, duplicate color-token system, or second accepted motion vocabulary. Later design/component phases must extend these owners instead of creating parallel theme/animation architecture.
+There is no competing ThemeProvider, duplicate color-token system, second accepted motion vocabulary, or parallel interaction-component stack. Later design/component phases must extend these owners instead of creating parallel theme/animation/component architecture.
 
 ### 5.11 Feature/module ownership
 
 The only implemented product feature module under `apps/mobile/src/features` is currently `auth`, organized into:
 
 - `api` — auth/profile/session transport boundaries,
-- `components` — auth visual primitives,
+- `components` — auth visual compositions/compatibility wrappers,
 - `domain` — auth domain types,
 - `firebase` — platform authentication wrapper,
 - `hooks` — bootstrap coordination,
@@ -424,12 +459,12 @@ Customer and Chef marketplace feature families have not yet been added in this r
 - `apps/mobile/__tests__/App.test.tsx` is the current root render test.
 - `apps/mobile/src/core/security/tokenMemory.test.ts` covers access-token memory behavior.
 - `apps/mobile/src/core/config/runtimeConfig.test.ts` covers the P03 runtime environment/configuration boundary.
-- `apps/mobile/src/design/tokens.test.ts` covers P04 brand, spacing, semantic-color, touch-target, dynamic-type, and safe-area token invariants.
-- `apps/mobile/src/design/motion.test.ts` covers P05 duration, transform/opacity, reduced-motion, critical-delay, and large-list motion invariants.
+- `apps/mobile/src/design/tokens.test.ts` covers P04 brand, spacing, semantic-color, touch-target, dynamic-type, and safe-area token invariants used by P06 primitives.
+- `apps/mobile/src/design/motion.test.ts` covers P05 duration, transform/opacity, reduced-motion, critical-delay, and large-list motion invariants used by P06 interaction feedback.
 - `apps/mobile/jest.config.js` owns Jest setup and transform rules.
 - `apps/mobile/tsconfig.json` extends the React Native TypeScript configuration and includes all TypeScript source/test files.
 
-Coverage is intentionally small and is not sufficient for later customer/chef features.
+Coverage is intentionally small and is not sufficient for later customer/chef features. P06 acceptance additionally relies on strict type checking, zero-warning linting, production bundling, and the existing design/motion invariant suites; it does not claim exhaustive component-render testing.
 
 ### 5.13 Android native ownership
 
@@ -451,13 +486,13 @@ Coverage is intentionally small and is not sufficient for later customer/chef fe
 
 ### 5.15 Duplicate/dead architecture result
 
-No active duplicate runtime navigation container, Redux store, TanStack Query client, general authenticated HTTP client, secure-token store, Firebase Auth wrapper, runtime configuration owner, design-token system, or accepted motion baseline was found in the current `apps/mobile` source.
+No active duplicate runtime navigation container, Redux store, TanStack Query client, general authenticated HTTP client, secure-token store, Firebase Auth wrapper, runtime configuration owner, design-token system, accepted motion baseline, or shared interaction-component system was found in the current `apps/mobile` source.
 
 Installed baseline libraries that are not yet exercised by the auth-only implementation (for example bottom tabs, FlashList, React Hook Form/Zod, AsyncStorage for approved non-sensitive persistence, and animation/media helpers) are reserved dependencies, not parallel architecture. Future phases must reuse them where appropriate rather than add competing libraries without approval.
 
 ### 5.16 Deferred cleanup/refinement notes
 
-These findings do **not** block P01–P05 completion, but later owning phases should address them deliberately:
+These findings do **not** block P01–P06 completion, but later owning phases should address them deliberately:
 
 1. `src/core/http/apiError.ts` imports the `ApiErrorResponse` transport type from `features/auth/domain/types`. Even though it is type-only, shared core HTTP infrastructure should not depend inward on the auth feature. P09 should move/define the generic API error response at a core/shared transport boundary.
 2. The `QueryClient` is intentionally private inside `AppProviders.tsx`; once private server state exists, P08/P24 must provide a controlled cache-clearing/invalidation boundary for logout and role switching rather than creating another query client.
@@ -465,9 +500,9 @@ These findings do **not** block P01–P05 completion, but later owning phases sh
 4. Android Kotlin files are physically under `android/app/src/main/java/com/cravesmobile/` while declaring package `com.cravesapp`. The declarations/application ID are consistent at runtime, but the directory should be normalized in a future native-configuration cleanup for maintainability.
 5. Android release currently uses the debug signing configuration. Production signing is a final release-readiness concern and must not be introduced during intermediate UI phases.
 6. Historical write-capable Phase 1 bootstrap/dependency/implementation workflows remain in the repository. They are quarantined as legacy helpers; a later repository-hygiene change may retire them, but they must not be triggered/edited as part of normal phased implementation.
-7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P05 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
+7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P06 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
 
-**Current foundation blocker status:** none for P05. The unresolved P02 backend/APIM contracts remain visible and unchanged.
+**Current foundation blocker status:** none for P06. The unresolved P02 backend/APIM contracts remain visible and unchanged.
 
 ---
 
@@ -482,7 +517,7 @@ Known tests currently include:
 - `apps/mobile/src/design/motion.test.ts` — P05 shared duration, property, reduced-motion, critical-delay, and bounded-list invariants,
 - `apps/mobile/src/utils/validation.test.ts` — current validation helpers.
 
-CI run `31197890099` is green for the accepted P05 implementation. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
+CI run `31199569464` is green for the accepted P06 implementation: strict TypeScript, ESLint, the current Jest suite, production Android JavaScript bundle generation, and the backend/APIM/infrastructure guard all pass. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
 
 ---
 
@@ -498,7 +533,7 @@ The granular `phases.md` was introduced after the existing auth foundation was w
 | P03 Runtime Config | **DONE** | Runtime schema/base URL validation, Android `react-native-config` injection, non-secret `.env.example`, Firebase Android audit, explicit remote-config/feature-flag boundary, focused tests, and successful CI are recorded in `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`. |
 | P04 Design Tokens | **DONE** | `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md` records the accepted single token baseline for brand/warm/semantic colors, spacing, radius, typography, borders/elevation, icon/touch sizes, safe-area clearances, dynamic type, focused tests, and successful CI. |
 | P05 Motion Baseline | **DONE** | `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md` records the accepted shared motion vocabulary, platform reduced-motion preference boundary, critical-flow zero-delay rule, bounded-list guard, focused tests, and successful CI. |
-| P06 Shared Interaction Primitives | PARTIAL | Auth primitives exist only. |
+| P06 Shared Interaction Primitives | **DONE** | Shared Button/IconButton/PressableCard/InputField/Chip/SegmentedControl/Badge/LoadingIndicator layer accepted; auth button/input compatibility wrappers and RoleSelector migrated; evidence in `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md`; CI run `31199569464` **SUCCESS**. |
 | P07 Shared Lifecycle Primitives | PARTIAL | Auth/startup states exist; app-wide lifecycle primitives pending. |
 | P08 Query/Store Cache Rules | PARTIAL | Providers/dependencies exist; feature cache rules not audited. |
 | P09 Typed HTTP Client | PARTIAL | Foundation exists; full retry/cancellation/contract audit pending. |
@@ -530,8 +565,8 @@ The following must **not** be described as complete at this point:
 - runtime/backend/APIM resolution of the `CONTRACT_ONLY` and `BLOCKED` routes identified by P02,
 - restoration/approval of the missing authoritative full APIM/OpenAPI contract,
 - an approved production feature-flag/remote-config provider/key contract for future flag-controlled features,
-- P06 Shared Interaction Primitives acceptance,
-- per-screen/reference visual certification of the P04 token baseline and P05 motion baseline,
+- P07 Shared Screen/Lifecycle Primitives acceptance,
+- per-screen/reference visual certification of the P04 token, P05 motion, and P06 interaction foundations,
 - Customer Home refs 5/6,
 - Discover Chefs refs 7/8,
 - Orders refs 9/10 and order child flows,
@@ -695,10 +730,27 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 - Blockers: none to P05 acceptance.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
+### P06 — Shared Interaction Primitives
+
+- Status: **DONE**
+- Started from commit: `53f27fd405208cdd6b740124c0901857d04bd8fd`
+- Completed implementation at commit: `6d9578c1b2d60362ee124f162e4d046d7b471fdc`
+- Evidence: `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md` (artifact commit `a7ec9fcf2fbef7dfab2537b9001497fc63f42b14`).
+- Guide references: full master-guide global UI/UX/accessibility rules for reusable interactive controls, minimum Android interaction sizing, immediate feedback, loading/disabled protection, scalable text, screen-reader semantics, validation feedback, semantic status presentation, and reduced-motion-compatible interaction behavior. No individual reference screen was implemented.
+- Changed implementation/evidence files: `apps/mobile/src/design/tokens.ts`; `apps/mobile/src/shared/components/Button.tsx`, `IconButton.tsx`, `PressableCard.tsx`, `InputField.tsx`, `Chip.tsx`, `SegmentedControl.tsx`, `Badge.tsx`, `LoadingIndicator.tsx`, `index.ts`; `apps/mobile/src/features/auth/components/PrimaryButton.tsx`, `InputField.tsx`, `RoleSelector.tsx`; `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md`; `build.md` updated only as the completion ledger.
+- APIM/contracts used: **None.** P06 is a client shared-component foundation phase. No endpoint, route key, request/response model, auth contract, cache/storage rule, backend/APIM/infrastructure source, or environment behavior changed. P02 classifications remain unchanged.
+- Behavior completed: established the cross-feature interaction primitive layer; enforced shared minimum/comfortable touch sizes, immediate press feedback, disabled/loading duplicate-action guards, accessibility roles/states, scalable labels/error text, typed segmented selection, semantic badges, accessible loading feedback, validation/helper/error input presentation, and reduced-motion-safe press feedback. Existing auth PrimaryButton/InputField now delegate to the shared owners while preserving feature spacing, and RoleSelector delegates to the shared segmented control.
+- Tests/checks: GitHub Actions run `31199569464` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
+- Visual QA: P06 implements shared primitives only; no individual master-guide reference screen is claimed complete. Final component/device accessibility and per-reference visual certification remain later QA/screen-phase work.
+- APK built: **No**, per the implementation-phase policy.
+- Backend/APIM/infrastructure source changed: **No**.
+- Blockers: none to P06 acceptance.
+- Next phase: **NONE AUTHORIZED — waiting for user**.
+
 ---
 
 ## 12. Current Next Step
 
 **Stop here.**
 
-P05 is complete. P06 — Shared Interaction Primitives is the next phase in `phases.md`, but it is **not authorized** by completion of P05. Begin P06 only after the user explicitly says to continue/start the next phase.
+P06 is complete. P07 — Shared Screen/Lifecycle Primitives is the next phase in `phases.md`, but it is **not authorized** by completion of P06. Begin P07 only after the user explicitly says to continue/start the next phase.

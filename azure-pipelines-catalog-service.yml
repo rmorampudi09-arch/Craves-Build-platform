@@ -24,12 +24,14 @@ pool:
 
 steps:
   - checkout: self
+
   - task: JavaToolInstaller@0
     displayName: Use Java 21
     inputs:
       versionSpec: '21'
       jdkArchitectureOption: x64
       jdkSourceOption: PreInstalled
+
   - script: |
       set -euo pipefail
       cd $(modulePath)
@@ -44,17 +46,27 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-        ACR='${{ parameters.acrName }}'; TAG='${{ parameters.imageTag }}'; IMAGE_REPOSITORY='$(imageRepository)'
-        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
-        [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
+
+        ACR='${{ parameters.acrName }}'
+        TAG='${{ parameters.imageTag }}'
+        IMAGE_REPOSITORY='$(imageRepository)'
+
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
+        [[ -n "$ACR_LOGIN_SERVER" ]] || {
+          echo 'ERROR: ACR login server was not resolved.' >&2
+          exit 1
+        }
+
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-        az acr login --name "$ACR"
+
+        az acr login --name "$ACR" --only-show-errors
         docker build --pull -t "$IMAGE" "$(modulePath)"
         docker push "$IMAGE"
+
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Store Catalog database and JWT secrets
+    displayName: Deploy Catalog image and preserve runtime security state
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -62,55 +74,272 @@ steps:
       inlineScript: |
         set -euo pipefail
         set +x
-        RG='${{ parameters.resourceGroupName }}'; APP='${{ parameters.containerAppName }}'
-        DB_PASSWORD='$(POSTGRES_BUSINESS_DB_PASSWORD)'; JWT_PEM='$(CRAVES_JWT_VERIFICATION_PEM_BASE64)'
-        require_value() { local name="$1" value="$2"; [[ -n "$value" && "$value" != "\$($name)" ]] || { echo "ERROR: Secure pipeline variable $name is missing." >&2; exit 1; }; }
-        require_value POSTGRES_BUSINESS_DB_PASSWORD "$DB_PASSWORD"
-        require_value CRAVES_JWT_VERIFICATION_PEM_BASE64 "$JWT_PEM"
-        az containerapp secret set -g "$RG" -n "$APP" --secrets db-password="$DB_PASSWORD" jwt-verify-pem="$JWT_PEM" -o none
-        echo 'Catalog secrets stored; values were not printed.'
 
-  - task: AzureCLI@2
-    displayName: Deploy and verify Catalog revision
-    inputs:
-      azureSubscription: $(AZURE_SERVICE_CONNECTION)
-      scriptType: bash
-      scriptLocation: inlineScript
-      inlineScript: |
-        set -euo pipefail
-        RG='${{ parameters.resourceGroupName }}'; ACR='${{ parameters.acrName }}'; APP='${{ parameters.containerAppName }}'; TAG='${{ parameters.imageTag }}'; IMAGE_REPOSITORY='$(imageRepository)'
-        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv); IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-        BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json)
-        PREVIOUS_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$BEFORE"); PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")
-        [[ -n "$PREVIOUS_REVISION" && -n "$PREVIOUS_IMAGE" && "$PREVIOUS_IMAGE" != "$IMAGE" ]] || { echo 'ERROR: Catalog deployment state or image tag is invalid.' >&2; exit 1; }
-        az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --set-env-vars \
-          SPRING_PROFILES_ACTIVE=prod \
-          SPRING_DATASOURCE_URL='$(POSTGRES_BUSINESS_DB_URL)' \
-          SPRING_DATASOURCE_USERNAME='$(POSTGRES_BUSINESS_DB_USER)' \
-          SPRING_DATASOURCE_PASSWORD=secretref:db-password \
-          CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem \
-          CRAVES_JWT_ISSUER='https://api.craves.in/auth' \
-          CRAVES_JWT_AUDIENCE=craves-api \
-          CRAVES_STORAGE_ENDPOINT_VALUE='$(CRAVES_STORAGE_ENDPOINT_VALUE)' \
-          CRAVES_STORAGE_MEDIA_CONTAINER=media \
-          CRAVES_MEDIA_PUBLIC_BASE_URL='$(CRAVES_MEDIA_PUBLIC_BASE_URL)' \
-          CRAVES_TOKEN_REVOCATION_ENABLED=false \
-          --no-wait -o none
-        for attempt in $(seq 1 60); do
-          JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
-          LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON"); READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON"); RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$JSON")
-          LATEST_IMAGE=''; HEALTH=''
-          if [[ -n "$LATEST" ]]; then LATEST_IMAGE=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || true); HEALTH=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query properties.healthState -o tsv 2>/dev/null || true); fi
-          DB_REF=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "SPRING_DATASOURCE_PASSWORD")][0].secretRef // ""' <<<"$JSON"); JWT_REF=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_JWT_VERIFICATION_PEM_BASE64")][0].secretRef // ""' <<<"$JSON"); REVOCATION=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_TOKEN_REVOCATION_ENABLED")][0].value // ""' <<<"$JSON")
-          echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE dbRef=$DB_REF jwtRef=$JWT_REF revocation=$REVOCATION"
-          if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$DB_REF" == 'db-password' && "$JWT_REF" == 'jwt-verify-pem' && "${REVOCATION,,}" == 'false' ]]; then
-            FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON"); [[ -n "$FQDN" ]] || exit 1
-            curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status == "UP"' >/dev/null
-            echo "SUCCESS: Catalog revision $LATEST is healthy, secret-bound and fail-closed. Rollback image: $PREVIOUS_IMAGE"
-            exit 0
+        RG='${{ parameters.resourceGroupName }}'
+        ACR='${{ parameters.acrName }}'
+        APP='${{ parameters.containerAppName }}'
+        TAG='${{ parameters.imageTag }}'
+        IMAGE_REPOSITORY='$(imageRepository)'
+
+        fail() {
+          echo "ERROR: $*" >&2
+          exit 1
+        }
+
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
+        [[ -n "$ACR_LOGIN_SERVER" ]] || fail 'ACR login server was not resolved.'
+        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+
+        environment_hash() {
+          local revision="$1"
+          az containerapp revision show \
+            --resource-group "$RG" \
+            --name "$APP" \
+            --revision "$revision" \
+            --query 'properties.template.containers[0].env' \
+            --output json \
+            --only-show-errors \
+          | jq -S '
+              (. // [])
+              | map({
+                  name: .name,
+                  value: (.value // null),
+                  secretRef: (.secretRef // null)
+                })
+              | sort_by(.name)
+            ' \
+          | sha256sum \
+          | cut -d' ' -f1
+        }
+
+        secret_metadata_json() {
+          az containerapp secret list \
+            --resource-group "$RG" \
+            --name "$APP" \
+            --output json \
+            --only-show-errors \
+          | jq -S '
+              map({
+                name: .name,
+                keyVaultUrl: (.keyVaultUrl // null),
+                identity: (.identity // null)
+              })
+              | sort_by(.name)
+            '
+        }
+
+        secret_metadata_hash() {
+          secret_metadata_json \
+          | sha256sum \
+          | cut -d' ' -f1
+        }
+
+        wait_for_image() {
+          local expected_image="$1"
+          local forbidden_revision="$2"
+          local attempt json latest ready running health latest_image
+
+          for attempt in $(seq 1 60); do
+            json=$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)
+            latest=$(jq -r '.properties.latestRevisionName // ""' <<<"$json")
+            ready=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$json")
+            running=$(jq -r '.properties.runningStatus // ""' <<<"$json")
+            health=''
+            latest_image=''
+
+            if [[ -n "$latest" ]]; then
+              latest_image=$(az containerapp revision show \
+                -g "$RG" \
+                -n "$APP" \
+                --revision "$latest" \
+                --query 'properties.template.containers[0].image' \
+                -o tsv \
+                --only-show-errors 2>/dev/null || true)
+
+              health=$(az containerapp revision show \
+                -g "$RG" \
+                -n "$APP" \
+                --revision "$latest" \
+                --query properties.healthState \
+                -o tsv \
+                --only-show-errors 2>/dev/null || true)
+            fi
+
+            echo "Attempt $attempt/60 latest=$latest ready=$ready running=$running health=$health image=$latest_image"
+
+            if [[ "$latest_image" == "$expected_image" \
+              && "$latest" == "$ready" \
+              && "$running" == 'Running' \
+              && "$health" == 'Healthy' \
+              && ( -z "$forbidden_revision" || "$latest" != "$forbidden_revision" ) ]]; then
+              printf '%s\n' "$latest"
+              return 0
+            fi
+
+            if [[ "$running" == 'Failed' || "$health" == 'Unhealthy' ]]; then
+              if [[ -n "$latest" ]]; then
+                az containerapp logs show \
+                  -g "$RG" \
+                  -n "$APP" \
+                  --revision "$latest" \
+                  --type console \
+                  --tail 200 \
+                  --format text \
+                  --only-show-errors || true
+              fi
+              return 1
+            fi
+
+            sleep 10
+          done
+
+          return 1
+        }
+
+        BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)
+        PREVIOUS_REVISION=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$BEFORE")
+        PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")
+
+        [[ -n "$PREVIOUS_REVISION" ]] || fail 'Previous ready Catalog revision was not resolved.'
+        [[ -n "$PREVIOUS_IMAGE" ]] || fail 'Previous Catalog image was not resolved.'
+        [[ "$PREVIOUS_IMAGE" != "$IMAGE" ]] || fail 'Target Catalog image is already deployed.'
+
+        ENV_HASH_BEFORE=$(environment_hash "$PREVIOUS_REVISION")
+        SECRET_HASH_BEFORE=$(secret_metadata_hash)
+        SECRET_META_BEFORE=$(secret_metadata_json)
+
+        DB_REF_BEFORE=$(jq -r '
+          [.properties.template.containers[0].env[]?
+           | select(.name == "SPRING_DATASOURCE_PASSWORD")][0].secretRef // ""
+        ' <<<"$BEFORE")
+
+        [[ -n "$DB_REF_BEFORE" ]] || fail 'Catalog datasource password is not secret-bound.'
+
+        DB_KV_BEFORE=$(jq -r --arg N "$DB_REF_BEFORE" '
+          [.[] | select(.name == $N)][0].keyVaultUrl // ""
+        ' <<<"$SECRET_META_BEFORE")
+
+        [[ "$DB_KV_BEFORE" == https://*.vault.azure.net/secrets/* ]] || \
+          fail 'Catalog datasource password is not Key Vault-backed. Deployment refused.'
+
+        echo "Current ready revision: $PREVIOUS_REVISION"
+        echo "Current image: $PREVIOUS_IMAGE"
+        echo "Runtime environment fingerprint: $ENV_HASH_BEFORE"
+        echo "Secret metadata fingerprint: $SECRET_HASH_BEFORE"
+        echo "Database secret binding: $DB_REF_BEFORE (Key Vault-backed)"
+        echo 'No secret values were read.'
+
+        rollback() {
+          local reason="$1"
+          echo "ROLLBACK: $reason" >&2
+          echo "Restoring image: $PREVIOUS_IMAGE" >&2
+
+          az containerapp update \
+            -g "$RG" \
+            -n "$APP" \
+            --image "$PREVIOUS_IMAGE" \
+            --no-wait \
+            --only-show-errors >/dev/null || {
+              echo 'ERROR: Catalog rollback update failed.' >&2
+              exit 1
+            }
+
+          local rollback_revision
+          rollback_revision=$(wait_for_image "$PREVIOUS_IMAGE" '') || {
+            echo 'ERROR: Catalog rollback revision did not become healthy.' >&2
+            exit 1
+          }
+
+          [[ "$(environment_hash "$rollback_revision")" == "$ENV_HASH_BEFORE" ]] || {
+            echo 'ERROR: Rollback environment fingerprint differs from the pre-deployment state.' >&2
+            exit 1
+          }
+
+          [[ "$(secret_metadata_hash)" == "$SECRET_HASH_BEFORE" ]] || {
+            echo 'ERROR: Rollback secret metadata fingerprint differs from the pre-deployment state.' >&2
+            exit 1
+          }
+
+          echo "Rollback completed: $rollback_revision" >&2
+          exit 1
+        }
+
+        echo 'Deploying Catalog image only; runtime environment and secrets are not being modified.'
+
+        az containerapp update \
+          -g "$RG" \
+          -n "$APP" \
+          --image "$IMAGE" \
+          --no-wait \
+          --only-show-errors >/dev/null || fail 'Catalog image update failed before a new revision was created.'
+
+        NEW_REVISION=$(wait_for_image "$IMAGE" "$PREVIOUS_REVISION") || \
+          rollback 'New Catalog revision did not become healthy.'
+
+        ENV_HASH_AFTER=$(environment_hash "$NEW_REVISION")
+        SECRET_HASH_AFTER=$(secret_metadata_hash)
+
+        [[ "$ENV_HASH_AFTER" == "$ENV_HASH_BEFORE" ]] || \
+          rollback 'Catalog runtime environment changed unexpectedly.'
+
+        [[ "$SECRET_HASH_AFTER" == "$SECRET_HASH_BEFORE" ]] || \
+          rollback 'Catalog secret metadata changed unexpectedly.'
+
+        AFTER=$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)
+        DB_REF_AFTER=$(jq -r '
+          [.properties.template.containers[0].env[]?
+           | select(.name == "SPRING_DATASOURCE_PASSWORD")][0].secretRef // ""
+        ' <<<"$AFTER")
+
+        SECRET_META_AFTER=$(secret_metadata_json)
+        DB_KV_AFTER=$(jq -r --arg N "$DB_REF_AFTER" '
+          [.[] | select(.name == $N)][0].keyVaultUrl // ""
+        ' <<<"$SECRET_META_AFTER")
+
+        [[ "$DB_REF_AFTER" == "$DB_REF_BEFORE" ]] || \
+          rollback 'Catalog datasource secret reference changed.'
+
+        [[ "$DB_KV_AFTER" == "$DB_KV_BEFORE" ]] || \
+          rollback 'Catalog datasource Key Vault reference changed.'
+
+        FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$AFTER")
+        [[ -n "$FQDN" ]] || rollback 'Catalog ingress FQDN is missing.'
+
+        for PATHNAME in \
+          '/actuator/health' \
+          '/actuator/health/liveness' \
+          '/actuator/health/readiness'
+        do
+          BODY=$(mktemp)
+          CODE=$(curl \
+            --silent \
+            --show-error \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --output "$BODY" \
+            --write-out '%{http_code}' \
+            "https://$FQDN$PATHNAME" || true)
+
+          echo "$PATHNAME -> HTTP ${CODE:-unavailable}"
+
+          if [[ "$CODE" != '200' ]] || ! jq -e '.status == "UP"' "$BODY" >/dev/null 2>&1; then
+            rm -f "$BODY"
+            rollback "$PATHNAME did not report UP."
           fi
-          [[ "$HEALTH" != 'Unhealthy' && "$RUNNING" != 'Failed' ]] || { az containerapp logs show -g "$RG" -n "$APP" --revision "$LATEST" --type console --tail 200 --format text || true; exit 1; }
-          sleep 10
+
+          rm -f "$BODY"
         done
-        echo 'ERROR: Catalog revision did not become healthy within 10 minutes.' >&2
-        exit 1
+
+        echo '============================================================'
+        echo 'CATALOG DEPLOYMENT RESULT: PASS'
+        echo '============================================================'
+        echo "New revision: $NEW_REVISION"
+        echo "Image: $IMAGE"
+        echo 'Runtime environment preserved: YES'
+        echo 'Key Vault secret metadata preserved: YES'
+        echo 'Credential values read or changed: NO'
+        echo 'Redis resource provisioned: NO'
+        echo '/actuator/health: UP'
+        echo '/actuator/health/liveness: UP'
+        echo '/actuator/health/readiness: UP'
+        echo '============================================================'

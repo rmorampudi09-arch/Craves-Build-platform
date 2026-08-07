@@ -287,6 +287,16 @@ Pipeline:
 azure-pipelines-catalog-service.yml
 ```
 
+The Catalog deployment pipeline is image-only after the build. It does not read database, JWT, Firebase, provider, or other application credential values and it does not recreate local Container App secrets. Before deployment it fingerprints the current Container App environment and Key Vault secret metadata. After the new revision is Ready, it requires both fingerprints to match exactly and verifies that the datasource password remains Key Vault-backed. If readiness, health, environment preservation, or secret-metadata preservation fails, the pipeline restores the previous image and verifies the rollback fingerprints.
+
+The only Azure DevOps connection variable required by this pipeline is:
+
+```text
+AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection
+```
+
+Do not add `POSTGRES_BUSINESS_DB_PASSWORD` or `CRAVES_JWT_VERIFICATION_PEM_BASE64` merely for this pipeline; the running Container App already owns its secure runtime bindings and the deployment preserves them.
+
 After deployment verify:
 
 ```text
@@ -295,6 +305,8 @@ Maven tests passed
 Flyway V3 completed
 PostGIS is available
 new Container App revision is Ready
+runtime environment fingerprint is unchanged
+Key Vault secret metadata fingerprint is unchanged
 /actuator/health returns UP
 /actuator/health/liveness returns UP
 /actuator/health/readiness returns UP

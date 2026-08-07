@@ -74,8 +74,8 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-cream pb-12">
-      <header className="border-b border-border bg-cream/95">
+    <div className="min-h-screen bg-white pb-12">
+      <header className="border-b border-border bg-white/95">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4">
           <Link to="/home" className="rounded-full border border-border bg-white p-2">
             <ArrowLeft className="h-5 w-5 text-ink" />

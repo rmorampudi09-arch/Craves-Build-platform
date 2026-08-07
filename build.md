@@ -21,7 +21,7 @@
 - **P00 — Execution Documents and Source Lock: DONE**.
 - **P01 — Repository Architecture Inventory: DONE**.
 - P01 started from branch HEAD `64dfbd18820b2644ee0263d5fffcefbd62172dfe`.
-- P01 completion commit: `P01_INVENTORY_COMMIT_PENDING`.
+- P01 completion commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`.
 - Next phase in sequence: **P02 — APIM/OpenAPI Contract Inventory**.
 - Next phase authorization: **NONE AUTHORIZED**.
 - Required action: stop and wait for the user to explicitly start/continue the next phase.
@@ -530,7 +530,7 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 
 - Status: **DONE**
 - Started from commit: `64dfbd18820b2644ee0263d5fffcefbd62172dfe`
-- Completed at commit: `P01_INVENTORY_COMMIT_PENDING`
+- Completed at commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`
 - Guide references: global Project Overview, Technology Stack, Development Rules, State Management, Code Quality, Security, and Testing standards from the full 183-page / 52-reference master guide; no screen reference was implemented in this phase.
 - Changed files: `build.md` only.
 - APIM/contracts used: none. P02 contract inventory was deliberately not started.

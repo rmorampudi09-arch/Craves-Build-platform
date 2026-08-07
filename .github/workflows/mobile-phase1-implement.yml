@@ -28,6 +28,8 @@ jobs:
         run: |
           set -euo pipefail
           test -d apps/mobile
+          test "$(wc -c < .phase1/chunk07a.b64)" -eq 4000
+          test "$(wc -c < .phase1/chunk07b.b64)" -eq 4000
           cat .phase1/chunk01.b64 .phase1/chunk02.b64 .phase1/chunk03.b64 .phase1/chunk04.b64 .phase1/chunk05.b64 .phase1/chunk06.b64 .phase1/chunk07a.b64 .phase1/chunk07b.b64 .phase1/chunk08.b64 .phase1/chunk09.b64 | tr -d '\n\r' | base64 -d > /tmp/phase1-overlay.tar.gz
           echo '815999af83cea5086e7de61791a4b8720568d23a7d4b9c324b8a060613d3a3f6  /tmp/phase1-overlay.tar.gz' | sha256sum -c -
           tar -xzf /tmp/phase1-overlay.tar.gz -C apps/mobile

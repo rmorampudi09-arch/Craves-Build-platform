@@ -14,6 +14,8 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
+**Historical ledger preservation:** The exact authoritative ledger state through accepted P08 is preserved unchanged at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P08.md`. This file remains the current authority from P09 onward; use the archived ledger when detailed P00–P08 architecture/history evidence is needed.
+
 ---
 
 ## 1. Current Control State
@@ -27,61 +29,42 @@
 - **P06 — Shared Interaction Primitives: DONE**.
 - **P07 — Shared Screen/Lifecycle Primitives: DONE**.
 - **P08 — Query/Store Provider and Cache Rules: DONE**.
-- P01 started from branch HEAD `64dfbd18820b2644ee0263d5fffcefbd62172dfe`.
+- **P09 — Typed HTTP Client Foundation: DONE**.
+
+Accepted completion evidence:
+
 - P01 completion commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`.
-- P02 inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`.
-- P02 evidence: `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`.
-- P03 started from branch HEAD `ad37c1366b3399c9910e76a1343d9454f42f30eb`.
-- P03 implementation completion commit: `57f371cc3851c78daa6a0bd6b28521f0c62babb2`.
-- P03 evidence: `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`.
-- P03 CI run: `31194872495` — **SUCCESS**.
-- P04 started from branch HEAD `3a221d71819dc1bb079f01bbcfc5428fc65ca521`.
-- P04 implementation completion commit: `ae15a1702923e68dbd3b3582d664e500ec723927`.
-- P04 evidence: `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md`.
-- P04 CI run: `31196834196` — **SUCCESS**.
-- P05 started from branch HEAD `783b29224661a969405837c2a1ef7f5a477b427c`.
-- P05 implementation completion commit: `53f27fd405208cdd6b740124c0901857d04bd8fd`.
-- P05 evidence: `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md`.
-- P05 CI run: `31197890099` — **SUCCESS**.
-- P06 started from P05 implementation HEAD `53f27fd405208cdd6b740124c0901857d04bd8fd`.
-- P06 implementation completion commit: `6d9578c1b2d60362ee124f162e4d046d7b471fdc`.
-- P06 evidence: `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md` (artifact commit `a7ec9fcf2fbef7dfab2537b9001497fc63f42b14`).
-- P06 CI run: `31199569464` — **SUCCESS**.
-- P07 started from P06 completion HEAD `3544af1539fa2e3fc18c22c26aee52a5fa747485`.
-- P07 implementation completion commit: `4a55e1377e3e3dd2fee08a30b5d3e874d32c1680`.
-- P07 evidence: `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md` (artifact commit `db60cbf5670fc5ee9e273e8197a3a9cc3ef29ea0`).
-- P07 CI run: `31201252609` — **SUCCESS**.
-- P08 started from P07 record HEAD `6b41ad1f72b1d9723e7abe0f140ddf959cdc680c`.
-- P08 validated implementation completion commit: `c87828bf0d8378cd6dcd5738a36a4db2850d5d0c`.
-- P08 evidence: `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md` (artifact commit `4554112cf598a7ad660c1450bbb8a332bcf58163`).
-- P08 CI run: `31205887901` — **SUCCESS**.
-- Next phase in sequence: **P09 — Typed HTTP Client Foundation**.
-- Next phase authorization: **NONE AUTHORIZED**.
-- Required action: stop and wait for the user to explicitly start/continue the next phase.
+- P02 inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`; evidence: `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`.
+- P03 implementation commit: `57f371cc3851c78daa6a0bd6b28521f0c62babb2`; evidence: `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`; CI `31194872495` **SUCCESS**.
+- P04 implementation commit: `ae15a1702923e68dbd3b3582d664e500ec723927`; evidence: `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md`; CI `31196834196` **SUCCESS**.
+- P05 implementation commit: `53f27fd405208cdd6b740124c0901857d04bd8fd`; evidence: `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md`; CI `31197890099` **SUCCESS**.
+- P06 implementation commit: `6d9578c1b2d60362ee124f162e4d046d7b471fdc`; evidence: `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md`; CI `31199569464` **SUCCESS**.
+- P07 implementation commit: `4a55e1377e3e3dd2fee08a30b5d3e874d32c1680`; evidence: `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md`; CI `31201252609` **SUCCESS**.
+- P08 validated implementation commit: `c87828bf0d8378cd6dcd5738a36a4db2850d5d0c`; evidence: `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md`; CI `31205887901` **SUCCESS**.
+- P09 started from P08 record HEAD `6369d1e547036d988335ea7bb0d1860ac5a6848a`.
+- P09 validated implementation completion commit: `530b352a6b6f1b8a820a8858b0192820cef9cd67`.
+- P09 evidence: `docs/mobile-ui-rebuild/P09_TYPED_HTTP_CLIENT_FOUNDATION.md`.
+- P09 CI run: `31207371023` — **SUCCESS**.
 
-P08 keeps TanStack Query as the single server-state/cache layer and Redux Toolkit as the single global app-state layer, moves QueryClient construction/defaults into the dedicated application query boundary, establishes deterministic public/private contextual cache keys, provides scoped private-query cancellation/removal, and defines finite cache/paging conventions. No server collection was copied into Redux, no P09 HTTP behavior was changed, and no backend/APIM/infrastructure/product-screen work was introduced.
+**Next phase in sequence:** **P10 — Session Token Security Foundation**.
+
+**Next phase authorization:** **NONE AUTHORIZED**.
+
+**Required action:** Stop and wait for the user to explicitly start/continue P10. Do not pre-implement P10.
+
+P09 formalizes the existing HTTP foundation into one centralized transport architecture. Authenticated requests now reuse the process-memory bearer source through the central client; pre-session/refresh/logout requests use a centralized unauthenticated core transport to avoid interceptor recursion; correlation IDs, default timeout, safe normalized errors, cancellation semantics, bounded read-only retry, and opt-in in-flight request dedupe are centralized. P09 does not change token storage ownership, invent API contracts, resolve P02 backend/APIM blockers, add product screens, or begin P10.
 
 ---
 
-## 2. Branch Snapshot Before Governance Documents
-
-The last product/CI commit before the four governance documents was:
-
-- Commit: `b91802ecd98b76a6aa28680c7e3bf83693816d74`
-- Message: `Stop per-phase APK builds and keep code-only mobile CI`
-- This commit was 45 commits ahead of the protected backend/mobile-rebuild baseline `8a2444cde508ea2fb20cb9822397e55c29bd8c5f`.
-
-The rebuild diff from that baseline is confined to the new mobile application and mobile-focused GitHub workflow files; the current CI explicitly guards backend/APIM/infrastructure source from modification.
-
----
-
-## 3. Latest Validated CI Evidence
+## 2. Latest Validated CI Evidence
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
-- GitHub Actions run ID: `31205887901`
-- Head SHA: `c87828bf0d8378cd6dcd5738a36a4db2850d5d0c`
+
+- GitHub Actions run ID: `31207371023`
+- Head SHA: `530b352a6b6f1b8a820a8858b0192820cef9cd67`
+- Phase: **P09 — Typed HTTP Client Foundation**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -91,586 +74,216 @@ Successful checks:
 3. `npm ci`,
 4. strict TypeScript check (`tsc --noEmit`),
 5. ESLint (`--max-warnings=0`),
-6. Jest including the P08 query/cache regression suite,
+6. Jest including the P09 HTTP-foundation regression suite,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
 
-Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is the correct implementation-phase policy.
+This workflow intentionally does **not** perform Java/Gradle/APK packaging. That remains the correct implementation-phase policy.
 
-P08 centralized the existing TanStack Query defaults, added stable public/private query-key and private-cache-clearing rules, added finite query/paging policy, and added focused regression coverage without changing HTTP/auth/backend behavior. Run `31205887901` is the accepted P08 code-level validation evidence. It does not claim feature-specific API pagination contracts, logout/role-transition orchestration, backend runtime validation, Gradle packaging, or APK verification.
+Run `31207371023` validates the P09 mobile code boundary only. It does not claim runtime verification of the `CONTRACT_ONLY`/`BLOCKED` routes documented by P02, Gradle/APK verification, P10 session-security acceptance, or end-to-end marketplace completion.
 
 ---
 
-## 4. What Is Actually Implemented Today
+## 3. What Is Actually Implemented Today
 
-### 4.1 Fresh React Native CLI foundation — IMPLEMENTED
+### 3.1 Application foundation — IMPLEMENTED FOR CURRENT AUTH SCOPE
 
-Current source includes a fresh `apps/mobile` React Native CLI project with:
+Current source retains the approved React Native CLI architecture with React Native `0.85.3`, React `19.2.3`, strict TypeScript, React Navigation, Redux Toolkit, TanStack Query, Axios, React Hook Form/Zod, Reanimated/Gesture Handler, Safe Area Context/Screens, FlashList, Firebase App/Auth, SecureStore, Jest, ESLint, Metro, Babel, and Android native ownership under `apps/mobile`.
 
-- React Native `0.85.3`, React `19.2.3`, strict TypeScript,
-- React Navigation native stack/bottom-tab dependencies,
-- Redux Toolkit / React Redux,
-- TanStack Query,
-- Axios,
-- React Hook Form + Zod resolver stack,
-- Reanimated / Gesture Handler,
-- Safe Area Context / Screens,
-- FlashList,
-- Firebase App/Auth,
-- secure-storage module,
-- Android native project and Firebase Android config,
-- Jest/ESLint/Prettier/Metro/Babel configuration.
+The current root navigation still implements authentication/account-resolution scope only. Complete Customer/Chef marketplace shells remain later phases.
 
-The dependency list existing in the repository is the current architecture baseline. Do not replace it wholesale to match a generic recommendation from the guide.
+### 3.2 Runtime, design, motion, interaction, lifecycle, query/cache foundations — ACCEPTED P03–P08
 
-### 4.2 App/provider/navigation bootstrap — IMPLEMENTED FOR AUTH SCOPE
+Accepted shared owners remain:
 
-Key files include:
+- runtime configuration: `apps/mobile/src/core/config/runtimeConfig.ts`,
+- design tokens: `apps/mobile/src/design/tokens.ts`,
+- motion/reduced motion: `apps/mobile/src/design/motion.ts`, `reducedMotion.ts`,
+- shared interaction/lifecycle components: `apps/mobile/src/shared/components/**`,
+- application query/cache policy: `apps/mobile/src/app/query/**`,
+- Redux store: `apps/mobile/src/app/store/**`.
 
-- `apps/mobile/App.tsx`
-- `apps/mobile/src/app/providers/AppProviders.tsx`
-- `apps/mobile/src/app/query/queryClient.ts`
-- `apps/mobile/src/app/query/queryPolicy.ts`
-- `apps/mobile/src/app/query/queryKeys.ts`
-- `apps/mobile/src/app/query/queryCache.ts`
-- `apps/mobile/src/app/store/store.ts`
-- `apps/mobile/src/app/store/hooks.ts`
-- `apps/mobile/src/app/navigation/AppNavigator.tsx`
-- `apps/mobile/src/app/navigation/types.ts`
+P08 remains the accepted query/server-state boundary: one application TanStack Query client, one Redux store, deterministic public/private contextual keys, scoped private-cache clearing, finite query GC, and bounded paging conventions. Server collections must not be copied into arbitrary Redux arrays.
 
-The current root navigator implements the authentication/account-resolution stack. It does **not** yet implement the complete Customer and Chef marketplace shells.
-
-### 4.3 Runtime configuration — IMPLEMENTED / P03 ACCEPTED
-
-Key files:
-
-- `apps/mobile/src/core/config/runtimeConfig.ts`
-- `apps/mobile/src/core/config/runtimeConfig.test.ts`
-- `apps/mobile/.env.example`
-- `apps/mobile/android/app/build.gradle`
-- `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`
-
-Accepted P03 behavior:
-
-- `runtimeConfig.ts` remains the single runtime configuration owner.
-- `CRAVES_API_BASE_URL` is required, normalized, and validated as an absolute HTTP(S) URL.
-- Non-development environments require HTTPS.
-- Base URLs containing embedded credentials, query parameters, or fragments are rejected.
-- `CRAVES_ENVIRONMENT` supports `development`, `staging`, and `production`; invalid explicit values fail with `RuntimeConfigurationError`.
-- `.env.example` documents the public schema only and contains a reserved non-production placeholder rather than a production endpoint.
-- Root `.gitignore` excludes `.env`/`.env.*` while allowing `.env.example`, keeping deployment environment files outside source control.
-- Android applies the existing `react-native-config` `dotenv.gradle` bridge so injected environment values reach the native module.
-- Existing Firebase Android Google Services wiring and `com.cravesapp` package alignment were statically verified and retained.
-- No feature-flag reads, Firebase Remote Config SDK, established remote-config provider, or current P00–P03 flag consumer exists. P03 records that boundary and prohibits future ad hoc screen/environment flags; exact provider, keys, defaults, rollout semantics, and cache policy must be approved when a feature actually requires them.
-
-No backend route, APIM policy, secret, or environment-specific production value was introduced by P03.
-
-### 4.4 Shared design-token baseline — IMPLEMENTED / P04 ACCEPTED
-
-Key files:
-
-- `apps/mobile/src/design/tokens.ts`
-- `apps/mobile/src/design/tokens.test.ts`
-- `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md`
-
-Accepted P04 baseline includes:
-
-- locked Flame Red `#F62E18` and Espresso Brown `#261A15`,
-- warm/base/muted semantic surfaces,
-- primary/secondary/placeholder text colors,
-- distinct success/warning/error/information semantic colors,
-- a 4 dp shared spacing rhythm,
-- shared radii and standard/focus/strong border widths,
-- typography sizes and shared font-weight vocabulary,
-- dynamic type policy with React Native font scaling enabled and no fixed token line-height that would clip scaled text,
-- shared icon sizes,
-- Android-first `48 dp` minimum and `56 dp` comfortable interaction targets,
-- safe-area content/floating clearances that remain additive to runtime `react-native-safe-area-context` device insets,
-- restrained shared `none`, `card`, and `primaryAction` elevation/shadow definitions.
-
-Existing foundation adoption in P04 is intentionally narrow: `Icon.tsx`, `AuthCard.tsx`, `PrimaryButton.tsx`, `InputField.tsx`, and `AuthShell.tsx` consume the relevant shared baseline values instead of carrying equivalent raw/default values.
-
-All 52 references have **not** been visually certified against the token baseline; reference/device visual certification remains in the later screen and QA phases.
-
-### 4.5 Shared motion and reduced-motion baseline — IMPLEMENTED / P05 ACCEPTED
-
-Key files:
-
-- `apps/mobile/src/design/motion.ts`
-- `apps/mobile/src/design/reducedMotion.ts`
-- `apps/mobile/src/design/motion.test.ts`
-- `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md`
-
-Accepted P05 baseline includes:
-
-- shared durations for press, selection, bounded item insertion/removal, bottom navigation, View Cart, modal transitions, and skeleton cycles,
-- standard/enter/exit cubic-bezier conventions,
-- restrained feedback/settle spring conventions with overshoot clamped,
-- intent-level motion definitions restricted to opacity and transform,
-- platform reduced-motion preference tracking through React Native `AccessibilityInfo`,
-- conservative reduced-motion startup behavior until the platform preference resolves,
-- immediate reduced-motion equivalents with springs and continuous shimmer disabled,
-- explicit zero animation delay for authentication navigation, payment navigation, and error presentation,
-- whole-large-list animation disabled by shared policy,
-- bounded visible list-change animation via `shouldAnimateListChanges`.
-
-P05 defines the baseline only. P06 now consumes that baseline for shared interaction feedback; View Cart/bottom-navigation/modal product surfaces and screen-level motion/device certification remain later-phase work.
-
-### 4.6 HTTP/error/correlation foundation — IMPLEMENTED FOUNDATION
+### 3.3 Typed HTTP client foundation — IMPLEMENTED / P09 ACCEPTED
 
 Key files:
 
 - `apps/mobile/src/core/http/apiClient.ts`
 - `apps/mobile/src/core/http/apiError.ts`
 - `apps/mobile/src/core/http/correlation.ts`
+- `apps/mobile/src/core/http/transport.ts`
+- `apps/mobile/src/core/http/httpClient.ts`
+- `apps/mobile/src/core/http/requestMetadata.ts`
+- `apps/mobile/src/core/http/requestPolicy.ts`
+- `apps/mobile/src/core/http/requestDedupe.ts`
+- `apps/mobile/src/core/http/httpFoundation.test.ts`
+- `docs/mobile-ui-rebuild/P09_TYPED_HTTP_CLIENT_FOUNDATION.md`
 
-The central client/error/correlation architecture exists. P02 completed the static inventory of all currently consumed mobile operations; unresolved APIM/OpenAPI/backend contracts remain explicitly classified in `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`. Future feature wrappers still require exact contracts before implementation. P08 did not alter this layer; P09 owns its formal typed-client acceptance.
+Accepted P09 behavior:
 
-### 4.7 Token/session security — IMPLEMENTED FOR CURRENT AUTH FLOW
+- `transport.ts` is the shared low-level Axios instance factory and owns runtime base URL, shared default timeout, and request metadata setup.
+- `apiClient.ts` is the general authenticated client and injects the current process-memory access token.
+- `publicApiClient` is the centralized unauthenticated transport for the narrowly approved auth operations that must not recurse through bearer refresh.
+- Existing Firebase-token exchange, refresh rotation, and logout use the centralized public transport rather than feature-local Axios construction.
+- Correlation IDs are added centrally and preserved across retry/replay when already present.
+- `httpClient.ts` exposes typed data-returning read/write helpers for feature API modules.
+- Read requests can opt into in-flight dedupe with an explicit `dedupeKey`; dedupe state is released when the request settles.
+- Automatic transient retry is bounded to at most one retry and only safe read methods (`GET`, `HEAD`, `OPTIONS`) for the approved transient status/network classes.
+- Mutations are not automatically retried.
+- Cancellation is normalized as `REQUEST_CANCELLED` and is never treated as retriable.
+- Timeout/network failures receive bounded public-safe messages.
+- `AppApiError` now owns safe code, status, correlation ID, retriable, and cancelled fields at the core HTTP boundary.
+- Stack-like backend messages and server 5xx internals are not exposed to users.
+- The existing one-shot 401 refresh/replay behavior remains in the authenticated client; token persistence/rotation security acceptance itself remains P10.
+- P09 removed the previous generic core HTTP dependency on `features/auth/domain/types`.
+- No endpoint/path/request/response schema was invented or changed. P02 classifications remain authoritative.
 
-Key files:
+### 3.4 Session/token security — CURRENT FOUNDATION EXISTS, P10 NOT ACCEPTED
 
-- `apps/mobile/src/core/security/tokenMemory.ts`
-- `apps/mobile/src/core/security/refreshTokenStore.ts`
-- `apps/mobile/src/features/auth/api/sessionManager.ts`
+Current owners remain:
 
-Verified implementation behavior:
+- `apps/mobile/src/core/security/tokenMemory.ts` — process-memory access token,
+- `apps/mobile/src/core/security/refreshTokenStore.ts` — secure refresh-token persistence,
+- `apps/mobile/src/features/auth/api/sessionManager.ts` — token-pair acceptance, restore/refresh rotation, single in-flight refresh, local clear.
 
-- access token stored in process memory,
-- refresh token stored through secure storage,
-- refresh token rotation through `/api/v1/auth/refresh`,
-- one in-flight refresh promise guard,
-- local secure credentials cleared on refresh failure/logout.
+P09 only routes session refresh through the centralized public transport. It does **not** certify P10. Full token-memory/secure-store behavior audit and focused P10 acceptance remain next.
 
-This matches the guide’s session-storage model. P02 found that the corresponding current backend/APIM refresh contract is not runtime-verified and is `CONTRACT_ONLY`; wider application cache cleanup and role-transition orchestration remain assigned to P24 even though P08 now provides the accepted private-query clearing mechanism.
+### 3.5 Current auth/API contract status — CODED, CONTRACT CAVEATS REMAIN
 
-### 4.8 Authentication UI/components — IMPLEMENTED FOUNDATION, FINAL VISUAL QA PENDING
-
-Current auth components include:
-
-- `AuthCard.tsx`
-- `AuthHero.tsx`
-- `AuthShell.tsx` — composes the P07 shared `ScreenShell`,
-- `InputField.tsx` — thin compatibility wrapper over the P06 shared input,
-- `PrimaryButton.tsx` — thin compatibility wrapper over the P06 shared button,
-- `RoleSelector.tsx` — composes the P06 shared segmented control,
-- `ScreenHeader.tsx`
-- `SecurityNote.tsx`
-
-Current auth screens include:
-
-- `RoleSelectionScreen.tsx`
-- `PhoneSignInScreen.tsx`
-- `EmailSignInScreen.tsx`
-- `OtpVerificationScreen.tsx`
-- `ForgotPasswordScreen.tsx`
-- `PasswordResetSentScreen.tsx`
-- `SplashScreen.tsx`
-- `StartupErrorScreen.tsx`
-
-These implement the current role-aware authentication foundation, but no pixel-perfect claim is recorded until final reference/device QA.
-
-### 4.9 Firebase authentication — IMPLEMENTED FOR CURRENT AUTH FLOW
-
-Key file:
-
-- `apps/mobile/src/features/auth/firebase/firebaseAuth.ts`
-
-Current flow supports native Firebase phone sign-in/OTP and Firebase email/password/password-reset operations used by the auth service.
-
-### 4.10 CRAVES Auth Service integration — IMPLEMENTED FOR CURRENT AUTH FLOW
-
-Key files:
-
-- `apps/mobile/src/features/auth/api/authApi.ts`
-- `apps/mobile/src/features/auth/state/authService.ts`
-
-Currently coded exact paths include:
+Current coded paths remain:
 
 - `POST /api/v1/auth/firebase/exchange`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
-
-The current auth implementation exchanges Firebase identity for the CRAVES session, maps selected Firebase/network errors, restores sessions, and performs best-effort remote logout followed by mandatory local credential clearing.
-
-**P02 contract result:** Firebase exchange, refresh, and logout are `CONTRACT_ONLY`; `/api/v1/auth/me` is `BLOCKED`. Existing mobile code presence is not evidence that these routes are currently runnable. See the P02 inventory before any later contract-dependent change.
-
-### 4.11 Customer profile completion — IMPLEMENTED ONLY FOR AUTH/ONBOARDING HANDOFF
-
-Key file:
-
-- `apps/mobile/src/features/auth/api/profileApi.ts`
-
-Currently coded paths:
-
 - `GET /api/v1/customer/profile`
 - `PUT /api/v1/customer/profile`
-
-`CustomerRegistrationScreen.tsx` and `AccountRouterScreen.tsx` use the profile capability to decide whether customer profile completion is needed.
-
-P02 classifies both current customer-profile operations as `BLOCKED` pending an authoritative repository contract/backend mapping. This does **not** mean the master-guide Customer Profile/Edit Profile experiences are complete.
-
-### 4.12 Chef application/onboarding handoff — IMPLEMENTED ONLY FOR AUTH/ACCOUNT STATUS
-
-Current coded paths:
-
 - `GET /api/v1/chef/application`
 - `POST /api/v1/chef/application`
 
-Current screens include:
-
-- `ChefRegistrationScreen.tsx`
-- `ChefAccountStatusScreen.tsx`
-
-P02 classifies both current chef-application operations as `BLOCKED`: an APIM policy template exists, but exact operation/backend/schema evidence is insufficient. This covers the auth-time chef application/status handoff code only. It does **not** mean Chef Dashboard, Orders, Menu, Analytics, Profile, Business, Payout, Subscription, or Preferences are complete.
-
-### 4.13 Account router — IMPLEMENTED AS TEMPORARY AUTH COMPLETION ROUTER
-
-`AccountRouterScreen.tsx` resolves profile/application state after authentication.
-
-The present `CustomerAccountStatusScreen.tsx` explicitly says the customer marketplace shell is connected in a later implementation phase. Therefore the marketplace/customer screen implementation is not complete and must not be inferred from successful authentication.
-
-### 4.14 Shared interaction primitives — IMPLEMENTED / P06 ACCEPTED
-
-Key files:
-
-- `apps/mobile/src/shared/components/Button.tsx`
-- `apps/mobile/src/shared/components/IconButton.tsx`
-- `apps/mobile/src/shared/components/PressableCard.tsx`
-- `apps/mobile/src/shared/components/InputField.tsx`
-- `apps/mobile/src/shared/components/Chip.tsx`
-- `apps/mobile/src/shared/components/SegmentedControl.tsx`
-- `apps/mobile/src/shared/components/Badge.tsx`
-- `apps/mobile/src/shared/components/LoadingIndicator.tsx`
-- `apps/mobile/src/shared/components/index.ts`
-- `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md`
-
-Accepted P06 behavior includes:
-
-- shared 48/56 dp interaction targets from the P04 token system,
-- immediate press-state feedback on actionable primitives,
-- reduced-motion-aware suppression of non-essential scale feedback,
-- disabled/loading duplicate-submission protection and accessibility busy/disabled state,
-- accessible button/progress/alert/selected semantics,
-- scalable text on labels, validation messages and status indicators,
-- shared input label/helper/error and trailing-action behavior,
-- semantic badge surfaces owned by the token layer,
-- typed segmented-control options,
-- auth compatibility wrappers that preserve existing screen spacing rather than duplicate interaction logic.
-
-P06 owns interaction controls only. P07 now owns the shared screen/lifecycle layer; Customer/Chef marketplace screens and network/storage/cache policies remain later work.
-
-### 4.15 Shared screen/lifecycle primitives — IMPLEMENTED / P07 ACCEPTED
-
-Key files:
-
-- `apps/mobile/src/shared/components/ScreenShell.tsx`
-- `apps/mobile/src/shared/components/Skeleton.tsx`
-- `apps/mobile/src/shared/components/LifecycleStates.tsx`
-- `apps/mobile/src/shared/components/ContentLifecycle.tsx`
-- `apps/mobile/src/shared/components/index.ts`
-- `apps/mobile/src/features/auth/components/AuthShell.tsx`
-- `apps/mobile/__tests__/LifecyclePrimitives.test.tsx`
-- `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md`
-
-Accepted P07 behavior includes:
-
-- reusable runtime safe-area handling through `react-native-safe-area-context`,
-- reusable keyboard avoidance and optional scroll handling,
-- static section/list skeletons that do not force continuous shimmer,
-- reusable recoverable error, terminal, offline, permission, and retry presentation,
-- retry/actions built on the accepted P06 interaction layer rather than a duplicate button family,
-- initial no-content loading via caller-provided skeletons,
-- prior valid content kept mounted during safe background refresh,
-- optional inline offline/recoverable notices above retained valid content,
-- no generic full-screen spinner forced on every query,
-- accessibility progress/alert/header semantics and skeleton exclusion from accessibility traversal,
-- existing auth `AuthShell` migrated onto the shared `ScreenShell` without changing auth transport behavior.
-
-P07 is presentation/lifecycle infrastructure only. P08 now owns and has accepted the query/store/cache foundation; later feature phases must consume it rather than create feature-local server-state architectures.
-
-### 4.16 Query/store provider and cache rules — IMPLEMENTED / P08 ACCEPTED
-
-Key files:
-
-- `apps/mobile/src/app/providers/AppProviders.tsx`
-- `apps/mobile/src/app/query/queryClient.ts`
-- `apps/mobile/src/app/query/queryPolicy.ts`
-- `apps/mobile/src/app/query/queryKeys.ts`
-- `apps/mobile/src/app/query/queryCache.ts`
-- `apps/mobile/src/app/query/index.ts`
-- `apps/mobile/src/app/query/queryFoundation.test.ts`
-- `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md`
-
-Accepted P08 behavior includes:
-
-- one application TanStack Query client and one Redux Toolkit store; no parallel state architecture,
-- server collections assigned to TanStack Query rather than arbitrary Redux arrays,
-- shared query defaults with 30-second stale time, 10-minute finite query GC, one read retry, reconnect refetch, and mutation retry disabled,
-- versioned public/private cache-key builders,
-- private keys requiring authenticated user and Customer/Chef role context,
-- optional location/filter/entity/paging context encoded into query identity,
-- recursive key canonicalization so equivalent filter/paging objects produce stable equivalent keys,
-- scoped private-query cancellation/removal by user and/or role while public cache remains untouched,
-- bounded paging convention: default request size 20, max request size 50, max retained future paginated pages 8,
-- no feature-specific cursor/page contract invented where P02 has not established an exact contract,
-- no logout/role-transition orchestration pulled forward from P24.
-
-P08 changes query/cache ownership only. Typed HTTP transport hardening remains P09; session security remains P10; logout/revoke/full role-state cleanup remains P24.
+P02 remains authoritative: Firebase exchange, refresh, and logout are `CONTRACT_ONLY`; `/api/v1/auth/me`, customer profile GET/PUT, and chef application GET/POST remain `BLOCKED` under the repository evidence captured by P02. Existing mobile code is not runtime proof of those contracts.
 
 ---
 
-## 5. P01 Accepted Repository Architecture Inventory
+## 4. Current Architecture Ownership After P09
 
-P01 formally audited the current mobile source against the full master guide's requirement to reuse the established architecture rather than create parallel systems.
+### 4.1 HTTP/error ownership
 
-### 5.1 Application entry and root ownership
+- `core/http/transport.ts`: only low-level Axios client factory plus centralized unauthenticated client.
+- `core/http/apiClient.ts`: single general authenticated client, bearer injection, one-shot 401 refresh replay, bounded safe-read retry.
+- `core/http/httpClient.ts`: typed feature-facing data client and opt-in read dedupe entry point.
+- `core/http/requestMetadata.ts`: base URL/correlation/bearer request metadata behavior.
+- `core/http/requestPolicy.ts`: timeout/retry policy and retry delay rules.
+- `core/http/requestDedupe.ts`: explicit in-flight read coalescing compatibility.
+- `core/http/apiError.ts`: generic normalized public-safe API error boundary.
+- `core/http/correlation.ts`: correlation ID generation.
+- `features/auth/api/authApi.ts` and `sessionManager.ts`: use the central public/authenticated core transports as appropriate; they no longer construct feature-local Axios instances/calls.
+- `features/auth/api/profileApi.ts`: uses the typed central authenticated client.
 
-- `apps/mobile/index.js` is the React Native entry point and registers `CravesMobile`.
-- `apps/mobile/App.tsx` is the single application component. It owns the global status-bar setup and composes `AppProviders` with `AppNavigator`.
-- `apps/mobile/app.json` keeps the `CravesMobile` component identity and declares the existing `expo-secure-store` module integration.
-- There is no second mobile application entry or alternate runtime root in `apps/mobile`.
+Future feature screens must not call Axios/fetch directly. Feature API modules should use the accepted core HTTP boundary unless a later phase documents an explicitly approved special transport flow.
 
-### 5.2 Provider ownership
+### 4.2 State/query ownership
 
-`apps/mobile/src/app/providers/AppProviders.tsx` is the single provider composition boundary. It owns:
+- Redux Toolkit remains for true application/client global state.
+- TanStack Query remains the server-state/cache owner.
+- Future feature query keys must use the P08 contextual key rules.
+- Private cache clearing remains available for later logout/role-transition orchestration in P24.
 
-- `GestureHandlerRootView`,
-- `SafeAreaProvider`,
-- the single Redux `Provider`,
-- the single TanStack `QueryClientProvider`.
+### 4.3 Session ownership
 
-P08 retains one application-lifetime `appQueryClient` but moves its construction/defaults into `apps/mobile/src/app/query/queryClient.ts` with policy in `queryPolicy.ts`. Future feature cache behavior must extend this query boundary rather than add a second query client.
-
-### 5.3 Navigation ownership
-
-- `apps/mobile/src/app/navigation/AppNavigator.tsx` owns the single `NavigationContainer` and current native-stack root.
-- `apps/mobile/src/app/navigation/types.ts` owns the current typed route parameter list.
-- The present navigator covers authentication, registration, account routing, and account-status handoff only.
-- Customer shell, Chef shell, transactional/checkout, modal domains, bottom tabs, deep-link allowlisting, and route-level View Cart/bottom-nav policy are not yet implemented and remain later-phase work.
-
-No second navigation container or alternate route framework was found in the current mobile source.
-
-### 5.4 Global application state ownership
-
-- `apps/mobile/src/app/store/store.ts` owns the single Redux Toolkit store.
-- The store currently contains only the `auth` reducer because the rebuild has not reached cart/location/profile/preferences marketplace phases.
-- `apps/mobile/src/app/store/hooks.ts` owns typed Redux access hooks.
-- `apps/mobile/src/features/auth/state/authSlice.ts` owns current bootstrap status, selected role, identity, and auth error state.
-
-P08 formally accepts this ownership rule: future true cross-screen client/global slices extend this store, while server collections remain in the query/cache layer instead of being copied into arbitrary Redux arrays.
-
-### 5.5 Server/query state ownership
-
-- TanStack Query is installed and the single `QueryClientProvider` remains owned by `AppProviders.tsx`.
-- `apps/mobile/src/app/query/queryClient.ts` owns the single application query client.
-- `queryPolicy.ts` owns shared stale/GC/retry and bounded paging conventions.
-- `queryKeys.ts` owns stable versioned public/private query identity and result-defining user/role/location/filter/entity/paging context.
-- `queryCache.ts` owns controlled private-query cancellation/removal.
-- No second server-state cache was introduced.
-- The current auth foundation still primarily uses imperative service calls because its implemented scope predates marketplace query phases. Later server-backed feature modules must consume this P08 query foundation.
-
-### 5.6 Runtime configuration ownership
-
-- `apps/mobile/src/core/config/runtimeConfig.ts` is the single runtime configuration boundary currently used by the mobile client.
-- `CRAVES_API_BASE_URL` is injected through `react-native-config`; P03 additionally validates environment identity, URL structure, and HTTPS requirements and keeps deployment values external.
-- `.env.example` is the non-secret configuration schema/template.
-
-Future runtime values/flags must extend the established configuration boundary rather than introduce ad hoc environment access in screens.
-
-### 5.7 HTTP and error ownership
-
-- `apps/mobile/src/core/http/apiClient.ts` is the single general authenticated Axios client.
-- It centralizes APIM base URL resolution, bearer injection, correlation ID, timeout, one-time 401 replay, and delegation to the shared session refresh manager.
-- `apps/mobile/src/core/http/apiError.ts` owns normalized public API errors.
-- `apps/mobile/src/core/http/correlation.ts` owns correlation ID generation.
-- `apps/mobile/src/features/auth/api/profileApi.ts` correctly uses the central authenticated client.
-- `apps/mobile/src/features/auth/api/authApi.ts` and `sessionManager.ts` use narrowly scoped raw Axios calls for pre-session token exchange, refresh-token rotation, and logout/revocation flows where routing through the bearer-refresh interceptor would be inappropriate or recursive. These are bounded auth exceptions, not a second general API architecture.
-
-P08 did not change any of these transport rules; P09 owns their formal typed HTTP-client audit/hardening.
-
-### 5.8 Session and secure-storage ownership
-
-- `apps/mobile/src/core/security/tokenMemory.ts` is the single in-process access-token owner.
-- `apps/mobile/src/core/security/refreshTokenStore.ts` is the single refresh-credential persistence boundary and uses `expo-secure-store`.
-- `apps/mobile/src/features/auth/api/sessionManager.ts` owns token-pair acceptance, restore/refresh rotation, the one-in-flight refresh guard, and local credential clearing.
-- `AsyncStorage` is installed but is not used for access/refresh tokens in the inspected current source.
-
-No duplicate secure-token store was found.
-
-### 5.9 Firebase ownership
-
-- `apps/mobile/src/features/auth/firebase/firebaseAuth.ts` is the single Firebase Auth platform wrapper for phone verification, OTP confirmation, email/password sign-in, password reset, and sign-out.
-- `apps/mobile/android/app/google-services.json` supplies the Android Firebase application configuration.
-- Android applies the Google Services Gradle plugin.
-- P03 statically re-verified that the Firebase Android client package aligns with `com.cravesapp`.
-
-No second Firebase Auth wrapper or web-auth implementation was found in the current mobile runtime.
-
-### 5.10 Design-system ownership
-
-- `apps/mobile/src/design/tokens.ts` is the single current design-token source. P04 accepts it for brand colors, warm/semantic surfaces, semantic status/text colors, spacing, radii, border widths, typography/font weights, icon sizes, touch targets, safe-area content clearances, dynamic type, and elevation/shadow definitions; P06 extends its semantic status surfaces for shared badges rather than introducing component-local status colors.
-- `apps/mobile/src/design/motion.ts` is the single shared motion-convention source accepted by P05; `apps/mobile/src/design/reducedMotion.ts` owns the platform reduced-motion preference boundary consumed by P06 actionable primitives where non-essential scale feedback exists.
-- `apps/mobile/src/shared/components` owns the cross-feature interaction primitives from P06 plus the P07 `ScreenShell`, skeletons, lifecycle notices/states, retry control, and `ContentLifecycle` policy through the same shared barrel.
-- Auth `PrimaryButton` and `InputField` remain thin feature-compatibility wrappers over shared controls, `RoleSelector` composes the shared segmented control, and `AuthShell` composes the P07 shared `ScreenShell`. Auth-specific compositions remain feature-scoped.
-
-There is no competing ThemeProvider, duplicate color-token system, second accepted motion vocabulary, parallel interaction-component stack, or parallel screen/lifecycle primitive stack. Later phases must extend these owners instead of creating parallel theme/animation/component/lifecycle architecture.
-
-### 5.11 Feature/module ownership
-
-The only implemented product feature module under `apps/mobile/src/features` is currently `auth`, organized into:
-
-- `api` — auth/profile/session transport boundaries,
-- `components` — auth visual compositions/compatibility wrappers,
-- `domain` — auth domain types,
-- `firebase` — platform authentication wrapper,
-- `hooks` — bootstrap coordination,
-- `screens` — auth/account-resolution presentation,
-- `state` — auth reducer and orchestration service.
-
-Customer and Chef marketplace feature families have not yet been added in this rebuild.
-
-### 5.12 Validation and tests
-
-- `apps/mobile/src/utils/validation.ts` is the current validation-helper boundary with focused unit coverage.
-- `apps/mobile/__tests__/App.test.tsx` is the current root render test.
-- `apps/mobile/__tests__/LifecyclePrimitives.test.tsx` covers P07 initial loading, retained-content background refresh, and reusable lifecycle primitives.
-- `apps/mobile/src/core/security/tokenMemory.test.ts` covers access-token memory behavior.
-- `apps/mobile/src/core/config/runtimeConfig.test.ts` covers the P03 runtime environment/configuration boundary.
-- `apps/mobile/src/design/tokens.test.ts` covers P04 brand, spacing, semantic-color, touch-target, dynamic-type, and safe-area token invariants used by shared primitives.
-- `apps/mobile/src/design/motion.test.ts` covers P05 duration, transform/opacity, reduced-motion, critical-delay, and large-list motion invariants used by shared interaction behavior.
-- `apps/mobile/src/app/query/queryFoundation.test.ts` covers P08 query defaults, deterministic contextual keys, private user/role scope matching and cache clearing, public-cache preservation, and bounded paging policy.
-- `apps/mobile/jest.config.js` owns Jest setup and transform rules.
-- `apps/mobile/tsconfig.json` extends the React Native TypeScript configuration and includes all TypeScript source/test files.
-
-Coverage is intentionally small and is not sufficient for later customer/chef features. P08 acceptance additionally relies on strict type checking, zero-warning linting, the focused query/cache regression suite, production bundling, and the backend/APIM source guard; it does not claim exhaustive feature testing.
-
-### 5.13 Android native ownership
-
-- `apps/mobile/android` is the native Android project owned by this React Native CLI app.
-- Application ID/namespace is `com.cravesapp`.
-- React Native New Architecture and Hermes are enabled.
-- The project uses React Native Gradle ownership plus Expo module autolinking only for approved bare-RN native modules such as SecureStore; this is **not** an Expo-managed application.
-- `MainActivity` registers the `CravesMobile` component and uses `adjustResize` through the Android manifest for keyboard behavior.
-- P03 wires the existing `react-native-config` Android dotenv bridge; it does not introduce a second configuration system.
-- Current Android release configuration still points to debug signing; production signing remains intentionally deferred to final release readiness.
-
-### 5.14 CI ownership
-
-- `.github/workflows/mobile-phase1-ci.yml` is the current general mobile implementation CI despite its historical filename.
-- It runs dependency install, TypeScript, ESLint, Jest, production Android JavaScript bundling, and the backend/APIM/infrastructure source guard.
-- It intentionally does not build an APK per phase.
-- `.github/workflows/mobile-phase1-bootstrap.yml`, `mobile-phase1-deps.yml`, and `mobile-phase1-implement.yml` are historical one-time, write-capable bootstrap helpers. They are not the current implementation architecture and must not be reused as an automatic phase engine.
-- `apps/mobile/PHASE1.md` is historical foundation documentation. `build.md` is the authoritative completion ledger.
-
-### 5.15 Duplicate/dead architecture result
-
-No active duplicate runtime navigation container, Redux store, TanStack Query client, general authenticated HTTP client, secure-token store, Firebase Auth wrapper, runtime configuration owner, design-token system, accepted motion baseline, shared interaction-component system, or shared screen/lifecycle primitive system was found in the current `apps/mobile` source.
-
-Installed baseline libraries that are not yet exercised by the auth-only implementation (for example bottom tabs, FlashList, React Hook Form/Zod, AsyncStorage for approved non-sensitive persistence, and animation/media helpers) are reserved dependencies, not parallel architecture. Future phases must reuse them where appropriate rather than add competing libraries without approval.
-
-### 5.16 Deferred cleanup/refinement notes
-
-These findings do **not** block P01–P08 completion, but later owning phases should address them deliberately:
-
-1. `src/core/http/apiError.ts` imports the `ApiErrorResponse` transport type from `features/auth/domain/types`. Even though it is type-only, shared core HTTP infrastructure should not depend inward on the auth feature. P09 should move/define the generic API error response at a core/shared transport boundary.
-2. P08 now provides `clearPrivateQueryCache(...)` and stable private query ownership. P24 must wire the accepted mechanism into logout/revoke/role-transition cleanup when the full authenticated feature state exists; P08 intentionally does not pull that orchestration forward.
-3. `AppNavigator.tsx` is currently auth-only and `AccountRouterScreen.tsx` performs temporary account-resolution orchestration. P11 and the account-resolution phases must evolve these existing owners instead of creating separate root navigators.
-4. Android Kotlin files are physically under `android/app/src/main/java/com/cravesmobile/` while declaring package `com.cravesapp`. The declarations/application ID are consistent at runtime, but the directory should be normalized in a future native-configuration cleanup for maintainability.
-5. Android release currently uses the debug signing configuration. Production signing is a final release-readiness concern and must not be introduced during intermediate UI phases.
-6. Historical write-capable Phase 1 bootstrap/dependency/implementation workflows remain in the repository. They are quarantined as legacy helpers; a later repository-hygiene change may retire them, but they must not be triggered/edited as part of normal phased implementation.
-7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P08 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
-
-**Current foundation blocker status:** none for P08. The unresolved P02 backend/APIM contracts remain visible and unchanged.
+- Access token: process memory only.
+- Refresh token: secure-storage boundary only.
+- Session rotation: `sessionManager.ts`.
+- No access/refresh token logging or route-param ownership is approved.
+- P10 must audit/accept this foundation rather than create a duplicate token architecture.
 
 ---
 
-## 6. Current Test Coverage
+## 5. Current Test Coverage
 
-Known tests currently include:
+Known accepted tests include:
 
-- `apps/mobile/__tests__/App.test.tsx` — basic root render,
-- `apps/mobile/__tests__/LifecyclePrimitives.test.tsx` — P07 initial loading, retained valid content during background refresh, and shared lifecycle primitive rendering,
-- `apps/mobile/src/core/security/tokenMemory.test.ts` — token-memory behavior,
-- `apps/mobile/src/core/config/runtimeConfig.test.ts` — runtime environment/base URL validation and failure behavior,
-- `apps/mobile/src/design/tokens.test.ts` — P04 brand, spacing, semantic, touch, dynamic-type, and safe-area token invariants,
-- `apps/mobile/src/design/motion.test.ts` — P05 shared duration, property, reduced-motion, critical-delay, and bounded-list invariants,
-- `apps/mobile/src/app/query/queryFoundation.test.ts` — P08 query/client defaults, cache-key stability/context, private-cache scope clearing, public-cache preservation, and bounded paging conventions,
+- `apps/mobile/__tests__/App.test.tsx` — root render,
+- `apps/mobile/__tests__/LifecyclePrimitives.test.tsx` — P07 lifecycle behavior,
+- `apps/mobile/src/core/security/tokenMemory.test.ts` — current token-memory behavior,
+- `apps/mobile/src/core/config/runtimeConfig.test.ts` — P03 runtime configuration,
+- `apps/mobile/src/design/tokens.test.ts` — P04 design-token invariants,
+- `apps/mobile/src/design/motion.test.ts` — P05 motion/reduced-motion invariants,
+- `apps/mobile/src/app/query/queryFoundation.test.ts` — P08 query/cache rules,
+- `apps/mobile/src/core/http/httpFoundation.test.ts` — P09 request metadata, safe retry rules, cancellation normalization, stack-trace suppression, safe validation messages, and in-flight dedupe,
 - `apps/mobile/src/utils/validation.test.ts` — current validation helpers.
 
-CI run `31205887901` is green for the accepted P08 implementation: strict TypeScript, ESLint, the current Jest suite including P08 query/cache regression tests, production Android JavaScript bundle generation, and the backend/APIM/infrastructure guard all pass. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
+CI run `31207371023` is green for the accepted P09 implementation: strict TypeScript, ESLint, Jest, production Android JavaScript bundle generation, and the backend/APIM/infrastructure source guard all pass.
+
+This is not complete-project test coverage. Each future phase must add focused unit/component/integration coverage as its domain grows.
 
 ---
 
-## 7. Current Mini-Phase Status Mapping
-
-The granular `phases.md` was introduced after the existing auth foundation was written. To avoid retroactively overstating completion, existing code is mapped conservatively:
+## 6. Current Mini-Phase Status Mapping
 
 | Phase | Status | Evidence/Reason |
 |---|---|---|
-| P00 Execution Documents | **DONE** | `plan.md`, `phases.md`, `build.md`, and `agent.md` committed; source hierarchy and execution policy locked. |
-| P01 Repository Inventory | **DONE** | Formal repository architecture audit recorded in this ledger; current entry/navigation/provider/store/query/config/HTTP/security/Firebase/design/native/test/CI ownership is documented and duplicate architecture was checked. |
-| P02 APIM/OpenAPI Inventory | **DONE** | `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md` inventories all 8 currently consumed mobile HTTP operations, route-key/auth expectations, path/source mismatches, validation gaps, and static classifications: 3 `CONTRACT_ONLY`, 5 `BLOCKED`, 0 runtime-verified. |
-| P03 Runtime Config | **DONE** | Runtime schema/base URL validation, Android `react-native-config` injection, non-secret `.env.example`, Firebase Android audit, explicit remote-config/feature-flag boundary, focused tests, and successful CI are recorded in `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`. |
-| P04 Design Tokens | **DONE** | `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md` records the accepted single token baseline for brand/warm/semantic colors, spacing, radius, typography, borders/elevation, icon/touch sizes, safe-area clearances, dynamic type, focused tests, and successful CI. |
-| P05 Motion Baseline | **DONE** | `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md` records the accepted shared motion vocabulary, platform reduced-motion preference boundary, critical-flow zero-delay rule, bounded-list guard, focused tests, and successful CI. |
-| P06 Shared Interaction Primitives | **DONE** | Shared Button/IconButton/PressableCard/InputField/Chip/SegmentedControl/Badge/LoadingIndicator layer accepted; auth button/input compatibility wrappers and RoleSelector migrated; evidence in `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md`; CI run `31199569464` **SUCCESS**. |
-| P07 Shared Lifecycle Primitives | **DONE** | Shared ScreenShell/Skeleton/LifecycleStates/ContentLifecycle layer accepted; auth shell migrated to the shared screen owner; focused refresh-preservation regression tests added; evidence in `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md`; CI run `31201252609` **SUCCESS**. |
-| P08 Query/Store Cache Rules | **DONE** | Single QueryClient/Redux ownership retained; deterministic public/private contextual query keys, scoped private-cache clearing, finite GC and bounded paging policy accepted; evidence in `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md`; CI run `31205887901` **SUCCESS**. |
-| P09 Typed HTTP Client | PARTIAL | Foundation exists; full typed transport/retry/cancellation/contract audit pending. |
-| P10 Session Token Security | PARTIAL / strong foundation | Memory/secure-store/refresh implementation exists and CI passes; later full security audit still required. |
+| P00 Execution Documents | **DONE** | Execution/source-lock documents accepted. |
+| P01 Repository Inventory | **DONE** | Architecture ownership audit accepted. |
+| P02 APIM/OpenAPI Inventory | **DONE** | Exact current mobile consumers classified; unresolved contracts remain explicit. |
+| P03 Runtime Config | **DONE** | Central runtime boundary accepted; CI green. |
+| P04 Design Tokens | **DONE** | Shared token baseline accepted; CI green. |
+| P05 Motion Baseline | **DONE** | Shared/reduced-motion baseline accepted; CI green. |
+| P06 Shared Interaction Primitives | **DONE** | Shared actionable controls accepted; CI green. |
+| P07 Shared Lifecycle Primitives | **DONE** | Shared screen/lifecycle layer accepted; CI green. |
+| P08 Query/Store Cache Rules | **DONE** | Query/store ownership, contextual keys, cache clearing, paging rules accepted; CI `31205887901` green. |
+| P09 Typed HTTP Client | **DONE** | Central authenticated/public transports, typed data client, correlation/bearer metadata, normalized safe errors, cancellation, bounded safe-read retry, opt-in dedupe, focused tests/evidence accepted; CI `31207371023` green. |
+| P10 Session Token Security | PARTIAL / strong foundation | Memory/secure-store/refresh implementation exists, but P10 audit/tests/acceptance have not been performed. |
 | P11 Root Navigation | PARTIAL | Auth stack exists; Customer/Chef/Transactional/Modal domains incomplete. |
-| P12 Role Selection | PARTIAL / implemented | Functional code exists; final visual/device acceptance pending. |
-| P13 Customer Phone Sign-In | PARTIAL / implemented | Functional code exists; reference-specific final acceptance pending. |
-| P14 Chef Phone Sign-In | PARTIAL / implemented | Shared role-aware phone flow exists; reference-specific final acceptance pending. |
+| P12 Role Selection | PARTIAL / implemented | Functional code exists; final reference/device acceptance pending. |
+| P13 Customer Phone Sign-In | PARTIAL / implemented | Functional code exists; reference-specific acceptance pending. |
+| P14 Chef Phone Sign-In | PARTIAL / implemented | Shared role-aware phone flow exists; reference-specific acceptance pending. |
 | P15 Customer Email Sign-In | PARTIAL / implemented | Functional code exists; reference-specific acceptance pending. |
 | P16 Chef Email Sign-In | PARTIAL / implemented | Shared role-aware email flow exists; reference-specific acceptance pending. |
 | P17 OTP | PARTIAL / implemented | Verification/resend behavior exists; granular acceptance audit pending. |
 | P18 Password Recovery | PARTIAL / implemented | Recovery screens/service exist; acceptance audit pending. |
-| P19 Firebase→CRAVES Exchange | PARTIAL / implemented | Auth exchange code exists; P02 classifies the corresponding current contract as `CONTRACT_ONLY`, so later runtime completion still requires aligned backend/APIM evidence. |
-| P20 Session Restore/Refresh | PARTIAL / implemented | Session manager/bootstrap exists; P02 records the refresh route as `CONTRACT_ONLY`. |
-| P21 Identity/Role Resolution | PARTIAL / implemented | `/me` and account routing code exist; P02 classifies the exact `/api/v1/auth/me` contract as `BLOCKED`. |
-| P22 Customer Registration | PARTIAL / implemented | Auth-time profile completion code exists; P02 classifies customer profile GET/PUT contracts as `BLOCKED`. |
-| P23 Chef Application Status | PARTIAL / implemented | Auth-time application/status code exists; P02 classifies chef application GET/POST contracts as `BLOCKED`. |
-| P24 Logout Cleanup | PARTIAL / implemented | Auth/local cleanup exists and P08 supplies the private-query clearing mechanism; P02 records the logout route as `CONTRACT_ONLY`; full cross-feature cache/role cleanup cannot be complete until those features exist. |
-| P25 onward | NOT STARTED | Product marketplace/customer/chef experiences have not been accepted under this rebuild protocol. |
+| P19 Firebase→CRAVES Exchange | PARTIAL / implemented | Code exists; P02 classifies the current contract as `CONTRACT_ONLY`. |
+| P20 Session Restore/Refresh | PARTIAL / implemented | Session manager/bootstrap exists; P02 refresh contract remains `CONTRACT_ONLY`. |
+| P21 Identity/Role Resolution | PARTIAL / implemented | `/me` code exists; P02 classifies exact contract as `BLOCKED`. |
+| P22 Customer Registration | PARTIAL / implemented | Auth-time profile completion exists; P02 customer profile contracts remain `BLOCKED`. |
+| P23 Chef Application Status | PARTIAL / implemented | Auth-time application/status exists; P02 exact contracts remain `BLOCKED`. |
+| P24 Logout Cleanup | PARTIAL / implemented | Local cleanup exists and P08 supplies private-cache clearing; cross-feature/role cleanup is not complete. |
+| P25 onward | NOT STARTED | Marketplace/customer/chef product phases have not been accepted under this rebuild protocol. |
 
-A future phase may upgrade an existing `PARTIAL` item to `DONE` by auditing it against the exact guide reference/contracts and completing any missing tests/behavior. Do not rewrite already-correct code merely to make the status label change.
+A future phase may upgrade an existing `PARTIAL` item to `DONE` by auditing it against its exact guide/contracts and completing missing tests/behavior. Do not rewrite already-correct code merely to change the status label.
 
 ---
 
-## 8. Explicitly Not Complete
+## 7. Explicitly Not Complete
 
-The following must **not** be described as complete at this point:
+The following must **not** be described as complete now:
 
-- runtime/backend/APIM resolution of the `CONTRACT_ONLY` and `BLOCKED` routes identified by P02,
+- runtime/backend/APIM resolution of P02 `CONTRACT_ONLY` and `BLOCKED` routes,
 - restoration/approval of the missing authoritative full APIM/OpenAPI contract,
-- an approved production feature-flag/remote-config provider/key contract for future flag-controlled features,
-- P09 Typed HTTP Client Foundation acceptance,
-- P10 Session Token Security full acceptance,
-- per-screen/reference visual certification of the P04 token, P05 motion, P06 interaction, and P07 lifecycle foundations,
+- P10 Session Token Security acceptance,
+- P11 complete root navigation/route-policy acceptance,
+- final reference/device certification of auth screens and shared foundations,
 - Customer Home refs 5/6,
 - Discover Chefs refs 7/8,
-- Orders refs 9/10 and order child flows,
+- Orders refs 9/10 and child flows,
 - Customer Profile refs 11/12,
 - Dish/Kitchen/Filter/Cart refs 13–18,
 - Favorites/Notifications/Profile Edit/Addresses/Payments/Offers/Reviews/Settings/Support refs 19–36,
 - reference 37 eight-state system,
-- Chef Dashboard and all Chef operational/product refs 38–52,
-- customer bottom-nav scroll behavior,
+- Chef Dashboard and Chef operational/product refs 38–52,
 - authoritative full cart/View Cart system,
 - checkout/payment end-to-end flow,
-- full screen-by-screen lifecycle/offline/error state matrix,
+- full screen-by-screen lifecycle/offline/error matrix,
 - full accessibility/performance/security audits,
 - 52-reference device visual certification,
 - final production signing/release build.
 
 ---
 
-## 9. Historical Artifact Quarantine
+## 8. Historical Artifact Quarantine
 
-Earlier conversations/branches produced experimental or validation APK/source packages using a different implementation path. Those artifacts are **historical only** and are **not** evidence that the current `mobile-ui-rebuild-from-scratch` rebuild has completed the 52-reference application.
+Earlier conversations/branches produced experimental or validation APK/source packages using a different implementation path. Those artifacts are historical only and are not evidence that this rebuild completed the 52-reference application.
 
 Future agents must not:
 
@@ -678,15 +291,15 @@ Future agents must not:
 - mark phases complete because an older APK once built,
 - use old artifact checksums as current release evidence,
 - resume an old release workflow as though it represents this branch,
-- treat the historical `mobile-phase1-bootstrap.yml`, `mobile-phase1-deps.yml`, `mobile-phase1-implement.yml`, or `apps/mobile/PHASE1.md` as the current phase-control mechanism.
+- treat historical `mobile-phase1-bootstrap.yml`, `mobile-phase1-deps.yml`, `mobile-phase1-implement.yml`, or `apps/mobile/PHASE1.md` as the current phase-control mechanism.
 
-Only this ledger plus current branch code/CI evidence determines current completion.
+The exact detailed pre-P09 ledger is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P08.md`; it is historical evidence, while this `build.md` is the current authority.
 
 ---
 
-## 10. Phase Completion Recording Protocol
+## 9. Phase Completion Recording Protocol
 
-After every authorized phase, append/update a record containing:
+After every authorized phase, update this ledger with:
 
 ```text
 Phase: Pxx — Title
@@ -703,171 +316,102 @@ Blockers: <none or exact missing dependency>
 Next phase: NONE AUTHORIZED — waiting for user
 ```
 
-Do not erase useful history. If a later phase changes an earlier implementation, record the new phase/commit and note the superseded behavior.
+Do not erase useful history. If this ledger becomes unwieldy, preserve the prior authoritative version unchanged under `docs/mobile-ui-rebuild/` before compacting it, as was done at P09.
 
 ---
 
-## 11. Phase History
+## 10. Phase History
+
+Detailed P00–P08 history is preserved unchanged in `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P08.md`. The accepted checkpoints are summarized here so future agents can resolve sequencing without relying on chat history.
 
 ### P00 — Execution Documents and Source Lock
 
-- Status: **DONE**
-- Started from product-code commit: `b91802ecd98b76a6aa28680c7e3bf83693816d74`
-- Documentation commits:
-  - `plan.md` — `5ffe4abdb4899b65065a7ed01752092b11fa88d3`
-  - `phases.md` — `144ff81acfa6fdbfeda5c8c49ebf25f94e83c456`
-  - initial `build.md` — `7283b4ddae569e6826da8467e7e1cde1f6c9ddca`
-  - `agent.md` — `29add4fafac303b4293840b7f89ae8ab2c98f7d7`
+- Status: **DONE**.
 - Guide scope locked: 183 pages / 52 references, customer + chef.
-- Backend/APIM code changed: **No**.
-- Product source changed: **No**.
-- APK built: **No**.
-- CI: no new product CI required because P00 is documentation-only; latest product-code CI run `31178539054` remains green.
-- Blockers: none.
+- Backend/APIM/product code changed: **No**.
 - Next phase at completion: **NONE AUTHORIZED — waiting for user**.
 
 ### P01 — Repository Architecture Inventory
 
-- Status: **DONE**
-- Started from commit: `64dfbd18820b2644ee0263d5fffcefbd62172dfe`
-- Completed at commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`
-- Guide references: global Project Overview, Technology Stack, Development Rules, State Management, Code Quality, Security, and Testing standards from the full 183-page / 52-reference master guide; no screen reference was implemented in this phase.
-- Changed files: `build.md` only.
-- APIM/contracts used: none. P02 contract inventory was deliberately not started.
-- Behavior completed: no product behavior changed. Formal ownership inventory completed for mobile entry/root, providers, navigation, Redux, TanStack Query, runtime config, HTTP/error/correlation, secure session storage, Firebase Auth, design tokens/shared components, feature organization, tests, Android native project, and mobile CI. Duplicate/legacy architecture findings and deferred cleanup notes are documented in Section 5.
-- Tests/checks: repository branch/head, mobile directory trees, source owners, Android configuration, dependency manifest, tests, and CI workflow were inspected. No code-level CI rerun was required because P01 changes documentation only; latest product-code CI run `31178539054` remains **SUCCESS**.
-- Visual QA: not applicable to this architecture-inventory phase; no UI changed.
-- APK built: **No**.
-- Backend/APIM/infrastructure code changed: **No**.
-- Blockers: none.
-- Next phase: **NONE AUTHORIZED — waiting for user**.
+- Status: **DONE**.
+- Completion commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`.
+- Formal mobile architecture ownership inventory completed; no product behavior changed.
 
 ### P02 — APIM/OpenAPI Contract Inventory
 
-- Status: **DONE**
-- Started from commit: `5b40ca380f6a8e0a6d3f0ddd9fa6cf262ac3787f`
-- Inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`
-- Guide references: global API/integration/authentication/state/validation rules only; no screen reference was implemented.
-- Changed files: `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`, `build.md`.
-- APIM/contracts used: current mobile consumers under `apps/mobile/src/**`; current backend evidence under `apps/api/**`; APIM evidence under `infra/apim/**`; `docs/CRV-AUTH-001-auth-service-LLD.md`; `main` used only as reference where expected paths were absent.
-- Behavior completed: **No product behavior changed.** All 8 currently consumed mobile HTTP operations were inventoried with method/path, contract/backend/APIM evidence, auth expectation, route-key expectation, status, and mitigation.
-- Classification: **0 `VERIFIED`, 3 `CONTRACT_ONLY`, 5 `BLOCKED`**. P02 makes no runtime-verification claim.
-- Key gaps recorded: missing `infra/apim/full/openapi.yaml`; expected `backend/functions/src/functions/**`, `mobile/src/services/api/**`, and `infra/apim/policies/**` layouts do not match current repository layout; mobile `/api/v1/...` vs current Express `/api/auth/...` auth path mismatch; refresh/logout backend handlers are `501` stubs; `/auth/me`, customer profile, and exact chef application operation evidence is incomplete; chef APIM policy contains placeholder backend/function-key values.
-- Route-key result: no client route key/subscription key requirement was found for the 8 consumed operations; the Chef APIM template's downstream `x-functions-key` injection is not treated as a mobile route key.
-- Tests/checks: static repository audit and cross-branch reference checks only. No API runtime calls, device tests, APK build, or new product CI run were performed or claimed because P02 changed documentation only.
-- Visual QA: not applicable; no UI changed.
-- APK built: **No**.
-- Backend/APIM/infrastructure code changed: **No**.
-- Product source changed: **No**.
-- Blockers: unresolved API contracts remain explicitly recorded in the P02 inventory; they do not invalidate completion of the inventory phase.
-- Next phase: **NONE AUTHORIZED — waiting for user**.
+- Status: **DONE**.
+- Evidence: `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`.
+- Static classification at acceptance: 0 `VERIFIED`, 3 `CONTRACT_ONLY`, 5 `BLOCKED`.
+- No runtime/API success was claimed and no backend/APIM source was changed.
 
 ### P03 — Runtime Configuration and Environment Boundary
 
-- Status: **DONE**
-- Started from commit: `ad37c1366b3399c9910e76a1343d9454f42f30eb`
-- Completed implementation at commit: `57f371cc3851c78daa6a0bd6b28521f0c62babb2`
-- Evidence: `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`.
-- Guide references: global Development Rules, runtime/networking configuration, security, state ownership, and feature-flag/remote-configuration rules from the full 183-page / 52-reference master guide; no screen reference or UI was implemented.
-- Changed implementation/evidence files: `apps/mobile/src/core/config/runtimeConfig.ts`, `apps/mobile/src/core/config/runtimeConfig.test.ts`, `apps/mobile/.env.example`, `apps/mobile/android/app/build.gradle`, `apps/mobile/jest.setup.js`, `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`; `build.md` updated only as the completion ledger.
-- APIM/contracts used: **No new endpoint or backend contract was introduced.** The existing central HTTP client continues to source `apiBaseUrl` from `getRuntimeConfig()`. P02 route classifications and blockers are unchanged.
-- Behavior completed: hardened the existing runtime schema and typed failure behavior; externalized deployment-specific endpoint/environment values; removed the production endpoint from committed example/test configuration; wired Android to the existing `react-native-config` dotenv bridge; statically verified current Firebase Android Google Services/package configuration; audited feature flags/remote config and recorded that no established provider/SDK/current consumer exists, so no arbitrary key/provider was fabricated.
-- Tests/checks: GitHub Actions run `31194872495` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest including new runtime-config tests, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
-- Visual QA: not applicable; P03 changes no screen layout or visual behavior.
-- APK built: **No**, per the implementation-phase policy.
-- Backend/APIM/infrastructure source changed: **No**.
-- Blockers: none to P03 acceptance. Future flag-controlled product behavior requires an approved centralized provider and exact key/default/rollout contract before implementation.
-- Next phase: **NONE AUTHORIZED — waiting for user**.
+- Status: **DONE**.
+- Completion commit: `57f371cc3851c78daa6a0bd6b28521f0c62babb2`.
+- CI: `31194872495` **SUCCESS**.
+- Central runtime/env boundary accepted; no new backend contract introduced.
 
 ### P04 — Design Token Baseline
 
-- Status: **DONE**
-- Started from commit: `3a221d71819dc1bb079f01bbcfc5428fc65ca521`
-- Completed implementation at commit: `ae15a1702923e68dbd3b3582d664e500ec723927`
-- Evidence: `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md`.
-- Guide references: full 183-page master guide global UI standards: brand tokens, warm surfaces, semantic colors, tokenized spacing/radius/typography/icon/elevation/borders, safe-area-aware layout, Android interaction sizing, scalable text, and restrained shadows/borders. No individual screen reference was implemented.
-- Changed implementation/evidence files: `apps/mobile/src/design/tokens.ts`, `apps/mobile/src/design/tokens.test.ts`, `apps/mobile/src/shared/components/Icon.tsx`, `apps/mobile/src/features/auth/components/AuthCard.tsx`, `apps/mobile/src/features/auth/components/PrimaryButton.tsx`, `apps/mobile/src/features/auth/components/InputField.tsx`, `apps/mobile/src/features/auth/components/AuthShell.tsx`, `docs/mobile-ui-rebuild/P04_DESIGN_TOKEN_BASELINE.md`; `build.md` updated only as the completion ledger.
-- APIM/contracts used: **None.** P04 is a design-system foundation phase and introduces no network/backend behavior. P02 route classifications and blockers are unchanged.
-- Behavior completed: retained the existing single token system; locked Flame Red/Espresso Brown; normalized warm/semantic surfaces, semantic status/text colors, 4 dp spacing, radii, border widths, typography/font-weight vocabulary, icon sizes, Android-first touch targets, safe-area content clearances, dynamic-type policy, and shared elevation/shadow definitions; migrated current foundation consumers only where they carried those baseline values.
-- Tests/checks: GitHub Actions run `31196834196` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest including the new design-token invariant suite, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
-- Visual QA: final reference/device visual certification intentionally deferred. P04 does not claim pixel-perfect certification of any reference image.
-- APK built: **No**, per the implementation-phase policy.
-- Backend/APIM/infrastructure source changed: **No**.
-- Blockers: none to P04 acceptance.
-- Next phase: **NONE AUTHORIZED — waiting for user**.
+- Status: **DONE**.
+- Completion commit: `ae15a1702923e68dbd3b3582d664e500ec723927`.
+- CI: `31196834196` **SUCCESS**.
+- Shared brand/semantic/spacing/radius/type/touch/safe-area/elevation token baseline accepted.
 
 ### P05 — Shared Motion and Reduced-Motion Baseline
 
-- Status: **DONE**
-- Started from commit: `783b29224661a969405837c2a1ef7f5a477b427c`
-- Completed implementation at commit: `53f27fd405208cdd6b740124c0901857d04bd8fd`
-- Evidence: `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md`.
-- Guide references: full 183-page master guide page 14 Animation Guidelines plus global UX/performance/accessibility rules requiring consistent motion, transform/opacity preference, reduced-motion equivalents, smooth mid-range Android behavior, and no animation that delays critical navigation/error handling. No individual screen reference was implemented.
-- Changed implementation/evidence files: `apps/mobile/src/design/motion.ts`, `apps/mobile/src/design/reducedMotion.ts`, `apps/mobile/src/design/motion.test.ts`, `docs/mobile-ui-rebuild/P05_SHARED_MOTION_REDUCED_MOTION_BASELINE.md`; `build.md` updated only as the completion ledger.
-- APIM/contracts used: **None.** P05 is a client design-system foundation phase. No endpoint, route key, request/response model, auth contract, backend/APIM/infrastructure source, or environment behavior changed. P02 classifications remain unchanged.
-- Behavior completed: added a single intent-level motion vocabulary for press/chip-tab/bounded list insertion-removal/bottom navigation/View Cart/modal/skeleton behavior; standardized short durations, cubic-bezier curves, and restrained springs; restricted shared transition properties to opacity/transform; added platform reduced-motion preference tracking with a conservative startup default; added immediate low-motion resolution disabling springs/continuous shimmer; fixed critical auth/payment/error animation delays at zero; prevented whole-large-list animation and bounded list-item change animation.
-- Tests/checks: GitHub Actions run `31197890099` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest including the new P05 motion invariant suite, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
-- Visual QA: no screen/reference was implemented in P05; device-level reduced-motion and reference animation certification remains in later component/screen/QA phases.
-- APK built: **No**, per the implementation-phase policy.
-- Backend/APIM/infrastructure source changed: **No**.
-- Blockers: none to P05 acceptance.
-- Next phase: **NONE AUTHORIZED — waiting for user**.
+- Status: **DONE**.
+- Completion commit: `53f27fd405208cdd6b740124c0901857d04bd8fd`.
+- CI: `31197890099` **SUCCESS**.
+- Shared motion vocabulary and reduced-motion/critical-navigation rules accepted.
 
 ### P06 — Shared Interaction Primitives
 
-- Status: **DONE**
-- Started from commit: `53f27fd405208cdd6b740124c0901857d04bd8fd`
-- Completed implementation at commit: `6d9578c1b2d60362ee124f162e4d046d7b471fdc`
-- Evidence: `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md` (artifact commit `a7ec9fcf2fbef7dfab2537b9001497fc63f42b14`).
-- Guide references: full master-guide global UI/UX/accessibility rules for reusable interactive controls, minimum Android interaction sizing, immediate feedback, loading/disabled protection, scalable text, screen-reader semantics, validation feedback, semantic status presentation, and reduced-motion-compatible interaction behavior. No individual reference screen was implemented.
-- Changed implementation/evidence files: `apps/mobile/src/design/tokens.ts`; `apps/mobile/src/shared/components/Button.tsx`, `IconButton.tsx`, `PressableCard.tsx`, `InputField.tsx`, `Chip.tsx`, `SegmentedControl.tsx`, `Badge.tsx`, `LoadingIndicator.tsx`, `index.ts`; `apps/mobile/src/features/auth/components/PrimaryButton.tsx`, `InputField.tsx`, `RoleSelector.tsx`; `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md`; `build.md` updated only as the completion ledger.
-- APIM/contracts used: **None.** P06 is a client shared-component foundation phase. No endpoint, route key, request/response model, auth contract, cache/storage rule, backend/APIM/infrastructure source, or environment behavior changed. P02 classifications remain unchanged.
-- Behavior completed: established the cross-feature interaction primitive layer; enforced shared minimum/comfortable touch sizes, immediate press feedback, disabled/loading duplicate-action guards, accessibility roles/states, scalable labels/error text, typed segmented selection, semantic badges, accessible loading feedback, validation/helper/error input presentation, and reduced-motion-safe press feedback. Existing auth PrimaryButton/InputField now delegate to the shared owners while preserving feature spacing, and RoleSelector delegates to the shared segmented control.
-- Tests/checks: GitHub Actions run `31199569464` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
-- Visual QA: P06 implements shared primitives only; no individual master-guide reference screen is claimed complete. Final component/device accessibility and per-reference visual certification remain later QA/screen-phase work.
-- APK built: **No**, per the implementation-phase policy.
-- Backend/APIM/infrastructure source changed: **No**.
-- Blockers: none to P06 acceptance.
-- Next phase: **NONE AUTHORIZED — waiting for user**.
+- Status: **DONE**.
+- Completion commit: `6d9578c1b2d60362ee124f162e4d046d7b471fdc`.
+- Evidence: `docs/mobile-ui-rebuild/P06_SHARED_INTERACTION_PRIMITIVES.md`.
+- CI: `31199569464` **SUCCESS**.
+- Shared buttons/inputs/cards/chips/segmented controls/badges/loading primitives accepted.
 
 ### P07 — Shared Screen/Lifecycle Primitives
 
-- Status: **DONE**
-- Started from commit: `3544af1539fa2e3fc18c22c26aee52a5fa747485`
-- Completed implementation at commit: `4a55e1377e3e3dd2fee08a30b5d3e874d32c1680`
-- Evidence: `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md` (artifact commit `db60cbf5670fc5ee9e273e8197a3a9cc3ef29ea0`).
-- Guide references: global UI/UX/responsive/accessibility/lifecycle requirements from the full 183-page master guide for runtime safe areas, keyboard handling, skeleton loading, recoverable/terminal/offline/permission states, retry behavior, preserving valid content during background refresh, and avoiding unnecessary full-screen spinners. No individual reference screen was implemented.
-- Changed implementation/evidence files: `apps/mobile/src/shared/components/ScreenShell.tsx`, `Skeleton.tsx`, `LifecycleStates.tsx`, `ContentLifecycle.tsx`, `index.ts`; `apps/mobile/src/features/auth/components/AuthShell.tsx`; `apps/mobile/__tests__/LifecyclePrimitives.test.tsx`; `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md`; `build.md` updated only as the completion ledger.
-- APIM/contracts used: **None.** P07 is a client shared screen/lifecycle foundation phase. No endpoint, route key, request/response model, auth contract, query/cache rule, persisted-data rule, backend/APIM/infrastructure source, or environment behavior changed. P02 classifications remain unchanged.
-- Behavior completed: added the reusable `ScreenShell` with runtime safe-area, keyboard avoidance, optional scrolling and status-bar handling; static section/list skeleton primitives; recoverable error/offline notices; terminal and permission states; shared retry control; and `ContentLifecycle` orchestration that reserves skeletons for initial no-content loading while keeping already-valid content mounted during background refresh. Existing auth `AuthShell` now composes the shared shell without changing auth behavior.
-- Tests/checks: GitHub Actions run `31201252609` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest including focused P07 lifecycle regression tests, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
-- Visual QA: P07 implements shared infrastructure only; no individual master-guide reference screen is claimed complete. Final device-level safe-area/keyboard/accessibility behavior and per-reference visual certification remain later screen/QA work.
-- APK built: **No**, per the implementation-phase policy.
-- Backend/APIM/infrastructure source changed: **No**.
-- Blockers: none to P07 acceptance.
-- Next phase: **NONE AUTHORIZED — waiting for user**.
+- Status: **DONE**.
+- Completion commit: `4a55e1377e3e3dd2fee08a30b5d3e874d32c1680`.
+- Evidence: `docs/mobile-ui-rebuild/P07_SHARED_SCREEN_LIFECYCLE_PRIMITIVES.md`.
+- CI: `31201252609` **SUCCESS**.
+- Shared safe-area/keyboard/skeleton/recoverable/terminal/offline/permission/retry lifecycle layer accepted.
 
 ### P08 — Query/Store Provider and Cache Rules
 
-- Status: **DONE**
-- Started from commit: `6b41ad1f72b1d9723e7abe0f140ddf959cdc680c`
-- Validated implementation completion commit: `c87828bf0d8378cd6dcd5738a36a4db2850d5d0c`
-- Evidence: `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md` (artifact commit `4554112cf598a7ad660c1450bbb8a332bcf58163`).
-- Guide references: full master-guide global State Management, networking/cache, performance, privacy, pagination, logout/role-isolation, and derived/server-state ownership rules; no individual reference screen was implemented.
-- Changed implementation/evidence files: `apps/mobile/src/app/providers/AppProviders.tsx`; `apps/mobile/src/app/query/queryClient.ts`, `queryPolicy.ts`, `queryKeys.ts`, `queryCache.ts`, `index.ts`, `queryFoundation.test.ts`; `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md`; `build.md` updated only as the completion ledger.
-- APIM/contracts used: **None.** No new endpoint, route key, request/response model, backend pagination field, auth contract, HTTP transport behavior, backend/APIM/infrastructure source, or product screen was introduced. P02 classifications remain unchanged.
-- Behavior completed: retained the established single TanStack Query/Redux architecture; moved query-client creation/default policy into the dedicated app query owner; defined stable versioned public/private contextual query keys including relevant user/role/location/filter/entity/paging context; canonicalized nested key records; added controlled scoped/all private query cancellation/removal while preserving public data; added finite 10-minute query GC and shared bounded page-size/retained-page conventions; preserved the rule that server collections do not become arbitrary Redux arrays. Logout/role-transition integration remains P24.
-- Tests/checks: GitHub Actions run `31205887901` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest including P08 query/cache regression coverage, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed. Earlier candidate commits that failed TypeScript/test-lifecycle validation were corrected before acceptance.
-- Visual QA: not applicable; P08 changes no reference-screen layout or visual behavior.
-- APK built: **No**, per the implementation-phase policy.
+- Status: **DONE**.
+- Started from commit: `6b41ad1f72b1d9723e7abe0f140ddf959cdc680c`.
+- Validated implementation completion commit: `c87828bf0d8378cd6dcd5738a36a4db2850d5d0c`.
+- Evidence: `docs/mobile-ui-rebuild/P08_QUERY_STORE_PROVIDER_CACHE_RULES.md`.
+- CI: `31205887901` **SUCCESS**.
+- Accepted one TanStack Query/Redux architecture, contextual query keys, private-cache clearing, finite GC and bounded paging policy.
+- Next phase at completion: **NONE AUTHORIZED — waiting for user**.
+
+### P09 — Typed HTTP Client Foundation
+
+- Status: **DONE**.
+- Started from commit: `6369d1e547036d988335ea7bb0d1860ac5a6848a`.
+- Validated implementation completion commit: `530b352a6b6f1b8a820a8858b0192820cef9cd67`.
+- Evidence: `docs/mobile-ui-rebuild/P09_TYPED_HTTP_CLIENT_FOUNDATION.md`.
+- Guide references: global networking/API integration, secure request metadata, error handling, correlation/observability, retry/cancellation, request-coalescing/performance, and no-raw-stack user-facing error rules from the full 183-page master guide; no individual reference screen was implemented.
+- Changed implementation/evidence files: `apps/mobile/src/core/http/apiClient.ts`, `apiError.ts`, `transport.ts`, `httpClient.ts`, `requestMetadata.ts`, `requestPolicy.ts`, `requestDedupe.ts`, `httpFoundation.test.ts`; `apps/mobile/src/features/auth/api/authApi.ts`, `profileApi.ts`, `sessionManager.ts`; `apps/mobile/src/features/auth/state/authService.ts`; `docs/mobile-ui-rebuild/P09_TYPED_HTTP_CLIENT_FOUNDATION.md`; `build.md` updated only as the completion ledger, with the exact pre-P09 ledger archived at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P08.md`.
+- APIM/contracts used: **No new endpoint or contract.** Existing auth/profile paths were retained exactly. P02 route classifications remain unchanged.
+- Behavior completed: centralized authenticated and unauthenticated core transport; centralized runtime base URL/default timeout/correlation setup; process-memory bearer injection; correlation preservation across replay/retry; public-safe generic `AppApiError`; stack/internal 5xx suppression; cancellation normalization; one maximum safe read retry for bounded transient failures; no automatic mutation retry; typed feature-facing data helpers; explicit opt-in in-flight read dedupe; centralized auth exchange/refresh/logout transport; retained one-shot 401 refresh replay.
+- Tests/checks: GitHub Actions run `31207371023` — **SUCCESS**. `npm ci`, strict TypeScript, ESLint with zero warnings, Jest including P09 HTTP regression coverage, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
+- Visual QA: not applicable; P09 changes no reference-screen layout or visual behavior.
+- APK built: **No**, per implementation-phase policy.
 - Backend/APIM/infrastructure source changed: **No**.
-- Blockers: none to P08 acceptance.
+- Blockers: none to P09 acceptance. P02 contract/runtime blockers remain visible and unchanged.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
 ---
 
-## 12. Current Next Step
+## 11. Current Next Step
 
 **Stop here.**
 
-P08 is complete. P09 — Typed HTTP Client Foundation is the next phase in `phases.md`, but it is **not authorized** by completion of P08. Begin P09 only after the user explicitly says to continue/start the next phase.
+P09 is complete. P10 — Session Token Security Foundation is the next phase in `phases.md`, but it is **not authorized** by completion of P09. Begin P10 only after the user explicitly says to continue/start the next phase.

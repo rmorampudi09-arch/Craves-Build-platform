@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical ledger preservation:** The exact authoritative ledger state through accepted P09 is preserved unchanged at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P09.md`. Earlier detailed history through P08 remains at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P08.md`. This file is the current authority from P10 onward.
+**Historical ledger preservation:** Detailed accepted history through P09 remains at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P09.md`. Earlier detailed history through P08 remains at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P08.md`. P10 and P11 have dedicated evidence documents and are summarized below.
 
 ---
 
@@ -31,21 +31,22 @@
 - **P08 — Query/Store Provider and Cache Rules: DONE**.
 - **P09 — Typed HTTP Client Foundation: DONE**.
 - **P10 — Session Token Security Foundation: DONE**.
+- **P11 — Root Navigation and Typed Route Policy: DONE**.
 
-P10 completion evidence:
+P11 completion evidence:
 
-- Started from P09 record HEAD: `7f05c199b5d5c5fdf74783cc40f39cf1afe6009c`.
-- Validated P10 implementation commit: `1870aa30172574ad5bb2e192798bbe4f96b736e8`.
-- Evidence: `docs/mobile-ui-rebuild/P10_SESSION_TOKEN_SECURITY_FOUNDATION.md`.
-- CI run: `31208468433` — **SUCCESS**.
+- Started from P10 record HEAD: `26be99d71c9f7ded7fa5c14561e8c36507a35141`.
+- Validated P11 implementation commit: `b7ac5dfd5cfc86d9f17ffdfe7b217430c5b40b58`.
+- Evidence: `docs/mobile-ui-rebuild/P11_ROOT_NAVIGATION_TYPED_ROUTE_POLICY.md`.
+- CI run: `31209520350` — **SUCCESS**.
 
-**Next phase in sequence:** **P11 — Root Navigation and Typed Route Policy**.
+**Next phase in sequence:** **P12 — Role Selection UI and State**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop and wait for the user to explicitly start/continue P11. Do not pre-implement P11.
+**Required action:** Stop and wait for the user to explicitly start/continue P12. Do not pre-implement P12.
 
-P10 accepts and hardens the existing session-security architecture instead of creating a parallel auth/session stack. Access tokens remain process-memory only. Refresh credentials remain in the project-approved platform-secure store. Refresh token plus expiry metadata now persist as one secure record with legacy migration and malformed-state fail-closed handling. Token-pair acceptance and refresh rotation persist the refresh credential before exposing the new access token, expired refresh credentials are rejected locally, concurrent refresh callers still share one in-flight rotation, and refresh failure/logout cleanup clears local credential state. P10 does not implement P11 navigation, proactive refresh scheduling, full P24 logout/private-cache orchestration, backend/APIM functionality, or any product screen.
+P11 establishes role-separated registration for the currently existing anonymous Auth and authenticated Customer/Chef account-resolution routes while retaining one application `NavigationContainer`. It defines typed Auth/Customer/Chef/Transactional/Modal domain ownership, a centralized bottom-navigation/View Cart route-chrome policy, and a fail-closed validated deep-link allowlist for safe currently implemented anonymous entry routes. Transactional and Modal routes remain intentionally unregistered until their owning product phases; P11 does not add placeholder screens or pre-implement P12+ UI.
 
 ---
 
@@ -55,9 +56,9 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31208468433`
-- Head SHA: `1870aa30172574ad5bb2e192798bbe4f96b736e8`
-- Phase: **P10 — Session Token Security Foundation**
+- GitHub Actions run ID: `31209520350`
+- Head SHA: `b7ac5dfd5cfc86d9f17ffdfe7b217430c5b40b58`
+- Phase: **P11 — Root Navigation and Typed Route Policy**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -67,56 +68,68 @@ Successful checks:
 3. `npm ci`,
 4. strict TypeScript check (`tsc --noEmit`),
 5. ESLint (`--max-warnings=0`),
-6. Jest including P10 token-memory, secure-store, rotation, failure, expiry, migration, and single-flight regression coverage,
+6. Jest including P11 route-policy/deep-link tests and all prior regressions,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
 
 This workflow intentionally does **not** perform Java/Gradle/APK packaging. That remains the correct implementation-phase policy.
 
-Run `31208468433` validates the P10 mobile code boundary only. It does not prove runtime operation of the `CONTRACT_ONLY`/`BLOCKED` routes documented by P02, perform end-to-end auth runtime verification, certify P11 navigation, or claim full-app completion.
+Run `31209520350` validates the P11 mobile-code boundary only. It does not certify P12 Role Selection visuals/state acceptance, P20 startup restoration UX, P21 authoritative backend role resolution, customer/chef shell UI, product deep links, or full-app completion.
 
 ---
 
 ## 3. What Is Actually Implemented Today
 
-### 3.1 Accepted application foundations — P03 through P09
+### 3.1 Accepted application foundations — P03 through P10
 
 The existing React Native CLI architecture remains intact: strict TypeScript, React Navigation, Redux Toolkit, TanStack Query, Axios through the centralized core HTTP boundary, React Hook Form/Zod, Reanimated/Gesture Handler, Safe Area Context/Screens, FlashList, Firebase App/Auth, project-approved `expo-secure-store`, Jest, ESLint, Metro/Babel, and Android native ownership under `apps/mobile`.
 
-Accepted foundation owners remain documented in the P03–P09 evidence files and the archived ledger through P09. No duplicate store, query client, HTTP client, navigation container, theme system, or secure-storage implementation was introduced by P10.
+Accepted P03–P10 ownership and evidence remain in their phase documents and historical ledgers. No duplicate store, query client, HTTP client, navigation container, theme system, or secure-storage implementation was introduced by P11.
 
-### 3.2 Session/token security — IMPLEMENTED / P10 ACCEPTED
+### 3.2 Root navigation and route policy — IMPLEMENTED / P11 ACCEPTED
+
+Key files:
+
+- `apps/mobile/src/app/navigation/AppNavigator.tsx`
+- `apps/mobile/src/app/navigation/types.ts`
+- `apps/mobile/src/app/navigation/navigationPolicy.ts`
+- `apps/mobile/src/app/navigation/navigationPolicy.test.ts`
+- `apps/mobile/src/app/navigation/deepLinkPolicy.ts`
+- `apps/mobile/src/app/navigation/deepLinkPolicy.test.ts`
+- `docs/mobile-ui-rebuild/P11_ROOT_NAVIGATION_TYPED_ROUTE_POLICY.md`
+
+Accepted P11 behavior:
+
+- One application `NavigationContainer` remains the navigation owner.
+- Anonymous Auth route registration is isolated from authenticated account-resolution registration.
+- Authenticated Customer account-resolution routes and Chef account-resolution routes are registered in separate navigators.
+- Customer account screens are not registered in the Chef navigator; Chef account screens are not registered in the Customer navigator.
+- Existing flat screen route typing remains compatible while explicit Auth, Customer, Chef, Transactional, and Modal domain types establish the future ownership boundary.
+- Transactional and Modal domains are deliberately unregistered until their real owning phases; no placeholder route is introduced.
+- Current route parameters remain small serializable values; no mutable domain object is added to route params.
+- Shared route-chrome policy defines Auth/Transactional/Modal as immersive, Customer shell as bottom-nav/View-Cart eligible by default, and Chef shell as bottom-nav eligible but never Customer View-Cart eligible.
+- Every currently registered auth/account-resolution route is explicitly immersive, so no future shell chrome appears on current auth/onboarding/status routes.
+- Deep-link handling now has a fail-closed validation boundary. Only safe currently implemented anonymous routes are allowlisted (`RoleSelection`, `PhoneSignIn`, `EmailSignIn`, `ForgotPassword`).
+- Deep-link role params accept only `CUSTOMER`/`CHEF`; malformed/extra object payloads, OTP/account/product destinations, unknown routes, and auth-route redirects during an authenticated session are rejected.
+- No URL scheme, host, product resource link, notification payload model, backend permission rule, or product route is invented.
+
+### 3.3 Session/token security — IMPLEMENTED / P10 ACCEPTED
+
+P10 remains unchanged by P11.
 
 Key files:
 
 - `apps/mobile/src/core/security/tokenMemory.ts`
-- `apps/mobile/src/core/security/tokenMemory.test.ts`
 - `apps/mobile/src/core/security/refreshTokenStore.ts`
-- `apps/mobile/src/core/security/refreshTokenStore.test.ts`
 - `apps/mobile/src/features/auth/api/sessionManager.ts`
-- `apps/mobile/src/features/auth/api/sessionManager.test.ts`
+- focused P10 tests
 - `docs/mobile-ui-rebuild/P10_SESSION_TOKEN_SECURITY_FOUNDATION.md`
 
-Accepted P10 behavior:
+Accepted P10 security remains: process-memory access token, platform-secure refresh credential, single-record refresh metadata, legacy migration/fail-closed handling, persistence-before-publication rotation ordering, expiry rejection, one in-flight refresh, and credential cleanup on failure/local clear.
 
-- `tokenMemory.ts` remains the only access-token owner; access tokens are process-memory only.
-- The existing access-token freshness safety window remains in place and is tested.
-- `refreshTokenStore.ts` remains the only persisted refresh-credential owner and uses platform-secure storage through the project-approved SecureStore module.
-- Refresh token and expiry metadata are stored as one serialized `craves_refresh_session_v1` secure record rather than independent token/expiry records.
-- Existing legacy `refresh_token` / `refresh_token_expires_at` secure records are migrated once into the current record and removed.
-- Malformed, incomplete, or invalid persisted refresh metadata fails closed instead of being used.
-- Secure cleanup attempts current and legacy-key deletion together.
-- `sessionManager.acceptTokenPair()` clears stale memory, persists the refresh credential first, then publishes the access token to memory; a persistence failure leaves no usable access token.
-- Refresh-session expiry is checked before a network refresh attempt; expired credentials are cleared and not sent.
-- Refresh rotation persists the newly rotated refresh credential before publishing the new access token.
-- One shared in-flight refresh promise prevents concurrent refresh duplication.
-- Refresh failure clears process-memory access state and performs best-effort secure refresh-state cleanup before surfacing the original error.
-- Local session cleanup clears both process-memory and secure refresh state.
-- No token is added to AsyncStorage, generic persistence, route parameters, logging, or screen/component state.
+### 3.4 Current auth/API contract status — UNCHANGED BY P11
 
-### 3.3 Current auth/API contract status — UNCHANGED BY P10
-
-Current coded paths remain as documented by P02/P09, including:
+Current coded paths remain as documented by P02/P09/P10, including:
 
 - `POST /api/v1/auth/firebase/exchange`
 - `GET /api/v1/auth/me`
@@ -127,11 +140,21 @@ Current coded paths remain as documented by P02/P09, including:
 - `GET /api/v1/chef/application`
 - `POST /api/v1/chef/application`
 
-P02 remains authoritative. Firebase exchange, refresh, and logout remain `CONTRACT_ONLY`; `/api/v1/auth/me`, customer profile GET/PUT, and chef application GET/POST remain `BLOCKED` under the accepted static repository evidence. P10 did not invent, alter, or runtime-verify any route or payload.
+P02 remains authoritative. Firebase exchange, refresh, and logout remain `CONTRACT_ONLY`; `/api/v1/auth/me`, customer profile GET/PUT, and chef application GET/POST remain `BLOCKED` under the accepted static repository evidence. P11 does not invent, alter, or runtime-verify any route or payload.
 
 ---
 
-## 4. Current Architecture Ownership After P10
+## 4. Current Architecture Ownership After P11
+
+### Navigation ownership
+
+- Application navigation container: `app/navigation/AppNavigator.tsx` only.
+- Current route parameter definitions/domain model: `app/navigation/types.ts`.
+- Shared bottom-nav/View-Cart/immersive policy: `app/navigation/navigationPolicy.ts`.
+- External destination allowlist/payload validation boundary: `app/navigation/deepLinkPolicy.ts`.
+- Anonymous root: Auth route registry.
+- Authenticated Customer root at current implementation depth: Customer account-resolution registry only.
+- Authenticated Chef root at current implementation depth: Chef account-resolution registry only.
 
 ### Session/security ownership
 
@@ -143,40 +166,36 @@ P02 remains authoritative. Firebase exchange, refresh, and logout remain `CONTRA
 
 ### Important later-phase boundaries
 
-- P11 owns complete typed Auth/Customer/Chef/Transactional/Modal root navigation and route visibility policy.
+- P12 owns Role Selection UI/state acceptance.
 - P19 owns Firebase-to-CRAVES exchange acceptance against the exact approved contract.
 - P20 owns startup restore/silent-refresh UX, proactive lifecycle behavior, and wrong-root-flash prevention.
+- P21 owns authoritative backend role/onboarding resolution; P11 does not upgrade selected-role state into server authorization.
 - P24 owns full logout/revoke plus private cache/store/role cleanup orchestration.
+- P25/P26 own Customer bottom tabs and their scroll behavior.
+- P29 owns View Cart UI/animation/synchronization.
+- Later customer/chef/transactional/modal phases add their real screens/routes to the P11 boundaries.
 
-Do not pull those later scopes into P10 retroactively.
+Do not pull those later scopes into P11 retroactively.
 
 ---
 
-## 5. Current Test Coverage Relevant to P10
+## 5. Current Test Coverage Relevant to P11
 
-P10-focused tests now include:
+P11-focused tests include:
 
-- `apps/mobile/src/core/security/tokenMemory.test.ts`
-  - memory lifecycle,
-  - freshness safety window,
-  - immediately stale short-lived tokens.
-- `apps/mobile/src/core/security/refreshTokenStore.test.ts`
-  - single secure-record persistence,
-  - current-record loading,
-  - legacy-key migration,
-  - malformed-state fail-closed behavior,
-  - invalid metadata rejection,
-  - complete secure cleanup.
-- `apps/mobile/src/features/auth/api/sessionManager.test.ts`
-  - secure persistence before access-token publication,
-  - token-pair persistence failure cleanup,
-  - expired refresh rejection without backend traffic,
-  - rotation ordering,
-  - concurrent single-flight refresh,
-  - refresh-failure cleanup,
-  - local credential cleanup.
+- `apps/mobile/src/app/navigation/navigationPolicy.test.ts`
+  - auth/account-resolution routes remain immersive,
+  - Customer domain shell-chrome default,
+  - Chef domain View Cart exclusion,
+  - Transactional/Modal immersive defaults.
+- `apps/mobile/src/app/navigation/deepLinkPolicy.test.ts`
+  - allowlisted anonymous destinations,
+  - role/email serializable param validation,
+  - unknown/sensitive route rejection,
+  - invalid role/extra-object rejection,
+  - authenticated-session rejection of anonymous auth destinations.
 
-Prior accepted P03–P09 regression suites remain part of the same passing CI run.
+Prior accepted P03–P10 regression suites remain part of the same passing CI run.
 
 ---
 
@@ -193,10 +212,10 @@ Prior accepted P03–P09 regression suites remain part of the same passing CI ru
 | P06 Shared Interaction Primitives | **DONE** | Shared actionable controls accepted. |
 | P07 Shared Lifecycle Primitives | **DONE** | Shared lifecycle layer accepted. |
 | P08 Query/Store Cache Rules | **DONE** | Query/store ownership, contextual keys, private clearing, bounded cache/paging accepted. |
-| P09 Typed HTTP Client | **DONE** | Central typed HTTP/error/retry/cancellation/dedupe foundation accepted; CI `31207371023` green. |
-| P10 Session Token Security | **DONE** | Memory-only access token, atomic secure refresh record, migration/fail-closed behavior, rotation ordering, single-flight refresh, cleanup and focused tests accepted; CI `31208468433` green. |
-| P11 Root Navigation | PARTIAL / NOT ACCEPTED | Existing auth navigation exists, but complete typed route domains/policy are not accepted. This is the next phase and is not authorized. |
-| P12 Role Selection | PARTIAL / implemented | Existing functional code; phase-specific acceptance still pending. |
+| P09 Typed HTTP Client | **DONE** | Central typed HTTP/error/retry/cancellation/dedupe foundation accepted. |
+| P10 Session Token Security | **DONE** | Memory-only access token, secure refresh record, rotation/failure cleanup, focused tests; CI `31208468433` green. |
+| P11 Root Navigation | **DONE** | Role-separated current route registries, typed domain ownership, route-chrome policy, fail-closed deep-link boundary; CI `31209520350` green. |
+| P12 Role Selection | PARTIAL / NOT ACCEPTED | Existing functional code exists; P12 phase-specific UI/state/reference acceptance is next and is not authorized. |
 | P13 Customer Phone Sign-In | PARTIAL / implemented | Existing functional code; phase-specific/reference acceptance pending. |
 | P14 Chef Phone Sign-In | PARTIAL / implemented | Existing shared role-aware flow; phase-specific/reference acceptance pending. |
 | P15 Customer Email Sign-In | PARTIAL / implemented | Existing functional code; phase-specific/reference acceptance pending. |
@@ -204,7 +223,7 @@ Prior accepted P03–P09 regression suites remain part of the same passing CI ru
 | P17 OTP | PARTIAL / implemented | Existing behavior; granular acceptance pending. |
 | P18 Password Recovery | PARTIAL / implemented | Existing behavior; granular acceptance pending. |
 | P19 Firebase→CRAVES Exchange | PARTIAL / implemented | Mobile code exists; P02 classifies current route as `CONTRACT_ONLY`. |
-| P20 Session Restore/Refresh | PARTIAL / implemented | Security foundation accepted in P10; lifecycle/root UX acceptance remains later and refresh route is `CONTRACT_ONLY`. |
+| P20 Session Restore/Refresh | PARTIAL / implemented | P10/P11 foundations exist; lifecycle/root UX acceptance remains later and refresh route is `CONTRACT_ONLY`. |
 | P21 Identity/Role Resolution | PARTIAL / implemented | `/me` code exists; P02 classifies exact contract as `BLOCKED`. |
 | P22 Customer Registration | PARTIAL / implemented | Existing code; P02 customer profile contracts remain `BLOCKED`. |
 | P23 Chef Application Status | PARTIAL / implemented | Existing code; P02 chef application contracts remain `BLOCKED`. |
@@ -215,16 +234,18 @@ Prior accepted P03–P09 regression suites remain part of the same passing CI ru
 
 ## 7. Explicitly Not Complete
 
-Do not describe any of the following as complete after P10:
+Do not describe any of the following as complete after P11:
 
+- P12 Role Selection UI/state/reference acceptance,
 - runtime/backend/APIM resolution of P02 `CONTRACT_ONLY` and `BLOCKED` routes,
 - authoritative full APIM/OpenAPI restoration,
-- P11 complete root navigation and typed route policy,
-- full P19/P20/P24 auth lifecycle acceptance,
+- full P19/P20/P21/P24 auth lifecycle acceptance,
 - final reference/device certification of auth screens,
 - Customer refs 5–37,
 - Chef refs 38–52,
-- authoritative cart/View Cart system,
+- Customer/chef bottom-tab product shells,
+- View Cart UI/authoritative cart system,
+- authenticated product/resource deep links and notification routing,
 - checkout/payment end-to-end flow,
 - full lifecycle/accessibility/performance/security audits,
 - 52-reference visual certification,
@@ -251,7 +272,7 @@ Blockers: <none or exact missing dependency>
 Next phase: NONE AUTHORIZED — waiting for user
 ```
 
-Do not erase useful history. Preserve prior authoritative versions under `docs/mobile-ui-rebuild/` before compacting.
+Do not erase useful history. Preserve prior authoritative detail under `docs/mobile-ui-rebuild/` before any future compaction.
 
 ---
 
@@ -265,15 +286,30 @@ Detailed P00–P09 history is preserved unchanged in `docs/mobile-ui-rebuild/BUI
 - Started from commit: `7f05c199b5d5c5fdf74783cc40f39cf1afe6009c`.
 - Validated implementation completion commit: `1870aa30172574ad5bb2e192798bbe4f96b736e8`.
 - Evidence: `docs/mobile-ui-rebuild/P10_SESSION_TOKEN_SECURITY_FOUNDATION.md`.
-- Guide references: global Technology Stack security storage, State Management secure state, Security/Privacy/Compliance token rules, authentication session model, and testing standards in the full 183-page master guide; no individual reference screen was implemented.
-- Changed files: `apps/mobile/src/core/security/refreshTokenStore.ts`, `apps/mobile/src/core/security/refreshTokenStore.test.ts`, `apps/mobile/src/core/security/tokenMemory.test.ts`, `apps/mobile/src/features/auth/api/sessionManager.ts`, `apps/mobile/src/features/auth/api/sessionManager.test.ts`, `docs/mobile-ui-rebuild/P10_SESSION_TOKEN_SECURITY_FOUNDATION.md`; `build.md` is the completion ledger and the prior exact ledger is archived at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P09.md`.
-- APIM/contracts used: no new contract. Existing `POST /api/v1/auth/refresh` request/response path is retained unchanged and remains `CONTRACT_ONLY` under P02. No endpoint, route key, request field, response field, enum, or server rule was invented.
-- Behavior completed: memory-only access-token ownership; one-record secure refresh credential/expiry persistence; legacy secure-key migration; malformed/incomplete state fail-closed cleanup; refresh expiry precheck; secure persistence before access-token publication on accept/rotation; single in-flight refresh; failure/local-clear credential cleanup.
-- Tests/checks: GitHub Actions run `31208468433` — **SUCCESS**. Dependency install, strict TypeScript, ESLint with zero warnings, Jest including focused P10 security/session tests, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
-- Visual QA: not applicable; P10 changes no reference-screen layout or visual behavior.
+- Guide references: global security-storage, state-management secure-state, security/privacy token, auth-session, and testing standards; no individual reference screen implemented.
+- APIM/contracts used: no new contract; existing `POST /api/v1/auth/refresh` retained unchanged and remains `CONTRACT_ONLY` under P02.
+- Tests/checks: GitHub Actions run `31208468433` — **SUCCESS**.
+- Visual QA: not applicable; no reference-screen layout change.
+- APK built: **No**.
+- Backend/APIM/infrastructure source changed: **No**.
+- Blockers: none to P10 client-security acceptance; P02 blockers remain.
+- Next phase at completion: P11 required separate user authorization.
+
+### P11 — Root Navigation and Typed Route Policy
+
+- Status: **DONE**.
+- Started from commit: `26be99d71c9f7ded7fa5c14561e8c36507a35141`.
+- Validated implementation completion commit: `b7ac5dfd5cfc86d9f17ffdfe7b217430c5b40b58`.
+- Evidence: `docs/mobile-ui-rebuild/P11_ROOT_NAVIGATION_TYPED_ROUTE_POLICY.md`.
+- Guide references: full 183-page master guide global Navigation Standards (navigation domains and required behavior), Smart UI route visibility rules, Security/Privacy deep-link allowlisting, and Testing/Verification navigation/deep-link requirements; no individual reference screen was implemented.
+- Changed implementation files: `apps/mobile/src/app/navigation/AppNavigator.tsx`, `apps/mobile/src/app/navigation/types.ts`, `apps/mobile/src/app/navigation/navigationPolicy.ts`, `apps/mobile/src/app/navigation/navigationPolicy.test.ts`, `apps/mobile/src/app/navigation/deepLinkPolicy.ts`, `apps/mobile/src/app/navigation/deepLinkPolicy.test.ts`.
+- APIM/contracts used: **none**. P11 is a client navigation boundary and does not add/change a backend route, APIM route key, JSON model, auth contract, or server rule.
+- Behavior completed: one navigation container retained; current anonymous/customer/chef route registration separated by root; typed domain ownership for Auth/Customer/Chef/Transactional/Modal; centralized bottom-nav/View-Cart/immersive policy; validated fail-closed deep-link allowlist for safe current anonymous entry routes.
+- Tests/checks: GitHub Actions run `31209520350` — **SUCCESS**. Dependency install, strict TypeScript, ESLint with zero warnings, Jest including P11 policy tests and prior regressions, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+- Visual QA: not applicable to a reference screen; P11 changes navigation architecture/policy only. Device/reference certification remains in the later visual QA phases.
 - APK built: **No**, per implementation-phase policy.
 - Backend/APIM/infrastructure source changed: **No**.
-- Blockers: none to P10 client-security acceptance. P02 runtime/contract blockers remain unchanged.
+- Blockers: none to P11 acceptance. Product deep links stay intentionally deny-by-default until their owning feature phases can validate access and resource state.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
 ---
@@ -282,4 +318,4 @@ Detailed P00–P09 history is preserved unchanged in `docs/mobile-ui-rebuild/BUI
 
 **Stop here.**
 
-P10 is complete. **P11 — Root Navigation and Typed Route Policy** is the next phase in `phases.md`, but it is **not authorized** by completion of P10. Begin P11 only after the user explicitly says to continue/start the next phase.
+P11 is complete. **P12 — Role Selection UI and State** is the next phase in `phases.md`, but it is **not authorized** by completion of P11. Begin P12 only after the user explicitly says to continue/start the next phase.

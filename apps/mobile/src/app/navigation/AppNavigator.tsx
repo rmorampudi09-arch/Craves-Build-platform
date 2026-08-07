@@ -18,8 +18,13 @@ import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerA
 import {ChefAccountStatusScreen} from '../../features/auth/screens/ChefAccountStatusScreen';
 import {StartupErrorScreen} from '../../features/auth/screens/StartupErrorScreen';
 import {AccountRouterScreen} from '../../features/auth/screens/AccountRouterScreen';
+import type {
+  AccountResolution,
+  ChefApplicationStatus,
+} from '../../features/auth/domain/types';
 
 const AuthStack = createNativeStackNavigator<RootStackParamList>();
+const ResolutionStack = createNativeStackNavigator<RootStackParamList>();
 const CustomerStack = createNativeStackNavigator<RootStackParamList>();
 const ChefStack = createNativeStackNavigator<RootStackParamList>();
 
@@ -41,24 +46,67 @@ function AuthNavigator() {
   );
 }
 
-function CustomerAccountNavigator() {
+function AccountResolutionNavigator() {
   return (
-    <CustomerStack.Navigator screenOptions={screenOptions} initialRouteName="AccountRouter">
-      <CustomerStack.Screen name="AccountRouter" component={AccountRouterScreen} />
+    <ResolutionStack.Navigator screenOptions={screenOptions} initialRouteName="AccountRouter">
+      <ResolutionStack.Screen name="AccountRouter" component={AccountRouterScreen} />
+    </ResolutionStack.Navigator>
+  );
+}
+
+function CustomerAccountNavigator({
+  resolution,
+}: {
+  resolution: Extract<AccountResolution, {flow: 'CUSTOMER'}>;
+}) {
+  const initialRouteName =
+    resolution.onboardingStatus === 'PROFILE_REQUIRED'
+      ? 'CustomerRegistration'
+      : 'CustomerAccountStatus';
+
+  return (
+    <CustomerStack.Navigator
+      screenOptions={screenOptions}
+      initialRouteName={initialRouteName}>
       <CustomerStack.Screen name="CustomerRegistration" component={CustomerRegistrationScreen} />
       <CustomerStack.Screen name="CustomerAccountStatus" component={CustomerAccountStatusScreen} />
     </CustomerStack.Navigator>
   );
 }
 
-function ChefAccountNavigator() {
+function ChefAccountNavigator({
+  resolution,
+}: {
+  resolution: Exclude<AccountResolution, {flow: 'CUSTOMER'}>;
+}) {
+  const status: ChefApplicationStatus = resolution.onboardingStatus;
+  const initialRouteName =
+    resolution.flow === 'CHEF_ONBOARDING' && status === 'NOT_SUBMITTED'
+      ? 'ChefRegistration'
+      : 'ChefAccountStatus';
+
   return (
-    <ChefStack.Navigator screenOptions={screenOptions} initialRouteName="AccountRouter">
-      <ChefStack.Screen name="AccountRouter" component={AccountRouterScreen} />
+    <ChefStack.Navigator screenOptions={screenOptions} initialRouteName={initialRouteName}>
       <ChefStack.Screen name="ChefRegistration" component={ChefRegistrationScreen} />
-      <ChefStack.Screen name="ChefAccountStatus" component={ChefAccountStatusScreen} />
+      <ChefStack.Screen
+        name="ChefAccountStatus"
+        component={ChefAccountStatusScreen}
+        initialParams={{status}}
+      />
     </ChefStack.Navigator>
   );
+}
+
+function AuthenticatedNavigator({resolution}: {resolution: AccountResolution | null}) {
+  if (!resolution) {
+    return <AccountResolutionNavigator />;
+  }
+
+  if (resolution.flow === 'CUSTOMER') {
+    return <CustomerAccountNavigator resolution={resolution} />;
+  }
+
+  return <ChefAccountNavigator resolution={resolution} />;
 }
 
 export function AppNavigator() {
@@ -77,11 +125,7 @@ export function AppNavigator() {
   return (
     <NavigationContainer>
       {auth.bootstrapStatus === 'authenticated' ? (
-        auth.selectedRole === 'CHEF' ? (
-          <ChefAccountNavigator />
-        ) : (
-          <CustomerAccountNavigator />
-        )
+        <AuthenticatedNavigator resolution={auth.accountResolution} />
       ) : (
         <AuthNavigator />
       )}

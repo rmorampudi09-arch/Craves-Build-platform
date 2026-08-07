@@ -1,10 +1,9 @@
-import React, {useState} from 'react';
+import React, {useRef, useState} from 'react';
 import {StyleSheet, Text} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
 import {colors, spacing} from '../../../design/tokens';
-import {phoneSchema, toIndianE164} from '../../../utils/validation';
 import {authService} from '../state/authService';
 import {AuthCard} from '../components/AuthCard';
 import {AuthHero} from '../components/AuthHero';
@@ -13,6 +12,14 @@ import {InputField} from '../components/InputField';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {RoleSelector} from '../components/RoleSelector';
 import {SecurityNote} from '../components/SecurityNote';
+import {
+  createPhoneRequestGate,
+  DEFAULT_PHONE_COUNTRY,
+  getPhoneValidationError,
+  isSupportedPhoneValid,
+  sanitizeNationalPhone,
+  toSupportedPhoneE164,
+} from '../domain/phoneSignInPolicy';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PhoneSignIn'>;
@@ -21,31 +28,46 @@ export function PhoneSignInScreen({navigation, route}: Props) {
   const {role, selectRole} = useAuthAttemptRole(route.params.role);
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const parsed = phoneSchema.safeParse(phone);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const requestGate = useRef(createPhoneRequestGate());
+  const phoneValid = isSupportedPhoneValid(phone);
+  const validationError = getPhoneValidationError(phone);
 
   const submit = async () => {
-    if (!parsed.success || busy) {
+    if (!phoneValid || busy || !requestGate.current.tryAcquire()) {
       return;
     }
 
     setBusy(true);
-    setError(null);
+    setRequestError(null);
+    const submissionRole = role;
+    const e164 = toSupportedPhoneE164(phone);
+
     try {
-      const e164 = toIndianE164(phone);
-      await authService.beginPhone(role, e164);
-      navigation.navigate('OtpVerification', {role, phone: e164});
-    } catch (e) {
-      setError(toAppApiError(e).message);
+      await authService.beginPhone(submissionRole, e164);
+      navigation.navigate('OtpVerification', {
+        role: submissionRole,
+        phone: e164,
+      });
+    } catch (error) {
+      setRequestError(toAppApiError(error).message);
     } finally {
+      requestGate.current.release();
       setBusy(false);
+    }
+  };
+
+  const updatePhone = (value: string) => {
+    setPhone(sanitizeNationalPhone(value));
+    if (requestError) {
+      setRequestError(null);
     }
   };
 
   return (
     <AuthShell>
       <AuthHero role={role} />
-      <RoleSelector value={role} onChange={selectRole} />
+      <RoleSelector value={role} onChange={selectRole} disabled={busy} />
       <AuthCard>
         <Text style={styles.title}>Verify your phone number</Text>
         <Text style={styles.desc}>
@@ -53,17 +75,32 @@ export function PhoneSignInScreen({navigation, route}: Props) {
         </Text>
         <InputField
           value={phone}
-          onChangeText={value => setPhone(value.replace(/\D/g, '').slice(0, 10))}
+          onChangeText={updatePhone}
           placeholder="Phone Number"
           keyboardType="phone-pad"
+          returnKeyType="done"
+          textContentType="telephoneNumber"
+          autoComplete="tel"
           leftIcon="phone"
-          prefix="+91"
-          error={error ?? (!phone || parsed.success ? undefined : 'Enter a valid 10-digit mobile number.')}
+          prefix={DEFAULT_PHONE_COUNTRY.dialCode}
+          maxLength={DEFAULT_PHONE_COUNTRY.nationalDigits}
+          accessibilityLabel="Phone number"
+          disabled={busy}
+          error={validationError}
+          onSubmitEditing={() => {
+            void submit();
+          }}
         />
+        {requestError ? (
+          <Text accessibilityRole="alert" style={styles.requestError}>
+            {requestError}
+          </Text>
+        ) : null}
         <PrimaryButton
           label="Continue"
           loading={busy}
-          disabled={!parsed.success || busy}
+          disabled={!phoneValid || busy}
+          accessibilityHint="Requests a verification code for this phone number"
           onPress={submit}
         />
         <PrimaryButton
@@ -71,6 +108,7 @@ export function PhoneSignInScreen({navigation, route}: Props) {
           label="Login with email/password"
           leftIcon="mail"
           rightIcon="chevron"
+          disabled={busy}
           onPress={() => navigation.navigate('EmailSignIn', {role})}
         />
         <SecurityNote />
@@ -87,5 +125,11 @@ const styles = StyleSheet.create({
     color: colors.mutedText,
     marginTop: 6,
     marginBottom: spacing.lg,
+  },
+  requestError: {
+    color: colors.error,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: spacing.sm,
   },
 });

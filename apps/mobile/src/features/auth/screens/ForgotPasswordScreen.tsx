@@ -1,68 +1,123 @@
-import React, {useState} from 'react';
+import React, {useRef, useState} from 'react';
 import {StyleSheet, Text} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
 import {colors, spacing} from '../../../design/tokens';
-import {emailSchema} from '../../../utils/validation';
 import {AuthCard} from '../components/AuthCard';
 import {AuthShell} from '../components/AuthShell';
 import {InputField} from '../components/InputField';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {ScreenHeader} from '../components/ScreenHeader';
+import {
+  createPasswordRecoveryRequestGate,
+  createPasswordRecoverySubmission,
+  createPasswordResetSentContext,
+  getPasswordRecoveryEmailError,
+} from '../domain/passwordRecoveryPolicy';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 import {authService} from '../state/authService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ForgotPassword'>;
 
 export function ForgotPasswordScreen({navigation, route}: Props) {
-  useAuthAttemptRole(route.params.role);
+  const {role} = useAuthAttemptRole(route.params.role);
   const [email, setEmail] = useState(route.params.email ?? '');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const valid = emailSchema.safeParse(email).success;
+  const [touched, setTouched] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const requestGate = useRef(createPasswordRecoveryRequestGate());
+  const emailError = getPasswordRecoveryEmailError(email);
+  const valid = !emailError;
+
+  const updateEmail = (value: string) => {
+    setEmail(value);
+    if (requestError) {
+      setRequestError(null);
+    }
+  };
+
+  const returnToLogin = () => {
+    if (busy) {
+      return;
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    const submission = createPasswordRecoverySubmission(role, email);
+    navigation.replace('EmailSignIn', {
+      role: submission.role,
+      email: valid ? submission.email : undefined,
+    });
+  };
 
   const submit = async () => {
-    if (!valid || busy) {
+    setTouched(true);
+    if (!valid || busy || !requestGate.current.tryAcquire()) {
       return;
     }
 
+    const submission = createPasswordRecoverySubmission(role, email);
+    let completed = false;
     setBusy(true);
-    setError(null);
+    setRequestError(null);
+
     try {
-      await authService.sendPasswordReset(email);
-      navigation.replace('PasswordResetSent', {
-        role: route.params.role,
-        email: email.trim().toLowerCase(),
-      });
-    } catch (e) {
-      setError(toAppApiError(e).message);
+      await authService.sendPasswordReset(submission.email);
+      completed = true;
+    } catch (error) {
+      setRequestError(toAppApiError(error).message);
     } finally {
+      requestGate.current.release();
       setBusy(false);
+    }
+
+    if (completed) {
+      navigation.replace(
+        'PasswordResetSent',
+        createPasswordResetSentContext(submission.role, submission.email),
+      );
     }
   };
 
   return (
     <AuthShell>
-      <ScreenHeader title="Reset password" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Reset password" onBack={returnToLogin} />
       <AuthCard>
         <Text style={styles.title}>Forgot your password?</Text>
         <Text style={styles.desc}>
-          Enter the email linked to your Craves account. Firebase will send a secure reset link.
+          Enter the email you use for Craves. If an account matches, we will send secure reset
+          instructions.
         </Text>
         <InputField
           value={email}
-          onChangeText={setEmail}
+          onChangeText={updateEmail}
+          onBlur={() => setTouched(true)}
+          onSubmitEditing={submit}
           placeholder="Email Address"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          importantForAutofill="yes"
+          returnKeyType="send"
           leftIcon="mail"
-          error={error ?? undefined}
+          accessibilityLabel="Password recovery email address"
+          disabled={busy}
+          error={touched ? emailError : undefined}
         />
+        {requestError ? (
+          <Text accessibilityRole="alert" style={styles.requestError}>
+            {requestError}
+          </Text>
+        ) : null}
         <PrimaryButton
           label="Send reset link"
           loading={busy}
           disabled={!valid || busy}
+          accessibilityHint="Requests password reset instructions without revealing account status"
           onPress={submit}
         />
       </AuthCard>
@@ -78,5 +133,12 @@ const styles = StyleSheet.create({
     color: colors.mutedText,
     marginTop: 7,
     marginBottom: spacing.lg,
+  },
+  requestError: {
+    color: colors.error,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
 });

@@ -19,14 +19,14 @@
 ## 1. Current Control State
 
 - **P00 — Execution Documents and Source Lock: DONE**.
-- `plan.md`: created at commit `5ffe4abdb4899b65065a7ed01752092b11fa88d3`.
-- `phases.md`: created at commit `144ff81acfa6fdbfeda5c8c49ebf25f94e83c456`.
-- `build.md`: created at commit `7283b4ddae569e6826da8467e7e1cde1f6c9ddca` and finalized for P00 in the current commit.
-- `agent.md`: created at commit `29add4fafac303b4293840b7f89ae8ab2c98f7d7`.
-- Next product implementation phase: **NONE AUTHORIZED**.
-- Required action: stop and wait for the user to say **“start next phase”**.
+- **P01 — Repository Architecture Inventory: DONE**.
+- P01 started from branch HEAD `64dfbd18820b2644ee0263d5fffcefbd62172dfe`.
+- P01 completion commit: `P01_INVENTORY_COMMIT_PENDING`.
+- Next phase in sequence: **P02 — APIM/OpenAPI Contract Inventory**.
+- Next phase authorization: **NONE AUTHORIZED**.
+- Required action: stop and wait for the user to explicitly start/continue the next phase.
 
-P00 changed documentation/tracking only. It did not modify mobile product code, backend code, APIM definitions, or infrastructure.
+P01 was an architecture/documentation audit only. It did not modify mobile product code, backend code, APIM definitions, infrastructure, or native build configuration.
 
 ---
 
@@ -64,7 +64,7 @@ Successful checks:
 
 Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is now the correct implementation-phase policy.
 
-No product source changed during P00, so the latest product-code CI evidence remains the successful run above.
+No mobile product source changed during P00 or P01, so the latest product-code CI evidence remains the successful run above. P01 changed only this ledger and therefore does not require a new application CI run.
 
 ---
 
@@ -246,7 +246,157 @@ The present `CustomerAccountStatusScreen.tsx` explicitly says the customer marke
 
 ---
 
-## 5. Current Test Coverage
+## 5. P01 Accepted Repository Architecture Inventory
+
+P01 formally audited the current mobile source against the full master guide's requirement to reuse the established architecture rather than create parallel systems.
+
+### 5.1 Application entry and root ownership
+
+- `apps/mobile/index.js` is the React Native entry point and registers `CravesMobile`.
+- `apps/mobile/App.tsx` is the single application component. It owns the global status-bar setup and composes `AppProviders` with `AppNavigator`.
+- `apps/mobile/app.json` keeps the `CravesMobile` component identity and declares the existing `expo-secure-store` module integration.
+- There is no second mobile application entry or alternate runtime root in `apps/mobile`.
+
+### 5.2 Provider ownership
+
+`apps/mobile/src/app/providers/AppProviders.tsx` is the single provider composition boundary. It owns:
+
+- `GestureHandlerRootView`,
+- `SafeAreaProvider`,
+- the single Redux `Provider`,
+- the single TanStack `QueryClientProvider`.
+
+The current query client is created once for the application lifetime with default query retry/staleness/reconnect rules and mutation retry disabled. Future cache policy work must extend this provider rather than add a second query client.
+
+### 5.3 Navigation ownership
+
+- `apps/mobile/src/app/navigation/AppNavigator.tsx` owns the single `NavigationContainer` and current native-stack root.
+- `apps/mobile/src/app/navigation/types.ts` owns the current typed route parameter list.
+- The present navigator covers authentication, registration, account routing, and account-status handoff only.
+- Customer shell, Chef shell, transactional/checkout, modal domains, bottom tabs, deep-link allowlisting, and route-level View Cart/bottom-nav policy are not yet implemented and remain later-phase work.
+
+No second navigation container or alternate route framework was found in the current mobile source.
+
+### 5.4 Global application state ownership
+
+- `apps/mobile/src/app/store/store.ts` owns the single Redux Toolkit store.
+- The store currently contains only the `auth` reducer because the rebuild has not reached cart/location/profile/preferences marketplace phases.
+- `apps/mobile/src/app/store/hooks.ts` owns typed Redux access hooks.
+- `apps/mobile/src/features/auth/state/authSlice.ts` owns current bootstrap status, selected role, identity, and auth error state.
+
+Future global slices must extend this store. Server collections must remain in the query/cache layer instead of being copied into arbitrary Redux arrays.
+
+### 5.5 Server/query state ownership
+
+- TanStack Query is installed and the single `QueryClient` is owned by `AppProviders.tsx`.
+- No second server-state cache was found.
+- The current auth foundation primarily uses imperative service calls because the implemented scope is authentication/bootstrap; marketplace query keys, pagination policies, and private-cache cleanup are intentionally pending P08 and later feature phases.
+
+### 5.6 Runtime configuration ownership
+
+- `apps/mobile/src/core/config/runtimeConfig.ts` is the single runtime configuration boundary currently used by the mobile client.
+- `CRAVES_API_BASE_URL` is injected through `react-native-config` and missing required configuration throws a typed runtime configuration error.
+- `.env.example` is the non-secret configuration template.
+
+Future runtime values/flags must extend the established configuration boundary rather than introduce ad hoc environment access in screens.
+
+### 5.7 HTTP and error ownership
+
+- `apps/mobile/src/core/http/apiClient.ts` is the single general authenticated Axios client.
+- It centralizes APIM base URL resolution, bearer injection, correlation ID, timeout, one-time 401 replay, and delegation to the shared session refresh manager.
+- `apps/mobile/src/core/http/apiError.ts` owns normalized public API errors.
+- `apps/mobile/src/core/http/correlation.ts` owns correlation ID generation.
+- `apps/mobile/src/features/auth/api/profileApi.ts` correctly uses the central authenticated client.
+- `apps/mobile/src/features/auth/api/authApi.ts` and `sessionManager.ts` use narrowly scoped raw Axios calls for pre-session token exchange, refresh-token rotation, and logout/revocation flows where routing through the bearer-refresh interceptor would be inappropriate or recursive. These are bounded auth exceptions, not a second general API architecture.
+
+### 5.8 Session and secure-storage ownership
+
+- `apps/mobile/src/core/security/tokenMemory.ts` is the single in-process access-token owner.
+- `apps/mobile/src/core/security/refreshTokenStore.ts` is the single refresh-credential persistence boundary and uses `expo-secure-store`.
+- `apps/mobile/src/features/auth/api/sessionManager.ts` owns token-pair acceptance, restore/refresh rotation, the one-in-flight refresh guard, and local credential clearing.
+- `AsyncStorage` is installed but is not used for access/refresh tokens in the inspected current source.
+
+No duplicate secure-token store was found.
+
+### 5.9 Firebase ownership
+
+- `apps/mobile/src/features/auth/firebase/firebaseAuth.ts` is the single Firebase Auth platform wrapper for phone verification, OTP confirmation, email/password sign-in, password reset, and sign-out.
+- `apps/mobile/android/app/google-services.json` supplies the Android Firebase application configuration.
+- Android applies the Google Services Gradle plugin.
+
+No second Firebase Auth wrapper or web-auth implementation was found in the current mobile runtime.
+
+### 5.10 Design-system ownership
+
+- `apps/mobile/src/design/tokens.ts` is the current shared design-token source for Flame Red, Espresso Brown, warm surfaces, semantic colors, spacing, radii, and typography sizes.
+- `apps/mobile/src/shared/components/Icon.tsx` is the current cross-feature shared component.
+- Auth-specific visual primitives remain under `apps/mobile/src/features/auth/components` because they are feature-scoped today.
+
+There is no competing ThemeProvider or duplicate color-token system. Later design phases must extend this token system instead of creating a parallel theme architecture.
+
+### 5.11 Feature/module ownership
+
+The only implemented product feature module under `apps/mobile/src/features` is currently `auth`, organized into:
+
+- `api` — auth/profile/session transport boundaries,
+- `components` — auth visual primitives,
+- `domain` — auth domain types,
+- `firebase` — platform authentication wrapper,
+- `hooks` — bootstrap coordination,
+- `screens` — auth/account-resolution presentation,
+- `state` — auth reducer and orchestration service.
+
+Customer and Chef marketplace feature families have not yet been added in this rebuild.
+
+### 5.12 Validation and tests
+
+- `apps/mobile/src/utils/validation.ts` is the current validation-helper boundary with focused unit coverage.
+- `apps/mobile/__tests__/App.test.tsx` is the current root render test.
+- `apps/mobile/src/core/security/tokenMemory.test.ts` covers access-token memory behavior.
+- `apps/mobile/jest.config.js` owns Jest setup and transform rules.
+- `apps/mobile/tsconfig.json` extends the React Native TypeScript configuration and includes all TypeScript source/test files.
+
+Coverage is intentionally small and is not sufficient for later customer/chef features.
+
+### 5.13 Android native ownership
+
+- `apps/mobile/android` is the native Android project owned by this React Native CLI app.
+- Application ID/namespace is `com.cravesapp`.
+- React Native New Architecture and Hermes are enabled.
+- The project uses React Native Gradle ownership plus Expo module autolinking only for approved bare-RN native modules such as SecureStore; this is **not** an Expo-managed application.
+- `MainActivity` registers the `CravesMobile` component and uses `adjustResize` through the Android manifest for keyboard behavior.
+- Current Android release configuration still points to debug signing; production signing remains intentionally deferred to final release readiness.
+
+### 5.14 CI ownership
+
+- `.github/workflows/mobile-phase1-ci.yml` is the current general mobile implementation CI despite its historical filename.
+- It runs dependency install, TypeScript, ESLint, Jest, production Android JavaScript bundling, and the backend/APIM/infrastructure source guard.
+- It intentionally does not build an APK per phase.
+- `.github/workflows/mobile-phase1-bootstrap.yml`, `mobile-phase1-deps.yml`, and `mobile-phase1-implement.yml` are historical one-time, write-capable bootstrap helpers. They are not the current implementation architecture and must not be reused as an automatic phase engine.
+- `apps/mobile/PHASE1.md` is historical foundation documentation. `build.md` is the authoritative completion ledger.
+
+### 5.15 Duplicate/dead architecture result
+
+No active duplicate runtime navigation container, Redux store, TanStack Query client, general authenticated HTTP client, secure-token store, Firebase Auth wrapper, or design-token system was found in the current `apps/mobile` source.
+
+Installed baseline libraries that are not yet exercised by the auth-only implementation (for example bottom tabs, FlashList, React Hook Form/Zod, AsyncStorage for approved non-sensitive persistence, and animation/media helpers) are reserved dependencies, not parallel architecture. Future phases must reuse them where appropriate rather than add competing libraries without approval.
+
+### 5.16 Deferred cleanup/refinement notes
+
+These findings do **not** block P01 completion or P02 contract inventory, but later owning phases should address them deliberately:
+
+1. `src/core/http/apiError.ts` imports the `ApiErrorResponse` transport type from `features/auth/domain/types`. Even though it is type-only, shared core HTTP infrastructure should not depend inward on the auth feature. P09 should move/define the generic API error response at a core/shared transport boundary.
+2. The `QueryClient` is intentionally private inside `AppProviders.tsx`; once private server state exists, P08/P24 must provide a controlled cache-clearing/invalidation boundary for logout and role switching rather than creating another query client.
+3. `AppNavigator.tsx` is currently auth-only and `AccountRouterScreen.tsx` performs temporary account-resolution orchestration. P11 and the account-resolution phases must evolve these existing owners instead of creating separate root navigators.
+4. Android Kotlin files are physically under `android/app/src/main/java/com/cravesmobile/` while declaring package `com.cravesapp`. The declarations/application ID are consistent at runtime, but the directory should be normalized in a future native-configuration cleanup for maintainability.
+5. Android release currently uses the debug signing configuration. Production signing is a final release-readiness concern and must not be introduced during intermediate UI phases.
+6. Historical write-capable Phase 1 bootstrap/dependency/implementation workflows remain in the repository. They are quarantined as legacy helpers; a later repository-hygiene change may retire them, but they must not be triggered/edited as part of normal phased implementation.
+
+**P01 blocker status:** none. The current architecture has clear owners and is safe to extend phase-by-phase.
+
+---
+
+## 6. Current Test Coverage
 
 Known tests currently include:
 
@@ -258,14 +408,14 @@ CI is green for the current foundation. This test set is intentionally not consi
 
 ---
 
-## 6. Current Mini-Phase Status Mapping
+## 7. Current Mini-Phase Status Mapping
 
 The granular `phases.md` was introduced after the existing auth foundation was written. To avoid retroactively overstating completion, existing code is mapped conservatively:
 
 | Phase | Status | Evidence/Reason |
 |---|---|---|
 | P00 Execution Documents | **DONE** | `plan.md`, `phases.md`, `build.md`, and `agent.md` committed; source hierarchy and execution policy locked. |
-| P01 Repository Inventory | PARTIAL | Core mobile architecture inspected, but full formal inventory phase has not been re-run under the new protocol. |
+| P01 Repository Inventory | **DONE** | Formal repository architecture audit recorded in this ledger; current entry/navigation/provider/store/query/config/HTTP/security/Firebase/design/native/test/CI ownership is documented and duplicate architecture was checked. |
 | P02 APIM/OpenAPI Inventory | NOT STARTED | No full feature-by-feature contract inventory is recorded yet. |
 | P03 Runtime Config | PARTIAL | Foundation exists; full environment/feature-flag audit pending. |
 | P04 Design Tokens | PARTIAL | Foundation exists; global/reference audit pending. |
@@ -295,10 +445,11 @@ A future phase may upgrade an existing `PARTIAL` item to `DONE` by auditing it a
 
 ---
 
-## 7. Explicitly Not Complete
+## 8. Explicitly Not Complete
 
 The following must **not** be described as complete at this point:
 
+- P02 full APIM/OpenAPI contract inventory,
 - Customer Home refs 5/6,
 - Discover Chefs refs 7/8,
 - Orders refs 9/10 and order child flows,
@@ -310,7 +461,6 @@ The following must **not** be described as complete at this point:
 - customer bottom-nav scroll behavior,
 - authoritative full cart/View Cart system,
 - checkout/payment end-to-end flow,
-- complete APIM route/model inventory,
 - full lifecycle/offline/error state matrix,
 - full accessibility/performance/security audits,
 - 52-reference device visual certification,
@@ -318,7 +468,7 @@ The following must **not** be described as complete at this point:
 
 ---
 
-## 8. Historical Artifact Quarantine
+## 9. Historical Artifact Quarantine
 
 Earlier conversations/branches produced experimental or validation APK/source packages using a different implementation path. Those artifacts are **historical only** and are **not** evidence that the current `mobile-ui-rebuild-from-scratch` rebuild has completed the 52-reference application.
 
@@ -327,13 +477,14 @@ Future agents must not:
 - copy old generated screen implementations into this branch without explicit review,
 - mark phases complete because an older APK once built,
 - use old artifact checksums as current release evidence,
-- resume an old release workflow as though it represents this branch.
+- resume an old release workflow as though it represents this branch,
+- treat the historical `mobile-phase1-bootstrap.yml`, `mobile-phase1-deps.yml`, `mobile-phase1-implement.yml`, or `apps/mobile/PHASE1.md` as the current phase-control mechanism.
 
 Only this ledger plus current branch code/CI evidence determines current completion.
 
 ---
 
-## 9. Phase Completion Recording Protocol
+## 10. Phase Completion Recording Protocol
 
 After every authorized phase, append/update a record containing:
 
@@ -356,7 +507,7 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 
 ---
 
-## 10. Phase History
+## 11. Phase History
 
 ### P00 — Execution Documents and Source Lock
 
@@ -373,12 +524,28 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 - APK built: **No**.
 - CI: no new product CI required because P00 is documentation-only; latest product-code CI run `31178539054` remains green.
 - Blockers: none.
+- Next phase at completion: **NONE AUTHORIZED — waiting for user**.
+
+### P01 — Repository Architecture Inventory
+
+- Status: **DONE**
+- Started from commit: `64dfbd18820b2644ee0263d5fffcefbd62172dfe`
+- Completed at commit: `P01_INVENTORY_COMMIT_PENDING`
+- Guide references: global Project Overview, Technology Stack, Development Rules, State Management, Code Quality, Security, and Testing standards from the full 183-page / 52-reference master guide; no screen reference was implemented in this phase.
+- Changed files: `build.md` only.
+- APIM/contracts used: none. P02 contract inventory was deliberately not started.
+- Behavior completed: no product behavior changed. Formal ownership inventory completed for mobile entry/root, providers, navigation, Redux, TanStack Query, runtime config, HTTP/error/correlation, secure session storage, Firebase Auth, design tokens/shared components, feature organization, tests, Android native project, and mobile CI. Duplicate/legacy architecture findings and deferred cleanup notes are documented in Section 5.
+- Tests/checks: repository branch/head, mobile directory trees, source owners, Android configuration, dependency manifest, tests, and CI workflow were inspected. No code-level CI rerun was required because P01 changes documentation only; latest product-code CI run `31178539054` remains **SUCCESS**.
+- Visual QA: not applicable to this architecture-inventory phase; no UI changed.
+- APK built: **No**.
+- Backend/APIM/infrastructure code changed: **No**.
+- Blockers: none.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
 ---
 
-## 11. Current Next Step
+## 12. Current Next Step
 
 **Stop here.**
 
-No product implementation phase is authorized yet. When the user says **“start next phase”**, read this ledger and begin the next pending phase according to `phases.md`, starting with the architecture/contract audit needed to make subsequent UI/backend work reliable.
+P01 is complete. P02 — APIM/OpenAPI Contract Inventory is the next phase in `phases.md`, but it is **not authorized** by completion of P01. Begin P02 only after the user explicitly says to continue/start the next phase.

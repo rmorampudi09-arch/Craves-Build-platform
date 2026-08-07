@@ -13,10 +13,11 @@ import {PrimaryButton} from '../components/PrimaryButton';
 import {RoleSelector} from '../components/RoleSelector';
 import {SecurityNote} from '../components/SecurityNote';
 import {
+  createEmailAuthRoleContext,
+  createEmailPasswordRecoveryContext,
   createEmailRequestGate,
   createEmailSignInSubmission,
   getEmailSignInFieldErrors,
-  getPasswordRecoveryEmail,
 } from '../domain/emailSignInPolicy';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 import {authService} from '../state/authService';
@@ -75,7 +76,7 @@ export function EmailSignInScreen({navigation, route}: Props) {
     } catch (error) {
       const mapped = toAppApiError(error);
       if (mapped.code === 'PHONE_VERIFICATION_REQUIRED') {
-        navigation.replace('PhoneSignIn', {role: submission.role});
+        navigation.replace('PhoneSignIn', createEmailAuthRoleContext(submission.role));
         return;
       }
       setRequestError(mapped.message);
@@ -89,11 +90,14 @@ export function EmailSignInScreen({navigation, route}: Props) {
     if (busy) {
       return;
     }
-    const recoveryEmail = getPasswordRecoveryEmail(email);
-    navigation.navigate(
-      'ForgotPassword',
-      recoveryEmail ? {role, email: recoveryEmail} : {role},
-    );
+    navigation.navigate('ForgotPassword', createEmailPasswordRecoveryContext(role, email));
+  };
+
+  const openPhoneSignIn = () => {
+    if (busy) {
+      return;
+    }
+    navigation.navigate('PhoneSignIn', createEmailAuthRoleContext(role));
   };
 
   return (
@@ -166,7 +170,7 @@ export function EmailSignInScreen({navigation, route}: Props) {
           label="Continue with phone number"
           leftIcon="phone"
           disabled={busy}
-          onPress={() => navigation.navigate('PhoneSignIn', {role})}
+          onPress={openPhoneSignIn}
         />
         <SecurityNote />
       </AuthCard>

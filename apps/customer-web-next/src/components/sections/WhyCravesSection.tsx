@@ -1,5 +1,5 @@
 import { ArrowRight, Heart } from "lucide-react";
-import chefIllustration from "@/assets/images/chef-illustration.jpg";
+import chefsCta from "@/assets/images/chefs-cta.jpg";
 import { assetUrl } from "@/lib/asset-url";
 
 const missionPoints = [
@@ -9,7 +9,7 @@ const missionPoints = [
   "Build a community of trust & love",
 ];
 
-/** "Why Craves Exists?" — mission statement with a chef illustration. */
+/** "Why Craves Exists?" — mission statement with a premium home-chef visual. */
 export function WhyCravesSection() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-20">
@@ -44,16 +44,23 @@ export function WhyCravesSection() {
             Know More About Us <ArrowRight className="h-4 w-4" />
           </button>
         </div>
+
         <div className="relative">
-          <div className="absolute inset-0 -z-10 rounded-[40%_40%_20%_20%] bg-accent/50" />
-          <img
-            src={assetUrl(chefIllustration)}
-            alt="Home chef cooking"
-            width={1024}
-            height={1024}
-            loading="lazy"
-            className="mx-auto w-full max-w-md"
-          />
+          <div className="absolute -inset-4 -z-10 rounded-[2.5rem] bg-[#F62E18]/6" />
+          <div className="overflow-hidden rounded-[2rem] border border-grey-200 bg-white shadow-[var(--shadow-card)]">
+            <img
+              src={assetUrl(chefsCta)}
+              alt="Home chefs preparing homemade food"
+              width={1600}
+              height={640}
+              loading="lazy"
+              className="aspect-[4/3] w-full object-cover object-center"
+            />
+          </div>
+          <div className="absolute -bottom-5 -left-5 hidden rounded-2xl bg-white px-5 py-4 shadow-[var(--shadow-card)] sm:block">
+            <p className="font-script text-lg text-[#C92716]">Food from home</p>
+            <p className="mt-1 text-xs font-semibold text-black/65">Made with care. Shared with love.</p>
+          </div>
         </div>
       </div>
     </section>

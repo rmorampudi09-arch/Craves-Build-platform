@@ -8,10 +8,19 @@ import {
 } from '../firebase/firebaseAuthError';
 import type {AuthRole, AuthTokenResponse} from '../domain/types';
 
+async function clearPartialAuthentication(): Promise<void> {
+  await Promise.allSettled([sessionManager.clearLocal(), firebaseAuth.signOut()]);
+}
+
 async function exchangeAndPersist(firebaseIdToken: string): Promise<AuthTokenResponse> {
-  const tokens = await authApi.exchangeFirebaseToken(firebaseIdToken);
-  await sessionManager.acceptTokenPair(tokens);
-  return tokens;
+  try {
+    const tokens = await authApi.exchangeFirebaseToken(firebaseIdToken);
+    await sessionManager.acceptTokenPair(tokens);
+    return tokens;
+  } catch (error) {
+    await clearPartialAuthentication();
+    throw error;
+  }
 }
 
 export const authService = {

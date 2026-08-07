@@ -32,6 +32,9 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    redis:
+      enabled: ${CRAVES_REDIS_HEALTH_ENABLED:false}
 
 craves:
   jwt:

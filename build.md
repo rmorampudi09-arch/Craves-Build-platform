@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P20 each have dedicated evidence under `docs/mobile-ui-rebuild/`.
+**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P21 have dedicated evidence under `docs/mobile-ui-rebuild/`.
 
 ---
 
@@ -33,29 +33,29 @@
 - **P10 — Session Token Security Foundation: DONE**.
 - **P11 — Root Navigation and Typed Route Policy: DONE**.
 - **P12 — Role Selection UI and State: DONE**.
-- **P13 — Customer Phone Sign-In Visual + Interaction: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
-- **P14 — Chef Phone Sign-In Visual + Interaction: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
-- **P15 — Customer Email/Password Sign-In: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
-- **P16 — Chef Email/Password Sign-In: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
+- **P13 — Customer Phone Sign-In Visual + Interaction: DONE** at implementation level; device pixel-certification remains later visual QA.
+- **P14 — Chef Phone Sign-In Visual + Interaction: DONE** at implementation level; device pixel-certification remains later visual QA.
+- **P15 — Customer Email/Password Sign-In: DONE** at implementation level; device pixel-certification remains later visual QA.
+- **P16 — Chef Email/Password Sign-In: DONE** at implementation level; device pixel-certification remains later visual QA.
 - **P17 — OTP Verification, Resend, Expiry, Rate Limit: DONE** at implementation level.
 - **P18 — Password Recovery Flow: DONE** at implementation level.
 - **P19 — Firebase → CRAVES Session Exchange: DONE** at implementation/static-contract level.
 - **P20 — Session Restore and Silent Refresh: DONE** at implementation/static-contract level.
+- **P21 — Identity, Role, and Onboarding Resolution: DONE** at implementation/static-contract level.
 
-P20 completion evidence:
+P21 completion evidence:
 
-- Started from commit: `6e54098622367e7b4a35173ef3946f62007d16c7`.
-- Initial implementation commit: `52499ea6bf59e877d2f618e7b51b6039f8f68176`.
-- Validated implementation commit: `fbaee4352d119140ee8a859583478860ee7b6267`.
-- Evidence commit: `79af6c807143122b68369d6d650c4bb017e05ede`.
-- Evidence: `docs/mobile-ui-rebuild/P20_SESSION_RESTORE_AND_SILENT_REFRESH.md`.
-- CI run: `31219378437` — **SUCCESS**.
+- Started from commit: `70dd5a9b85739cc2026be058907d07b432255d6b`.
+- Validated implementation commit: `e4fd28ed9f9d79eca509bee79f566f648c50e161`.
+- Evidence commit: `bfa15c4cfa0bdc61f8f2b072db570de89e3c833b`.
+- Evidence: `docs/mobile-ui-rebuild/P21_IDENTITY_ROLE_AND_ONBOARDING_RESOLUTION.md`.
+- CI run: `31220843488` — **SUCCESS**.
 
-**Next phase in sequence:** **P21 — Identity, Role, and Onboarding Resolution**.
+**Next phase in sequence:** **P22 — Customer Registration/Profile Completion**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P21 until the user explicitly authorizes the next phase.
+**Required action:** Stop. Do not pre-implement P22 until the user explicitly authorizes the next phase.
 
 ---
 
@@ -65,9 +65,9 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31219378437`
-- Head SHA: `fbaee4352d119140ee8a859583478860ee7b6267`
-- Phase: **P20 — Session Restore and Silent Refresh**
+- GitHub Actions run ID: `31220843488`
+- Head SHA: `e4fd28ed9f9d79eca509bee79f566f648c50e161`
+- Phase: **P21 — Identity, Role, and Onboarding Resolution**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -77,150 +77,152 @@ Successful checks:
 3. `npm ci`,
 4. strict TypeScript (`tsc --noEmit`),
 5. ESLint with zero warnings,
-6. Jest including focused P20 session restore/refresh tests and prior auth regressions,
+6. Jest including focused P21 authority/resolution tests and prior regressions,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
-
-The initial P20 implementation run `31219237307` passed strict TypeScript but failed the zero-warning lint gate on three `no-void` warnings. Those warnings were corrected in `fbaee4352d119140ee8a859583478860ee7b6267`; run `31219378437` then passed the complete workflow.
 
 This workflow intentionally does **not** perform Java/Gradle/APK packaging. That remains the implementation-phase policy.
 
 ---
 
-## 3. P20 Accepted Session Restore / Silent Refresh Boundary
+## 3. P21 Accepted Identity / Role / Onboarding Boundary
 
-P20 accepts one shared session lifecycle:
+P21 accepts this authenticated resolution sequence:
 
-`app startup` → splash/bootstrap gate → secure refresh credential load → `POST /api/v1/auth/refresh` through the public client → rotated refresh credential persisted → access token published to process memory → authenticated identity published → proactive/foreground silent refresh through the same session manager.
+`valid CRAVES session` → account-resolution gate → `GET /api/v1/auth/me` → backend identity/role authority → bounded customer-profile or Chef-application status read → typed `AccountResolution` → appropriate existing Customer/Chef onboarding/account navigator.
 
-The existing P10 token-security architecture is preserved; P20 does not create a second token store, refresh interceptor, or session state machine.
+The role selected before authentication is **requested intent only**. It is no longer sufficient to authorize an authenticated product/account root.
 
-### Exact P20 contract
+### Exact Auth Service identity contract
 
 Method/path:
 
-- `POST /api/v1/auth/refresh`
+- `GET /api/v1/auth/me`
 
-Request model:
+Response:
 
-- `RefreshTokenRequest`
-- JSON field: `refreshToken`
+- `MeResponse.identity`
+- authoritative fields used here: `status`, `roles`
+- current identity statuses: `ACTIVE`, `SUSPENDED`
+- current backend role values: `CUSTOMER`, `CHEF`, `ADMIN`
 
-Success model:
-
-- `AuthTokenResponse`
-- `tokenType`
-- `accessToken`
-- `expiresIn`
-- `refreshToken`
-- `refreshTokenExpiresAt`
-- `identity`
-
-Current authoritative static sources:
+Authoritative static sources:
 
 - `openapi/auth-service-v1.yaml`
 - `services/auth-service/src/main/java/in/craves/auth/web/AuthController.java`
 - `services/auth-service/src/main/java/in/craves/auth/service/AuthService.java`
 
-The current branch OpenAPI and Spring Auth Service agree on refresh-token rotation and invalid/expired/revoked outcomes. P20 therefore accepts this operation as **VERIFIED at current static repository contract/implementation level**. This does **not** claim a live APIM/device refresh call.
+The Spring service loads the current identity, enforces active status, reads persisted role mappings, and returns those roles. P21 therefore accepts `/me` as **VERIFIED at current static repository contract/implementation level**. No fresh live APIM/device call is claimed.
 
-### Startup restore and wrong-root flash prevention
+### Customer onboarding resolution
 
-- `AppNavigator` keeps `SplashScreen` visible while bootstrap is `idle` or `restoring`.
-- Auth/account navigation roots are not rendered until session restoration resolves, so a saved authenticated session does not flash the sign-in root first.
-- Startup restoration rotates the secure refresh credential through the shared `sessionManager`.
-- The rotated refresh credential is persisted before the new access token is exposed in process memory.
-- Missing, expired, rejected, or otherwise terminal refresh credentials fail closed to anonymous/sign-in state.
+Existing read:
 
-P20 does **not** resolve authoritative Customer/Chef role or onboarding state; that remains P21.
+- `GET /api/v1/customer/profile`
 
-### Proactive silent refresh
+Resolution:
 
-- `tokenMemory` remains memory-only and now exposes the bounded delay until its existing 30-second refresh safety window.
-- `useSessionLifecycle` schedules a shared refresh before server access-token expiry after bootstrap becomes authenticated.
-- Refresh scheduling pauses while the app is backgrounded/inactive.
-- Returning to foreground reschedules a fresh token or immediately refreshes a stale token.
-- Startup, 401 recovery, proactive timer refresh, and foreground refresh all coalesce through the existing single in-flight `refreshPromise`.
+- backend `CUSTOMER` role + existing profile → `CUSTOMER / READY`,
+- backend `CUSTOMER` role + exact HTTP 404 code `CUSTOMER_PROFILE_NOT_FOUND` → `CUSTOMER / PROFILE_REQUIRED`,
+- other errors remain errors and are not silently treated as incomplete onboarding.
 
-### Refresh failure behavior
+P21 does not submit customer profile data. P22 owns profile completion.
 
-- Local expired refresh credentials are cleared without backend traffic.
-- Backend-invalid/revoked/terminal credentials clear local session state and publish session invalidation so authenticated runtime state returns to sign-in.
-- A missing refresh credential invalidates an already-authenticated runtime session.
-- Failure to persist a rotated refresh credential fails closed.
-- **Transient network/5xx/retriable refresh failures preserve the existing valid secure refresh credential** so bootstrap retry or later silent refresh can recover without forcing an unnecessary re-login.
+### Chef authorization and onboarding resolution
 
-### Startup recovery UX
+Existing read:
 
-- `Try again` restarts bootstrap while retaining a valid saved refresh credential after a transient restore failure.
-- `Go to sign in` explicitly discards retained local CRAVES/Firebase authentication state before publishing anonymous state.
-- The sign-in escape action has loading/duplicate-tap protection.
+- `GET /api/v1/chef/application`
+- current statuses: `NOT_SUBMITTED`, `PENDING`, `APPROVED`, `REJECTED`
+
+Resolution:
+
+- Customer-only backend identity + `NOT_SUBMITTED`/`PENDING`/`REJECTED` → Chef onboarding boundary only; Chef operational role remains locked,
+- backend `CHEF` role + application `APPROVED` → authorized Chef account flow,
+- application `APPROVED` without backend `CHEF`, or backend `CHEF` while application is not approved → fail closed with `CHEF_AUTHORIZATION_STATUS_MISMATCH`.
+
+The current backend Chef approval path grants `CHEF` through the Auth Service. The mobile client does not grant, synthesize, or persist a fake Chef authority.
+
+P21 does not submit/resubmit Chef applications or accept the complete Chef status experience. P23 owns those behaviors.
+
+### Navigation/root behavior
+
+- `AppNavigator` no longer branches authenticated Customer/Chef account routing directly from `auth.selectedRole`.
+- A valid session without `accountResolution` enters the dedicated account-resolution navigator first.
+- The resolver refreshes identity authority through `/me`, determines the bounded onboarding state, and publishes a typed `AccountResolution`.
+- Only then is the existing Customer or Chef account/onboarding navigator rendered.
+- A pre-login Chef selection cannot grant Chef authorization without the backend `CHEF` role.
+
+### Failure/retry behavior
+
+- One resolution request in flight at a time.
+- Public normalized error copy.
+- Explicit retry.
+- Explicit sign-out escape.
+- No fake fallback role.
+- No simulated Chef approval.
+- Account resolution is cleared on new authentication, bootstrap reset/failure, role-intent change, and sign-out so stale role authority is not reused.
 
 ---
 
-## 4. P20 Changed Files
+## 4. P21 Changed Files
 
-Validated implementation changes from P20 start `6e54098622367e7b4a35173ef3946f62007d16c7` through validated head `fbaee4352d119140ee8a859583478860ee7b6267` are limited to:
+Validated implementation changes from P21 start `70dd5a9b85739cc2026be058907d07b432255d6b` through validated head `e4fd28ed9f9d79eca509bee79f566f648c50e161` are limited to:
 
 - `apps/mobile/src/app/navigation/AppNavigator.tsx`
-- `apps/mobile/src/core/security/tokenMemory.ts`
-- `apps/mobile/src/core/security/tokenMemory.test.ts`
-- `apps/mobile/src/features/auth/api/sessionManager.ts`
-- `apps/mobile/src/features/auth/api/sessionManager.test.ts`
-- `apps/mobile/src/features/auth/hooks/useSessionLifecycle.ts`
-- `apps/mobile/src/features/auth/screens/StartupErrorScreen.tsx`
-- `apps/mobile/src/features/auth/state/authService.ts`
-- `apps/mobile/src/features/auth/state/authService.test.ts`
+- `apps/mobile/src/features/auth/api/authApi.test.ts`
+- `apps/mobile/src/features/auth/domain/types.ts`
+- `apps/mobile/src/features/auth/screens/AccountRouterScreen.tsx`
+- `apps/mobile/src/features/auth/state/accountResolutionService.ts`
+- `apps/mobile/src/features/auth/state/accountResolutionService.test.ts`
+- `apps/mobile/src/features/auth/state/authSlice.ts`
+- `apps/mobile/src/features/auth/state/authSlice.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P20_SESSION_RESTORE_AND_SILENT_REFRESH.md`
+- `docs/mobile-ui-rebuild/P21_IDENTITY_ROLE_AND_ONBOARDING_RESOLUTION.md`
 
-No backend, OpenAPI, APIM, infrastructure, Android native build configuration, Customer/Chef product UI, or P21 source was changed by P20.
+No backend, OpenAPI, APIM, infrastructure, Android native build configuration, Customer marketplace screen, Chef operational screen, P22 implementation, or P23 submission implementation was changed.
 
 ---
 
-## 5. Current Architecture Ownership After P20
+## 5. Current Architecture Ownership After P21
 
-### Authentication provider/exchange
+### Authentication/session
 
-- Phone OTP initiation/confirmation: `features/auth/firebase/firebaseAuth.ts`.
-- Email/password provider sign-in: same Firebase wrapper.
-- Firebase public error normalization: `features/auth/firebase/firebaseAuthError.ts`.
-- Shared Firebase → CRAVES orchestration: `features/auth/state/authService.ts`.
-- Exact CRAVES auth HTTP wrapper: `features/auth/api/authApi.ts`.
+- Firebase phone/email identity provider wrapper: `features/auth/firebase/firebaseAuth.ts`.
+- Firebase → CRAVES exchange orchestration: `features/auth/state/authService.ts`.
+- Exact Auth Service wrapper: `features/auth/api/authApi.ts`.
+- Access token: process memory through `core/security/tokenMemory.ts`.
+- Refresh credential: platform-secure storage through `core/security/refreshTokenStore.ts`.
+- Restore/rotation/single-flight/invalidation: `features/auth/api/sessionManager.ts`.
+- Startup restore: `features/auth/hooks/useBootstrap.ts`.
+- Proactive/foreground refresh: `features/auth/hooks/useSessionLifecycle.ts`.
 
-### Session/security
+### P21 account authority
 
-- Access token: process memory only through `core/security/tokenMemory.ts`.
-- Refresh credential: platform-secure storage only through `core/security/refreshTokenStore.ts`.
-- Token acceptance/restore/rotation/single-flight/invalidation/local-clear owner: `features/auth/api/sessionManager.ts`.
-- Authenticated bearer injection/reactive 401 retry: accepted P09 HTTP client foundation.
-- Proactive and foreground silent-refresh timing: `features/auth/hooks/useSessionLifecycle.ts`.
+- Auth store keeps `selectedRole` as requested role intent and `accountResolution` as separate authoritative resolved state.
+- `features/auth/state/accountResolutionService.ts` owns `/me` role authority plus bounded onboarding resolution.
+- `features/auth/screens/AccountRouterScreen.tsx` owns loading/retry/sign-out UX for account resolution.
+- `app/navigation/AppNavigator.tsx` renders authenticated account roots only after `accountResolution` exists.
 
-### Bootstrap/navigation
+### Later-phase boundaries
 
-- Startup restoration state: `features/auth/hooks/useBootstrap.ts`.
-- Splash/error gate before auth/account navigation roots: `app/navigation/AppNavigator.tsx`.
-- Startup recoverable error UI: `features/auth/screens/StartupErrorScreen.tsx`.
-
-### Later-phase boundaries not pulled into P20
-
-- **P21** owns authoritative identity/role/onboarding resolution.
-- **P22/P23** own customer completion and Chef application/status flows.
+- **P22** owns customer registration/profile-completion request, validation, and success transition.
+- **P23** owns Chef application submission/resubmission and full backend-authoritative pending/rejected/approved UX.
 - **P24** owns complete logout/revoke/private-query/private-store/role cleanup orchestration.
 - **P25 onward** owns customer/chef product shells and marketplace functionality.
 
 ---
 
-## 6. Current Auth/API Contract Status
+## 6. Current Auth / Onboarding Contract Status
 
 - `POST /api/v1/auth/firebase/exchange` — **VERIFIED at static repository contract/implementation level by P19; live APIM runtime not claimed**.
 - `POST /api/v1/auth/refresh` — **VERIFIED at static repository contract/implementation level by P20; live APIM/runtime refresh not claimed**.
-- `POST /api/v1/auth/logout` — full logout/revoke cleanup remains outside P20; P24 owns acceptance.
-- `GET /api/v1/auth/me` — not accepted by P20; P21 owns authoritative identity/role resolution.
-- customer profile operations — not accepted by P20; P22 owns profile completion.
-- chef application operations — not accepted by P20; P23 owns application/status behavior.
+- `GET /api/v1/auth/me` — **VERIFIED at static repository contract/implementation level by P21; live APIM/runtime identity call not claimed**.
+- `GET /api/v1/customer/profile` — **USED by P21 only for profile-existence resolution; P22 owns profile completion acceptance**.
+- `GET /api/v1/chef/application` — **USED by P21 only for bounded authorization/onboarding resolution; P23 owns full Chef application/status acceptance**.
+- `POST /api/v1/auth/logout` — existing best-effort auth-screen escape exists, but complete logout/revoke/private-state cleanup remains P24.
 
 Historical P02 evidence remains preserved and should not be rewritten as though its earlier repository snapshot contained later/current Auth Service evidence.
 
@@ -233,16 +235,16 @@ Historical P02 evidence remains preserved and should not be rewritten as though 
 | P00–P09 | **DONE** | Preserved in historical ledgers and dedicated evidence. |
 | P10 Session Token Security | **DONE** | Secure token boundary accepted; CI `31208468433`. |
 | P11 Root Navigation | **DONE** | Typed route/chrome/deep-link policy accepted; CI `31209520350`. |
-| P12 Role Selection | **DONE** | Shared current-attempt role and auth-route synchronization accepted; CI `31210359665`. |
-| P13 Customer Phone Sign-In | **DONE** | Customer phone validation/request guard/native Firebase initiation accepted; CI `31211607174`. |
-| P14 Chef Phone Sign-In | **DONE** | Chef-specific role/copy/submission behavior accepted through shared phone engine; CI `31212292710`. |
-| P15 Customer Email Sign-In | **DONE** | Customer credential UI/validation/request behavior accepted; CI `31213256378`. |
-| P16 Chef Email Sign-In | **DONE** | Chef role preservation through shared email engine accepted; CI `31214293358`. |
-| P17 OTP | **DONE** | OTP verification/resend/expiry/rate-limit behavior accepted; CI `31215342272`. |
-| P18 Password Recovery | **DONE** | Neutral recovery and safe navigation accepted; CI `31217157970`. |
-| P19 Firebase → CRAVES Exchange | **DONE** | Current exchange contract, secure token acceptance, and fail-closed partial-auth cleanup accepted; CI `31218027179`. |
-| P20 Session Restore/Refresh | **DONE** | Startup splash/restore gate, single-flight rotation, proactive/foreground silent refresh, terminal invalidation, and transient recovery accepted; CI `31219378437`. |
-| P21 Identity/Role Resolution | PARTIAL / existing baseline | Existing code may exist; P21 acceptance not authorized. |
+| P12 Role Selection | **DONE** | Shared requested-role state and auth-route synchronization accepted; CI `31210359665`. |
+| P13 Customer Phone Sign-In | **DONE** | Customer phone interaction accepted; CI `31211607174`. |
+| P14 Chef Phone Sign-In | **DONE** | Chef phone role/copy behavior accepted; CI `31212292710`. |
+| P15 Customer Email Sign-In | **DONE** | Customer email credential behavior accepted; CI `31213256378`. |
+| P16 Chef Email Sign-In | **DONE** | Chef role-preserving email flow accepted; CI `31214293358`. |
+| P17 OTP | **DONE** | Verification/resend/expiry/rate-limit behavior accepted; CI `31215342272`. |
+| P18 Password Recovery | **DONE** | Neutral recovery behavior accepted; CI `31217157970`. |
+| P19 Firebase → CRAVES Exchange | **DONE** | Exact exchange and secure token acceptance; CI `31218027179`. |
+| P20 Session Restore/Refresh | **DONE** | Restore/rotation/proactive refresh accepted; CI `31219378437`. |
+| P21 Identity/Role/Onboarding Resolution | **DONE** | `/me` backend authority, bounded onboarding resolution, fail-closed Chef authorization, authenticated root gate; CI `31220843488`. |
 | P22 Customer Registration | PARTIAL / existing baseline | P22 acceptance not authorized. |
 | P23 Chef Application Status | PARTIAL / existing baseline | P23 acceptance not authorized. |
 | P24 Logout Cleanup | PARTIAL / foundation exists | Full cleanup acceptance remains later. |
@@ -250,16 +252,15 @@ Historical P02 evidence remains preserved and should not be rewritten as though 
 
 ---
 
-## 8. Explicitly Not Complete After P20
+## 8. Explicitly Not Complete After P21
 
 Do not describe any of the following as complete:
 
-- P21 authoritative identity/role/onboarding resolution,
-- P22/P23 customer/chef onboarding completion,
+- P22 Customer registration/profile completion,
+- P23 Chef application submission/resubmission and complete status flow,
 - P24 complete logout/revoke/private-cache cleanup,
-- live APIM/device runtime certification of the P19 exchange or P20 refresh operation,
-- authoritative runtime resolution of unrelated P02 blocked/contract-only operations,
-- physical-device pixel-perfect certification of accepted auth references or the remaining reference set,
+- live APIM/device runtime certification of P19/P20/P21 auth operations,
+- physical-device pixel-perfect certification of accepted auth references or remaining references,
 - Customer product refs beyond accepted auth phases,
 - Chef product refs beyond accepted auth phases,
 - customer/chef bottom-tab product shells,
@@ -297,35 +298,32 @@ Preserve useful prior history under `docs/mobile-ui-rebuild/` before compacting 
 
 ## 10. Recent Phase History
 
-### P18 — Password Recovery Flow
-
-- Status: **DONE** at implementation level.
-- Validated implementation commit: `e8c7f280ab68801b3a420ff93b7c07b7e15cb1ce`.
-- Evidence commit: `fcca218bc4224e55f4318715f70f6e141bee1d7e`.
-- Evidence: `docs/mobile-ui-rebuild/P18_PASSWORD_RECOVERY_FLOW.md`.
-- CI: `31217157970` — **SUCCESS**.
-
 ### P19 — Firebase → CRAVES Session Exchange
 
 - Status: **DONE** at implementation/static-contract level.
-- Started from: `6d70d855b8e62f0d416f8da94ba468d2135e99bf`.
 - Validated implementation commit: `0005a7751998ec8626f55bfcd4240aacb4c5e4be`.
-- Evidence commit: `26c229026ce4c0918e8144c0c60399e22d34fc2d`.
 - Evidence: `docs/mobile-ui-rebuild/P19_FIREBASE_CRAVES_SESSION_EXCHANGE.md`.
-- Contract accepted: `POST /api/v1/auth/firebase/exchange` at current static repository contract/implementation level.
+- Contract: `POST /api/v1/auth/firebase/exchange`.
 - CI: `31218027179` — **SUCCESS**.
 
 ### P20 — Session Restore and Silent Refresh
 
 - Status: **DONE** at implementation/static-contract level.
 - Started from: `6e54098622367e7b4a35173ef3946f62007d16c7`.
-- Initial implementation commit: `52499ea6bf59e877d2f618e7b51b6039f8f68176`.
 - Validated implementation commit: `fbaee4352d119140ee8a859583478860ee7b6267`.
-- Evidence commit: `79af6c807143122b68369d6d650c4bb017e05ede`.
 - Evidence: `docs/mobile-ui-rebuild/P20_SESSION_RESTORE_AND_SILENT_REFRESH.md`.
-- Changed implementation files: `AppNavigator.tsx`, `tokenMemory.ts`, `tokenMemory.test.ts`, `sessionManager.ts`, `sessionManager.test.ts`, `useSessionLifecycle.ts`, `StartupErrorScreen.tsx`, `authService.ts`, `authService.test.ts`.
-- Contract accepted: `POST /api/v1/auth/refresh` with current `RefreshTokenRequest` and `AuthTokenResponse` static repository implementation evidence.
-- Behavior completed: startup splash/restore gate, rotated secure-session restore, proactive and foreground silent refresh, single-flight refresh, terminal invalidation, transient retry preservation, and actionable startup recovery.
+- Contract: `POST /api/v1/auth/refresh`.
 - CI: `31219378437` — **SUCCESS**.
-- Visual/runtime note: P20 is primarily lifecycle behavior; live APIM/device refresh is not falsely claimed.
-- Next phase: **P21 — Identity, Role, and Onboarding Resolution — NONE AUTHORIZED**.
+
+### P21 — Identity, Role, and Onboarding Resolution
+
+- Status: **DONE** at implementation/static-contract level.
+- Started from: `70dd5a9b85739cc2026be058907d07b432255d6b`.
+- Validated implementation commit: `e4fd28ed9f9d79eca509bee79f566f648c50e161`.
+- Evidence commit: `bfa15c4cfa0bdc61f8f2b072db570de89e3c833b`.
+- Evidence: `docs/mobile-ui-rebuild/P21_IDENTITY_ROLE_AND_ONBOARDING_RESOLUTION.md`.
+- Contracts used: `GET /api/v1/auth/me`, `GET /api/v1/customer/profile` for existence resolution, and `GET /api/v1/chef/application` for bounded status resolution.
+- Behavior completed: backend-authoritative Customer/Chef authorization, selected-role-as-intent separation, typed onboarding resolution, fail-closed Chef role/application mismatch, authenticated root gate, retry/sign-out recovery.
+- CI: `31220843488` — **SUCCESS**.
+- Runtime note: current repository implementation/static contracts accepted; fresh live APIM/device certification not claimed.
+- Next phase: **P22 — Customer Registration/Profile Completion — NONE AUTHORIZED**.

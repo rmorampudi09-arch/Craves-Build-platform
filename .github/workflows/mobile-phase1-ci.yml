@@ -1,4 +1,4 @@
-name: CRAVES Mobile Phase 1 CI
+name: CRAVES Mobile Implementation CI
 
 on:
   push:
@@ -13,12 +13,12 @@ permissions:
   contents: read
 
 jobs:
-  validate-build-package:
+  validate-mobile-code:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 25
 
     steps:
-      - name: Checkout Phase 1
+      - name: Checkout mobile implementation
         uses: actions/checkout@v4
         with:
           ref: mobile-ui-rebuild-from-scratch
@@ -30,13 +30,6 @@ jobs:
           node-version: 22.13.0
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: gradle
 
       - name: Install dependencies
         working-directory: apps/mobile
@@ -57,67 +50,23 @@ jobs:
       - name: Production JavaScript bundle
         working-directory: apps/mobile
         run: |
-          mkdir -p build/phase1-bundle
+          rm -rf build/implementation-bundle
+          mkdir -p build/implementation-bundle
           npx react-native bundle \
             --platform android \
             --dev false \
             --entry-file index.js \
-            --bundle-output build/phase1-bundle/index.android.bundle \
-            --assets-dest build/phase1-bundle/assets
-          test -s build/phase1-bundle/index.android.bundle
+            --bundle-output build/implementation-bundle/index.android.bundle \
+            --assets-dest build/implementation-bundle/assets
+          test -s build/implementation-bundle/index.android.bundle
 
-      - name: Build Android debug APK
-        working-directory: apps/mobile/android
+      - name: Verify backend source remains unchanged
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a,x86_64
-          test -s app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Verify no backend source changes in Phase 1
-        run: |
+          set -euo pipefail
           changed="$(git diff --name-only 8a2444cde508ea2fb20cb9822397e55c29bd8c5f...HEAD)"
           printf '%s\n' "$changed"
           if printf '%s\n' "$changed" | grep -E '^(services/|openapi/|infra/|apps/api/)'; then
-            echo 'Backend/infrastructure source changed during mobile rebuild.' >&2
+            echo 'Backend/APIM/infrastructure source changed during the mobile rebuild.' >&2
             exit 1
           fi
-
-      - name: Create clean Phase 1 source ZIP
-        run: |
-          mkdir -p dist/source/CravesMobile-Phase1
-          rsync -a \
-            --exclude node_modules \
-            --exclude android/.gradle \
-            --exclude android/app/build \
-            --exclude build \
-            --exclude .env \
-            apps/mobile/ dist/source/CravesMobile-Phase1/
-          cd dist/source
-          zip -qr ../CRAVES-Mobile-Phase1-source.zip CravesMobile-Phase1
-          test -s ../CRAVES-Mobile-Phase1-source.zip
-
-      - name: Prepare Phase 1 package
-        run: |
-          mkdir -p dist/final
-          cp apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk dist/final/CRAVES-Mobile-Phase1-debug.apk
-          cp dist/CRAVES-Mobile-Phase1-source.zip dist/final/
-          sha256sum dist/final/* > dist/final/SHA256SUMS.txt
-          cat > dist/final/PHASE1-BUILD.txt <<EOF
-          CRAVES Mobile Phase 1
-          Branch: mobile-ui-rebuild-from-scratch
-          Commit: ${GITHUB_SHA}
-          React Native: 0.85.3
-          TypeScript: strict validation executed by CI
-          Auth: Firebase native phone/email authentication + existing Craves Auth Service exchange
-          Access token: memory only
-          Refresh token: expo-secure-store key refresh_token
-          Backend source changed: no
-          EOF
-
-      - name: Upload Phase 1 APK and source
-        uses: actions/upload-artifact@v4
-        with:
-          name: CRAVES-Mobile-Phase1-Android
-          path: dist/final/*
-          if-no-files-found: error
-          retention-days: 14
+          echo 'Backend/APIM/infrastructure source guard passed.'

@@ -18,13 +18,15 @@
 
 ## 1. Current Control State
 
-- Current documentation setup phase: **P00 — Execution Documents and Source Lock**.
-- `plan.md`: created.
-- `phases.md`: created.
-- `build.md`: this file.
-- `agent.md`: pending at the moment this initial ledger entry is written; P00 becomes `DONE` only after it is committed and this ledger is updated.
+- **P00 — Execution Documents and Source Lock: DONE**.
+- `plan.md`: created at commit `5ffe4abdb4899b65065a7ed01752092b11fa88d3`.
+- `phases.md`: created at commit `144ff81acfa6fdbfeda5c8c49ebf25f94e83c456`.
+- `build.md`: created at commit `7283b4ddae569e6826da8467e7e1cde1f6c9ddca` and finalized for P00 in the current commit.
+- `agent.md`: created at commit `29add4fafac303b4293840b7f89ae8ab2c98f7d7`.
 - Next product implementation phase: **NONE AUTHORIZED**.
-- Required action after P00: stop and wait for the user to say **“start next phase”**.
+- Required action: stop and wait for the user to say **“start next phase”**.
+
+P00 changed documentation/tracking only. It did not modify mobile product code, backend code, APIM definitions, or infrastructure.
 
 ---
 
@@ -61,6 +63,8 @@ Successful checks:
 8. backend/APIM/infrastructure source-change guard.
 
 Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is now the correct implementation-phase policy.
+
+No product source changed during P00, so the latest product-code CI evidence remains the successful run above.
 
 ---
 
@@ -260,7 +264,7 @@ The granular `phases.md` was introduced after the existing auth foundation was w
 
 | Phase | Status | Evidence/Reason |
 |---|---|---|
-| P00 Execution Documents | PARTIAL | `plan.md`, `phases.md`, `build.md` created; `agent.md` still pending at this ledger version. |
+| P00 Execution Documents | **DONE** | `plan.md`, `phases.md`, `build.md`, and `agent.md` committed; source hierarchy and execution policy locked. |
 | P01 Repository Inventory | PARTIAL | Core mobile architecture inspected, but full formal inventory phase has not been re-run under the new protocol. |
 | P02 APIM/OpenAPI Inventory | NOT STARTED | No full feature-by-feature contract inventory is recorded yet. |
 | P03 Runtime Config | PARTIAL | Foundation exists; full environment/feature-flag audit pending. |
@@ -352,8 +356,29 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 
 ---
 
-## 10. Current Next Step
+## 10. Phase History
 
-**No product implementation phase is authorized yet.**
+### P00 — Execution Documents and Source Lock
 
-Finish P00 by creating `agent.md`, update this ledger to mark P00 `DONE`, then stop. The next phase starts only after explicit user authorization.
+- Status: **DONE**
+- Started from product-code commit: `b91802ecd98b76a6aa28680c7e3bf83693816d74`
+- Documentation commits:
+  - `plan.md` — `5ffe4abdb4899b65065a7ed01752092b11fa88d3`
+  - `phases.md` — `144ff81acfa6fdbfeda5c8c49ebf25f94e83c456`
+  - initial `build.md` — `7283b4ddae569e6826da8467e7e1cde1f6c9ddca`
+  - `agent.md` — `29add4fafac303b4293840b7f89ae8ab2c98f7d7`
+- Guide scope locked: 183 pages / 52 references, customer + chef.
+- Backend/APIM code changed: **No**.
+- Product source changed: **No**.
+- APK built: **No**.
+- CI: no new product CI required because P00 is documentation-only; latest product-code CI run `31178539054` remains green.
+- Blockers: none.
+- Next phase: **NONE AUTHORIZED — waiting for user**.
+
+---
+
+## 11. Current Next Step
+
+**Stop here.**
+
+No product implementation phase is authorized yet. When the user says **“start next phase”**, read this ledger and begin the next pending phase according to `phases.md`, starting with the architecture/contract audit needed to make subsequent UI/backend work reliable.

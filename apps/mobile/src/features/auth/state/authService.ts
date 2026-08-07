@@ -27,7 +27,12 @@ function mapFirebaseError(error: unknown): AppApiError {
   if (code.includes('invalid-phone-number')) {
     return new AppApiError('INVALID_PHONE', 'Enter a valid phone number.');
   }
-  if (code.includes('wrong-password') || code.includes('invalid-credential')) {
+  if (
+    code.includes('wrong-password') ||
+    code.includes('invalid-credential') ||
+    code.includes('user-not-found') ||
+    code.includes('invalid-email')
+  ) {
     return new AppApiError('INVALID_CREDENTIALS', 'The email or password is incorrect.');
   }
   if (code.includes('user-disabled')) {

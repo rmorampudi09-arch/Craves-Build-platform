@@ -28,12 +28,22 @@ jobs:
         run: |
           set -euo pipefail
           test -d apps/mobile
-          for part in .phase1/chunk01.b64 .phase1/chunk02.b64 .phase1/chunk03.b64 .phase1/chunk04.b64 .phase1/chunk05.b64 .phase1/chunk06.b64 .phase1/chunk07a.b64 .phase1/chunk07b.b64 .phase1/chunk08.b64 .phase1/chunk09.b64; do
-            printf '%s bytes=' "$part"
-            wc -c < "$part"
-            sha256sum "$part"
-          done
-          cat .phase1/chunk01.b64 .phase1/chunk02.b64 .phase1/chunk03.b64 .phase1/chunk04.b64 .phase1/chunk05.b64 .phase1/chunk06.b64 .phase1/chunk07a.b64 .phase1/chunk07b.b64 .phase1/chunk08.b64 .phase1/chunk09.b64 | tr -d '\n\r' | base64 --decode --ignore-garbage > /tmp/phase1-overlay.tar.gz
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          path = Path('.phase1/chunk07a.b64')
+          value = path.read_text()
+          expected = 'e2c45bfd1578eb03dc2a8b9ca0fca52d63f1b21cf1134afc9bd5d62fcd441348'
+          if hashlib.sha256(value.encode()).hexdigest() != expected:
+              candidates = [value[:i] + value[i+1:] for i in range(len(value))]
+              repaired = next((candidate for candidate in candidates if hashlib.sha256(candidate.encode()).hexdigest() == expected), None)
+              if repaired is None:
+                  raise SystemExit('chunk07a does not match the single-byte staging repair contract')
+              path.write_text(repaired)
+          assert hashlib.sha256(path.read_bytes()).hexdigest() == expected
+          PY
+          cat .phase1/chunk01.b64 .phase1/chunk02.b64 .phase1/chunk03.b64 .phase1/chunk04.b64 .phase1/chunk05.b64 .phase1/chunk06.b64 .phase1/chunk07a.b64 .phase1/chunk07b.b64 .phase1/chunk08.b64 .phase1/chunk09.b64 | tr -d '\n\r' | base64 --decode > /tmp/phase1-overlay.tar.gz
           echo '815999af83cea5086e7de61791a4b8720568d23a7d4b9c324b8a060613d3a3f6  /tmp/phase1-overlay.tar.gz' | sha256sum -c -
           tar -xzf /tmp/phase1-overlay.tar.gz -C apps/mobile
 

@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P25 have dedicated evidence under `docs/mobile-ui-rebuild/`; prior phase details remain there when this living ledger is compacted.
+**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P26 have dedicated evidence under `docs/mobile-ui-rebuild/`; prior phase details remain there when this living ledger is compacted.
 
 ---
 
@@ -45,22 +45,23 @@
 - **P22 — Customer Registration/Profile Completion: DONE** at implementation/static-contract level.
 - **P23 — Chef Application Submission / Status: DONE** at implementation/static-contract level.
 - **P24 — Logout, Revoke, and Role-State Cleanup: DONE** at implementation/static-contract level.
-- **P25 — Customer Root Shell and Bottom Tabs: DONE** at implementation/static-navigation level; later Customer product screens remain unaccepted until their owning phases.
+- **P25 — Customer Root Shell and Bottom Tabs: DONE** at implementation/static-navigation level.
+- **P26 — Customer Bottom-Nav Scroll Hide/Reveal: DONE** at implementation/static-navigation level; final device/reference certification remains later visual QA.
 
-P25 completion evidence:
+P26 completion evidence:
 
-- Started from commit: `85545d24c8f05a88ad2b7f7cffcaa6fe08438bfb`.
-- Initial implementation commit: `40d31af0b8ac9045b9031991b041ddac4a85d153`.
-- Validated implementation commit: `f3b6f9458f2c5e42c58989dbe6115fd382102f85`.
-- Evidence commit: `9933e62208e7855d7672af5a211738cfa151a235`.
-- Evidence: `docs/mobile-ui-rebuild/P25_CUSTOMER_ROOT_SHELL_BOTTOM_TABS.md`.
-- CI run: `31226669633` — **SUCCESS**.
+- Started from commit: `bcbbcac31ebe8857bfc7f7e5af0c80a9ddf98443`.
+- Initial implementation commit: `3aa720d9d9543a6a45bc6ef13085bcf087e01648`.
+- Validated implementation commit: `613a91be62722ae032ef9d4f9b9124702c8902bd`.
+- Evidence commit: `2a372cdceb4bf4db2ecfe6faa112010e4fd551d3`.
+- Evidence: `docs/mobile-ui-rebuild/P26_CUSTOMER_BOTTOM_NAV_SCROLL_HIDE_REVEAL.md`.
+- CI run: `31228012689` — **SUCCESS**.
 
-**Next phase in sequence:** **P26 — Customer Bottom-Nav Scroll Hide/Reveal**.
+**Next phase in sequence:** **P27 — Shared Customer Header/Location/Notification Badge**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P26 until the user explicitly authorizes the next phase.
+**Required action:** Stop. Do not pre-implement P27 until the user explicitly authorizes the next phase.
 
 ---
 
@@ -70,9 +71,9 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31226669633`
-- Head SHA: `f3b6f9458f2c5e42c58989dbe6115fd382102f85`
-- Phase: **P25 — Customer Root Shell and Bottom Tabs**
+- GitHub Actions run ID: `31228012689`
+- Head SHA: `613a91be62722ae032ef9d4f9b9124702c8902bd`
+- Phase: **P26 — Customer Bottom-Nav Scroll Hide/Reveal**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -82,68 +83,62 @@ Successful checks:
 3. `npm ci`,
 4. strict TypeScript (`tsc --noEmit`),
 5. ESLint with zero warnings,
-6. Jest including focused P25 customer-tab/navigation-policy tests and prior regressions,
+6. Jest including focused P26 scroll direction/threshold tests and prior regressions,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
 
-The initial P25 run `31226522662` failed only because ESLint correctly rejected an inline tab-icon renderer with `react/no-unstable-nested-components`. The final implementation moved those renderers to stable module-level functions and the complete validation suite then passed.
-
-This workflow intentionally does **not** perform Java/Gradle/APK packaging. That remains the implementation-phase policy.
+The implementation-phase workflow intentionally does **not** perform Java/Gradle/APK packaging.
 
 ---
 
-## 3. P25 Accepted Customer Shell Boundary
+## 3. P26 Accepted Bottom-Navigation Behavior
 
-P25 accepts this bounded transition:
-
-`authenticated Customer + backend-resolved READY onboarding state` → existing authenticated root gate → `CustomerRootNavigator` → typed **Home / Chefs / Orders / Profile** bottom tabs → independent typed native stack per tab.
+P26 extends the existing P25 Customer shell only. It does not introduce any Customer product/reference screen.
 
 Accepted behavior:
 
-- The existing single `NavigationContainer` remains authoritative; no parallel navigation system was added.
-- A Customer whose onboarding status is `PROFILE_REQUIRED` remains in the existing registration flow.
-- A Customer whose onboarding status is `READY` enters the Customer shell.
-- Home, Chefs, Orders, and Profile are typed bottom-tab routes in the required order.
-- Each tab owns an independent typed native stack so later product child routes can be added without resetting sibling tab state.
-- `popToTopOnBlur` remains disabled, preserving each tab stack across tab changes.
-- Active-tab tint uses shared Flame Red `#F62E18`; inactive tint uses the shared muted-text token.
-- The shell remains under the existing `SafeAreaProvider`; the tab bar does not impose a fixed bottom offset or fixed height that would bypass Android navigation/gesture insets.
-- The tab bar hides for the keyboard/IME.
-- Customer tab routes resolve to the non-immersive Customer chrome policy while authentication/account-resolution routes remain immersive.
-- Existing shared icon infrastructure was extended with Home and Orders icons rather than creating a second icon system.
-- P26 scroll-driven hide/reveal behavior was **not** implemented.
+- Customer bottom navigation is visible when a tab-root vertical list is at/near the top.
+- Deliberate downward scrolling hides the bar after a small accumulated-direction threshold.
+- Deliberate upward scrolling reveals the bar after the same threshold.
+- Minor scroll jitter does not repeatedly toggle the bar.
+- Negative Android overscroll is normalized safely and keeps navigation visible.
+- Changing Customer tabs reveals the bar.
+- Returning/focusing a Customer tab root reveals the bar without resetting the preserved list offset.
+- While hidden, the tab bar does not intercept touches.
+- While hidden, the tab bar is removed from accessibility traversal.
+- The shared P05 bottom-navigation motion definition is reused; only opacity/transform are animated with the native driver.
+- Android reduced-motion preference is respected; visibility changes become immediate when reduced motion is enabled.
+- The actual React Navigation `BottomTabBar` remains authoritative; no second tab UI or navigation system was created.
+- Existing P25 `lazy: true` / `popToTopOnBlur: false` stack-preservation behavior remains unchanged.
+- The tab bar continues to own its normal safe-area geometry; P26 does not impose a fixed bottom offset or fixed tab height that would bypass Android gesture/navigation insets.
 
-### Product-screen boundary
+### Later product-list integration boundary
 
-P25 does **not** accept Customer Home, Chefs discovery, My Orders, or Customer Profile as completed product/reference screens. Until their owning phases replace these roots, each tab stack reuses the already-accepted `CustomerAccountStatusScreen` with its real P24 logout path. This avoids fake marketplace data, empty handlers, or falsely claiming later reference screens as complete.
+`useCustomerBottomNavScroll()` is now the single shared vertical-scroll binding for the real Customer tab-root `ScrollView`, `FlatList`, or `FlashList` implementations added by their later owning phases. It provides shared `onScroll` handling and `scrollEventThrottle: 16` while revealing navigation on root focus without resetting list position.
 
-No View Cart/cart domain, discovery/catalog data, orders domain, profile product UI, transactional flows, or Chef product shell was introduced.
+P26 intentionally did **not** create fake scrollable Home, Chefs, Orders, or Profile content just to demonstrate the behavior. Those screens remain unaccepted until their owning phases.
 
 ---
 
-## 4. P25 Changed Files
+## 4. P26 Changed Files
 
-Validated P25 implementation changes are limited to:
+Validated P26 implementation changes from the accepted P25 ledger head are limited to:
 
-- `apps/mobile/src/app/navigation/AppNavigator.tsx`
+- `apps/mobile/src/app/navigation/CustomerBottomNavController.tsx`
 - `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
+- `apps/mobile/src/app/navigation/customerBottomNavScroll.ts`
+- `apps/mobile/src/app/navigation/customerBottomNavScroll.test.ts`
 - `apps/mobile/src/app/navigation/customerTabs.ts`
-- `apps/mobile/src/app/navigation/customerTabs.test.ts`
-- `apps/mobile/src/app/navigation/navigationPolicy.ts`
-- `apps/mobile/src/app/navigation/navigationPolicy.test.ts`
-- `apps/mobile/src/app/navigation/types.ts`
-- `apps/mobile/src/features/auth/screens/CustomerAccountStatusScreen.tsx`
-- `apps/mobile/src/shared/components/Icon.tsx`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P25_CUSTOMER_ROOT_SHELL_BOTTOM_TABS.md`
+- `docs/mobile-ui-rebuild/P26_CUSTOMER_BOTTOM_NAV_SCROLL_HIDE_REVEAL.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, or P26+ behavior was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, cart/View Cart behavior, P27 shared-header behavior, or later Customer product screen was changed.
 
 ---
 
-## 5. Current Architecture Ownership After P25
+## 5. Current Architecture Ownership After P26
 
 ### Authentication/session
 
@@ -161,29 +156,32 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 
 - Redux auth state owns requested role, authenticated identity, and onboarding/account resolution.
 - TanStack Query owns server state; private cache cleanup remains centralized through `app/query/queryCache.ts`.
-- Root navigation remains conditional on `auth.bootstrapStatus`; logout still unmounts the authenticated navigator subtree.
-- P25 adds one Customer bottom-tab navigator inside the existing root navigation container.
-- Home, Chefs, Orders, and Profile each own a nested typed native stack and preserve stack state on tab changes.
-- Product routes are added to those stacks only by their owning later phases.
+- Root navigation remains conditional on `auth.bootstrapStatus`; logout unmounts the authenticated navigator subtree.
+- P25 remains the owner of the one Customer bottom-tab navigator and four independent typed tab stacks.
+- P26 adds one shell-level Customer bottom-nav visibility provider/controller rather than per-screen duplicate logic.
+- `customerBottomNavScroll.ts` owns the pure direction/threshold state machine.
+- `CustomerBottomNavController.tsx` owns visibility animation, reduced-motion behavior, hidden interaction/accessibility policy, and the reusable root-list scroll binding.
+- Product routes and real root lists remain owned by later phases and must reuse this P26 binding when applicable.
 
 ### Account/onboarding authority
 
 - P21 account resolution remains authoritative for Customer/Chef authorization.
 - P22 Customer profile completion and P23 Chef application/status behavior remain unchanged.
-- `CUSTOMER + READY` now routes to the P25 Customer shell; `CUSTOMER + PROFILE_REQUIRED` remains in registration.
-- Chef routing remains unchanged by P25.
+- `CUSTOMER + READY` enters the Customer shell; `CUSTOMER + PROFILE_REQUIRED` remains in registration.
+- Chef routing remains unchanged by P26.
 
 ### Later-phase boundaries
 
-- **P26** owns Customer bottom-navigation scroll hide/reveal behavior.
-- Later Customer phases own Home, Chefs discovery, Orders, Profile and their real API-backed product compositions.
-- Chef KYC proof upload and Chef operational/product screens remain outside P25.
+- **P27** owns shared Customer header/location/notification badge behavior.
+- **P28 onward** owns cart/domain/product behavior according to `phases.md`.
+- Later Customer screen phases own Home, Chefs discovery, Orders, Profile and their real API-backed compositions.
+- Chef KYC proof upload and Chef operational/product screens remain outside P26.
 
 ---
 
 ## 6. Current Contract Status
 
-Authentication/profile/onboarding contracts accepted before P25 remain unchanged:
+Authentication/profile/onboarding contracts accepted before P26 remain unchanged:
 
 - `POST /api/v1/auth/firebase/exchange` — P19.
 - `POST /api/v1/auth/refresh` — P20.
@@ -191,9 +189,9 @@ Authentication/profile/onboarding contracts accepted before P25 remain unchanged
 - `GET /api/v1/customer/profile` / `PUT /api/v1/customer/profile` — P21/P22.
 - `GET /api/v1/chef/application` / `POST /api/v1/chef/application` — P23.
 - `POST /api/v1/auth/logout` — P24.
-- `POST /api/v1/chef/application/proof-files` — backend route exists but remains outside accepted P23–P25 behavior.
+- `POST /api/v1/chef/application/proof-files` — backend route exists but remains outside accepted P23–P26 behavior.
 
-**P25 uses no new APIM/backend contract.** It is a navigation-shell phase only.
+**P25 and P26 use no new APIM/backend contract.** They are navigation-shell phases only.
 
 Live APIM/device runtime certification is not claimed by these static implementation phases unless a later evidence record explicitly says so.
 
@@ -211,22 +209,23 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P23 Chef Application Submission / Status | **DONE** | Backend-driven application/status flow and approved-role recheck; CI `31222819644`. |
 | P24 Logout/Revoke/Role-State Cleanup | **DONE** | Best-effort revoke, unconditional local credential cleanup, private cache/mutation cleanup, role reset, fresh Auth root; CI `31225688358`. |
 | P25 Customer Root Shell/Bottom Tabs | **DONE** | Typed four-tab Customer shell, nested stack preservation, Flame Red active state, safe-area-compatible bottom tabs; CI `31226669633`. |
-| P26 onward | **NOT STARTED / not accepted** | No later phase is authorized by this record. |
+| P26 Customer Bottom-Nav Scroll Hide/Reveal | **DONE** | Shared scroll-direction controller, reduced-motion animation, hidden interaction/accessibility guard, tab/root reveal behavior; CI `31228012689`. |
+| P27 onward | **NOT STARTED / not accepted** | No later phase is authorized by this record. |
 
 ---
 
-## 8. Explicitly Not Complete After P25
+## 8. Explicitly Not Complete After P26
 
 Do not describe any of the following as complete:
 
-- P26 Customer bottom-nav scroll hide/reveal,
-- Customer Home/Discovery/Chefs/Orders/Profile product screens merely because the P25 tab shell now exists,
-- authoritative cart/View Cart/cart synchronization,
+- P27 shared Customer header/location/notification badge,
+- P28 authoritative cart domain or P29 View Cart overlay,
+- Customer Home/Discovery/Chefs/Orders/Profile product screens merely because the shell and scroll behavior exist,
 - Chef KYC proof-file upload,
 - Chef operational/product screens,
 - authenticated product/resource deep links and notification routing,
 - checkout/payment end-to-end flow,
-- live APIM/device runtime certification of P19–P25 flows,
+- live APIM/device runtime certification of P19–P26 flows,
 - physical-device pixel-perfect certification of accepted auth references or remaining references,
 - full lifecycle/accessibility/performance/security audits,
 - 52-reference visual certification,

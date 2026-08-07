@@ -248,6 +248,27 @@ CRAVES_DISCOVERY_MAX_PAGE_SIZE
 
 The first two variables support the older compatibility endpoint. The metre-based variables protect the new `/api/v1/discovery/**` queries.
 
+## Redis token-revocation health behavior
+
+Catalog contains Redis-backed access-token revocation support, but the runtime feature remains disabled unless `CRAVES_TOKEN_REVOCATION_ENABLED=true` is explicitly configured.
+
+Because `spring-boot-starter-data-redis` is present for that security capability, Spring Boot Actuator would otherwise auto-detect Redis and probe the default `localhost:6379` even when token revocation is disabled. Catalog therefore keeps the Redis Actuator health contribution disabled by default:
+
+```text
+CRAVES_REDIS_HEALTH_ENABLED=false
+```
+
+This prevents an unused Redis dependency from making the aggregate `/actuator/health` endpoint report `DOWN` while the application, PostgreSQL and readiness/liveness probes are healthy.
+
+When Redis-backed token revocation is intentionally activated later, configure the real Azure Redis connection first and then enable both controls together:
+
+```text
+CRAVES_TOKEN_REVOCATION_ENABLED=true
+CRAVES_REDIS_HEALTH_ENABLED=true
+```
+
+Do not enable the Redis health indicator before a reachable Redis endpoint is configured. This setting does not provision Redis, enable caching, rotate credentials, or change Catalog business behavior.
+
 ## Media design
 
 Images are uploaded to Azure Blob Storage under paths such as:
@@ -275,9 +296,11 @@ Flyway V3 completed
 PostGIS is available
 new Container App revision is Ready
 /actuator/health returns UP
+/actuator/health/liveness returns UP
+/actuator/health/readiness returns UP
 ```
 
-No new Azure resource, secret, Key Vault entry, or Service Bus entity is required.
+No new Azure resource, secret, Key Vault entry, Redis instance, or Service Bus entity is required for this health correction.
 
 ## Deliberately excluded
 

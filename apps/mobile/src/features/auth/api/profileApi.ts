@@ -1,4 +1,4 @@
-import {apiClient} from '../../../core/http/apiClient';
+import {httpClient} from '../../../core/http/httpClient';
 import type {ChefApplication, CustomerProfile} from '../domain/types';
 
 export interface CustomerProfileInput {
@@ -23,19 +23,15 @@ export interface ChefApplicationInput {
 
 export const profileApi = {
   async getCustomerProfile(): Promise<CustomerProfile> {
-    const response = await apiClient.get<CustomerProfile>('/api/v1/customer/profile');
-    return response.data;
+    return httpClient.get<CustomerProfile>('/api/v1/customer/profile');
   },
   async saveCustomerProfile(input: CustomerProfileInput): Promise<CustomerProfile> {
-    const response = await apiClient.put<CustomerProfile>('/api/v1/customer/profile', input);
-    return response.data;
+    return httpClient.put<CustomerProfile>('/api/v1/customer/profile', input);
   },
   async getChefApplication(): Promise<ChefApplication> {
-    const response = await apiClient.get<ChefApplication>('/api/v1/chef/application');
-    return response.data;
+    return httpClient.get<ChefApplication>('/api/v1/chef/application');
   },
   async submitChefApplication(input: ChefApplicationInput): Promise<ChefApplication> {
-    const response = await apiClient.post<ChefApplication>('/api/v1/chef/application', input);
-    return response.data;
+    return httpClient.post<ChefApplication>('/api/v1/chef/application', input);
   },
 };

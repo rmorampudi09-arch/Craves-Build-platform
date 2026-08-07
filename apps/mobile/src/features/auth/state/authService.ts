@@ -1,4 +1,3 @@
-import axios from 'axios';
 import {AppApiError, toAppApiError} from '../../../core/http/apiError';
 import {sessionManager} from '../api/sessionManager';
 import {authApi} from '../api/authApi';
@@ -12,8 +11,8 @@ async function exchangeAndPersist(firebaseIdToken: string): Promise<AuthTokenRes
 }
 
 function mapFirebaseError(error: unknown): AppApiError {
-  if (axios.isAxiosError(error)) {
-    return toAppApiError(error);
+  if (error instanceof AppApiError) {
+    return error;
   }
   const code =
     typeof error === 'object' && error && 'code' in error

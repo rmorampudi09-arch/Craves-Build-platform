@@ -1,36 +1,58 @@
-import axios, {AxiosError, InternalAxiosRequestConfig} from 'axios';
-import {getRuntimeConfig} from '../config/runtimeConfig';
+import type {AxiosError, InternalAxiosRequestConfig} from 'axios';
 import {tokenMemory} from '../security/tokenMemory';
-import {createCorrelationId} from './correlation';
 import {sessionManager} from '../../features/auth/api/sessionManager';
+import {toAppApiError} from './apiError';
+import {createCoreAxiosClient} from './transport';
+import {getRetryDelayMs, shouldRetryRequest} from './requestPolicy';
 
-type RetriableConfig = InternalAxiosRequestConfig & {_cravesRetried?: boolean};
+type RetriableConfig = InternalAxiosRequestConfig & {
+  _cravesAuthRetried?: boolean;
+  _cravesRetryCount?: number;
+};
 
-export const apiClient = axios.create({timeout: 12000});
+function waitForRetry(delayMs: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, delayMs));
+}
 
-apiClient.interceptors.request.use(config => {
-  config.baseURL = getRuntimeConfig().apiBaseUrl;
-  config.headers.set('X-Correlation-ID', createCorrelationId());
-  const token = tokenMemory.get();
-  if (token) {
-    config.headers.set('Authorization', `Bearer ${token}`);
-  }
-  return config;
-});
+export const apiClient = createCoreAxiosClient(() => tokenMemory.get());
 
 apiClient.interceptors.response.use(
   response => response,
-  async (error: AxiosError) => {
+  async (error: AxiosError<unknown>) => {
     const original = error.config as RetriableConfig | undefined;
-    if (error.response?.status !== 401 || !original || original._cravesRetried) {
-      throw error;
+    const status = error.response?.status;
+
+    if (status === 401 && original && !original._cravesAuthRetried) {
+      original._cravesAuthRetried = true;
+      try {
+        const refreshed = await sessionManager.refresh();
+        if (refreshed) {
+          original.headers.set('Authorization', `Bearer ${refreshed.accessToken}`);
+          return apiClient.request(original);
+        }
+      } catch {
+        // Session manager owns credential clearing; surface the original safe 401 below.
+      }
+      throw toAppApiError(error);
     }
-    original._cravesRetried = true;
-    const refreshed = await sessionManager.refresh();
-    if (!refreshed) {
-      throw error;
+
+    const retryCount = original?._cravesRetryCount ?? 0;
+    const cancelled = error.code === 'ERR_CANCELED';
+    if (
+      original &&
+      shouldRetryRequest({
+        method: original.method,
+        status,
+        errorCode: error.code,
+        retryCount,
+        cancelled,
+      })
+    ) {
+      original._cravesRetryCount = retryCount + 1;
+      await waitForRetry(getRetryDelayMs(retryCount));
+      return apiClient.request(original);
     }
-    original.headers.set('Authorization', `Bearer ${refreshed.accessToken}`);
-    return apiClient.request(original);
+
+    throw toAppApiError(error);
   },
 );

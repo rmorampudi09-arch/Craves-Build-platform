@@ -87,6 +87,7 @@ const authSlice = createSlice({
     },
     signedOut(state) {
       state.bootstrapStatus = 'anonymous';
+      state.selectedRole = initialState.selectedRole;
       state.identity = null;
       state.accountResolution = null;
       state.lastErrorCode = null;

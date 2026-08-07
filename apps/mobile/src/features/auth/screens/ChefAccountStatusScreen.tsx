@@ -12,8 +12,8 @@ import {AuthShell} from '../components/AuthShell';
 import {PrimaryButton} from '../components/PrimaryButton';
 import type {ChefApplication, ChefApplicationStatus} from '../domain/types';
 import {accountResolutionService} from '../state/accountResolutionService';
-import {authService} from '../state/authService';
 import {authActions} from '../state/authSlice';
+import {completeLogout} from '../state/logoutCoordinator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ChefAccountStatus'>;
 
@@ -87,8 +87,7 @@ export function ChefAccountStatusScreen({navigation, route}: Props) {
     application?.status === 'REJECTED' ? application.rejectionReason : null;
 
   const logout = async () => {
-    await authService.logout();
-    dispatch(authActions.signedOut());
+    await completeLogout(dispatch);
   };
 
   return (

@@ -11,6 +11,9 @@ export async function clearPrivateQueryCache(
   const predicate = (query: {queryKey: readonly unknown[]}) =>
     matchesPrivateQueryScope(query.queryKey, scope);
 
-  await queryClient.cancelQueries({predicate});
-  queryClient.removeQueries({predicate});
+  try {
+    await queryClient.cancelQueries({predicate});
+  } finally {
+    queryClient.removeQueries({predicate});
+  }
 }

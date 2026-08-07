@@ -4,7 +4,7 @@ import 'react-native-gesture-handler/jestSetup';
 jest.mock('react-native-config', () => ({
   __esModule: true,
   default: {
-    CRAVES_API_BASE_URL: 'https://api.craves.in',
+    CRAVES_API_BASE_URL: 'https://api.example.invalid',
   },
 }));
 

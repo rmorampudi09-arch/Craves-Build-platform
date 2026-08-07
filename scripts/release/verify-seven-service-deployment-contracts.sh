@@ -2,15 +2,20 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HELPER="$ROOT/scripts/release/deploy-single-service-preserve-runtime.sh"
 fail() { echo "ERROR: $*" >&2; exit 1; }
-command -v python3 >/dev/null || fail "python3 is required"
 
-python3 - "$ROOT" <<'PY'
+command -v python3 >/dev/null || fail "python3 is required"
+[[ -s "$HELPER" ]] || fail "runtime-preserving deployment helper is missing"
+
+python3 - "$ROOT" "$HELPER" <<'PY'
 import re
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
+helper = Path(sys.argv[2])
+
 pipelines = {
     "auth": root / "azure-pipelines-auth-service.yml",
     "user-chef": root / "azure-pipelines-user-chef-service.yml",
@@ -20,103 +25,127 @@ pipelines = {
     "integration": root / "azure-pipelines-integration-service.yml",
     "notification": root / "azure-pipelines-notification-service.yml",
 }
-common_required = (
+
+common_pipeline_required = (
     "trigger: none",
     "pr: none",
     "versionSpec: '21'",
     "mvn -B -ntp clean verify",
     "docker build --pull",
     "docker push",
-    "PREVIOUS_REVISION",
-    "PREVIOUS_IMAGE",
-    "LATEST_IMAGE",
-    "latestReadyRevisionName",
-    "properties.healthState",
-    "Healthy",
-    "/actuator/health",
-    "Rollback image",
-    "SPRING_DATASOURCE_PASSWORD=secretref:db-password",
+    "AZURE_SERVICE_CONNECTION",
 )
-required_by_service = {
-    "auth": (
-        "FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=secretref:firebase-admin-json",
-        "CRAVES_JWT_PRIVATE_KEY_PEM_BASE64=secretref:jwt-private-pem",
-        "CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED=false",
-        "CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED=false",
-        "CRAVES_TOKEN_REVOCATION_PUBLISHER_ENABLED=false",
-        "CRAVES_AUTH_RATE_LIMIT_ENABLED=false",
-    ),
-    "user-chef": (
-        "CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem",
-        "CRAVES_NOTIFICATION_DIRECT_DISPATCH_ENABLED=false",
-        "CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_ENABLED=false",
-        "CRAVES_TOKEN_REVOCATION_ENABLED=false",
-    ),
-    "catalog": (
-        "CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem",
-        "CRAVES_TOKEN_REVOCATION_ENABLED=false",
-    ),
-    "order": (
-        "CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem",
-        "CRAVES_NOTIFICATION_DIRECT_DISPATCH_ENABLED=false",
-        "CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED=false",
-        "CRAVES_REFUND_STATUS_CONSUMER_ENABLED=false",
-        "CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=false",
-        "CRAVES_SUBSCRIPTION_ORDER_CONSUMER_ENABLED=false",
-        "CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED=false",
-    ),
-    "subscription": (
-        "CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem",
-        "CRAVES_SUBSCRIPTION_OCCURRENCE_GENERATOR_ENABLED=false",
-        "CRAVES_SUBSCRIPTION_BILLING_GENERATOR_ENABLED=false",
-        "CRAVES_SUBSCRIPTION_PAYMENT_STATUS_CONSUMER_ENABLED=false",
-        "CRAVES_SUBSCRIPTION_ORDER_REQUEST_WORKER_ENABLED=false",
-    ),
-    "integration": (
-        "CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem",
-        "CRAVES_PAYMENT_ORDER_API_ENABLED=false",
-        "CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED=false",
-        "CRAVES_DELIVERY_INTELLIGENCE_ENABLED=false",
-        "CRAVES_DELIVERY_COMMAND_ENABLED=false",
-        "CRAVES_DELIVERY_RECONCILIATION_ENABLED=false",
-        "CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=false",
-        "CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=false",
-        "CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=false",
-        "CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED=false",
-        "CRAVES_SUBSCRIPTION_PAYMENT_CONSUMER_ENABLED=false",
-        "BORZO_API_ENABLED=false",
-        "BORZO_PRODUCTION_ACTIVATION_APPROVED=false",
-    ),
-    "notification": (
-        "CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:jwt-verify-pem",
-        "CRAVES_SERVICEBUS_ENABLED=false",
-        "CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED=false",
-        "CRAVES_NOTIFICATION_PUSH_ENABLED=false",
-        "CRAVES_NOTIFICATION_EMAIL_ENABLED=false",
-        "CRAVES_NOTIFICATION_RECOVERY_API_ENABLED=false",
-    ),
+
+shared_helper_services = {
+    "auth",
+    "user-chef",
+    "order",
+    "subscription",
+    "integration",
+    "notification",
 }
+
+forbidden_pipeline_patterns = (
+    r"--set-env-vars\b",
+    r"--replace-env-vars\b",
+    r"\bcontainerapp\s+secret\s+set\b",
+    r"\bcontainerapp\s+ingress\s+update\b",
+    r"--min-replicas\b",
+    r"--max-replicas\b",
+)
+
+credential_macro_pattern = re.compile(
+    r"\$\((?:"
+    r"POSTGRES_[A-Z0-9_]*(?:PASSWORD|SECRET)|"
+    r"FIREBASE_SERVICE_ACCOUNT[A-Z0-9_]*|"
+    r"CRAVES_JWT_[A-Z0-9_]*|"
+    r"CRAVES_INTERNAL_[A-Z0-9_]*|"
+    r"ACS_[A-Z0-9_]*(?:SECRET|KEY|CONNECTION)|"
+    r"CASHFREE_[A-Z0-9_]*(?:SECRET|KEY)|"
+    r"BORZO_[A-Z0-9_]*(?:TOKEN|SECRET|KEY)"
+    r")\)"
+)
+
 for service, path in pipelines.items():
     if not path.is_file():
         raise SystemExit(f"ERROR: Missing deployment pipeline for {service}: {path.name}")
+
     text = path.read_text(encoding="utf-8")
-    for token in common_required + required_by_service[service]:
+
+    for token in common_pipeline_required:
         if token not in text:
-            raise SystemExit(f"ERROR: {path.name} lacks required deployment contract token: {token}")
+            raise SystemExit(
+                f"ERROR: {path.name} lacks required deployment contract token: {token}"
+            )
+
+    if service in shared_helper_services:
+        if "scripts/release/deploy-single-service-preserve-runtime.sh" not in text:
+            raise SystemExit(
+                f"ERROR: {path.name} must use the shared runtime-preserving deployment helper"
+            )
+    else:
+        catalog_required = (
+            "Runtime environment preserved: YES",
+            "secret_metadata_hash",
+            "environment_hash",
+            "--image",
+            "/actuator/health/readiness",
+        )
+        for token in catalog_required:
+            if token not in text:
+                raise SystemExit(
+                    f"ERROR: {path.name} lacks Catalog runtime-preservation token: {token}"
+                )
+
+    for pattern in forbidden_pipeline_patterns:
+        if re.search(pattern, text):
+            raise SystemExit(
+                f"ERROR: {path.name} contains forbidden routine-deployment mutation: {pattern}"
+            )
+
+    if credential_macro_pattern.search(text):
+        raise SystemExit(
+            f"ERROR: {path.name} consumes a credential-value pipeline macro; "
+            "routine deployments must reuse existing Key Vault-backed runtime state"
+        )
+
     if "-DskipTests" in text or "maven.test.skip" in text:
         raise SystemExit(f"ERROR: {path.name} skips tests")
-    if re.search(r"SPRING_DATASOURCE_PASSWORD=['\"]?\$\(", text):
-        raise SystemExit(f"ERROR: {path.name} passes the database password as plaintext environment data")
-    if re.search(r"CRAVES_JWT_(?:VERIFICATION|PRIVATE)_KEY_PEM_BASE64=['\"]?\$\(", text):
-        raise SystemExit(f"ERROR: {path.name} passes JWT key material as plaintext environment data")
-    if "--no-wait" not in text:
-        raise SystemExit(f"ERROR: {path.name} does not use an explicit asynchronous revision followed by polling")
-    if service == "integration" and "CRAVES_DELIVERY_PROVIDER_EXECUTION_ENABLED" in text:
-        raise SystemExit(
-            "ERROR: Integration pipeline contains obsolete CRAVES_DELIVERY_PROVIDER_EXECUTION_ENABLED; "
-            "use the real delivery and Borzo controls instead"
-        )
+
     print(f"DEPLOYMENT_CONTRACT_OK {service}={path.name}")
 
-print("SUCCESS: All seven service deployment pipelines enforce tests, secret references, fail-closed flags and healthy revision evidence.")
+helper_text = helper.read_text(encoding="utf-8")
+helper_required = (
+    "runtime_template_hash",
+    "configuration_hash",
+    "identity_hash",
+    "secret_metadata_hash",
+    "verify_active_secret_refs_are_key_vault_backed",
+    "az containerapp update",
+    "--image",
+    "rollback()",
+    "/actuator/health/liveness",
+    "/actuator/health/readiness",
+    "Credential values read:     NO",
+    "Credential values changed:  NO",
+)
+for token in helper_required:
+    if token not in helper_text:
+        raise SystemExit(
+            f"ERROR: runtime-preserving deployment helper lacks required token: {token}"
+        )
+
+for pattern in forbidden_pipeline_patterns[:3]:
+    if re.search(pattern, helper_text):
+        raise SystemExit(
+            f"ERROR: runtime-preserving helper contains forbidden runtime/secret mutation: {pattern}"
+        )
+
+if "-DskipTests" in helper_text or "maven.test.skip" in helper_text:
+    raise SystemExit("ERROR: runtime-preserving helper unexpectedly contains test-skip controls")
+
+print(
+    "SUCCESS: All seven service pipelines build/test immutable images and preserve "
+    "the existing Key Vault-backed runtime configuration during routine deployment."
+)
 PY

@@ -36,14 +36,31 @@ steps:
 
   - script: |
       set -euo pipefail
+
       grep -F 'enabled: ${CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED:false}' \
         services/order-service/src/main/resources/application.yml
-      grep -F 'CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=false' \
-        azure-pipelines-order-service.yml
-      grep -F 'CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=false' \
-        azure-pipelines-integration-service.yml
-      grep -F 'BORZO_API_ENABLED=false' \
-        azure-pipelines-integration-service.yml
+
+      grep -F 'status-publisher-enabled: ${CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED:false}' \
+        services/integration-service/src/main/resources/application.yml
+
+      grep -F 'enabled: ${BORZO_API_ENABLED:false}' \
+        services/integration-service/src/main/resources/application.yml
+
       grep -F 'does not replace the commercial order status' \
         services/order-service/src/main/resources/db/migration/V9__delivery_status_consumer.sql
-    displayName: Verify fail-closed delivery controls
+
+      grep -F 'scripts/release/deploy-single-service-preserve-runtime.sh' \
+        azure-pipelines-order-service.yml
+
+      grep -F 'scripts/release/deploy-single-service-preserve-runtime.sh' \
+        azure-pipelines-integration-service.yml
+
+      if grep -En -- '--set-env-vars|--replace-env-vars|containerapp secret set' \
+        azure-pipelines-order-service.yml \
+        azure-pipelines-integration-service.yml; then
+        echo 'ERROR: Routine Order/Integration deployment must preserve runtime configuration and Key Vault bindings.' >&2
+        exit 1
+      fi
+
+      echo 'SUCCESS: Delivery status source defaults remain fail-closed and routine deployments preserve the live runtime state.'
+    displayName: Verify fail-closed delivery controls and runtime-preserving deployment contract

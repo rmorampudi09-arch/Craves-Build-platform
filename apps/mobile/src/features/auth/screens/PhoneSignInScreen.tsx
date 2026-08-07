@@ -14,11 +14,12 @@ import {RoleSelector} from '../components/RoleSelector';
 import {SecurityNote} from '../components/SecurityNote';
 import {
   createPhoneRequestGate,
+  createPhoneSignInSubmission,
   DEFAULT_PHONE_COUNTRY,
+  getPhoneSignInCopy,
   getPhoneValidationError,
   isSupportedPhoneValid,
   sanitizeNationalPhone,
-  toSupportedPhoneE164,
 } from '../domain/phoneSignInPolicy';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 
@@ -32,6 +33,7 @@ export function PhoneSignInScreen({navigation, route}: Props) {
   const requestGate = useRef(createPhoneRequestGate());
   const phoneValid = isSupportedPhoneValid(phone);
   const validationError = getPhoneValidationError(phone);
+  const copy = getPhoneSignInCopy(role);
 
   const submit = async () => {
     if (!phoneValid || busy || !requestGate.current.tryAcquire()) {
@@ -40,15 +42,11 @@ export function PhoneSignInScreen({navigation, route}: Props) {
 
     setBusy(true);
     setRequestError(null);
-    const submissionRole = role;
-    const e164 = toSupportedPhoneE164(phone);
+    const submission = createPhoneSignInSubmission(role, phone);
 
     try {
-      await authService.beginPhone(submissionRole, e164);
-      navigation.navigate('OtpVerification', {
-        role: submissionRole,
-        phone: e164,
-      });
+      await authService.beginPhone(submission.role, submission.phone);
+      navigation.navigate('OtpVerification', submission);
     } catch (error) {
       setRequestError(toAppApiError(error).message);
     } finally {
@@ -70,9 +68,7 @@ export function PhoneSignInScreen({navigation, route}: Props) {
       <RoleSelector value={role} onChange={selectRole} disabled={busy} />
       <AuthCard>
         <Text style={styles.title}>Verify your phone number</Text>
-        <Text style={styles.desc}>
-          We use Firebase phone verification to keep your Craves account secure.
-        </Text>
+        <Text style={styles.desc}>{copy.description}</Text>
         <InputField
           value={phone}
           onChangeText={updatePhone}
@@ -98,7 +94,7 @@ export function PhoneSignInScreen({navigation, route}: Props) {
           label="Continue"
           loading={busy}
           disabled={!phoneValid || busy}
-          accessibilityHint="Requests a verification code for this phone number"
+          accessibilityHint={copy.continueAccessibilityHint}
           onPress={submit}
         />
         <PrimaryButton

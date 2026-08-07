@@ -44,21 +44,33 @@ test("buttons use white surfaces without logo-colored borders and keep the reque
   assert.match(theme, /font-weight:\s*700\s*!important/);
 });
 
-test("landing hero uses the supplied chef artwork on a white surface with logo-red ghost word", () => {
-  assert.match(hero, /craves-chef-hero-reference\.jpg/);
-  assert.match(hero, /bg-white text-black/);
-  assert.match(hero, /rgba\(246, 46, 24, 0\.08\)/);
+test("landing hero uses the approved clean no-photo design with logo-red ghost word", () => {
+  assert.match(hero, /bg-white text-\[#111111\]/);
+  assert.match(hero, /Good food\./);
+  assert.match(hero, /Real impact\./);
+  assert.match(hero, /text-\[#F62E18\]\/\[0\.04\]/);
   assert.match(hero, /<CravesLogo size="md" priority \/>/);
-  assert.doesNotMatch(hero, /min-h-\[46rem\].*bg-\[#F62E18\].*text-white/);
+  assert.match(hero, /Made with love/);
+  assert.match(hero, /From chef to door/);
+  assert.match(hero, /Home cooked happiness/);
+  assert.doesNotMatch(
+    hero,
+    /craves-chef-hero-reference\.jpg|<img|backgroundImage:/,
+  );
 });
 
-test("public landing surface and footer reference stay white without replacing the canonical logo", () => {
+test("public landing stays white and photo-free while preserving canonical logo and wired flows", () => {
   assert.match(landing, /min-h-screen bg-white text-ink/);
   assert.match(landing, /items-center justify-center bg-white px-4/);
-  assert.match(howItWorks, /section className="bg-white py-20"/);
-  assert.match(footer, /craves-footer-reference\.jpg/);
+  assert.match(howItWorks, /bg-white pb-28 pt-20/);
+  assert.doesNotMatch(howItWorks, /<img/);
   assert.match(footer, /<CravesLogo size="lg" \/>/);
-  assert.match(footer, /bg-white\/75/);
+  assert.match(footer, /bg-\[#111111\] text-white/);
+  assert.doesNotMatch(footer, /craves-footer-reference\.jpg|<img/);
+  assert.match(landing, /<AuthModal/);
+  assert.match(landing, /<LocationModal/);
+  assert.match(landing, /<CommunityImpactSection \/>/);
+  assert.match(landing, /<AppDownloadSection \/>/);
   assert.doesNotMatch(landing, /min-h-screen bg-cream text-ink/);
 });
 

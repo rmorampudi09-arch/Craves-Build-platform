@@ -1,5 +1,8 @@
 import {AppApiError} from '../../../core/http/apiError';
-import {mapFirebaseAuthError} from './firebaseAuthError';
+import {
+  mapFirebaseAuthError,
+  mapPasswordRecoveryFirebaseError,
+} from './firebaseAuthError';
 
 describe('Firebase auth error mapping', () => {
   it('maps invalid verification codes without exposing provider text', () => {
@@ -34,6 +37,22 @@ describe('Firebase auth error mapping', () => {
     expect(mapFirebaseAuthError({code: 'auth/user-not-found'})).toMatchObject({
       code: 'INVALID_CREDENTIALS',
       message: 'The email or password is incorrect.',
+    });
+  });
+
+  it('turns account-specific password recovery failures into neutral success', () => {
+    expect(mapPasswordRecoveryFirebaseError({code: 'auth/user-not-found'})).toBeNull();
+    expect(mapPasswordRecoveryFirebaseError({code: 'auth/user-disabled'})).toBeNull();
+  });
+
+  it('keeps recovery operational failures generic and non-enumerating', () => {
+    expect(mapPasswordRecoveryFirebaseError({code: 'auth/too-many-requests'})).toMatchObject({
+      code: 'PASSWORD_RECOVERY_RATE_LIMITED',
+      retriable: true,
+    });
+    expect(mapPasswordRecoveryFirebaseError({code: 'auth/internal-error'})).toMatchObject({
+      code: 'PASSWORD_RECOVERY_FAILED',
+      message: 'We could not process password recovery right now. Please try again.',
     });
   });
 

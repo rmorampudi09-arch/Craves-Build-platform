@@ -30,6 +30,33 @@ export interface ApiErrorResponse {
 }
 
 export type ChefApplicationStatus = 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
+export type CustomerOnboardingStatus = 'PROFILE_REQUIRED' | 'READY';
+export type ChefOnboardingStatus = Exclude<ChefApplicationStatus, 'APPROVED'>;
+
+/**
+ * P21 authoritative account result. `requestedRole` remains user intent only.
+ * `authorizedRole` is derived from backend identity roles and must be the source
+ * for any eventual Customer/Chef product-root authorization decision.
+ */
+export type AccountResolution =
+  | {
+      flow: 'CUSTOMER';
+      requestedRole: 'CUSTOMER';
+      authorizedRole: 'CUSTOMER';
+      onboardingStatus: CustomerOnboardingStatus;
+    }
+  | {
+      flow: 'CHEF_ONBOARDING';
+      requestedRole: 'CHEF';
+      authorizedRole: 'CUSTOMER';
+      onboardingStatus: ChefOnboardingStatus;
+    }
+  | {
+      flow: 'CHEF';
+      requestedRole: 'CHEF';
+      authorizedRole: 'CHEF';
+      onboardingStatus: 'APPROVED';
+    };
 
 export interface KycDocument {
   id: string;

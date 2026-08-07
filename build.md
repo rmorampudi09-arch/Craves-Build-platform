@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P18 each have dedicated evidence under `docs/mobile-ui-rebuild/`.
+**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P19 each have dedicated evidence under `docs/mobile-ui-rebuild/`.
 
 ---
 
@@ -39,19 +39,21 @@
 - **P16 — Chef Email/Password Sign-In: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
 - **P17 — OTP Verification, Resend, Expiry, Rate Limit: DONE** at implementation level.
 - **P18 — Password Recovery Flow: DONE** at implementation level.
+- **P19 — Firebase → CRAVES Session Exchange: DONE** at implementation/static-contract level.
 
-P18 completion evidence:
+P19 completion evidence:
 
-- Validated P18 implementation commit: `e8c7f280ab68801b3a420ff93b7c07b7e15cb1ce`.
-- Evidence commit: `fcca218bc4224e55f4318715f70f6e141bee1d7e`.
-- Evidence: `docs/mobile-ui-rebuild/P18_PASSWORD_RECOVERY_FLOW.md`.
-- CI run: `31217157970` — **SUCCESS**.
+- Started from commit: `6d70d855b8e62f0d416f8da94ba468d2135e99bf`.
+- Validated implementation commit: `0005a7751998ec8626f55bfcd4240aacb4c5e4be`.
+- Evidence commit: `26c229026ce4c0918e8144c0c60399e22d34fc2d`.
+- Evidence: `docs/mobile-ui-rebuild/P19_FIREBASE_CRAVES_SESSION_EXCHANGE.md`.
+- CI run: `31218027179` — **SUCCESS**.
 
-**Next phase in sequence:** **P19 — Firebase -> CRAVES Exchange**.
+**Next phase in sequence:** **P20 — Session Restore and Silent Refresh**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop and wait for the user to explicitly start/continue P19. Do not pre-implement P19.
+**Required action:** Stop. Do not pre-implement P20 until the user explicitly authorizes the next phase.
 
 ---
 
@@ -61,19 +63,19 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31217157970`
-- Head SHA: `e8c7f280ab68801b3a420ff93b7c07b7e15cb1ce`
-- Phase: **P18 — Password Recovery Flow**
+- GitHub Actions run ID: `31218027179`
+- Head SHA: `0005a7751998ec8626f55bfcd4240aacb4c5e4be`
+- Phase: **P19 — Firebase → CRAVES Session Exchange**
 - Conclusion: **SUCCESS**
 
 Successful checks:
 
 1. checkout `mobile-ui-rebuild-from-scratch`,
-2. Node setup,
+2. Node 22.13 setup,
 3. `npm ci`,
 4. strict TypeScript (`tsc --noEmit`),
 5. ESLint with zero warnings,
-6. Jest including focused P18 recovery-policy/Firebase error-mapping tests and prior auth regressions,
+6. Jest including focused P19 exchange/fail-closed tests and prior auth regressions,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
 
@@ -81,110 +83,141 @@ This workflow intentionally does **not** perform Java/Gradle/APK packaging. That
 
 ---
 
-## 3. P18 Accepted Password-Recovery Boundary
+## 3. P19 Accepted Firebase → CRAVES Exchange Boundary
 
-P18 completes the existing typed forgot-password flow without creating another authentication architecture or inventing a CRAVES/APIM password-recovery route.
+P19 accepts one shared CRAVES session-exchange path after Firebase authentication:
 
-Key P18 files:
+`Firebase OTP/email auth` → fresh Firebase ID token → `authService` → `authApi.exchangeFirebaseToken(...)` → `POST /api/v1/auth/firebase/exchange` through the public shared client → `sessionManager.acceptTokenPair(...)` → authenticated identity returned to the existing screen/store boundary.
 
-- `apps/mobile/src/features/auth/screens/ForgotPasswordScreen.tsx`
-- `apps/mobile/src/features/auth/screens/PasswordResetSentScreen.tsx`
-- `apps/mobile/src/features/auth/domain/passwordRecoveryPolicy.ts`
-- `apps/mobile/src/features/auth/domain/passwordRecoveryPolicy.test.ts`
-- `apps/mobile/src/features/auth/firebase/firebaseAuthError.ts`
-- `apps/mobile/src/features/auth/firebase/firebaseAuthError.test.ts`
-- `apps/mobile/src/features/auth/state/authService.ts`
+### Exact P19 contract
 
-Accepted P18 behavior:
+Method/path:
 
-- Recovery email is validated before request and normalized by trimming/lower-casing.
-- Invalid-email feedback is field-specific and submission remains disabled while invalid.
-- Busy state disables the input/action and a synchronous request gate prevents same-tick duplicate reset requests.
-- Customer/Chef role context is preserved through forgot-password submission, Reset Sent state, and return to email login.
-- React Native Firebase `sendPasswordResetEmail` remains the recovery provider.
-- Firebase account-specific outcomes such as user-not-found and disabled account resolve through the same neutral sent state as an accepted reset request.
-- The Reset Sent copy does not claim that an account exists; it says only that if a Craves account exists, a secure reset link will be sent.
-- Network, throttling, and provider/internal failures use generic public recovery messages and do not expose raw provider text.
-- Successful submission replaces the forgot-password route, avoiding accidental resubmission through normal back behavior.
-- Back-to-login resets the auth stack to `RoleSelection -> EmailSignIn` with role and normalized email preserved, avoiding duplicate login-route stacking.
-- No password, reset credential, or provider-internal detail is logged or persisted by P18.
+- `POST /api/v1/auth/firebase/exchange`
 
-### P18 authentication/API boundary
+Request model:
 
-P18 adds no APIM endpoint and changes no backend/APIM/infrastructure source.
+- `FirebaseExchangeRequest`
+- JSON field: `firebaseIdToken`
 
-The accepted recovery path is:
+Success model:
 
-`EmailSignInScreen` -> typed `ForgotPassword {role, email?}` -> `authService.sendPasswordReset(normalizedEmail)` -> React Native Firebase `sendPasswordResetEmail` -> neutral typed `PasswordResetSent {role, email}` -> controlled return to `EmailSignIn`.
+- `AuthTokenResponse`
+- `tokenType`
+- `accessToken`
+- `expiresIn`
+- `refreshToken`
+- `refreshTokenExpiresAt`
+- `identity: IdentityResponse`
 
-P18 does **not** claim P19 acceptance or runtime verification of `POST /api/v1/auth/firebase/exchange`; P19 remains the owning phase for that exact boundary.
+Current authoritative static sources:
 
-Visual/device note: P18 retains the accepted auth composition while completing recovery behavior/accessibility. Physical-device visual certification remains a later QA gate.
+- `openapi/auth-service-v1.yaml`
+- `services/auth-service/src/main/java/in/craves/auth/web/AuthController.java`
+- `services/auth-service/src/main/java/in/craves/auth/api/FirebaseExchangeRequest.java`
+- `services/auth-service/src/main/java/in/craves/auth/api/AuthTokenResponse.java`
+- `services/auth-service/src/main/java/in/craves/auth/api/IdentityResponse.java`
+- `services/auth-service/src/main/java/in/craves/auth/service/AuthService.java`
+- `docs/CRV-AUTH-001-auth-service-LLD.md`
+
+The P19-specific re-audit found that the current branch now contains matching OpenAPI + Spring Auth Service implementation for this exact route. Therefore this **one operation** is accepted as **VERIFIED at current static repository contract/implementation level**, superseding its older P02 `CONTRACT_ONLY` classification for P19 purposes. This does **not** claim a live APIM/device exchange call.
+
+### Correlation, timeout, and error handling
+
+- Exchange uses `publicApiClient`; it does not require a pre-existing CRAVES bearer token.
+- Request timeout is bounded at 10,000 ms.
+- Shared request metadata attaches `X-Correlation-ID`.
+- Shared transport normalizes failures to `AppApiError` while retaining safe backend code/status/correlation evidence.
+- Existing screen/store authentication dispatch occurs only after CRAVES exchange and secure token acceptance both succeed.
+
+### Fail-closed behavior completed by P19
+
+Before P19, a failure after Firebase authentication could leave Firebase signed in even though CRAVES session exchange or token persistence had failed.
+
+P19 changes the shared `authService` exchange boundary so that if exchange or secure token-pair acceptance fails:
+
+- local CRAVES credentials are cleared best-effort,
+- Firebase authentication state is signed out best-effort,
+- cleanup cannot mask the original operation error,
+- no authenticated Redux state is published,
+- stale/partial credentials are not treated as a successful session.
+
+### P10 token security preserved
+
+- Access token remains process-memory only through `tokenMemory`.
+- Refresh credential remains platform-secure only through `refreshTokenStore`.
+- Refresh credential is persisted before the access token is exposed.
+- Secure-store failure fails closed.
+
+No tokens were moved to component state, AsyncStorage, plain persistence, logs, or screen parameters.
 
 ---
 
-## 4. Current Architecture Ownership After P18
+## 4. P19 Changed Files
 
-### Navigation
+Implementation commit `0005a7751998ec8626f55bfcd4240aacb4c5e4be` changes only:
 
-- Application `NavigationContainer`: `app/navigation/AppNavigator.tsx` only.
-- Typed route/domain definitions: `app/navigation/types.ts`.
-- `ForgotPassword` carries `{role, email?}` and `PasswordResetSent` carries `{role, email}`.
-- Bottom-nav/View-Cart/immersive policy: `app/navigation/navigationPolicy.ts`.
-- Fail-closed anonymous deep-link validation: `app/navigation/deepLinkPolicy.ts`.
+- `apps/mobile/src/features/auth/state/authService.ts`
+- `apps/mobile/src/features/auth/state/authService.test.ts`
+- `apps/mobile/src/features/auth/api/authApi.test.ts`
 
-### Authentication role and sign-in state
+Evidence:
 
-- Shared current-attempt role: `features/auth/state/authSlice.ts` (`auth.selectedRole`).
-- Auth-route role synchronization: `features/auth/hooks/useAuthAttemptRole.ts`.
-- Customer/Chef phone, email, OTP, and recovery screens share one authentication engine; selected role is not treated as authoritative backend authorization.
+- `docs/mobile-ui-rebuild/P19_FIREBASE_CRAVES_SESSION_EXCHANGE.md`
 
-### Auth input/recovery policy
+No backend, OpenAPI, APIM, infrastructure, Android native build configuration, product-screen visual, or P20 lifecycle source was changed by P19.
 
-- Phone sanitization/validation/E.164 normalization and request gate: `features/auth/domain/phoneSignInPolicy.ts`.
-- Email sign-in normalization/field validation/request gate: `features/auth/domain/emailSignInPolicy.ts`.
-- OTP validation/resend/recovery policy: `features/auth/domain/otpVerificationPolicy.ts`.
-- Password recovery normalization/neutral copy/request gate/role context: `features/auth/domain/passwordRecoveryPolicy.ts`.
-- Native Firebase operations: `features/auth/firebase/firebaseAuth.ts`.
-- Firebase public error normalization, including non-enumerating recovery handling: `features/auth/firebase/firebaseAuthError.ts`.
-- Shared Firebase/CRAVES orchestration: `features/auth/state/authService.ts`.
+---
+
+## 5. Current Architecture Ownership After P19
+
+### Authentication inputs and provider boundary
+
+- Phone OTP initiation/confirmation: `features/auth/firebase/firebaseAuth.ts`.
+- Email/password provider sign-in: same Firebase wrapper.
+- Firebase public error normalization: `features/auth/firebase/firebaseAuthError.ts`.
+- Shared Firebase → CRAVES orchestration: `features/auth/state/authService.ts`.
+- Exact CRAVES auth HTTP wrapper: `features/auth/api/authApi.ts`.
 
 ### Session/security
 
 - Access token: process memory only through `core/security/tokenMemory.ts`.
 - Refresh credential: platform-secure storage only through `core/security/refreshTokenStore.ts`.
 - Token acceptance/restore/refresh/local-clear owner: `features/auth/api/sessionManager.ts`.
-- Authenticated bearer injection and one-shot 401 replay: accepted P09 `core/http/apiClient.ts` boundary.
+- Authenticated bearer injection/401 behavior: accepted P09 HTTP client foundation.
 
-### Later-phase boundaries not pulled into P18
+### Navigation/store publication
 
-- P19 owns Firebase-to-CRAVES exchange acceptance against the exact approved contract.
-- P20 owns startup restore/silent-refresh lifecycle UX.
-- P21 owns authoritative backend identity/role/onboarding resolution.
-- P22/P23 own customer completion and Chef application/status flows.
-- P24 owns full logout/revoke plus private cache/store/role cleanup orchestration.
-- P25 onward owns product-shell and marketplace functionality.
+- OTP and email screens call the shared auth service.
+- `authActions.authenticated(identity)` is dispatched only after `authService` returns a successfully exchanged and securely accepted CRAVES token pair.
+- P19 does not alter startup root selection, role/onboarding authority, or product navigation.
 
----
+### Later-phase boundaries not pulled into P19
 
-## 5. Current Auth/API Contract Status
-
-Current coded paths remain governed by P02, including:
-
-- `POST /api/v1/auth/firebase/exchange` — `CONTRACT_ONLY`
-- `POST /api/v1/auth/refresh` — `CONTRACT_ONLY`
-- `POST /api/v1/auth/logout` — `CONTRACT_ONLY`
-- `GET /api/v1/auth/me` — `BLOCKED` under accepted static repository evidence
-- `GET /api/v1/customer/profile` — `BLOCKED`
-- `PUT /api/v1/customer/profile` — `BLOCKED`
-- `GET /api/v1/chef/application` — `BLOCKED`
-- `POST /api/v1/chef/application` — `BLOCKED`
-
-P18 does not invent, alter, or claim runtime verification of these routes or payloads.
+- **P20** owns startup session restore/silent refresh lifecycle behavior and wrong-root flash prevention.
+- **P21** owns authoritative identity/role/onboarding resolution.
+- **P22/P23** own customer completion and Chef application/status flows.
+- **P24** owns complete logout/revoke/private-cache/role cleanup orchestration.
+- **P25 onward** owns customer/chef product shells and marketplace functionality.
 
 ---
 
-## 6. Mini-Phase Status Mapping
+## 6. Current Auth/API Contract Status
+
+P19 changes only the current acceptance status of the exchange operation after re-auditing current branch evidence:
+
+- `POST /api/v1/auth/firebase/exchange` — **VERIFIED at static repository contract/implementation level by P19; live APIM runtime not claimed**.
+- `POST /api/v1/auth/refresh` — remains outside P19 acceptance; P20 owns restore/refresh lifecycle acceptance.
+- `POST /api/v1/auth/logout` — remains outside P19 completion; P24 owns complete logout/revoke cleanup acceptance.
+- `GET /api/v1/auth/me` — not accepted by P19; P21 owns identity/role resolution.
+- customer profile operations — not accepted by P19; P22 owns profile completion.
+- chef application operations — not accepted by P19; P23 owns application/status behavior.
+
+Historical P02 evidence remains preserved and should not be rewritten as though its earlier repository snapshot contained the later/current Auth Service evidence.
+
+---
+
+## 7. Mini-Phase Status Mapping
 
 | Phase | Status | Evidence/Reason |
 |---|---|---|
@@ -196,31 +229,33 @@ P18 does not invent, alter, or claim runtime verification of these routes or pay
 | P14 Chef Phone Sign-In | **DONE** | Chef-specific role/copy/submission behavior accepted through shared phone engine; CI `31212292710`. |
 | P15 Customer Email Sign-In | **DONE** | Customer credential UI/validation/request behavior accepted; CI `31213256378`. |
 | P16 Chef Email Sign-In | **DONE** | Chef role preservation through shared email engine accepted; CI `31214293358`. |
-| P17 OTP | **DONE** | OTP input, duplicate guards, resend deadline, invalid/expired/rate-limit/network recovery, accessibility and focused tests accepted; CI `31215342272`. |
-| P18 Password Recovery | **DONE** | Neutral recovery outcome, account-enumeration protection, role continuity, validation/loading/error handling, deterministic navigation, and focused tests accepted; CI `31217157970`. |
-| P19 Firebase -> CRAVES Exchange | PARTIAL / existing baseline | Mobile code exists; exact route remains `CONTRACT_ONLY` under P02. |
-| P20 Session Restore/Refresh | PARTIAL / foundation exists | P10/P11 foundations exist; lifecycle/root UX acceptance pending. |
-| P21 Identity/Role Resolution | PARTIAL / existing baseline | `/me` code exists; exact contract remains `BLOCKED` under P02. |
-| P22 Customer Registration | PARTIAL / existing baseline | Customer profile contracts remain `BLOCKED`. |
-| P23 Chef Application Status | PARTIAL / existing baseline | Chef application contracts remain `BLOCKED`. |
-| P24 Logout Cleanup | PARTIAL / foundation exists | Full private cache/store/role cleanup acceptance remains later. |
+| P17 OTP | **DONE** | OTP verification/resend/expiry/rate-limit behavior accepted; CI `31215342272`. |
+| P18 Password Recovery | **DONE** | Neutral recovery and safe navigation accepted; CI `31217157970`. |
+| P19 Firebase → CRAVES Exchange | **DONE** | Exact current Auth Service exchange contract, P10 token acceptance, correlation/timeout/error path, and fail-closed partial-auth cleanup accepted; CI `31218027179`. |
+| P20 Session Restore/Refresh | PARTIAL / foundation exists | P10 session manager code exists; P20 lifecycle/root UX acceptance is not authorized yet. |
+| P21 Identity/Role Resolution | PARTIAL / existing baseline | Existing code may exist; P21 acceptance not authorized. |
+| P22 Customer Registration | PARTIAL / existing baseline | P22 acceptance not authorized. |
+| P23 Chef Application Status | PARTIAL / existing baseline | P23 acceptance not authorized. |
+| P24 Logout Cleanup | PARTIAL / foundation exists | Full cleanup acceptance remains later. |
 | P25 onward | NOT STARTED / not accepted | Product/customer/chef phases have not been accepted under this rebuild protocol unless a later record explicitly says otherwise. |
 
 ---
 
-## 7. Explicitly Not Complete After P18
+## 8. Explicitly Not Complete After P19
 
 Do not describe any of the following as complete:
 
-- runtime/backend/APIM resolution of P02 `CONTRACT_ONLY` and `BLOCKED` routes,
-- authoritative full APIM/OpenAPI restoration,
-- full P19/P20/P21/P22/P23/P24 auth/account lifecycle acceptance,
-- authoritative Chef approval/status resolution after credentials,
+- P20 startup restore/silent-refresh lifecycle UX,
+- P21 authoritative identity/role/onboarding resolution,
+- P22/P23 customer/chef onboarding completion,
+- P24 complete logout/revoke/private-cache cleanup,
+- live APIM/device runtime certification of the P19 exchange,
+- authoritative runtime resolution of unrelated P02 blocked/contract-only operations,
 - physical-device pixel-perfect certification of accepted auth references or the remaining reference set,
-- Customer product refs beyond the accepted auth phases,
-- Chef product refs beyond the accepted auth visual states,
-- Customer/chef bottom-tab product shells,
-- View Cart authoritative UI/cart synchronization,
+- Customer product refs beyond accepted auth phases,
+- Chef product refs beyond accepted auth phases,
+- customer/chef bottom-tab product shells,
+- authoritative View Cart/cart synchronization,
 - authenticated product/resource deep links and notification routing,
 - checkout/payment end-to-end flow,
 - full lifecycle/accessibility/performance/security audits,
@@ -229,7 +264,7 @@ Do not describe any of the following as complete:
 
 ---
 
-## 8. Phase Completion Recording Protocol
+## 9. Phase Completion Recording Protocol
 
 After every authorized phase, record:
 
@@ -252,7 +287,7 @@ Preserve useful prior history under `docs/mobile-ui-rebuild/` before compacting 
 
 ---
 
-## 9. Recent Phase History
+## 10. Recent Phase History
 
 ### P13 — Customer Phone Sign-In Visual + Interaction
 
@@ -295,20 +330,18 @@ Preserve useful prior history under `docs/mobile-ui-rebuild/` before compacting 
 - Validated implementation commit: `e8c7f280ab68801b3a420ff93b7c07b7e15cb1ce`.
 - Evidence commit: `fcca218bc4224e55f4318715f70f6e141bee1d7e`.
 - Evidence: `docs/mobile-ui-rebuild/P18_PASSWORD_RECOVERY_FLOW.md`.
-- Changed implementation files: `ForgotPasswordScreen.tsx`, `PasswordResetSentScreen.tsx`, `passwordRecoveryPolicy.ts`, `passwordRecoveryPolicy.test.ts`, `firebaseAuthError.ts`, `firebaseAuthError.test.ts`, `authService.ts`.
-- API/contracts used: existing React Native Firebase `sendPasswordResetEmail`; no new or changed APIM route.
-- Behavior completed: normalized/validated email recovery, duplicate-request protection, non-enumerating provider outcome mapping, neutral Reset Sent copy, role continuity, controlled back/login navigation, safe operational errors, and focused regression tests.
-- Tests/checks: GitHub Actions run `31217157970` — **SUCCESS**.
-- Visual QA: existing auth composition retained; physical-device visual certification deferred.
-- APK built: **No**, per implementation-phase policy.
-- Backend/APIM/infrastructure source changed: **No**.
-- Blockers: none to the bounded P18 implementation acceptance.
-- Next phase: **NONE AUTHORIZED — waiting for user**.
+- CI: `31217157970` — **SUCCESS**.
 
----
+### P19 — Firebase → CRAVES Session Exchange
 
-## 10. Current Next Step
-
-**Stop here.**
-
-P18 is complete at the authorized implementation boundary. **P19 — Firebase -> CRAVES Exchange** is next in `phases.md`, but it is **not authorized** by completion of P18. Begin P19 only after the user explicitly says to continue/start the next phase.
+- Status: **DONE** at implementation/static-contract level.
+- Started from: `6d70d855b8e62f0d416f8da94ba468d2135e99bf`.
+- Validated implementation commit: `0005a7751998ec8626f55bfcd4240aacb4c5e4be`.
+- Evidence commit: `26c229026ce4c0918e8144c0c60399e22d34fc2d`.
+- Evidence: `docs/mobile-ui-rebuild/P19_FIREBASE_CRAVES_SESSION_EXCHANGE.md`.
+- Changed implementation files: `authService.ts`, `authService.test.ts`, `authApi.test.ts`.
+- Contract accepted: `POST /api/v1/auth/firebase/exchange` with exact current `FirebaseExchangeRequest`, `AuthTokenResponse`, and `IdentityResponse` models.
+- Behavior completed: shared OTP/email Firebase-token exchange, public-client correlation/timeout/error path, P10 secure token acceptance, and fail-closed cleanup of Firebase + local CRAVES state on exchange/persistence failure.
+- CI: `31218027179` — **SUCCESS**.
+- Visual/runtime note: P19 is non-visual; live APIM/device exchange is not falsely claimed.
+- Next phase: **P20 — Session Restore and Silent Refresh — NONE AUTHORIZED**.

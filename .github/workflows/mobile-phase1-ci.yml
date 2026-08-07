@@ -1,6 +1,5 @@
 name: CRAVES Mobile Phase 1 CI
 
-# Explicit retrigger after Expo SDK 56 dependency alignment.
 on:
   push:
     branches:
@@ -71,7 +70,7 @@ jobs:
         working-directory: apps/mobile/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a,x86_64
           test -s app/build/outputs/apk/debug/app-debug.apk
 
       - name: Verify no backend source changes in Phase 1

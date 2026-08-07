@@ -1,4 +1,4 @@
-import type {Identity} from '../domain/types';
+import type {AccountResolution, Identity} from '../domain/types';
 import {authActions, authReducer} from './authSlice';
 
 const chefIdentity: Identity = {
@@ -9,15 +9,23 @@ const chefIdentity: Identity = {
   emailVerified: true,
   displayName: 'Chef',
   status: 'ACTIVE',
-  roles: ['CHEF'],
+  roles: ['CUSTOMER', 'CHEF'],
   lastLoginAt: null,
 };
 
-describe('auth role selection state', () => {
+const chefResolution: AccountResolution = {
+  flow: 'CHEF',
+  requestedRole: 'CHEF',
+  authorizedRole: 'CHEF',
+  onboardingStatus: 'APPROVED',
+};
+
+describe('auth role selection and account resolution state', () => {
   it('defaults a new anonymous auth attempt to Customer', () => {
     const state = authReducer(undefined, {type: '@@INIT'});
 
     expect(state.selectedRole).toBe('CUSTOMER');
+    expect(state.accountResolution).toBeNull();
   });
 
   it('updates the shared role immediately when the user selects Chef', () => {
@@ -27,7 +35,7 @@ describe('auth role selection state', () => {
     expect(state.selectedRole).toBe('CHEF');
   });
 
-  it('keeps the selected role through authentication so root routing uses the current attempt', () => {
+  it('keeps the selected role as intent through authentication without treating it as resolved authority', () => {
     const initial = authReducer(undefined, {type: '@@INIT'});
     const chefAttempt = authReducer(initial, authActions.roleSelected('CHEF'));
     const authenticated = authReducer(chefAttempt, authActions.authenticated(chefIdentity));
@@ -35,6 +43,30 @@ describe('auth role selection state', () => {
     expect(authenticated.selectedRole).toBe('CHEF');
     expect(authenticated.bootstrapStatus).toBe('authenticated');
     expect(authenticated.identity).toEqual(chefIdentity);
+    expect(authenticated.accountResolution).toBeNull();
+  });
+
+  it('stores the authoritative /me identity together with the resolved account flow', () => {
+    const initial = authReducer(undefined, {type: '@@INIT'});
+    const authenticated = authReducer(initial, authActions.authenticated(chefIdentity));
+    const resolved = authReducer(
+      authenticated,
+      authActions.accountResolved({identity: chefIdentity, resolution: chefResolution}),
+    );
+
+    expect(resolved.identity).toEqual(chefIdentity);
+    expect(resolved.accountResolution).toEqual(chefResolution);
+  });
+
+  it('clears a prior resolution when a new authentication result is accepted', () => {
+    const initial = authReducer(undefined, {type: '@@INIT'});
+    const resolved = authReducer(
+      initial,
+      authActions.accountResolved({identity: chefIdentity, resolution: chefResolution}),
+    );
+    const reauthenticated = authReducer(resolved, authActions.authenticated(chefIdentity));
+
+    expect(reauthenticated.accountResolution).toBeNull();
   });
 
   it('allows the current auth attempt to switch back to Customer', () => {
@@ -43,5 +75,19 @@ describe('auth role selection state', () => {
     const customerAttempt = authReducer(chefAttempt, authActions.roleSelected('CUSTOMER'));
 
     expect(customerAttempt.selectedRole).toBe('CUSTOMER');
+    expect(customerAttempt.accountResolution).toBeNull();
+  });
+
+  it('clears authoritative account state on sign out', () => {
+    const initial = authReducer(undefined, {type: '@@INIT'});
+    const resolved = authReducer(
+      initial,
+      authActions.accountResolved({identity: chefIdentity, resolution: chefResolution}),
+    );
+    const signedOut = authReducer(resolved, authActions.signedOut());
+
+    expect(signedOut.bootstrapStatus).toBe('anonymous');
+    expect(signedOut.identity).toBeNull();
+    expect(signedOut.accountResolution).toBeNull();
   });
 });

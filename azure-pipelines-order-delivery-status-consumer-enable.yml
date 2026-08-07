@@ -55,9 +55,8 @@ steps:
           exit 1
         }
 
-        if [[ "$FQNS" != "$NS.servicebus.windows.net" ]]; then
+        [[ "$FQNS" == "$NS.servicebus.windows.net" ]] || \
           fail "Fully-qualified namespace must be $NS.servicebus.windows.net"
-        fi
 
         echo '============================================================'
         echo '1. VERIFY ORDER / INTEGRATION SAFETY STATE'
@@ -77,18 +76,15 @@ steps:
 
         PRINCIPAL_ID=$(jq -r '.identity.principalId // ""' <<<"$BEFORE")
         PREVIOUS_LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$BEFORE")
-        PREVIOUS_READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$BEFORE")
-        PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")
-        PREVIOUS_IDENTITY=$(jq -S '.identity // {}' <<<"$BEFORE" | sha256sum | awk '{print $1}')
-        PREVIOUS_CONFIGURATION=$(jq -S '.properties.configuration // {}' <<<"$BEFORE" | sha256sum | awk '{print $1}')
-        PREVIOUS_TEMPLATE_NON_ENV=$(jq -S '(.properties.template // {}) | del(.containers[].env)' <<<"$BEFORE" | sha256sum | awk '{print $1}')
 
-        [[ -n "$PRINCIPAL_ID" ]] || fail 'Order Container App does not have a system-assigned managed identity.'
-        [[ -n "$PREVIOUS_LATEST" && -n "$PREVIOUS_READY" && -n "$PREVIOUS_IMAGE" ]] || fail 'Order Container App revision state is incomplete.'
+        [[ -n "$PRINCIPAL_ID" ]] || fail 'Order Container App has no system-assigned managed identity.'
+        [[ -n "$PREVIOUS_LATEST" ]] || fail 'Order Container App latest revision is missing.'
 
         integration_value() {
           local name="$1"
-          jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$INTEGRATION_BEFORE"
+          jq -r --arg name "$name" \
+            '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' \
+            <<<"$INTEGRATION_BEFORE"
         }
 
         require_false_or_empty() {
@@ -119,11 +115,14 @@ steps:
           --output json \
           --only-show-errors)
 
-        SECRET_META_HASH=$(jq -S '[.[] | {name, keyVaultUrl:(.keyVaultUrl // null), identity:(.identity // null)}] | sort_by(.name)' <<<"$SECRET_META" | sha256sum | awk '{print $1}')
+        SECRET_META_HASH=$(jq -S \
+          '[.[] | {name, keyVaultUrl:(.keyVaultUrl // null), identity:(.identity // null)}] | sort_by(.name)' \
+          <<<"$SECRET_META" | sha256sum | awk '{print $1}')
 
         while IFS= read -r REF; do
           [[ -n "$REF" ]] || continue
-          KV_URL=$(jq -r --arg ref "$REF" '[.[] | select(.name == $ref)][0].keyVaultUrl // ""' <<<"$SECRET_META")
+          KV_URL=$(jq -r --arg ref "$REF" \
+            '[.[] | select(.name == $ref)][0].keyVaultUrl // ""' <<<"$SECRET_META")
           [[ -n "$KV_URL" ]] || fail "Active Order secretRef '$REF' is not Key Vault-backed."
         done < <(jq -r '.properties.template.containers[].env[]? | .secretRef // empty' <<<"$BEFORE" | sort -u)
 
@@ -144,25 +143,36 @@ steps:
                   value: ($env.value // null),
                   secretRef: ($env.secretRef // null)
                 }
-            ]
-            | sort_by(.container, .name)
+            ] | sort_by(.container, .name)
           ' | sha256sum | awk '{print $1}'
         }
 
         UNRELATED_ENV_BEFORE=$(unrelated_env_hash <<<"$BEFORE")
+        IDENTITY_BEFORE=$(jq -S '.identity // {}' <<<"$BEFORE" | sha256sum | awk '{print $1}')
+        CONFIGURATION_BEFORE=$(jq -S '.properties.configuration // {}' <<<"$BEFORE" | sha256sum | awk '{print $1}')
 
         previous_value() {
           local name="$1"
-          jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // "__ABSENT__"' <<<"$BEFORE"
+          jq -r --arg name "$name" \
+            '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // "__ABSENT__"' \
+            <<<"$BEFORE"
         }
 
         previous_ref() {
           local name="$1"
-          jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$BEFORE"
+          jq -r --arg name "$name" \
+            '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' \
+            <<<"$BEFORE"
         }
 
-        for TARGET in CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED CRAVES_DELIVERY_STATUS_SUBSCRIPTION CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE CRAVES_DOMAIN_EVENTS_TOPIC_NAME; do
-          [[ -z "$(previous_ref "$TARGET")" ]] || fail "$TARGET unexpectedly uses secretRef; activation pipeline only supports non-secret control values."
+        for TARGET in \
+          CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED \
+          CRAVES_DELIVERY_STATUS_SUBSCRIPTION \
+          CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE \
+          CRAVES_DOMAIN_EVENTS_TOPIC_NAME
+        do
+          [[ -z "$(previous_ref "$TARGET")" ]] || \
+            fail "$TARGET unexpectedly uses secretRef."
         done
 
         PREV_ENABLED=$(previous_value CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED)
@@ -191,7 +201,7 @@ steps:
           --output none \
           --only-show-errors 2>/dev/null; then
 
-          echo 'Subscription is missing; creating it DISABLED until filter and RBAC checks pass.'
+          echo 'Subscription is missing; creating it Disabled until filter and RBAC checks pass.'
           az servicebus topic subscription create \
             --resource-group "$RG" \
             --namespace-name "$NS" \
@@ -224,9 +234,8 @@ steps:
           --output none \
           --only-show-errors 2>/dev/null; then
 
-          if [[ "$SUB_CREATED" != true ]]; then
-            fail "Existing subscription $SUB does not contain expected rule $RULE. Refusing to rewrite an unexpected existing subscription automatically."
-          fi
+          [[ "$SUB_CREATED" == true ]] || \
+            fail "Existing subscription $SUB lacks expected rule $RULE; refusing automatic rewrite."
 
           az servicebus topic subscription rule create \
             --resource-group "$RG" \
@@ -252,8 +261,8 @@ steps:
         RULE_TYPE=$(jq -r '.filterType // ""' <<<"$RULE_JSON")
         RULE_EXPRESSION=$(jq -r '.sqlFilter.sqlExpression // ""' <<<"$RULE_JSON")
 
-        [[ "$RULE_TYPE" == 'SqlFilter' ]] || fail "Unexpected filter type on $RULE: $RULE_TYPE"
-        [[ "$RULE_EXPRESSION" == "$EXPECTED_FILTER" ]] || fail "Unexpected SQL filter on $RULE: $RULE_EXPRESSION"
+        [[ "$RULE_TYPE" == 'SqlFilter' ]] || fail "Unexpected filter type: $RULE_TYPE"
+        [[ "$RULE_EXPRESSION" == "$EXPECTED_FILTER" ]] || fail "Unexpected SQL filter: $RULE_EXPRESSION"
 
         az servicebus topic subscription rule delete \
           --resource-group "$RG" \
@@ -273,7 +282,7 @@ steps:
           --output tsv \
           --only-show-errors)
 
-        [[ "$RULE_COUNT" == '1' ]] || fail "Expected exactly one filter rule on $SUB, found $RULE_COUNT."
+        [[ "$RULE_COUNT" == '1' ]] || fail "Expected exactly one filter rule, found $RULE_COUNT."
 
         echo "Subscription: $SUB"
         echo "Filter rule:  $RULE"
@@ -293,33 +302,33 @@ steps:
           --output tsv \
           --only-show-errors)
 
+        # Azure CLI does not allow --scope and --all together.  A scoped query
+        # with --include-inherited returns direct assignments at this scope plus
+        # assignments inherited from parent scopes.
         RECEIVER_COUNT=$(az role assignment list \
           --assignee-object-id "$PRINCIPAL_ID" \
           --scope "$SUBSCRIPTION_SCOPE" \
           --role 'Azure Service Bus Data Receiver' \
           --include-inherited \
-          --all \
           --fill-principal-name false \
           --query 'length(@)' \
           --output tsv \
           --only-show-errors)
 
         if [[ "${RECEIVER_COUNT:-0}" == '0' ]]; then
-          if [[ "$SUB_CREATED" == true ]]; then
-            az servicebus topic subscription update \
-              --resource-group "$RG" \
-              --namespace-name "$NS" \
-              --topic-name "$TOPIC" \
-              --name "$SUB" \
-              --status Disabled \
-              --output none \
-              --only-show-errors || true
-          fi
+          az servicebus topic subscription update \
+            --resource-group "$RG" \
+            --namespace-name "$NS" \
+            --topic-name "$TOPIC" \
+            --name "$SUB" \
+            --status Disabled \
+            --output none \
+            --only-show-errors || true
 
           echo 'ERROR: Order managed identity is missing Azure Service Bus Data Receiver.' >&2
           echo "PRINCIPAL_ID=$PRINCIPAL_ID"
           echo "SUBSCRIPTION_SCOPE=$SUBSCRIPTION_SCOPE"
-          echo 'The filtered subscription has been left disabled. Grant the role at this subscription or a parent scope, then rerun.' >&2
+          echo 'Subscription remains Disabled. Grant the role at this scope or a parent scope, then rerun.' >&2
           exit 2
         fi
 
@@ -330,17 +339,8 @@ steps:
         echo '5. ACTIVATE SUBSCRIPTION AND ORDER CONSUMER'
         echo '============================================================'
 
-        az servicebus topic subscription update \
-          --resource-group "$RG" \
-          --namespace-name "$NS" \
-          --topic-name "$TOPIC" \
-          --name "$SUB" \
-          --status Active \
-          --output none \
-          --only-show-errors
-
         rollback_order_env() {
-          echo 'Rolling back the four delivery-status consumer environment controls.' >&2
+          echo 'Rolling back delivery-status consumer controls.' >&2
           local set_args=()
           local remove_args=()
 
@@ -377,26 +377,24 @@ steps:
               --only-show-errors || true
           fi
 
-          if [[ "$SUB_CREATED" == true ]]; then
-            az servicebus topic subscription update \
-              --resource-group "$RG" \
-              --namespace-name "$NS" \
-              --topic-name "$TOPIC" \
-              --name "$SUB" \
-              --status Disabled \
-              --output none \
-              --only-show-errors || true
-          else
-            az servicebus topic subscription update \
-              --resource-group "$RG" \
-              --namespace-name "$NS" \
-              --topic-name "$TOPIC" \
-              --name "$SUB" \
-              --status "$PREVIOUS_SUB_STATUS" \
-              --output none \
-              --only-show-errors || true
-          fi
+          az servicebus topic subscription update \
+            --resource-group "$RG" \
+            --namespace-name "$NS" \
+            --topic-name "$TOPIC" \
+            --name "$SUB" \
+            --status "$PREVIOUS_SUB_STATUS" \
+            --output none \
+            --only-show-errors || true
         }
+
+        az servicebus topic subscription update \
+          --resource-group "$RG" \
+          --namespace-name "$NS" \
+          --topic-name "$TOPIC" \
+          --name "$SUB" \
+          --status Active \
+          --output none \
+          --only-show-errors
 
         az containerapp update \
           --resource-group "$RG" \
@@ -426,9 +424,11 @@ steps:
           LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$FINAL")
           READY_REV=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$FINAL")
           RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$FINAL")
-          ENABLED=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED")][0].value // ""' <<<"$FINAL")
-          HEALTH=''
+          ENABLED=$(jq -r \
+            '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED")][0].value // ""' \
+            <<<"$FINAL")
 
+          HEALTH=''
           if [[ -n "$LATEST" ]]; then
             HEALTH=$(az containerapp revision show \
               --resource-group "$RG" \
@@ -464,52 +464,75 @@ steps:
 
         echo ''
         echo '============================================================'
-        echo '6. VERIFY TARGET SETTINGS AND UNRELATED RUNTIME PRESERVATION'
+        echo '6. VERIFY RUNTIME PRESERVATION AND HEALTH'
         echo '============================================================'
 
-        final_value() {
-          local name="$1"
-          jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$FINAL"
-        }
+        FINAL_ENABLED=$(jq -r \
+          '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED")][0].value // ""' \
+          <<<"$FINAL")
+        FINAL_SUB=$(jq -r \
+          '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_DELIVERY_STATUS_SUBSCRIPTION")][0].value // ""' \
+          <<<"$FINAL")
+        FINAL_FQNS=$(jq -r \
+          '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE")][0].value // ""' \
+          <<<"$FINAL")
+        FINAL_TOPIC=$(jq -r \
+          '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_DOMAIN_EVENTS_TOPIC_NAME")][0].value // ""' \
+          <<<"$FINAL")
 
-        FINAL_ENABLED=$(final_value CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED)
-        FINAL_SUB=$(final_value CRAVES_DELIVERY_STATUS_SUBSCRIPTION)
-        FINAL_FQNS=$(final_value CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE)
-        FINAL_TOPIC=$(final_value CRAVES_DOMAIN_EVENTS_TOPIC_NAME)
-
-        [[ "${FINAL_ENABLED,,}" == 'true' ]] || { rollback_order_env; fail 'Delivery status consumer is not enabled after rollout.'; }
-        [[ "$FINAL_SUB" == "$SUB" ]] || { rollback_order_env; fail 'Delivery status subscription binding changed unexpectedly.'; }
-        [[ "$FINAL_FQNS" == "$FQNS" ]] || { rollback_order_env; fail 'Service Bus namespace binding changed unexpectedly.'; }
-        [[ "$FINAL_TOPIC" == "$TOPIC" ]] || { rollback_order_env; fail 'Domain-events topic binding changed unexpectedly.'; }
+        [[ "${FINAL_ENABLED,,}" == 'true' ]] || { rollback_order_env; fail 'Consumer is not enabled.'; }
+        [[ "$FINAL_SUB" == "$SUB" ]] || { rollback_order_env; fail 'Subscription binding mismatch.'; }
+        [[ "$FINAL_FQNS" == "$FQNS" ]] || { rollback_order_env; fail 'Namespace binding mismatch.'; }
+        [[ "$FINAL_TOPIC" == "$TOPIC" ]] || { rollback_order_env; fail 'Topic binding mismatch.'; }
 
         UNRELATED_ENV_AFTER=$(unrelated_env_hash <<<"$FINAL")
-        FINAL_IDENTITY=$(jq -S '.identity // {}' <<<"$FINAL" | sha256sum | awk '{print $1}')
-        FINAL_CONFIGURATION=$(jq -S '.properties.configuration // {}' <<<"$FINAL" | sha256sum | awk '{print $1}')
-        FINAL_TEMPLATE_NON_ENV=$(jq -S '(.properties.template // {}) | del(.containers[].env)' <<<"$FINAL" | sha256sum | awk '{print $1}')
+        IDENTITY_AFTER=$(jq -S '.identity // {}' <<<"$FINAL" | sha256sum | awk '{print $1}')
+        CONFIGURATION_AFTER=$(jq -S '.properties.configuration // {}' <<<"$FINAL" | sha256sum | awk '{print $1}')
 
         FINAL_SECRET_META=$(az containerapp secret list \
           --resource-group "$RG" \
           --name "$APP" \
           --output json \
           --only-show-errors)
-        FINAL_SECRET_META_HASH=$(jq -S '[.[] | {name, keyVaultUrl:(.keyVaultUrl // null), identity:(.identity // null)}] | sort_by(.name)' <<<"$FINAL_SECRET_META" | sha256sum | awk '{print $1}')
+        FINAL_SECRET_META_HASH=$(jq -S \
+          '[.[] | {name, keyVaultUrl:(.keyVaultUrl // null), identity:(.identity // null)}] | sort_by(.name)' \
+          <<<"$FINAL_SECRET_META" | sha256sum | awk '{print $1}')
 
         if [[ "$UNRELATED_ENV_BEFORE" != "$UNRELATED_ENV_AFTER" \
-              || "$PREVIOUS_IDENTITY" != "$FINAL_IDENTITY" \
-              || "$PREVIOUS_CONFIGURATION" != "$FINAL_CONFIGURATION" \
-              || "$PREVIOUS_TEMPLATE_NON_ENV" != "$FINAL_TEMPLATE_NON_ENV" \
+              || "$IDENTITY_BEFORE" != "$IDENTITY_AFTER" \
+              || "$CONFIGURATION_BEFORE" != "$CONFIGURATION_AFTER" \
               || "$SECRET_META_HASH" != "$FINAL_SECRET_META_HASH" ]]; then
           rollback_order_env
-          fail 'Unrelated Order runtime configuration changed during consumer activation.'
+          fail 'Unrelated Order runtime configuration changed during activation.'
         fi
 
         FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$FINAL")
         [[ -n "$FQDN" ]] || { rollback_order_env; fail 'Order FQDN is missing.'; }
 
         for PATHNAME in /actuator/health/liveness /actuator/health/readiness; do
-          CODE=$(curl -sS --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "https://$FQDN$PATHNAME" || true)
+          CODE=$(curl -sS --connect-timeout 10 --max-time 30 \
+            -o /dev/null -w '%{http_code}' "https://$FQDN$PATHNAME" || true)
           echo "$PATHNAME -> HTTP ${CODE:-unavailable}"
           [[ "$CODE" == '200' ]] || { rollback_order_env; fail "$PATHNAME did not return HTTP 200."; }
+        done
+
+        INTEGRATION_AFTER=$(az containerapp show \
+          --resource-group "$RG" \
+          --name "$INTEGRATION_APP" \
+          --output json \
+          --only-show-errors)
+
+        for FLAG in \
+          CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED \
+          CRAVES_DELIVERY_COMMAND_ENABLED \
+          CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED \
+          CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED \
+          BORZO_API_ENABLED
+        do
+          VALUE=$(jq -r --arg name "$FLAG" \
+            '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' \
+            <<<"$INTEGRATION_AFTER")
+          require_false_or_empty "$FLAG" "$VALUE"
         done
 
         SUB_FINAL=$(az servicebus topic subscription show \
@@ -520,7 +543,8 @@ steps:
           --output json \
           --only-show-errors)
 
-        [[ "$(jq -r '.status // ""' <<<"$SUB_FINAL")" == 'Active' ]] || { rollback_order_env; fail 'Service Bus subscription is not Active.'; }
+        [[ "$(jq -r '.status // ""' <<<"$SUB_FINAL")" == 'Active' ]] || \
+          { rollback_order_env; fail 'Service Bus subscription is not Active.'; }
 
         echo ''
         echo '============================================================'

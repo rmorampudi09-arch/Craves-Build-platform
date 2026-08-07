@@ -21,15 +21,20 @@
 - **P00 — Execution Documents and Source Lock: DONE**.
 - **P01 — Repository Architecture Inventory: DONE**.
 - **P02 — APIM/OpenAPI Contract Inventory: DONE**.
+- **P03 — Runtime Configuration and Environment Boundary: DONE**.
 - P01 started from branch HEAD `64dfbd18820b2644ee0263d5fffcefbd62172dfe`.
 - P01 completion commit: `d27d6eacef2f2c21f8908116d526e1fffc6bf2a0`.
 - P02 inventory artifact commit: `ed23344ea2cdbe89b1543432f265bb320e56d505`.
 - P02 evidence: `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md`.
-- Next phase in sequence: **P03 — Runtime Configuration and Environment Boundary**.
+- P03 started from branch HEAD `ad37c1366b3399c9910e76a1343d9454f42f30eb`.
+- P03 implementation completion commit: `57f371cc3851c78daa6a0bd6b28521f0c62babb2`.
+- P03 evidence: `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`.
+- P03 CI run: `31194872495` — **SUCCESS**.
+- Next phase in sequence: **P04 — Design Token Baseline**.
 - Next phase authorization: **NONE AUTHORIZED**.
 - Required action: stop and wait for the user to explicitly start/continue the next phase.
 
-P02 was a repository contract/documentation audit only. It did not modify mobile product code, backend code, APIM definitions, infrastructure, or native build configuration. P02 classified all 8 currently consumed mobile HTTP operations from static repository evidence: 3 `CONTRACT_ONLY`, 5 `BLOCKED`, and 0 runtime-verified operations. Missing contracts and route/version mismatches are intentionally visible rather than inferred.
+P03 hardened the existing single mobile runtime-configuration boundary without creating a parallel system. The APIM/API base URL and environment identity are externally injected, required/invalid runtime values fail clearly, production endpoint values were removed from committed example/test configuration, Android now applies the existing `react-native-config` dotenv bridge, Firebase Android wiring was statically verified, and the absence of a current feature-flag/remote-config provider or consumer was recorded explicitly rather than inventing keys or rollout behavior. P03 did not modify backend/APIM/infrastructure source and did not begin P04.
 
 ---
 
@@ -50,8 +55,8 @@ The rebuild diff from that baseline is confined to the new mobile application an
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
-- GitHub Actions run ID: `31178539054`
-- Head SHA: `b91802ecd98b76a6aa28680c7e3bf83693816d74`
+- GitHub Actions run ID: `31194872495`
+- Head SHA: `57f371cc3851c78daa6a0bd6b28521f0c62babb2`
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -65,9 +70,9 @@ Successful checks:
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
 
-Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is now the correct implementation-phase policy.
+Important: this workflow intentionally does **not** perform Java/Gradle/APK packaging. That is the correct implementation-phase policy.
 
-No mobile product source changed during P00, P01, or P02, so the latest product-code CI evidence remains the successful run above. P02 changed documentation only and therefore does not create a new application-runtime verification claim.
+P03 changed mobile runtime/native configuration and added focused tests, so run `31194872495` is the accepted P03 code-level validation evidence. It does not claim device runtime, backend runtime, Gradle packaging, or APK verification.
 
 ---
 
@@ -106,13 +111,30 @@ Key files include:
 
 The current root navigator implements the authentication/account-resolution stack. It does **not** yet implement the complete Customer and Chef marketplace shells.
 
-### 4.3 Runtime configuration — IMPLEMENTED FOUNDATION
+### 4.3 Runtime configuration — IMPLEMENTED / P03 ACCEPTED
 
-Key file:
+Key files:
 
 - `apps/mobile/src/core/config/runtimeConfig.ts`
+- `apps/mobile/src/core/config/runtimeConfig.test.ts`
+- `apps/mobile/.env.example`
+- `apps/mobile/android/app/build.gradle`
+- `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`
 
-Runtime APIM base configuration is externalized. `.env.example` exists. Environment-specific secrets must remain outside source control.
+Accepted P03 behavior:
+
+- `runtimeConfig.ts` remains the single runtime configuration owner.
+- `CRAVES_API_BASE_URL` is required, normalized, and validated as an absolute HTTP(S) URL.
+- Non-development environments require HTTPS.
+- Base URLs containing embedded credentials, query parameters, or fragments are rejected.
+- `CRAVES_ENVIRONMENT` supports `development`, `staging`, and `production`; invalid explicit values fail with `RuntimeConfigurationError`.
+- `.env.example` documents the public schema only and contains a reserved non-production placeholder rather than a production endpoint.
+- Root `.gitignore` excludes `.env`/`.env.*` while allowing `.env.example`, keeping deployment environment files outside source control.
+- Android applies the existing `react-native-config` `dotenv.gradle` bridge so injected environment values reach the native module.
+- Existing Firebase Android Google Services wiring and `com.cravesapp` package alignment were statically verified and retained.
+- No feature-flag reads, Firebase Remote Config SDK, established remote-config provider, or current P00–P03 flag consumer exists. P03 records that boundary and prohibits future ad hoc screen/environment flags; exact provider, keys, defaults, rollout semantics, and cache policy must be approved when a feature actually requires them.
+
+No backend route, APIM policy, secret, or environment-specific production value was introduced by P03.
 
 ### 4.4 Shared design-token foundation — IMPLEMENTED FOUNDATION
 
@@ -130,7 +152,7 @@ Current tokens include:
 - radii,
 - typography sizing.
 
-This is only a foundation; all 52 references have **not** yet been visually certified against these tokens.
+This is only a foundation; all 52 references have **not** yet been visually certified against these tokens. P04 has not been started under the granular phase protocol.
 
 ### 4.5 HTTP/error/correlation foundation — IMPLEMENTED FOUNDATION
 
@@ -298,8 +320,8 @@ Future global slices must extend this store. Server collections must remain in t
 ### 5.6 Runtime configuration ownership
 
 - `apps/mobile/src/core/config/runtimeConfig.ts` is the single runtime configuration boundary currently used by the mobile client.
-- `CRAVES_API_BASE_URL` is injected through `react-native-config` and missing required configuration throws a typed runtime configuration error.
-- `.env.example` is the non-secret configuration template.
+- `CRAVES_API_BASE_URL` is injected through `react-native-config`; P03 additionally validates environment identity, URL structure, and HTTPS requirements and keeps deployment values external.
+- `.env.example` is the non-secret configuration schema/template.
 
 Future runtime values/flags must extend the established configuration boundary rather than introduce ad hoc environment access in screens.
 
@@ -326,6 +348,7 @@ No duplicate secure-token store was found.
 - `apps/mobile/src/features/auth/firebase/firebaseAuth.ts` is the single Firebase Auth platform wrapper for phone verification, OTP confirmation, email/password sign-in, password reset, and sign-out.
 - `apps/mobile/android/app/google-services.json` supplies the Android Firebase application configuration.
 - Android applies the Google Services Gradle plugin.
+- P03 statically re-verified that the Firebase Android client package aligns with `com.cravesapp`.
 
 No second Firebase Auth wrapper or web-auth implementation was found in the current mobile runtime.
 
@@ -356,6 +379,7 @@ Customer and Chef marketplace feature families have not yet been added in this r
 - `apps/mobile/src/utils/validation.ts` is the current validation-helper boundary with focused unit coverage.
 - `apps/mobile/__tests__/App.test.tsx` is the current root render test.
 - `apps/mobile/src/core/security/tokenMemory.test.ts` covers access-token memory behavior.
+- `apps/mobile/src/core/config/runtimeConfig.test.ts` covers the P03 runtime environment/configuration boundary.
 - `apps/mobile/jest.config.js` owns Jest setup and transform rules.
 - `apps/mobile/tsconfig.json` extends the React Native TypeScript configuration and includes all TypeScript source/test files.
 
@@ -368,6 +392,7 @@ Coverage is intentionally small and is not sufficient for later customer/chef fe
 - React Native New Architecture and Hermes are enabled.
 - The project uses React Native Gradle ownership plus Expo module autolinking only for approved bare-RN native modules such as SecureStore; this is **not** an Expo-managed application.
 - `MainActivity` registers the `CravesMobile` component and uses `adjustResize` through the Android manifest for keyboard behavior.
+- P03 wires the existing `react-native-config` Android dotenv bridge; it does not introduce a second configuration system.
 - Current Android release configuration still points to debug signing; production signing remains intentionally deferred to final release readiness.
 
 ### 5.14 CI ownership
@@ -380,13 +405,13 @@ Coverage is intentionally small and is not sufficient for later customer/chef fe
 
 ### 5.15 Duplicate/dead architecture result
 
-No active duplicate runtime navigation container, Redux store, TanStack Query client, general authenticated HTTP client, secure-token store, Firebase Auth wrapper, or design-token system was found in the current `apps/mobile` source.
+No active duplicate runtime navigation container, Redux store, TanStack Query client, general authenticated HTTP client, secure-token store, Firebase Auth wrapper, runtime configuration owner, or design-token system was found in the current `apps/mobile` source.
 
 Installed baseline libraries that are not yet exercised by the auth-only implementation (for example bottom tabs, FlashList, React Hook Form/Zod, AsyncStorage for approved non-sensitive persistence, and animation/media helpers) are reserved dependencies, not parallel architecture. Future phases must reuse them where appropriate rather than add competing libraries without approval.
 
 ### 5.16 Deferred cleanup/refinement notes
 
-These findings do **not** block P01 completion or P02 contract inventory, but later owning phases should address them deliberately:
+These findings do **not** block P01, P02, or P03 completion, but later owning phases should address them deliberately:
 
 1. `src/core/http/apiError.ts` imports the `ApiErrorResponse` transport type from `features/auth/domain/types`. Even though it is type-only, shared core HTTP infrastructure should not depend inward on the auth feature. P09 should move/define the generic API error response at a core/shared transport boundary.
 2. The `QueryClient` is intentionally private inside `AppProviders.tsx`; once private server state exists, P08/P24 must provide a controlled cache-clearing/invalidation boundary for logout and role switching rather than creating another query client.
@@ -394,8 +419,9 @@ These findings do **not** block P01 completion or P02 contract inventory, but la
 4. Android Kotlin files are physically under `android/app/src/main/java/com/cravesmobile/` while declaring package `com.cravesapp`. The declarations/application ID are consistent at runtime, but the directory should be normalized in a future native-configuration cleanup for maintainability.
 5. Android release currently uses the debug signing configuration. Production signing is a final release-readiness concern and must not be introduced during intermediate UI phases.
 6. Historical write-capable Phase 1 bootstrap/dependency/implementation workflows remain in the repository. They are quarantined as legacy helpers; a later repository-hygiene change may retire them, but they must not be triggered/edited as part of normal phased implementation.
+7. There is currently no approved/established feature-flag or remote-config provider in the mobile runtime. This is not a P03 blocker because no current P00–P03 behavior consumes a flag. Before later flag-controlled behavior is implemented, the owning phase must establish the approved centralized typed mechanism and exact key/default/rollout contract rather than adding ad hoc local conditionals.
 
-**P01 blocker status:** none. The current architecture has clear owners and is safe to extend phase-by-phase.
+**Current foundation blocker status:** none for P03. The unresolved P02 backend/APIM contracts remain visible and unchanged.
 
 ---
 
@@ -405,9 +431,10 @@ Known tests currently include:
 
 - `apps/mobile/__tests__/App.test.tsx` — basic root render,
 - `apps/mobile/src/core/security/tokenMemory.test.ts` — token-memory behavior,
+- `apps/mobile/src/core/config/runtimeConfig.test.ts` — runtime environment/base URL validation and failure behavior,
 - `apps/mobile/src/utils/validation.test.ts` — current validation helpers.
 
-CI is green for the current foundation. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
+CI run `31194872495` is green for the accepted P03 implementation. This test set is intentionally not considered sufficient for the complete guide. Each future phase must add focused unit/component/integration coverage as the domain grows.
 
 ---
 
@@ -420,7 +447,7 @@ The granular `phases.md` was introduced after the existing auth foundation was w
 | P00 Execution Documents | **DONE** | `plan.md`, `phases.md`, `build.md`, and `agent.md` committed; source hierarchy and execution policy locked. |
 | P01 Repository Inventory | **DONE** | Formal repository architecture audit recorded in this ledger; current entry/navigation/provider/store/query/config/HTTP/security/Firebase/design/native/test/CI ownership is documented and duplicate architecture was checked. |
 | P02 APIM/OpenAPI Inventory | **DONE** | `docs/mobile-ui-rebuild/P02_APIM_OPENAPI_CONTRACT_INVENTORY.md` inventories all 8 currently consumed mobile HTTP operations, route-key/auth expectations, path/source mismatches, validation gaps, and static classifications: 3 `CONTRACT_ONLY`, 5 `BLOCKED`, 0 runtime-verified. |
-| P03 Runtime Config | PARTIAL | Foundation exists; full environment/feature-flag audit pending. |
+| P03 Runtime Config | **DONE** | Runtime schema/base URL validation, Android `react-native-config` injection, non-secret `.env.example`, Firebase Android audit, explicit remote-config/feature-flag boundary, focused tests, and successful CI are recorded in `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`. |
 | P04 Design Tokens | PARTIAL | Foundation exists; global/reference audit pending. |
 | P05 Motion Baseline | NOT STARTED | No accepted full shared motion/reduced-motion phase yet. |
 | P06 Shared Interaction Primitives | PARTIAL | Auth primitives exist only. |
@@ -454,6 +481,8 @@ The following must **not** be described as complete at this point:
 
 - runtime/backend/APIM resolution of the `CONTRACT_ONLY` and `BLOCKED` routes identified by P02,
 - restoration/approval of the missing authoritative full APIM/OpenAPI contract,
+- an approved production feature-flag/remote-config provider/key contract for future flag-controlled features,
+- P04 Design Token Baseline acceptance,
 - Customer Home refs 5/6,
 - Discover Chefs refs 7/8,
 - Orders refs 9/10 and order child flows,
@@ -566,10 +595,27 @@ Do not erase useful history. If a later phase changes an earlier implementation,
 - Blockers: unresolved API contracts remain explicitly recorded in the P02 inventory; they do not invalidate completion of the inventory phase.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
+### P03 — Runtime Configuration and Environment Boundary
+
+- Status: **DONE**
+- Started from commit: `ad37c1366b3399c9910e76a1343d9454f42f30eb`
+- Completed implementation at commit: `57f371cc3851c78daa6a0bd6b28521f0c62babb2`
+- Evidence: `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`.
+- Guide references: global Development Rules, runtime/networking configuration, security, state ownership, and feature-flag/remote-configuration rules from the full 183-page / 52-reference master guide; no screen reference or UI was implemented.
+- Changed implementation/evidence files: `apps/mobile/src/core/config/runtimeConfig.ts`, `apps/mobile/src/core/config/runtimeConfig.test.ts`, `apps/mobile/.env.example`, `apps/mobile/android/app/build.gradle`, `apps/mobile/jest.setup.js`, `docs/mobile-ui-rebuild/P03_RUNTIME_CONFIGURATION_ENVIRONMENT_BOUNDARY.md`; `build.md` updated only as the completion ledger.
+- APIM/contracts used: **No new endpoint or backend contract was introduced.** The existing central HTTP client continues to source `apiBaseUrl` from `getRuntimeConfig()`. P02 route classifications and blockers are unchanged.
+- Behavior completed: hardened the existing runtime schema and typed failure behavior; externalized deployment-specific endpoint/environment values; removed the production endpoint from committed example/test configuration; wired Android to the existing `react-native-config` dotenv bridge; statically verified current Firebase Android Google Services/package configuration; audited feature flags/remote config and recorded that no established provider/SDK/current consumer exists, so no arbitrary key/provider was fabricated.
+- Tests/checks: GitHub Actions run `31194872495` — **SUCCESS**. `npm ci`, TypeScript strict check, ESLint with zero warnings, Jest including new runtime-config tests, production Android JavaScript bundle generation, and backend/APIM/infrastructure source guard all passed.
+- Visual QA: not applicable; P03 changes no screen layout or visual behavior.
+- APK built: **No**, per the implementation-phase policy.
+- Backend/APIM/infrastructure source changed: **No**.
+- Blockers: none to P03 acceptance. Future flag-controlled product behavior requires an approved centralized provider and exact key/default/rollout contract before implementation.
+- Next phase: **NONE AUTHORIZED — waiting for user**.
+
 ---
 
 ## 12. Current Next Step
 
 **Stop here.**
 
-P02 is complete. P03 — Runtime Configuration and Environment Boundary is the next phase in `phases.md`, but it is **not authorized** by completion of P02. Begin P03 only after the user explicitly says to continue/start the next phase.
+P03 is complete. P04 — Design Token Baseline is the next phase in `phases.md`, but it is **not authorized** by completion of P03. Begin P04 only after the user explicitly says to continue/start the next phase.

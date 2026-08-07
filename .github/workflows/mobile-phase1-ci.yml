@@ -1,0 +1,122 @@
+name: CRAVES Mobile Phase 1 CI
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - apps/mobile/**
+      - .github/workflows/mobile-phase1-ci.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-build-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+
+    steps:
+      - name: Checkout Phase 1
+        uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.11.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: TypeScript strict check
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        working-directory: apps/mobile
+        run: npm run lint -- --max-warnings=0
+
+      - name: Jest
+        working-directory: apps/mobile
+        run: npm test -- --runInBand
+
+      - name: Production JavaScript bundle
+        working-directory: apps/mobile
+        run: |
+          mkdir -p build/phase1-bundle
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output build/phase1-bundle/index.android.bundle \
+            --assets-dest build/phase1-bundle/assets
+          test -s build/phase1-bundle/index.android.bundle
+
+      - name: Build Android debug APK
+        working-directory: apps/mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          test -s app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Verify no backend source changes in Phase 1
+        run: |
+          changed="$(git diff --name-only 8a2444cde508ea2fb20cb9822397e55c29bd8c5f...HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -E '^(services/|openapi/|infra/|apps/api/)'; then
+            echo 'Backend/infrastructure source changed during mobile rebuild.' >&2
+            exit 1
+          fi
+
+      - name: Create clean Phase 1 source ZIP
+        run: |
+          mkdir -p dist/source/CravesMobile-Phase1
+          rsync -a \
+            --exclude node_modules \
+            --exclude android/.gradle \
+            --exclude android/app/build \
+            --exclude build \
+            --exclude .env \
+            apps/mobile/ dist/source/CravesMobile-Phase1/
+          cd dist/source
+          zip -qr ../CRAVES-Mobile-Phase1-source.zip CravesMobile-Phase1
+          test -s ../CRAVES-Mobile-Phase1-source.zip
+
+      - name: Prepare Phase 1 package
+        run: |
+          mkdir -p dist/final
+          cp apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk dist/final/CRAVES-Mobile-Phase1-debug.apk
+          cp dist/CRAVES-Mobile-Phase1-source.zip dist/final/
+          sha256sum dist/final/* > dist/final/SHA256SUMS.txt
+          cat > dist/final/PHASE1-BUILD.txt <<EOF
+          CRAVES Mobile Phase 1
+          Branch: mobile-ui-rebuild-from-scratch
+          Commit: ${GITHUB_SHA}
+          React Native: 0.85.3
+          TypeScript: strict validation executed by CI
+          Auth: Firebase native phone/email authentication + existing Craves Auth Service exchange
+          Access token: memory only
+          Refresh token: expo-secure-store key refresh_token
+          Backend source changed: no
+          EOF
+
+      - name: Upload Phase 1 APK and source
+        uses: actions/upload-artifact@v4
+        with:
+          name: CRAVES-Mobile-Phase1-Android
+          path: dist/final/*
+          if-no-files-found: error
+          retention-days: 14

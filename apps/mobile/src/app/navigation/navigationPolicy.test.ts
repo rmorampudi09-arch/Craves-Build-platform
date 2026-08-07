@@ -16,12 +16,14 @@ describe('navigationPolicy', () => {
     });
   });
 
-  it('allows customer shell chrome only at the domain default boundary', () => {
-    expect(resolveRouteChromePolicy('Customer')).toEqual({
-      bottomNavigationVisible: true,
-      viewCartEligible: true,
-      immersive: false,
-    });
+  it('enables customer shell chrome for the four customer tab routes', () => {
+    for (const routeName of ['Home', 'Chefs', 'Orders', 'Profile'] as const) {
+      expect(resolveRouteChromePolicy('Customer', routeName)).toEqual({
+        bottomNavigationVisible: true,
+        viewCartEligible: true,
+        immersive: false,
+      });
+    }
   });
 
   it('never makes customer cart chrome eligible in the chef domain', () => {

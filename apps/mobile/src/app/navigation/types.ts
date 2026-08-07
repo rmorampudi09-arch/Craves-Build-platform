@@ -1,10 +1,10 @@
+import type {NavigatorScreenParams} from '@react-navigation/native';
 import type {AuthRole, ChefApplicationStatus} from '../../features/auth/domain/types';
 
 /**
  * Current registered route parameters. Existing auth/account screens intentionally
- * continue to consume this flat list while P11 separates navigator registration
- * by role. Later product phases can migrate screens into their domain lists without
- * introducing a second navigation container.
+ * continue to consume this flat list while product navigators are introduced as
+ * typed nested domains without creating a second navigation container.
  */
 export type RootStackParamList = {
   Splash: undefined;
@@ -45,17 +45,47 @@ export type ChefAccountStackParamList = Pick<
 >;
 
 /**
- * P11 domain model. Customer/Chef currently expose only their accepted account
- * resolution routes. Transactional and modal route lists remain deliberately
+ * P25 customer shell types. Each bottom tab owns a stack navigator so later
+ * product phases can add child routes without resetting sibling tab state.
+ */
+export type CustomerHomeStackParamList = {
+  CustomerHomeRoot: undefined;
+};
+
+export type CustomerChefsStackParamList = {
+  CustomerChefsRoot: undefined;
+};
+
+export type CustomerOrdersStackParamList = {
+  CustomerOrdersRoot: undefined;
+};
+
+export type CustomerProfileStackParamList = {
+  CustomerProfileRoot: undefined;
+};
+
+export type CustomerTabParamList = {
+  Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;
+  Chefs: NavigatorScreenParams<CustomerChefsStackParamList> | undefined;
+  Orders: NavigatorScreenParams<CustomerOrdersStackParamList> | undefined;
+  Profile: NavigatorScreenParams<CustomerProfileStackParamList> | undefined;
+};
+
+export type CustomerTabRouteName = keyof CustomerTabParamList;
+
+export type CustomerDomainParamList = CustomerAccountStackParamList & CustomerTabParamList;
+
+/**
+ * P11/P25 domain model. Transactional and modal route lists remain deliberately
  * unregistered until their owning implementation phases add real screens.
  */
 export type NavigationDomainParamLists = {
   Auth: AuthStackParamList;
-  Customer: CustomerAccountStackParamList;
+  Customer: CustomerDomainParamList;
   Chef: ChefAccountStackParamList;
   Transactional: never;
   Modal: never;
 };
 
 export type NavigationDomain = keyof NavigationDomainParamLists;
-export type RegisteredRouteName = keyof RootStackParamList;
+export type RegisteredRouteName = keyof RootStackParamList | CustomerTabRouteName;

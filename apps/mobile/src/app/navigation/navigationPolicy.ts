@@ -38,9 +38,8 @@ const DOMAIN_DEFAULTS: Record<NavigationDomain, RouteChromePolicy> = {
 };
 
 /**
- * Every currently registered route belongs to authentication/account resolution
- * and is intentionally immersive. Product phases add route-specific exceptions
- * only when the corresponding real screen exists.
+ * Authentication/account-resolution routes remain immersive. P25 customer tab
+ * routes intentionally fall through to the Customer domain default.
  */
 const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'Splash',

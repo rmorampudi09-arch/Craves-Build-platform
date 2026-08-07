@@ -2,6 +2,7 @@ import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import type {RootStackParamList} from './types';
+import {CustomerRootNavigator} from './CustomerRootNavigator';
 import {useAppSelector} from '../store/hooks';
 import {useBootstrap} from '../../features/auth/hooks/useBootstrap';
 import {useSessionLifecycle} from '../../features/auth/hooks/useSessionLifecycle';
@@ -13,8 +14,8 @@ import {OtpVerificationScreen} from '../../features/auth/screens/OtpVerification
 import {ForgotPasswordScreen} from '../../features/auth/screens/ForgotPasswordScreen';
 import {PasswordResetSentScreen} from '../../features/auth/screens/PasswordResetSentScreen';
 import {CustomerRegistrationScreen} from '../../features/auth/screens/CustomerRegistrationScreen';
-import {ChefRegistrationScreen} from '../../features/auth/screens/ChefRegistrationScreen';
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
+import {ChefRegistrationScreen} from '../../features/auth/screens/ChefRegistrationScreen';
 import {ChefAccountStatusScreen} from '../../features/auth/screens/ChefAccountStatusScreen';
 import {StartupErrorScreen} from '../../features/auth/screens/StartupErrorScreen';
 import {AccountRouterScreen} from '../../features/auth/screens/AccountRouterScreen';
@@ -59,15 +60,14 @@ function CustomerAccountNavigator({
 }: {
   resolution: Extract<AccountResolution, {flow: 'CUSTOMER'}>;
 }) {
-  const initialRouteName =
-    resolution.onboardingStatus === 'PROFILE_REQUIRED'
-      ? 'CustomerRegistration'
-      : 'CustomerAccountStatus';
+  if (resolution.onboardingStatus === 'READY') {
+    return <CustomerRootNavigator />;
+  }
 
   return (
     <CustomerStack.Navigator
       screenOptions={screenOptions}
-      initialRouteName={initialRouteName}>
+      initialRouteName="CustomerRegistration">
       <CustomerStack.Screen name="CustomerRegistration" component={CustomerRegistrationScreen} />
       <CustomerStack.Screen name="CustomerAccountStatus" component={CustomerAccountStatusScreen} />
     </CustomerStack.Navigator>

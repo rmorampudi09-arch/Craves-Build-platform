@@ -5,6 +5,8 @@ import {colors, iconSize} from '../../design/tokens';
 export type IconName =
   | 'account'
   | 'chef'
+  | 'home'
+  | 'orders'
   | 'phone'
   | 'mail'
   | 'lock'
@@ -51,6 +53,18 @@ export function Icon({
           <Path d="M6 9.5V20h12V9.5" {...common} />
           <Path d="M7 10a4 4 0 0 1 1.2-7.8A4.8 4.8 0 0 1 12 4a4.8 4.8 0 0 1 3.8-1.8A4 4 0 0 1 17 10" {...common} />
           <Path d="M9 14h6M9 17h6" {...common} />
+        </>
+      )}
+      {name === 'home' && (
+        <>
+          <Path d="M3 11.5 12 4l9 7.5" {...common} />
+          <Path d="M5.5 10.5V20h13v-9.5M9.5 20v-6h5v6" {...common} />
+        </>
+      )}
+      {name === 'orders' && (
+        <>
+          <Rect x="5" y="3" width="14" height="18" rx="2" {...common} />
+          <Path d="M8.5 8h7M8.5 12h7M8.5 16h4" {...common} />
         </>
       )}
       {name === 'phone' && (

@@ -1,10 +1,10 @@
-import React, {useState} from 'react';
+import React, {useRef, useState} from 'react';
 import {StyleSheet, Text} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../../../app/navigation/types';
+import {useAppDispatch} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {colors, spacing} from '../../../design/tokens';
-import {emailLoginSchema} from '../../../utils/validation';
 import {AuthCard} from '../components/AuthCard';
 import {AuthHero} from '../components/AuthHero';
 import {AuthShell} from '../components/AuthShell';
@@ -12,49 +12,94 @@ import {InputField} from '../components/InputField';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {RoleSelector} from '../components/RoleSelector';
 import {SecurityNote} from '../components/SecurityNote';
+import {
+  createEmailRequestGate,
+  createEmailSignInSubmission,
+  getEmailSignInFieldErrors,
+  getPasswordRecoveryEmail,
+} from '../domain/emailSignInPolicy';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 import {authService} from '../state/authService';
-import {useAppDispatch} from '../../../app/store/hooks';
 import {authActions} from '../state/authSlice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EmailSignIn'>;
+
+type TouchedFields = {
+  email: boolean;
+  password: boolean;
+};
 
 export function EmailSignInScreen({navigation, route}: Props) {
   const dispatch = useAppDispatch();
   const {role, selectRole} = useAuthAttemptRole(route.params.role);
   const [email, setEmail] = useState(route.params.email ?? '');
   const [password, setPassword] = useState('');
-  const [visible, setVisible] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const valid = emailLoginSchema.safeParse({email, password}).success;
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [touched, setTouched] = useState<TouchedFields>({email: false, password: false});
+  const requestGate = useRef(createEmailRequestGate());
+
+  const fieldErrors = getEmailSignInFieldErrors(email, password);
+  const valid = !fieldErrors.email && !fieldErrors.password;
+
+  const clearRequestError = () => {
+    if (requestError) {
+      setRequestError(null);
+    }
+  };
+
+  const updateEmail = (value: string) => {
+    setEmail(value);
+    clearRequestError();
+  };
+
+  const updatePassword = (value: string) => {
+    setPassword(value);
+    clearRequestError();
+  };
 
   const submit = async () => {
-    if (!valid || busy) {
+    setTouched({email: true, password: true});
+    if (!valid || busy || !requestGate.current.tryAcquire()) {
       return;
     }
 
     setBusy(true);
-    setError(null);
+    setRequestError(null);
+    const submission = createEmailSignInSubmission(role, email, password);
+
     try {
-      const tokens = await authService.emailLogin(email, password);
+      const tokens = await authService.emailLogin(submission.email, submission.password);
       dispatch(authActions.authenticated(tokens.identity));
-    } catch (e) {
-      const mapped = toAppApiError(e);
+    } catch (error) {
+      const mapped = toAppApiError(error);
       if (mapped.code === 'PHONE_VERIFICATION_REQUIRED') {
-        navigation.replace('PhoneSignIn', {role});
+        navigation.replace('PhoneSignIn', {role: submission.role});
         return;
       }
-      setError(mapped.message);
+      setRequestError(mapped.message);
     } finally {
+      requestGate.current.release();
       setBusy(false);
     }
+  };
+
+  const openPasswordRecovery = () => {
+    if (busy) {
+      return;
+    }
+    const recoveryEmail = getPasswordRecoveryEmail(email);
+    navigation.navigate(
+      'ForgotPassword',
+      recoveryEmail ? {role, email: recoveryEmail} : {role},
+    );
   };
 
   return (
     <AuthShell>
       <AuthHero role={role} />
-      <RoleSelector value={role} onChange={selectRole} />
+      <RoleSelector value={role} onChange={selectRole} disabled={busy} />
       <AuthCard>
         <Text style={styles.title}>Login with email/password</Text>
         <Text style={styles.desc}>
@@ -62,37 +107,65 @@ export function EmailSignInScreen({navigation, route}: Props) {
         </Text>
         <InputField
           value={email}
-          onChangeText={setEmail}
+          onChangeText={updateEmail}
+          onBlur={() => setTouched(current => ({...current, email: true}))}
           placeholder="Email Address"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          importantForAutofill="yes"
           leftIcon="mail"
+          accessibilityLabel="Email address"
+          disabled={busy}
+          error={touched.email ? fieldErrors.email : undefined}
         />
         <InputField
           value={password}
-          onChangeText={setPassword}
+          onChangeText={updatePassword}
+          onBlur={() => setTouched(current => ({...current, password: true}))}
           placeholder="Password"
-          secureTextEntry={!visible}
+          secureTextEntry={!passwordVisible}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="current-password"
+          textContentType="password"
+          importantForAutofill="yes"
+          returnKeyType="done"
           leftIcon="lock"
-          rightIcon={visible ? 'eye-off' : 'eye'}
-          onRightIconPress={() => setVisible(value => !value)}
-          error={error ?? undefined}
+          rightIcon={passwordVisible ? 'eye-off' : 'eye'}
+          rightIconAccessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
+          onRightIconPress={() => setPasswordVisible(value => !value)}
+          accessibilityLabel="Password"
+          disabled={busy}
+          error={touched.password ? fieldErrors.password : undefined}
+          onSubmitEditing={submit}
         />
+        {requestError ? (
+          <Text accessibilityRole="alert" style={styles.requestError}>
+            {requestError}
+          </Text>
+        ) : null}
         <Text
-          style={styles.forgot}
-          onPress={() => navigation.navigate('ForgotPassword', {role, email})}>
+          accessibilityRole="link"
+          accessibilityState={{disabled: busy}}
+          style={[styles.forgot, busy && styles.disabledLink]}
+          onPress={openPasswordRecovery}>
           Forgot password?
         </Text>
         <PrimaryButton
           label="Login"
           loading={busy}
           disabled={!valid || busy}
+          accessibilityHint="Signs in to the selected Craves account"
           onPress={submit}
         />
         <PrimaryButton
           variant="outline"
           label="Continue with phone number"
           leftIcon="phone"
+          disabled={busy}
           onPress={() => navigation.navigate('PhoneSignIn', {role})}
         />
         <SecurityNote />
@@ -110,12 +183,19 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: spacing.lg,
   },
+  requestError: {
+    color: colors.error,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: spacing.sm,
+  },
   forgot: {
     alignSelf: 'flex-end',
     fontSize: 12,
     fontWeight: '600',
     color: colors.flameRed,
-    marginTop: -8,
+    marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
+  disabledLink: {opacity: 0.56},
 });

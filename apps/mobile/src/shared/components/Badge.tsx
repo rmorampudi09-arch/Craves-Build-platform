@@ -59,10 +59,10 @@ const styles = StyleSheet.create({
 
 const toneStyles = StyleSheet.create({
   neutral: {backgroundColor: colors.surfaceMuted},
-  success: {backgroundColor: '#E8F7F1'},
-  warning: {backgroundColor: '#FFF4DF'},
-  error: {backgroundColor: '#FDEAE8'},
-  info: {backgroundColor: '#EAF0FF'},
+  success: {backgroundColor: colors.successSoft},
+  warning: {backgroundColor: colors.warningSoft},
+  error: {backgroundColor: colors.errorSoft},
+  info: {backgroundColor: colors.infoSoft},
 });
 
 const toneTextStyles = StyleSheet.create({

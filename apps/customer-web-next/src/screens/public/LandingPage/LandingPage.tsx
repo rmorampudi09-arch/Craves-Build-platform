@@ -3,18 +3,21 @@ import { useEffect, useState } from "react";
 
 import { AuthModal, type AccountMode } from "@/components/auth/AuthModal";
 import { LocationModal } from "@/components/layout/LocationModal";
+import { AppDownloadSection } from "@/components/sections/AppDownloadSection";
+import { BecomeChefCtaSection } from "@/components/sections/BecomeChefCtaSection";
+import { CommunityImpactSection } from "@/components/sections/CommunityImpactSection";
+import { FooterSection } from "@/components/sections/FooterSection";
 import { HeroSection } from "@/components/sections/HeroSection";
-import { WhyCravesSection } from "@/components/sections/WhyCravesSection";
 import { HowItWorksSection } from "@/components/sections/HowItWorksSection";
 import { WhatMakesSpecialSection } from "@/components/sections/WhatMakesSpecialSection";
-import { BecomeChefCtaSection } from "@/components/sections/BecomeChefCtaSection";
-import { FooterSection } from "@/components/sections/FooterSection";
+import { WhyCravesSection } from "@/components/sections/WhyCravesSection";
 import {
   getAddress,
   loadSession,
   type CravesAddress,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
+import styles from "./LandingV2.module.css";
 
 export const routeMeta = {};
 
@@ -65,17 +68,15 @@ function LandingPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-white px-4">
         <div className="text-center" role="status" aria-live="polite">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-border border-t-primary" />
-          <p className="mt-4 text-sm font-medium text-muted-foreground">
-            Opening Craves…
-          </p>
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#E6E8EA] border-t-[#F62E18]" />
+          <p className="mt-4 text-sm font-medium text-[#6E7378]">Opening Craves…</p>
         </div>
       </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white text-ink">
+    <div className={`${styles.page} min-h-screen bg-white text-[#111111]`}>
       <main>
         <HeroSection
           locationLabel={locationLabel}
@@ -83,19 +84,27 @@ function LandingPage() {
           onOpenAuth={openAuth}
           onBecomeChef={() => openAuth("register", "chef")}
         />
-        <div id="why-craves" className="scroll-mt-20">
-          <WhyCravesSection />
-        </div>
+
+        <WhatMakesSpecialSection />
+
         <div id="how-it-works" className="scroll-mt-20">
           <HowItWorksSection />
         </div>
-        <WhatMakesSpecialSection />
+
+        <div id="why-craves" className="scroll-mt-20">
+          <WhyCravesSection />
+        </div>
+
         <div id="become-a-chef" className="scroll-mt-20">
           <BecomeChefCtaSection
             onBecomeChef={() => openAuth("register", "chef")}
           />
         </div>
+
+        <CommunityImpactSection />
+        <AppDownloadSection />
       </main>
+
       <FooterSection />
 
       <AuthModal
@@ -115,6 +124,7 @@ function LandingPage() {
           });
         }}
       />
+
       <LocationModal
         open={locOpen}
         onClose={() => setLocOpen(false)}

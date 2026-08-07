@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "201887934076",
+    "project_id": "cravesapp-dev",
+    "storage_bucket": "cravesapp-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:201887934076:android:b2860385b4057e5d700bf9",
+        "android_client_info": {
+          "package_name": "com.cravesapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBV2_IAlK7Yh_R7LMVI69o0q5Y4r1vA-b8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

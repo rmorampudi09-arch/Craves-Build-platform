@@ -1,17 +1,26 @@
-import React, {useEffect, useState} from 'react';
-import {Pressable, StyleSheet, Text} from 'react-native';
+import React, {useEffect, useRef, useState} from 'react';
+import {AccessibilityInfo, Pressable, StyleSheet, Text} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {colors, spacing} from '../../../design/tokens';
-import {otpSchema} from '../../../utils/validation';
 import {AuthCard} from '../components/AuthCard';
 import {AuthShell} from '../components/AuthShell';
 import {InputField} from '../components/InputField';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {ScreenHeader} from '../components/ScreenHeader';
 import {SecurityNote} from '../components/SecurityNote';
+import {
+  createOtpCooldownDeadline,
+  createOtpRequestGate,
+  getOtpFailureRecovery,
+  isOtpCodeComplete,
+  OTP_CODE_LENGTH,
+  OTP_RESEND_COOLDOWN_SECONDS,
+  remainingOtpCooldownSeconds,
+  sanitizeOtpCode,
+} from '../domain/otpVerificationPolicy';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 import {authService} from '../state/authService';
 import {authActions} from '../state/authSlice';
@@ -23,20 +32,64 @@ export function OtpVerificationScreen({navigation, route}: Props) {
   const {role} = useAuthAttemptRole(route.params.role);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [seconds, setSeconds] = useState(30);
+  const [clockMs, setClockMs] = useState(() => Date.now());
+  const [resendAvailableAt, setResendAvailableAt] = useState(() =>
+    createOtpCooldownDeadline(OTP_RESEND_COOLDOWN_SECONDS, clockMs),
+  );
+  const [rateLimitUntil, setRateLimitUntil] = useState(0);
+  const [requiresResend, setRequiresResend] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestGate = useRef(createOtpRequestGate());
+  const resendAvailabilityAnnounced = useRef(false);
+
+  const resendSeconds = remainingOtpCooldownSeconds(resendAvailableAt, clockMs);
+  const rateLimitSeconds = remainingOtpCooldownSeconds(rateLimitUntil, clockMs);
+  const rateLimited = rateLimitSeconds > 0;
+  const canVerify = isOtpCodeComplete(code) && !busy && !requiresResend && !rateLimited;
+  const canResend = resendSeconds === 0 && !busy && !rateLimited;
 
   useEffect(() => {
-    if (seconds <= 0) {
-      return;
+    const id = setInterval(() => setClockMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (canResend && !resendAvailabilityAnnounced.current) {
+      resendAvailabilityAnnounced.current = true;
+      AccessibilityInfo.announceForAccessibility(
+        'You can request a new verification code now.',
+      );
+    } else if (!canResend) {
+      resendAvailabilityAnnounced.current = false;
+    }
+  }, [canResend]);
+
+  const applyFailureRecovery = (caught: unknown) => {
+    const apiError = toAppApiError(caught);
+    const recovery = getOtpFailureRecovery(apiError.code);
+    setError(apiError.message);
+
+    if (recovery.clearCode) {
+      setCode('');
     }
 
-    const id = setInterval(() => setSeconds(value => Math.max(0, value - 1)), 1000);
-    return () => clearInterval(id);
-  }, [seconds]);
+    const now = Date.now();
+    setClockMs(now);
+
+    if (recovery.requiresResend) {
+      setRequiresResend(true);
+      setResendAvailableAt(now);
+    }
+
+    if (recovery.minimumCooldownSeconds > 0) {
+      setRateLimitUntil(
+        createOtpCooldownDeadline(recovery.minimumCooldownSeconds, now),
+      );
+    }
+  };
 
   const finish = async () => {
-    if (!otpSchema.safeParse(code).success || busy) {
+    if (!canVerify || !requestGate.current.tryAcquire()) {
       return;
     }
 
@@ -45,15 +98,16 @@ export function OtpVerificationScreen({navigation, route}: Props) {
     try {
       const tokens = await authService.confirmOtp(code);
       dispatch(authActions.authenticated(tokens.identity));
-    } catch (e) {
-      setError(toAppApiError(e).message);
+    } catch (caught) {
+      applyFailureRecovery(caught);
     } finally {
+      requestGate.current.release();
       setBusy(false);
     }
   };
 
   const resend = async () => {
-    if (seconds > 0 || busy) {
+    if (!canResend || !requestGate.current.tryAcquire()) {
       return;
     }
 
@@ -61,14 +115,35 @@ export function OtpVerificationScreen({navigation, route}: Props) {
     setError(null);
     try {
       await authService.beginPhone(role, route.params.phone);
+      const now = Date.now();
+      setClockMs(now);
       setCode('');
-      setSeconds(30);
-    } catch (e) {
-      setError(toAppApiError(e).message);
+      setRequiresResend(false);
+      setRateLimitUntil(0);
+      setResendAvailableAt(
+        createOtpCooldownDeadline(OTP_RESEND_COOLDOWN_SECONDS, now),
+      );
+      AccessibilityInfo.announceForAccessibility('A new verification code was sent.');
+    } catch (caught) {
+      applyFailureRecovery(caught);
     } finally {
+      requestGate.current.release();
       setBusy(false);
     }
   };
+
+  const updateCode = (value: string) => {
+    setCode(sanitizeOtpCode(value));
+    if (error && !requiresResend && !rateLimited) {
+      setError(null);
+    }
+  };
+
+  const resendLabel = rateLimited
+    ? `Try again in ${rateLimitSeconds}s`
+    : resendSeconds > 0
+      ? `Resend code in ${resendSeconds}s`
+      : 'Resend verification code';
 
   return (
     <AuthShell>
@@ -78,24 +153,34 @@ export function OtpVerificationScreen({navigation, route}: Props) {
         <Text style={styles.desc}>We sent a 6-digit code to {route.params.phone}.</Text>
         <InputField
           value={code}
-          onChangeText={value => setCode(value.replace(/\D/g, '').slice(0, 6))}
+          onChangeText={updateCode}
           placeholder="6-digit OTP"
           keyboardType="number-pad"
+          returnKeyType="done"
+          textContentType="oneTimeCode"
+          autoFocus
+          selectTextOnFocus
+          maxLength={OTP_CODE_LENGTH}
+          disabled={busy || requiresResend || rateLimited}
+          accessibilityLabel="Verification code"
+          accessibilityHint="Enter the six digit code sent to your phone"
           error={error ?? undefined}
+          onSubmitEditing={finish}
         />
         <PrimaryButton
           label="Verify & Continue"
           loading={busy}
-          disabled={!otpSchema.safeParse(code).success || busy}
+          disabled={!canVerify}
+          accessibilityHint="Verifies this phone code and continues sign in"
           onPress={finish}
         />
         <Pressable
-          disabled={seconds > 0 || busy}
+          disabled={!canResend}
           onPress={resend}
-          accessibilityRole="button">
-          <Text style={[styles.resend, seconds > 0 && styles.muted]}>
-            {seconds > 0 ? `Resend code in ${seconds}s` : 'Resend verification code'}
-          </Text>
+          accessibilityRole="button"
+          accessibilityState={{disabled: !canResend}}
+          accessibilityHint="Requests a new verification code for this phone number">
+          <Text style={[styles.resend, !canResend && styles.muted]}>{resendLabel}</Text>
         </Pressable>
         <SecurityNote />
       </AuthCard>

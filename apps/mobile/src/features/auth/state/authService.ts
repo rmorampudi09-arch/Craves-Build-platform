@@ -2,43 +2,13 @@ import {AppApiError, toAppApiError} from '../../../core/http/apiError';
 import {sessionManager} from '../api/sessionManager';
 import {authApi} from '../api/authApi';
 import {firebaseAuth} from '../firebase/firebaseAuth';
+import {mapFirebaseAuthError} from '../firebase/firebaseAuthError';
 import type {AuthRole, AuthTokenResponse} from '../domain/types';
 
 async function exchangeAndPersist(firebaseIdToken: string): Promise<AuthTokenResponse> {
   const tokens = await authApi.exchangeFirebaseToken(firebaseIdToken);
   await sessionManager.acceptTokenPair(tokens);
   return tokens;
-}
-
-function mapFirebaseError(error: unknown): AppApiError {
-  if (error instanceof AppApiError) {
-    return error;
-  }
-  const code =
-    typeof error === 'object' && error && 'code' in error
-      ? String((error as {code?: unknown}).code)
-      : 'FIREBASE_AUTH_FAILED';
-  if (code.includes('invalid-verification-code')) {
-    return new AppApiError('INVALID_OTP', 'That verification code is not correct.');
-  }
-  if (code.includes('too-many-requests')) {
-    return new AppApiError('OTP_RATE_LIMITED', 'Too many attempts. Please wait and try again.');
-  }
-  if (code.includes('invalid-phone-number')) {
-    return new AppApiError('INVALID_PHONE', 'Enter a valid phone number.');
-  }
-  if (
-    code.includes('wrong-password') ||
-    code.includes('invalid-credential') ||
-    code.includes('user-not-found') ||
-    code.includes('invalid-email')
-  ) {
-    return new AppApiError('INVALID_CREDENTIALS', 'The email or password is incorrect.');
-  }
-  if (code.includes('user-disabled')) {
-    return new AppApiError('ACCOUNT_DISABLED', 'This account is currently unavailable.');
-  }
-  return new AppApiError('FIREBASE_AUTH_FAILED', 'Authentication could not be completed.');
 }
 
 export const authService = {
@@ -54,7 +24,7 @@ export const authService = {
       await firebaseAuth.beginPhoneSignIn(e164Phone);
       return {role, phone: e164Phone};
     } catch (error) {
-      throw mapFirebaseError(error);
+      throw mapFirebaseAuthError(error);
     }
   },
   async confirmOtp(code: string): Promise<AuthTokenResponse> {
@@ -62,10 +32,7 @@ export const authService = {
       const firebaseIdToken = await firebaseAuth.confirmOtp(code);
       return await exchangeAndPersist(firebaseIdToken);
     } catch (error) {
-      if (error instanceof AppApiError) {
-        throw error;
-      }
-      throw mapFirebaseError(error);
+      throw mapFirebaseAuthError(error);
     }
   },
   async emailLogin(email: string, password: string): Promise<AuthTokenResponse> {
@@ -73,7 +40,7 @@ export const authService = {
       const firebaseIdToken = await firebaseAuth.signInWithEmail(email, password);
       return await exchangeAndPersist(firebaseIdToken);
     } catch (error) {
-      const mapped = mapFirebaseError(error);
+      const mapped = mapFirebaseAuthError(error);
       if (mapped.code === 'PHONE_NUMBER_MISSING') {
         return Promise.reject(
           new AppApiError(
@@ -89,7 +56,7 @@ export const authService = {
     try {
       await firebaseAuth.sendPasswordReset(email);
     } catch (error) {
-      throw mapFirebaseError(error);
+      throw mapFirebaseAuthError(error);
     }
   },
   async logout(): Promise<void> {

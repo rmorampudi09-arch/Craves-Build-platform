@@ -7,12 +7,26 @@ import {Icon} from '../../../shared/components/Icon';
 import {AuthCard} from '../components/AuthCard';
 import {AuthShell} from '../components/AuthShell';
 import {PrimaryButton} from '../components/PrimaryButton';
+import {PASSWORD_RECOVERY_NEUTRAL_MESSAGE} from '../domain/passwordRecoveryPolicy';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PasswordResetSent'>;
 
 export function PasswordResetSentScreen({navigation, route}: Props) {
-  useAuthAttemptRole(route.params.role);
+  const {role} = useAuthAttemptRole(route.params.role);
+
+  const returnToLogin = () => {
+    navigation.reset({
+      index: 1,
+      routes: [
+        {name: 'RoleSelection'},
+        {
+          name: 'EmailSignIn',
+          params: {role, email: route.params.email},
+        },
+      ],
+    });
+  };
 
   return (
     <AuthShell>
@@ -21,18 +35,12 @@ export function PasswordResetSentScreen({navigation, route}: Props) {
         <View style={styles.icon}>
           <Icon name="check" size={30} color={colors.flameRed} />
         </View>
-        <Text style={styles.title}>Check your email</Text>
-        <Text style={styles.desc}>
-          A secure password reset link was sent to {route.params.email}.
-        </Text>
+        <Text style={styles.title}>Password Reset Sent</Text>
+        <Text style={styles.desc}>{PASSWORD_RECOVERY_NEUTRAL_MESSAGE}</Text>
         <PrimaryButton
           label="Back to login"
-          onPress={() =>
-            navigation.replace('EmailSignIn', {
-              role: route.params.role,
-              email: route.params.email,
-            })
-          }
+          accessibilityHint={`Returns to ${role === 'CHEF' ? 'Chef' : 'Customer'} email login`}
+          onPress={returnToLogin}
         />
       </AuthCard>
     </AuthShell>

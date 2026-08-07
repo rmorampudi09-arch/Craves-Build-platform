@@ -2,39 +2,33 @@ import React, {useState} from 'react';
 import {StyleSheet, Text} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../../../app/navigation/types';
-import {AuthShell} from '../components/AuthShell';
-import {AuthHero} from '../components/AuthHero';
-import {RoleSelector} from '../components/RoleSelector';
+import {toAppApiError} from '../../../core/http/apiError';
+import {colors, spacing} from '../../../design/tokens';
+import {phoneSchema, toIndianE164} from '../../../utils/validation';
+import {authService} from '../state/authService';
 import {AuthCard} from '../components/AuthCard';
+import {AuthHero} from '../components/AuthHero';
+import {AuthShell} from '../components/AuthShell';
 import {InputField} from '../components/InputField';
 import {PrimaryButton} from '../components/PrimaryButton';
+import {RoleSelector} from '../components/RoleSelector';
 import {SecurityNote} from '../components/SecurityNote';
-import {colors, spacing} from '../../../design/tokens';
-import {authService} from '../state/authService';
-import {phoneSchema, toIndianE164} from '../../../utils/validation';
-import {toAppApiError} from '../../../core/http/apiError';
-import {useAppDispatch} from '../../../app/store/hooks';
-import {authActions} from '../state/authSlice';
+import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PhoneSignIn'>;
 
 export function PhoneSignInScreen({navigation, route}: Props) {
-  const dispatch = useAppDispatch();
-  const [role, setRole] = useState(route.params.role);
+  const {role, selectRole} = useAuthAttemptRole(route.params.role);
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const parsed = phoneSchema.safeParse(phone);
 
-  const switchRole = (next: typeof role) => {
-    setRole(next);
-    dispatch(authActions.roleSelected(next));
-  };
-
   const submit = async () => {
     if (!parsed.success || busy) {
       return;
     }
+
     setBusy(true);
     setError(null);
     try {
@@ -51,7 +45,7 @@ export function PhoneSignInScreen({navigation, route}: Props) {
   return (
     <AuthShell>
       <AuthHero role={role} />
-      <RoleSelector value={role} onChange={switchRole} />
+      <RoleSelector value={role} onChange={selectRole} />
       <AuthCard>
         <Text style={styles.title}>Verify your phone number</Text>
         <Text style={styles.desc}>

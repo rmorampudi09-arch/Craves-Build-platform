@@ -18,6 +18,8 @@ describe('query/store provider and cache rules', () => {
     expect(defaults.queries?.gcTime).toBe(queryPolicy.gcTimeMs);
     expect(defaults.queries?.refetchOnReconnect).toBe(true);
     expect(defaults.mutations?.retry).toBe(queryPolicy.mutationRetryCount);
+
+    client.clear();
   });
 
   it('creates stable contextual public query keys', () => {
@@ -96,6 +98,8 @@ describe('query/store provider and cache rules', () => {
     expect(client.getQueryData(chefKey)).toBeUndefined();
     expect(client.getQueryData(otherUserKey)).toBeUndefined();
     expect(client.getQueryData(publicKey)).toEqual(['public-dish']);
+
+    client.clear();
   });
 
   it('bounds page size and publishes a finite cached-page limit', () => {

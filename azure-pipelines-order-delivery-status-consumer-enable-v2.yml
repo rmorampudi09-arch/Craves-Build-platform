@@ -32,7 +32,7 @@ steps:
 
   - script: |
       set -euo pipefail
-      bash -n scripts/release/order-delivery-status-consumer-enable.sh
+      bash -n scripts/release/order-delivery-status-consumer-enable-v2.sh
     displayName: Validate activation helper syntax
 
   - task: AzureCLI@2
@@ -43,7 +43,7 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-        bash scripts/release/order-delivery-status-consumer-enable.sh \
+        bash scripts/release/order-delivery-status-consumer-enable-v2.sh \
           '${{ parameters.resourceGroupName }}' \
           '${{ parameters.containerAppName }}' \
           '${{ parameters.integrationContainerAppName }}' \

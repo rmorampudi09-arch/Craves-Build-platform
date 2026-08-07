@@ -20,8 +20,8 @@ export const CUSTOMER_TAB_ACTIVE_COLOR = colors.flameRed;
 export const CUSTOMER_TAB_INACTIVE_COLOR = colors.mutedText;
 
 /**
- * P25 deliberately preserves navigator state on blur. Scroll-driven tab-bar
- * visibility belongs to P26 and is not enabled here.
+ * Preserve each tab stack while P26 independently controls only the visual
+ * hide/reveal state of the shared bottom-navigation surface.
  */
 export const CUSTOMER_TAB_STATE_OPTIONS = {
   lazy: true,

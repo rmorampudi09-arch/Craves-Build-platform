@@ -5,6 +5,11 @@ import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
 import {Icon} from '../../shared/components/Icon';
 import {
+  CustomerBottomNavVisibilityProvider,
+  CustomerBottomTabBar,
+  useCustomerBottomNavReveal,
+} from './CustomerBottomNavController';
+import {
   CUSTOMER_TAB_ACTIVE_COLOR,
   CUSTOMER_TAB_INACTIVE_COLOR,
   CUSTOMER_TAB_STATE_OPTIONS,
@@ -97,46 +102,94 @@ const profileTabOptions = {
   tabBarIcon: ProfileTabIcon,
 };
 
+function useCustomerTabRootListeners() {
+  const showBottomNav = useCustomerBottomNavReveal();
+
+  return React.useMemo(
+    () => ({
+      focus: showBottomNav,
+    }),
+    [showBottomNav],
+  );
+}
+
 /**
  * P25 owns the root shell, not the later marketplace product screens. Reusing
  * the accepted account-status surface keeps the branch honest and functional
  * until each tab root is replaced by its owning product phase.
  */
 function CustomerHomeStackNavigator() {
+  const rootListeners = useCustomerTabRootListeners();
+
   return (
     <HomeStack.Navigator screenOptions={stackScreenOptions}>
-      <HomeStack.Screen name="CustomerHomeRoot" component={CustomerAccountStatusScreen} />
+      <HomeStack.Screen
+        name="CustomerHomeRoot"
+        component={CustomerAccountStatusScreen}
+        listeners={rootListeners}
+      />
     </HomeStack.Navigator>
   );
 }
 
 function CustomerChefsStackNavigator() {
+  const rootListeners = useCustomerTabRootListeners();
+
   return (
     <ChefsStack.Navigator screenOptions={stackScreenOptions}>
-      <ChefsStack.Screen name="CustomerChefsRoot" component={CustomerAccountStatusScreen} />
+      <ChefsStack.Screen
+        name="CustomerChefsRoot"
+        component={CustomerAccountStatusScreen}
+        listeners={rootListeners}
+      />
     </ChefsStack.Navigator>
   );
 }
 
 function CustomerOrdersStackNavigator() {
+  const rootListeners = useCustomerTabRootListeners();
+
   return (
     <OrdersStack.Navigator screenOptions={stackScreenOptions}>
-      <OrdersStack.Screen name="CustomerOrdersRoot" component={CustomerAccountStatusScreen} />
+      <OrdersStack.Screen
+        name="CustomerOrdersRoot"
+        component={CustomerAccountStatusScreen}
+        listeners={rootListeners}
+      />
     </OrdersStack.Navigator>
   );
 }
 
 function CustomerProfileStackNavigator() {
+  const rootListeners = useCustomerTabRootListeners();
+
   return (
     <ProfileStack.Navigator screenOptions={stackScreenOptions}>
-      <ProfileStack.Screen name="CustomerProfileRoot" component={CustomerAccountStatusScreen} />
+      <ProfileStack.Screen
+        name="CustomerProfileRoot"
+        component={CustomerAccountStatusScreen}
+        listeners={rootListeners}
+      />
     </ProfileStack.Navigator>
   );
 }
 
-export function CustomerRootNavigator() {
+function CustomerTabsNavigator() {
+  const showBottomNav = useCustomerBottomNavReveal();
+  const tabScreenListeners = React.useMemo(
+    () => ({
+      focus: showBottomNav,
+      tabPress: showBottomNav,
+    }),
+    [showBottomNav],
+  );
+
   return (
-    <Tab.Navigator initialRouteName="Home" screenOptions={tabScreenOptions}>
+    <Tab.Navigator
+      initialRouteName="Home"
+      screenOptions={tabScreenOptions}
+      screenListeners={tabScreenListeners}
+      tabBar={CustomerBottomTabBar}>
       <Tab.Screen
         name="Home"
         component={CustomerHomeStackNavigator}
@@ -158,5 +211,13 @@ export function CustomerRootNavigator() {
         options={profileTabOptions}
       />
     </Tab.Navigator>
+  );
+}
+
+export function CustomerRootNavigator() {
+  return (
+    <CustomerBottomNavVisibilityProvider>
+      <CustomerTabsNavigator />
+    </CustomerBottomNavVisibilityProvider>
   );
 }

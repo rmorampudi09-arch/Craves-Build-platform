@@ -16,7 +16,7 @@ parameters:
     default: $(Build.BuildId)
 
 variables:
-  servicePath: services/notification-service
+  modulePath: services/notification-service
   imageRepository: craves/notification-service
 
 pool:
@@ -24,17 +24,19 @@ pool:
 
 steps:
   - checkout: self
+
   - task: JavaToolInstaller@0
     displayName: Use Java 21
     inputs:
       versionSpec: '21'
       jdkArchitectureOption: x64
       jdkSourceOption: PreInstalled
+
   - script: |
       set -euo pipefail
-      cd $(servicePath)
+      cd $(modulePath)
       mvn -B -ntp clean verify
-    displayName: Build and test Notification service
+    displayName: Maven build and tests
 
   - task: AzureCLI@2
     displayName: Build and push immutable Notification image
@@ -44,102 +46,34 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-        ACR='${{ parameters.acrName }}'; TAG='${{ parameters.imageTag }}'
-        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+        ACR='${{ parameters.acrName }}'
+        TAG='${{ parameters.imageTag }}'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
         [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
-        az acr login --name "$ACR"
-        docker build --pull -t "$IMAGE" "$(servicePath)"
+        az acr login --name "$ACR" --only-show-errors
+        docker build --pull -t "$IMAGE" "$(modulePath)"
         docker push "$IMAGE"
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Verify existing Notification secret references
+    displayName: Deploy Notification image without changing runtime configuration
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-        RG='${{ parameters.resourceGroupName }}'; APP='${{ parameters.containerAppName }}'
-        APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)
-        SECRET_NAMES=$(az containerapp secret list -g "$RG" -n "$APP" --query '[].name' -o tsv --only-show-errors)
-        env_ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$APP_JSON"; }
-        verify_ref() {
-          local env_name="$1" ref
-          ref=$(env_ref "$env_name")
-          [[ -n "$ref" ]] || { echo "ERROR: $env_name has no Container App secret reference." >&2; exit 1; }
-          grep -Fxq "$ref" <<<"$SECRET_NAMES" || { echo "ERROR: Secret reference for $env_name is missing from the Container App." >&2; exit 1; }
-          echo "$env_name secret reference verified."
-        }
-        verify_ref SPRING_DATASOURCE_PASSWORD
-        verify_ref CRAVES_JWT_VERIFICATION_PEM_BASE64
-        verify_ref CRAVES_INTERNAL_SERVICE_KEY
+        RG='${{ parameters.resourceGroupName }}'
+        ACR='${{ parameters.acrName }}'
+        APP='${{ parameters.containerAppName }}'
+        TAG='${{ parameters.imageTag }}'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
+        [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
+        IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
 
-  - task: AzureCLI@2
-    displayName: Deploy and verify fail-closed Notification revision
-    inputs:
-      azureSubscription: $(AZURE_SERVICE_CONNECTION)
-      scriptType: bash
-      scriptLocation: inlineScript
-      inlineScript: |
-        set -euo pipefail
-        RG='${{ parameters.resourceGroupName }}'; ACR='${{ parameters.acrName }}'; APP='${{ parameters.containerAppName }}'; TAG='${{ parameters.imageTag }}'
-        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv); IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
-        BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json)
-        CURRENT_LATEST_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$BEFORE")
-        PREVIOUS_REVISION=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$BEFORE")
-        [[ -n "$CURRENT_LATEST_REVISION" ]] || { echo 'ERROR: Notification app has no latest revision.' >&2; exit 1; }
-        [[ -n "$PREVIOUS_REVISION" ]] || { echo 'ERROR: Notification app has no ready revision to preserve.' >&2; exit 1; }
-        READY_JSON=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$PREVIOUS_REVISION" -o json --only-show-errors)
-        PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$READY_JSON")
-        target_ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$READY_JSON"; }
-        target_value() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$READY_JSON"; }
-        TARGET_DB_URL=$(target_value SPRING_DATASOURCE_URL)
-        TARGET_DB_USER=$(target_value SPRING_DATASOURCE_USERNAME)
-        TARGET_DB_REF=$(target_ref SPRING_DATASOURCE_PASSWORD)
-        TARGET_JWT_REF=$(target_ref CRAVES_JWT_VERIFICATION_PEM_BASE64)
-        TARGET_INTERNAL_REF=$(target_ref CRAVES_INTERNAL_SERVICE_KEY)
-        [[ -n "$PREVIOUS_REVISION" && -n "$PREVIOUS_IMAGE" && "$PREVIOUS_IMAGE" != "$IMAGE" ]] || { echo 'ERROR: Notification deployment state or image tag is invalid.' >&2; exit 1; }
-        [[ -n "$TARGET_DB_URL" && -n "$TARGET_DB_USER" ]] || { echo 'ERROR: Existing Notification database settings are incomplete.' >&2; exit 1; }
-        [[ -n "$TARGET_DB_REF" && -n "$TARGET_JWT_REF" && -n "$TARGET_INTERNAL_REF" ]] || { echo 'ERROR: Existing Notification secret references are incomplete.' >&2; exit 1; }
-        az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --min-replicas 1 --max-replicas 1 --set-env-vars \
-          SPRING_PROFILES_ACTIVE=prod \
-          SPRING_DATASOURCE_URL="$TARGET_DB_URL" \
-          SPRING_DATASOURCE_USERNAME="$TARGET_DB_USER" \
-          SPRING_DATASOURCE_PASSWORD=secretref:$TARGET_DB_REF \
-          CRAVES_JWT_VERIFICATION_PEM_BASE64=secretref:$TARGET_JWT_REF \
-          CRAVES_JWT_ISSUER='https://api.craves.in/auth' \
-          CRAVES_JWT_AUDIENCE=craves-api \
-          CRAVES_INTERNAL_SERVICE_KEY=secretref:$TARGET_INTERNAL_REF \
-          CRAVES_SERVICEBUS_ENABLED=false \
-          CRAVES_NOTIFICATION_PUSH_ENABLED=false \
-          CRAVES_NOTIFICATION_RECOVERY_API_ENABLED=false \
-          CRAVES_TOKEN_REVOCATION_ENABLED=false \
-          --no-wait -o none
-        REQUIRED_FALSE=(CRAVES_SERVICEBUS_ENABLED CRAVES_NOTIFICATION_PUSH_ENABLED CRAVES_NOTIFICATION_RECOVERY_API_ENABLED CRAVES_TOKEN_REVOCATION_ENABLED)
-        for attempt in $(seq 1 60); do
-          JSON=$(az containerapp show -g "$RG" -n "$APP" -o json); LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON"); READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON"); RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$JSON")
-          LATEST_IMAGE=''; HEALTH=''; if [[ -n "$LATEST" ]]; then LATEST_IMAGE=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || true); HEALTH=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query properties.healthState -o tsv 2>/dev/null || true); fi
-          FLAGS_OK=true; for name in "${REQUIRED_FALSE[@]}"; do value=$(jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$JSON"); [[ "${value,,}" == 'false' ]] || FLAGS_OK=false; done
-          ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$JSON"; }
-          DB_REF=$(ref SPRING_DATASOURCE_PASSWORD); JWT_REF=$(ref CRAVES_JWT_VERIFICATION_PEM_BASE64); INTERNAL_REF=$(ref CRAVES_INTERNAL_SERVICE_KEY)
-          echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE flagsOk=$FLAGS_OK dbRef=$DB_REF jwtRef=$JWT_REF internalRef=$INTERNAL_REF"
-          if [[ "$LATEST" != "$CURRENT_LATEST_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$DB_REF" == "$TARGET_DB_REF" && "$JWT_REF" == "$TARGET_JWT_REF" && "$INTERNAL_REF" == "$TARGET_INTERNAL_REF" ]]; then
-            FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON"); [[ -n "$FQDN" ]] || exit 1
-            if curl --fail --silent --max-time 30 "https://$FQDN/actuator/health/liveness" | jq -e '.status == "UP"' >/dev/null; then
-              echo 'Direct Notification liveness endpoint is reachable.'
-            else
-              echo 'Direct Notification liveness endpoint is not externally reachable; Azure revision health remains authoritative.'
-            fi
-            echo "SUCCESS: Notification revision $LATEST is healthy, secret-bound and fail-closed. Rollback image: $PREVIOUS_IMAGE"
-            exit 0
-          fi
-          if [[ "$LATEST" != "$CURRENT_LATEST_REVISION" && ( "$HEALTH" == 'Unhealthy' || "$RUNNING" == 'Failed' ) ]]; then
-            az containerapp logs show -g "$RG" -n "$APP" --revision "$LATEST" --type console --tail 200 --format text || true
-            exit 1
-          fi
-          sleep 10
-        done
-        echo 'ERROR: Notification revision did not become healthy and fail-closed within 10 minutes.' >&2
-        exit 1
+        bash scripts/release/deploy-single-service-preserve-runtime.sh \
+          "$RG" \
+          "$APP" \
+          "$IMAGE" \
+          notification

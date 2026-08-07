@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical ledger preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. Earlier archives remain under `docs/mobile-ui-rebuild/`. P10–P15 have dedicated evidence documents, including `P13_CUSTOMER_PHONE_SIGN_IN_VISUAL_INTERACTION.md`, `P14_CHEF_PHONE_SIGN_IN_VISUAL_INTERACTION.md`, and `P15_CUSTOMER_EMAIL_SIGN_IN.md`.
+**Historical ledger preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P16 have dedicated evidence documents under `docs/mobile-ui-rebuild/`, including `P13_CUSTOMER_PHONE_SIGN_IN_VISUAL_INTERACTION.md`, `P14_CHEF_PHONE_SIGN_IN_VISUAL_INTERACTION.md`, `P15_CUSTOMER_EMAIL_SIGN_IN.md`, and `P16_CHEF_EMAIL_SIGN_IN.md`.
 
 ---
 
@@ -36,20 +36,21 @@
 - **P13 — Customer Phone Sign-In Visual + Interaction: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
 - **P14 — Chef Phone Sign-In Visual + Interaction: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
 - **P15 — Customer Email/Password Sign-In: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
+- **P16 — Chef Email/Password Sign-In: DONE** at implementation level; device pixel-certification remains a later visual-QA gate.
 
-P15 completion evidence:
+P16 completion evidence:
 
-- Started from accepted P14 record HEAD: `4007a0496fe36993a2b3fedb96bf4343a384deef`.
-- Validated P15 implementation commit: `595bdf73a2afefc58554b0d3cd3beda600d8aa6c`.
-- Evidence commit: `862cb3357a7d0c2f495c45c2d7e5002cb66cc4f4`.
-- Evidence: `docs/mobile-ui-rebuild/P15_CUSTOMER_EMAIL_SIGN_IN.md`.
-- CI run: `31213256378` — **SUCCESS**.
+- Started from accepted P15 record HEAD: `35835055fcf5c7ed8c7edba5a46add836fc749f6`.
+- Validated P16 implementation commit: `44f82184f169e3c01363658e8bd1c33eca3a85cc`.
+- Evidence commit: `aada5e2fd867dba06792238a7cb67c05f1ea679f`.
+- Evidence: `docs/mobile-ui-rebuild/P16_CHEF_EMAIL_SIGN_IN.md`.
+- CI run: `31214293358` — **SUCCESS**.
 
-**Next phase in sequence:** **P16 — Chef Email/Password Sign-In**.
+**Next phase in sequence:** **P17 — OTP Verification, Resend, Expiry, Rate Limit**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop and wait for the user to explicitly start/continue P16. Do not pre-implement P16.
+**Required action:** Stop and wait for the user to explicitly start/continue P17. Do not pre-implement P17.
 
 ---
 
@@ -59,9 +60,9 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31213256378`
-- Head SHA: `595bdf73a2afefc58554b0d3cd3beda600d8aa6c`
-- Phase: **P15 — Customer Email/Password Sign-In**
+- GitHub Actions run ID: `31214293358`
+- Head SHA: `44f82184f169e3c01363658e8bd1c33eca3a85cc`
+- Phase: **P16 — Chef Email/Password Sign-In**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -70,8 +71,8 @@ Successful checks:
 2. Node setup,
 3. `npm ci`,
 4. strict TypeScript (`tsc --noEmit`),
-5. ESLint with `--max-warnings=0`,
-6. Jest including P15 email normalization/validation/recovery/request-gate coverage and prior regressions,
+5. ESLint with zero warnings,
+6. Jest including P16 Chef role-preservation coverage and prior email-auth regressions,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
 
@@ -79,45 +80,43 @@ This workflow intentionally does **not** perform Java/Gradle/APK packaging. That
 
 ---
 
-## 3. P15 Accepted Customer Email Sign-In Boundary
+## 3. P16 Accepted Chef Email Sign-In Boundary
 
-Guide scope: Screen 03 / Reference Image 03 — Customer Email and Password Sign-In, full-guide pages 29–31 (`image3.jpeg`).
+Guide scope: Screen 04 / Reference Image 04 — Chef Email and Password Sign-In (`image4.jpeg`), specification beginning on full-guide page 32 and screen-specific prompt beginning on page 33.
 
-Key P15 implementation files:
+Key P16 implementation files:
 
 - `apps/mobile/src/features/auth/screens/EmailSignInScreen.tsx`
 - `apps/mobile/src/features/auth/domain/emailSignInPolicy.ts`
 - `apps/mobile/src/features/auth/domain/emailSignInPolicy.test.ts`
-- `apps/mobile/src/features/auth/state/authService.ts`
 
-Accepted P15 behavior:
+Accepted P16 behavior:
 
-- Reuses the existing role-aware authentication architecture and Firebase/email transport; no duplicate authentication stack is introduced.
-- Email is trimmed and lowercased at the typed submission boundary while the user-entered password is passed through unchanged.
-- Email/password validation is field-specific, with inline errors after field touch or attempted submission.
-- Login remains disabled until valid and while busy; a synchronous request gate also blocks same-tick duplicate login attempts.
-- Role selection, fields, password recovery navigation, and alternate phone navigation cannot race an active email login.
-- Password visibility is an accessible Show/Hide control and raw credentials remain transient component state only.
-- Android email/password autofill metadata is supplied without caching credentials in app persistence.
-- Forgot Password receives the selected role and only a valid normalized email prefill; invalid email text is not forwarded.
-- Existing role-preserving phone fallback remains intact.
-- Firebase wrong-password, invalid-credential, user-not-found, and invalid-email conditions use the same public invalid-credentials message to avoid client-side account-existence disclosure.
+- Reuses the single role-aware email/password screen and authentication engine accepted in P15; no duplicate Chef auth screen, API stack, navigation container, or transport layer was introduced.
+- Chef selection drives the existing role-aware `AuthHero`, selector state, and approved-chef sign-in copy.
+- Typed Chef email submissions preserve `CHEF` while normalizing email and leaving the password unchanged.
+- Forgot Password preserves the selected Chef role and forwards only a valid normalized email prefill.
+- Continue with phone number preserves the selected Chef role.
+- `PHONE_VERIFICATION_REQUIRED` recovery preserves the captured submission role when replacing email sign-in with phone sign-in.
+- Busy/disabled state prevents recovery, role changes, or alternate-auth navigation from racing an active credential attempt.
+- Existing password visibility accessibility, Android autofill metadata, inline validation, synchronous duplicate-request protection, and non-disclosing Firebase credential errors remain shared with Customer sign-in.
+- P15 Customer behavior remains covered by retained regression tests.
 - Auth route policy continues to keep Customer/Chef bottom navigation, View Cart, and authenticated header controls absent.
-- No fake success, TODO, empty handler, mock delay, or fabricated backend response was added.
+- No fake Chef approval, fake success, TODO, empty handler, mock delay, or fabricated backend response was added.
 
-### P15 exact authentication/API boundary
+### P16 exact authentication/API boundary
 
-P15 adds no APIM endpoint and changes no backend/APIM/infrastructure source.
+P16 adds no APIM endpoint and changes no backend/APIM/infrastructure source.
 
-The accepted chain is:
+The credential chain remains:
 
 `EmailSignInScreen.submit()` -> `createEmailSignInSubmission(role, email, password)` -> `authService.emailLogin(normalizedEmail, originalPassword)` -> `firebaseAuth.signInWithEmail()` -> React Native Firebase `signInWithEmailAndPassword(getAuth(), email, password)` -> Firebase ID token -> existing `POST /api/v1/auth/firebase/exchange` wrapper -> `sessionManager.acceptTokenPair()`.
 
-The exchange route remains `CONTRACT_ONLY` under P02. P19 owns granular Firebase-to-CRAVES exchange acceptance/runtime verification, P20 owns restore/refresh lifecycle acceptance, and P21 owns authoritative backend identity/role/onboarding resolution. P18 owns complete password-recovery acceptance; P15 only implements Screen 03's valid prefill/navigation boundary.
+P16 does **not** treat the client-selected Chef role as authoritative Chef authorization. The existing P02 contract state remains authoritative. P19 owns Firebase-to-CRAVES exchange acceptance, P21 owns authoritative backend identity/role resolution, P23 owns Chef application/onboarding status, and P18 owns complete password-recovery acceptance.
 
 ---
 
-## 4. Current Architecture Ownership After P15
+## 4. Current Architecture Ownership After P16
 
 ### Navigation
 
@@ -125,6 +124,7 @@ The exchange route remains `CONTRACT_ONLY` under P02. P19 owns granular Firebase
 - Typed route/domain definitions: `app/navigation/types.ts`.
 - Bottom-nav/View-Cart/immersive policy: `app/navigation/navigationPolicy.ts`.
 - Fail-closed anonymous deep-link validation: `app/navigation/deepLinkPolicy.ts`.
+- Customer and Chef email sign-in remain one typed `EmailSignIn` route with role context; no parallel Chef navigator was created for P16.
 
 ### Authentication role state
 
@@ -141,7 +141,7 @@ The exchange route remains `CONTRACT_ONLY` under P02. P19 owns granular Firebase
 
 ### Email sign-in policy
 
-- Email normalization, field validation mapping, typed role/email/password submission snapshot, password-recovery prefill eligibility, and synchronous duplicate-request gate: `features/auth/domain/emailSignInPolicy.ts`.
+- Email normalization, field validation mapping, typed role/email/password submission snapshot, password-recovery prefill eligibility, typed role-preserving auth-route contexts, and synchronous duplicate-request gate: `features/auth/domain/emailSignInPolicy.ts`.
 - Native Firebase email/password authentication: `features/auth/firebase/firebaseAuth.ts`.
 - Shared Firebase/CRAVES orchestration and safe credential-error mapping: `features/auth/state/authService.ts`.
 
@@ -152,12 +152,11 @@ The exchange route remains `CONTRACT_ONLY` under P02. P19 owns granular Firebase
 - Token acceptance/restore/refresh/local-clear owner: `features/auth/api/sessionManager.ts`.
 - Authenticated bearer injection and one-shot 401 replay: accepted P09 `core/http/apiClient.ts` boundary.
 
-### Later-phase boundaries not pulled into P15
+### Later-phase boundaries not pulled into P16
 
-- P16 owns Chef Email Sign-In granular acceptance.
 - P17 owns OTP verification/resend granular acceptance.
 - P18 owns password recovery.
-- P19 owns Firebase-to-Craves exchange acceptance against the exact approved contract.
+- P19 owns Firebase-to-CRAVES exchange acceptance against the exact approved contract.
 - P20 owns startup restore/silent-refresh lifecycle UX.
 - P21 owns authoritative backend identity/role/onboarding resolution.
 - P22/P23 own customer completion and Chef application/status flows.
@@ -179,7 +178,7 @@ Current coded paths remain governed by P02, including:
 - `GET /api/v1/chef/application` — `BLOCKED`
 - `POST /api/v1/chef/application` — `BLOCKED`
 
-P15 does not invent, alter, or claim runtime verification of these routes or payloads.
+P16 does not invent, alter, or claim runtime verification of these routes or payloads.
 
 ---
 
@@ -194,8 +193,8 @@ P15 does not invent, alter, or claim runtime verification of these routes or pay
 | P13 Customer Phone Sign-In | **DONE** | Customer phone validation, request guard, native Firebase initiation and focused tests accepted; CI `31211607174`. Device pixel-certification deferred. |
 | P14 Chef Phone Sign-In | **DONE** | Chef-specific role/copy/submission acceptance through the shared phone-auth engine; CI `31212292710`. Device pixel-certification deferred. |
 | P15 Customer Email Sign-In | **DONE** | Customer email normalization, field validation, password visibility/autofill, safe recovery prefill, duplicate-request guard, non-disclosing credential errors, and focused tests accepted; CI `31213256378`. Device pixel-certification deferred. |
-| P16 Chef Email Sign-In | PARTIAL / existing baseline | Granular acceptance pending; not authorized yet. |
-| P17 OTP | PARTIAL / existing baseline | Granular verification/resend acceptance pending. |
+| P16 Chef Email Sign-In | **DONE** | Chef role visual state remains in shared auth screen; typed Chef role preservation through submit/recovery/phone fallbacks accepted; CI `31214293358`. Device pixel-certification deferred. |
+| P17 OTP | PARTIAL / existing baseline | Granular verification/resend acceptance pending; not authorized yet. |
 | P18 Password Recovery | PARTIAL / existing baseline | Granular acceptance pending. |
 | P19 Firebase -> CRAVES Exchange | PARTIAL / existing baseline | Mobile code exists; exact route remains `CONTRACT_ONLY` under P02. |
 | P20 Session Restore/Refresh | PARTIAL / foundation exists | P10/P11 foundations exist; lifecycle/root UX acceptance pending. |
@@ -207,18 +206,18 @@ P15 does not invent, alter, or claim runtime verification of these routes or pay
 
 ---
 
-## 7. Explicitly Not Complete After P15
+## 7. Explicitly Not Complete After P16
 
 Do not describe any of the following as complete:
 
-- P16 Chef email-sign-in granular/reference acceptance,
 - P17 OTP and P18 password-recovery granular acceptance,
 - runtime/backend/APIM resolution of P02 `CONTRACT_ONLY` and `BLOCKED` routes,
 - authoritative full APIM/OpenAPI restoration,
 - full P19/P20/P21/P22/P23/P24 auth/account lifecycle acceptance,
-- physical-device pixel-perfect certification of References 01–03 or the remaining reference set,
+- authoritative Chef approval/status resolution after credentials,
+- physical-device pixel-perfect certification of References 01–04 or the remaining reference set,
 - Customer product refs beyond the accepted auth phases,
-- Chef product refs beyond the accepted Chef phone-auth visual state,
+- Chef product refs beyond the accepted auth visual states,
 - Customer/chef bottom-tab product shells,
 - View Cart authoritative UI/cart synchronization,
 - authenticated product/resource deep links and notification routing,
@@ -283,12 +282,27 @@ Preserve useful prior history under `docs/mobile-ui-rebuild/` before compacting 
 - Guide reference: Screen 03 / Reference Image 03, pages 29–31 (`image3.jpeg`).
 - Changed implementation files: `EmailSignInScreen.tsx`, `emailSignInPolicy.ts`, `emailSignInPolicy.test.ts`, `authService.ts`.
 - API/contracts used: existing React Native Firebase email/password authentication and existing `POST /api/v1/auth/firebase/exchange` wrapper; no new/changed APIM route. Exchange runtime acceptance remains P19.
-- Behavior completed: normalized Customer email submission with unchanged password, inline field validation, accessible password visibility, autofill metadata, valid-only recovery prefill, duplicate-request protection, busy-state race protection, role-preserving phone fallback, and non-disclosing Firebase credential errors.
 - Tests/checks: GitHub Actions run `31213256378` — **SUCCESS**.
 - Visual QA: guide/code traceability completed without redesign; physical-device pixel-perfect screenshot certification deferred.
 - APK built: **No**, per implementation-phase policy.
 - Backend/APIM/infrastructure source changed: **No**.
-- Blockers: none to P15 implementation acceptance; P02 later-phase contract blockers remain.
+
+### P16 — Chef Email/Password Sign-In
+
+- Status: **DONE** at implementation level.
+- Started from accepted P15 record HEAD: `35835055fcf5c7ed8c7edba5a46add836fc749f6`.
+- Validated implementation commit: `44f82184f169e3c01363658e8bd1c33eca3a85cc`.
+- Evidence commit: `aada5e2fd867dba06792238a7cb67c05f1ea679f`.
+- Evidence: `docs/mobile-ui-rebuild/P16_CHEF_EMAIL_SIGN_IN.md`.
+- Guide reference: Screen 04 / Reference Image 04 (`image4.jpeg`), specification page 32 and implementation prompt beginning page 33.
+- Changed implementation files: `EmailSignInScreen.tsx`, `emailSignInPolicy.ts`, `emailSignInPolicy.test.ts`.
+- API/contracts used: same shared React Native Firebase email/password authentication and existing `POST /api/v1/auth/firebase/exchange` wrapper; no new or changed APIM route.
+- Behavior completed: Chef role is explicitly preserved through typed email submission, valid-only forgot-password prefill, alternate phone navigation, and phone-verification-required fallback while retaining the shared P15 credential engine and Customer regressions.
+- Tests/checks: GitHub Actions run `31214293358` — **SUCCESS**.
+- Visual QA: guide/code traceability completed without redesign; physical-device pixel-perfect screenshot certification deferred.
+- APK built: **No**, per implementation-phase policy.
+- Backend/APIM/infrastructure source changed: **No**.
+- Blockers: none to the P16 implementation acceptance boundary; authoritative Chef role/application status remains owned by P21/P23 and existing P02 contract blockers remain.
 - Next phase: **NONE AUTHORIZED — waiting for user**.
 
 ---
@@ -297,4 +311,4 @@ Preserve useful prior history under `docs/mobile-ui-rebuild/` before compacting 
 
 **Stop here.**
 
-P15 is complete at the authorized implementation boundary. **P16 — Chef Email/Password Sign-In** is next in `phases.md`, but it is **not authorized** by completion of P15. Begin P16 only after the user explicitly says to continue/start the next phase.
+P16 is complete at the authorized implementation boundary. **P17 — OTP Verification, Resend, Expiry, Rate Limit** is next in `phases.md`, but it is **not authorized** by completion of P16. Begin P17 only after the user explicitly says to continue/start the next phase.

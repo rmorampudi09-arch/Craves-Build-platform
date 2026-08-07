@@ -1,6 +1,34 @@
-import React,{useEffect,useRef,useState}from'react';
-import{Animated,LayoutChangeEvent,Pressable,StyleSheet,Text,View}from'react-native';
-import{colors,radius,spacing}from'../../../design/tokens';import type{AuthRole}from'../domain/types';
-interface Props{value:AuthRole;onChange:(role:AuthRole)=>void}
-export function RoleSelector({value,onChange}:Props){const[width,setWidth]=useState(0);const progress=useRef(new Animated.Value(value==='CUSTOMER'?0:1)).current;useEffect(()=>{Animated.timing(progress,{toValue:value==='CUSTOMER'?0:1,duration:180,useNativeDriver:true}).start()},[progress,value]);const segment=Math.max(0,(width-10)/2);const translateX=progress.interpolate({inputRange:[0,1],outputRange:[0,segment]});const layout=(e:LayoutChangeEvent)=>setWidth(e.nativeEvent.layout.width);return <View style={s.wrapper} onLayout={layout}><Animated.View style={[s.indicator,{width:segment,transform:[{translateX}]}]}/>{(['CUSTOMER','CHEF']as const).map(role=><Pressable key={role} style={s.tab} accessibilityRole="button" accessibilityState={{selected:value===role}} onPress={()=>onChange(role)}><Text style={[s.label,value===role&&s.active]}>{role==='CUSTOMER'?'Customer':'Chef'}</Text></Pressable>)}</View>}
-const s=StyleSheet.create({wrapper:{height:62,marginHorizontal:spacing.xl,marginBottom:spacing.sm,backgroundColor:colors.white,borderRadius:radius.lg,flexDirection:'row',padding:5,borderWidth:1,borderColor:colors.border,overflow:'hidden'},indicator:{position:'absolute',top:5,left:5,bottom:5,backgroundColor:colors.flameRed,borderRadius:radius.md},tab:{flex:1,alignItems:'center',justifyContent:'center',zIndex:1},label:{fontSize:16,fontWeight:'600',color:colors.ink},active:{color:colors.white}});
+import React from 'react';
+import {StyleSheet} from 'react-native';
+import {spacing} from '../../../design/tokens';
+import {SegmentedControl} from '../../../shared/components/SegmentedControl';
+import type {AuthRole} from '../domain/types';
+
+interface Props {
+  value: AuthRole;
+  onChange: (role: AuthRole) => void;
+}
+
+const options = [
+  {value: 'CUSTOMER', label: 'Customer'},
+  {value: 'CHEF', label: 'Chef'},
+] as const;
+
+export function RoleSelector({value, onChange}: Props) {
+  return (
+    <SegmentedControl<AuthRole>
+      accessibilityLabel="Account type"
+      value={value}
+      options={options}
+      onChange={onChange}
+      style={styles.wrapper}
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  wrapper: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+});

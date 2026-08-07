@@ -26,197 +26,59 @@ variables:
 pool:
   vmImage: ubuntu-latest
 
-stages:
-  - stage: BuildAndDeployAuthService
-    displayName: Build, deploy and verify Auth Service
-    jobs:
-      - job: BuildDeploy
-        timeoutInMinutes: 45
-        steps:
-          - checkout: self
+steps:
+  - checkout: self
 
-          - task: JavaToolInstaller@0
-            displayName: Use Java 21
-            inputs:
-              versionSpec: '21'
-              jdkArchitectureOption: x64
-              jdkSourceOption: PreInstalled
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
 
-          - script: |
-              set -euo pipefail
-              cd $(modulePath)
-              mvn -B -ntp clean verify
-            displayName: Maven build and tests
+  - script: |
+      set -euo pipefail
+      cd $(modulePath)
+      mvn -B -ntp clean verify
+    displayName: Maven build and tests
 
-          - task: AzureCLI@2
-            displayName: Build and push immutable Auth image
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                set -euo pipefail
-                ACR='${{ parameters.acrName }}'
-                TAG='${{ parameters.imageTag }}'
-                IMAGE_REPOSITORY='$(imageRepository)'
-                ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
-                [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
-                IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-                az acr login --name "$ACR"
-                docker build --pull -t "$IMAGE" "$(modulePath)"
-                docker push "$IMAGE"
-                echo "Image pushed: $IMAGE"
+  - task: AzureCLI@2
+    displayName: Build and push immutable Auth image
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        ACR='${{ parameters.acrName }}'
+        TAG='${{ parameters.imageTag }}'
+        IMAGE_REPOSITORY='$(imageRepository)'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
+        [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
+        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+        az acr login --name "$ACR" --only-show-errors
+        docker build --pull -t "$IMAGE" "$(modulePath)"
+        docker push "$IMAGE"
+        echo "Image pushed: $IMAGE"
 
-          - task: AzureCLI@2
-            displayName: Verify Auth managed identity can pull from ACR
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                set -euo pipefail
-                RG='${{ parameters.resourceGroupName }}'
-                ACR='${{ parameters.acrName }}'
-                APP='${{ parameters.containerAppName }}'
-                PRINCIPAL_ID=$(az containerapp show -g "$RG" -n "$APP" --query identity.principalId -o tsv)
-                ACR_ID=$(az acr show --name "$ACR" --query id -o tsv)
-                [[ -n "$PRINCIPAL_ID" && -n "$ACR_ID" ]] || { echo 'ERROR: Managed identity or ACR resource ID is missing.' >&2; exit 1; }
-                ASSIGNMENT=$(az role assignment list --assignee "$PRINCIPAL_ID" --role AcrPull --scope "$ACR_ID" --query '[0].id' -o tsv)
-                [[ -n "$ASSIGNMENT" ]] || { echo 'ERROR: Auth Container App managed identity lacks AcrPull on ACR.' >&2; exit 1; }
-                echo 'AcrPull assignment verified.'
+  - task: AzureCLI@2
+    displayName: Deploy Auth image without changing runtime configuration
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        ACR='${{ parameters.acrName }}'
+        APP='${{ parameters.containerAppName }}'
+        TAG='${{ parameters.imageTag }}'
+        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
+        [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
+        IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
 
-          - task: AzureCLI@2
-            displayName: Store Auth secrets with valid Container App names
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                set -euo pipefail
-                set +x
-                RG='${{ parameters.resourceGroupName }}'
-                APP='${{ parameters.containerAppName }}'
-                NOTIFICATION_APP='ca-craves-notification-service-p'
-                DB_PASSWORD='$(POSTGRES_AUTH_DB_PASSWORD)'
-                FIREBASE_JSON='$(FIREBASE_SERVICE_ACCOUNT_JSON_BASE64)'
-                JWT_PRIVATE='$(CRAVES_JWT_PRIVATE_KEY_PEM_BASE64)'
-                INTERNAL_SECRET='$(CRAVES_INTERNAL_SERVICE_SECRET)'
-                require_value() {
-                  local variable_name="$1" value="$2"
-                  [[ -n "$value" && "$value" != "\$($variable_name)" ]] || {
-                    echo "ERROR: Secure pipeline variable $variable_name is missing." >&2
-                    exit 1
-                  }
-                }
-                require_value POSTGRES_AUTH_DB_PASSWORD "$DB_PASSWORD"
-                require_value FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 "$FIREBASE_JSON"
-                require_value CRAVES_JWT_PRIVATE_KEY_PEM_BASE64 "$JWT_PRIVATE"
-                require_value CRAVES_INTERNAL_SERVICE_SECRET "$INTERNAL_SECRET"
-                az containerapp secret set -g "$RG" -n "$APP" --secrets \
-                  db-password="$DB_PASSWORD" \
-                  firebase-admin-json="$FIREBASE_JSON" \
-                  jwt-private-pem="$JWT_PRIVATE" \
-                  internal-secret="$INTERNAL_SECRET" \
-                  -o none
-                az containerapp show -g "$RG" -n "$NOTIFICATION_APP" --only-show-errors >/dev/null
-                az containerapp secret set -g "$RG" -n "$NOTIFICATION_APP" \
-                  --secrets auth-internal-secret="$INTERNAL_SECRET" \
-                  --only-show-errors -o none
-                echo 'Auth secrets stored and the protected email-lookup secret was handed to Notification; values were not printed.'
-
-          - task: AzureCLI@2
-            displayName: Deploy and verify fail-closed Auth revision
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                set -euo pipefail
-                RG='${{ parameters.resourceGroupName }}'
-                ACR='${{ parameters.acrName }}'
-                APP='${{ parameters.containerAppName }}'
-                TAG='${{ parameters.imageTag }}'
-                IMAGE_REPOSITORY='$(imageRepository)'
-                ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
-                IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
-                APP_BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json)
-                PREVIOUS_REVISION=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_BEFORE")
-                PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$APP_BEFORE")
-                [[ -n "$PREVIOUS_REVISION" && -n "$PREVIOUS_IMAGE" ]] || { echo 'ERROR: Existing Auth Container App state is incomplete.' >&2; exit 1; }
-                [[ "$PREVIOUS_IMAGE" != "$IMAGE" ]] || { echo 'ERROR: Target image is already deployed. Use a new immutable image tag.' >&2; exit 1; }
-
-                az containerapp update \
-                  --name "$APP" \
-                  --resource-group "$RG" \
-                  --image "$IMAGE" \
-                  --set-env-vars \
-                    SPRING_PROFILES_ACTIVE=prod \
-                    SPRING_DATASOURCE_URL='$(POSTGRES_AUTH_DB_URL)' \
-                    SPRING_DATASOURCE_USERNAME='$(POSTGRES_AUTH_DB_USER)' \
-                    SPRING_DATASOURCE_PASSWORD=secretref:db-password \
-                    FIREBASE_PROJECT_ID='$(FIREBASE_PROJECT_ID)' \
-                    FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=secretref:firebase-admin-json \
-                    CRAVES_JWT_PRIVATE_KEY_PEM_BASE64=secretref:jwt-private-pem \
-                    CRAVES_INTERNAL_SERVICE_SECRET=secretref:internal-secret \
-                    CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS=false \
-                    CRAVES_JWT_ISSUER='https://api.craves.in/auth' \
-                    CRAVES_JWT_AUDIENCE=craves-api \
-                    CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED=false \
-                    CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED=false \
-                    CRAVES_TOKEN_REVOCATION_PUBLISHER_ENABLED=false \
-                    CRAVES_TOKEN_REVOCATION_ENABLED=false \
-                    CRAVES_AUTH_RATE_LIMIT_ENABLED=false \
-                  --no-wait \
-                  -o none
-
-                REQUIRED_FALSE=(
-                  CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED
-                  CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED
-                  CRAVES_TOKEN_REVOCATION_PUBLISHER_ENABLED
-                  CRAVES_TOKEN_REVOCATION_ENABLED
-                  CRAVES_AUTH_RATE_LIMIT_ENABLED
-                )
-                for attempt in $(seq 1 60); do
-                  APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
-                  LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
-                  READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
-                  RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
-                  LATEST_IMAGE=''
-                  HEALTH=''
-                  if [[ -n "$LATEST" ]]; then
-                    LATEST_IMAGE=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || true)
-                    HEALTH=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query properties.healthState -o tsv 2>/dev/null || true)
-                  fi
-                  FLAGS_OK=true
-                  for name in "${REQUIRED_FALSE[@]}"; do
-                    value=$(jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].value // ""' <<<"$APP_JSON")
-                    [[ "${value,,}" == 'false' ]] || FLAGS_OK=false
-                  done
-                  secret_ref() { jq -r --arg name "$1" '[.properties.template.containers[0].env[]? | select(.name == $name)][0].secretRef // ""' <<<"$APP_JSON"; }
-                  DB_REF=$(secret_ref SPRING_DATASOURCE_PASSWORD)
-                  FIREBASE_REF=$(secret_ref FIREBASE_SERVICE_ACCOUNT_JSON_BASE64)
-                  JWT_REF=$(secret_ref CRAVES_JWT_PRIVATE_KEY_PEM_BASE64)
-                  INTERNAL_REF=$(secret_ref CRAVES_INTERNAL_SERVICE_SECRET)
-                  echo "Attempt $attempt/60 latest=$LATEST ready=$READY running=$RUNNING health=$HEALTH image=$LATEST_IMAGE flagsOk=$FLAGS_OK dbRef=$DB_REF firebaseRef=$FIREBASE_REF jwtRef=$JWT_REF internalRef=$INTERNAL_REF"
-                  if [[ "$LATEST" != "$PREVIOUS_REVISION" && "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$HEALTH" == 'Healthy' && "$LATEST_IMAGE" == "$IMAGE" && "$FLAGS_OK" == true && "$DB_REF" == 'db-password' && "$FIREBASE_REF" == 'firebase-admin-json' && "$JWT_REF" == 'jwt-private-pem' && "$INTERNAL_REF" == 'internal-secret' ]]; then
-                    FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
-                    [[ -n "$FQDN" ]] || { echo 'ERROR: Auth FQDN is missing.' >&2; exit 1; }
-                    if curl --fail --silent --max-time 30 "https://$FQDN/actuator/health/liveness" | jq -e '.status == "UP"' >/dev/null; then
-                      echo 'Direct Auth liveness endpoint is reachable.'
-                    else
-                      echo 'Direct Auth liveness endpoint is not externally reachable; Azure revision health remains authoritative.'
-                    fi
-                    echo "SUCCESS: Auth revision $LATEST is healthy, secret-bound and fail-closed."
-                    echo "Rollback image: $PREVIOUS_IMAGE"
-                    exit 0
-                  fi
-                  if [[ "$HEALTH" == 'Unhealthy' || "$RUNNING" == 'Failed' ]]; then
-                    az containerapp logs show -g "$RG" -n "$APP" --revision "$LATEST" --type console --tail 200 --format text || true
-                    echo 'ERROR: Auth revision became unhealthy.' >&2
-                    exit 1
-                  fi
-                  sleep 10
-                done
-
-                echo 'ERROR: Auth revision did not become healthy and fail-closed within 10 minutes.' >&2
-                exit 1
+        bash scripts/release/deploy-single-service-preserve-runtime.sh \
+          "$RG" \
+          "$APP" \
+          "$IMAGE" \
+          auth

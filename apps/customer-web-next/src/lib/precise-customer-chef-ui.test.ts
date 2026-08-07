@@ -11,6 +11,8 @@ const hero = source("../components/sections/HeroSection.tsx");
 const welcome = source("../components/home/WelcomeBanner.tsx");
 const checkout = source("../screens/Checkout/Checkout.tsx");
 const orders = source("../screens/OrderHistory/OrderHistory.tsx");
+const cart = source("../screens/Cart/Cart.tsx");
+const notifications = source("../screens/Notifications/Notifications.tsx");
 const addressDialog = source("../components/checkout/CheckoutAddressDialog.tsx");
 const chefActions = source("../components/chef-order-actions.tsx");
 const mealPlans = source("../components/subscription-plan-browser.tsx");
@@ -80,6 +82,15 @@ test("checkout shows only the current address and manages all addresses in a dia
 test("customer orders page uses a white page surface", () => {
   assert.match(orders, /min-h-screen bg-white pb-20 text-ink/);
   assert.doesNotMatch(orders, /min-h-screen bg-cream pb-20 text-ink/);
+});
+
+test("customer cart and notifications use white page surfaces", () => {
+  assert.match(cart, /min-h-screen bg-white pb-32 text-ink/);
+  assert.doesNotMatch(cart, /min-h-screen bg-cream pb-32 text-ink/);
+  assert.match(notifications, /min-h-screen bg-white pb-12/);
+  assert.match(notifications, /border-b border-border bg-white\/95/);
+  assert.doesNotMatch(notifications, /min-h-screen bg-cream pb-12/);
+  assert.doesNotMatch(notifications, /border-b border-border bg-cream\/95/);
 });
 
 test("chef accept and reject fields use one neutral border with no focus outline or ring", () => {

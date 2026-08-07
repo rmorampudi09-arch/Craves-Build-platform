@@ -76,7 +76,7 @@ function LandingPage() {
   }
 
   return (
-    <div className={`${styles.page} min-h-screen bg-white text-[#111111]`}>
+    <div className={`${styles.page} min-h-screen bg-white text-ink`}>
       <main>
         <HeroSection
           locationLabel={locationLabel}

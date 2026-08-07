@@ -1,141 +1,119 @@
-import { ChefHat, Heart, House, ShieldCheck, Truck } from "lucide-react";
+import { ChefHat, Heart, House } from "lucide-react";
+
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import styles from "@/screens/public/LandingPage/LandingV2.module.css";
 
-const impactItems = [
-  {
-    title: "Support Home Chefs",
-    description: "Every order helps home chefs share their passion.",
-    icon: House,
-  },
-  {
-    title: "Homemade Goodness",
-    description: "Fresh ingredients, authentic recipes and real taste.",
-    icon: ChefHat,
-  },
-  {
-    title: "Safe & Hygienic",
-    description: "Thoughtful preparation and carefully packed food.",
-    icon: ShieldCheck,
-  },
-  {
-    title: "Delivered with Care",
-    description: "Homemade food brought to you with care.",
-    icon: Truck,
-  },
-] as const;
+const mutedItemClass = "text-sm leading-6 text-[#C7C9CC]";
 
-/** Public landing footer inspired by the supplied Craves reference artwork. */
 export function FooterSection() {
   return (
-    <footer className="relative overflow-hidden border-t border-border bg-white text-black">
-      <section className="relative isolate overflow-hidden bg-white py-16 md:py-20">
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-cover bg-center opacity-45"
-          style={{
-            backgroundImage:
-              "url('/landing/craves-footer-reference.jpg')",
-          }}
+    <footer className="relative overflow-hidden bg-[#111111] text-white">
+      <svg
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-20 w-full md:h-24"
+        viewBox="0 0 1440 100"
+        preserveAspectRatio="none"
+      >
+        <path
+          d="M0 0h1440v28c-270 78-520-52-790 3C392 83 230 58 0 22V0Z"
+          fill="#FFFFFF"
         />
-        <div className="absolute inset-0 bg-white/75" aria-hidden="true" />
+      </svg>
 
-        <div className="relative z-10 mx-auto max-w-7xl px-6">
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,24rem)_1fr] lg:items-center">
-            <div>
-              <p className="font-script text-xl text-[#C92716]">Made with care</p>
-              <h2 className="mt-2 font-display text-4xl font-bold tracking-[-0.04em] text-black md:text-5xl">
-                Good food.
-                <span className="block text-[#C92716]">Real impact.</span>
-              </h2>
-              <p className="mt-5 max-w-md text-base leading-7 text-black/70">
-                Every Craves order supports the people cooking from home and the communities enjoying their food.
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {impactItems.map((item) => (
-                <article
-                  key={item.title}
-                  className="rounded-2xl border border-grey-200 bg-white/90 p-5 text-center shadow-[var(--shadow-card)]"
-                >
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F62E18]/10 text-[#C92716]">
-                    <item.icon className="h-7 w-7" aria-hidden="true" />
-                  </div>
-                  <h3 className="mt-4 text-sm font-bold text-black">{item.title}</h3>
-                  <p className="mt-2 text-xs leading-5 text-black/60">{item.description}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-[#1A0D09] text-white">
-        <div className="mx-auto grid max-w-7xl gap-10 px-6 py-12 md:grid-cols-[1.2fr_2fr_1fr] md:py-14">
+      <div className="relative mx-auto max-w-7xl px-4 pb-8 pt-32 md:px-6 md:pt-36">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.25fr_0.8fr_0.8fr_0.9fr_0.8fr_1.15fr]">
           <div>
-            <div className="flex items-center gap-3">
-              <CravesLogo size="lg" />
-              <div>
-                <p className="font-display text-xl font-bold text-white">Craves</p>
-                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/65">
-                  Food from home
-                </p>
-              </div>
-            </div>
-            <p className="mt-5 max-w-xs text-sm leading-6 text-white/70">
-              Homemade meals from home chefs, discovered and ordered through Craves.
+            <CravesLogo size="lg" />
+            <p className="mt-5 max-w-[15rem] text-sm leading-6 text-[#C7C9CC]">
+              Good food. Real impact. Homemade meals from real people.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
-            <div>
-              <p className="text-sm font-bold text-white">CRAVES</p>
-              <div className="mt-4 grid gap-3 text-sm text-white/70">
-                <a href="#why-craves" className="hover:text-white">Why Craves</a>
-                <a href="#how-it-works" className="hover:text-white">How it works</a>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white">FOR CHEFS</p>
-              <div className="mt-4 grid gap-3 text-sm text-white/70">
-                <a href="#become-a-chef" className="hover:text-white">Become a chef</a>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white">TRUST</p>
-              <div className="mt-4 grid gap-3 text-sm text-white/70">
-                <span>Firebase-secured access</span>
-                <span>Backend-backed menus</span>
-              </div>
+          <div>
+            <FooterHeading>CRAVES</FooterHeading>
+            <div className="mt-5 grid gap-2.5">
+              <a href="#why-craves" className={`${styles.footerLink} text-sm leading-6`}>About us</a>
+              <a href="#how-it-works" className={`${styles.footerLink} text-sm leading-6`}>How it works</a>
+              <a href="mailto:support@craves.in" className={`${styles.footerLink} text-sm leading-6`}>Contact us</a>
             </div>
           </div>
 
           <div>
-            <p className="text-sm font-bold text-white">CRAVES APP</p>
-            <p className="mt-3 text-sm leading-6 text-white/70">
+            <FooterHeading>LEGAL</FooterHeading>
+            <div className="mt-5 grid gap-2.5" aria-label="Legal pages planned for publishing">
+              <span className={mutedItemClass}>Privacy policy</span>
+              <span className={mutedItemClass}>Terms of service</span>
+              <span className={mutedItemClass}>Refund policy</span>
+              <span className={mutedItemClass}>Security</span>
+            </div>
+          </div>
+
+          <div>
+            <FooterHeading>FOR CHEFS</FooterHeading>
+            <div className="mt-5 grid gap-2.5">
+              <a href="#become-a-chef" className={`${styles.footerLink} text-sm leading-6`}>Become a chef</a>
+              <span className={mutedItemClass}>Chef resources</span>
+              <span className={mutedItemClass}>Guidelines</span>
+              <span className={mutedItemClass}>Earnings</span>
+              <span className={mutedItemClass}>Help center</span>
+            </div>
+          </div>
+
+          <div>
+            <FooterHeading>SOCIAL</FooterHeading>
+            <div className="mt-5 grid gap-2.5" aria-label="Craves social channels pending public URLs">
+              <span className={mutedItemClass}>Instagram</span>
+              <span className={mutedItemClass}>LinkedIn</span>
+              <span className={mutedItemClass}>YouTube</span>
+              <span className={mutedItemClass}>WhatsApp</span>
+            </div>
+          </div>
+
+          <div>
+            <FooterHeading>DOWNLOAD THE APP</FooterHeading>
+            <p className="mt-5 text-sm leading-6 text-[#C7C9CC]">
               Delicious food at your fingertips.
             </p>
-            <div className="mt-5 grid gap-3">
-              <div className="rounded-xl border border-white/20 px-4 py-3 text-sm text-white">
-                Google Play
-              </div>
-              <div className="rounded-xl border border-white/20 px-4 py-3 text-sm text-white">
-                App Store
-              </div>
-            </div>
+            <a
+              href="#download-app"
+              className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition-colors hover:border-white/50"
+            >
+              App Store • Google Play
+            </a>
           </div>
         </div>
 
-        <div className="border-t border-white/10">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-5 text-xs text-white/55 sm:flex-row sm:items-center sm:justify-between">
-            <span>© {new Date().getFullYear()} Craves. All rights reserved.</span>
-            <span className="inline-flex items-center gap-1.5">
-              Made with <Heart className="h-3.5 w-3.5 fill-[#F62E18] text-[#F62E18]" aria-hidden="true" /> for food from home
-            </span>
+        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div className="flex flex-wrap gap-3" aria-hidden="true">
+            <div className={`${styles.sticker} flex -rotate-2 items-center gap-2 rounded-2xl px-4 py-3 text-xs font-semibold text-[#111111]`}>
+              <House className="h-5 w-5 text-[#F62E18]" strokeWidth={1.8} />
+              <span>Home chef approved</span>
+            </div>
+            <div className={`${styles.sticker} flex rotate-2 items-center gap-2 rounded-2xl px-4 py-3 text-xs font-semibold text-[#111111]`}>
+              <ChefHat className="h-5 w-5 text-[#F62E18]" strokeWidth={1.8} />
+              <span>Made with love</span>
+            </div>
           </div>
+          <p className="text-right text-xs font-semibold text-[#F62E18]">food from home.</p>
         </div>
-      </section>
+
+        <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-[#A7ABB0] sm:flex-row sm:items-center sm:justify-between">
+          <span>© {new Date().getFullYear()} Craves. All rights reserved.</span>
+          <span className="inline-flex items-center gap-1.5">
+            Made with <Heart className="h-3.5 w-3.5 fill-[#F62E18] text-[#F62E18]" aria-hidden="true" /> in Hyderabad
+          </span>
+        </div>
+      </div>
     </footer>
+  );
+}
+
+function FooterHeading({ children }: { children: string }) {
+  return (
+    <div>
+      <p className="text-xs font-bold tracking-[0.04em] text-white">{children}</p>
+      <span className="mt-2 block h-0.5 w-7 bg-[#F62E18]" aria-hidden="true" />
+    </div>
   );
 }
 

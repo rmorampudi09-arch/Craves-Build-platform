@@ -1,10 +1,17 @@
-import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
+import {
+  getAuth,
+  getIdToken,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signInWithPhoneNumber,
+  signOut,
+} from '@react-native-firebase/auth';
 
-let phoneConfirmation: FirebaseAuthTypes.ConfirmationResult | null = null;
+let phoneConfirmation: Awaited<ReturnType<typeof signInWithPhoneNumber>> | null = null;
 
 export const firebaseAuth = {
   async beginPhoneSignIn(e164PhoneNumber: string): Promise<void> {
-    phoneConfirmation = await auth().signInWithPhoneNumber(e164PhoneNumber);
+    phoneConfirmation = await signInWithPhoneNumber(getAuth(), e164PhoneNumber);
   },
   async confirmOtp(code: string): Promise<string> {
     if (!phoneConfirmation) {
@@ -15,18 +22,18 @@ export const firebaseAuth = {
       throw new Error('OTP_CONFIRMATION_FAILED');
     }
     phoneConfirmation = null;
-    return credential.user.getIdToken(true);
+    return getIdToken(credential.user, true);
   },
   async signInWithEmail(email: string, password: string): Promise<string> {
-    const credential = await auth().signInWithEmailAndPassword(email.trim(), password);
-    return credential.user.getIdToken(true);
+    const credential = await signInWithEmailAndPassword(getAuth(), email.trim(), password);
+    return getIdToken(credential.user, true);
   },
   async sendPasswordReset(email: string): Promise<void> {
-    await auth().sendPasswordResetEmail(email.trim());
+    await sendPasswordResetEmail(getAuth(), email.trim());
   },
   async signOut(): Promise<void> {
     phoneConfirmation = null;
-    await auth().signOut();
+    await signOut(getAuth());
   },
   hasPendingOtp(): boolean {
     return phoneConfirmation !== null;

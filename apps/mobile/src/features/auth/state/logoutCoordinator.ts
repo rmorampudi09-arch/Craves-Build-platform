@@ -4,6 +4,7 @@ import {appQueryClient} from '../../../app/query/queryClient';
 import type {AppDispatch} from '../../../app/store/store';
 import {cartActions} from '../../cart/state/cartSlice';
 import {customerShellActions} from '../../customerShell/state/customerShellSlice';
+import {clearPrimaryPaymentMethod} from '../../payment/state/paymentMethodSlice';
 import {authActions} from './authSlice';
 import {authService} from './authService';
 
@@ -38,6 +39,7 @@ export async function completeLogout(
     }
   } finally {
     dispatch(cartActions.resetCartDomain());
+    dispatch(clearPrimaryPaymentMethod());
     dispatch(customerShellActions.resetCustomerShell());
     dispatch(authActions.signedOut());
   }

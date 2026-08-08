@@ -29,18 +29,17 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 - **P66 — My Addresses Active/Empty Visuals: PARTIAL.** Saved-address list/default/delete, Deliver Here, available cart refresh, active View Cart, and zero-item hiding are implemented. Address-aware delivery quote/reprice remains unavailable.
 - **P67 — Add/Edit Address and Location Permission: PARTIAL.** Shared manual editor, existing-address full-PUT edit, pincode validation, duplicate/default rules, unsaved-change protection, and controlled manual fallbacks are implemented and validated. New-address persistence, pincode/geocode lookup, and native current-location permission/geocode remain deferred because approved executable contracts/integration are not present.
 - **P68 — Payment Methods Active/Empty Visuals: PARTIAL.** Shared Payments route, active/empty cart presentation, payment capability groups, canonical active View Cart behavior, and explicit disabled eligibility boundaries are implemented. Saved token-list data, cart/provider payment eligibility, and COD eligibility are not exposed by the approved mobile contract, so stored instruments and selectable primary methods are not fabricated.
+- **P69 — Payment Method Add/Manage Provider Flow: BLOCKED.** The approved mobile runtime has checkout-scoped payment-order create/read/verify only; it has no tokenized customer method setup/list/delete/set-primary contract, no authoritative primary replacement rule, and no installed/wired native Cashfree provider SDK. No credential-entry or fake local mutation flow was added.
 
-**Current executed phase:** **P68 — Payment Methods Active/Empty Visuals — PARTIAL** at implementation/static-contract scope.
+**Current executed phase:** **P69 — Payment Method Add/Manage Provider Flow — BLOCKED** at exact-contract/provider-capability scope.
 
-**P68 validated implementation head:** `d044bf7bb545875302eb23d5ba5aa00fcbc18574`.
+**P69 evidence checkpoint commit:** `5f90d4f659eb849eded36cbcfe0082181e45d028`.
 
-**P68 evidence record head:** `6030c8b1cbac29ac9d8d7d0765fd4b9d48ac2956`.
-
-**Next phase in sequence:** **P69 — Payment Method Add/Manage Provider Flow — NOT STARTED**.
+**Next phase in sequence:** **P70 — Coupons/Offers — Empty Cart — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P69. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P70. Wait for explicit user direction.
 
 ---
 
@@ -60,9 +59,10 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 | P66 | **PARTIAL** | `docs/mobile-ui-rebuild/P66_MY_ADDRESSES_ACTIVE_EMPTY_VISUALS.md` | `31277654687` / `93153771794` — SUCCESS |
 | P67 | **PARTIAL** | `docs/mobile-ui-rebuild/P67_ADD_EDIT_ADDRESS_LOCATION_PERMISSION.md`; validated implementation `fe7a263095a138d546c851908cbec166bd30b8b0` | `31279558033` / `93158570541` — SUCCESS |
 | P68 | **PARTIAL** | `docs/mobile-ui-rebuild/P68_PAYMENT_METHODS_ACTIVE_EMPTY_VISUALS.md`; validated implementation `d044bf7bb545875302eb23d5ba5aa00fcbc18574` | `31281213495` / `93162733549` — SUCCESS |
-| P69 onward | **NOT STARTED / not accepted** | — | — |
+| P69 | **BLOCKED** | `docs/mobile-ui-rebuild/P69_PAYMENT_METHOD_ADD_MANAGE_PROVIDER_FLOW.md`; exact contract/provider capability audit | Not triggered — documentation/ledger only; P68 mobile source remains unchanged |
+| P70 onward | **NOT STARTED / not accepted** | — | — |
 
-The P68 implementation workflow has been inspected and is successful. P68 remains PARTIAL only for its explicitly documented payment-method-list, provider/cart eligibility, COD eligibility, and physical reference/device gaps. P69 provider add/manage mutations are not part of P68 and remain unstarted.
+P69 was executed against the exact branch contract. The available payment API creates, reads, and verifies checkout-scoped payment orders only. It does not expose customer tokenized-method setup/list/delete/set-primary mutations or a primary replacement policy, and the mobile package does not include a native Cashfree SDK. Per the no-invented-contract rule, P69 is BLOCKED rather than implemented with guessed routes or credential-entry UI.
 
 ---
 
@@ -159,7 +159,29 @@ Evidence: `docs/mobile-ui-rebuild/P68_PAYMENT_METHODS_ACTIVE_EMPTY_VISUALS.md`.
 
 ---
 
-## 7. P68 Changed/Accepted Files
+## 7. P69 Executed Boundary
+
+**Phase:** Payment Method Add/Manage Provider Flow.
+
+`phases.md` requires exact tokenized method setup/manage/delete/set-primary contracts/provider flow. The current branch does not contain that contract or an executable provider SDK boundary.
+
+Verified P69 boundary:
+
+- `paymentApi.ts` exposes checkout-scoped payment-order create/read/verify only.
+- Those checkout routes are not repurposed as saved-method enrollment or management routes.
+- `paymentHandoffCoordinator.ts` explicitly reports `tokenizedPaymentMethodContractSupported: false` and `nativeCashfreeLaunchSupported: false`.
+- `PAYMENT_METHOD_TOKEN_CONTRACT_UNAVAILABLE` and `CASHFREE_NATIVE_PROVIDER_SDK_UNAVAILABLE` remain authoritative runtime blockers.
+- `apps/mobile/package.json` contains no Cashfree native/React Native provider SDK dependency.
+- No backend/product rule exists for replacing a primary tokenized method before deletion.
+- No raw PAN/CVV/UPI PIN/net-banking credentials are collected, persisted, or logged.
+
+**P69 status: BLOCKED.** There is no truthful production mutation to implement until the tokenized-method contract and provider SDK/integration are supplied. Fabricating local saved methods, guessed REST paths, or app-owned credential fields would violate both the phase contract and the master security boundary.
+
+Evidence: `docs/mobile-ui-rebuild/P69_PAYMENT_METHOD_ADD_MANAGE_PROVIDER_FLOW.md`.
+
+---
+
+## 8. P68 Changed/Accepted Files
 
 P68 implementation ownership includes:
 
@@ -182,38 +204,31 @@ No backend, APIM, OpenAPI, database, infrastructure, Android native source, Grad
 
 ---
 
-## 8. Validation State
+## 9. Validation State
 
 Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
-- GitHub Actions run ID: `31281213495`.
-- Job ID: `93162733549`.
+- Latest mobile-source validation remains P68 GitHub Actions run ID `31281213495`, job ID `93162733549` — **SUCCESS**.
 - Validated P68 implementation head: `d044bf7bb545875302eb23d5ba5aa00fcbc18574`.
-- Job conclusion: **SUCCESS**.
-- Dependency install: **SUCCESS**.
-- TypeScript strict check: **SUCCESS**.
-- ESLint zero-warning gate: **SUCCESS**.
-- Jest: **SUCCESS**.
-- Production Android JavaScript bundle: **SUCCESS**.
-- Backend/APIM/infrastructure source guard: **SUCCESS**.
+- Dependency install, TypeScript strict check, ESLint zero-warning gate, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed on that unchanged mobile implementation.
+- P69 changes only documentation/ledger because the production flow is contract/provider blocked.
+- The workflow path filter runs for `apps/mobile/**` or workflow-file changes, so a docs-only P69 checkpoint does not trigger a new mobile CI run.
 - No Gradle/APK packaging was performed, consistent with the implementation-phase policy.
-
-Focused P68 tests cover empty-cart no-selection behavior, active-cart non-inference of online eligibility, and COD blocking without an authoritative contract. The existing Profile UI-model test was updated to reflect that Payments is now a registered P68 route.
 
 ---
 
-## 9. Handoff
+## 10. Handoff
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current executed phase: P68 — Payment Methods Active/Empty Visuals — PARTIAL
-P68 validated implementation head: d044bf7bb545875302eb23d5ba5aa00fcbc18574
-P68 CI: 31281213495 / 93162733549 — SUCCESS
-P68 evidence: docs/mobile-ui-rebuild/P68_PAYMENT_METHODS_ACTIVE_EMPTY_VISUALS.md
-P68 implemented: shared Payments route; Profile entry; empty/active cart visual states; Cards/UPI/Wallets/Net banking/COD capability groups; canonical active View Cart; zero-item hiding; bottom-nav scroll behavior; cart state retry; explicit eligibility/token blockers; logout cleanup; focused tests
-P68 remains PARTIAL: no approved customer payment-method list; no cart/provider payment eligibility contract; no COD eligibility contract; therefore no fabricated stored instrument or enabled primary selection
-P69 provider add/manage/tokenize/delete/set-primary work: NOT STARTED
-Inherited blockers: retain all earlier phase blockers not explicitly superseded
-Next phase: P69 — Payment Method Add/Manage Provider Flow — NOT STARTED
+Current executed phase: P69 — Payment Method Add/Manage Provider Flow — BLOCKED
+P69 evidence checkpoint commit: 5f90d4f659eb849eded36cbcfe0082181e45d028
+P69 evidence: docs/mobile-ui-rebuild/P69_PAYMENT_METHOD_ADD_MANAGE_PROVIDER_FLOW.md
+P69 verified available transport: checkout-scoped payment-order create/read/verify only
+P69 blocked: no exact tokenized method setup/list/delete/set-primary contract; no primary replacement rule; no native Cashfree provider SDK/integration
+P69 security decision: no raw PAN/CVV/UPI PIN/net-banking credential collection, state, persistence, or logging; no guessed provider/API flow
+Mobile production source changed by P69: none
+Inherited blockers: retain P68 and all earlier phase blockers not explicitly superseded
+Next phase: P70 — Coupons/Offers — Empty Cart — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

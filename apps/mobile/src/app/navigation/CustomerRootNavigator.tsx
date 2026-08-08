@@ -5,7 +5,7 @@ import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
-import {CustomerOrdersScreen} from '../../features/customerOrders/screens/CustomerOrdersScreen';
+import {CustomerOrdersRouteScreen} from '../../features/customerOrders/screens/CustomerOrdersRouteScreen';
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
@@ -192,7 +192,7 @@ function CustomerChefsStackNavigator() {
   );
 }
 
-/** P53 promotes the Orders tab root from the account-status placeholder. */
+/** P54 keeps one Orders route and adds state-driven active-cart chrome. */
 function CustomerOrdersStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -200,7 +200,7 @@ function CustomerOrdersStackNavigator() {
     <OrdersStack.Navigator screenOptions={stackScreenOptions}>
       <OrdersStack.Screen
         name="CustomerOrdersRoot"
-        component={CustomerOrdersScreen}
+        component={CustomerOrdersRouteScreen}
         listeners={rootListeners}
       />
       <OrdersStack.Screen name="CustomerCart" component={CustomerCartScreen} />

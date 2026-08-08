@@ -18,6 +18,7 @@ import {CustomerHomeRouteScreen} from '../../features/home/screens/CustomerHomeR
 import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
 import {CustomerNotificationsRouteScreen} from '../../features/notifications/screens/CustomerNotificationsRouteScreen';
+import {CustomerPaymentMethodsScreen} from '../../features/payment/screens/CustomerPaymentMethodsScreen';
 import {Icon} from '../../shared/components/Icon';
 import {
   CustomerBottomNavVisibilityProvider,
@@ -159,6 +160,10 @@ function CustomerHomeStackNavigator() {
         component={CustomerKitchenDishesScreen}
       />
       <HomeStack.Screen name="CustomerCart" component={CustomerCartScreen} />
+      <HomeStack.Screen
+        name="CustomerPaymentMethods"
+        component={CustomerPaymentMethodsScreen}
+      />
     </HomeStack.Navigator>
   );
 }
@@ -194,6 +199,10 @@ function CustomerChefsStackNavigator() {
         component={CustomerKitchenDishesScreen}
       />
       <ChefsStack.Screen name="CustomerCart" component={CustomerCartScreen} />
+      <ChefsStack.Screen
+        name="CustomerPaymentMethods"
+        component={CustomerPaymentMethodsScreen}
+      />
     </ChefsStack.Navigator>
   );
 }
@@ -218,11 +227,15 @@ function CustomerOrdersStackNavigator() {
         component={CustomerOrderTrackingScreen}
       />
       <OrdersStack.Screen name="CustomerCart" component={CustomerCartScreen} />
+      <OrdersStack.Screen
+        name="CustomerPaymentMethods"
+        component={CustomerPaymentMethodsScreen}
+      />
     </OrdersStack.Navigator>
   );
 }
 
-/** P66 adds My Addresses after the P65 shared Edit Profile route. */
+/** P68 keeps Payment Methods shared with the existing Profile child routes. */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -274,6 +287,10 @@ function CustomerProfileStackNavigator() {
         component={CustomerKitchenDishesScreen}
       />
       <ProfileStack.Screen name="CustomerCart" component={CustomerCartScreen} />
+      <ProfileStack.Screen
+        name="CustomerPaymentMethods"
+        component={CustomerPaymentMethodsScreen}
+      />
     </ProfileStack.Navigator>
   );
 }

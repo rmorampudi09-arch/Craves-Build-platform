@@ -44,16 +44,22 @@ export type ChefAccountStackParamList = Pick<
   'AccountRouter' | 'ChefRegistration' | 'ChefAccountStatus'
 >;
 
+export type CustomerFilterSortRouteParams = {
+  origin: 'HOME' | 'CHEFS';
+};
+
 /**
  * P25 customer shell types. Each bottom tab owns a stack navigator so later
  * product phases can add child routes without resetting sibling tab state.
  */
 export type CustomerHomeStackParamList = {
   CustomerHomeRoot: undefined;
+  CustomerFilterSort: CustomerFilterSortRouteParams;
 };
 
 export type CustomerChefsStackParamList = {
   CustomerChefsRoot: undefined;
+  CustomerFilterSort: CustomerFilterSortRouteParams;
 };
 
 export type CustomerOrdersStackParamList = {
@@ -72,6 +78,11 @@ export type CustomerTabParamList = {
 };
 
 export type CustomerTabRouteName = keyof CustomerTabParamList;
+export type CustomerStackRouteName =
+  | keyof CustomerHomeStackParamList
+  | keyof CustomerChefsStackParamList
+  | keyof CustomerOrdersStackParamList
+  | keyof CustomerProfileStackParamList;
 
 export type CustomerDomainParamList = CustomerAccountStackParamList & CustomerTabParamList;
 
@@ -88,4 +99,7 @@ export type NavigationDomainParamLists = {
 };
 
 export type NavigationDomain = keyof NavigationDomainParamLists;
-export type RegisteredRouteName = keyof RootStackParamList | CustomerTabRouteName;
+export type RegisteredRouteName =
+  | keyof RootStackParamList
+  | CustomerTabRouteName
+  | CustomerStackRouteName;

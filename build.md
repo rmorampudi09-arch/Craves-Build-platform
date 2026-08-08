@@ -32,15 +32,16 @@
 - **P44 — Kitchen All Dishes: PARTIAL.** Typed immersive `CustomerKitchenDishes` route, real Kitchen Profile View all navigation, virtualized complete current-contract menu rendering, authoritative category filtering, Dish Detail opening, shared-cart Add/quantity reconciliation with pre-mutation menu revalidation, lifecycle states, pull-to-refresh, and list scroll/category preservation are implemented and CI-validated. Full Reference 16 acceptance remains blocked by the non-paginated public menu contract, missing rating/favorite/final-serviceability fields, and deferred physical-device/reference certification.
 - **P45 — Cart Screen Data and Pricing Model: PARTIAL.** The Cart screen has an explicit data/pricing composition model over the authoritative shared cart: exact cart items and server food subtotal are reused, unsupported pricing/address/ETA/coupon fields are marked unavailable instead of calculated, quantity targets map safely to update/remove/invalid, and checkout fails closed unless explicit server eligibility evidence exists. Full acceptance remains blocked because the current cart contract has no pre-checkout bill breakdown/quote, coupon result, delivery-address summary, ETA, or checkout-eligibility payload.
 - **P46 — Cart and Bill Summary UI: PARTIAL.** Typed `CustomerCart` is registered in all customer tab stacks; Home/Chefs View Cart opens it; grouped-kitchen virtualized lines, authoritative prices, quantity/remove mutations, pull-to-refresh, empty/error states, scroll-aware bottom navigation, fail-closed address/ETA/offers, expandable bill details, server food subtotal, and sticky checkout area are implemented and CI-validated. Full acceptance remains blocked by missing complete pre-checkout pricing, commerce address/ETA, coupon result/application, explicit checkout eligibility, cart-line media for exact reference fidelity, and deferred physical-device/reference certification.
-- **P47 — Address Selection for Commerce: PARTIAL.** Cart-origin saved-address selection now reuses the exact authenticated saved-address contract/query, promotes the selected saved-address ID into the cart commerce dependency, keeps shared browsing location synchronized, preserves the existing Cart/tab origin, and marks the delivery quote `STALE` when the address changes. Full acceptance remains blocked because the repository has no exact pre-checkout serviceability/fee/ETA quote/reprice contract and the rebuild does not yet have the later Checkout origin route.
+- **P47 — Address Selection for Commerce: PARTIAL.** Cart-origin saved-address selection reuses the exact authenticated saved-address contract/query, promotes the selected saved-address ID into the cart commerce dependency, keeps shared browsing location synchronized, preserves the existing Cart/tab origin, and invalidates the delivery quote when the address changes. Full acceptance remains blocked because the repository has no exact pre-checkout serviceability/fee/ETA quote/reprice contract and the rebuild does not yet have the later Checkout origin route.
+- **P48 — Delivery Quote/Reprice Orchestration: PARTIAL.** A shared quote-invalidation/readiness boundary now centralizes address/cart/coupon dependency semantics, detects quote-relevant authoritative cart snapshot changes without timestamp noise, automatically marks an address-bound quote `STALE` after authoritative cart changes, keeps it `UNRESOLVED` without an address, preserves the last valid cart during background refresh, and fails closed with an explicit contract blocker. Full acceptance remains blocked because no exact address-aware pre-checkout quote/reprice endpoint and response schema exists for serviceability, fee, ETA, taxes, grand total, quote version, or expiry.
 
-**Current executed phase:** **P47 — Address Selection for Commerce** is **PARTIAL**. Every safe/supportable P47 behavior available through current authoritative contracts is implemented and passed the required mobile CI. Missing serviceability/fee/ETA orchestration is explicitly not fabricated.
+**Current executed phase:** **P48 — Delivery Quote/Reprice Orchestration** is **PARTIAL**. Every safe/supportable P48 orchestration behavior available through current authoritative contracts is implemented and passed the required mobile CI. Missing quote/reprice transport is explicitly not fabricated.
 
-**Next phase in sequence:** **P48 — Delivery Quote/Reprice Orchestration** — **NOT STARTED**.
+**Next phase in sequence:** **P49 — Checkout Session Creation** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P48. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P49. Wait for explicit user direction.
 
 ---
 
@@ -66,18 +67,20 @@
 | P45 | **PARTIAL** | `f4e71b370c1607e8df6572d0634dc5282da515f0` | `P45_CART_SCREEN_DATA_AND_PRICING_MODEL.md` | `31258338717` / `93105128626` |
 | P46 | **PARTIAL** | `8de414d1b70635433b4ac9f7f1164da0c29a6790` | `P46_CART_AND_BILL_SUMMARY_UI.md` | `31259171300` / `93107162275` |
 | P47 | **PARTIAL** | `921bdc0af0e307a8e0c99d90a3f57e7d9d6aed41` | `P47_ADDRESS_SELECTION_FOR_COMMERCE.md` | `31260111878` / `93109503409` |
-| P48 onward | **NOT STARTED / not accepted** | — | — | — |
+| P48 | **PARTIAL** | `2bd26edbb687a5baaf104c3d4b73d47978c1b122` | `P48_DELIVERY_QUOTE_REPRICE_ORCHESTRATION.md` | `31260767948` / `93111102045` |
+| P49 onward | **NOT STARTED / not accepted** | — | — | — |
 
-### P47 evidence commits
+### P48 evidence commits
 
-- User authorized exactly one next phase after P46 while P46 remained correctly recorded as PARTIAL.
-- Started from branch head: `02938b1286d8207d00b1af71e393e13a5c5bdecb`.
-- Address-selection transition commit: `e90e7ab050501c5de7f1f1896ffd51aeba33d23e`.
-- Focused transition-test commit: `f148f7a947f0c4f01a26fb151e272566a258fe94`.
-- Validated commerce-selector integration commit: `921bdc0af0e307a8e0c99d90a3f57e7d9d6aed41`.
-- Evidence commit: `466dd7355e5824be3f970182684447551106f7ff`.
-- Evidence: `docs/mobile-ui-rebuild/P47_ADDRESS_SELECTION_FOR_COMMERCE.md`.
-- Final implementation CI run/job: `31260111878` / `93109503409` — **SUCCESS**.
+- User authorized exactly one next phase after P47 while P47 remained correctly recorded as PARTIAL.
+- Started from branch head: `b29a69b5d6dd37ae268b2d7431312d71e1c50ba5`.
+- Quote-orchestration boundary commit: `0acfb33f856f20a2fb52ecb32302746f18551864`.
+- Address-invalidation integration commit: `d3cedf512572e02c2ada5003c4ef76294fe8fbd3`.
+- Authoritative cart-change invalidation commit: `39650374995a378f2a1a94c0bdff721b60a24dc1`.
+- Focused orchestration-test / validated implementation commit: `2bd26edbb687a5baaf104c3d4b73d47978c1b122`.
+- Evidence commit: `380cfa9a74f45cfa3e06f666caa803a6e0f37b0b`.
+- Evidence: `docs/mobile-ui-rebuild/P48_DELIVERY_QUOTE_REPRICE_ORCHESTRATION.md`.
+- Final implementation CI run/job: `31260767948` / `93111102045` — **SUCCESS**.
 
 ---
 
@@ -85,10 +88,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31260111878`
-- Job ID: `93109503409`
-- Head SHA: `921bdc0af0e307a8e0c99d90a3f57e7d9d6aed41`
-- Phase: **P47 — Address Selection for Commerce**
+- GitHub Actions run ID: `31260767948`
+- Job ID: `93111102045`
+- Head SHA: `2bd26edbb687a5baaf104c3d4b73d47978c1b122`
+- Phase: **P48 — Delivery Quote/Reprice Orchestration**
 - Conclusion: **SUCCESS**
 - Dependency install: **SUCCESS**
 - TypeScript strict check: **SUCCESS**
@@ -101,97 +104,89 @@ No Java/Gradle/APK packaging was performed, consistent with the implementation-p
 
 ---
 
-## 4. P47 Implemented Boundary
+## 4. P48 Implemented Boundary
 
-### Exact saved-address contract reuse
+### Exact contract audit and fail-closed transport boundary
 
-P47 reuses the existing authenticated saved-address query and parser backed by:
-
-```text
-GET /api/v1/customer/addresses
-```
-
-Authoritative sources audited:
-
-- `services/user-chef-service/src/main/java/in/craves/userchef/web/CustomerProfileController.java`
-- `services/user-chef-service/src/main/java/in/craves/userchef/web/ApiDtos.java`
-- `services/user-chef-service/README.md`
-- `apps/mobile/src/features/customerShell/api/customerShellApi.ts`
-
-No duplicate address cache, new transport wrapper, guessed response field, or identity/private field exposure was introduced.
-
-### Cart-origin commerce selection
-
-The existing `CustomerLocationSelector` remains the shared saved-location selector but now recognizes `CustomerCart` as a commerce origin.
-
-From Cart it:
-
-- presents delivery-address-specific copy;
-- uses the Cart address dependency for selection state;
-- keeps the established shared browsing location synchronized through the existing selector hook;
-- promotes the selected authoritative saved-address ID into `cart.dependencies.address`;
-- preserves the existing Cart screen/tab stack rather than opening or duplicating another Cart instance;
-- closes the selector back onto the same Cart origin.
-
-### Quote dependency invalidation
-
-`resolveCartAddressSelection` owns the P47 domain transition. When the customer selects a different saved address:
-
-- the selected address dependency becomes current;
-- the existing delivery-quote dependency becomes `STALE`;
-- the same-address selection leaves the delivery-quote status unchanged.
-
-This ensures location-dependent Cart state is invalidated without pretending serviceability, fee, ETA, tax, or total was recalculated.
-
-### Focused tests
-
-`apps/mobile/src/features/cart/cartAddressSelection.test.ts` verifies:
-
-- changed address -> quote becomes `STALE`;
-- same address -> quote state is preserved;
-- first commerce address selection -> quote becomes `STALE`.
-
----
-
-## 5. P47 Acceptance Blockers
-
-Full P47 acceptance requires an address change to refresh delivery serviceability, fee, and ETA. The exact authoritative contract required for that is not currently present in the repository.
-
-Audited current Order Service source:
+P48 re-audited current Order Service source:
 
 ```text
 POST /api/v1/cart/validate
+POST /api/v1/checkout
 ```
 
-`services/order-service/src/main/java/in/craves/order/web/CartController.java` shows that this route accepts no delivery-address input and returns the current Cart response; it is not a delivery quote/reprice API. Repository search found no exact supported `/api/v1/checkout/quote` implementation, and current Order Service documentation records delivery serviceability/pricing as outside the implemented boundary.
+`POST /api/v1/cart/validate` accepts no delivery-address input and returns the current `CartResponse`, whose totals contain only `foodSubtotal`. It is not an address-aware delivery quote/reprice contract.
 
-P47 therefore does **not**:
+`POST /api/v1/checkout` accepts `deliveryAddressId` and returns final checkout pricing, but it creates a checkout resource. It is a side-effecting P49 operation and is not used as a quote probe.
 
-- invent a quote/reprice endpoint,
-- infer serviceability from saved-address distance,
-- locally calculate delivery fee or ETA,
-- call checkout creation as a quote,
-- fabricate a successful commerce-address validation.
+No authoritative `/api/v1/checkout/quote` or equivalent pre-checkout address-aware quote/reprice endpoint/response schema exists in the current repository. P48 therefore records `DELIVERY_QUOTE_CONTRACT_UNAVAILABLE` and does not invent transport.
 
-P48 explicitly owns exact delivery quote/reprice orchestration and remains not started.
+### Shared dependency invalidation
 
-The later Checkout mobile route is also not yet implemented, so P47 certifies the supported Cart-origin selection only. Physical-device/reference-image certification remains deferred under the implementation-phase policy.
+`apps/mobile/src/features/cart/domain/cartDeliveryQuote.ts` now owns quote invalidation semantics for:
 
-Because the required server-owned quote/serviceability capability is absent, P47 is **PARTIAL**, not DONE.
+- address changes,
+- cart changes,
+- future coupon changes.
+
+Without a selected address, the quote dependency is `UNRESOLVED`. With a selected address, a quote-affecting change marks it `STALE`.
+
+P47 address selection delegates to this shared rule, so address and cart flows cannot drift into separate stale-quote semantics.
+
+### Authoritative cart-change detection
+
+`cartSnapshotsRequireQuoteRefresh` compares quote-relevant authoritative server cart state while ignoring transport timestamps. It covers cart/currency identity, line identity/order, quantities, unit prices, line totals, and food subtotal.
+
+`cartSlice.snapshotAccepted` applies this check whenever a server snapshot is accepted. This covers successful add/update/remove responses plus server changes discovered by explicit cart refresh without duplicating invalidation logic in every mutation path.
+
+### Background-state preservation and checkout safety
+
+The existing refresh flow keeps the last valid cart snapshot visible while a read-only cart refresh runs and preserves it after recoverable failure. P48 only changes quote dependency state when a materially changed authoritative snapshot is accepted.
+
+`getCartDeliveryQuoteReadiness` explicitly reports refresh unsupported and checkout usage false until an exact quote/reprice contract exists. A stale, unresolved, error, or legacy/current status alone cannot authorize checkout.
+
+### Focused tests
+
+`apps/mobile/src/features/cart/cartDeliveryQuote.test.ts` verifies:
+
+- no-address invalidation -> `UNRESOLVED`;
+- address-bound cart/coupon invalidation -> `STALE`;
+- quote-relevant cart changes are detected;
+- timestamp-only changes are ignored;
+- authoritative snapshot acceptance invalidates a current quote;
+- missing quote contract always fails closed for checkout use.
 
 ---
 
-## 6. P47 Changed Files
+## 5. P48 Acceptance Blockers
+
+P48 requires exact quote/reprice endpoint(s) and authoritative refresh of address-dependent delivery serviceability, fee, ETA, taxes/total, quote version/expiry where the contract defines them. Those contracts are not currently present.
+
+P48 therefore does **not**:
+
+- invent `/api/v1/checkout/quote` or another endpoint;
+- guess address/cart/coupon request fields;
+- reinterpret bodyless cart validation as delivery quoting;
+- call checkout creation to obtain a price preview;
+- calculate delivery fee, ETA, serviceability, tax, or payable total locally;
+- permit stale/unresolved quote state to enable checkout.
+
+Because the required server-owned quote/reprice transport and response are absent, P48 is **PARTIAL**, not DONE.
+
+---
+
+## 6. P48 Changed Files
 
 Implementation/test:
 
+- `apps/mobile/src/features/cart/domain/cartDeliveryQuote.ts`
 - `apps/mobile/src/features/cart/domain/cartAddressSelection.ts`
-- `apps/mobile/src/features/cart/cartAddressSelection.test.ts`
-- `apps/mobile/src/features/customerShell/components/CustomerLocationSelector.tsx`
+- `apps/mobile/src/features/cart/state/cartSlice.ts`
+- `apps/mobile/src/features/cart/cartDeliveryQuote.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P47_ADDRESS_SELECTION_FOR_COMMERCE.md`
+- `docs/mobile-ui-rebuild/P48_DELIVERY_QUOTE_REPRICE_ORCHESTRATION.md`
 
 Ledger:
 
@@ -201,7 +196,7 @@ No backend, APIM, OpenAPI, database, infrastructure, checkout/payment service, o
 
 ---
 
-## 7. Architecture Ownership After P47
+## 7. Architecture Ownership After P48
 
 - P19–P24 remain authoritative for authentication/session/onboarding/logout/private-cache cleanup.
 - P25–P30 remain authoritative for Customer shell/header/shared cart foundations and mutation reconciliation.
@@ -210,20 +205,21 @@ No backend, APIM, OpenAPI, database, infrastructure, checkout/payment service, o
 - P42–P44 remain authoritative for supported customer-facing Kitchen Profile and Kitchen All Dishes contract/UI boundaries.
 - P45 remains authoritative for Cart-screen data/pricing capability composition and fail-closed checkout evidence.
 - P46 remains authoritative for the supported Cart/bill-summary UI and Cart route.
-- **P47 owns Cart-origin saved delivery-address selection, promotion of the exact saved-address ID into the Cart commerce dependency, and address-change invalidation of the delivery-quote dependency.**
-- **P48 — Delivery Quote/Reprice Orchestration has not started.**
+- P47 remains authoritative for Cart-origin saved delivery-address selection and promotion of the exact saved-address ID into the Cart dependency.
+- **P48 owns delivery-quote dependency invalidation/readiness orchestration for address/cart/future coupon inputs and authoritative cart-change detection.**
+- **P49 — Checkout Session Creation has not started.**
 - Later checkout/payment/order/account/Chef phases remain not started unless an earlier evidence record explicitly says otherwise.
 
 ---
 
-## 8. Explicitly Not Complete After P47
+## 8. Explicitly Not Complete After P48
 
 Do not describe any of the following as complete:
 
-- outstanding blockers recorded for P31–P46;
-- P47 full serviceability/fee/ETA refresh acceptance;
+- outstanding blockers recorded for P31–P47;
+- P48 authoritative quote/reprice network refresh and full serviceability/fee/ETA acceptance;
 - Checkout-origin address selection;
-- **P48 — Delivery Quote/Reprice Orchestration**;
+- **P49 — Checkout Session Creation**;
 - checkout/payment end-to-end flow;
 - Chef operational/product screens;
 - live APIM/device runtime certification unless a later evidence record explicitly says so;
@@ -237,11 +233,11 @@ Do not describe any of the following as complete:
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current implemented phase: P47 — PARTIAL
-Validated implementation SHA: 921bdc0af0e307a8e0c99d90a3f57e7d9d6aed41
-CI: 31260111878 / 93109503409 — SUCCESS
-Evidence: docs/mobile-ui-rebuild/P47_ADDRESS_SELECTION_FOR_COMMERCE.md
-Blockers: exact pre-checkout delivery serviceability/fee/ETA quote/reprice contract; later Checkout origin; physical reference/device certification
-Next phase: P48 — NOT STARTED
+Current implemented phase: P48 — PARTIAL
+Validated implementation SHA: 2bd26edbb687a5baaf104c3d4b73d47978c1b122
+CI: 31260767948 / 93111102045 — SUCCESS
+Evidence: docs/mobile-ui-rebuild/P48_DELIVERY_QUOTE_REPRICE_ORCHESTRATION.md
+Blockers: exact pre-checkout address-aware delivery quote/reprice endpoint and response for serviceability/fee/ETA/pricing; physical reference/device certification where applicable
+Next phase: P49 — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

@@ -16,7 +16,9 @@ export type IconName =
   | 'chevron'
   | 'shield'
   | 'arrow-left'
-  | 'check';
+  | 'check'
+  | 'location'
+  | 'bell';
 
 interface Props {
   name: IconName;
@@ -110,6 +112,18 @@ export function Icon({
         </>
       )}
       {name === 'check' && <Polyline points="5,12 10,17 19,7" {...common} />}
+      {name === 'location' && (
+        <>
+          <Path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" {...common} />
+          <Circle cx="12" cy="10" r="2.2" {...common} />
+        </>
+      )}
+      {name === 'bell' && (
+        <>
+          <Path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" {...common} />
+          <Path d="M10 21h4" {...common} />
+        </>
+      )}
     </Svg>
   );
 }

@@ -4,6 +4,7 @@ import {cartReducer} from '../../features/cart/state/cartSlice';
 import {customerShellReducer} from '../../features/customerShell/state/customerShellSlice';
 import {discoveryFilterReducer} from '../../features/discoveryFilters/state/discoveryFilterSlice';
 import {discoverySearchReducer} from '../../features/discoverySearch/state/discoverySearchSlice';
+import {paymentMethodReducer} from '../../features/payment/state/paymentMethodSlice';
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     customerShell: customerShellReducer,
     discoveryFilters: discoveryFilterReducer,
     discoverySearch: discoverySearchReducer,
+    paymentMethods: paymentMethodReducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({serializableCheck: true, immutableCheck: __DEV__}),

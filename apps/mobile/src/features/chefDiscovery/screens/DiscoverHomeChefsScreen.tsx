@@ -10,7 +10,10 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import {useNavigation} from '@react-navigation/native';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
+import type {CustomerChefsStackParamList} from '../../../app/navigation/types';
 import {useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {
@@ -126,6 +129,8 @@ function KitchenCard({kitchen, onPress}: KitchenCardProps) {
 }
 
 export function DiscoverHomeChefsScreen() {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<CustomerChefsStackParamList, 'CustomerChefsRoot'>>();
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const selectedLocation = useAppSelector(state => state.customerShell.selectedLocation);
   const header = useCustomerHeaderState();
@@ -231,10 +236,8 @@ export function DiscoverHomeChefsScreen() {
     }
   }, [search.scrollOffset, visibleKitchens.length]);
 
-  const showFiltersBoundary = () => {
-    setBoundaryNotice(
-      'Cuisine, rating and sort filters are not available because the nearby-kitchen API does not provide those fields yet.',
-    );
+  const openFilters = () => {
+    navigation.navigate('CustomerFilterSort', {origin: 'CHEFS'});
   };
 
   const showKitchenProfileBoundary = (kitchen: NearbyKitchen) => {
@@ -335,10 +338,10 @@ export function DiscoverHomeChefsScreen() {
           value={search.draft}
         />
         <Pressable
-          accessibilityHint="Explains why advanced nearby-kitchen filters are unavailable"
+          accessibilityHint="Open filter and sort options"
           accessibilityLabel="Filters"
           accessibilityRole="button"
-          onPress={showFiltersBoundary}
+          onPress={openFilters}
           style={({pressed}) => [styles.filterButton, pressed && styles.filterButtonPressed]}>
           <Text style={styles.filterButtonText}>Filters</Text>
         </Pressable>

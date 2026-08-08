@@ -83,7 +83,7 @@ export function useCustomerLocationOptions() {
     dispatch(customerShellActions.locationSelected(location));
 
     if (changed) {
-      void invalidateCustomerHomeFeedQueries(queryClient);
+      invalidateCustomerHomeFeedQueries(queryClient);
     }
   };
 

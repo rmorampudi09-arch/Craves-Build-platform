@@ -1,8 +1,30 @@
 import React from 'react';
-import {ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
-import {colors, fontWeight, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {useRoute} from '@react-navigation/native';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
+import {
+  colors,
+  fontWeight,
+  radius,
+  spacing,
+  touchTarget,
+  typography,
+} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
-import {useCustomerHeaderState, useCustomerLocationOptions} from '../hooks/useCustomerHeaderState';
+import {resolveCartAddressSelection} from '../../cart/domain/cartAddressSelection';
+import {cartActions} from '../../cart/state/cartSlice';
+import {
+  useCustomerHeaderState,
+  useCustomerLocationOptions,
+} from '../hooks/useCustomerHeaderState';
 
 interface Props {
   visible: boolean;
@@ -10,8 +32,18 @@ interface Props {
 }
 
 export function CustomerLocationSelector({visible, onClose}: Props) {
+  const route = useRoute();
+  const dispatch = useAppDispatch();
   const {selectedLocation} = useCustomerHeaderState();
   const {locations, status, refresh, selectLocation} = useCustomerLocationOptions();
+  const cartAddress = useAppSelector(state => state.cart.dependencies.address);
+  const deliveryQuoteStatus = useAppSelector(
+    state => state.cart.dependencies.deliveryQuote.status,
+  );
+  const commerceSelection = route.name === 'CustomerCart';
+  const selectedAddressId = commerceSelection
+    ? cartAddress.addressId
+    : selectedLocation?.addressId ?? null;
 
   return (
     <Modal
@@ -27,9 +59,15 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
         <Pressable onPress={() => undefined} style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.headingRow}>
-            <View>
-              <Text style={styles.title}>Choose location</Text>
-              <Text style={styles.subtitle}>Use one of your saved addresses</Text>
+            <View style={styles.headingCopy}>
+              <Text style={styles.title}>
+                {commerceSelection ? 'Choose delivery address' : 'Choose location'}
+              </Text>
+              <Text style={styles.subtitle}>
+                {commerceSelection
+                  ? 'Use a saved address for this cart'
+                  : 'Use one of your saved addresses'}
+              </Text>
             </View>
             <Pressable
               accessibilityRole="button"
@@ -65,7 +103,7 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
           ) : (
             <ScrollView contentContainerStyle={styles.list}>
               {locations.map(location => {
-                const selected = selectedLocation?.addressId === location.addressId;
+                const selected = selectedAddressId === location.addressId;
                 return (
                   <Pressable
                     accessibilityRole="button"
@@ -73,6 +111,26 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
                     key={location.addressId}
                     onPress={() => {
                       selectLocation(location);
+
+                      if (commerceSelection) {
+                        const transition = resolveCartAddressSelection(
+                          cartAddress.addressId,
+                          deliveryQuoteStatus,
+                          location.addressId,
+                        );
+                        dispatch(
+                          cartActions.addressDependencyChanged(transition.address),
+                        );
+                        if (transition.changed) {
+                          dispatch(
+                            cartActions.dependencyStatusChanged({
+                              dependency: 'deliveryQuote',
+                              status: transition.deliveryQuoteStatus,
+                            }),
+                          );
+                        }
+                      }
+
                       onClose();
                     }}
                     style={[styles.row, selected && styles.rowSelected]}>
@@ -85,7 +143,9 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
                         {location.displayName}
                       </Text>
                     </View>
-                    {selected ? <Icon name="check" size={20} color={colors.flameRed} /> : null}
+                    {selected ? (
+                      <Icon name="check" size={20} color={colors.flameRed} />
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -126,6 +186,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
     marginBottom: spacing.md,
+  },
+  headingCopy: {
+    minWidth: 0,
+    flex: 1,
   },
   title: {
     color: colors.espressoBrown,

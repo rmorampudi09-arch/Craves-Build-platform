@@ -117,9 +117,10 @@ export function useUpdateCustomerProfileMutation() {
       return customerProfileApi.updateProfile(request);
     },
     retry: false,
-    onSuccess: profile => {
+    onSuccess: async profile => {
       if (identityId) {
         writeCustomerProfileQuery(queryClient, identityId, profile);
+        await invalidateCustomerProfileQuery(queryClient);
       }
     },
   });

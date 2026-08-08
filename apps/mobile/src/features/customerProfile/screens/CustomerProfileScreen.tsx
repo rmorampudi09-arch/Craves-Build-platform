@@ -217,10 +217,6 @@ function ProfileReadyContent({
           </React.Fragment>
         ))}
       </View>
-
-      <Text style={styles.emptyCartNote} testID="customer-profile-empty-cart-state">
-        Your cart is empty. View Cart stays hidden in this profile state.
-      </Text>
     </View>
   );
 }
@@ -264,9 +260,7 @@ export function CustomerProfileScreen() {
       {
         text: 'Logout',
         style: 'destructive',
-        onPress: () => {
-          void performLogout();
-        },
+        onPress: performLogout,
       },
     ]);
   }, [performLogout]);
@@ -301,7 +295,7 @@ export function CustomerProfileScreen() {
   );
 
   const retryProfile = useCallback(() => {
-    void profileQuery.refetch();
+    profileQuery.refetch().catch(() => undefined);
   }, [profileQuery]);
 
   const body = (() => {
@@ -595,13 +589,6 @@ const styles = StyleSheet.create({
     height: borderWidth.standard,
     marginLeft: 68,
     backgroundColor: colors.border,
-  },
-  emptyCartNote: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    textAlign: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
   },
   skeletonWrap: {
     width: '100%',

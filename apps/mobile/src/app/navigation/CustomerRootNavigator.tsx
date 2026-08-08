@@ -4,6 +4,7 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
+import {CustomerAddressesRouteScreen} from '../../features/customerAddresses/screens/CustomerAddressesRouteScreen';
 import {CustomerOrderDetailScreen} from '../../features/customerOrders/screens/CustomerOrderDetailScreen';
 import {CustomerOrdersRouteScreen} from '../../features/customerOrders/screens/CustomerOrdersRouteScreen';
 import {CustomerOrderTrackingScreen} from '../../features/customerOrders/screens/CustomerOrderTrackingScreen';
@@ -221,7 +222,7 @@ function CustomerOrdersStackNavigator() {
   );
 }
 
-/** P65 adds one shared Edit Profile route for refs 23/24. */
+/** P66 adds My Addresses after the P65 shared Edit Profile route. */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -235,6 +236,10 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen
         name="CustomerProfileEdit"
         component={CustomerProfileEditRouteScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerAddresses"
+        component={CustomerAddressesRouteScreen}
       />
       <ProfileStack.Screen
         name="CustomerFavorites"

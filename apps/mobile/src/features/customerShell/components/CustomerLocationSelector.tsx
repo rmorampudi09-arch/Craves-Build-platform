@@ -1,5 +1,11 @@
 import React from 'react';
-import {useRoute} from '@react-navigation/native';
+import {
+  useNavigation,
+  useRoute,
+  type NavigationProp,
+  type ParamListBase,
+} from '@react-navigation/native';
+import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import {
   ActivityIndicator,
   Modal,
@@ -9,6 +15,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import type {CustomerTabParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {
   colors,
@@ -31,7 +38,10 @@ interface Props {
   onClose: () => void;
 }
 
+type CustomerTabsNavigation = BottomTabNavigationProp<CustomerTabParamList>;
+
 export function CustomerLocationSelector({visible, onClose}: Props) {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute();
   const dispatch = useAppDispatch();
   const {selectedLocation} = useCustomerHeaderState();
@@ -44,6 +54,15 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
   const selectedAddressId = commerceSelection
     ? cartAddress.addressId
     : selectedLocation?.addressId ?? null;
+  const customerTabs = navigation.getParent<CustomerTabsNavigation>();
+
+  const openAddressManager = () => {
+    if (!customerTabs) {
+      return;
+    }
+    onClose();
+    customerTabs.navigate('Profile', {screen: 'CustomerAddresses'});
+  };
 
   return (
     <Modal
@@ -79,6 +98,26 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
             </Pressable>
           </View>
 
+          {customerTabs ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Manage saved addresses"
+              onPress={openAddressManager}
+              style={({pressed}) => [
+                styles.manageAddresses,
+                pressed && styles.manageAddressesPressed,
+              ]}>
+              <View style={styles.manageIcon}>
+                <Icon name="location" size={20} color={colors.flameRed} />
+              </View>
+              <View style={styles.manageCopy}>
+                <Text style={styles.manageTitle}>My Addresses</Text>
+                <Text style={styles.manageSubtitle}>Default, delete and Deliver Here</Text>
+              </View>
+              <Icon name="chevron-right" size={18} color={colors.flameRed} />
+            </Pressable>
+          ) : null}
+
           {status === 'pending' ? (
             <View style={styles.stateBox}>
               <ActivityIndicator color={colors.flameRed} />
@@ -88,7 +127,7 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
             <View style={styles.stateBox}>
               <Text style={styles.stateTitle}>No saved locations yet</Text>
               <Text style={styles.stateText}>
-                Address creation stays in its owning address-management phase.
+                Your saved delivery addresses will appear here.
               </Text>
               {status === 'error' ? (
                 <Pressable
@@ -164,7 +203,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(38,26,21,0.32)',
   },
   sheet: {
-    maxHeight: '72%',
+    maxHeight: '78%',
     backgroundColor: colors.white,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
@@ -211,6 +250,36 @@ const styles = StyleSheet.create({
     color: colors.espressoBrown,
     fontSize: 30,
     fontWeight: fontWeight.regular,
+  },
+  manageAddresses: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceWarm,
+  },
+  manageAddressesPressed: {opacity: 0.78},
+  manageIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  manageCopy: {minWidth: 0, flex: 1},
+  manageTitle: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.semibold,
+  },
+  manageSubtitle: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    marginTop: spacing.xxs,
   },
   stateBox: {
     minHeight: 160,

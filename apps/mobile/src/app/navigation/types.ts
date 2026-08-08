@@ -112,13 +112,11 @@ export type CustomerOrdersStackParamList = {
 } & CustomerOrderDetailStackParamList &
   CustomerCartStackParamList;
 
-/**
- * P65 adds the shared Edit Profile destination after P62/P63 Notifications.
- * Active and empty cart references reuse this one route and form implementation.
- */
+/** P66 adds the shared My Addresses destination after P65 Edit Profile. */
 export type CustomerProfileStackParamList = {
   CustomerProfileRoot: undefined;
   CustomerProfileEdit: undefined;
+  CustomerAddresses: undefined;
   CustomerFavorites: undefined;
   CustomerNotifications: undefined;
 } & CustomerDishDetailStackParamList &

@@ -30,16 +30,17 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 - **P67 — Add/Edit Address and Location Permission: PARTIAL.** Shared manual editor, existing-address full-PUT edit, pincode validation, duplicate/default rules, unsaved-change protection, and controlled manual fallbacks are implemented and validated. New-address persistence, pincode/geocode lookup, and native current-location permission/geocode remain deferred because approved executable contracts/integration are not present.
 - **P68 — Payment Methods Active/Empty Visuals: PARTIAL.** Shared Payments route, active/empty cart presentation, payment capability groups, canonical active View Cart behavior, and explicit disabled eligibility boundaries are implemented. Saved token-list data, cart/provider payment eligibility, and COD eligibility are not exposed by the approved mobile contract, so stored instruments and selectable primary methods are not fabricated.
 - **P69 — Payment Method Add/Manage Provider Flow: BLOCKED.** The approved mobile runtime has checkout-scoped payment-order create/read/verify only; it has no tokenized customer method setup/list/delete/set-primary contract, no authoritative primary replacement rule, and no installed/wired native Cashfree provider SDK. No credential-entry or fake local mutation flow was added.
+- **P70 — Coupons/Offers — Empty Cart: BLOCKED.** The branch names Coupons only as a logical module; no executable offers/category/bank-offer/terms/eligibility contract exists, and the current cart model explicitly marks coupon discount as server-contract unavailable. No guessed endpoint, fake offer catalogue, invented T&C, or client-computed savings flow was added.
 
-**Current executed phase:** **P69 — Payment Method Add/Manage Provider Flow — BLOCKED** at exact-contract/provider-capability scope.
+**Current executed phase:** **P70 — Coupons/Offers — Empty Cart — BLOCKED** at exact-contract capability scope.
 
-**P69 evidence checkpoint commit:** `5f90d4f659eb849eded36cbcfe0082181e45d028`.
+**P70 evidence checkpoint commit:** `9cdb485c8bbdb7bb7824eecd46da212bd6b412e7`.
 
-**Next phase in sequence:** **P70 — Coupons/Offers — Empty Cart — NOT STARTED**.
+**Next phase in sequence:** **P71 — Coupons/Offers — Active Cart — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P70. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P71. Wait for explicit user direction.
 
 ---
 
@@ -60,9 +61,12 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 | P67 | **PARTIAL** | `docs/mobile-ui-rebuild/P67_ADD_EDIT_ADDRESS_LOCATION_PERMISSION.md`; validated implementation `fe7a263095a138d546c851908cbec166bd30b8b0` | `31279558033` / `93158570541` — SUCCESS |
 | P68 | **PARTIAL** | `docs/mobile-ui-rebuild/P68_PAYMENT_METHODS_ACTIVE_EMPTY_VISUALS.md`; validated implementation `d044bf7bb545875302eb23d5ba5aa00fcbc18574` | `31281213495` / `93162733549` — SUCCESS |
 | P69 | **BLOCKED** | `docs/mobile-ui-rebuild/P69_PAYMENT_METHOD_ADD_MANAGE_PROVIDER_FLOW.md`; exact contract/provider capability audit | Not triggered — documentation/ledger only; P68 mobile source remains unchanged |
-| P70 onward | **NOT STARTED / not accepted** | — | — |
+| P70 | **BLOCKED** | `docs/mobile-ui-rebuild/P70_COUPONS_OFFERS_EMPTY_CART.md`; exact coupons/offers contract capability audit | Not triggered — documentation/ledger only; P68 mobile source remains unchanged |
+| P71 onward | **NOT STARTED / not accepted** | — | — |
 
 P69 was executed against the exact branch contract. The available payment API creates, reads, and verifies checkout-scoped payment orders only. It does not expose customer tokenized-method setup/list/delete/set-primary mutations or a primary replacement policy, and the mobile package does not include a native Cashfree SDK. Per the no-invented-contract rule, P69 is BLOCKED rather than implemented with guessed routes or credential-entry UI.
+
+P70 was executed against the exact branch contract and guide requirement for server-owned offers/eligibility/terms/savings. The branch contains no concrete coupons/offers OpenAPI/APIM/mobile response contract, while the cart screen model explicitly records coupon discount as `SERVER_CONTRACT_UNAVAILABLE`. Per the same no-invented-contract rule, P70 is BLOCKED rather than implemented with a guessed route/schema, fake offer data, or client-computed discount.
 
 ---
 
@@ -181,7 +185,30 @@ Evidence: `docs/mobile-ui-rebuild/P69_PAYMENT_METHOD_ADD_MANAGE_PROVIDER_FLOW.md
 
 ---
 
-## 8. P68 Changed/Accepted Files
+## 8. P70 Executed Boundary
+
+**Guide ref:** 29.  
+**Phase:** Coupons/Offers — Empty Cart.
+
+P70 requires a server-backed empty-cart offers experience: coupon input, offers/categories, T&C/details, and server-authoritative eligibility/savings. The current branch does not contain the exact data contract needed to render or validate those controls truthfully.
+
+Verified P70 boundary:
+
+- `shared/contracts/openapi-notes.md` names `Coupons` only as a logical module; it defines no concrete route/schema.
+- `openapi/` contains no coupons/offers OpenAPI file.
+- `services/` contains no dedicated coupon/promotion service contract.
+- `infra/apim/` contains no coupons/offers API surface in the inspected branch.
+- the mobile feature tree contains no existing coupons/offers typed API/domain layer to extend.
+- `cartScreenModel.ts` marks `couponDiscount` as `SERVER_CONTRACT_UNAVAILABLE`.
+- `cartTypes.ts` models coupon dependency status only and exposes no authoritative coupon identity, eligibility, terms, category, bank-offer, or savings payload.
+
+**P70 status: BLOCKED.** A production `CustomerCouponsOffers` screen would require invented offer records, T&C, eligibility fields, or endpoint schemas, so no static/fake route was registered. The canonical empty-cart View Cart rule remains unchanged, and P71 active-cart mutation behavior is untouched.
+
+Evidence: `docs/mobile-ui-rebuild/P70_COUPONS_OFFERS_EMPTY_CART.md`.
+
+---
+
+## 9. P68 Changed/Accepted Files
 
 P68 implementation ownership includes:
 
@@ -204,7 +231,7 @@ No backend, APIM, OpenAPI, database, infrastructure, Android native source, Grad
 
 ---
 
-## 9. Validation State
+## 10. Validation State
 
 Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
@@ -212,23 +239,24 @@ Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 - Validated P68 implementation head: `d044bf7bb545875302eb23d5ba5aa00fcbc18574`.
 - Dependency install, TypeScript strict check, ESLint zero-warning gate, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed on that unchanged mobile implementation.
 - P69 changes only documentation/ledger because the production flow is contract/provider blocked.
-- The workflow path filter runs for `apps/mobile/**` or workflow-file changes, so a docs-only P69 checkpoint does not trigger a new mobile CI run.
+- P70 changes only documentation/ledger because the server-backed offers/eligibility/terms contract is absent.
+- The workflow path filter runs for `apps/mobile/**` or workflow-file changes, so docs-only P69/P70 checkpoints do not trigger a new mobile CI run.
 - No Gradle/APK packaging was performed, consistent with the implementation-phase policy.
 
 ---
 
-## 10. Handoff
+## 11. Handoff
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current executed phase: P69 — Payment Method Add/Manage Provider Flow — BLOCKED
-P69 evidence checkpoint commit: 5f90d4f659eb849eded36cbcfe0082181e45d028
-P69 evidence: docs/mobile-ui-rebuild/P69_PAYMENT_METHOD_ADD_MANAGE_PROVIDER_FLOW.md
-P69 verified available transport: checkout-scoped payment-order create/read/verify only
-P69 blocked: no exact tokenized method setup/list/delete/set-primary contract; no primary replacement rule; no native Cashfree provider SDK/integration
-P69 security decision: no raw PAN/CVV/UPI PIN/net-banking credential collection, state, persistence, or logging; no guessed provider/API flow
-Mobile production source changed by P69: none
-Inherited blockers: retain P68 and all earlier phase blockers not explicitly superseded
-Next phase: P70 — Coupons/Offers — Empty Cart — NOT STARTED
+Current executed phase: P70 — Coupons/Offers — Empty Cart — BLOCKED
+P70 evidence checkpoint commit: 9cdb485c8bbdb7bb7824eecd46da212bd6b412e7
+P70 evidence: docs/mobile-ui-rebuild/P70_COUPONS_OFFERS_EMPTY_CART.md
+P70 verified contract boundary: Coupons is named only as a logical module; no concrete offers/categories/eligibility/terms/bank-offer schema is present
+P70 verified cart boundary: coupon discount remains SERVER_CONTRACT_UNAVAILABLE
+P70 no-fabrication decision: no guessed REST path/schema, sample offers, invented T&C, hardcoded eligibility, or client-computed savings
+Mobile production source changed by P70: none
+Inherited blockers: retain P69/P68 and all earlier phase blockers not explicitly superseded
+Next phase: P71 — Coupons/Offers — Active Cart — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

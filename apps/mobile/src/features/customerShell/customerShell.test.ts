@@ -1,3 +1,4 @@
+import {httpClient} from '../../core/http/httpClient';
 import {customerShellApi, unreadNoticeCount, type CustomerNotice} from './api/customerShellApi';
 import {customerShellActions, customerShellReducer} from './state/customerShellSlice';
 
@@ -7,7 +8,13 @@ jest.mock('../../core/http/httpClient', () => ({
   },
 }));
 
+const getMock = httpClient.get as jest.Mock;
+
 describe('P27 customer shell', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
+
   it('propagates one selected location through shared state', () => {
     const location = {
       kind: 'SAVED_ADDRESS' as const,
@@ -55,14 +62,11 @@ describe('P27 customer shell', () => {
   });
 
   it('keeps the notification contract capped at one hundred items', async () => {
-    const {httpClient} = require('../../core/http/httpClient') as {
-      httpClient: {get: jest.Mock};
-    };
-    httpClient.get.mockResolvedValueOnce([]);
+    getMock.mockResolvedValueOnce([]);
 
     await customerShellApi.listNotifications(500);
 
-    expect(httpClient.get).toHaveBeenCalledWith('/api/v1/notifications/in-app', {
+    expect(getMock).toHaveBeenCalledWith('/api/v1/notifications/in-app', {
       params: {limit: 100},
       dedupeKey: 'customer-shell:notifications:100',
     });

@@ -22,15 +22,16 @@
 - **P54 — My Orders — Active Cart: PARTIAL.** Active-cart composition is implemented; exact reorder/cart merge-or-replacement validation remains unavailable.
 - **P55 — Order Detail, Timeline, and Tracking: PARTIAL.** Customer-safe detail/tracking is implemented; the backend still exposes no complete order-status lifecycle event history.
 - **P56 — Reorder, Cancellation, and Refund Eligibility: PARTIAL.** The client mutation-authority and revalidation boundary is implemented; exact customer reorder/cancel/refund eligibility and mutation contracts remain unavailable.
-- **P57 — Customer Profile/Rewards Contract: DONE.** The approved `GET /api/v1/customer/profile` fields now map into a strict mobile profile-hub contract with private query integration, registered-phone readiness fields, full/partial/empty/error/unsupported state handling, and fixtures/tests. Rewards, reward history, order aggregate counters, profile notification unread count, and chef-role summary are explicitly `unsupported` because those semantics are not exposed by the accepted backend/profile contract. No fake balance, counters, role state, fields, or endpoint was introduced.
+- **P57 — Customer Profile/Rewards Contract: DONE.** The approved `GET /api/v1/customer/profile` fields map into a strict mobile profile-hub contract. Rewards, reward history, order aggregate counters, profile notification unread count, and chef-role summary remain explicitly `unsupported` because those semantics are not exposed by the accepted backend/profile contract.
+- **P58 — Customer Profile — Empty Cart: DONE.** Reference 11 profile composition now replaces the prior Profile placeholder. It renders only approved P57 identity fields, capability-gates unsupported rewards/order counts, provides deterministic menu rows with either real navigation or explicit contract blockers, uses the guarded P24 logout coordinator, supports loading/empty/error/unsupported/refresh states, and keeps View Cart absent. P59 active-cart behavior was not implemented.
 
-**Current executed phase:** **P57 — Customer Profile/Rewards Contract** is **DONE** at its defined contract/integration scope.
+**Current executed phase:** **P58 — Customer Profile — Empty Cart** is **DONE** at its defined implementation/static-contract scope.
 
-**Next phase in sequence:** **P58 — Customer Profile UI** — **NOT STARTED**.
+**Next phase in sequence:** **P59 — Customer Profile — Active Cart** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P58. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P59. Wait for explicit user direction.
 
 ---
 
@@ -66,7 +67,8 @@
 | P55 | **PARTIAL** | `4bb32730c1cbae0556db686688cc4c088f7a415f` | `P55_ORDER_DETAIL_TIMELINE_TRACKING.md` | `31268384221` / `93130106434` |
 | P56 | **PARTIAL** | `20081ccef8abb89a25b47c6a8bb278ec42ec45d5` | `P56_REORDER_CANCELLATION_REFUND_ELIGIBILITY.md` | `31269398555` / `93132711235` |
 | P57 | **DONE** | `9983592fc87e603a95fa4eace5b6fbf71225057b` | `P57_CUSTOMER_PROFILE_REWARDS_CONTRACT.md` | `31270356726` / `93135116492` |
-| P58 onward | **NOT STARTED / not accepted** | — | — | — |
+| P58 | **DONE** | `467b5a71c5b208a151d14b5aeae3d87b5baccd07` | `P58_CUSTOMER_PROFILE_EMPTY_CART.md` | `31271539076` / `93138248796` |
+| P59 onward | **NOT STARTED / not accepted** | — | — | — |
 
 ---
 
@@ -74,10 +76,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31270356726`
-- Job ID: `93135116492`
-- Head SHA: `9983592fc87e603a95fa4eace5b6fbf71225057b`
-- Phase: **P57 — Customer Profile/Rewards Contract**
+- GitHub Actions run ID: `31271539076`
+- Job ID: `93138248796`
+- Head SHA: `467b5a71c5b208a151d14b5aeae3d87b5baccd07`
+- Phase: **P58 — Customer Profile — Empty Cart**
 - Conclusion: **SUCCESS**
 - Dependency install: **SUCCESS**
 - TypeScript strict check: **SUCCESS**
@@ -90,89 +92,64 @@ No Java/Gradle/APK packaging was performed, consistent with the implementation-p
 
 ---
 
-## 4. P57 Implemented Contract Boundary
+## 4. P57 Contract Boundary Retained by P58
 
-P57 audited the accepted profile API before defining mobile rewards/profile semantics.
-
-Authoritative profile source:
+P58 consumes the P57 customer profile contract without widening it. The only accepted profile source remains:
 
 ```text
 GET /api/v1/customer/profile
 ```
 
-Accepted server-owned response fields used by mobile:
+Accepted server-owned fields remain `id`, `identityId`, `registeredPhoneNumber`, `firstName`, `lastName`, `email`, `createdAt`, and `updatedAt`.
 
-```text
-id
-identityId
-registeredPhoneNumber
-firstName
-lastName
-email
-createdAt
-updatedAt
-```
-
-The normalized mobile contract provides profile/account metadata and registered-phone readiness. `registeredPhoneNumber`, `last4`, and `isRegistered` are derived only from the server-owned registered phone. P57 does not reinterpret registration as a separate backend `verified` state.
-
-The contract also includes the profile-hub capability surfaces required for P58, but marks unsupported server semantics explicitly instead of inventing values:
-
-- reward balance/tier: `unsupported`, value `null`;
-- reward history: `unsupported`, empty entries;
-- order aggregate counters: `unsupported`, empty counters;
-- profile notification unread count: `unsupported`, value `null`;
-- chef role/eligibility summary: `unsupported`, value `null`.
-
-All use the stable fail-closed reason `not-exposed-by-approved-contract`.
-
-P57 exposes discriminated `loading`, `ready`, `empty`, `unsupported`, and `error` states and distinguishes full versus partial profile readiness.
-
-A private customer identity-scoped TanStack Query key, cancellation-aware GET, dedupe key, stale-time policy, and invalidation helper integrate the contract into the existing mobile architecture without duplicating full server profile data into a new global store.
+The following capabilities remain fail-closed as `not-exposed-by-approved-contract`: reward balance/tier/history, order aggregate counters, profile notification unread count, and chef role/eligibility summary. P58 does not fabricate any of them.
 
 ---
 
-## 5. P57 Validation and Exit
+## 5. P58 Implemented UI Boundary
 
-Focused fixtures exist for:
+P58 implements Reference 11 — Customer Profile, Empty Cart — on the existing `CustomerProfileRoot` route and replaces the prior account-status placeholder.
 
-- full profile;
-- partial profile;
-- empty profile;
-- unsupported profile source posture.
+Implemented composition and behavior:
 
-Focused tests cover approved field mapping, server-owned identity validation, phone readiness/last-four derivation, missing-profile behavior, unsupported rewards/history/count/notification/role semantics, exact route usage, malformed response rejection, and query loading/ready/empty/error mapping.
+- shared customer location/notification header and existing bottom navigation behavior;
+- profile identity summary derived only from approved P57 fields, including masked registered-phone last four and profile completeness status;
+- Edit Profile remains visible but displays an explicit route-contract blocker because no approved edit-profile route is registered;
+- rewards composition is present but truthfully reports the unsupported contract state instead of showing a fabricated balance or tier;
+- order-status composition routes to the existing Orders tab while aggregate counts remain explicitly unsupported;
+- menu rows are deterministic: Favorites, Payments, Order Status, Contact us, Logout;
+- Favorites, Payments, and Contact us show explicit contract blockers because approved destination routes are not registered;
+- Order Status navigates to the real existing Orders tab;
+- Logout requires confirmation and uses the existing P24 `completeLogout` cleanup boundary;
+- authenticated/private query states cover loading, ready, empty, unsupported, error, and pull-to-refresh behavior;
+- **View Cart is absent in this phase**, satisfying the P58 empty-cart acceptance boundary. The P59 active-cart overlay/state was not added.
 
-P57 is **DONE** because its phase acceptance explicitly requires a truthful contract that handles missing/unsupported rewards data rather than requiring the unavailable backend capability to be invented.
-
-P58 may now render only supported profile data and capability-gate unsupported rewards/counters/notification/role surfaces until exact backend contracts exist.
+Focused UI-model tests cover row ordering/actions/blockers, approved identity derivation, phone masking, and unsupported rewards/order-count copy.
 
 ---
 
-## 6. P57 Changed Files
+## 6. P58 Changed Files
 
 Implementation/test:
 
-- `apps/mobile/src/features/customerProfile/domain/customerProfileContract.ts`
-- `apps/mobile/src/features/customerProfile/api/customerProfileApi.ts`
-- `apps/mobile/src/features/customerProfile/query/customerProfileQueries.ts`
-- `apps/mobile/src/features/customerProfile/fixtures/customerProfileFixtures.ts`
-- `apps/mobile/src/features/customerProfile/customerProfileContract.test.ts`
-- `apps/mobile/src/features/customerProfile/customerProfileApi.test.ts`
-- `apps/mobile/src/features/customerProfile/customerProfileQueries.test.ts`
+- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
+- `apps/mobile/src/features/customerProfile/presentation/customerProfileUiModel.ts`
+- `apps/mobile/src/features/customerProfile/customerProfileUiModel.test.ts`
+- `apps/mobile/src/features/customerProfile/screens/CustomerProfileScreen.tsx`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P57_CUSTOMER_PROFILE_REWARDS_CONTRACT.md`
+- `docs/mobile-ui-rebuild/P58_CUSTOMER_PROFILE_EMPTY_CART.md`
 
 Ledger:
 
 - `build.md`
 
-No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android native source, Gradle/APK, or AAB configuration was changed.
+No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android native source, Gradle/APK, AAB configuration, or P59 active-cart implementation was changed.
 
 ---
 
-## 7. Architecture Ownership After P57
+## 7. Architecture Ownership After P58
 
 - P19–P24 remain authoritative for authentication/session/onboarding/logout/private-cache cleanup.
 - P25–P30 remain authoritative for Customer shell/header/shared cart foundations, View Cart behavior, and cart mutation reconciliation.
@@ -182,16 +159,17 @@ No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android
 - P45–P51 remain authoritative for their recorded Cart/checkout/payment/address orchestration boundaries and blockers.
 - P52 remains authoritative for customer Orders list contract/window/cache semantics.
 - P53–P56 retain their recorded Orders UI/detail/mutation-boundary ownership and blockers.
-- **P57 owns the normalized customer profile hub contract, registered-phone readiness mapping, profile capability availability posture, private customer-profile query key/invalidation boundary, explicit profile load/error/empty/unsupported states, and P58-ready fixtures.**
-- **P58 — Customer Profile UI has not started.**
+- **P57 owns the normalized customer profile contract and capability availability posture.**
+- **P58 owns the Reference 11 empty-cart Profile hub composition, its menu row action/blocker mapping, Profile root integration, and its loading/empty/error/unsupported rendering.**
+- **P59 — Customer Profile — Active Cart has not started.**
 
 ---
 
-## 8. Explicitly Not Complete After P57
+## 8. Explicitly Not Complete After P58
 
 Do not describe any of the following as complete:
 
-- outstanding blockers recorded for P31–P56 that P57 did not explicitly supersede;
+- outstanding blockers recorded for P31–P56 that P58 did not explicitly supersede;
 - P52 true server pagination/cursor navigation beyond the newest 50 orders;
 - P52 global order totals or authoritative lifecycle-tab counts;
 - customer-authoritative reorder/cancellation/refund eligibility or mutations;
@@ -200,7 +178,8 @@ Do not describe any of the following as complete:
 - customer profile order-status aggregate-count backend support;
 - profile notification unread-count backend support through the P57 accepted contract;
 - chef role/eligibility summary backend support through the P57 accepted contract;
-- P58 Customer Profile UI;
+- registered Edit Profile, Favorites, Payments, or Contact us destination routes;
+- P59 Customer Profile active-cart state / View Cart behavior;
 - live provider sandbox/device certification unless a later evidence record explicitly says so;
 - Chef operational/product screens;
 - full lifecycle/accessibility/performance/security audits;
@@ -213,12 +192,15 @@ Do not describe any of the following as complete:
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current implemented phase: P57 — DONE
-Validated implementation SHA: 9983592fc87e603a95fa4eace5b6fbf71225057b
-CI: 31270356726 / 93135116492 — SUCCESS
-Evidence: docs/mobile-ui-rebuild/P57_CUSTOMER_PROFILE_REWARDS_CONTRACT.md
-P57 unsupported capabilities: rewards balance/tier/history; order aggregate counters; profile notification unread count; chef role/eligibility summary — all fail closed as not-exposed-by-approved-contract
+Current implemented phase: P58 — Customer Profile — Empty Cart — DONE
+Validated implementation SHA: 467b5a71c5b208a151d14b5aeae3d87b5baccd07
+CI: 31271539076 / 93138248796 — SUCCESS
+Evidence: docs/mobile-ui-rebuild/P58_CUSTOMER_PROFILE_EMPTY_CART.md
+P57 unsupported capabilities retained: rewards balance/tier/history; order aggregate counters; profile notification unread count; chef role/eligibility summary — all fail closed as not-exposed-by-approved-contract
+P58 explicit route blockers: Edit Profile; Favorites; Payments; Contact us
+P58 real actions: Order Status -> Orders tab; Logout -> confirmed P24 completeLogout
+P58 cart boundary: View Cart absent; P59 active-cart state not implemented
 Inherited blockers: retain all P31–P56 blockers not explicitly superseded
-Next phase: P58 — Customer Profile UI — NOT STARTED
+Next phase: P59 — Customer Profile — Active Cart — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

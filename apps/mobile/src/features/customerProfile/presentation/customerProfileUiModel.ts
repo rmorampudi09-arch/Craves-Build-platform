@@ -6,6 +6,7 @@ export const CUSTOMER_PROFILE_ROUTE_BLOCKER_REASON =
 
 export type CustomerProfileMenuAction =
   | 'route-favorites'
+  | 'route-payments'
   | 'route-orders'
   | 'contract-blocker'
   | 'logout';
@@ -20,7 +21,7 @@ export interface CustomerProfileMenuRowModel {
 }
 
 function blockedRow(
-  id: Extract<CustomerProfileMenuRowModel['id'], 'payments' | 'contact'>,
+  id: Extract<CustomerProfileMenuRowModel['id'], 'contact'>,
   title: string,
   subtitle: string,
   icon: IconName,
@@ -43,7 +44,13 @@ export const CUSTOMER_PROFILE_MENU_ROWS: readonly CustomerProfileMenuRowModel[] 
     icon: 'heart',
     action: 'route-favorites',
   },
-  blockedRow('payments', 'Payments', 'Payment methods and preferences', 'shield'),
+  {
+    id: 'payments',
+    title: 'Payments',
+    subtitle: 'Payment methods and preferences',
+    icon: 'shield',
+    action: 'route-payments',
+  },
   {
     id: 'orders',
     title: 'Order Status',

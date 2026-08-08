@@ -93,6 +93,7 @@ interface DishCardProps {
   onAdd: (dishId: string) => void;
   onDecrease: (line: CartLine) => void;
   onIncrease: (line: CartLine) => void;
+  onOpen: (dishId: string) => void;
 }
 
 function DishCard({
@@ -103,6 +104,7 @@ function DishCard({
   onAdd,
   onDecrease,
   onIncrease,
+  onOpen,
 }: DishCardProps) {
   const kitchenName = dish.kitchenDisplayName ?? dish.kitchenName;
   const location = [dish.areaName, dish.city].filter(Boolean).join(', ');
@@ -110,28 +112,39 @@ function DishCard({
 
   return (
     <View style={styles.dishCard}>
-      {dish.primaryImageUrl ? (
-        <Image
-          accessibilityIgnoresInvertColors
-          source={{uri: dish.primaryImageUrl}}
-          resizeMode="cover"
-          style={styles.dishImage}
-        />
-      ) : (
-        <View style={styles.imageFallback}>
-          <Text style={styles.imageFallbackText}>{dish.category}</Text>
-        </View>
-      )}
+      <Pressable
+        accessibilityHint="Opens full dish information and purchase actions"
+        accessibilityLabel={`View details for ${dish.itemName}`}
+        accessibilityRole="button"
+        onPress={() => onOpen(dish.id)}
+        style={({pressed}) => pressed && styles.dishOpenPressed}>
+        {dish.primaryImageUrl ? (
+          <Image
+            accessibilityIgnoresInvertColors
+            source={{uri: dish.primaryImageUrl}}
+            resizeMode="cover"
+            style={styles.dishImage}
+          />
+        ) : (
+          <View style={styles.imageFallback}>
+            <Text style={styles.imageFallbackText}>{dish.category}</Text>
+          </View>
+        )}
+      </Pressable>
       <View style={styles.dishBody}>
         <View style={styles.dishTitleRow}>
-          <View style={styles.dishTitleCopy}>
+          <Pressable
+            accessibilityLabel={`Open ${dish.itemName}`}
+            accessibilityRole="button"
+            onPress={() => onOpen(dish.id)}
+            style={({pressed}) => [styles.dishTitleCopy, pressed && styles.dishOpenPressed]}>
             <Text numberOfLines={2} style={styles.dishName}>
               {dish.itemName}
             </Text>
             <Text numberOfLines={1} style={styles.kitchenName}>
               {kitchenName}
             </Text>
-          </View>
+          </Pressable>
           <Text style={styles.price}>{formatDishPrice(dish.price, dish.currency)}</Text>
         </View>
         <Text numberOfLines={1} style={styles.metadata}>
@@ -361,6 +374,13 @@ export function CustomerHomeScreen() {
     ).then(handleMutationOutcome);
   };
 
+  const openDishDetail = useCallback(
+    (dishId: string) => {
+      navigation.navigate('CustomerDishDetail', {menuItemId: dishId});
+    },
+    [navigation],
+  );
+
   const openFilters = () => {
     navigation.navigate('CustomerFilterSort', {origin: 'HOME'});
   };
@@ -575,6 +595,7 @@ export function CustomerHomeScreen() {
               onAdd={handleAdd}
               onDecrease={handleDecrease}
               onIncrease={handleIncrease}
+              onOpen={openDishDetail}
             />
           );
         }}
@@ -676,6 +697,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     overflow: 'hidden',
     ...elevation.card,
+  },
+  dishOpenPressed: {
+    opacity: 0.86,
   },
   dishImage: {
     width: '100%',

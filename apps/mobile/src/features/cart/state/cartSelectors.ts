@@ -1,3 +1,4 @@
+import {buildCartScreenModel} from '../domain/cartScreenModel';
 import type {CartDomainState} from './cartSlice';
 
 export interface CartRootState {
@@ -32,3 +33,8 @@ export function selectCartMutation(state: CartRootState, key: string) {
 }
 
 export const selectCartDependencies = (state: CartRootState) => state.cart.dependencies;
+
+export const selectCartScreenModel = (state: CartRootState) =>
+  state.cart.snapshot
+    ? buildCartScreenModel(state.cart.snapshot, state.cart.dependencies)
+    : null;

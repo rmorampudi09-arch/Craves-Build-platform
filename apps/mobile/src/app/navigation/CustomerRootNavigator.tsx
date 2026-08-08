@@ -4,6 +4,7 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
+import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
 import {CustomerHomeScreen} from '../../features/home/screens/CustomerHomeScreen';
 import {Icon} from '../../shared/components/Icon';
 import {
@@ -125,6 +126,10 @@ function CustomerHomeStackNavigator() {
         component={CustomerHomeScreen}
         listeners={rootListeners}
       />
+      <HomeStack.Screen
+        name="CustomerFilterSort"
+        component={CustomerFilterSortScreen}
+      />
     </HomeStack.Navigator>
   );
 }
@@ -138,6 +143,10 @@ function CustomerChefsStackNavigator() {
         name="CustomerChefsRoot"
         component={DiscoverHomeChefsRouteScreen}
         listeners={rootListeners}
+      />
+      <ChefsStack.Screen
+        name="CustomerFilterSort"
+        component={CustomerFilterSortScreen}
       />
     </ChefsStack.Navigator>
   );

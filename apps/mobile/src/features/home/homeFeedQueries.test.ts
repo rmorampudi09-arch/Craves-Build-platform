@@ -71,7 +71,9 @@ describe('P31 home feed query model', () => {
   });
 
   it('invalidates all current home discovery variants on location change', async () => {
-    const queryClient = new QueryClient();
+    const queryClient = new QueryClient({
+      defaultOptions: {queries: {gcTime: Infinity}},
+    });
     const homeKey = createHomeNearbyDishesQueryKey('customer-1', location, {
       radiusMeters: 10000,
       size: 20,
@@ -85,5 +87,6 @@ describe('P31 home feed query model', () => {
 
     expect(queryClient.getQueryState(homeKey)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(unrelatedKey)?.isInvalidated).toBe(false);
+    queryClient.clear();
   });
 });

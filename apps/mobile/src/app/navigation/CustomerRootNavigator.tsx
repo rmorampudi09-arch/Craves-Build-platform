@@ -2,12 +2,12 @@ import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
-import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
 import {CustomerOrderDetailScreen} from '../../features/customerOrders/screens/CustomerOrderDetailScreen';
 import {CustomerOrdersRouteScreen} from '../../features/customerOrders/screens/CustomerOrdersRouteScreen';
 import {CustomerOrderTrackingScreen} from '../../features/customerOrders/screens/CustomerOrderTrackingScreen';
+import {CustomerProfileScreen} from '../../features/customerProfile/screens/CustomerProfileScreen';
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
@@ -218,7 +218,7 @@ function CustomerOrdersStackNavigator() {
   );
 }
 
-/** Profile remains on its accepted placeholder until its owning phase. */
+/** P58 replaces the accepted account placeholder with the real Profile hub. */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -226,7 +226,7 @@ function CustomerProfileStackNavigator() {
     <ProfileStack.Navigator screenOptions={stackScreenOptions}>
       <ProfileStack.Screen
         name="CustomerProfileRoot"
-        component={CustomerAccountStatusScreen}
+        component={CustomerProfileScreen}
         listeners={rootListeners}
       />
       <ProfileStack.Screen name="CustomerCart" component={CustomerCartScreen} />

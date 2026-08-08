@@ -13,8 +13,13 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import {useNavigation, useRoute, type RouteProp} from '@react-navigation/native';
-import type {CustomerDishDetailRouteParams} from '../../../app/navigation/types';
+import {
+  useNavigation,
+  useRoute,
+  type NavigationProp,
+  type RouteProp,
+} from '@react-navigation/native';
+import type {CustomerDishDetailStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {
@@ -50,7 +55,12 @@ import {
 import {useCustomerDishDetailQuery} from '../query/dishDetailQueries';
 
 type DishDetailRoute = RouteProp<
-  {CustomerDishDetail: CustomerDishDetailRouteParams},
+  CustomerDishDetailStackParamList,
+  'CustomerDishDetail'
+>;
+
+type DishDetailNavigation = NavigationProp<
+  CustomerDishDetailStackParamList,
   'CustomerDishDetail'
 >;
 
@@ -87,7 +97,7 @@ function spiceLabel(spiceLevel: 'MILD' | 'MEDIUM' | 'SPICY' | null): string | nu
 }
 
 export function CustomerDishDetailScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<DishDetailNavigation>();
   const route = useRoute<DishDetailRoute>();
   const dispatch = useAppDispatch();
   const {width} = useWindowDimensions();
@@ -509,6 +519,18 @@ export function CustomerDishDetailScreen() {
               <Text style={styles.bodyText}>
                 Ingredient and allergen details are not available from the current catalog contract.
               </Text>
+              <Pressable
+                accessibilityHint="Opens the focused ingredient details screen"
+                accessibilityLabel={`View ingredients for ${dish.itemName}`}
+                accessibilityRole="button"
+                onPress={() =>
+                  navigation.navigate('CustomerDishIngredients', {
+                    menuItemId: dish.id,
+                  })
+                }
+                style={({pressed}) => [styles.inlineAction, pressed && styles.pressed]}>
+                <Text style={styles.inlineActionText}>View ingredients</Text>
+              </Pressable>
             </View>
 
             <View style={styles.section}>

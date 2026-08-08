@@ -52,6 +52,16 @@ export type CustomerDishDetailRouteParams = {
   menuItemId: string;
 };
 
+export type CustomerDishIngredientsRouteParams = {
+  menuItemId: string;
+};
+
+/** Shared typed subroutes owned by the customer dish-detail experience. */
+export type CustomerDishDetailStackParamList = {
+  CustomerDishDetail: CustomerDishDetailRouteParams;
+  CustomerDishIngredients: CustomerDishIngredientsRouteParams;
+};
+
 /**
  * P25 customer shell types. Each bottom tab owns a stack navigator so later
  * product phases can add child routes without resetting sibling tab state.
@@ -59,14 +69,12 @@ export type CustomerDishDetailRouteParams = {
 export type CustomerHomeStackParamList = {
   CustomerHomeRoot: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
-  CustomerDishDetail: CustomerDishDetailRouteParams;
-};
+} & CustomerDishDetailStackParamList;
 
 export type CustomerChefsStackParamList = {
   CustomerChefsRoot: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
-  CustomerDishDetail: CustomerDishDetailRouteParams;
-};
+} & CustomerDishDetailStackParamList;
 
 export type CustomerOrdersStackParamList = {
   CustomerOrdersRoot: undefined;

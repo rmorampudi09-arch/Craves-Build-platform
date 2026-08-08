@@ -26,8 +26,12 @@ describe('navigationPolicy', () => {
     }
   });
 
-  it('keeps focused filter and dish-detail routes immersive', () => {
-    for (const routeName of ['CustomerFilterSort', 'CustomerDishDetail'] as const) {
+  it('keeps focused filter and dish routes immersive', () => {
+    for (const routeName of [
+      'CustomerFilterSort',
+      'CustomerDishDetail',
+      'CustomerDishIngredients',
+    ] as const) {
       expect(isCurrentImmersiveRoute(routeName)).toBe(true);
       expect(resolveRouteChromePolicy('Customer', routeName)).toEqual({
         bottomNavigationVisible: false,

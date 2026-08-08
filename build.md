@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical preservation:** The complete ledger through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P29 use dedicated evidence under `docs/mobile-ui-rebuild/`; this living ledger may remain compact while those records preserve phase detail.
+**Historical preservation:** The complete ledger through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P30 use dedicated evidence under `docs/mobile-ui-rebuild/`; this living ledger remains compact while those records preserve phase detail.
 
 ---
 
@@ -50,20 +50,23 @@
 - **P27 — Shared Customer Header/Location/Notification Badge: DONE** at implementation/static-contract level; final device/reference certification remains later visual QA.
 - **P28 — Authoritative Cart Domain Skeleton: DONE** at implementation/static-contract level.
 - **P29 — Shared View Cart Overlay: DONE** at implementation/static-contract level; final device/reference certification remains later visual QA.
+- **P30 — Cart Add/Remove/Quantity Reconciliation: DONE** at implementation/static-contract level.
 
-P29 completion evidence:
+P30 completion evidence:
 
-- Started from accepted P28 ledger head: `2c90cead1350728e0e56a21c20512f94a6d19732`.
-- Validated implementation commit: `3413d329aee34acdc8c6057cfd22ed5a227d15dd`.
-- Evidence commit: `ae8bdda40c377010ff4dc595204bb2d6f131eaf0`.
-- Evidence: `docs/mobile-ui-rebuild/P29_SHARED_VIEW_CART_OVERLAY.md`.
-- CI run: `31230836784` — **SUCCESS**.
+- Started from accepted P29 ledger head: `e75ed7f56860026fccccd7ff9a1f3f0218faf2b3`.
+- Validated implementation commit: `1e7d8ec460098aaeaf993d5b34129d2c7b8a8f75`.
+- Evidence commit: `8ff11cac0bb550d72755e0ff46dda32f0f603c34`.
+- Evidence: `docs/mobile-ui-rebuild/P30_CART_ADD_REMOVE_QUANTITY_RECONCILIATION.md`.
+- CI run: `31231364244` — **SUCCESS**.
+- CI job: `93035709313` — **SUCCESS**.
+- Jest: **34 suites passed, 167 tests passed**.
 
-**Next phase in sequence:** **P30 — Cart Add/Remove/Quantity Reconciliation**.
+**Next phase in sequence:** **P31 — Home Feed Data Contract and Query Model**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P30 until the user explicitly authorizes the next phase.
+**Required action:** Stop. Do not pre-implement P31 until the user explicitly authorizes the next phase.
 
 ---
 
@@ -73,9 +76,9 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31230836784`
-- Head SHA: `3413d329aee34acdc8c6057cfd22ed5a227d15dd`
-- Phase: **P29 — Shared View Cart Overlay**
+- GitHub Actions run ID: `31231364244`
+- Head SHA: `1e7d8ec460098aaeaf993d5b34129d2c7b8a8f75`
+- Phase: **P30 — Cart Add/Remove/Quantity Reconciliation**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -83,8 +86,8 @@ Successful checks:
 1. checkout `mobile-ui-rebuild-from-scratch`,
 2. Node setup and `npm ci`,
 3. strict TypeScript (`tsc --noEmit`),
-4. ESLint,
-5. Jest including P29 focused coverage and prior regressions,
+4. ESLint with zero warnings,
+5. Jest including P30 focused coverage and prior regressions — 34 suites / 167 tests passed,
 6. production Android JavaScript bundle generation with `react-native bundle`,
 7. backend/APIM/infrastructure source-change guard.
 
@@ -92,56 +95,55 @@ The implementation-phase workflow intentionally does **not** perform Java/Gradle
 
 ---
 
-## 3. P29 Accepted Shared View Cart Behavior
+## 3. P30 Accepted Cart Mutation/Reconciliation Behavior
 
-P29 extends the accepted P28 cart domain with one shared customer-facing View Cart overlay contract. It does not implement P30 cart mutations, a Cart product screen, checkout, or payment.
+P30 extends the accepted P28 authoritative cart domain and P29 shared View Cart overlay with exact existing line mutation contracts. It does not implement P31 discovery, a Cart product screen, checkout, or payment.
 
 Accepted behavior:
 
-- `SharedViewCartOverlay` reads the canonical P28 `selectCartItemCount` and `selectCartFoodSubtotal` selectors; it does not maintain a second cart copy.
-- The server-provided food subtotal is displayed rather than locally recalculating pricing.
-- Zero items remove the overlay immediately.
-- A non-empty cart with an authoritative subtotal is eligible for the overlay only when `RouteChromePolicy.viewCartEligible` is true.
-- Customer-domain routes are eligible by policy; Auth, Chef, Transactional, and Modal domains are suppressed.
-- The surface uses the shared Espresso Brown token and existing spacing/radius/type/touch-target/elevation tokens.
-- Entrance motion uses the shared `viewCart` motion intent and respects Android reduced-motion preference.
-- The visible control has button accessibility semantics, scalable text, press feedback, and a required `onOpenCart` callback.
-- P29 does not register an inert or placeholder Cart route. The real Cart navigation destination remains owned by the Cart UI phase; consumers must supply a real navigation action when mounting this reusable component.
-- No backend/APIM contract was added or changed by P29.
+- `POST /api/v1/cart/items` is used for add with exact `{menuItemId, quantity}` request shape.
+- `PUT /api/v1/cart/items/{cartItemId}` is used for quantity updates with exact `{quantity}` request shape.
+- `DELETE /api/v1/cart/items/{cartItemId}` is used for line removal.
+- Every mutation response is parsed as the existing authoritative `CartResponse`; invalid/inconsistent responses are rejected.
+- Add waits for authoritative server reconciliation because the backend can create or merge the cart line and refresh catalog/kitchen/price snapshots.
+- Quantity update optimistically changes only canonical line quantity; it does not fabricate server-owned line totals or food subtotal.
+- Remove optimistically removes the canonical line so derived item count/empty state/View Cart visibility react immediately.
+- Quantity/remove failures roll back to the prior snapshot only when no newer authoritative client acceptance revision has arrived.
+- All cart writes are serialized, preventing later intent from being overwritten by an earlier out-of-order mutation response.
+- Duplicate same-key taps are blocked while pending (`menu:<menuItemId>` for add; `line:<cartItemId>` for update/remove).
+- Existing request-id-aware mutation metadata remains authoritative for pending/failed state.
+- Only validated authoritative snapshots advance `clientRevision`; optimistic and rollback projections do not.
+- Existing P28 selectors remain the one source for item count, per-menu-item quantity, empty state, and server food subtotal, so current and future surfaces synchronize from one cart domain.
+- No backend/APIM contract was added or changed by P30.
 
 ### Guide alignment
 
-The master guide requires the View Cart control to:
-
-- stay hidden at zero,
-- appear automatically for an active cart,
-- use Espresso Brown `#261A15`,
-- show synchronized quantity and authoritative price when present,
-- disappear immediately when the cart empties,
-- remain hidden on authentication, checkout, payment, and other immersive contexts,
-- reuse centralized cart state and respect reduced-motion/accessibility rules.
-
-P29 implements this shared contract without pulling P30/P45/P46 work forward.
+The master guide requires centralized cart state, immediate mutation feedback, duplicate-mutation protection, reliable rollback for low-risk optimistic updates, server reconciliation, derived totals/badges/selectors, and protection against stale/out-of-order responses. P30 implements those rules without inventing pricing or later product-screen contracts.
 
 ---
 
-## 4. P29 Changed Files
+## 4. P30 Changed Files
 
 Implementation:
 
-- `apps/mobile/src/features/cart/viewCartOverlayModel.ts`
-- `apps/mobile/src/features/cart/components/SharedViewCartOverlay.tsx`
-- `apps/mobile/src/features/cart/viewCartOverlayModel.test.ts`
+- `apps/mobile/src/features/cart/api/cartApi.ts`
+- `apps/mobile/src/features/cart/state/cartSlice.ts`
+- `apps/mobile/src/features/cart/state/cartMutations.ts`
+
+Tests:
+
+- `apps/mobile/src/features/cart/cartDomain.test.ts`
+- `apps/mobile/src/features/cart/cartMutations.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P29_SHARED_VIEW_CART_OVERLAY.md`
+- `docs/mobile-ui-rebuild/P30_CART_ADD_REMOVE_QUANTITY_RECONCILIATION.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, cart mutation transport, Cart product screen, checkout, payment, or P30+ product behavior was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, Home/discovery data model, Cart product screen, checkout, payment, or P31+ product behavior was changed.
 
 ---
 
-## 5. Current Architecture Ownership After P29
+## 5. Current Architecture Ownership After P30
 
 ### Authentication/session
 
@@ -152,13 +154,14 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 - P25 owns the Customer root shell and four typed bottom tabs.
 - P26 owns bottom-navigation scroll hide/reveal behavior.
 - P27 owns the shared customer header, saved browsing location, and notification badge derivation.
-- P28 owns the one canonical cart read domain, server-total snapshot, cart selectors, dependency metadata, and mutation metadata skeleton.
-- P29 owns the reusable shared View Cart presentation/visibility contract and consumes P28 selectors plus navigation route policy.
+- P28 owns the one canonical cart read domain, server-total snapshot, selectors, dependency metadata, and mutation metadata skeleton.
+- P29 owns the reusable shared View Cart presentation/visibility contract.
+- P30 owns exact add/update/remove cart-line transport and reconciliation, bounded optimistic quantity/remove behavior, duplicate protection, serialized writes, and rollback/stale-response protection.
 
 ### Later-phase boundaries
 
-- **P30** owns exact add/remove/quantity mutation transport, reconciliation, rollback/stale-response behavior, and cross-surface mutation synchronization.
-- P31+ owns customer discovery/product screens according to `phases.md`.
+- **P31** owns Home feed/category/cuisine/location data contract/query mapping, pagination, and cache keys according to `phases.md`.
+- P32+ owns customer discovery/product screens according to `phases.md`.
 - **P45** owns Cart screen data/pricing model extensions.
 - **P46** owns Cart and Bill Summary UI and its real navigation destination.
 - Checkout/payment remain P47+ according to `phases.md`.
@@ -169,11 +172,14 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 
 Previously accepted authentication/profile/onboarding and P27 customer-shell reads remain unchanged.
 
-P28/P29 cart contract boundary remains:
+Accepted customer cart mobile contract boundary now includes:
 
-- `GET /api/v1/cart`
+- `GET /api/v1/cart` — P28 authoritative cart read.
+- `POST /api/v1/cart/items` — P30 add line/item quantity.
+- `PUT /api/v1/cart/items/{cartItemId}` — P30 set line quantity.
+- `DELETE /api/v1/cart/items/{cartItemId}` — P30 remove line.
 
-P29 adds **no transport**. Existing cart mutation endpoints are not claimed as implemented until P30.
+No client-owned tax, fee, discount, delivery-fee, grand-total, stock, serviceability, or pricing-version field is invented when the current accepted cart response does not provide it.
 
 Live APIM/device runtime certification is not claimed by these static implementation phases unless a later evidence record explicitly says so.
 
@@ -194,22 +200,23 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P26 Customer Bottom-Nav Scroll Hide/Reveal | **DONE** | CI `31228012689`. |
 | P27 Shared Customer Header/Location/Notification Badge | **DONE** | CI `31229329651`. |
 | P28 Authoritative Cart Domain Skeleton | **DONE** | CI `31229985407`. |
-| P29 Shared View Cart Overlay | **DONE** | Shared authoritative-count/subtotal overlay, route-policy suppression, reduced-motion entrance; CI `31230836784`. |
-| P30 onward | **NOT STARTED / not accepted** | No later phase is authorized by this record. |
+| P29 Shared View Cart Overlay | **DONE** | CI `31230836784`. |
+| P30 Cart Add/Remove/Quantity Reconciliation | **DONE** | Exact line writes, duplicate/stale/out-of-order protection, bounded optimistic rollback; CI `31231364244`. |
+| P31 onward | **NOT STARTED / not accepted** | No later phase is authorized by this record. |
 
 ---
 
-## 8. Explicitly Not Complete After P29
+## 8. Explicitly Not Complete After P30
 
 Do not describe any of the following as complete:
 
-- P30 cart add/remove/quantity mutation transport and reconciliation UX,
-- Customer cart product screen merely because the shared overlay exists,
+- P31 Home feed/category/cuisine/location query model or discovery data integration,
 - Customer Home/Discovery/Chefs/Orders/Profile product screens merely because shell/header/cart foundations exist,
+- full dish-card/quantity-selector product UI merely because P30 mutation commands exist,
+- Customer Cart product screen/Bill Summary,
 - native GPS/location permission behavior or full serviceability/geocoding flows,
 - Notifications Center product route/actions merely because the P27 badge exists,
 - coupon application, delivery quote, cart address integration, checkout eligibility, tax/fee/grand-total computation,
-- Cart/Bill Summary UI,
 - checkout/payment end-to-end flow,
 - Chef operational/product screens,
 - live APIM/device runtime certification of static-contract phases,

@@ -12,7 +12,10 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import {useNavigation} from '@react-navigation/native';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
+import type {CustomerHomeStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {
@@ -21,6 +24,7 @@ import {
   fontWeight,
   radius,
   spacing,
+  touchTarget,
   typography,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
@@ -41,6 +45,12 @@ import {
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
+import {applyHomeDiscoveryFilters} from '../../discoveryFilters/discoveryFilterApplication';
+import {
+  discoveryFilterActions,
+  getActiveDiscoveryFilterCount,
+  resolveDiscoveryFilterSession,
+} from '../../discoveryFilters/state/discoveryFilterSlice';
 import {DiscoverySearchInput} from '../../discoverySearch/components/DiscoverySearchInput';
 import {
   canRequestNextSearchPage,
@@ -183,11 +193,14 @@ function DishCard({
 }
 
 export function CustomerHomeScreen() {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<CustomerHomeStackParamList, 'CustomerHomeRoot'>>();
   const dispatch = useAppDispatch();
   const identity = useAppSelector(state => state.auth.identity);
   const selectedLocation = useAppSelector(state => state.customerShell.selectedLocation);
   const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const cartMutations = useAppSelector(state => state.cart.mutations);
+  const storedFilters = useAppSelector(state => state.discoveryFilters.sessions.HOME);
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
@@ -204,6 +217,10 @@ export function CustomerHomeScreen() {
       ? `${identity.id}:${selectedLocation.addressId}`
       : null;
   const search = useDiscoverySearchSession('HOME', searchScopeKey);
+  const appliedFilters = useMemo(
+    () => resolveDiscoveryFilterSession(storedFilters, searchScopeKey).applied,
+    [searchScopeKey, storedFilters],
+  );
   const restorePendingRef = useRef(search.scrollOffset > 0);
 
   const dishes = useMemo(
@@ -211,10 +228,15 @@ export function CustomerHomeScreen() {
     [feed.data?.pages],
   );
   const categories = useMemo(() => getHomeCategories(dishes), [dishes]);
-  const visibleDishes = useMemo(
-    () => filterHomeDishes(dishes, search.query, selectedCategory),
-    [dishes, search.query, selectedCategory],
+  const filteredAndSortedDishes = useMemo(
+    () => applyHomeDiscoveryFilters(dishes, appliedFilters),
+    [appliedFilters, dishes],
   );
+  const visibleDishes = useMemo(
+    () => filterHomeDishes(filteredAndSortedDishes, search.query, selectedCategory),
+    [filteredAndSortedDishes, search.query, selectedCategory],
+  );
+  const activeDiscoveryFilterCount = getActiveDiscoveryFilterCount(appliedFilters);
   const cartLinesByMenuItemId = useMemo(() => {
     const lines = new Map<string, CartLine>();
     for (const line of cartSnapshot?.lines ?? []) {
@@ -237,7 +259,9 @@ export function CustomerHomeScreen() {
   const initialLoading = feed.isPending && dishes.length === 0 && !feed.locationRequired;
   const searchActive = isDiscoverySearchActive(search.query);
   const draftSearchActive = isDiscoverySearchActive(search.draft);
-  const hasFilters = Boolean(searchActive || selectedCategory);
+  const hasFilters = Boolean(
+    searchActive || selectedCategory || activeDiscoveryFilterCount > 0,
+  );
 
   const retryFeed = () => {
     feed.refetch();
@@ -337,9 +361,19 @@ export function CustomerHomeScreen() {
     ).then(handleMutationOutcome);
   };
 
+  const openFilters = () => {
+    navigation.navigate('CustomerFilterSort', {origin: 'HOME'});
+  };
+
   const clearFilters = () => {
     handleClearSearch();
     setSelectedCategory(null);
+    dispatch(
+      discoveryFilterActions.filtersCleared({
+        surface: 'HOME',
+        scopeKey: searchScopeKey,
+      }),
+    );
   };
 
   const emptyState = (() => {
@@ -390,7 +424,7 @@ export function CustomerHomeScreen() {
       return (
         <TerminalState
           title="No matching meals"
-          description="Try a different search or category."
+          description="Try a different search, category or filter."
           actionLabel="Clear filters"
           onAction={clearFilters}
         />
@@ -423,14 +457,27 @@ export function CustomerHomeScreen() {
           Fresh meals from active home kitchens around your selected location.
         </Text>
       </View>
-      <View style={styles.searchWrap}>
+      <View style={styles.searchRow}>
         <DiscoverySearchInput
           accessibilityLabel="Search nearby meals"
           onChangeText={handleSearchChange}
           onClear={handleClearSearch}
           placeholder="Search nearby dishes or kitchens"
+          style={styles.searchField}
           value={search.draft}
         />
+        <Pressable
+          accessibilityHint="Open filter and sort options"
+          accessibilityLabel="Filters"
+          accessibilityRole="button"
+          onPress={openFilters}
+          style={({pressed}) => [styles.filterButton, pressed && styles.filterButtonPressed]}>
+          <Text style={styles.filterButtonText}>
+            {activeDiscoveryFilterCount > 0
+              ? `Filters (${activeDiscoveryFilterCount})`
+              : 'Filters'}
+          </Text>
+        </Pressable>
       </View>
       {categories.length > 0 ? (
         <ScrollView
@@ -569,9 +616,32 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     marginTop: spacing.xs,
   },
-  searchWrap: {
+  searchRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+  },
+  searchField: {
+    flex: 1,
+  },
+  filterButton: {
+    minHeight: touchTarget.comfortable,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.flameRed,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...elevation.primaryAction,
+  },
+  filterButtonPressed: {
+    opacity: 0.84,
+    transform: [{scale: 0.98}],
+  },
+  filterButtonText: {
+    color: colors.white,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
   },
   categoryRow: {
     gap: spacing.xs,

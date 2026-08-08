@@ -26,18 +26,19 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 - **P63 — Notifications — Active Cart: PARTIAL.** Shared active-cart wrapper is implemented; inherited P62 contract gaps and physical reference certification remain.
 - **P64 — Edit Customer Profile Domain/Form: PARTIAL.** Original/draft state, dirty-field detection, supported field schema/validation, server-validation mapping, unsaved-change protection, full-PUT save planning for the exact supported update contract, query reconciliation, and explicit avatar-contract blocking are implemented. The later P65 integration CI validates this code in the accepted branch state, but guide-required photo/security/device/delete-account capabilities are not all exposed by approved contracts.
 - **P65 — Edit Customer Profile Active/Empty Visuals: PARTIAL.** References 23/24 use one registered `CustomerProfileEdit` route/form. The active variant reads the authoritative cart selectors and reuses `SharedViewCartOverlay`; the empty variant removes the overlay at zero items; successful profile save writes and invalidates the shared profile query. P65 implementation CI is successful. Full reference/device certification and several guide-visible profile capabilities remain blocked/deferred.
+- **P66 — My Addresses Active/Empty Visuals: PARTIAL.** References 25/26 now use one registered `CustomerAddresses` route. Supported address list/default/delete behavior, delete confirmation, global `Deliver Here` selection, cart-address dependency updates, real cart snapshot refresh, active shared View Cart, and zero-item hiding are implemented and validated. Full P66 acceptance remains blocked because no approved address-aware delivery quote/reprice contract exists to refresh delivery fee, ETA, and serviceability; Add/Edit/location-permission behavior remains P67-owned and is not started.
 
-**Current executed phase:** **P65 — Edit Customer Profile Active/Empty Visuals — PARTIAL** at implementation/static-contract scope.
+**Current executed phase:** **P66 — My Addresses Active/Empty Visuals — PARTIAL** at implementation/static-contract scope.
 
-**P65 validated implementation head:** `edf8674e31b0867eded2f4618667482994cb9ec2`.
+**P66 validated implementation head:** `5904af74d25a8070a3834c33fbfb8f7e0c60deea`.
 
-**P65 evidence update head:** `fff22adfc1ba32e1f2319a8747a548f1cb821288`.
+**P66 evidence update head:** `c01526f03c2317e3d568c3a146bc7b5563eb194f`.
 
-**Next phase in sequence:** **P66 — My Addresses Active/Empty Visuals — NOT STARTED**.
+**Next phase in sequence:** **P67 — Add/Edit Address and Location Permission — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P66. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P67. Wait for explicit user direction.
 
 ---
 
@@ -54,9 +55,10 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 | P63 | **PARTIAL** | `docs/mobile-ui-rebuild/P63_NOTIFICATIONS_ACTIVE_CART.md` | `31274568039` / `93145968430` — SUCCESS |
 | P64 | **PARTIAL** | Existing P64 form/domain/API/query implementation on branch; no separate accepted evidence document | `31276696857` / `93151316827` — SUCCESS as part of the P65 integrated branch state |
 | P65 | **PARTIAL** | `docs/mobile-ui-rebuild/P65_EDIT_CUSTOMER_PROFILE_ACTIVE_EMPTY_VISUALS.md`; validated implementation `edf8674e31b0867eded2f4618667482994cb9ec2` | `31276696857` / `93151316827` — SUCCESS |
-| P66 onward | **NOT STARTED / not accepted** | — | — |
+| P66 | **PARTIAL** | `docs/mobile-ui-rebuild/P66_MY_ADDRESSES_ACTIVE_EMPTY_VISUALS.md`; validated implementation `5904af74d25a8070a3834c33fbfb8f7e0c60deea` | `31277654687` / `93153771794` — SUCCESS |
+| P67 onward | **NOT STARTED / not accepted** | — | — |
 
-The P65 implementation workflow has been inspected and is successful. P65 remains PARTIAL only for the explicitly documented contract and physical visual-certification gaps.
+The P66 implementation workflow has been inspected and is successful. P66 remains PARTIAL only for the explicitly documented missing delivery-quote capability and deferred physical visual certification; P67-owned Add/Edit/location-permission behavior remains intentionally untouched.
 
 ---
 
@@ -137,13 +139,67 @@ No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android
 
 ---
 
-## 6. Validation State
+## 6. P66 Implemented Boundary
+
+**Guide refs:** 25 and 26.
+
+P66 adds one shared My Addresses management destination and keeps active/empty cart state outside address ownership:
+
+- `CustomerAddresses` is registered once in the existing Profile stack;
+- the existing customer location selector exposes the real My Addresses destination;
+- address list state comes from the exact `/api/v1/customer/addresses` contract through a private React Query cache;
+- address response parsing validates supported identity IDs, HOME/WORK/OTHER label, address/contact fields, coordinates, default/active state, and timestamps;
+- Set default uses the existing full PUT update shape with the original supported fields plus `isDefault=true`;
+- default/delete success invalidates both the address-management cache and the existing saved-location cache used by customer shell surfaces;
+- Delete requires destructive confirmation before the real DELETE request;
+- deleting a selected browsing or cart address clears the corresponding global dependency so a deleted identifier is not retained;
+- Deliver Here writes the selected saved address into the shared customer-shell location state and invalidates location-sensitive home queries when changed;
+- Deliver Here also uses the existing cart-address transition, which marks the address dependency current and invalidates a previously usable delivery quote when the address changes;
+- when the cart is active, Deliver Here performs a real cart snapshot refresh through the existing cart API;
+- active cart count/subtotal come from authoritative cart selectors and `SharedViewCartOverlay` opens the real `CustomerCart` route;
+- zero-item state automatically hides View Cart and removes the extra content clearance;
+- address management never creates/replaces/clears the actual cart snapshot.
+
+### P66 delivery-quote blocker
+
+The repository’s existing cart domain explicitly records `DELIVERY_QUOTE_CONTRACT_UNAVAILABLE`. No exact approved address-aware delivery quote/reprice endpoint exists that can refresh delivery fee, ETA, and serviceability from My Addresses.
+
+P66 therefore does not invent a backend/API call and does not misuse checkout creation as a quote. The client performs the supported address/global/cart transitions and real cart snapshot refresh, keeps delivery quote state stale when appropriate, and fails closed on the missing fee/ETA/serviceability capability.
+
+**P66 status: PARTIAL.** Saved-address list/default/delete, confirmation, global selection, available cart refresh, and active/empty visual behavior are implemented and validated. The fee/ETA/serviceability acceptance remains blocked by the missing approved delivery-quote contract. P67-owned Add/Edit/location-permission/geocode behavior is not started. Physical Android/reference-image certification is deferred.
+
+Evidence: `docs/mobile-ui-rebuild/P66_MY_ADDRESSES_ACTIVE_EMPTY_VISUALS.md`.
+
+---
+
+## 7. P66 Changed/Accepted Files
+
+P66 implementation ownership on the current branch includes:
+
+- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
+- `apps/mobile/src/app/navigation/types.ts`
+- `apps/mobile/src/features/customerAddresses/api/customerAddressesApi.ts`
+- `apps/mobile/src/features/customerAddresses/domain/customerAddressContract.ts`
+- `apps/mobile/src/features/customerAddresses/query/customerAddressQueries.ts`
+- `apps/mobile/src/features/customerAddresses/customerAddressesActiveCart.ts`
+- `apps/mobile/src/features/customerAddresses/screens/CustomerAddressesScreen.tsx`
+- `apps/mobile/src/features/customerAddresses/screens/CustomerAddressesRouteScreen.tsx`
+- `apps/mobile/src/features/customerAddresses/customerAddresses.test.ts`
+- `apps/mobile/src/features/customerShell/components/CustomerLocationSelector.tsx`
+- `docs/mobile-ui-rebuild/P66_MY_ADDRESSES_ACTIVE_EMPTY_VISUALS.md`
+- `build.md`
+
+No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android native source, Gradle/APK, or AAB configuration was intentionally changed for P66.
+
+---
+
+## 8. Validation State
 
 Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
-- GitHub Actions run ID: `31276696857`.
-- Job ID: `93151316827`.
-- Validated P65 implementation head: `edf8674e31b0867eded2f4618667482994cb9ec2`.
+- GitHub Actions run ID: `31277654687`.
+- Job ID: `93153771794`.
+- Validated P66 implementation head: `5904af74d25a8070a3834c33fbfb8f7e0c60deea`.
 - Job conclusion: **SUCCESS**.
 - Dependency install: **SUCCESS**.
 - TypeScript strict check: **SUCCESS**.
@@ -155,17 +211,17 @@ Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
 ---
 
-## 7. Handoff
+## 9. Handoff
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current executed phase: P65 — Edit Customer Profile Active/Empty Visuals — PARTIAL
-P65 validated implementation head: edf8674e31b0867eded2f4618667482994cb9ec2
-P65 CI: 31276696857 / 93151316827 — SUCCESS
-P65 evidence: docs/mobile-ui-rebuild/P65_EDIT_CUSTOMER_PROFILE_ACTIVE_EMPTY_VISUALS.md
-P65 implemented: one shared CustomerProfileEdit route/form; active authoritative View Cart; zero-item empty variant; real CustomerCart navigation; cart preserved; successful save reconciles/invalidates shared profile cache
-P65 remains PARTIAL: missing approved profile photo/rewards/security/device/delete-account capabilities; device/reference certification deferred
+Current executed phase: P66 — My Addresses Active/Empty Visuals — PARTIAL
+P66 validated implementation head: 5904af74d25a8070a3834c33fbfb8f7e0c60deea
+P66 CI: 31277654687 / 93153771794 — SUCCESS
+P66 evidence: docs/mobile-ui-rebuild/P66_MY_ADDRESSES_ACTIVE_EMPTY_VISUALS.md
+P66 implemented: one shared CustomerAddresses route; exact saved-address list; full-PUT Set default; destructive Delete confirmation and real delete; global Deliver Here selection; cart-address dependency update; real active-cart snapshot refresh; shared View Cart when active; zero-item hiding; cart snapshot preserved
+P66 remains PARTIAL: no approved address-aware delivery quote/reprice contract exists to refresh delivery fee/ETA/serviceability; P67-owned Add/Edit/location-permission behavior not started; device/reference certification deferred
 Inherited blockers: retain all earlier phase blockers not explicitly superseded
-Next phase: P66 — My Addresses Active/Empty Visuals — NOT STARTED
+Next phase: P67 — Add/Edit Address and Location Permission — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

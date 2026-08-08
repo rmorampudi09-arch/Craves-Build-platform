@@ -7,7 +7,7 @@ import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
 import {customerOrdersApi} from '../api/customerOrdersApi';
 import {createCustomerOrdersSnapshot} from '../domain/customerOrdersModel';
-import {CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT} from '../api/customerOrdersApi';
+import {CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT} from '../domain/customerOrderTypes';
 
 const CUSTOMER_ROLE = 'CUSTOMER' as const;
 const CUSTOMER_ORDERS_DOMAIN = 'customer-orders';

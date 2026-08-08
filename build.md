@@ -21,6 +21,7 @@
 - **P33 — Customer Home — Active Cart: PARTIAL.** The same Home route reconciles loaded dish cards to the authoritative cart snapshot, exposes real increment/decrement/remove quantity controls, protects duplicate line mutations, and returns to Add when a line reaches zero. The required visible View Cart/count/total and `View Cart -> Cart` action remain blocked because no Customer Cart product route is registered and P45/P46 own that later destination.
 - **P34 — Nearby Chef Discovery Contract: PARTIAL.** Exact `GET /api/v1/discovery/kitchens` transport, validated kitchen-summary mapping, saved-location coordinates, pagination, bounded cache identity, and targeted invalidation are implemented and CI-validated. Full P34 acceptance remains blocked because the current branch has no authoritative delivery-serviceability contract; the richer rating/ETA/cuisine/favorite/verification/media/search/filter/sort data required by the Discover Home Chefs references is also absent from the current nearby-kitchen contract.
 - **P35 — Discover Home Chefs — Empty Cart: PARTIAL.** The real Customer Chefs root now renders the supported nearby-kitchen discovery surface using P34 data, saved location, pagination, loaded-result search, pull-to-refresh, lifecycle states, and scroll-aware bottom navigation. Full P35 acceptance remains blocked by missing cuisine/filter/favorite/rating/ETA/verification/media/server-search contracts and by the not-yet-registered public kitchen profile route owned by P42/P43.
+- **P36 — Discover Home Chefs — Active Cart: PARTIAL.** The same Customer Chefs route now composes the P35 discovery surface with the shared P29 View Cart overlay, reads authoritative P28 cart item count/server subtotal, synchronizes overlay visibility/count/total with canonical cart state, reserves dynamic bottom clearance while active, and restores the empty-cart layout at zero. Full P36 acceptance remains blocked because no real Customer Cart destination exists before P45/P46 and the current P34 nearby-kitchen response has no dish-level item/price payload for Reference 08 Add actions.
 
 ### P31 evidence
 
@@ -76,13 +77,25 @@
 - CI gates passed: dependency install, strict TypeScript, ESLint, Jest, production Android JavaScript bundle, backend/APIM/infrastructure source guard.
 - Outstanding blockers: no exact cuisine/filter/favorite/rating/ETA/verification/media/server-search contract and no public Customer kitchen-profile route/contract is registered yet. Physical-device/reference-image pixel certification remains deferred to later visual QA phases.
 
-**Current executed phase:** **P35 — Discover Home Chefs — Empty Cart** is recorded **PARTIAL** because the supported nearby-kitchen empty-cart surface is implemented and CI-validated, while guide-required rich data/filter/favorite/profile-navigation behavior cannot be completed without authoritative contracts/routes.
+### P36 evidence
 
-**Next phase in sequence:** **P36 — Discover Home Chefs — Active Cart** — **NOT STARTED**.
+- User explicitly authorized exactly the next single phase after P35 while P35 remains correctly recorded as PARTIAL.
+- Started from branch head: `7751fa7c225445e544d0cbce76022d86b4e5ce3a`.
+- Validated implementation commit: `f86d4e29041330eb768ac53f64848729446c6415`.
+- Evidence commit: `ee45299e2fc14aca4963c15208149a3d2c6267b7`.
+- Evidence: `docs/mobile-ui-rebuild/P36_DISCOVER_HOME_CHEFS_ACTIVE_CART.md`.
+- Guide ref: 8 / `image8.jpeg` — Discover Home Chefs — Active Cart.
+- CI run/job: `31249712277` / `93083997312` — **SUCCESS**.
+- CI gates passed: dependency install, strict TypeScript, ESLint, Jest, production Android JavaScript bundle, backend/APIM/infrastructure source guard.
+- Outstanding blockers: no real Customer Cart route/destination exists before P45/P46, and the P34 nearby-kitchen contract has no dish ID/price payload for Reference 08 dish Add actions. P35/P34 richer chef-discovery blockers remain unchanged. Physical-device/reference-image pixel certification remains deferred to later visual QA phases.
+
+**Current executed phase:** **P36 — Discover Home Chefs — Active Cart** is recorded **PARTIAL** because the supported same-route active-cart overlay/count/total/zero-state restoration/content-clearance behavior is implemented and CI-validated, while real Cart navigation and dish-level Add behavior cannot be completed without later-owned routes/contracts.
+
+**Next phase in sequence:** **P37 — Search Query Orchestration** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P36. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P37. Wait for explicit user direction.
 
 ---
 
@@ -90,10 +103,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31249264023`
-- Job ID: `93082900325`
-- Head SHA: `5fd2dfa0b36de13f38db16f45fed374d7f295724`
-- Phase: **P35 — Discover Home Chefs — Empty Cart**
+- GitHub Actions run ID: `31249712277`
+- Job ID: `93083997312`
+- Head SHA: `f86d4e29041330eb768ac53f64848729446c6415`
+- Phase: **P36 — Discover Home Chefs — Active Cart**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -110,52 +123,48 @@ The implementation workflow intentionally does **not** perform Java/Gradle/APK p
 
 ---
 
-## 3. P35 Implemented Discover Home Chefs Empty-Cart Boundary
+## 3. P36 Implemented Discover Home Chefs Active-Cart Boundary
 
-P35 uses Reference 07 and the existing P34 nearby-kitchen contract only. It does not begin P36 active-cart behavior or P42/P43 public kitchen-profile implementation.
+P36 uses Reference 08 and reuses the accepted P35 discovery screen plus P28/P29/P30 shared cart foundations. It does not begin P37 search orchestration, P38 filters, P42/P43 public kitchen-profile implementation, or P45/P46 Cart UI.
 
 Implemented behavior:
 
-- Replaced the P25 temporary account-status content at `CustomerChefsRoot` with the real P35 discovery screen while keeping the existing typed tab/stack architecture.
-- Reuses the P27 Customer header, saved browsing location, and notification-count refresh behavior.
-- Reuses the P34 infinite nearby-kitchen query over `GET /api/v1/discovery/kitchens`.
-- Uses only backend-owned kitchen fields: ID, names/description, area/city/state, coordinates, distance, and active-menu-item count.
-- Uses the existing saved location coordinates and a bounded 10 km request radius without inventing a delivery ETA/serviceability conclusion.
-- Paginates using backend `hasNext`, supports pull-to-refresh, and keeps page data bounded through the existing query cache model.
-- Provides missing-location, loading skeleton, populated, no-nearby-results, local-search-empty, offline, recoverable-error, refresh, and pagination-loading states.
-- Adds a presentation helper that deduplicates kitchens by stable ID, formats distance/location, derives initials only as a no-media fallback, and performs bounded search over already loaded contract fields.
-- Loaded-result search does not send unsupported server query parameters and does not claim to be complete server search.
-- The filter action reports the missing cuisine/rating/sort contract instead of returning fabricated results.
-- Kitchen card interaction reports the missing public profile route/contract rather than navigating to an unreachable placeholder; P42/P43 remain the owning later phases.
-- Bottom navigation follows the existing P26 hide/reveal controller while the chef list scrolls.
-- P35 does not introduce a screen-local View Cart. The shared P29 cart visibility contract remains authoritative and the requested empty-cart state renders no View Cart.
-- Added focused presentation tests for page flattening/deduplication, loaded-result search, distance/location formatting, and initials fallback.
+- Keeps `CustomerChefsRoot` as the same logical Chefs route and wraps the existing P35 discovery screen with route-level active-cart chrome rather than duplicating the screen.
+- Reads only authoritative cart state through `selectCartItemCount` and `selectCartFoodSubtotal`.
+- Reuses P29 `isViewCartOverlayVisible` with the Customer Chefs route policy; no screen-local cart copy or total is introduced.
+- Reuses the shared Espresso Brown `SharedViewCartOverlay` and therefore inherits live item-count/total formatting, reduced-motion behavior, and immediate hidden-at-zero behavior.
+- Cart changes completed through existing supported surfaces synchronize the Chefs overlay automatically because the wrapper subscribes to the canonical cart store.
+- Adds active-state route content clearance so the floating View Cart action does not cover the final discovery content.
+- Removes that extra clearance immediately when View Cart disappears, restoring the P35 empty-cart layout without a dead bottom gap.
+- Leaves the P26 bottom-navigation scroll hide/reveal binding on the underlying P35 FlatList unchanged.
+- Adds focused P36 tests covering Customer/Chefs View Cart eligibility, positive active clearance, and zero-cart restoration.
+- Does not register a placeholder Cart route. Because P45/P46 still own the real destination, pressing the visible View Cart action fails closed with a human-readable unavailable message while preserving the cart.
 
-### P35 acceptance blockers
+### P36 acceptance blockers
 
-Reference 07 and `phases.md` require richer filter/favorite/profile behavior than the current branch can truthfully support. There is no authoritative current contract for cuisine taxonomy/filtering, favorites, rating, ETA, delivery serviceability, public verification/media, or server-side chef search/filter/sort. There is also no registered public Customer kitchen-profile route yet; P42/P43 own that later product boundary.
+Reference 08 requires `View Cart -> Cart` and dish-level Add synchronization. No real Customer Cart destination is registered yet; P45/P46 own that later product boundary. The accepted P34 `GET /api/v1/discovery/kitchens` response also contains only kitchen summary fields plus `activeMenuItemCount`, not dish IDs/prices required for truthful Add controls on the nearby-kitchen surface.
 
-The guide, `plan.md`, and `agent.md` prohibit fabricated fields, empty handlers, placeholder routes, and pre-implementing later phases. Therefore P35 remains **PARTIAL**, not DONE.
+The guide, `plan.md`, and `agent.md` prohibit fake routes, fabricated payloads, and pre-implementing later phases. Therefore P36 remains **PARTIAL**, not DONE.
 
 ---
 
-## 4. P35 Changed Files
+## 4. P36 Changed Files
 
 Implementation:
 
-- `apps/mobile/src/features/chefDiscovery/chefDiscoveryPresentation.ts`
-- `apps/mobile/src/features/chefDiscovery/screens/DiscoverHomeChefsScreen.tsx`
+- `apps/mobile/src/features/chefDiscovery/chefDiscoveryActiveCart.ts`
+- `apps/mobile/src/features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen.tsx`
 - `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
 
 Tests:
 
-- `apps/mobile/src/features/chefDiscovery/chefDiscoveryPresentation.test.ts`
+- `apps/mobile/src/features/chefDiscovery/chefDiscoveryActiveCart.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P35_DISCOVER_HOME_CHEFS_EMPTY_CART.md`
+- `docs/mobile-ui-rebuild/P36_DISCOVER_HOME_CHEFS_ACTIVE_CART.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P36 active-cart chef-discovery behavior, Cart/Checkout, public kitchen-profile implementation, or Chef-owner operational feature was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P37/P38 search/filter work, P42/P43 public kitchen-profile implementation, P45/P46 Cart/Bill Summary UI, checkout/payment, or Chef-owner operational feature was changed.
 
 ---
 
@@ -178,16 +187,16 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 - P33 owns the current supported active-cart Home card quantity/reconciliation behavior on that same Home route.
 - P34 owns the exact supported nearby-kitchen discovery transport/query/cache boundary for the Customer Chefs experience.
 - P35 owns the current supported Customer Chefs empty-cart discovery presentation, loaded-result search, lifecycle/pagination presentation, and connection of the real Chefs tab root to P34 data.
+- P36 owns the supported same-route Customer Chefs active-cart chrome, canonical cart synchronization, shared View Cart composition, dynamic content clearance, and zero-cart restoration.
 
 ### Later-phase boundaries
 
-- **P36** owns the Discover Home Chefs active-cart variant and was not started.
 - **P37** owns full search-query orchestration when exact search contracts exist.
 - **P38** owns the dedicated Filter and Sort experience.
 - **P42/P43** own the customer-facing public kitchen-profile contract/UI and the real kitchen-profile destination required for full P35 card-navigation acceptance.
 - Later Customer dish/favorite/notification routes remain owned by their phases in `phases.md`.
 - **P45** owns Cart screen data/pricing model extensions.
-- **P46** owns Cart and Bill Summary UI and its real navigation destination; this remains the blocker for P33's functional View Cart action.
+- **P46** owns Cart and Bill Summary UI and its real navigation destination; this remains the blocker for P33/P36 functional View Cart actions.
 - Checkout/payment remain P47+.
 
 ---
@@ -220,7 +229,7 @@ Accepted cart dependencies:
 - P30 remove-line transport/mutation,
 - line mutation pending/error metadata.
 
-No backend/APIM contract was added or changed by P35.
+No backend/APIM contract was added or changed by P36.
 
 Not accepted because no exact current-branch contract or registered product route exists:
 
@@ -236,6 +245,7 @@ Not accepted because no exact current-branch contract or registered product rout
 - nearby-kitchen rating/review summary,
 - public nearby-kitchen verification/media summary,
 - nearby-chef server search/filter/sort parameters,
+- dish-level ID/price payload on the nearby-kitchen summary used by P35/P36,
 - public Customer kitchen-profile destination before P42/P43,
 - current Customer Cart product route/destination before P45/P46.
 
@@ -255,20 +265,21 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P33 Customer Home — Active Cart | **PARTIAL** | Same-route cart quantity/add/remove reconciliation validated by CI `31248405375`; functional View Cart remains blocked on the P45/P46-owned Cart destination. |
 | P34 Nearby Chef Discovery Contract | **PARTIAL** | Exact nearby-kitchen/location/pagination/query-cache subset validated by CI `31248762726`; authoritative delivery-serviceability and richer guide-required chef-summary contracts are missing. |
 | P35 Discover Home Chefs — Empty Cart | **PARTIAL** | Supported real Chefs-root discovery surface validated by CI `31249264023`; full filters/favorites/rich metadata/server search and public profile navigation remain blocked by missing contracts/routes. |
-| P36 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
+| P36 Discover Home Chefs — Active Cart | **PARTIAL** | Same-route shared View Cart/count/total/content-clearance behavior validated by CI `31249712277`; real Cart navigation and nearby-kitchen dish Add controls remain blocked by later route/current contract boundaries. |
+| P37 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
 
 ---
 
-## 8. Explicitly Not Complete After P35 Work
+## 8. Explicitly Not Complete After P36 Work
 
 Do not describe any of the following as complete:
 
 - P31 category/cuisine/full-home aggregation mapping,
 - P32 favorite/chef-detail/dish-detail/full-search/notification-center/recommendation acceptance items listed in its evidence,
-- P33 visible View Cart/count/total/Cart navigation/inset acceptance until the real Cart destination exists,
+- P33 real `View Cart -> Cart` navigation until the P45/P46-owned Cart destination exists,
 - P34 delivery-serviceability/ETA/rating/cuisine/favorite/verification/media/search/filter/sort requirements where no exact backend contract exists,
 - P35 cuisine/filter/favorite/rating/ETA/verification/media/server-search/public-profile-navigation requirements blocked by missing current contracts/routes,
-- P36 Discover Home Chefs active-cart state,
+- P36 real `View Cart -> Cart` navigation and Reference 08 dish Add actions blocked by P45/P46 and the current nearby-kitchen response,
 - full Customer Cart/Bill Summary product screen,
 - checkout/payment end-to-end flow,
 - Chef operational/product screens,

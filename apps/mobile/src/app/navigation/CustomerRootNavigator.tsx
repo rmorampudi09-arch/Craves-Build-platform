@@ -3,6 +3,7 @@ import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
+import {CustomerHomeScreen} from '../../features/home/screens/CustomerHomeScreen';
 import {Icon} from '../../shared/components/Icon';
 import {
   CustomerBottomNavVisibilityProvider,
@@ -113,11 +114,6 @@ function useCustomerTabRootListeners() {
   );
 }
 
-/**
- * P25 owns the root shell, not the later marketplace product screens. Reusing
- * the accepted account-status surface keeps the branch honest and functional
- * until each tab root is replaced by its owning product phase.
- */
 function CustomerHomeStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -125,13 +121,17 @@ function CustomerHomeStackNavigator() {
     <HomeStack.Navigator screenOptions={stackScreenOptions}>
       <HomeStack.Screen
         name="CustomerHomeRoot"
-        component={CustomerAccountStatusScreen}
+        component={CustomerHomeScreen}
         listeners={rootListeners}
       />
     </HomeStack.Navigator>
   );
 }
 
+/**
+ * P25 owns these remaining tab roots. Their product screens stay on the
+ * accepted account-status surface until their owning phases are authorized.
+ */
 function CustomerChefsStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 

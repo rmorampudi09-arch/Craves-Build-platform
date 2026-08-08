@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NavigationProp} from '@react-navigation/native';
+import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
 import type {
   CustomerCartStackParamList,
   CustomerPaymentMethodsStackParamList,
@@ -111,6 +112,7 @@ function MethodCard({
 export function CustomerPaymentMethodsScreen() {
   const navigation = useNavigation<PaymentMethodsNavigation>();
   const dispatch = useAppDispatch();
+  const bottomNavScroll = useCustomerBottomNavScroll();
   const itemCount = useAppSelector(selectCartItemCount);
   const snapshotStatus = useAppSelector(state => state.cart.snapshotStatus);
   const snapshotErrorCode = useAppSelector(state => state.cart.snapshotErrorCode);
@@ -194,6 +196,8 @@ export function CustomerPaymentMethodsScreen() {
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
+          onScroll={bottomNavScroll.onScroll}
+          scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
           showsVerticalScrollIndicator={false}>
           <View style={styles.contextCard}>
             <Text style={styles.contextEyebrow}>

@@ -45,6 +45,10 @@ describe('customerProfileUiModel', () => {
     expect(favorites?.action).toBe('route-favorites');
     expect(favorites?.icon).toBe('heart');
 
+    const payments = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'payments');
+    expect(payments?.action).toBe('route-payments');
+    expect(payments?.icon).toBe('shield');
+
     const orders = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'orders');
     expect(orders?.action).toBe('route-orders');
 
@@ -54,8 +58,8 @@ describe('customerProfileUiModel', () => {
     const blocked = CUSTOMER_PROFILE_MENU_ROWS.filter(
       row => row.action === 'contract-blocker',
     );
-    expect(blocked).toHaveLength(2);
-    expect(blocked.map(row => row.id)).toEqual(['payments', 'contact']);
+    expect(blocked).toHaveLength(1);
+    expect(blocked.map(row => row.id)).toEqual(['contact']);
     expect(blocked.every(row => Boolean(row.blockerMessage))).toBe(true);
   });
 

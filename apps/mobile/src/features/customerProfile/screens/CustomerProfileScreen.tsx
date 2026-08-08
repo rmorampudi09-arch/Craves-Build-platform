@@ -38,7 +38,6 @@ import {CustomerLocationSelector} from '../../customerShell/components/CustomerL
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
 import type {CustomerProfileHubContract} from '../domain/customerProfileContract';
 import {
-  CUSTOMER_PROFILE_EDIT_BLOCKER_MESSAGE,
   CUSTOMER_PROFILE_MENU_ROWS,
   CUSTOMER_PROFILE_ORDER_COUNTS_UNSUPPORTED_COPY,
   CUSTOMER_PROFILE_REWARDS_UNSUPPORTED_COPY,
@@ -152,7 +151,7 @@ function ProfileReadyContent({
           </Text>
         </View>
         <Button
-          accessibilityHint="Shows the current route-contract blocker until profile editing is registered"
+          accessibilityHint="Opens customer profile editing"
           label="Edit Profile"
           onPress={onEditProfile}
           variant="outline"
@@ -235,8 +234,8 @@ export function CustomerProfileScreen() {
   }, []);
 
   const handleEditProfile = useCallback(() => {
-    showContractBlocker('Edit Profile', CUSTOMER_PROFILE_EDIT_BLOCKER_MESSAGE);
-  }, [showContractBlocker]);
+    navigation.navigate('CustomerProfileEdit');
+  }, [navigation]);
 
   const performLogout = useCallback(async () => {
     if (loggingOut) {

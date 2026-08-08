@@ -16,19 +16,21 @@ describe('P68 payment methods model', () => {
     });
   });
 
-  it('allows the real Cashfree route to be selected for an active cart', () => {
+  it('does not infer online eligibility from an active cart alone', () => {
     const model = buildCustomerPaymentMethodsModel({
       cartItemCount: 3,
       selectedMethodId: 'CASHFREE_ONLINE',
     });
+    const online = model.options.find(option => option.id === 'CASHFREE_ONLINE');
 
     expect(model.mode).toBe('ACTIVE_CART');
-    expect(model.selectedMethodId).toBe('CASHFREE_ONLINE');
-    expect(model.options.find(option => option.id === 'CASHFREE_ONLINE')).toMatchObject({
-      availability: 'AVAILABLE',
-      selected: true,
+    expect(model.selectedMethodId).toBeNull();
+    expect(online).toMatchObject({
+      availability: 'BLOCKED',
+      selected: false,
       channels: ['Cards', 'UPI', 'Wallets', 'Net banking'],
     });
+    expect(online?.blockerReason).toContain('not exposed');
   });
 
   it('does not fabricate COD eligibility without an authoritative contract', () => {

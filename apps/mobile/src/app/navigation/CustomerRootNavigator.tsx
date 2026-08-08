@@ -3,6 +3,7 @@ import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
+import {DiscoverHomeChefsScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsScreen';
 import {CustomerHomeScreen} from '../../features/home/screens/CustomerHomeScreen';
 import {Icon} from '../../shared/components/Icon';
 import {
@@ -128,10 +129,6 @@ function CustomerHomeStackNavigator() {
   );
 }
 
-/**
- * P25 owns these remaining tab roots. Their product screens stay on the
- * accepted account-status surface until their owning phases are authorized.
- */
 function CustomerChefsStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -139,13 +136,17 @@ function CustomerChefsStackNavigator() {
     <ChefsStack.Navigator screenOptions={stackScreenOptions}>
       <ChefsStack.Screen
         name="CustomerChefsRoot"
-        component={CustomerAccountStatusScreen}
+        component={DiscoverHomeChefsScreen}
         listeners={rootListeners}
       />
     </ChefsStack.Navigator>
   );
 }
 
+/**
+ * P25 owns these remaining tab roots. Their product screens stay on the
+ * accepted account-status surface until their owning phases are authorized.
+ */
 function CustomerOrdersStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 

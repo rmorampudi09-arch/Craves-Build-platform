@@ -18,7 +18,10 @@ import {
   BottomTabBar,
   type BottomTabBarProps,
 } from '@react-navigation/bottom-tabs';
-import {useFocusEffect} from '@react-navigation/native';
+import {
+  getFocusedRouteNameFromRoute,
+  useFocusEffect,
+} from '@react-navigation/native';
 import {resolveMotion} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {
@@ -26,6 +29,7 @@ import {
   reduceCustomerBottomNavScroll,
   revealCustomerBottomNav,
 } from './customerBottomNavScroll';
+import {resolveRouteChromePolicy} from './navigationPolicy';
 
 interface CustomerBottomNavVisibilityContextValue {
   readonly animationProgress: Animated.Value;
@@ -131,10 +135,20 @@ export function CustomerBottomTabBar(props: BottomTabBarProps) {
   const {animationProgress, isVisible} =
     useCustomerBottomNavVisibilityContext();
   const [barHeight, setBarHeight] = useState(0);
+  const activeTabRoute = props.state.routes[props.state.index];
+  const focusedChildRouteName = getFocusedRouteNameFromRoute(activeTabRoute);
+  const focusedRoutePolicy =
+    focusedChildRouteName === 'CustomerFilterSort'
+      ? resolveRouteChromePolicy('Customer', 'CustomerFilterSort')
+      : resolveRouteChromePolicy('Customer');
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setBarHeight(Math.ceil(event.nativeEvent.layout.height));
   }, []);
+
+  if (!focusedRoutePolicy.bottomNavigationVisible) {
+    return null;
+  }
 
   const hiddenDistance = Math.max(barHeight, 96);
   const translateY = animationProgress.interpolate({

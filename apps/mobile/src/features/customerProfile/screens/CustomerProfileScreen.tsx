@@ -271,6 +271,11 @@ export function CustomerProfileScreen() {
         return;
       }
 
+      if (row.action === 'route-payments') {
+        navigation.navigate('CustomerPaymentMethods');
+        return;
+      }
+
       if (row.action === 'route-orders') {
         const tabs = navigation.getParent<CustomerTabsNavigation>();
         if (!tabs) {

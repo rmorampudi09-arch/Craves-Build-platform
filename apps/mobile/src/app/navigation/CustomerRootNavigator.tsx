@@ -5,6 +5,7 @@ import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
+import {CustomerOrdersScreen} from '../../features/customerOrders/screens/CustomerOrdersScreen';
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
@@ -191,11 +192,7 @@ function CustomerChefsStackNavigator() {
   );
 }
 
-/**
- * P25 owns these remaining tab roots. Their product screens stay on the
- * accepted account-status surface until their owning phases are authorized.
- * P46 only adds the shared Cart child route without implementing those roots.
- */
+/** P53 promotes the Orders tab root from the account-status placeholder. */
 function CustomerOrdersStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -203,7 +200,7 @@ function CustomerOrdersStackNavigator() {
     <OrdersStack.Navigator screenOptions={stackScreenOptions}>
       <OrdersStack.Screen
         name="CustomerOrdersRoot"
-        component={CustomerAccountStatusScreen}
+        component={CustomerOrdersScreen}
         listeners={rootListeners}
       />
       <OrdersStack.Screen name="CustomerCart" component={CustomerCartScreen} />
@@ -211,6 +208,7 @@ function CustomerOrdersStackNavigator() {
   );
 }
 
+/** Profile remains on its accepted placeholder until its owning phase. */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 

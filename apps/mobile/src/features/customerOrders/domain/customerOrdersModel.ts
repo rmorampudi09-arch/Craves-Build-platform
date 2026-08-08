@@ -1,6 +1,6 @@
-import {CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT} from '../api/customerOrdersApi';
 import {
   CUSTOMER_ORDER_STATUSES,
+  CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT,
   type CustomerOrder,
   type CustomerOrdersSnapshot,
   type CustomerOrderStatus,

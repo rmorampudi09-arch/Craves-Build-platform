@@ -12,6 +12,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {getProductionCustomerOrderMutationDecision} from '../domain/customerOrderActionEligibility';
 import type {CustomerOrder} from '../domain/customerOrderTypes';
 import {
   formatCustomerOrderCreatedAt,
@@ -102,6 +103,11 @@ export function CustomerOrderCard({order}: Props) {
     navigation.navigate('CustomerOrderTracking', {orderId: order.id});
   const status = getCustomerOrderStatusPresentation(order.status);
   const referenceAction = getCustomerOrderReferenceAction(order.status);
+  const reorderDecision = getProductionCustomerOrderMutationDecision('REORDER');
+  const reorderUnavailableMessage =
+    reorderDecision.kind === 'BLOCKED'
+      ? reorderDecision.message
+      : 'Reorder requires authoritative revalidation before cart mutation.';
   const visibleItems = order.items.slice(0, 3);
   const remainingItems = Math.max(order.items.length - visibleItems.length, 0);
 
@@ -168,15 +174,13 @@ export function CustomerOrderCard({order}: Props) {
         {referenceAction === 'REORDER' ? (
           <UnavailableAction
             label="Reorder"
-            hint="Unavailable until authoritative reorder eligibility and cart validation are integrated"
+            hint={reorderUnavailableMessage}
           />
         ) : null}
       </View>
 
       {referenceAction === 'REORDER' ? (
-        <Text style={styles.capabilityNote}>
-          Reorder stays disabled until Craves can revalidate the historical items and resolve any active-cart conflict with server-approved rules.
-        </Text>
+        <Text style={styles.capabilityNote}>{reorderUnavailableMessage}</Text>
       ) : null}
     </Pressable>
   );

@@ -1,4 +1,8 @@
 import {createSlice, type PayloadAction} from '@reduxjs/toolkit';
+import {
+  cartSnapshotsRequireQuoteRefresh,
+  invalidateCartDeliveryQuote,
+} from '../domain/cartDeliveryQuote';
 import type {
   CartAddressDependency,
   CartDependencies,
@@ -68,6 +72,19 @@ const cartSlice = createSlice({
       state.snapshotErrorCode = null;
     },
     snapshotAccepted(state, action: PayloadAction<CartSnapshot>) {
+      const invalidatesDeliveryQuote = cartSnapshotsRequireQuoteRefresh(
+        state.snapshot,
+        action.payload,
+      );
+
+      if (invalidatesDeliveryQuote) {
+        state.dependencies.deliveryQuote.status = invalidateCartDeliveryQuote(
+          state.dependencies.deliveryQuote.status,
+          Boolean(state.dependencies.address.addressId),
+          'CART_CHANGED',
+        );
+      }
+
       state.snapshot = action.payload;
       state.snapshotStatus = 'READY';
       state.snapshotErrorCode = null;

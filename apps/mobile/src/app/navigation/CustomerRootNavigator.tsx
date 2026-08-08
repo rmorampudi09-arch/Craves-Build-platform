@@ -8,6 +8,7 @@ import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/Custom
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
 import {CustomerHomeScreen} from '../../features/home/screens/CustomerHomeScreen';
+import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
 import {Icon} from '../../shared/components/Icon';
 import {
@@ -145,6 +146,10 @@ function CustomerHomeStackNavigator() {
         name="CustomerKitchenProfile"
         component={CustomerKitchenProfileScreen}
       />
+      <HomeStack.Screen
+        name="CustomerKitchenDishes"
+        component={CustomerKitchenDishesScreen}
+      />
     </HomeStack.Navigator>
   );
 }
@@ -174,6 +179,10 @@ function CustomerChefsStackNavigator() {
       <ChefsStack.Screen
         name="CustomerKitchenProfile"
         component={CustomerKitchenProfileScreen}
+      />
+      <ChefsStack.Screen
+        name="CustomerKitchenDishes"
+        component={CustomerKitchenDishesScreen}
       />
     </ChefsStack.Navigator>
   );

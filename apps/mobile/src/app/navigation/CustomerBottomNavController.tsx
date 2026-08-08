@@ -140,7 +140,8 @@ export function CustomerBottomTabBar(props: BottomTabBarProps) {
   const focusedRoutePolicy =
     focusedChildRouteName === 'CustomerFilterSort' ||
     focusedChildRouteName === 'CustomerDishDetail' ||
-    focusedChildRouteName === 'CustomerKitchenProfile'
+    focusedChildRouteName === 'CustomerKitchenProfile' ||
+    focusedChildRouteName === 'CustomerKitchenDishes'
       ? resolveRouteChromePolicy('Customer', focusedChildRouteName)
       : resolveRouteChromePolicy('Customer');
 

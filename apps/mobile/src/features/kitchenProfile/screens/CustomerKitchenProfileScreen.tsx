@@ -318,6 +318,12 @@ export function CustomerKitchenProfileScreen() {
     [navigation],
   );
 
+  const openAllDishes = useCallback(() => {
+    navigation.navigate('CustomerKitchenDishes', {
+      kitchenId: route.params.kitchenId,
+    });
+  }, [navigation, route.params.kitchenId]);
+
   const scrollToMenu = () => {
     scrollRef.current?.scrollTo({y: Math.max(0, menuSectionY - spacing.sm), animated: true});
   };
@@ -534,9 +540,18 @@ export function CustomerKitchenProfileScreen() {
                     Current sellable dishes, kept in the kitchen's published order
                   </Text>
                 </View>
-                <View style={styles.previewPill}>
-                  <Text style={styles.previewPillText}>Menu preview</Text>
-                </View>
+                {profile.menuItems.length > 0 ? (
+                  <Pressable
+                    accessibilityLabel="View all dishes"
+                    accessibilityRole="button"
+                    onPress={openAllDishes}
+                    style={({pressed}) => [
+                      styles.previewPill,
+                      pressed && styles.pressed,
+                    ]}>
+                    <Text style={styles.previewPillText}>View all</Text>
+                  </Pressable>
+                ) : null}
               </View>
 
               {menuPreview.length > 0 ? (
@@ -577,8 +592,8 @@ export function CustomerKitchenProfileScreen() {
 
               {profile.menuItems.length > MENU_PREVIEW_LIMIT ? (
                 <Text style={styles.previewFootnote}>
-                  More dishes are available from this kitchen. This profile intentionally
-                  shows a bounded preview.
+                  More dishes are available from this kitchen. Use View all to browse the
+                  complete current menu.
                 </Text>
               ) : null}
             </View>
@@ -823,15 +838,18 @@ const styles = StyleSheet.create({
     fontSize: typography.tiny,
   },
   previewPill: {
+    minHeight: touchTarget.minimum,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceWarm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   previewPillText: {
-    color: colors.espressoBrown,
+    color: colors.flameRed,
     fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.bold,
   },
   menuList: {
     gap: spacing.sm,

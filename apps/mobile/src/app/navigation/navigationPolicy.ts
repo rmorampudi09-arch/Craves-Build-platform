@@ -60,6 +60,7 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'CustomerDishDetail',
   'CustomerDishIngredients',
   'CustomerKitchenProfile',
+  'CustomerKitchenDishes',
 ]);
 
 const IMMERSIVE_POLICY: RouteChromePolicy = {

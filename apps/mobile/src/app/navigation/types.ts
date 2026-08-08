@@ -60,11 +60,16 @@ export type CustomerKitchenProfileRouteParams = {
   kitchenId: string;
 };
 
+export type CustomerKitchenDishesRouteParams = {
+  kitchenId: string;
+};
+
 /** Shared typed subroutes owned by customer discovery/detail experiences. */
 export type CustomerDishDetailStackParamList = {
   CustomerDishDetail: CustomerDishDetailRouteParams;
   CustomerDishIngredients: CustomerDishIngredientsRouteParams;
   CustomerKitchenProfile: CustomerKitchenProfileRouteParams;
+  CustomerKitchenDishes: CustomerKitchenDishesRouteParams;
 };
 
 /**

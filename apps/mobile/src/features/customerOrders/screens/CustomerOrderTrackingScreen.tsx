@@ -85,6 +85,9 @@ export function CustomerOrderTrackingScreen() {
   const route = useRoute<TrackingRoute>();
   const tracking = useCustomerOrderTrackingQuery(route.params.orderId);
   const projection = tracking.data;
+  const refetchTracking = tracking.refetch;
+  const invalidOrderId = tracking.invalidOrderId;
+  const sessionRequired = tracking.sessionRequired;
   const queryError = tracking.error ? toAppApiError(tracking.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
   const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
@@ -106,23 +109,23 @@ export function CustomerOrderTrackingScreen() {
       appState !== 'active' ||
       terminal ||
       pollingBlockedByError ||
-      tracking.invalidOrderId ||
-      tracking.sessionRequired
+      invalidOrderId ||
+      sessionRequired
     ) {
       return;
     }
 
     const intervalId = setInterval(() => {
-      void tracking.refetch();
+      refetchTracking().then(() => undefined);
     }, CUSTOMER_DELIVERY_POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
   }, [
     appState,
     pollingBlockedByError,
     terminal,
-    tracking.invalidOrderId,
-    tracking.refetch,
-    tracking.sessionRequired,
+    invalidOrderId,
+    refetchTracking,
+    sessionRequired,
   ]);
 
   const openProviderTracking = useCallback(async () => {

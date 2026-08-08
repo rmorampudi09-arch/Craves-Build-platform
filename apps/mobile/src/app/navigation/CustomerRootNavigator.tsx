@@ -3,7 +3,7 @@ import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
-import {DiscoverHomeChefsScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsScreen';
+import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
 import {CustomerHomeScreen} from '../../features/home/screens/CustomerHomeScreen';
 import {Icon} from '../../shared/components/Icon';
 import {
@@ -136,7 +136,7 @@ function CustomerChefsStackNavigator() {
     <ChefsStack.Navigator screenOptions={stackScreenOptions}>
       <ChefsStack.Screen
         name="CustomerChefsRoot"
-        component={DiscoverHomeChefsScreen}
+        component={DiscoverHomeChefsRouteScreen}
         listeners={rootListeners}
       />
     </ChefsStack.Navigator>

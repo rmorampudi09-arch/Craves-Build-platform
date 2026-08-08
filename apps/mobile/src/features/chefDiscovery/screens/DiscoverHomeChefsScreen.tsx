@@ -159,7 +159,7 @@ export function DiscoverHomeChefsScreen() {
     if (search.scrollOffset === 0) {
       listRef.current?.scrollToOffset({offset: 0, animated: false});
     }
-  }, [searchScopeKey]);
+  }, [search.scrollOffset, searchScopeKey]);
 
   const queryError = discovery.error ? toAppApiError(discovery.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
@@ -180,7 +180,7 @@ export function DiscoverHomeChefsScreen() {
         isDebouncing: search.isDebouncing,
       })
     ) {
-      void discovery.fetchNextPage();
+      discovery.fetchNextPage();
     }
   }, [discovery, search.isDebouncing]);
 
@@ -192,7 +192,7 @@ export function DiscoverHomeChefsScreen() {
   const handleSearchChange = useCallback(
     (value: string) => {
       if (discovery.isFetchingNextPage) {
-        void discovery.cancelPendingRequest();
+        discovery.cancelPendingRequest();
       }
       resetSearchPosition();
       search.setDraft(value);
@@ -202,7 +202,7 @@ export function DiscoverHomeChefsScreen() {
 
   const handleClearSearch = useCallback(() => {
     if (discovery.isFetchingNextPage) {
-      void discovery.cancelPendingRequest();
+      discovery.cancelPendingRequest();
     }
     resetSearchPosition();
     search.clear();

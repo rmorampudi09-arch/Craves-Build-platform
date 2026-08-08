@@ -228,7 +228,7 @@ export function CustomerHomeScreen() {
     if (search.scrollOffset === 0) {
       listRef.current?.scrollToOffset({offset: 0, animated: false});
     }
-  }, [searchScopeKey]);
+  }, [search.scrollOffset, searchScopeKey]);
 
   const firstName = identity?.displayName?.trim().split(/\s+/)[0] ?? null;
   const greeting = firstName ? `Hi ${firstName}` : 'Hello';
@@ -251,7 +251,7 @@ export function CustomerHomeScreen() {
         isDebouncing: search.isDebouncing,
       })
     ) {
-      void feed.fetchNextPage();
+      feed.fetchNextPage();
     }
   }, [feed, search.isDebouncing]);
 
@@ -263,7 +263,7 @@ export function CustomerHomeScreen() {
   const handleSearchChange = useCallback(
     (value: string) => {
       if (feed.isFetchingNextPage) {
-        void feed.cancelPendingRequest();
+        feed.cancelPendingRequest();
       }
       resetSearchPosition();
       search.setDraft(value);
@@ -273,7 +273,7 @@ export function CustomerHomeScreen() {
 
   const handleClearSearch = useCallback(() => {
     if (feed.isFetchingNextPage) {
-      void feed.cancelPendingRequest();
+      feed.cancelPendingRequest();
     }
     resetSearchPosition();
     search.clear();

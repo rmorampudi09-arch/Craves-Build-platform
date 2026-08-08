@@ -24,15 +24,16 @@
 - **P56 — Reorder, Cancellation, and Refund Eligibility: PARTIAL.** The client mutation-authority and revalidation boundary is implemented; exact customer reorder/cancel/refund eligibility and mutation contracts remain unavailable.
 - **P57 — Customer Profile/Rewards Contract: DONE.** The approved `GET /api/v1/customer/profile` fields map into a strict mobile profile-hub contract. Rewards, reward history, order aggregate counters, profile notification unread count, and chef-role summary remain explicitly `unsupported` because those semantics are not exposed by the accepted backend/profile contract.
 - **P58 — Customer Profile — Empty Cart: DONE.** Reference 11 profile composition replaces the prior Profile placeholder, renders only approved P57 identity fields, capability-gates unsupported data, provides deterministic rows with real navigation or explicit blockers, uses the guarded P24 logout coordinator, and supports loading/empty/error/unsupported/refresh states.
-- **P59 — Customer Profile — Active Cart: DONE.** Reference 12 now uses the same P58 Profile route with the shared authoritative View Cart overlay. Live cart count/subtotal, real Cart navigation, dynamic bottom clearance, and zero-item return to the P58 layout are implemented without copying or resetting cart state. Unsupported chef-role/eligibility and later Profile child-route capabilities remain fail-closed.
+- **P59 — Customer Profile — Active Cart: DONE.** Reference 12 uses the same P58 Profile route with the shared authoritative View Cart overlay. Live cart count/subtotal, real Cart navigation, dynamic bottom clearance, and zero-item return to the P58 layout are implemented without copying or resetting cart state.
+- **P60 — Favorites — Empty Cart: PARTIAL.** Reference 19's real `CustomerFavorites` destination, Profile navigation, shared detail-route ownership, heart primitive, and fail-closed unsupported state are implemented. The current branch exposes no approved Favorites APIM/backend contract, so paginated favorites, search/counts, remove/toggle, cross-surface heart synchronization, and favorite-row Add to Cart remain explicitly unavailable rather than fabricated.
 
-**Current executed phase:** **P59 — Customer Profile — Active Cart** is **DONE** at its defined implementation/static-contract scope.
+**Current executed phase:** **P60 — Favorites — Empty Cart** is **PARTIAL** at its defined implementation/static-contract scope.
 
-**Next phase in sequence:** **P60 — Favorites — Empty Cart** — **NOT STARTED**.
+**Next phase in sequence:** **P61 — Favorites — Active Cart** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P60. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P61. Wait for explicit user direction.
 
 ---
 
@@ -70,7 +71,8 @@
 | P57 | **DONE** | `9983592fc87e603a95fa4eace5b6fbf71225057b` | `P57_CUSTOMER_PROFILE_REWARDS_CONTRACT.md` | `31270356726` / `93135116492` |
 | P58 | **DONE** | `467b5a71c5b208a151d14b5aeae3d87b5baccd07` | `P58_CUSTOMER_PROFILE_EMPTY_CART.md` | `31271539076` / `93138248796` |
 | P59 | **DONE** | `0361027495ab2759f970a58d832fd151b5888bf4` | `P59_CUSTOMER_PROFILE_ACTIVE_CART.md` | `31271923654` / `93139241176` |
-| P60 onward | **NOT STARTED / not accepted** | — | — | — |
+| P60 | **PARTIAL** | `b98dcfc79c99680487e27363dc5172884cdf6e07` | `P60_FAVORITES_EMPTY_CART.md` | `31272588586` / `93140939951` |
+| P61 onward | **NOT STARTED / not accepted** | — | — | — |
 
 ---
 
@@ -78,10 +80,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31271923654`
-- Job ID: `93139241176`
-- Head SHA: `0361027495ab2759f970a58d832fd151b5888bf4`
-- Phase: **P59 — Customer Profile — Active Cart**
+- GitHub Actions run ID: `31272588586`
+- Job ID: `93140939951`
+- Head SHA: `b98dcfc79c99680487e27363dc5172884cdf6e07`
+- Phase: **P60 — Favorites — Empty Cart**
 - Conclusion: **SUCCESS**
 - Dependency install: **SUCCESS**
 - TypeScript strict check: **SUCCESS**
@@ -94,56 +96,64 @@ No Java/Gradle/APK packaging was performed, consistent with the implementation-p
 
 ---
 
-## 4. P57/P58 Contract Boundary Retained by P59
+## 4. P60 Favorites Contract Boundary
 
-P59 consumes the P57 customer profile contract and P58 Profile hub without widening either boundary. The only accepted profile source remains:
+P60 re-audited current mobile/backend/APIM repository evidence before creating a Favorites network wrapper.
 
-```text
-GET /api/v1/customer/profile
-```
+Current repository truth:
 
-Accepted server-owned fields remain `id`, `identityId`, `registeredPhoneNumber`, `firstName`, `lastName`, `email`, `createdAt`, and `updatedAt`.
+- `infra/apim/**` has no Favorites/customer-favorites APIM domain or exact Favorites operation;
+- `apps/api/**` has no approved Favorites list/search/count/remove/toggle route;
+- the P02 inventory records the authoritative full OpenAPI as absent and requires later feature phases to re-establish exact contracts rather than infer them;
+- current mobile source had no server-backed Favorites API/query owner;
+- the customer-web wishlist implementation uses browser `localStorage` and is not accepted as account/server truth for the mobile rebuild.
 
-The following capabilities remain fail-closed as `not-exposed-by-approved-contract`: reward balance/tier/history, order aggregate counters, profile notification unread count, and chef role/eligibility summary. P59 does not fabricate any of them.
+P60 therefore adds an explicit typed fail-closed capability boundary and does **not** invent endpoint paths, pagination parameters, response schemas, mutation semantics, local-only persistence, or cross-surface synchronization behavior.
 
-P58's explicit route blockers for Edit Profile, Favorites, Payments, and Contact us also remain unchanged. Order Status still navigates to the real Orders tab, and Logout still uses the P24 `completeLogout` boundary.
+Capabilities that remain `unsupported`:
 
----
-
-## 5. P59 Implemented Active-Cart Boundary
-
-P59 implements Reference 12 — Customer Profile, Active Cart — by keeping `CustomerProfileScreen` as the shared Profile composition and adding state-driven active-cart chrome around the existing `CustomerProfileRoot` route.
-
-Implemented composition and behavior:
-
-- `CustomerProfileRouteScreen` wraps the P58 Profile screen rather than creating a duplicate active-cart screen;
-- authoritative shared cart selectors provide live item count and supported food subtotal;
-- the existing `SharedViewCartOverlay` appears automatically for an active cart and stays absent at zero items;
-- View Cart opens the real `CustomerCart` route in the Profile stack, preserving the originating Profile/customer tab state;
-- Profile owns no copied cart snapshot and performs no cart-clearing/reset action when navigating through its supported actions;
-- dynamic bottom clearance prevents the floating View Cart control and customer bottom navigation from covering final Profile content;
-- the extra clearance disappears with the overlay when the cart becomes empty, restoring the P58 empty-cart layout on the same route;
-- existing P58 header, query lifecycle, pull-to-refresh, bottom-nav hide/reveal, order navigation, blockers, and logout behavior remain intact;
-- focused P59 tests cover active-cart visibility, bottom-clearance switching, and the automatic return to the empty-cart state.
-
-Reference 12's role-switch behavior remains fail-closed because the accepted P57 profile/account boundary does not expose an authoritative chef-role/eligibility summary or approved Profile role-switch/cart-retention contract. P59 does not invent that action.
-
-The View Cart amount remains the currently supported authoritative cart food subtotal from the shared overlay contract; P59 does not fabricate taxes, fees, coupon-adjusted totals, delivery quote, or checkout totals.
+- paginated Favorites list;
+- Favorites search;
+- Favorites category counts;
+- remove favorite;
+- favorite-membership synchronization across customer surfaces.
 
 ---
 
-## 6. P59 Changed Files
+## 5. P60 Implemented Empty-Cart Boundary
+
+P60 implements the contract-independent portion of Reference 19:
+
+- `CustomerFavorites` is a typed route in the existing Profile stack;
+- the Profile `Favorites` row now navigates to the real Favorites destination instead of the P58/P59 generic route blocker;
+- the shared icon set includes the Favorites heart icon used by the Profile row and Favorites screen;
+- the Profile stack reuses existing Dish Detail / Ingredients / Kitchen Profile / Kitchen Dishes child routes so a later authoritative favorite row can open the established detail journey without duplicate navigation ownership;
+- `CustomerFavoritesScreen` uses the accepted customer header, location selector, bottom-nav scroll behavior, Favorites identity, a truthful unsupported lifecycle state, and a real `Browse meals` action back to Home;
+- unavailable Favorites capability is not presented as an empty server response;
+- the P60 empty-cart screen does not add fake View Cart state, copied cart state, fake favorite fixtures, or a local-only Favorites cache;
+- focused tests cover the P60 capability boundary and updated Profile menu mapping.
+
+P60 does not claim the missing server-backed list/search/filter/remove/heart-sync/Add-to-Cart behavior. Because no authoritative favorite row can be loaded, the Reference 19 first-add transition to active-cart chrome cannot be exercised truthfully. P61 remains separate and unimplemented.
+
+---
+
+## 6. P60 Changed Files
 
 Implementation/test:
 
+- `apps/mobile/src/app/navigation/types.ts`
 - `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
-- `apps/mobile/src/features/customerProfile/customerProfileActiveCart.ts`
-- `apps/mobile/src/features/customerProfile/customerProfileActiveCart.test.ts`
-- `apps/mobile/src/features/customerProfile/screens/CustomerProfileRouteScreen.tsx`
+- `apps/mobile/src/shared/components/Icon.tsx`
+- `apps/mobile/src/features/customerProfile/presentation/customerProfileUiModel.ts`
+- `apps/mobile/src/features/customerProfile/customerProfileUiModel.test.ts`
+- `apps/mobile/src/features/customerProfile/screens/CustomerProfileScreen.tsx`
+- `apps/mobile/src/features/favorites/domain/customerFavoritesContract.ts`
+- `apps/mobile/src/features/favorites/customerFavoritesContract.test.ts`
+- `apps/mobile/src/features/favorites/screens/CustomerFavoritesScreen.tsx`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P59_CUSTOMER_PROFILE_ACTIVE_CART.md`
+- `docs/mobile-ui-rebuild/P60_FAVORITES_EMPTY_CART.md`
 
 Ledger:
 
@@ -153,7 +163,7 @@ No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android
 
 ---
 
-## 7. Architecture Ownership After P59
+## 7. Architecture Ownership After P60
 
 - P19–P24 remain authoritative for authentication/session/onboarding/logout/private-cache cleanup.
 - P25–P30 remain authoritative for Customer shell/header/shared cart foundations, View Cart behavior, and cart mutation reconciliation.
@@ -163,18 +173,19 @@ No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android
 - P45–P51 remain authoritative for their recorded Cart/checkout/payment/address orchestration boundaries and blockers.
 - P52 remains authoritative for customer Orders list contract/window/cache semantics.
 - P53–P56 retain their recorded Orders UI/detail/mutation-boundary ownership and blockers.
-- **P57 owns the normalized customer profile contract and capability availability posture.**
-- **P58 owns the Reference 11 shared Profile hub composition, menu-row action/blocker mapping, and profile query/lifecycle rendering.**
-- **P59 owns the Reference 12 Profile-root active-cart wrapper, shared View Cart integration, real Cart navigation, and dynamic content-clearance state.**
-- **P60 — Favorites — Empty Cart has not started.**
+- P57 owns the normalized customer profile contract and capability availability posture.
+- P58 owns the shared Profile hub composition and supported menu/lifecycle behavior.
+- P59 owns the Profile-root active-cart wrapper and shared View Cart integration.
+- **P60 owns the `CustomerFavorites` route registration, Profile-to-Favorites navigation, Favorites heart visual primitive, and explicit fail-closed Favorites capability boundary.**
+- **P61 — Favorites — Active Cart has not started.**
 
 ---
 
-## 8. Explicitly Not Complete After P59
+## 8. Explicitly Not Complete After P60
 
 Do not describe any of the following as complete:
 
-- outstanding blockers recorded for P31–P56 that P59 did not explicitly supersede;
+- outstanding blockers recorded for P31–P56 that P60 did not explicitly supersede;
 - P52 true server pagination/cursor navigation beyond the newest 50 orders;
 - P52 global order totals or authoritative lifecycle-tab counts;
 - customer-authoritative reorder/cancellation/refund eligibility or mutations;
@@ -183,8 +194,13 @@ Do not describe any of the following as complete:
 - customer profile order-status aggregate-count backend support;
 - profile notification unread-count backend support through the P57 accepted contract;
 - chef role/eligibility summary or Profile role-switch/cart-retention contract support;
-- registered Edit Profile, Favorites, Payments, or Contact us destination routes;
-- P60 Favorites — Empty Cart or any later phase;
+- registered Edit Profile, Payments, or Contact us destination routes;
+- server-backed Favorites list/search/category counts;
+- favorite remove/toggle mutation or synchronized heart state across customer surfaces;
+- Favorites optimistic remove animation/undo/rollback;
+- favorite-row Add to Cart and Favorites scroll/filter preservation through that mutation;
+- P60 `phases.md` acceptance statement "Favorite heart synchronized across all surfaces";
+- P61 Favorites — Active Cart or any later phase;
 - live provider sandbox/device certification unless a later evidence record explicitly says so;
 - Chef operational/product screens;
 - full lifecycle/accessibility/performance/security audits;
@@ -197,15 +213,15 @@ Do not describe any of the following as complete:
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current implemented phase: P59 — Customer Profile — Active Cart — DONE
-Validated implementation SHA: 0361027495ab2759f970a58d832fd151b5888bf4
-CI: 31271923654 / 93139241176 — SUCCESS
-Evidence: docs/mobile-ui-rebuild/P59_CUSTOMER_PROFILE_ACTIVE_CART.md
-P57 unsupported capabilities retained: rewards balance/tier/history; order aggregate counters; profile notification unread count; chef role/eligibility summary — all fail closed as not-exposed-by-approved-contract
-P58 explicit route blockers retained: Edit Profile; Favorites; Payments; Contact us
-P59 active-cart behavior: shared View Cart overlay; live authoritative item count/food subtotal; real CustomerCart navigation; dynamic content clearance; zero-item return to P58 layout
-P59 role-switch boundary: not invented; chef role/eligibility and cart-retention contract remains unavailable on the accepted Profile contract
-Inherited blockers: retain all P31–P56 blockers not explicitly superseded
-Next phase: P60 — Favorites — Empty Cart — NOT STARTED
+Current implemented phase: P60 — Favorites — Empty Cart — PARTIAL
+Validated implementation SHA: b98dcfc79c99680487e27363dc5172884cdf6e07
+CI: 31272588586 / 93140939951 — SUCCESS
+Evidence: docs/mobile-ui-rebuild/P60_FAVORITES_EMPTY_CART.md
+P60 implemented: real CustomerFavorites route; Profile Favorites navigation; shared heart icon; Profile-stack reuse of existing dish-detail child routes; truthful unsupported Favorites state; real Browse meals recovery action
+P60 contract blocker: no approved Favorites APIM/backend operation exists for paginated list/search/count/remove/toggle/synchronization; local-only customer-web wishlist is not accepted as mobile account truth
+P60 acceptance not passed: favorite heart synchronization across all surfaces is unavailable until the exact server contract exists
+P61 active-cart Favorites behavior: NOT STARTED
+Inherited blockers: retain all P31–P59 blockers not explicitly superseded
+Next phase: P61 — Favorites — Active Cart — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

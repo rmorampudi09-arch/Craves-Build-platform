@@ -1,5 +1,7 @@
 import React from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {useNavigation, type NavigationProp} from '@react-navigation/native';
+import type {CustomerOrdersStackParamList} from '../../../app/navigation/types';
 import {
   borderWidth,
   colors,
@@ -30,6 +32,30 @@ interface UnavailableActionProps {
   hint: string;
 }
 
+interface CardActionProps {
+  label: string;
+  primary?: boolean;
+  onPress: () => void;
+}
+
+function CardAction({label, primary = false, onPress}: CardActionProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({pressed}) => [
+        styles.action,
+        primary && styles.actionPrimary,
+        pressed && styles.actionPressed,
+      ]}>
+      <Text style={[styles.actionText, primary && styles.actionTextPrimary]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 function UnavailableAction({
   label,
   primary = false,
@@ -42,14 +68,11 @@ function UnavailableAction({
       accessibilityHint={hint}
       accessibilityState={{disabled: true}}
       style={[
+        styles.action,
         styles.unavailableAction,
-        primary && styles.unavailableActionPrimary,
+        primary && styles.actionPrimary,
       ]}>
-      <Text
-        style={[
-          styles.unavailableActionText,
-          primary && styles.unavailableActionTextPrimary,
-        ]}>
+      <Text style={[styles.actionText, primary && styles.actionTextPrimary]}>
         {label}
       </Text>
     </View>
@@ -72,15 +95,21 @@ function statusToneStyle(tone: CustomerOrderStatusTone) {
 }
 
 export function CustomerOrderCard({order}: Props) {
+  const navigation = useNavigation<NavigationProp<CustomerOrdersStackParamList>>();
+  const onPressDetails = () =>
+    navigation.navigate('CustomerOrderDetail', {orderId: order.id});
+  const onPressTrack = () =>
+    navigation.navigate('CustomerOrderTracking', {orderId: order.id});
   const status = getCustomerOrderStatusPresentation(order.status);
   const referenceAction = getCustomerOrderReferenceAction(order.status);
   const visibleItems = order.items.slice(0, 3);
   const remainingItems = Math.max(order.items.length - visibleItems.length, 0);
 
   return (
-    <View
-      accessibilityLabel={`Order ${getCustomerOrderDisplayReference(order.id)}, ${status.label}, ${formatCustomerOrderMoney(order.grandTotal)}`}
-      style={styles.card}>
+    <Pressable
+      accessible={false}
+      onPress={onPressDetails}
+      style={({pressed}) => [styles.card, pressed && styles.cardPressed]}>
       <View style={styles.headerRow}>
         <View style={styles.orderHeading}>
           <Text style={styles.orderNumber}>
@@ -132,27 +161,24 @@ export function CustomerOrderCard({order}: Props) {
       </View>
 
       <View style={styles.actionsRow}>
-        <UnavailableAction
-          label="View Details"
-          hint="Unavailable until the exact order-detail contract and child route are integrated"
-        />
-        {referenceAction ? (
+        <CardAction label="View Details" onPress={onPressDetails} />
+        {referenceAction === 'TRACK' ? (
+          <CardAction label="Track Order" primary onPress={onPressTrack} />
+        ) : null}
+        {referenceAction === 'REORDER' ? (
           <UnavailableAction
-            label={referenceAction === 'TRACK' ? 'Track Order' : 'Reorder'}
-            primary={referenceAction === 'TRACK'}
-            hint={
-              referenceAction === 'TRACK'
-                ? 'Unavailable until the exact tracking contract and route are integrated'
-                : 'Unavailable until authoritative reorder eligibility and cart validation are integrated'
-            }
+            label="Reorder"
+            hint="Unavailable until authoritative reorder eligibility and cart validation are integrated"
           />
         ) : null}
       </View>
 
-      <Text style={styles.capabilityNote}>
-        Detail, tracking and reorder actions stay disabled until their exact server contracts and owning routes are available.
-      </Text>
-    </View>
+      {referenceAction === 'REORDER' ? (
+        <Text style={styles.capabilityNote}>
+          Reorder stays disabled until Craves can revalidate the historical items and resolve any active-cart conflict with server-approved rules.
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -167,16 +193,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     ...elevation.card,
   },
+  cardPressed: {opacity: 0.94},
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  orderHeading: {
-    minWidth: 0,
-    flex: 1,
-  },
+  orderHeading: {minWidth: 0, flex: 1},
   orderNumber: {
     color: colors.espressoBrown,
     fontSize: typography.body,
@@ -193,21 +217,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: radius.pill,
   },
-  statusAccent: {
-    backgroundColor: colors.errorSoft,
-  },
-  statusSuccess: {
-    backgroundColor: colors.successSoft,
-  },
-  statusWarning: {
-    backgroundColor: colors.warningSoft,
-  },
-  statusDanger: {
-    backgroundColor: colors.errorSoft,
-  },
-  statusMuted: {
-    backgroundColor: colors.surfaceMuted,
-  },
+  statusAccent: {backgroundColor: colors.errorSoft},
+  statusSuccess: {backgroundColor: colors.successSoft},
+  statusWarning: {backgroundColor: colors.warningSoft},
+  statusDanger: {backgroundColor: colors.errorSoft},
+  statusMuted: {backgroundColor: colors.surfaceMuted},
   statusText: {
     color: colors.espressoBrown,
     fontSize: typography.tiny,
@@ -231,10 +245,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceWarm,
   },
-  kitchenCopy: {
-    minWidth: 0,
-    flex: 1,
-  },
+  kitchenCopy: {minWidth: 0, flex: 1},
   kitchenName: {
     color: colors.espressoBrown,
     fontSize: typography.body,
@@ -245,11 +256,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.small,
   },
-  itemsRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-  },
+  itemsRow: {flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md},
   itemTile: {
     minWidth: 0,
     flex: 1,
@@ -285,21 +292,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: spacing.md,
   },
-  totalLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
+  totalLabel: {color: colors.textSecondary, fontSize: typography.small},
   totalValue: {
     color: colors.espressoBrown,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
   },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-  },
-  unavailableAction: {
+  actionsRow: {flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md},
+  action: {
     minWidth: 0,
     minHeight: 56,
     flex: 1,
@@ -310,20 +310,17 @@ const styles = StyleSheet.create({
     borderWidth: borderWidth.standard,
     borderColor: colors.flameRed,
     backgroundColor: colors.white,
-    opacity: 0.48,
   },
-  unavailableActionPrimary: {
-    backgroundColor: colors.flameRed,
-  },
-  unavailableActionText: {
+  actionPrimary: {backgroundColor: colors.flameRed},
+  actionPressed: {opacity: 0.82},
+  unavailableAction: {opacity: 0.48},
+  actionText: {
     color: colors.flameRed,
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
     textAlign: 'center',
   },
-  unavailableActionTextPrimary: {
-    color: colors.white,
-  },
+  actionTextPrimary: {color: colors.white},
   capabilityNote: {
     marginTop: spacing.sm,
     color: colors.textSecondary,

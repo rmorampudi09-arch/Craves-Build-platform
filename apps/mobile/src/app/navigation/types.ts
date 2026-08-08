@@ -64,12 +64,22 @@ export type CustomerKitchenDishesRouteParams = {
   kitchenId: string;
 };
 
+export type CustomerOrderRouteParams = {
+  orderId: string;
+};
+
 /** Shared typed subroutes owned by customer discovery/detail experiences. */
 export type CustomerDishDetailStackParamList = {
   CustomerDishDetail: CustomerDishDetailRouteParams;
   CustomerDishIngredients: CustomerDishIngredientsRouteParams;
   CustomerKitchenProfile: CustomerKitchenProfileRouteParams;
   CustomerKitchenDishes: CustomerKitchenDishesRouteParams;
+};
+
+/** P55 customer order child routes use the order ID only. */
+export type CustomerOrderDetailStackParamList = {
+  CustomerOrderDetail: CustomerOrderRouteParams;
+  CustomerOrderTracking: CustomerOrderRouteParams;
 };
 
 /**
@@ -99,7 +109,8 @@ export type CustomerChefsStackParamList = {
 
 export type CustomerOrdersStackParamList = {
   CustomerOrdersRoot: undefined;
-} & CustomerCartStackParamList;
+} & CustomerOrderDetailStackParamList &
+  CustomerCartStackParamList;
 
 export type CustomerProfileStackParamList = {
   CustomerProfileRoot: undefined;

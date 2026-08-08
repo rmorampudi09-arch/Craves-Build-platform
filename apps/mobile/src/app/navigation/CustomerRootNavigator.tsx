@@ -5,7 +5,9 @@ import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
+import {CustomerOrderDetailScreen} from '../../features/customerOrders/screens/CustomerOrderDetailScreen';
 import {CustomerOrdersRouteScreen} from '../../features/customerOrders/screens/CustomerOrdersRouteScreen';
+import {CustomerOrderTrackingScreen} from '../../features/customerOrders/screens/CustomerOrderTrackingScreen';
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
@@ -192,7 +194,7 @@ function CustomerChefsStackNavigator() {
   );
 }
 
-/** P54 keeps one Orders route and adds state-driven active-cart chrome. */
+/** P55 adds typed Order Detail and Delivery Tracking child routes. */
 function CustomerOrdersStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -202,6 +204,14 @@ function CustomerOrdersStackNavigator() {
         name="CustomerOrdersRoot"
         component={CustomerOrdersRouteScreen}
         listeners={rootListeners}
+      />
+      <OrdersStack.Screen
+        name="CustomerOrderDetail"
+        component={CustomerOrderDetailScreen}
+      />
+      <OrdersStack.Screen
+        name="CustomerOrderTracking"
+        component={CustomerOrderTrackingScreen}
       />
       <OrdersStack.Screen name="CustomerCart" component={CustomerCartScreen} />
     </OrdersStack.Navigator>

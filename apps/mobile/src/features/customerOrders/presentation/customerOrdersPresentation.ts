@@ -95,9 +95,9 @@ export function getCustomerOrderStatusPresentation(
 }
 
 /**
- * Mirrors only the visible reference-action label. It never grants eligibility:
- * the P53 buttons stay fail-closed until the exact server policy and P55 child
- * routes are integrated.
+ * Mirrors only the visible reference-action label. P55 wires TRACK to the exact
+ * owned-order delivery-status route. REORDER still does not grant eligibility;
+ * P56 owns the authoritative reorder validation and cart-conflict policy.
  */
 export function getCustomerOrderReferenceAction(
   status: CustomerOrderStatus,

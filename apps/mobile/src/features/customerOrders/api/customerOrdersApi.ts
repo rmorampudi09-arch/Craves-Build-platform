@@ -10,6 +10,10 @@ import {
 export {CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT} from '../domain/customerOrderTypes';
 
 export const CUSTOMER_ORDERS_PATH = '/api/v1/orders';
+export const customerOrderDetailPath = (orderId: string) =>
+  `${CUSTOMER_ORDERS_PATH}/${orderId}`;
+
+const orderIdSchema = z.string().uuid();
 
 const decimalSchema = z
   .union([
@@ -95,6 +99,15 @@ function toCustomerOrder(order: ParsedOrder): CustomerOrder {
   };
 }
 
+export function isCustomerOrderId(value: string): boolean {
+  return orderIdSchema.safeParse(value).success;
+}
+
+export function parseCustomerOrderResponse(value: unknown): CustomerOrder | null {
+  const parsed = orderSchema.safeParse(value);
+  return parsed.success ? toCustomerOrder(parsed.data) : null;
+}
+
 export function parseCustomerOrdersResponse(value: unknown): CustomerOrder[] | null {
   const parsed = orderWindowSchema.safeParse(value);
   if (!parsed.success) {
@@ -116,6 +129,15 @@ export function parseCustomerOrdersResponse(value: unknown): CustomerOrder[] | n
   return orders;
 }
 
+function requireOrderId(orderId: string): void {
+  if (!isCustomerOrderId(orderId)) {
+    throw new AppApiError(
+      'CUSTOMER_ORDER_INVALID_ID',
+      'This order link is invalid.',
+    );
+  }
+}
+
 export const customerOrdersApi = {
   async listRecentOrders(signal?: AbortSignal): Promise<CustomerOrder[]> {
     const response = await httpClient.get<unknown>(CUSTOMER_ORDERS_PATH, {
@@ -130,5 +152,21 @@ export const customerOrdersApi = {
       );
     }
     return orders;
+  },
+
+  async getOrder(orderId: string, signal?: AbortSignal): Promise<CustomerOrder> {
+    requireOrderId(orderId);
+    const response = await httpClient.get<unknown>(customerOrderDetailPath(orderId), {
+      signal,
+      dedupeKey: `customer-order:${orderId}`,
+    });
+    const order = parseCustomerOrderResponse(response);
+    if (!order || order.id !== orderId) {
+      throw new AppApiError(
+        'CUSTOMER_ORDER_DETAIL_INVALID_RESPONSE',
+        'These order details could not be verified. Please refresh and try again.',
+      );
+    }
+    return order;
   },
 };

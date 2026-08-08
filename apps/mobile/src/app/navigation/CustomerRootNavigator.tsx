@@ -11,7 +11,7 @@ import {CustomerProfileRouteScreen} from '../../features/customerProfile/screens
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
-import {CustomerFavoritesScreen} from '../../features/favorites/screens/CustomerFavoritesScreen';
+import {CustomerFavoritesRouteScreen} from '../../features/favorites/screens/CustomerFavoritesRouteScreen';
 import {CustomerHomeRouteScreen} from '../../features/home/screens/CustomerHomeRouteScreen';
 import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
@@ -220,8 +220,8 @@ function CustomerOrdersStackNavigator() {
 }
 
 /**
- * P60 keeps the P58/P59 Profile root and registers the Favorites empty-cart
- * destination plus the already-owned dish-detail journey needed by favorite rows.
+ * P61 keeps the P58/P59 Profile root and P60 Favorites destination while
+ * wrapping Favorites with the shared active-cart chrome and reusing detail routes.
  */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
@@ -235,7 +235,7 @@ function CustomerProfileStackNavigator() {
       />
       <ProfileStack.Screen
         name="CustomerFavorites"
-        component={CustomerFavoritesScreen}
+        component={CustomerFavoritesRouteScreen}
       />
       <ProfileStack.Screen
         name="CustomerDishDetail"

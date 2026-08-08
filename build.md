@@ -18,6 +18,7 @@
 - **P00–P30: DONE** at the implementation/static-contract level recorded by their existing ledger/evidence records. Device/reference certification remains deferred where those records say so.
 - **P31 — Home Feed Data Contract and Query Model: PARTIAL.** Exact nearby-menu/location/pagination/cache behavior is implemented and validated. Category/cuisine/full-home mapping remains blocked because the current branch has no authoritative concrete contract for those capabilities.
 - **P32 — Customer Home — Empty Cart: PARTIAL.** The supported empty-cart Home root, exact nearby feed presentation, Add action, saved-location behavior, loaded-result search/category filtering, pagination, refresh, bottom-nav scroll behavior, and lifecycle states are implemented and CI-validated. Full P32 acceptance remains blocked by missing favorite/full-search/category/cuisine/recommendation contracts and by Chef/Dish/Notifications product routes that belong to later phases and are not registered yet.
+- **P33 — Customer Home — Active Cart: PARTIAL.** The same Home route now reconciles loaded dish cards to the authoritative cart snapshot, exposes real increment/decrement/remove quantity controls, protects duplicate line mutations, and returns to Add when a line reaches zero. The required visible View Cart/count/total and `View Cart -> Cart` action remain blocked because no Customer Cart product route is registered and P45/P46 own that later destination.
 
 ### P31 evidence
 
@@ -39,13 +40,24 @@
 - CI run/job: `31245957014` / `93074471641` — **SUCCESS**.
 - CI gates passed: `npm ci`, strict TypeScript, ESLint zero warnings, Jest, production Android JavaScript bundle, backend/APIM/infrastructure source guard.
 
-**Current executed phase:** **P32 — Customer Home — Empty Cart** is recorded **PARTIAL** because explicit acceptance actions still depend on missing contracts/later product routes.
+### P33 evidence
 
-**Next phase in sequence:** **P33 — Customer Home — Active Cart** — **NOT STARTED**.
+- User explicitly authorized P33 after confirming P32 was partial.
+- Started from branch head: `8a8d3cf42ac8240f1363e28a4e0a8c322d0f55d9`.
+- Validated implementation commit: `bcb25866df664a77c8b83fa50c029f967d72a9be`.
+- Evidence commit: `aa75b09780823da4de78abdda7393763a4707eff`.
+- Evidence: `docs/mobile-ui-rebuild/P33_CUSTOMER_HOME_ACTIVE_CART.md`.
+- CI run/job: `31248405375` / `93080699835` — **SUCCESS**.
+- Jest at that gate: **37 suites / 179 tests passed**.
+- Outstanding blocker: Reference 06 requires a functional `View Cart -> Cart` action, but no Customer Cart route is registered yet and P45/P46 own the Cart data/UI destination. No inert callback, unreachable route, or placeholder Cart screen was introduced.
+
+**Current executed phase:** **P33 — Customer Home — Active Cart** is recorded **PARTIAL** because the safe cart-quantity/reconciliation subset is complete and validated, while the destination-bound View Cart surface cannot be completed without pre-implementing P45/P46-owned work.
+
+**Next phase in sequence:** **P34 — Nearby Chef Discovery Contract** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P33. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P34. Wait for explicit user direction.
 
 ---
 
@@ -53,10 +65,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31245957014`
-- Job ID: `93074471641`
-- Head SHA: `9227a56fb8caf3213d3900bed9e3b4eb7514f543`
-- Phase: **P32 — Customer Home — Empty Cart**
+- GitHub Actions run ID: `31248405375`
+- Job ID: `93080699835`
+- Head SHA: `bcb25866df664a77c8b83fa50c029f967d72a9be`
+- Phase: **P33 — Customer Home — Active Cart**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -65,7 +77,7 @@ Successful checks:
 2. Node `22.13.0` setup and `npm ci`,
 3. strict TypeScript (`tsc --noEmit`),
 4. ESLint with zero warnings,
-5. Jest including P32 presentation coverage and prior regressions,
+5. Jest — **37 suites / 179 tests passed**, including cart mutation/domain and Home regressions,
 6. production Android JavaScript bundle generation with `react-native bundle`,
 7. backend/APIM/infrastructure source-change guard.
 
@@ -73,60 +85,56 @@ The implementation workflow intentionally does **not** perform Java/Gradle/APK p
 
 ---
 
-## 3. P32 Implemented Customer Home Boundary
+## 3. P33 Implemented Customer Home Active-Cart Boundary
 
-P32 uses Reference 05 — Customer Home — Empty Cart — only within contracts and routes that already exist.
+P33 uses Reference 06 only within cart contracts and routes that already exist.
 
 Implemented behavior:
 
-- `CustomerHomeRoot` now renders the real P32 `CustomerHomeScreen` instead of the temporary account-status surface.
-- Chefs, Orders, and Profile tab roots remain untouched for their owning phases.
-- Shared P27 location header, notification badge state, and saved-location selector are reused.
-- Shared P26 bottom-nav hide/reveal is driven by the Home list scroll offset.
-- Home data uses only the P31 `GET /api/v1/discovery/menu-items` adapter with exact `latitude`, `longitude`, `radiusMeters`, `page`, and `size` parameters.
-- Only backend-returned active/available nearby menu items become product data; no hardcoded production dishes, chefs, cuisines, banners, or recommendations were added.
-- Debounced search filters the already-loaded authoritative nearby result set only.
-- Category chips are derived only from categories present in already-loaded nearby results and filter that loaded set only; P32 does not pretend this is server-side category search.
-- Add uses the existing P30 `addCartItem({menuItemId, quantity: 1})` mutation boundary and surfaces mutation failure.
-- Pull-to-refresh and backend-driven infinite pagination are connected.
-- Home renders backend image/price/currency/kitchen/distance/location/food-type fields with a neutral category fallback when an image URL is absent.
-- Initial loading, no-location, empty, filtered-empty, recoverable error, offline/network error, background refresh, next-page loading, and cart-mutation error states are connected.
-- P32 adds no View Cart control and implements no P33 active-cart Home composition.
+- P33 extends the existing `CustomerHomeScreen`; it does not add a duplicate active-cart Home route or a second cart store.
+- Home reads the canonical P28/P30 cart snapshot and mutation registry.
+- Loaded nearby dishes are matched to canonical cart lines by `menuItemId`.
+- A dish with no current cart line shows the existing real Add action.
+- A dish with a positive cart quantity shows a quantity selector instead of Add.
+- Increment dispatches the existing P30 `setCartItemQuantity` mutation with the canonical line ID.
+- Decrement above one dispatches `setCartItemQuantity` with the next quantity.
+- Decrement at one dispatches the existing P30 `removeCartItem` mutation.
+- Line-scoped pending mutation state disables the quantity controls and protects repeated taps.
+- P30 optimistic cart snapshots provide immediate quantity/removal feedback; P30 rollback restores the previous valid snapshot if the server mutation fails.
+- Cart-only mutations do not refetch the Home discovery feed.
+- Removing a line to zero causes the same Home dish card to return immediately to Add through authoritative cart-state reconciliation.
+- Quantity controls have explicit accessibility labels/states and Android-sized touch targets.
+- The Home surface now uses the neutral `customer-home` test ID rather than encoding the P32 empty-cart state into the shared route.
 
-### P32 acceptance blockers
+### P33 acceptance blocker
 
-The following are intentionally not fabricated:
+Reference 06 also requires the Espresso Brown View Cart control to show live count/total and open Cart.
 
-- persistent Favorite action — no authoritative favorite API/domain contract exists in the current branch,
-- full catalog-search route/contract — local loaded-result search is real but bounded,
-- server-side category filtering — P31 proved no accepted `category` query parameter exists,
-- cuisine taxonomy/filtering — no authoritative cuisine contract/response field exists,
-- Chef-card destination — owning Chef discovery/detail product routes are later phases,
-- Dish-card destination — owning Dish Detail route is a later phase,
-- Notifications Center destination — P27 supplies badge/read state but no registered product route yet,
-- promotional Home aggregation/recommendation sections — no authoritative current-branch aggregation/recommendation contract exists.
+The branch currently contains the reusable P29 `SharedViewCartOverlay`, but the Customer route registry/types contain no functional Cart product destination. `phases.md` assigns Cart data/pricing extensions to P45 and Cart/Bill Summary UI/navigation to P46.
 
-Therefore P32 is **PARTIAL**, not DONE.
+The guide, `plan.md`, and `agent.md` prohibit empty handlers, placeholder routes, unreachable UI, and pre-implementing later phases. Therefore P33 deliberately does **not**:
+
+- mount View Cart with a no-op `onOpenCart`,
+- invent a Cart route,
+- create a placeholder Cart screen,
+- pre-implement P45/P46,
+- claim View Cart count/total/inset behavior as complete.
+
+Therefore P33 is **PARTIAL**, not DONE.
 
 ---
 
-## 4. P32 Changed Files
+## 4. P33 Changed Files
 
 Implementation:
 
-- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
 - `apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx`
-- `apps/mobile/src/features/home/homePresentation.ts`
-
-Tests:
-
-- `apps/mobile/src/features/home/homePresentation.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P32_CUSTOMER_HOME_EMPTY_CART.md`
+- `docs/mobile-ui-rebuild/P33_CUSTOMER_HOME_ACTIVE_CART.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P33 active-cart Home behavior, checkout, payment, Chef product screen, Orders product screen, or Profile product screen was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, Cart product route/UI, checkout/payment, P34 nearby-chef work, or other later phase was changed.
 
 ---
 
@@ -143,16 +151,17 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 - P27 owns shared customer header, saved browsing location, and notification badge derivation.
 - P28 owns canonical cart read domain, server-total snapshot, selectors, dependency metadata, and mutation metadata skeleton.
 - P29 owns reusable shared View Cart presentation/visibility contract.
-- P30 owns exact add/update/remove cart-line transport and reconciliation.
+- P30 owns exact add/update/remove cart-line transport, optimistic safety, rollback, and reconciliation.
 - P31 owns the validated nearby Home-discovery adapter/query model, saved-location coordinate propagation, pagination/cache keys, location invalidation, and fail-closed unsupported category/cuisine server-filter intent.
 - P32 owns the current supported Customer Home empty-cart presentation and its connection to those accepted shared foundations.
+- P33 owns the current supported active-cart Home card quantity/reconciliation behavior on that same Home route.
 
 ### Later-phase boundaries
 
-- **P33** owns the Customer Home active-cart variant and was not started.
+- **P34** owns the next Nearby Chef Discovery Contract phase and was not started.
 - Later Customer discovery/chef/dish/search/favorite/notification product routes remain owned by their phases in `phases.md`.
 - **P45** owns Cart screen data/pricing model extensions.
-- **P46** owns Cart and Bill Summary UI and its real navigation destination.
+- **P46** owns Cart and Bill Summary UI and its real navigation destination; this is the current blocker for P33's functional View Cart action.
 - Checkout/payment remain P47+.
 
 ---
@@ -169,11 +178,17 @@ Accepted customer-location dependency:
 
 - existing saved-address response supplies `id`, `addressLabel`, `latitude`, and `longitude` for the shared browsing-location state.
 
-Accepted cart mutation dependency:
+Accepted cart dependencies:
 
-- P30 canonical add-item transport/mutation invoked by P32 Add action.
+- canonical P28 cart snapshot including cart lines and server food subtotal,
+- P30 add-item transport/mutation,
+- P30 set-quantity transport/mutation,
+- P30 remove-line transport/mutation,
+- line mutation pending/error metadata.
 
-Not accepted because no exact current-branch contract was found:
+No new backend/APIM contract was introduced by P33.
+
+Not accepted because no exact current-branch contract or registered product route exists:
 
 - Home aggregation URL,
 - cuisine taxonomy URL/model,
@@ -181,7 +196,8 @@ Not accepted because no exact current-branch contract was found:
 - discovery `cuisine` query parameter,
 - cuisine response field,
 - recommendation aggregation URL/model,
-- favorite API/domain contract.
+- favorite API/domain contract,
+- current Customer Cart product route/destination before its P45/P46 owning phases.
 
 Live APIM/device runtime certification is not claimed by these static implementation phases unless a later evidence record explicitly says so.
 
@@ -196,18 +212,19 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P25–P30 | **DONE** | Accepted Customer shell/header/cart implementation evidence. |
 | P31 Home Feed Data Contract and Query Model | **PARTIAL** | Exact nearby/location/pagination/cache subset validated by CI `31243903844`; category/cuisine/full-home contracts missing. |
 | P32 Customer Home — Empty Cart | **PARTIAL** | Supported Home empty-cart surface validated by CI `31245957014`; favorite/full-search/server-category/cuisine/recommendation and later product-route actions remain blocked. |
-| P33 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
+| P33 Customer Home — Active Cart | **PARTIAL** | Same-route cart quantity/add/remove reconciliation validated by CI `31248405375`; functional View Cart remains blocked on the P45/P46-owned Cart destination. |
+| P34 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
 
 ---
 
-## 8. Explicitly Not Complete After P32 Work
+## 8. Explicitly Not Complete After P33 Work
 
 Do not describe any of the following as complete:
 
 - P31 category/cuisine/full-home aggregation mapping,
-- P32 favorite/chef-detail/dish-detail/full-search/notification-center/recommendation acceptance items listed above,
-- P33 Customer Home — Active Cart,
-- later Customer Discovery/Chefs/Orders/Profile product screens,
+- P32 favorite/chef-detail/dish-detail/full-search/notification-center/recommendation acceptance items listed in its evidence,
+- P33 visible View Cart/count/total/Cart navigation/inset acceptance until the real Cart destination exists,
+- P34 Nearby Chef Discovery Contract or any later phase,
 - full Customer Cart/Bill Summary product screen,
 - checkout/payment end-to-end flow,
 - Chef operational/product screens,

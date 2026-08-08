@@ -23,7 +23,7 @@ export interface CartTotals {
 export interface CartSnapshot {
   cartId: string;
   currency: string;
-  lines: readonly CartLine[];
+  lines: CartLine[];
   totals: CartTotals;
 }
 

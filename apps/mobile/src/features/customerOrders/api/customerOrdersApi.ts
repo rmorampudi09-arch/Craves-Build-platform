@@ -3,11 +3,13 @@ import {AppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
 import {
   CUSTOMER_ORDER_STATUSES,
+  CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT,
   type CustomerOrder,
 } from '../domain/customerOrderTypes';
 
+export {CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT} from '../domain/customerOrderTypes';
+
 export const CUSTOMER_ORDERS_PATH = '/api/v1/orders';
-export const CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT = 50;
 
 const decimalSchema = z
   .union([
@@ -19,12 +21,23 @@ const decimalSchema = z
 
 const timestampSchema = z.string().refine(value => !Number.isNaN(Date.parse(value)));
 
+function nullableTrimmed(maxLength: number) {
+  return z
+    .string()
+    .max(maxLength)
+    .nullable()
+    .transform(value => {
+      const normalized = value?.trim() ?? '';
+      return normalized ? normalized : null;
+    });
+}
+
 const addressSchema = z.object({
   recipientName: z.string().trim().min(1).max(160),
   addressLine1: z.string().trim().min(1).max(250),
-  addressLine2: z.string().trim().min(1).max(250).nullable(),
-  landmark: z.string().trim().min(1).max(160).nullable(),
-  areaName: z.string().trim().min(1).max(120).nullable(),
+  addressLine2: nullableTrimmed(250),
+  landmark: nullableTrimmed(160),
+  areaName: nullableTrimmed(120),
   city: z.string().trim().min(1).max(120),
   state: z.string().trim().min(1).max(120),
   postalCode: z.string().trim().min(1).max(20),
@@ -34,8 +47,8 @@ const itemSchema = z.object({
   id: z.string().uuid(),
   menuItemId: z.string().uuid(),
   itemName: z.string().trim().min(1).max(180),
-  category: z.string().trim().min(1).max(80).nullable(),
-  foodType: z.string().trim().min(1).max(40).nullable(),
+  category: nullableTrimmed(80),
+  foodType: nullableTrimmed(40),
   unitPrice: decimalSchema,
   quantity: z.number().int().min(1).max(100),
   lineTotal: decimalSchema,
@@ -53,7 +66,7 @@ const orderSchema = z.object({
   taxAmount: decimalSchema,
   deliveryFee: decimalSchema,
   grandTotal: decimalSchema,
-  chefResponseNote: z.string().trim().min(1).max(500).nullable(),
+  chefResponseNote: nullableTrimmed(500),
   prepTimeMinutes: z.number().int().min(1).max(1440).nullable(),
   deliveryAddress: addressSchema.nullable(),
   items: z.array(itemSchema).max(100),

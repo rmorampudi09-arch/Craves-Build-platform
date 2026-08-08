@@ -7,6 +7,7 @@ import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens
 import {CustomerOrderDetailScreen} from '../../features/customerOrders/screens/CustomerOrderDetailScreen';
 import {CustomerOrdersRouteScreen} from '../../features/customerOrders/screens/CustomerOrdersRouteScreen';
 import {CustomerOrderTrackingScreen} from '../../features/customerOrders/screens/CustomerOrderTrackingScreen';
+import {CustomerProfileEditRouteScreen} from '../../features/customerProfile/screens/CustomerProfileEditRouteScreen';
 import {CustomerProfileRouteScreen} from '../../features/customerProfile/screens/CustomerProfileRouteScreen';
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
@@ -220,12 +221,7 @@ function CustomerOrdersStackNavigator() {
   );
 }
 
-/**
- * P63 keeps the P62 Notifications inbox in the Profile stack and adds only the
- * shared active-cart route chrome. ORDER and DELIVERY targets reuse the
- * existing detail/tracking screens so Back returns to the same Notifications
- * instance without resetting the cart or customer tab state.
- */
+/** P65 adds one shared Edit Profile route for refs 23/24. */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -235,6 +231,10 @@ function CustomerProfileStackNavigator() {
         name="CustomerProfileRoot"
         component={CustomerProfileRouteScreen}
         listeners={rootListeners}
+      />
+      <ProfileStack.Screen
+        name="CustomerProfileEdit"
+        component={CustomerProfileEditRouteScreen}
       />
       <ProfileStack.Screen
         name="CustomerFavorites"

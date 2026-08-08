@@ -1,3 +1,10 @@
+export const PAYMENT_METHOD_LIST_CONTRACT_UNAVAILABLE =
+  'CUSTOMER_PAYMENT_METHOD_LIST_CONTRACT_UNAVAILABLE' as const;
+export const PAYMENT_ELIGIBILITY_CONTRACT_UNAVAILABLE =
+  'CUSTOMER_PAYMENT_ELIGIBILITY_CONTRACT_UNAVAILABLE' as const;
+export const COD_ELIGIBILITY_CONTRACT_UNAVAILABLE =
+  'CUSTOMER_COD_ELIGIBILITY_CONTRACT_UNAVAILABLE' as const;
+
 export type CustomerPaymentMethodId = 'CASHFREE_ONLINE' | 'COD';
 
 export type CustomerPaymentMethodsMode = 'EMPTY_CART' | 'ACTIVE_CART';
@@ -29,9 +36,9 @@ export interface BuildCustomerPaymentMethodsModelInput {
 }
 
 /**
- * P68 intentionally separates provider capability from saved-token support.
- * The current authoritative runtime can hand off a checkout to Cashfree, but it
- * exposes no customer token CRUD contract and no COD eligibility endpoint.
+ * P68 renders the reference capability groups without fabricating token rows or
+ * eligibility. The branch has a verified Cashfree payment-order handoff, but no
+ * customer payment-method list or cart-scoped payment-eligibility contract.
  */
 export function buildCustomerPaymentMethodsModel({
   cartItemCount,
@@ -39,32 +46,32 @@ export function buildCustomerPaymentMethodsModel({
 }: BuildCustomerPaymentMethodsModelInput): CustomerPaymentMethodsScreenModel {
   const activeCart = cartItemCount > 0;
   const mode: CustomerPaymentMethodsMode = activeCart ? 'ACTIVE_CART' : 'EMPTY_CART';
-  const onlineAvailable = activeCart;
 
   return {
     mode,
     title: activeCart ? 'Choose how you’ll pay' : 'Payment methods',
     subtitle: activeCart
-      ? 'Choose a payment route for this cart. Final provider availability is confirmed at the secure payment step.'
-      : 'Saved payment methods are not exposed by the current mobile contract. Add items to a cart to choose a payment route.',
+      ? 'Payment options are shown from the approved product capability set. Selection stays disabled until current cart/provider eligibility can be verified.'
+      : 'View payment capabilities without creating a checkout selection. Saved tokenized methods require the approved payment-method contract.',
     savedMethodsSupported: false,
-    selectedMethodId: activeCart ? selectedMethodId : null,
+    selectedMethodId: null,
     options: [
       {
         id: 'CASHFREE_ONLINE',
-        title: 'Pay online securely',
-        description: activeCart
-          ? 'Continue to the Cashfree secure payment step after checkout review.'
-          : 'Available when you have items in your cart.',
-        availability: onlineAvailable ? 'AVAILABLE' : 'BLOCKED',
-        blockerReason: onlineAvailable ? null : 'Add items to your cart to use online payment.',
+        title: 'Online payment methods',
+        description:
+          'Cards, UPI, wallets and net banking are handled through the secure provider flow when an eligible checkout is available.',
+        availability: 'BLOCKED',
+        blockerReason: activeCart
+          ? 'Current cart/provider payment eligibility is not exposed by the approved mobile API contract yet.'
+          : 'Add items to a cart first; live provider eligibility still requires the approved payment eligibility contract.',
         channels: ['Cards', 'UPI', 'Wallets', 'Net banking'],
-        selected: onlineAvailable && selectedMethodId === 'CASHFREE_ONLINE',
+        selected: false,
       },
       {
         id: 'COD',
         title: 'Cash on delivery',
-        description: 'Availability must be verified for the current cart and delivery context.',
+        description: 'Availability must be verified for the current cart, address and order intent.',
         availability: 'BLOCKED',
         blockerReason:
           'Cash on delivery eligibility is not exposed by the approved mobile API contract yet.',

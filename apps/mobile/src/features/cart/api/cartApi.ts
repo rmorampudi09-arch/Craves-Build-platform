@@ -1,3 +1,4 @@
+import {AppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
 import type {CartLine, CartMoney, CartSnapshot} from '../domain/cartTypes';
 
@@ -146,15 +147,80 @@ export function parseCartSnapshot(value: unknown): CartSnapshot | null {
   };
 }
 
+function requireUuid(value: string, code: string, message: string): void {
+  if (!UUID_PATTERN.test(value)) {
+    throw new AppApiError(code, message);
+  }
+}
+
+function requireQuantity(quantity: number): void {
+  if (!Number.isSafeInteger(quantity) || quantity < 1) {
+    throw new AppApiError(
+      'CART_INVALID_QUANTITY',
+      'Choose a quantity of at least one item.',
+    );
+  }
+}
+
+function requireCartSnapshot(value: unknown): CartSnapshot {
+  const snapshot = parseCartSnapshot(value);
+  if (!snapshot) {
+    throw new AppApiError(
+      'CART_INVALID_RESPONSE',
+      'Cart information could not be verified. Please try again.',
+    );
+  }
+  return snapshot;
+}
+
 export const cartApi = {
   async getSnapshot(): Promise<CartSnapshot> {
     const response = await httpClient.get<unknown>('/api/v1/cart', {
       dedupeKey: 'customer-cart:snapshot',
     });
-    const snapshot = parseCartSnapshot(response);
-    if (!snapshot) {
-      throw new Error('Cart response failed validation.');
-    }
-    return snapshot;
+    return requireCartSnapshot(response);
+  },
+
+  async addItem(menuItemId: string, quantity: number): Promise<CartSnapshot> {
+    requireUuid(
+      menuItemId,
+      'CART_INVALID_MENU_ITEM_ID',
+      'This dish could not be added to the cart.',
+    );
+    requireQuantity(quantity);
+
+    const response = await httpClient.post<unknown>('/api/v1/cart/items', {
+      menuItemId,
+      quantity,
+    });
+    return requireCartSnapshot(response);
+  },
+
+  async updateItem(cartItemId: string, quantity: number): Promise<CartSnapshot> {
+    requireUuid(
+      cartItemId,
+      'CART_INVALID_LINE_ID',
+      'This cart item could not be updated.',
+    );
+    requireQuantity(quantity);
+
+    const response = await httpClient.put<unknown>(
+      `/api/v1/cart/items/${cartItemId}`,
+      {quantity},
+    );
+    return requireCartSnapshot(response);
+  },
+
+  async removeItem(cartItemId: string): Promise<CartSnapshot> {
+    requireUuid(
+      cartItemId,
+      'CART_INVALID_LINE_ID',
+      'This cart item could not be removed.',
+    );
+
+    const response = await httpClient.delete<unknown>(
+      `/api/v1/cart/items/${cartItemId}`,
+    );
+    return requireCartSnapshot(response);
   },
 };

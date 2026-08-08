@@ -10,10 +10,16 @@ import {cartActions, cartReducer} from './state/cartSlice';
 jest.mock('../../core/http/httpClient', () => ({
   httpClient: {
     get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
 const getMock = httpClient.get as jest.Mock;
+const postMock = httpClient.post as jest.Mock;
+const putMock = httpClient.put as jest.Mock;
+const deleteMock = httpClient.delete as jest.Mock;
 
 const cartResponse = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -40,7 +46,7 @@ const cartResponse = {
   },
 };
 
-describe('P28 authoritative cart domain', () => {
+describe('P28/P30 authoritative cart domain', () => {
   beforeEach(() => {
     jest.resetAllMocks();
   });
@@ -66,6 +72,40 @@ describe('P28 authoritative cart domain', () => {
     expect(snapshot).not.toHaveProperty('customerIdentityId');
   });
 
+  it('uses the exact add, update, and remove cart line contracts', async () => {
+    postMock.mockResolvedValueOnce(cartResponse);
+    putMock.mockResolvedValueOnce(cartResponse);
+    deleteMock.mockResolvedValueOnce(cartResponse);
+
+    await cartApi.addItem('33333333-3333-4333-8333-333333333333', 2);
+    await cartApi.updateItem('22222222-2222-4222-8222-222222222222', 3);
+    await cartApi.removeItem('22222222-2222-4222-8222-222222222222');
+
+    expect(postMock).toHaveBeenCalledWith('/api/v1/cart/items', {
+      menuItemId: '33333333-3333-4333-8333-333333333333',
+      quantity: 2,
+    });
+    expect(putMock).toHaveBeenCalledWith(
+      '/api/v1/cart/items/22222222-2222-4222-8222-222222222222',
+      {quantity: 3},
+    );
+    expect(deleteMock).toHaveBeenCalledWith(
+      '/api/v1/cart/items/22222222-2222-4222-8222-222222222222',
+    );
+  });
+
+  it('rejects invalid local mutation input before transport', async () => {
+    await expect(
+      cartApi.addItem('not-a-menu-item-id', 1),
+    ).rejects.toMatchObject({code: 'CART_INVALID_MENU_ITEM_ID'});
+    await expect(
+      cartApi.updateItem('22222222-2222-4222-8222-222222222222', 0),
+    ).rejects.toMatchObject({code: 'CART_INVALID_QUANTITY'});
+
+    expect(postMock).not.toHaveBeenCalled();
+    expect(putMock).not.toHaveBeenCalled();
+  });
+
   it('rejects a cart snapshot with inconsistent server currency', () => {
     expect(
       parseCartSnapshot({
@@ -83,11 +123,52 @@ describe('P28 authoritative cart domain', () => {
     }
 
     const first = cartReducer(undefined, cartActions.snapshotAccepted(snapshot));
-    const second = cartReducer(first, cartActions.snapshotAccepted(snapshot));
+    const optimistic = cartReducer(
+      first,
+      cartActions.snapshotOptimisticallyApplied({
+        ...snapshot,
+        lines: snapshot.lines.map(line => ({...line, quantity: 3})),
+      }),
+    );
+    const rollback = cartReducer(
+      optimistic,
+      cartActions.snapshotRollbackApplied({
+        snapshot,
+        expectedClientRevision: 1,
+      }),
+    );
+    const second = cartReducer(rollback, cartActions.snapshotAccepted(snapshot));
 
     expect(first.clientRevision).toBe(1);
+    expect(optimistic.clientRevision).toBe(1);
+    expect(rollback.clientRevision).toBe(1);
     expect(second.clientRevision).toBe(2);
     expect(second.snapshot).toEqual(snapshot);
+  });
+
+  it('does not roll back over a newer authoritative snapshot', () => {
+    const snapshot = parseCartSnapshot(cartResponse);
+    expect(snapshot).not.toBeNull();
+    if (!snapshot) {
+      return;
+    }
+
+    const first = cartReducer(undefined, cartActions.snapshotAccepted(snapshot));
+    const newerSnapshot = {
+      ...snapshot,
+      lines: snapshot.lines.map(line => ({...line, quantity: 4})),
+    };
+    const newer = cartReducer(first, cartActions.snapshotAccepted(newerSnapshot));
+    const attemptedRollback = cartReducer(
+      newer,
+      cartActions.snapshotRollbackApplied({
+        snapshot,
+        expectedClientRevision: 1,
+      }),
+    );
+
+    expect(attemptedRollback.clientRevision).toBe(2);
+    expect(attemptedRollback.snapshot?.lines[0]?.quantity).toBe(4);
   });
 
   it('derives quantity while returning server subtotal unchanged', () => {

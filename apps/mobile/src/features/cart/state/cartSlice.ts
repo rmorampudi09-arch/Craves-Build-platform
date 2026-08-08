@@ -54,6 +54,11 @@ interface DependencyStatusPayload {
   status: CartDependencyStatus;
 }
 
+interface SnapshotRollbackPayload {
+  snapshot: CartSnapshot;
+  expectedClientRevision: number;
+}
+
 const cartSlice = createSlice({
   name: 'cart',
   initialState,
@@ -67,6 +72,19 @@ const cartSlice = createSlice({
       state.snapshotStatus = 'READY';
       state.snapshotErrorCode = null;
       state.clientRevision += 1;
+    },
+    snapshotOptimisticallyApplied(state, action: PayloadAction<CartSnapshot>) {
+      state.snapshot = action.payload;
+      state.snapshotStatus = 'READY';
+      state.snapshotErrorCode = null;
+    },
+    snapshotRollbackApplied(state, action: PayloadAction<SnapshotRollbackPayload>) {
+      if (state.clientRevision !== action.payload.expectedClientRevision) {
+        return;
+      }
+      state.snapshot = action.payload.snapshot;
+      state.snapshotStatus = 'READY';
+      state.snapshotErrorCode = null;
     },
     snapshotLoadFailed(state, action: PayloadAction<{errorCode: string}>) {
       state.snapshotStatus = 'ERROR';

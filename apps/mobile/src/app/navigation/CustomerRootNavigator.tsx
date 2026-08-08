@@ -18,7 +18,7 @@ import {CustomerHomeRouteScreen} from '../../features/home/screens/CustomerHomeR
 import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
 import {CustomerNotificationsRouteScreen} from '../../features/notifications/screens/CustomerNotificationsRouteScreen';
-import {CustomerPaymentMethodsScreen} from '../../features/payment/screens/CustomerPaymentMethodsScreen';
+import {CustomerPaymentMethodsRouteScreen} from '../../features/payment/screens/CustomerPaymentMethodsRouteScreen';
 import {Icon} from '../../shared/components/Icon';
 import {
   CustomerBottomNavVisibilityProvider,
@@ -162,7 +162,7 @@ function CustomerHomeStackNavigator() {
       <HomeStack.Screen name="CustomerCart" component={CustomerCartScreen} />
       <HomeStack.Screen
         name="CustomerPaymentMethods"
-        component={CustomerPaymentMethodsScreen}
+        component={CustomerPaymentMethodsRouteScreen}
       />
     </HomeStack.Navigator>
   );
@@ -201,7 +201,7 @@ function CustomerChefsStackNavigator() {
       <ChefsStack.Screen name="CustomerCart" component={CustomerCartScreen} />
       <ChefsStack.Screen
         name="CustomerPaymentMethods"
-        component={CustomerPaymentMethodsScreen}
+        component={CustomerPaymentMethodsRouteScreen}
       />
     </ChefsStack.Navigator>
   );
@@ -229,7 +229,7 @@ function CustomerOrdersStackNavigator() {
       <OrdersStack.Screen name="CustomerCart" component={CustomerCartScreen} />
       <OrdersStack.Screen
         name="CustomerPaymentMethods"
-        component={CustomerPaymentMethodsScreen}
+        component={CustomerPaymentMethodsRouteScreen}
       />
     </OrdersStack.Navigator>
   );
@@ -289,7 +289,7 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen name="CustomerCart" component={CustomerCartScreen} />
       <ProfileStack.Screen
         name="CustomerPaymentMethods"
-        component={CustomerPaymentMethodsScreen}
+        component={CustomerPaymentMethodsRouteScreen}
       />
     </ProfileStack.Navigator>
   );

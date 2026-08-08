@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P26 have dedicated evidence under `docs/mobile-ui-rebuild/`; prior phase details remain there when this living ledger is compacted.
+**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P27 have dedicated evidence under `docs/mobile-ui-rebuild/`; prior phase details remain there when this living ledger is compacted.
 
 ---
 
@@ -47,21 +47,22 @@
 - **P24 — Logout, Revoke, and Role-State Cleanup: DONE** at implementation/static-contract level.
 - **P25 — Customer Root Shell and Bottom Tabs: DONE** at implementation/static-navigation level.
 - **P26 — Customer Bottom-Nav Scroll Hide/Reveal: DONE** at implementation/static-navigation level; final device/reference certification remains later visual QA.
+- **P27 — Shared Customer Header/Location/Notification Badge: DONE** at implementation/static-contract level; final device/reference certification remains later visual QA.
 
-P26 completion evidence:
+P27 completion evidence:
 
-- Started from commit: `bcbbcac31ebe8857bfc7f7e5af0c80a9ddf98443`.
-- Initial implementation commit: `3aa720d9d9543a6a45bc6ef13085bcf087e01648`.
-- Validated implementation commit: `613a91be62722ae032ef9d4f9b9124702c8902bd`.
-- Evidence commit: `2a372cdceb4bf4db2ecfe6faa112010e4fd551d3`.
-- Evidence: `docs/mobile-ui-rebuild/P26_CUSTOMER_BOTTOM_NAV_SCROLL_HIDE_REVEAL.md`.
-- CI run: `31228012689` — **SUCCESS**.
+- Started from commit: `9751bc2efc64e5e17f2609bbe553a2044051f237`.
+- Validated implementation commit: `64fb707a8c0fc4d706f6ee97c05189c9449f5271`.
+- Evidence commit: `ce91e97ddb12b82057e8a05557b9bf8771763f61`.
+- Evidence: `docs/mobile-ui-rebuild/P27_SHARED_CUSTOMER_HEADER_LOCATION_NOTIFICATION_BADGE.md`.
+- CI run: `31229329651` — **SUCCESS**.
+- A prior validation run `31229225679` exposed one lint-only `no-void` finding; it was corrected before the successful final validation.
 
-**Next phase in sequence:** **P27 — Shared Customer Header/Location/Notification Badge**.
+**Next phase in sequence:** **P28 — Authoritative Cart Domain Skeleton**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P27 until the user explicitly authorizes the next phase.
+**Required action:** Stop. Do not pre-implement P28 until the user explicitly authorizes the next phase.
 
 ---
 
@@ -71,9 +72,9 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31228012689`
-- Head SHA: `613a91be62722ae032ef9d4f9b9124702c8902bd`
-- Phase: **P26 — Customer Bottom-Nav Scroll Hide/Reveal**
+- GitHub Actions run ID: `31229329651`
+- Head SHA: `64fb707a8c0fc4d706f6ee97c05189c9449f5271`
+- Phase: **P27 — Shared Customer Header/Location/Notification Badge**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -82,8 +83,8 @@ Successful checks:
 2. Node 22.13 setup,
 3. `npm ci`,
 4. strict TypeScript (`tsc --noEmit`),
-5. ESLint with zero warnings,
-6. Jest including focused P26 scroll direction/threshold tests and prior regressions,
+5. ESLint,
+6. Jest including P27 location/badge tests and prior regressions,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
 
@@ -91,54 +92,60 @@ The implementation-phase workflow intentionally does **not** perform Java/Gradle
 
 ---
 
-## 3. P26 Accepted Bottom-Navigation Behavior
+## 3. P27 Accepted Shared Customer Header Behavior
 
-P26 extends the existing P25 Customer shell only. It does not introduce any Customer product/reference screen.
+P27 extends the P25/P26 Customer shell without fabricating later Home, Chefs, Orders, Profile, Notifications Center, or cart product screens.
 
 Accepted behavior:
 
-- Customer bottom navigation is visible when a tab-root vertical list is at/near the top.
-- Deliberate downward scrolling hides the bar after a small accumulated-direction threshold.
-- Deliberate upward scrolling reveals the bar after the same threshold.
-- Minor scroll jitter does not repeatedly toggle the bar.
-- Negative Android overscroll is normalized safely and keeps navigation visible.
-- Changing Customer tabs reveals the bar.
-- Returning/focusing a Customer tab root reveals the bar without resetting the preserved list offset.
-- While hidden, the tab bar does not intercept touches.
-- While hidden, the tab bar is removed from accessibility traversal.
-- The shared P05 bottom-navigation motion definition is reused; only opacity/transform are animated with the native driver.
-- Android reduced-motion preference is respected; visibility changes become immediate when reduced motion is enabled.
-- The actual React Navigation `BottomTabBar` remains authoritative; no second tab UI or navigation system was created.
-- Existing P25 `lazy: true` / `popToTopOnBlur: false` stack-preservation behavior remains unchanged.
-- The tab bar continues to own its normal safe-area geometry; P26 does not impose a fixed bottom offset or fixed tab height that would bypass Android gesture/navigation insets.
+- `CustomerHeader` is the reusable Customer header primitive and supports `default` and `compact` variants.
+- The header exposes one accessible location selector entry and one notification bell entry rather than owning product navigation routes itself.
+- Header interactions meet the shared 48dp minimum touch-target rule.
+- Flame Red and Espresso Brown continue to come from the shared P04 token set.
+- A saved location selection is Redux-owned Customer shell state, not a per-screen local copy.
+- `useCustomerHeaderState()` is the shared read surface for selected location and notification badge data.
+- `CustomerLocationSelector` lists customer-owned saved locations from the approved Customer address route and updates the one shared selected-location state.
+- No automatic first/default address is invented if the user has not selected a browsing location.
+- Notification data is private TanStack Query server state scoped by authenticated identity and CUSTOMER role.
+- The unread badge is calculated only from `readAt === null` and displays `99+` when the derived value exceeds 99.
+- Notification runtime parsing allow-lists only customer-visible fields and does not accept/render raw payload, event key, provider, or retry metadata.
+- Logout clears Customer shell selection in addition to the existing private query/mutation cache cleanup.
+- Existing authentication, navigation, bottom tabs, and P26 hide/reveal behavior remain unchanged.
 
-### Later product-list integration boundary
+### Location / notification contract boundary
 
-`useCustomerBottomNavScroll()` is now the single shared vertical-scroll binding for the real Customer tab-root `ScrollView`, `FlatList`, or `FlashList` implementations added by their later owning phases. It provides shared `onScroll` handling and `scrollEventThrottle: 16` while revealing navigation on root focus without resetting list position.
+P27 consumes only approved existing capabilities:
 
-P26 intentionally did **not** create fake scrollable Home, Chefs, Orders, or Profile content just to demonstrate the behavior. Those screens remain unaccepted until their owning phases.
+- `GET /api/v1/customer/addresses`
+- `GET /api/v1/notifications/in-app` with the documented `limit` range capped at `100`
+
+P27 intentionally does **not** introduce native GPS permissions, geocoding, maps SDKs, delivery/serviceability radius logic, a Notifications Center route, mark-read behavior, target navigation, or any new APIM/backend route. Those remain with their owning later phases/QA gates.
 
 ---
 
-## 4. P26 Changed Files
+## 4. P27 Changed Files
 
-Validated P26 implementation changes from the accepted P25 ledger head are limited to:
+Validated P27 implementation changes from the accepted P26 ledger head are limited to:
 
-- `apps/mobile/src/app/navigation/CustomerBottomNavController.tsx`
-- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
-- `apps/mobile/src/app/navigation/customerBottomNavScroll.ts`
-- `apps/mobile/src/app/navigation/customerBottomNavScroll.test.ts`
-- `apps/mobile/src/app/navigation/customerTabs.ts`
+- `apps/mobile/src/app/store/store.ts`
+- `apps/mobile/src/features/auth/state/logoutCoordinator.ts`
+- `apps/mobile/src/features/customerShell/api/customerShellApi.ts`
+- `apps/mobile/src/features/customerShell/components/CustomerHeader.tsx`
+- `apps/mobile/src/features/customerShell/components/CustomerLocationSelector.tsx`
+- `apps/mobile/src/features/customerShell/customerShell.test.ts`
+- `apps/mobile/src/features/customerShell/hooks/useCustomerHeaderState.ts`
+- `apps/mobile/src/features/customerShell/state/customerShellSlice.ts`
+- `apps/mobile/src/shared/components/Icon.tsx`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P26_CUSTOMER_BOTTOM_NAV_SCROLL_HIDE_REVEAL.md`
+- `docs/mobile-ui-rebuild/P27_SHARED_CUSTOMER_HEADER_LOCATION_NOTIFICATION_BADGE.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, cart/View Cart behavior, P27 shared-header behavior, or later Customer product screen was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, cart/View Cart behavior, P28 domain behavior, or later Customer product screen was changed.
 
 ---
 
-## 5. Current Architecture Ownership After P26
+## 5. Current Architecture Ownership After P27
 
 ### Authentication/session
 
@@ -155,33 +162,33 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 ### State/cache/navigation
 
 - Redux auth state owns requested role, authenticated identity, and onboarding/account resolution.
-- TanStack Query owns server state; private cache cleanup remains centralized through `app/query/queryCache.ts`.
+- Redux Customer shell state owns the current explicitly selected saved browsing location.
+- TanStack Query owns server state, including P27 saved-location options and notification list/badge data.
+- Private query cleanup remains centralized through `app/query/queryCache.ts`.
 - Root navigation remains conditional on `auth.bootstrapStatus`; logout unmounts the authenticated navigator subtree.
 - P25 remains the owner of the one Customer bottom-tab navigator and four independent typed tab stacks.
-- P26 adds one shell-level Customer bottom-nav visibility provider/controller rather than per-screen duplicate logic.
-- `customerBottomNavScroll.ts` owns the pure direction/threshold state machine.
-- `CustomerBottomNavController.tsx` owns visibility animation, reduced-motion behavior, hidden interaction/accessibility policy, and the reusable root-list scroll binding.
-- Product routes and real root lists remain owned by later phases and must reuse this P26 binding when applicable.
+- P26 remains the owner of bottom-navigation scroll hide/reveal behavior.
+- P27 owns `CustomerHeader`, `CustomerLocationSelector`, shared Customer location selection, and notification badge derivation.
+- Product routes and real Customer tab-root compositions remain owned by later phases and must consume these shared P26/P27 primitives rather than duplicating them.
 
 ### Account/onboarding authority
 
 - P21 account resolution remains authoritative for Customer/Chef authorization.
 - P22 Customer profile completion and P23 Chef application/status behavior remain unchanged.
 - `CUSTOMER + READY` enters the Customer shell; `CUSTOMER + PROFILE_REQUIRED` remains in registration.
-- Chef routing remains unchanged by P26.
+- Chef routing remains unchanged by P27.
 
 ### Later-phase boundaries
 
-- **P27** owns shared Customer header/location/notification badge behavior.
-- **P28 onward** owns cart/domain/product behavior according to `phases.md`.
-- Later Customer screen phases own Home, Chefs discovery, Orders, Profile and their real API-backed compositions.
-- Chef KYC proof upload and Chef operational/product screens remain outside P26.
+- **P28** owns the authoritative cart domain skeleton.
+- Later phases own View Cart, Customer Home/discovery, Chefs, Orders, Profile, notification center/target routing, checkout and payment according to `phases.md`.
+- Chef KYC proof upload and Chef operational/product screens remain outside P27.
 
 ---
 
 ## 6. Current Contract Status
 
-Authentication/profile/onboarding contracts accepted before P26 remain unchanged:
+Authentication/profile/onboarding contracts accepted before P27 remain unchanged:
 
 - `POST /api/v1/auth/firebase/exchange` — P19.
 - `POST /api/v1/auth/refresh` — P20.
@@ -189,9 +196,14 @@ Authentication/profile/onboarding contracts accepted before P26 remain unchanged
 - `GET /api/v1/customer/profile` / `PUT /api/v1/customer/profile` — P21/P22.
 - `GET /api/v1/chef/application` / `POST /api/v1/chef/application` — P23.
 - `POST /api/v1/auth/logout` — P24.
-- `POST /api/v1/chef/application/proof-files` — backend route exists but remains outside accepted P23–P26 behavior.
+- `POST /api/v1/chef/application/proof-files` — backend route exists but remains outside accepted P23–P27 behavior.
 
-**P25 and P26 use no new APIM/backend contract.** They are navigation-shell phases only.
+P27 additionally accepts only these existing Customer shell reads:
+
+- `GET /api/v1/customer/addresses`
+- `GET /api/v1/notifications/in-app`
+
+No new backend/APIM contract was invented or modified by P27.
 
 Live APIM/device runtime certification is not claimed by these static implementation phases unless a later evidence record explicitly says so.
 
@@ -210,23 +222,26 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P24 Logout/Revoke/Role-State Cleanup | **DONE** | Best-effort revoke, unconditional local credential cleanup, private cache/mutation cleanup, role reset, fresh Auth root; CI `31225688358`. |
 | P25 Customer Root Shell/Bottom Tabs | **DONE** | Typed four-tab Customer shell, nested stack preservation, Flame Red active state, safe-area-compatible bottom tabs; CI `31226669633`. |
 | P26 Customer Bottom-Nav Scroll Hide/Reveal | **DONE** | Shared scroll-direction controller, reduced-motion animation, hidden interaction/accessibility guard, tab/root reveal behavior; CI `31228012689`. |
-| P27 onward | **NOT STARTED / not accepted** | No later phase is authorized by this record. |
+| P27 Shared Customer Header/Location/Notification Badge | **DONE** | Shared header variants, saved-location selector/global state, private notification badge derivation, logout cleanup; CI `31229329651`. |
+| P28 onward | **NOT STARTED / not accepted** | No later phase is authorized by this record. |
 
 ---
 
-## 8. Explicitly Not Complete After P26
+## 8. Explicitly Not Complete After P27
 
 Do not describe any of the following as complete:
 
-- P27 shared Customer header/location/notification badge,
 - P28 authoritative cart domain or P29 View Cart overlay,
-- Customer Home/Discovery/Chefs/Orders/Profile product screens merely because the shell and scroll behavior exist,
+- Customer Home/Discovery/Chefs/Orders/Profile product screens merely because the shell/header primitives exist,
+- native GPS/location permission behavior,
+- geocoding/maps/serviceability logic,
+- Notifications Center list/mark-read/target routing merely because the shared badge query exists,
 - Chef KYC proof-file upload,
 - Chef operational/product screens,
 - authenticated product/resource deep links and notification routing,
 - checkout/payment end-to-end flow,
-- live APIM/device runtime certification of P19–P26 flows,
-- physical-device pixel-perfect certification of accepted auth references or remaining references,
+- live APIM/device runtime certification of P19–P27 flows,
+- physical-device pixel-perfect certification of accepted auth/header references or remaining references,
 - full lifecycle/accessibility/performance/security audits,
 - 52-reference visual certification,
 - production APK/AAB/signing/release readiness.

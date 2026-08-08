@@ -113,14 +113,16 @@ export type CustomerOrdersStackParamList = {
   CustomerCartStackParamList;
 
 /**
- * P60 registers Favorites inside the Profile stack. Dish-detail child routes are
- * shared so a future server-backed favorite row can open the existing detail
- * journey without duplicating route contracts or resetting the Profile stack.
+ * P62 registers Notifications inside the Profile stack and reuses the P55
+ * order child routes for allowlisted ORDER/DELIVERY notification destinations.
+ * P63 owns active View Cart chrome for this same destination.
  */
 export type CustomerProfileStackParamList = {
   CustomerProfileRoot: undefined;
   CustomerFavorites: undefined;
+  CustomerNotifications: undefined;
 } & CustomerDishDetailStackParamList &
+  CustomerOrderDetailStackParamList &
   CustomerCartStackParamList;
 
 export type CustomerTabParamList = {

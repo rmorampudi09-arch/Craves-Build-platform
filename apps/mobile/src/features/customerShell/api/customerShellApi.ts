@@ -155,10 +155,14 @@ export const customerShellApi = {
       .filter((item): item is CustomerBrowsingLocation => item !== null);
   },
 
-  async listNotifications(limit = 100): Promise<CustomerNotice[]> {
+  async listNotifications(
+    limit = 100,
+    signal?: AbortSignal,
+  ): Promise<CustomerNotice[]> {
     const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit)));
     const response = await httpClient.get<unknown>('/api/v1/notifications/in-app', {
       params: {limit: safeLimit},
+      signal,
       dedupeKey: `customer-shell:notifications:${safeLimit}`,
     });
     if (!Array.isArray(response)) {
@@ -167,5 +171,19 @@ export const customerShellApi = {
     return response
       .map(parseNotice)
       .filter((item): item is CustomerNotice => item !== null);
+  },
+
+  async markNotificationRead(
+    noticeId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (!UUID_PATTERN.test(noticeId)) {
+      throw new Error('Notification ID must be a UUID.');
+    }
+    await httpClient.patch<void>(
+      `/api/v1/notifications/in-app/${encodeURIComponent(noticeId)}/read`,
+      undefined,
+      {signal},
+    );
   },
 };

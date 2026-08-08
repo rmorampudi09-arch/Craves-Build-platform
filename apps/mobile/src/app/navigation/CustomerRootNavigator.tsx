@@ -15,6 +15,7 @@ import {CustomerFavoritesRouteScreen} from '../../features/favorites/screens/Cus
 import {CustomerHomeRouteScreen} from '../../features/home/screens/CustomerHomeRouteScreen';
 import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
+import {CustomerNotificationsScreen} from '../../features/notifications/screens/CustomerNotificationsScreen';
 import {Icon} from '../../shared/components/Icon';
 import {
   CustomerBottomNavVisibilityProvider,
@@ -220,8 +221,9 @@ function CustomerOrdersStackNavigator() {
 }
 
 /**
- * P61 keeps the P58/P59 Profile root and P60 Favorites destination while
- * wrapping Favorites with the shared active-cart chrome and reusing detail routes.
+ * P62 adds the empty-cart Notifications inbox. ORDER and DELIVERY targets reuse
+ * the existing customer order detail/tracking screens inside the Profile stack,
+ * preserving Notifications as the back destination. P63 owns active cart chrome.
  */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
@@ -236,6 +238,18 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen
         name="CustomerFavorites"
         component={CustomerFavoritesRouteScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerNotifications"
+        component={CustomerNotificationsScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerOrderDetail"
+        component={CustomerOrderDetailScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerOrderTracking"
+        component={CustomerOrderTrackingScreen}
       />
       <ProfileStack.Screen
         name="CustomerDishDetail"

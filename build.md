@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P27 have dedicated evidence under `docs/mobile-ui-rebuild/`; prior phase details remain there when this living ledger is compacted.
+**Historical preservation:** The complete ledger state through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P28 have dedicated evidence under `docs/mobile-ui-rebuild/`; prior phase details remain there when this living ledger is compacted.
 
 ---
 
@@ -48,21 +48,23 @@
 - **P25 — Customer Root Shell and Bottom Tabs: DONE** at implementation/static-navigation level.
 - **P26 — Customer Bottom-Nav Scroll Hide/Reveal: DONE** at implementation/static-navigation level; final device/reference certification remains later visual QA.
 - **P27 — Shared Customer Header/Location/Notification Badge: DONE** at implementation/static-contract level; final device/reference certification remains later visual QA.
+- **P28 — Authoritative Cart Domain Skeleton: DONE** at implementation/static-contract level.
 
-P27 completion evidence:
+P28 completion evidence:
 
-- Started from commit: `9751bc2efc64e5e17f2609bbe553a2044051f237`.
-- Validated implementation commit: `64fb707a8c0fc4d706f6ee97c05189c9449f5271`.
-- Evidence commit: `ce91e97ddb12b82057e8a05557b9bf8771763f61`.
-- Evidence: `docs/mobile-ui-rebuild/P27_SHARED_CUSTOMER_HEADER_LOCATION_NOTIFICATION_BADGE.md`.
-- CI run: `31229329651` — **SUCCESS**.
-- A prior validation run `31229225679` exposed one lint-only `no-void` finding; it was corrected before the successful final validation.
+- Started from accepted P27 ledger head: `81ccdab73768c7be97871689298a8a7fb3599570`.
+- Initial implementation commit: `a88a6a29f3939ceb636189f9a68554dbdd90cd7b`.
+- Validated implementation head: `6cda59ac43184d2427c012c6a30ec2b099e51016`.
+- Evidence commit: `03b572cc7a537f818eed717ad06147087e128bd5`.
+- Evidence: `docs/mobile-ui-rebuild/P28_AUTHORITATIVE_CART_DOMAIN_SKELETON.md`.
+- CI run: `31229985407` — **SUCCESS**.
+- Initial run `31229916591` exposed one strict-TypeScript Redux Toolkit/Immer draft incompatibility caused by a `readonly` cart-line array; the P28 type boundary was corrected before final validation.
 
-**Next phase in sequence:** **P28 — Authoritative Cart Domain Skeleton**.
+**Next phase in sequence:** **P29 — Shared View Cart Overlay**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P28 until the user explicitly authorizes the next phase.
+**Required action:** Stop. Do not pre-implement P29 until the user explicitly authorizes the next phase.
 
 ---
 
@@ -72,9 +74,9 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31229329651`
-- Head SHA: `64fb707a8c0fc4d706f6ee97c05189c9449f5271`
-- Phase: **P27 — Shared Customer Header/Location/Notification Badge**
+- GitHub Actions run ID: `31229985407`
+- Head SHA: `6cda59ac43184d2427c012c6a30ec2b099e51016`
+- Phase: **P28 — Authoritative Cart Domain Skeleton**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -84,7 +86,7 @@ Successful checks:
 3. `npm ci`,
 4. strict TypeScript (`tsc --noEmit`),
 5. ESLint,
-6. Jest including P27 location/badge tests and prior regressions,
+6. Jest including P28 cart-domain tests and prior regressions,
 7. production Android JavaScript bundle generation with `react-native bundle`,
 8. backend/APIM/infrastructure source-change guard.
 
@@ -92,60 +94,65 @@ The implementation-phase workflow intentionally does **not** perform Java/Gradle
 
 ---
 
-## 3. P27 Accepted Shared Customer Header Behavior
+## 3. P28 Accepted Authoritative Cart Domain Behavior
 
-P27 extends the P25/P26 Customer shell without fabricating later Home, Chefs, Orders, Profile, Notifications Center, or cart product screens.
+P28 establishes the shared cart domain only. It does not implement the P29 View Cart overlay, P30 cart mutation UX/reconciliation flows, cart product screen, or checkout.
 
 Accepted behavior:
 
-- `CustomerHeader` is the reusable Customer header primitive and supports `default` and `compact` variants.
-- The header exposes one accessible location selector entry and one notification bell entry rather than owning product navigation routes itself.
-- Header interactions meet the shared 48dp minimum touch-target rule.
-- Flame Red and Espresso Brown continue to come from the shared P04 token set.
-- A saved location selection is Redux-owned Customer shell state, not a per-screen local copy.
-- `useCustomerHeaderState()` is the shared read surface for selected location and notification badge data.
-- `CustomerLocationSelector` lists customer-owned saved locations from the approved Customer address route and updates the one shared selected-location state.
-- No automatic first/default address is invented if the user has not selected a browsing location.
-- Notification data is private TanStack Query server state scoped by authenticated identity and CUSTOMER role.
-- The unread badge is calculated only from `readAt === null` and displays `99+` when the derived value exceeds 99.
-- Notification runtime parsing allow-lists only customer-visible fields and does not accept/render raw payload, event key, provider, or retry metadata.
-- Logout clears Customer shell selection in addition to the existing private query/mutation cache cleanup.
-- Existing authentication, navigation, bottom tabs, and P26 hide/reveal behavior remain unchanged.
+- Redux owns one canonical `cart` domain for Customer cart state; screens must not create independent authoritative cart copies.
+- `GET /api/v1/cart` is parsed through a typed runtime boundary before a snapshot is accepted.
+- The mobile snapshot uses semantic `cartId` and `lineId` fields while preserving the exact backend identifiers needed by later phases.
+- The mobile snapshot intentionally drops backend `customerIdentityId` instead of storing identity data redundantly in the cart domain.
+- Server-owned item `unitPrice`, `lineTotal`, currency, and `foodSubtotal` are retained as authoritative values; the client does not recalculate prices or totals.
+- Shared selectors derive item count and per-menu-item quantity from the accepted snapshot rather than storing duplicate summary values.
+- Invalid UUIDs, invalid timestamps, invalid quantity, invalid monetary values, or inconsistent currencies reject the snapshot rather than masquerading as an empty cart.
+- The current backend cart response exposes no cart-version/revision field. P28 therefore does not fabricate one.
+- `clientRevision` is only a mobile-owned monotonic acceptance revision. It is not a server concurrency token and is never sent to the backend.
+- Coupon, address, and delivery-quote dependencies have explicit typed status state without invented coupon/quote endpoint payloads or fake pricing fields.
+- Mutation metadata is keyed and request-id aware so a stale completion cannot remove a newer logical mutation entry.
+- Logout clears the full cart domain in addition to the existing private query/mutation cache and Customer-shell cleanup.
+- Cart state is not persisted to AsyncStorage/general-purpose local storage.
 
-### Location / notification contract boundary
+### Exact P28 contract boundary
 
-P27 consumes only approved existing capabilities:
+P28 consumes only:
 
-- `GET /api/v1/customer/addresses`
-- `GET /api/v1/notifications/in-app` with the documented `limit` range capped at `100`
+- `GET /api/v1/cart`
 
-P27 intentionally does **not** introduce native GPS permissions, geocoding, maps SDKs, delivery/serviceability radius logic, a Notifications Center route, mark-read behavior, target navigation, or any new APIM/backend route. Those remain with their owning later phases/QA gates.
+The accepted response fields are limited to the existing Order Service cart contract:
+
+- cart `id`, `currency`, `items`, `totals`,
+- item `id`, `menuItemId`, `kitchenId`, `itemName`, `kitchenName`, `unitPrice`, `currency`, `quantity`, `lineTotal`, `createdAt`, `updatedAt`,
+- totals `foodSubtotal`, `currency`.
+
+Existing POST/PUT/DELETE cart operations were reviewed only to preserve future contract boundaries. Their mobile mutation and reconciliation behavior remains owned by P30.
+
+No tax, fee, discount, delivery-fee, grand-total, coupon-result, address-result, or delivery-quote value is invented in P28 when it is not present in the exact cart-read response.
 
 ---
 
-## 4. P27 Changed Files
+## 4. P28 Changed Files
 
-Validated P27 implementation changes from the accepted P26 ledger head are limited to:
+Validated P28 mobile implementation changes from the accepted P27 ledger head are limited to:
 
 - `apps/mobile/src/app/store/store.ts`
 - `apps/mobile/src/features/auth/state/logoutCoordinator.ts`
-- `apps/mobile/src/features/customerShell/api/customerShellApi.ts`
-- `apps/mobile/src/features/customerShell/components/CustomerHeader.tsx`
-- `apps/mobile/src/features/customerShell/components/CustomerLocationSelector.tsx`
-- `apps/mobile/src/features/customerShell/customerShell.test.ts`
-- `apps/mobile/src/features/customerShell/hooks/useCustomerHeaderState.ts`
-- `apps/mobile/src/features/customerShell/state/customerShellSlice.ts`
-- `apps/mobile/src/shared/components/Icon.tsx`
+- `apps/mobile/src/features/cart/api/cartApi.ts`
+- `apps/mobile/src/features/cart/cartDomain.test.ts`
+- `apps/mobile/src/features/cart/domain/cartTypes.ts`
+- `apps/mobile/src/features/cart/state/cartSelectors.ts`
+- `apps/mobile/src/features/cart/state/cartSlice.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P27_SHARED_CUSTOMER_HEADER_LOCATION_NOTIFICATION_BADGE.md`
+- `docs/mobile-ui-rebuild/P28_AUTHORITATIVE_CART_DOMAIN_SKELETON.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, cart/View Cart behavior, P28 domain behavior, or later Customer product screen was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, View Cart UI, cart-screen UI, cart mutation transport, checkout, payment, or P29+ behavior was changed.
 
 ---
 
-## 5. Current Architecture Ownership After P27
+## 5. Current Architecture Ownership After P28
 
 ### Authentication/session
 
@@ -157,38 +164,41 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 - Restore/rotation/single-flight/invalidation: `features/auth/api/sessionManager.ts`.
 - Startup restore: `features/auth/hooks/useBootstrap.ts`.
 - Proactive/foreground refresh: `features/auth/hooks/useSessionLifecycle.ts`.
-- Complete app-level logout cleanup: `features/auth/state/logoutCoordinator.ts`.
+- Complete app-level logout cleanup: `features/auth/state/logoutCoordinator.ts`, including P28 cart-domain reset.
 
 ### State/cache/navigation
 
 - Redux auth state owns requested role, authenticated identity, and onboarding/account resolution.
 - Redux Customer shell state owns the current explicitly selected saved browsing location.
-- TanStack Query owns server state, including P27 saved-location options and notification list/badge data.
+- Redux cart state owns the authoritative accepted Customer cart snapshot, dependency metadata, mutation metadata, and client acceptance revision.
+- TanStack Query owns server state outside the explicit Redux app-state domains, including P27 saved-location options and notification list/badge data.
 - Private query cleanup remains centralized through `app/query/queryCache.ts`.
 - Root navigation remains conditional on `auth.bootstrapStatus`; logout unmounts the authenticated navigator subtree.
-- P25 remains the owner of the one Customer bottom-tab navigator and four independent typed tab stacks.
-- P26 remains the owner of bottom-navigation scroll hide/reveal behavior.
+- P25 remains owner of the one Customer bottom-tab navigator and four independent typed tab stacks.
+- P26 remains owner of bottom-navigation scroll hide/reveal behavior.
 - P27 owns `CustomerHeader`, `CustomerLocationSelector`, shared Customer location selection, and notification badge derivation.
-- Product routes and real Customer tab-root compositions remain owned by later phases and must consume these shared P26/P27 primitives rather than duplicating them.
+- P28 owns the canonical cart domain/read boundary/selectors only.
+- Product routes and Customer product-screen compositions remain owned by later phases and must consume shared P26–P28 primitives/state rather than duplicate them.
 
 ### Account/onboarding authority
 
 - P21 account resolution remains authoritative for Customer/Chef authorization.
 - P22 Customer profile completion and P23 Chef application/status behavior remain unchanged.
 - `CUSTOMER + READY` enters the Customer shell; `CUSTOMER + PROFILE_REQUIRED` remains in registration.
-- Chef routing remains unchanged by P27.
+- Chef routing remains unchanged by P28.
 
 ### Later-phase boundaries
 
-- **P28** owns the authoritative cart domain skeleton.
-- Later phases own View Cart, Customer Home/discovery, Chefs, Orders, Profile, notification center/target routing, checkout and payment according to `phases.md`.
-- Chef KYC proof upload and Chef operational/product screens remain outside P27.
+- **P29** owns the Shared View Cart Overlay.
+- **P30** owns Cart Add/Remove/Quantity Reconciliation and the cart mutation transport/reconciliation lifecycle.
+- Later phases own Customer Home/discovery, Chefs, Orders, Profile, notification center/target routing, cart screen, checkout and payment according to `phases.md`.
+- Chef KYC proof upload and Chef operational/product screens remain outside P28.
 
 ---
 
 ## 6. Current Contract Status
 
-Authentication/profile/onboarding contracts accepted before P27 remain unchanged:
+Authentication/profile/onboarding contracts accepted before P28 remain unchanged:
 
 - `POST /api/v1/auth/firebase/exchange` — P19.
 - `POST /api/v1/auth/refresh` — P20.
@@ -196,14 +206,18 @@ Authentication/profile/onboarding contracts accepted before P27 remain unchanged
 - `GET /api/v1/customer/profile` / `PUT /api/v1/customer/profile` — P21/P22.
 - `GET /api/v1/chef/application` / `POST /api/v1/chef/application` — P23.
 - `POST /api/v1/auth/logout` — P24.
-- `POST /api/v1/chef/application/proof-files` — backend route exists but remains outside accepted P23–P27 behavior.
+- `POST /api/v1/chef/application/proof-files` — backend route exists but remains outside accepted P23–P28 behavior.
 
-P27 additionally accepts only these existing Customer shell reads:
+P27 Customer shell reads remain accepted:
 
 - `GET /api/v1/customer/addresses`
 - `GET /api/v1/notifications/in-app`
 
-No new backend/APIM contract was invented or modified by P27.
+P28 additionally accepts only this cart read:
+
+- `GET /api/v1/cart`
+
+No new backend/APIM contract was invented or modified by P28.
 
 Live APIM/device runtime certification is not claimed by these static implementation phases unless a later evidence record explicitly says so.
 
@@ -223,24 +237,28 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P25 Customer Root Shell/Bottom Tabs | **DONE** | Typed four-tab Customer shell, nested stack preservation, Flame Red active state, safe-area-compatible bottom tabs; CI `31226669633`. |
 | P26 Customer Bottom-Nav Scroll Hide/Reveal | **DONE** | Shared scroll-direction controller, reduced-motion animation, hidden interaction/accessibility guard, tab/root reveal behavior; CI `31228012689`. |
 | P27 Shared Customer Header/Location/Notification Badge | **DONE** | Shared header variants, saved-location selector/global state, private notification badge derivation, logout cleanup; CI `31229329651`. |
-| P28 onward | **NOT STARTED / not accepted** | No later phase is authorized by this record. |
+| P28 Authoritative Cart Domain Skeleton | **DONE** | One Redux cart domain, validated exact cart-read mapping, derived selectors, dependency/mutation metadata, logout reset; CI `31229985407`. |
+| P29 onward | **NOT STARTED / not accepted** | No later phase is authorized by this record. |
 
 ---
 
-## 8. Explicitly Not Complete After P27
+## 8. Explicitly Not Complete After P28
 
 Do not describe any of the following as complete:
 
-- P28 authoritative cart domain or P29 View Cart overlay,
-- Customer Home/Discovery/Chefs/Orders/Profile product screens merely because the shell/header primitives exist,
+- P29 Shared View Cart Overlay,
+- P30 add/remove/update/clear cart mutation transport and reconciliation UX,
+- Customer cart product screen merely because the P28 domain exists,
+- Customer Home/Discovery/Chefs/Orders/Profile product screens merely because shell/header/cart foundations exist,
 - native GPS/location permission behavior,
 - geocoding/maps/serviceability logic,
 - Notifications Center list/mark-read/target routing merely because the shared badge query exists,
+- coupon application, delivery quote, cart address integration, checkout eligibility, or server-computed checkout totals merely because dependency status types exist,
 - Chef KYC proof-file upload,
 - Chef operational/product screens,
 - authenticated product/resource deep links and notification routing,
 - checkout/payment end-to-end flow,
-- live APIM/device runtime certification of P19–P27 flows,
+- live APIM/device runtime certification of P19–P28 flows,
 - physical-device pixel-perfect certification of accepted auth/header references or remaining references,
 - full lifecycle/accessibility/performance/security audits,
 - 52-reference visual certification,

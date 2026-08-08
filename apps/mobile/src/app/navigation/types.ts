@@ -48,6 +48,10 @@ export type CustomerFilterSortRouteParams = {
   origin: 'HOME' | 'CHEFS';
 };
 
+export type CustomerDishDetailRouteParams = {
+  menuItemId: string;
+};
+
 /**
  * P25 customer shell types. Each bottom tab owns a stack navigator so later
  * product phases can add child routes without resetting sibling tab state.
@@ -55,11 +59,13 @@ export type CustomerFilterSortRouteParams = {
 export type CustomerHomeStackParamList = {
   CustomerHomeRoot: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
+  CustomerDishDetail: CustomerDishDetailRouteParams;
 };
 
 export type CustomerChefsStackParamList = {
   CustomerChefsRoot: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
+  CustomerDishDetail: CustomerDishDetailRouteParams;
 };
 
 export type CustomerOrdersStackParamList = {

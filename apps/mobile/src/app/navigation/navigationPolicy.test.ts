@@ -26,6 +26,17 @@ describe('navigationPolicy', () => {
     }
   });
 
+  it('keeps focused filter and dish-detail routes immersive', () => {
+    for (const routeName of ['CustomerFilterSort', 'CustomerDishDetail'] as const) {
+      expect(isCurrentImmersiveRoute(routeName)).toBe(true);
+      expect(resolveRouteChromePolicy('Customer', routeName)).toEqual({
+        bottomNavigationVisible: false,
+        viewCartEligible: false,
+        immersive: true,
+      });
+    }
+  });
+
   it('never makes customer cart chrome eligible in the chef domain', () => {
     expect(resolveRouteChromePolicy('Chef')).toEqual({
       bottomNavigationVisible: true,

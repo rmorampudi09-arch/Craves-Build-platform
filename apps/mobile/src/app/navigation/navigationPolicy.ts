@@ -57,6 +57,7 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'ChefAccountStatus',
   'StartupError',
   'CustomerFilterSort',
+  'CustomerDishDetail',
 ]);
 
 const IMMERSIVE_POLICY: RouteChromePolicy = {

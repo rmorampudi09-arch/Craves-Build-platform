@@ -138,8 +138,9 @@ export function CustomerBottomTabBar(props: BottomTabBarProps) {
   const activeTabRoute = props.state.routes[props.state.index];
   const focusedChildRouteName = getFocusedRouteNameFromRoute(activeTabRoute);
   const focusedRoutePolicy =
-    focusedChildRouteName === 'CustomerFilterSort'
-      ? resolveRouteChromePolicy('Customer', 'CustomerFilterSort')
+    focusedChildRouteName === 'CustomerFilterSort' ||
+    focusedChildRouteName === 'CustomerDishDetail'
+      ? resolveRouteChromePolicy('Customer', focusedChildRouteName)
       : resolveRouteChromePolicy('Customer');
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {

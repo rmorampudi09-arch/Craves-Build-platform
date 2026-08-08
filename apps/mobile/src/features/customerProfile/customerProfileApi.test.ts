@@ -9,10 +9,12 @@ import {
 jest.mock('../../core/http/httpClient', () => ({
   httpClient: {
     get: jest.fn(),
+    put: jest.fn(),
   },
 }));
 
 const getMock = httpClient.get as jest.Mock;
+const putMock = httpClient.put as jest.Mock;
 
 function profile(overrides: Record<string, unknown> = {}) {
   return {
@@ -28,7 +30,7 @@ function profile(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('P57 customer profile API', () => {
+describe('customer profile API', () => {
   beforeEach(() => {
     jest.resetAllMocks();
   });
@@ -44,7 +46,21 @@ describe('P57 customer profile API', () => {
     });
   });
 
-  it('maps an empty source response to the explicit empty posture', () => {
+  it('uses the approved PUT route and exact request model for profile changes', async () => {
+    putMock.mockResolvedValueOnce(profile({firstName: 'Anika'}));
+    const request = {
+      firstName: 'Anika',
+      lastName: 'Rao',
+      email: 'asha@example.test',
+    };
+
+    const result = await customerProfileApi.updateProfile(request);
+
+    expect(putMock).toHaveBeenCalledWith(CUSTOMER_PROFILE_PATH, request);
+    expect(result.profile.firstName).toBe('Anika');
+  });
+
+  it('maps an empty source response to the explicit empty posture for reads', () => {
     expect(parseCustomerProfileResponse(null)).toBeNull();
   });
 
@@ -52,6 +68,18 @@ describe('P57 customer profile API', () => {
     expect(() =>
       parseCustomerProfileResponse(profile({id: 'not-a-uuid'})),
     ).toThrow(CustomerProfileContractError);
+  });
+
+  it('rejects an empty update response instead of treating the mutation as successful', async () => {
+    putMock.mockResolvedValueOnce(null);
+
+    await expect(
+      customerProfileApi.updateProfile({
+        firstName: 'Asha',
+        lastName: 'Rao',
+        email: null,
+      }),
+    ).rejects.toBeInstanceOf(CustomerProfileContractError);
   });
 
   it('does not infer rewards from missing backend reward fields', () => {

@@ -1,6 +1,12 @@
-import {useQuery, type QueryClient} from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
+import {AppApiError} from '../../../core/http/apiError';
 import {
   CustomerProfileContractError,
   customerProfileApi,
@@ -13,6 +19,7 @@ import {
   type CustomerProfileHubContract,
   type CustomerProfileHubState,
 } from '../domain/customerProfileContract';
+import type {CustomerProfileUpdateRequest} from '../domain/customerProfileEditForm';
 
 const CUSTOMER_ROLE = 'CUSTOMER' as const;
 const CUSTOMER_PROFILE_DOMAIN = 'customer-profile';
@@ -37,6 +44,14 @@ export function invalidateCustomerProfileQuery(
   return queryClient
     .invalidateQueries({queryKey: customerProfileQueryPrefix})
     .then(() => undefined);
+}
+
+export function writeCustomerProfileQuery(
+  queryClient: QueryClient,
+  identityId: string,
+  profile: CustomerProfileHubContract,
+): void {
+  queryClient.setQueryData(createCustomerProfileQueryKey(identityId), profile);
 }
 
 export function resolveCustomerProfileHubState(input: {
@@ -84,4 +99,28 @@ export function useCustomerProfileQuery() {
     }),
     sessionRequired: identityId === null,
   };
+}
+
+export function useUpdateCustomerProfileMutation() {
+  const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: [...customerProfileQueryPrefix, 'update'],
+    mutationFn: (request: CustomerProfileUpdateRequest) => {
+      if (!identityId) {
+        throw new AppApiError(
+          'SESSION_REQUIRED',
+          'Sign in again before changing your profile.',
+        );
+      }
+      return customerProfileApi.updateProfile(request);
+    },
+    retry: false,
+    onSuccess: profile => {
+      if (identityId) {
+        writeCustomerProfileQuery(queryClient, identityId, profile);
+      }
+    },
+  });
 }

@@ -3,6 +3,7 @@ import {
   parseCustomerProfileHubContract,
   type CustomerProfileHubContract,
 } from '../domain/customerProfileContract';
+import type {CustomerProfileUpdateRequest} from '../domain/customerProfileEditForm';
 
 export const CUSTOMER_PROFILE_PATH = '/api/v1/customer/profile';
 
@@ -29,6 +30,14 @@ export function parseCustomerProfileResponse(
   return profile;
 }
 
+function requireCustomerProfileResponse(value: unknown): CustomerProfileHubContract {
+  const profile = parseCustomerProfileResponse(value);
+  if (!profile) {
+    throw new CustomerProfileContractError();
+  }
+  return profile;
+}
+
 export const customerProfileApi = {
   async getProfile(signal?: AbortSignal): Promise<CustomerProfileHubContract | null> {
     const response = await httpClient.get<unknown>(CUSTOMER_PROFILE_PATH, {
@@ -36,5 +45,12 @@ export const customerProfileApi = {
       dedupeKey: 'customer-profile:summary',
     });
     return parseCustomerProfileResponse(response);
+  },
+
+  async updateProfile(
+    request: CustomerProfileUpdateRequest,
+  ): Promise<CustomerProfileHubContract> {
+    const response = await httpClient.put<unknown>(CUSTOMER_PROFILE_PATH, request);
+    return requireCustomerProfileResponse(response);
   },
 };

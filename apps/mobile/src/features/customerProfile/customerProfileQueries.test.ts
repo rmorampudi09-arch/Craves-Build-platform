@@ -1,8 +1,13 @@
+import {QueryClient} from '@tanstack/react-query';
 import {CustomerProfileContractError} from './api/customerProfileApi';
 import {fullCustomerProfileFixture} from './fixtures/customerProfileFixtures';
-import {resolveCustomerProfileHubState} from './query/customerProfileQueries';
+import {
+  createCustomerProfileQueryKey,
+  resolveCustomerProfileHubState,
+  writeCustomerProfileQuery,
+} from './query/customerProfileQueries';
 
-describe('P57 customer profile query state', () => {
+describe('customer profile query state', () => {
   it('exposes loading, empty, invalid-response, and request-failed states explicitly', () => {
     expect(
       resolveCustomerProfileHubState({
@@ -67,5 +72,23 @@ describe('P57 customer profile query state', () => {
         '11111111-1111-4111-8111-111111111111',
       );
     }
+  });
+
+  it('writes a successful update into the canonical private profile query key', () => {
+    if (fullCustomerProfileFixture.status !== 'ready') {
+      throw new Error('Full customer profile fixture must be ready.');
+    }
+    const queryClient = new QueryClient();
+    const identityId = fullCustomerProfileFixture.data.profile.identityId;
+
+    writeCustomerProfileQuery(
+      queryClient,
+      identityId,
+      fullCustomerProfileFixture.data,
+    );
+
+    expect(
+      queryClient.getQueryData(createCustomerProfileQueryKey(identityId)),
+    ).toBe(fullCustomerProfileFixture.data);
   });
 });

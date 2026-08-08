@@ -1,3 +1,4 @@
+import {AppApiError} from '../../core/http/apiError';
 import type {CheckoutSession} from '../checkout/domain/checkoutTypes';
 import {parsePaymentVerificationResult} from './api/paymentApi';
 import {
@@ -188,8 +189,14 @@ describe('P51 payment success/failure/cancel recovery', () => {
       false,
     );
 
-    expect(() => requireNativeCashfreeCallbackAdapter()).toThrow(
-      CASHFREE_NATIVE_PROVIDER_CALLBACK_BLOCKER,
-    );
+    try {
+      requireNativeCashfreeCallbackAdapter();
+      throw new Error('Expected native provider callback adapter to fail closed');
+    } catch (error) {
+      expect(error).toBeInstanceOf(AppApiError);
+      expect((error as AppApiError).code).toBe(
+        CASHFREE_NATIVE_PROVIDER_CALLBACK_BLOCKER,
+      );
+    }
   });
 });

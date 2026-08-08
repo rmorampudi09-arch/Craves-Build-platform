@@ -2,75 +2,50 @@
 
 **Purpose:** Authoritative living record for the current mobile rebuild. Read this before changing code. Do not infer completion from old APKs, old branches, screenshots, historical documents, or prior chat claims.
 
-**Repository:** `rmorampudi09-arch/Craves-Build-platform`
-
-**Authoritative rebuild branch:** `mobile-ui-rebuild-from-scratch`
-
-**Mobile workspace:** `apps/mobile`
-
-**Backend/APIM guard baseline:** `8a2444cde508ea2fb20cb9822397e55c29bd8c5f`
-
-**Implementation guide:** Full 183-page `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, 52 embedded reference images.
-
+**Repository:** `rmorampudi09-arch/Craves-Build-platform`  
+**Authoritative rebuild branch:** `mobile-ui-rebuild-from-scratch`  
+**Mobile workspace:** `apps/mobile`  
+**Backend/APIM guard baseline:** `8a2444cde508ea2fb20cb9822397e55c29bd8c5f`  
+**Implementation guide:** Full 183-page `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, 52 embedded reference images.  
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical preservation:** The complete ledger through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P31 use dedicated evidence under `docs/mobile-ui-rebuild/`; this living ledger remains compact while those records preserve phase detail.
+**Historical preservation:** The complete ledger through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13 onward uses dedicated evidence under `docs/mobile-ui-rebuild/`; this living ledger stays compact while those records preserve phase detail.
 
 ---
 
 ## 1. Current Control State
 
-- **P00 — Execution Documents and Source Lock: DONE**.
-- **P01 — Repository Architecture Inventory: DONE**.
-- **P02 — APIM/OpenAPI Contract Inventory: DONE**.
-- **P03 — Runtime Configuration and Environment Boundary: DONE**.
-- **P04 — Design Token Baseline: DONE**.
-- **P05 — Shared Motion and Reduced-Motion Baseline: DONE**.
-- **P06 — Shared Interaction Primitives: DONE**.
-- **P07 — Shared Screen/Lifecycle Primitives: DONE**.
-- **P08 — Query/Store Provider and Cache Rules: DONE**.
-- **P09 — Typed HTTP Client Foundation: DONE**.
-- **P10 — Session Token Security Foundation: DONE**.
-- **P11 — Root Navigation and Typed Route Policy: DONE**.
-- **P12 — Role Selection UI and State: DONE**.
-- **P13 — Customer Phone Sign-In Visual + Interaction: DONE** at implementation level; device pixel-certification remains later visual QA.
-- **P14 — Chef Phone Sign-In Visual + Interaction: DONE** at implementation level; device pixel-certification remains later visual QA.
-- **P15 — Customer Email/Password Sign-In: DONE** at implementation level; device pixel-certification remains later visual QA.
-- **P16 — Chef Email/Password Sign-In: DONE** at implementation level; device pixel-certification remains later visual QA.
-- **P17 — OTP Verification, Resend, Expiry, Rate Limit: DONE** at implementation level.
-- **P18 — Password Recovery Flow: DONE** at implementation level.
-- **P19 — Firebase → CRAVES Session Exchange: DONE** at implementation/static-contract level.
-- **P20 — Session Restore and Silent Refresh: DONE** at implementation/static-contract level.
-- **P21 — Identity, Role, and Onboarding Resolution: DONE** at implementation/static-contract level.
-- **P22 — Customer Registration/Profile Completion: DONE** at implementation/static-contract level.
-- **P23 — Chef Application Submission / Status: DONE** at implementation/static-contract level.
-- **P24 — Logout, Revoke, and Role-State Cleanup: DONE** at implementation/static-contract level.
-- **P25 — Customer Root Shell and Bottom Tabs: DONE** at implementation/static-navigation level.
-- **P26 — Customer Bottom-Nav Scroll Hide/Reveal: DONE** at implementation/static-navigation level; final device/reference certification remains later visual QA.
-- **P27 — Shared Customer Header/Location/Notification Badge: DONE** at implementation/static-contract level; final device/reference certification remains later visual QA.
-- **P28 — Authoritative Cart Domain Skeleton: DONE** at implementation/static-contract level.
-- **P29 — Shared View Cart Overlay: DONE** at implementation/static-contract level; final device/reference certification remains later visual QA.
-- **P30 — Cart Add/Remove/Quantity Reconciliation: DONE** at implementation/static-contract level.
-- **P31 — Home Feed Data Contract and Query Model: PARTIAL** at implementation/static-contract level. Exact nearby-menu/location/pagination/cache behavior is implemented and validated; category/cuisine/full-home mapping remains blocked because the current branch has no authoritative concrete contract for those capabilities.
+- **P00–P30: DONE** at the implementation/static-contract level recorded by their existing ledger/evidence records. Device/reference certification remains deferred where those records say so.
+- **P31 — Home Feed Data Contract and Query Model: PARTIAL.** Exact nearby-menu/location/pagination/cache behavior is implemented and validated. Category/cuisine/full-home mapping remains blocked because the current branch has no authoritative concrete contract for those capabilities.
+- **P32 — Customer Home — Empty Cart: PARTIAL.** The supported empty-cart Home root, exact nearby feed presentation, Add action, saved-location behavior, loaded-result search/category filtering, pagination, refresh, bottom-nav scroll behavior, and lifecycle states are implemented and CI-validated. Full P32 acceptance remains blocked by missing favorite/full-search/category/cuisine/recommendation contracts and by Chef/Dish/Notifications product routes that belong to later phases and are not registered yet.
 
-P31 evidence:
+### P31 evidence
 
 - Started from accepted P30 ledger head: `58ad6ffd46f09992d1ad1098dd4df7cc2c246bd0`.
 - Validated implementation commit: `641ef5321a886185e5956f966f1710e231ee2ad4`.
 - Evidence commit: `87da0591af6768ab5640f2167c61cc8439b026e8`.
 - Evidence: `docs/mobile-ui-rebuild/P31_HOME_FEED_DATA_CONTRACT_AND_QUERY_MODEL.md`.
-- CI run: `31243903844` — **SUCCESS**.
-- CI job: `93069234068` — **SUCCESS**.
-- Jest: **36 suites passed, 175 tests passed**.
-- Exact blocker: no authoritative current-branch home aggregation endpoint, cuisine taxonomy endpoint, `category` discovery query parameter, `cuisine` discovery query parameter, or cuisine field in the nearby-menu discovery response.
+- CI run/job: `31243903844` / `93069234068` — **SUCCESS**.
+- Jest at that gate: **36 suites / 175 tests passed**.
+- Outstanding blocker: no authoritative current-branch home aggregation endpoint, cuisine taxonomy endpoint, discovery `category` parameter, discovery `cuisine` parameter, cuisine field, or recommendation aggregation contract.
 
-**Current phase in sequence:** **P31 — Home Feed Data Contract and Query Model** remains open because required category/cuisine/full-home contract mapping is blocked.
+### P32 evidence
 
-**Next phase after P31:** **P32 — Customer Home — Empty Cart**, but it is **NOT STARTED**.
+- User explicitly authorized advancing to the next phase while P31 remains recorded as PARTIAL.
+- Started from branch head: `3635fe443dd263393e2899a4f0ebb5f555b108ef`.
+- Validated implementation commit: `9227a56fb8caf3213d3900bed9e3b4eb7514f543`.
+- Evidence commit: `25715d9d79ff3dcf911e24b341d956adf4a952aa`.
+- Evidence: `docs/mobile-ui-rebuild/P32_CUSTOMER_HOME_EMPTY_CART.md`.
+- CI run/job: `31245957014` / `93074471641` — **SUCCESS**.
+- CI gates passed: `npm ci`, strict TypeScript, ESLint zero warnings, Jest, production Android JavaScript bundle, backend/APIM/infrastructure source guard.
+
+**Current executed phase:** **P32 — Customer Home — Empty Cart** is recorded **PARTIAL** because explicit acceptance actions still depend on missing contracts/later product routes.
+
+**Next phase in sequence:** **P33 — Customer Home — Active Cart** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P32. Resolve/supply the missing P31 authoritative contracts or explicitly change the phase authority before advancing.
+**Required action:** Stop. Do not pre-implement P33. Wait for explicit user direction.
 
 ---
 
@@ -78,86 +53,84 @@ P31 evidence:
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-Run:
-
-- GitHub Actions run ID: `31243903844`
-- Job ID: `93069234068`
-- Head SHA: `641ef5321a886185e5956f966f1710e231ee2ad4`
-- Phase: **P31 — Home Feed Data Contract and Query Model**
+- GitHub Actions run ID: `31245957014`
+- Job ID: `93074471641`
+- Head SHA: `9227a56fb8caf3213d3900bed9e3b4eb7514f543`
+- Phase: **P32 — Customer Home — Empty Cart**
 - Conclusion: **SUCCESS**
 
 Successful checks:
 
 1. checkout `mobile-ui-rebuild-from-scratch`,
-2. Node setup and `npm ci`,
+2. Node `22.13.0` setup and `npm ci`,
 3. strict TypeScript (`tsc --noEmit`),
 4. ESLint with zero warnings,
-5. Jest including P31 focused coverage and prior regressions — 36 suites / 175 tests passed,
+5. Jest including P32 presentation coverage and prior regressions,
 6. production Android JavaScript bundle generation with `react-native bundle`,
 7. backend/APIM/infrastructure source-change guard.
 
-The implementation-phase workflow intentionally does **not** perform Java/Gradle/APK packaging.
+The implementation workflow intentionally does **not** perform Java/Gradle/APK packaging.
 
 ---
 
-## 3. P31 Implemented Home Feed Query Boundary
+## 3. P32 Implemented Customer Home Boundary
 
-P31 reviewed the master guide's customer Home expectations against current backend/APIM reality before introducing mobile data contracts.
+P32 uses Reference 05 — Customer Home — Empty Cart — only within contracts and routes that already exist.
 
-Accepted exact contract behavior:
+Implemented behavior:
 
-- Nearby menu data uses only `GET /api/v1/discovery/menu-items`.
-- Exact supported query parameters are `latitude`, `longitude`, `radiusMeters`, `page`, and `size`.
-- Mobile request validation matches the backend's location/radius/page/page-size bounds.
-- Nearby discovery responses are strictly parsed before they become usable mobile data.
-- Backend page metadata (`page`, `size`, `totalElements`, `totalPages`, `hasNext`) drives infinite-query pagination.
-- The selected saved customer address now carries validated latitude/longitude from the existing customer address response contract.
-- Home discovery query keys are private and scoped by authenticated customer identity, CUSTOMER role, saved-address ID, normalized filter intent, radius, and page size.
-- Changing the shared browsing location invalidates all Home discovery query variants without invalidating unrelated private domains.
-- Category/cuisine filter intent is represented in the query model, but transport is fail-closed when either unsupported filter is requested.
-- No hardcoded production feed, cuisine list, guessed category parameter, guessed cuisine parameter, or guessed Home aggregation URL was added.
-- No backend/APIM contract was added or changed by P31.
+- `CustomerHomeRoot` now renders the real P32 `CustomerHomeScreen` instead of the temporary account-status surface.
+- Chefs, Orders, and Profile tab roots remain untouched for their owning phases.
+- Shared P27 location header, notification badge state, and saved-location selector are reused.
+- Shared P26 bottom-nav hide/reveal is driven by the Home list scroll offset.
+- Home data uses only the P31 `GET /api/v1/discovery/menu-items` adapter with exact `latitude`, `longitude`, `radiusMeters`, `page`, and `size` parameters.
+- Only backend-returned active/available nearby menu items become product data; no hardcoded production dishes, chefs, cuisines, banners, or recommendations were added.
+- Debounced search filters the already-loaded authoritative nearby result set only.
+- Category chips are derived only from categories present in already-loaded nearby results and filter that loaded set only; P32 does not pretend this is server-side category search.
+- Add uses the existing P30 `addCartItem({menuItemId, quantity: 1})` mutation boundary and surfaces mutation failure.
+- Pull-to-refresh and backend-driven infinite pagination are connected.
+- Home renders backend image/price/currency/kitchen/distance/location/food-type fields with a neutral category fallback when an image URL is absent.
+- Initial loading, no-location, empty, filtered-empty, recoverable error, offline/network error, background refresh, next-page loading, and cart-mutation error states are connected.
+- P32 adds no View Cart control and implements no P33 active-cart Home composition.
 
-### P31 contract blocker
+### P32 acceptance blockers
 
-The current branch does not provide an authoritative concrete contract for:
+The following are intentionally not fabricated:
 
-- a full Home-feed aggregation endpoint,
-- cuisine taxonomy,
-- server-side nearby `category` filtering,
-- server-side nearby `cuisine` filtering,
-- cuisine data in the current nearby-menu response,
-- the guide's logical recommendation aggregation capability.
+- persistent Favorite action — no authoritative favorite API/domain contract exists in the current branch,
+- full catalog-search route/contract — local loaded-result search is real but bounded,
+- server-side category filtering — P31 proved no accepted `category` query parameter exists,
+- cuisine taxonomy/filtering — no authoritative cuisine contract/response field exists,
+- Chef-card destination — owning Chef discovery/detail product routes are later phases,
+- Dish-card destination — owning Dish Detail route is a later phase,
+- Notifications Center destination — P27 supplies badge/read state but no registered product route yet,
+- promotional Home aggregation/recommendation sections — no authoritative current-branch aggregation/recommendation contract exists.
 
-Because `agent.md` forbids inventing missing API contracts, P31 remains **PARTIAL** even though its exact supported subset passes CI.
+Therefore P32 is **PARTIAL**, not DONE.
 
 ---
 
-## 4. P31 Changed Files
+## 4. P32 Changed Files
 
 Implementation:
 
-- `apps/mobile/src/features/customerShell/state/customerShellSlice.ts`
-- `apps/mobile/src/features/customerShell/api/customerShellApi.ts`
-- `apps/mobile/src/features/customerShell/hooks/useCustomerHeaderState.ts`
-- `apps/mobile/src/features/home/api/homeFeedApi.ts`
-- `apps/mobile/src/features/home/query/homeFeedQueries.ts`
+- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
+- `apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx`
+- `apps/mobile/src/features/home/homePresentation.ts`
 
 Tests:
 
-- `apps/mobile/src/features/customerShell/customerShell.test.ts`
-- `apps/mobile/src/features/home/homeFeedApi.test.ts`
-- `apps/mobile/src/features/home/homeFeedQueries.test.ts`
+- `apps/mobile/src/features/home/homePresentation.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P31_HOME_FEED_DATA_CONTRACT_AND_QUERY_MODEL.md`
+- `docs/mobile-ui-rebuild/P32_CUSTOMER_HOME_EMPTY_CART.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P32 Home screen, checkout, payment, or Chef product behavior was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P33 active-cart Home behavior, checkout, payment, Chef product screen, Orders product screen, or Profile product screen was changed.
 
 ---
 
-## 5. Current Architecture Ownership After P31 Work
+## 5. Current Architecture Ownership
 
 ### Authentication/session
 
@@ -165,46 +138,50 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 
 ### Customer shell/shared state
 
-- P25 owns the Customer root shell and four typed bottom tabs.
+- P25 owns Customer root shell and four typed bottom tabs.
 - P26 owns bottom-navigation scroll hide/reveal behavior.
-- P27 owns the shared customer header, saved browsing location, and notification badge derivation.
-- P28 owns the one canonical cart read domain, server-total snapshot, selectors, dependency metadata, and mutation metadata skeleton.
-- P29 owns the reusable shared View Cart presentation/visibility contract.
-- P30 owns exact add/update/remove cart-line transport and reconciliation, bounded optimistic quantity/remove behavior, duplicate protection, serialized writes, and rollback/stale-response protection.
-- P31 currently owns the validated nearby Home-discovery adapter/query model, saved-location coordinate propagation, pagination/cache keys, location invalidation, and explicit fail-closed treatment of unsupported category/cuisine filter intent.
+- P27 owns shared customer header, saved browsing location, and notification badge derivation.
+- P28 owns canonical cart read domain, server-total snapshot, selectors, dependency metadata, and mutation metadata skeleton.
+- P29 owns reusable shared View Cart presentation/visibility contract.
+- P30 owns exact add/update/remove cart-line transport and reconciliation.
+- P31 owns the validated nearby Home-discovery adapter/query model, saved-location coordinate propagation, pagination/cache keys, location invalidation, and fail-closed unsupported category/cuisine server-filter intent.
+- P32 owns the current supported Customer Home empty-cart presentation and its connection to those accepted shared foundations.
 
 ### Later-phase boundaries
 
-- **P31 remains open** until the missing authoritative category/cuisine/full-home contract is supplied/resolved or phase authority is explicitly changed.
-- **P32+** owns customer discovery/product screens according to `phases.md`; none was started by P31.
+- **P33** owns the Customer Home active-cart variant and was not started.
+- Later Customer discovery/chef/dish/search/favorite/notification product routes remain owned by their phases in `phases.md`.
 - **P45** owns Cart screen data/pricing model extensions.
 - **P46** owns Cart and Bill Summary UI and its real navigation destination.
-- Checkout/payment remain P47+ according to `phases.md`.
+- Checkout/payment remain P47+.
 
 ---
 
 ## 6. Current Contract Status
 
-Previously accepted authentication/profile/onboarding, P27 customer-shell reads, and P28–P30 cart contracts remain unchanged.
-
-Accepted current P31 mobile discovery contract boundary:
+Accepted Home discovery contract:
 
 - `GET /api/v1/discovery/menu-items`
   - query: `latitude`, `longitude`, `radiusMeters`, `page`, `size`
-  - authoritative paginated response from `DiscoveryDtos.NearbyMenuItemDiscoveryResponse`.
+  - authoritative paginated response: `DiscoveryDtos.NearbyMenuItemDiscoveryResponse`.
 
 Accepted customer-location dependency:
 
-- existing saved-address response supplies `id`, `addressLabel`, `latitude`, and `longitude` used by the shared browsing-location state.
+- existing saved-address response supplies `id`, `addressLabel`, `latitude`, and `longitude` for the shared browsing-location state.
 
-Not accepted because no exact current-branch server/APIM contract was found:
+Accepted cart mutation dependency:
+
+- P30 canonical add-item transport/mutation invoked by P32 Add action.
+
+Not accepted because no exact current-branch contract was found:
 
 - Home aggregation URL,
 - cuisine taxonomy URL/model,
 - discovery `category` query parameter,
 - discovery `cuisine` query parameter,
 - cuisine response field,
-- recommendation aggregation URL/model.
+- recommendation aggregation URL/model,
+- favorite API/domain contract.
 
 Live APIM/device runtime certification is not claimed by these static implementation phases unless a later evidence record explicitly says so.
 
@@ -215,35 +192,23 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | Phase | Status | Evidence/Reason |
 |---|---|---|
 | P00–P18 | **DONE** | Preserved in historical ledger/dedicated evidence. |
-| P19 Firebase → CRAVES Exchange | **DONE** | CI `31218027179`. |
-| P20 Session Restore/Refresh | **DONE** | CI `31219378437`. |
-| P21 Identity/Role/Onboarding Resolution | **DONE** | CI `31220843488`. |
-| P22 Customer Registration/Profile Completion | **DONE** | CI `31221757744`. |
-| P23 Chef Application Submission / Status | **DONE** | CI `31222819644`. |
-| P24 Logout/Revoke/Role-State Cleanup | **DONE** | CI `31225688358`. |
-| P25 Customer Root Shell/Bottom Tabs | **DONE** | CI `31226669633`. |
-| P26 Customer Bottom-Nav Scroll Hide/Reveal | **DONE** | CI `31228012689`. |
-| P27 Shared Customer Header/Location/Notification Badge | **DONE** | CI `31229329651`. |
-| P28 Authoritative Cart Domain Skeleton | **DONE** | CI `31229985407`. |
-| P29 Shared View Cart Overlay | **DONE** | CI `31230836784`. |
-| P30 Cart Add/Remove/Quantity Reconciliation | **DONE** | CI `31231364244`. |
-| P31 Home Feed Data Contract and Query Model | **PARTIAL** | Exact nearby/location/pagination/cache/invalidation subset validated by CI `31243903844`; category/cuisine/full-home contract missing. |
-| P32 onward | **NOT STARTED / not accepted** | P31 is not DONE; no later phase was authorized or started. |
+| P19–P24 | **DONE** | Accepted auth/session/onboarding/logout implementation evidence. |
+| P25–P30 | **DONE** | Accepted Customer shell/header/cart implementation evidence. |
+| P31 Home Feed Data Contract and Query Model | **PARTIAL** | Exact nearby/location/pagination/cache subset validated by CI `31243903844`; category/cuisine/full-home contracts missing. |
+| P32 Customer Home — Empty Cart | **PARTIAL** | Supported Home empty-cart surface validated by CI `31245957014`; favorite/full-search/server-category/cuisine/recommendation and later product-route actions remain blocked. |
+| P33 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
 
 ---
 
-## 8. Explicitly Not Complete After P31 Work
+## 8. Explicitly Not Complete After P32 Work
 
 Do not describe any of the following as complete:
 
-- P31 exact category/cuisine/full-home aggregation mapping,
-- P32 Customer Home — Empty Cart,
-- Customer Home/Discovery/Chefs/Orders/Profile product screens merely because shell/header/cart/query foundations exist,
-- full dish-card/quantity-selector product UI merely because P30 mutation commands and P31 nearby data exist,
-- Customer Cart product screen/Bill Summary,
-- native GPS/location permission behavior or full serviceability/geocoding flows,
-- Notifications Center product route/actions merely because the P27 badge exists,
-- coupon application, delivery quote, cart address integration, checkout eligibility, tax/fee/grand-total computation,
+- P31 category/cuisine/full-home aggregation mapping,
+- P32 favorite/chef-detail/dish-detail/full-search/notification-center/recommendation acceptance items listed above,
+- P33 Customer Home — Active Cart,
+- later Customer Discovery/Chefs/Orders/Profile product screens,
+- full Customer Cart/Bill Summary product screen,
 - checkout/payment end-to-end flow,
 - Chef operational/product screens,
 - live APIM/device runtime certification of static-contract phases,

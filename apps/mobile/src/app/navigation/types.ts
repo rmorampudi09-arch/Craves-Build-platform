@@ -91,6 +91,11 @@ export type CustomerCartStackParamList = {
   CustomerCart: undefined;
 };
 
+/** P68 adds the shared active/empty-cart Payment Methods destination. */
+export type CustomerPaymentMethodsStackParamList = {
+  CustomerPaymentMethods: undefined;
+};
+
 /**
  * P25 customer shell types. Each bottom tab owns a stack navigator so product
  * child routes can open without resetting sibling tab state.
@@ -99,18 +104,21 @@ export type CustomerHomeStackParamList = {
   CustomerHomeRoot: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
 } & CustomerDishDetailStackParamList &
-  CustomerCartStackParamList;
+  CustomerCartStackParamList &
+  CustomerPaymentMethodsStackParamList;
 
 export type CustomerChefsStackParamList = {
   CustomerChefsRoot: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
 } & CustomerDishDetailStackParamList &
-  CustomerCartStackParamList;
+  CustomerCartStackParamList &
+  CustomerPaymentMethodsStackParamList;
 
 export type CustomerOrdersStackParamList = {
   CustomerOrdersRoot: undefined;
 } & CustomerOrderDetailStackParamList &
-  CustomerCartStackParamList;
+  CustomerCartStackParamList &
+  CustomerPaymentMethodsStackParamList;
 
 /** P66 adds the shared My Addresses destination after P65 Edit Profile. */
 export type CustomerProfileStackParamList = {
@@ -121,7 +129,8 @@ export type CustomerProfileStackParamList = {
   CustomerNotifications: undefined;
 } & CustomerDishDetailStackParamList &
   CustomerOrderDetailStackParamList &
-  CustomerCartStackParamList;
+  CustomerCartStackParamList &
+  CustomerPaymentMethodsStackParamList;
 
 export type CustomerTabParamList = {
   Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;
@@ -140,11 +149,11 @@ export type CustomerStackRouteName =
 export type CustomerDomainParamList = CustomerAccountStackParamList & CustomerTabParamList;
 
 /**
- * P46 promotes CustomerCart into the logical Transactional domain while keeping
- * the physical route inside the active customer tab stack so the reference
- * bottom navigation remains visible and back restores the exact origin.
+ * P68 keeps Cart and Payment Methods in the logical Transactional domain while
+ * preserving the physical route inside the active customer tab stack.
  */
-export type TransactionalStackParamList = CustomerCartStackParamList;
+export type TransactionalStackParamList = CustomerCartStackParamList &
+  CustomerPaymentMethodsStackParamList;
 
 export type NavigationDomainParamLists = {
   Auth: AuthStackParamList;

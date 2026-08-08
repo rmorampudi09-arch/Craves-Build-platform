@@ -120,7 +120,10 @@ export function CustomerNotificationsScreen() {
   const [selectedCategory, setSelectedCategory] = useState<CustomerNotificationCategory>('ALL');
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
 
-  const notices = notificationsQuery.data ?? [];
+  const notices = useMemo(
+    () => notificationsQuery.data ?? [],
+    [notificationsQuery.data],
+  );
   const counts = useMemo(() => buildCustomerNotificationCategoryCounts(notices), [notices]);
   const filtered = useMemo(
     () => filterCustomerNotifications(notices, selectedCategory),

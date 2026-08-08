@@ -72,6 +72,7 @@ The existing P64 tests continue to cover draft/original state, dirty-field detec
 - **One shared route/form for refs 23/24: PASSED.**
 - **Active cart synchronization/preservation: PASSED at implemented client scope.** The edit route only reads cart selectors and never creates, replaces, or clears cart state.
 - **Successful save refreshes profile/header identity surfaces: PASSED at implemented client/query-cache scope.** The update mutation writes the returned profile and invalidates the shared profile query.
+- **Implementation CI: PASSED.** The exact P65 implementation head `edf8674e31b0867eded2f4618667482994cb9ec2` passed the repository implementation workflow.
 - **Full visual/reference completion: NOT CERTIFIED.** Device/reference comparison remains deferred.
 - **All guide-visible profile capabilities end-to-end: BLOCKED/PARTIAL.** Missing approved photo/rewards/security/device/delete-account contracts are not fabricated.
 
@@ -87,9 +88,22 @@ The existing P64 tests continue to cover draft/original state, dirty-field detec
 
 P64-owned form/API modules remain prerequisites and are not reclassified as new P65 work.
 
-## Validation posture
+## Validation evidence
 
-No APK/Gradle release build is required for this phase. The project policy requires the implementation CI gates (dependency install, strict TypeScript, ESLint, Jest, production Android JS bundle, backend/APIM guard). CI evidence should be attached to the P65 ledger entry when the workflow run for the accepted P65 head is available.
+Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
+
+- GitHub Actions run ID: `31276696857`
+- Job ID: `93151316827`
+- Validated implementation head: `edf8674e31b0867eded2f4618667482994cb9ec2`
+- Job conclusion: **SUCCESS**
+- Dependency install: **SUCCESS**
+- TypeScript strict check: **SUCCESS**
+- ESLint zero-warning gate: **SUCCESS**
+- Jest: **SUCCESS**
+- Production Android JavaScript bundle: **SUCCESS**
+- Backend/APIM/infrastructure source guard: **SUCCESS**
+
+No Java/Gradle/APK packaging was performed, consistent with the implementation-phase policy.
 
 ## Handoff
 

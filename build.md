@@ -6,7 +6,7 @@
 **Authoritative rebuild branch:** `mobile-ui-rebuild-from-scratch`  
 **Mobile workspace:** `apps/mobile`  
 **Backend/APIM guard baseline:** `8a2444cde508ea2fb20cb9822397e55c29bd8c5f`  
-**Implementation guide:** Full 183-page `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, 52 embedded reference images.  
+**Implementation guide:** Full `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`.  
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
 **Historical preservation:** The complete ledger through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13 onward uses dedicated evidence under `docs/mobile-ui-rebuild/`; this living ledger intentionally stays compact while those records preserve phase detail.
@@ -16,20 +16,21 @@
 ## 1. Current Control State
 
 - **P00–P30: DONE** at the implementation/static-contract level recorded by their accepted ledger/evidence records. Device/reference certification remains deferred where those records say so.
-- **P31–P56:** retain the exact DONE/PARTIAL status, ownership boundaries, blockers and validated CI recorded in their dedicated evidence documents and in the phase summary table below. Do not reinterpret a PARTIAL phase as DONE.
-- **P52 — Customer Orders Contract and Pagination: PARTIAL.** Exact `GET /api/v1/orders` newest-first customer order window, strict customer-safe response allowlisting, authoritative amount/status preservation, private customer-scoped query cache, raw-status window counts, conservative history-completeness signaling, cancellation, and invalidation remain authoritative. Full P52 acceptance is still blocked because the current server/APIM contract is fixed to the newest 50 orders and exposes no page/cursor parameters, global counts, or authoritative lifecycle-bucket mapping.
-- **P53 — My Orders — Empty Cart: PARTIAL.** The Orders tab root renders the supportable Reference 09 experience over the exact P52 window with shared header state, title/tabs, virtualized order cards, authoritative raw-status/total presentation, pull-to-refresh, loading/empty/error/offline behavior, fixed-window warning, per-tab scroll restoration, scroll-aware bottom navigation, and explicit fail-closed unsupported states.
-- **P54 — My Orders — Active Cart: PARTIAL.** The same Orders route renders the supportable Reference 10 active-cart state through the shared cart domain and `SharedViewCartOverlay`. Full P54 acceptance remains blocked because the exact reorder/cart merge-or-replacement validation capability is still unavailable.
-- **P55 — Order Detail, Timeline, and Tracking: PARTIAL.** Typed owned-order detail and provider-neutral delivery-tracking child routes are implemented using the existing customer-safe Order Service/APIM contracts. Verified delivery history is rendered as the delivery timeline, with 30-second foreground-only controlled refresh for non-terminal delivery states, pull-to-refresh, HTTPS-only external tracking, private identity/order cache scope, list/detail reconciliation, and stale/offline/invalid/403/404 handling. Full P55 acceptance remains blocked because no customer/API contract currently exposes the order-status lifecycle event history required for a complete order timeline.
-- **P56 — Reorder, Cancellation, and Refund Eligibility: PARTIAL.** A typed customer-order mutation authority boundary now fails closed for reorder/cancel/refund, and a reusable execution guard requires authoritative revalidation immediately before mutation. The delivered-order Reorder reference action remains disabled and uses the centralized P56 decision. Full P56 acceptance remains blocked because the current customer Order Service/APIM surface exposes no exact reorder-validation, approved reorder/cart merge-or-replace, cancellation-eligibility/mutation, or refund-eligibility/mutation contract.
+- **P31–P56:** retain the exact DONE/PARTIAL status, ownership boundaries, blockers, and validated CI recorded in their dedicated evidence documents and the phase summary table below. Do not reinterpret a PARTIAL phase as DONE.
+- **P52 — Customer Orders Contract and Pagination: PARTIAL.** The server/APIM contract remains fixed to the newest 50 orders and exposes no page/cursor parameters, global counts, or authoritative lifecycle-bucket mapping.
+- **P53 — My Orders — Empty Cart: PARTIAL.** The supported Reference 09 Orders state is implemented over the exact P52 window with explicit unsupported/fail-closed behavior for missing contract capabilities.
+- **P54 — My Orders — Active Cart: PARTIAL.** Active-cart composition is implemented; exact reorder/cart merge-or-replacement validation remains unavailable.
+- **P55 — Order Detail, Timeline, and Tracking: PARTIAL.** Customer-safe detail/tracking is implemented; the backend still exposes no complete order-status lifecycle event history.
+- **P56 — Reorder, Cancellation, and Refund Eligibility: PARTIAL.** The client mutation-authority and revalidation boundary is implemented; exact customer reorder/cancel/refund eligibility and mutation contracts remain unavailable.
+- **P57 — Customer Profile/Rewards Contract: DONE.** The approved `GET /api/v1/customer/profile` fields now map into a strict mobile profile-hub contract with private query integration, registered-phone readiness fields, full/partial/empty/error/unsupported state handling, and fixtures/tests. Rewards, reward history, order aggregate counters, profile notification unread count, and chef-role summary are explicitly `unsupported` because those semantics are not exposed by the accepted backend/profile contract. No fake balance, counters, role state, fields, or endpoint was introduced.
 
-**Current executed phase:** **P56 — Reorder, Cancellation, and Refund Eligibility** is **PARTIAL**. Every safe P56 client-side safety boundary supportable without inventing a server contract is implemented and passed required mobile CI.
+**Current executed phase:** **P57 — Customer Profile/Rewards Contract** is **DONE** at its defined contract/integration scope.
 
-**Next phase in sequence:** **P57 — Customer Profile/Rewards Contract** — **NOT STARTED**.
+**Next phase in sequence:** **P58 — Customer Profile UI** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P57. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P58. Wait for explicit user direction.
 
 ---
 
@@ -64,15 +65,8 @@
 | P54 | **PARTIAL** | `6320289f9c51dd866dc440c951a5a566ce7c081e` | `P54_MY_ORDERS_ACTIVE_CART.md` | `31266801670` / `93126154241` |
 | P55 | **PARTIAL** | `4bb32730c1cbae0556db686688cc4c088f7a415f` | `P55_ORDER_DETAIL_TIMELINE_TRACKING.md` | `31268384221` / `93130106434` |
 | P56 | **PARTIAL** | `20081ccef8abb89a25b47c6a8bb278ec42ec45d5` | `P56_REORDER_CANCELLATION_REFUND_ELIGIBILITY.md` | `31269398555` / `93132711235` |
-| P57 onward | **NOT STARTED / not accepted** | — | — | — |
-
-### P56 evidence
-
-- User authorized exactly one next phase after P55 while P55 remained correctly recorded as PARTIAL.
-- Started from branch head: `38ddcfdcba11749dd767dc0c421059c95a3746a7`.
-- Validated implementation/test commit: `20081ccef8abb89a25b47c6a8bb278ec42ec45d5`.
-- Evidence: `docs/mobile-ui-rebuild/P56_REORDER_CANCELLATION_REFUND_ELIGIBILITY.md`.
-- Implementation CI run/job: `31269398555` / `93132711235` — **SUCCESS**.
+| P57 | **DONE** | `9983592fc87e603a95fa4eace5b6fbf71225057b` | `P57_CUSTOMER_PROFILE_REWARDS_CONTRACT.md` | `31270356726` / `93135116492` |
+| P58 onward | **NOT STARTED / not accepted** | — | — | — |
 
 ---
 
@@ -80,10 +74,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31269398555`
-- Job ID: `93132711235`
-- Head SHA: `20081ccef8abb89a25b47c6a8bb278ec42ec45d5`
-- Phase: **P56 — Reorder, Cancellation, and Refund Eligibility**
+- GitHub Actions run ID: `31270356726`
+- Job ID: `93135116492`
+- Head SHA: `9983592fc87e603a95fa4eace5b6fbf71225057b`
+- Phase: **P57 — Customer Profile/Rewards Contract**
 - Conclusion: **SUCCESS**
 - Dependency install: **SUCCESS**
 - TypeScript strict check: **SUCCESS**
@@ -96,55 +90,79 @@ No Java/Gradle/APK packaging was performed, consistent with the implementation-p
 
 ---
 
-## 4. P56 Implemented Boundary
+## 4. P57 Implemented Contract Boundary
 
-P56 audited the exact customer order mutation surface before wiring any action. The current Order Controller/customer APIM surface remains read-only for customer orders, and no exact customer reorder/cancel/refund mutation or eligibility route exists.
+P57 audited the accepted profile API before defining mobile rewards/profile semantics.
 
-Existing adjacent APIs do not fill that gap:
-
-- Cart Controller primitives can read/add/update/delete/clear/validate the current cart, but do not define historical-order reorder eligibility or an approved reorder/cart merge-or-replace flow.
-- Checkout quote/intent/status does not define customer reorder/cancel/refund eligibility.
-- Chef order accept/reject/status routes belong to chef authority and are not customer mutation authority.
-- Refund services/processors consume internal refund state/events and expose no customer refund eligibility/mutation REST contract.
-
-P56 therefore adds a typed app-internal fail-closed authority for `REORDER`, `CANCEL`, and `REFUND`. Production decisions do not accept raw `CustomerOrderStatus`, so a client-rendered status or reference action can never grant mutation authority.
-
-The reusable `executeCustomerOrderMutationAfterRevalidation(...)` gate establishes the future mutation invariant: authoritative revalidation executes first; blocked or failed revalidation cannot call mutation; mutation runs only after an immediately preceding `ELIGIBLE` result.
-
-The existing delivered-order `Reorder` reference action remains visibly disabled. Its hint/capability copy is now sourced from the centralized P56 production decision instead of ad-hoc UI text. Cancellation/refund buttons are not made actionable or eligibility-assumed.
-
----
-
-## 5. P56 Acceptance Blockers
-
-P56 records/retains:
+Authoritative profile source:
 
 ```text
-P53_REORDER_ELIGIBILITY_CONTRACT_UNAVAILABLE
-P54_REORDER_CART_MERGE_CONTRACT_UNAVAILABLE
-P56_CUSTOMER_ORDER_CANCELLATION_ELIGIBILITY_CONTRACT_UNAVAILABLE
-P56_CUSTOMER_ORDER_REFUND_ELIGIBILITY_CONTRACT_UNAVAILABLE
+GET /api/v1/customer/profile
 ```
 
-The first two prevent a truthful reorder mutation because the server cannot authoritatively revalidate the historical order and the product/backend contract does not define how an existing active cart is merged or replaced. The new P56 blockers prevent client-assumed cancellation/refund eligibility because no customer-authoritative eligibility/mutation contract exists on this branch.
+Accepted server-owned response fields used by mobile:
 
-P56 acceptance requires the exact reorder-validation and cancellation/refund-eligibility actions. The safe client enforcement boundary is implemented, but the authoritative server capabilities are unavailable, so P56 is **PARTIAL**, not DONE.
+```text
+id
+identityId
+registeredPhoneNumber
+firstName
+lastName
+email
+createdAt
+updatedAt
+```
 
-Existing upstream blockers still apply where not owned by P56, including P52 pagination/lifecycle mapping, P53 reference-only metadata/notification routing, and P55 order-status lifecycle history.
+The normalized mobile contract provides profile/account metadata and registered-phone readiness. `registeredPhoneNumber`, `last4`, and `isRegistered` are derived only from the server-owned registered phone. P57 does not reinterpret registration as a separate backend `verified` state.
+
+The contract also includes the profile-hub capability surfaces required for P58, but marks unsupported server semantics explicitly instead of inventing values:
+
+- reward balance/tier: `unsupported`, value `null`;
+- reward history: `unsupported`, empty entries;
+- order aggregate counters: `unsupported`, empty counters;
+- profile notification unread count: `unsupported`, value `null`;
+- chef role/eligibility summary: `unsupported`, value `null`.
+
+All use the stable fail-closed reason `not-exposed-by-approved-contract`.
+
+P57 exposes discriminated `loading`, `ready`, `empty`, `unsupported`, and `error` states and distinguishes full versus partial profile readiness.
+
+A private customer identity-scoped TanStack Query key, cancellation-aware GET, dedupe key, stale-time policy, and invalidation helper integrate the contract into the existing mobile architecture without duplicating full server profile data into a new global store.
 
 ---
 
-## 6. P56 Changed Files
+## 5. P57 Validation and Exit
+
+Focused fixtures exist for:
+
+- full profile;
+- partial profile;
+- empty profile;
+- unsupported profile source posture.
+
+Focused tests cover approved field mapping, server-owned identity validation, phone readiness/last-four derivation, missing-profile behavior, unsupported rewards/history/count/notification/role semantics, exact route usage, malformed response rejection, and query loading/ready/empty/error mapping.
+
+P57 is **DONE** because its phase acceptance explicitly requires a truthful contract that handles missing/unsupported rewards data rather than requiring the unavailable backend capability to be invented.
+
+P58 may now render only supported profile data and capability-gate unsupported rewards/counters/notification/role surfaces until exact backend contracts exist.
+
+---
+
+## 6. P57 Changed Files
 
 Implementation/test:
 
-- `apps/mobile/src/features/customerOrders/domain/customerOrderActionEligibility.ts`
-- `apps/mobile/src/features/customerOrders/customerOrderActionEligibility.test.ts`
-- `apps/mobile/src/features/customerOrders/components/CustomerOrderCard.tsx`
+- `apps/mobile/src/features/customerProfile/domain/customerProfileContract.ts`
+- `apps/mobile/src/features/customerProfile/api/customerProfileApi.ts`
+- `apps/mobile/src/features/customerProfile/query/customerProfileQueries.ts`
+- `apps/mobile/src/features/customerProfile/fixtures/customerProfileFixtures.ts`
+- `apps/mobile/src/features/customerProfile/customerProfileContract.test.ts`
+- `apps/mobile/src/features/customerProfile/customerProfileApi.test.ts`
+- `apps/mobile/src/features/customerProfile/customerProfileQueries.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P56_REORDER_CANCELLATION_REFUND_ELIGIBILITY.md`
+- `docs/mobile-ui-rebuild/P57_CUSTOMER_PROFILE_REWARDS_CONTRACT.md`
 
 Ledger:
 
@@ -154,7 +172,7 @@ No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android
 
 ---
 
-## 7. Architecture Ownership After P56
+## 7. Architecture Ownership After P57
 
 - P19–P24 remain authoritative for authentication/session/onboarding/logout/private-cache cleanup.
 - P25–P30 remain authoritative for Customer shell/header/shared cart foundations, View Cart behavior, and cart mutation reconciliation.
@@ -162,36 +180,31 @@ No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android
 - P39–P41 remain authoritative for Dish Detail/ingredients boundaries.
 - P42–P44 remain authoritative for customer-facing Kitchen Profile and Kitchen All Dishes boundaries.
 - P45–P51 remain authoritative for their recorded Cart/checkout/payment/address orchestration boundaries and blockers.
-- P52 remains authoritative for the exact current customer Orders list response allowlist, returned-window model, private cache, raw-status counts, history-completeness guard and invalidation boundary.
-- P53 remains authoritative for My Orders composition, lifecycle states, tabs/scroll restoration and fail-closed reference actions not superseded by an exact later contract.
-- P54 remains authoritative for Orders active-cart View Cart composition and its reorder/cart merge blocker.
-- P55 remains authoritative for customer Order Detail navigation/query/presentation, provider-neutral Delivery Tracking, exact delivery-history timeline rendering, and bounded foreground refresh.
-- **P56 owns the app-internal customer order mutation authority model, fail-closed reorder/cancel/refund production decisions, and the mandatory authoritative revalidation-before-mutation execution gate.**
-- **P57 — Customer Profile/Rewards Contract has not started.**
+- P52 remains authoritative for customer Orders list contract/window/cache semantics.
+- P53–P56 retain their recorded Orders UI/detail/mutation-boundary ownership and blockers.
+- **P57 owns the normalized customer profile hub contract, registered-phone readiness mapping, profile capability availability posture, private customer-profile query key/invalidation boundary, explicit profile load/error/empty/unsupported states, and P58-ready fixtures.**
+- **P58 — Customer Profile UI has not started.**
 
 ---
 
-## 8. Explicitly Not Complete After P56
+## 8. Explicitly Not Complete After P57
 
 Do not describe any of the following as complete:
 
-- outstanding blockers recorded for P31–P55 that P56 did not explicitly supersede;
+- outstanding blockers recorded for P31–P56 that P57 did not explicitly supersede;
 - P52 true server pagination/cursor navigation beyond the newest 50 orders;
-- P52 global order totals or global per-status/lifecycle-tab counts;
-- authoritative mapping from backend statuses to `All`/`Upcoming`/`Completed`/`Cancelled`;
-- exact reference thumbnails/ratings/cuisine/human-readable order number where the contract does not supply them;
-- customer-authoritative reorder eligibility or reorder mutation;
-- approved reorder/cart merge-or-replacement flow;
-- customer-authoritative cancellation eligibility/mutation;
-- customer-authoritative refund eligibility/mutation;
-- a complete customer order-status lifecycle event timeline;
-- ETA/map/courier-location tracking not supplied by the accepted customer delivery contract;
-- checkout/payment end-to-end flow;
-- P57 Customer Profile/Rewards contract/UI;
+- P52 global order totals or authoritative lifecycle-tab counts;
+- customer-authoritative reorder/cancellation/refund eligibility or mutations;
+- complete customer order-status lifecycle event history;
+- reward balance/tier/history backend support;
+- customer profile order-status aggregate-count backend support;
+- profile notification unread-count backend support through the P57 accepted contract;
+- chef role/eligibility summary backend support through the P57 accepted contract;
+- P58 Customer Profile UI;
 - live provider sandbox/device certification unless a later evidence record explicitly says so;
 - Chef operational/product screens;
 - full lifecycle/accessibility/performance/security audits;
-- final physical-device visual certification of all 52 references;
+- final physical-device visual certification;
 - final Android APK/AAB.
 
 ---
@@ -200,12 +213,12 @@ Do not describe any of the following as complete:
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current implemented phase: P56 — PARTIAL
-Validated implementation SHA: 20081ccef8abb89a25b47c6a8bb278ec42ec45d5
-CI: 31269398555 / 93132711235 — SUCCESS
-Evidence: docs/mobile-ui-rebuild/P56_REORDER_CANCELLATION_REFUND_ELIGIBILITY.md
-P56 blockers: P53_REORDER_ELIGIBILITY_CONTRACT_UNAVAILABLE; P54_REORDER_CART_MERGE_CONTRACT_UNAVAILABLE; P56_CUSTOMER_ORDER_CANCELLATION_ELIGIBILITY_CONTRACT_UNAVAILABLE; P56_CUSTOMER_ORDER_REFUND_ELIGIBILITY_CONTRACT_UNAVAILABLE
-Inherited Orders blockers: CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE; P53_REFERENCE_ORDER_CARD_METADATA_UNAVAILABLE; P53_NOTIFICATION_INBOX_ROUTE_UNAVAILABLE; P55_ORDER_STATUS_TIMELINE_CONTRACT_UNAVAILABLE
-Next phase: P57 — Customer Profile/Rewards Contract — NOT STARTED
+Current implemented phase: P57 — DONE
+Validated implementation SHA: 9983592fc87e603a95fa4eace5b6fbf71225057b
+CI: 31270356726 / 93135116492 — SUCCESS
+Evidence: docs/mobile-ui-rebuild/P57_CUSTOMER_PROFILE_REWARDS_CONTRACT.md
+P57 unsupported capabilities: rewards balance/tier/history; order aggregate counters; profile notification unread count; chef role/eligibility summary — all fail closed as not-exposed-by-approved-contract
+Inherited blockers: retain all P31–P56 blockers not explicitly superseded
+Next phase: P58 — Customer Profile UI — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

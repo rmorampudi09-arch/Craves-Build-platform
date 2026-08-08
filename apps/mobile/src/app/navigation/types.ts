@@ -113,12 +113,12 @@ export type CustomerOrdersStackParamList = {
   CustomerCartStackParamList;
 
 /**
- * P62 registers Notifications inside the Profile stack and reuses the P55
- * order child routes for allowlisted ORDER/DELIVERY notification destinations.
- * P63 owns active View Cart chrome for this same destination.
+ * P65 adds the shared Edit Profile destination after P62/P63 Notifications.
+ * Active and empty cart references reuse this one route and form implementation.
  */
 export type CustomerProfileStackParamList = {
   CustomerProfileRoot: undefined;
+  CustomerProfileEdit: undefined;
   CustomerFavorites: undefined;
   CustomerNotifications: undefined;
 } & CustomerDishDetailStackParamList &

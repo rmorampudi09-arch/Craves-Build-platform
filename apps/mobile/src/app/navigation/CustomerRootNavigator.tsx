@@ -7,7 +7,7 @@ import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens
 import {CustomerOrderDetailScreen} from '../../features/customerOrders/screens/CustomerOrderDetailScreen';
 import {CustomerOrdersRouteScreen} from '../../features/customerOrders/screens/CustomerOrdersRouteScreen';
 import {CustomerOrderTrackingScreen} from '../../features/customerOrders/screens/CustomerOrderTrackingScreen';
-import {CustomerProfileScreen} from '../../features/customerProfile/screens/CustomerProfileScreen';
+import {CustomerProfileRouteScreen} from '../../features/customerProfile/screens/CustomerProfileRouteScreen';
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
@@ -218,7 +218,7 @@ function CustomerOrdersStackNavigator() {
   );
 }
 
-/** P58 replaces the accepted account placeholder with the real Profile hub. */
+/** P59 keeps the P58 Profile hub and adds state-driven active-cart chrome. */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -226,7 +226,7 @@ function CustomerProfileStackNavigator() {
     <ProfileStack.Navigator screenOptions={stackScreenOptions}>
       <ProfileStack.Screen
         name="CustomerProfileRoot"
-        component={CustomerProfileScreen}
+        component={CustomerProfileRouteScreen}
         listeners={rootListeners}
       />
       <ProfileStack.Screen name="CustomerCart" component={CustomerCartScreen} />

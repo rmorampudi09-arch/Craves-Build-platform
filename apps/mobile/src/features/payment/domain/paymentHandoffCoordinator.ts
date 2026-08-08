@@ -20,7 +20,7 @@ export const paymentHandoffCapability = {
   rawPaymentCredentialCollectionAllowed: false,
   tokenizedPaymentMethodContractSupported: false,
   nativeCashfreeLaunchSupported: false,
-  paymentVerificationOwnedByNextPhase: true,
+  paymentVerificationOwnedByNextPhase: false,
   blockerCodes: [
     PAYMENT_METHOD_TOKEN_CONTRACT_BLOCKER,
     CASHFREE_NATIVE_PROVIDER_LAUNCH_BLOCKER,
@@ -46,7 +46,7 @@ function canonicalDecimal(value: string): string | null {
   return fractional ? `${whole}.${fractional}` : whole;
 }
 
-function sameMoney(left: PaymentMoney, right: PaymentMoney): boolean {
+export function samePaymentMoney(left: PaymentMoney, right: PaymentMoney): boolean {
   return (
     left.currency === right.currency &&
     canonicalDecimal(left.amount) !== null &&
@@ -75,7 +75,7 @@ export function prepareCashfreeHostedHandoff(
       'Payment information belongs to a different checkout. Please refresh and try again.',
     );
   }
-  if (!sameMoney(paymentOrder.amount, checkout.grandTotal)) {
+  if (!samePaymentMoney(paymentOrder.amount, checkout.grandTotal)) {
     throw new AppApiError(
       'PAYMENT_AMOUNT_MISMATCH',
       'The payment amount changed. Refresh checkout before continuing.',

@@ -5,6 +5,7 @@ import type {
   PaymentOrderHandoffSession,
   PaymentOrderSnapshot,
   PaymentOrderStatus,
+  PaymentVerificationResult,
 } from '../domain/paymentTypes';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -188,6 +189,29 @@ export function parsePaymentOrderSnapshot(value: unknown): PaymentOrderSnapshot 
   };
 }
 
+export function parsePaymentVerificationResult(
+  value: unknown,
+): PaymentVerificationResult | null {
+  const result = asRecord(value);
+  if (!result) {
+    return null;
+  }
+
+  const paymentOrderId = parseUuid(result.paymentOrderId);
+  const status = parseStatus(result.status);
+  const providerStatus = optionalBoundedString(result.providerStatus, 160);
+  const providerStatusWasInvalid =
+    result.providerStatus !== undefined &&
+    result.providerStatus !== null &&
+    providerStatus === null;
+
+  if (!paymentOrderId || !status || providerStatusWasInvalid) {
+    return null;
+  }
+
+  return {paymentOrderId, status, providerStatus};
+}
+
 function requireHandoffSession(value: unknown): PaymentOrderHandoffSession {
   const session = parsePaymentOrderHandoffSession(value);
   if (!session) {
@@ -208,6 +232,17 @@ function requireSnapshot(value: unknown): PaymentOrderSnapshot {
     );
   }
   return snapshot;
+}
+
+function requireVerificationResult(value: unknown): PaymentVerificationResult {
+  const result = parsePaymentVerificationResult(value);
+  if (!result) {
+    throw new AppApiError(
+      'PAYMENT_VERIFICATION_INVALID_RESPONSE',
+      'Payment status could not be verified. Please try again.',
+    );
+  }
+  return result;
 }
 
 export const paymentApi = {
@@ -248,5 +283,24 @@ export const paymentApi = {
       );
     }
     return snapshot;
+  },
+
+  async verifyOrder(paymentOrderId: string): Promise<PaymentVerificationResult> {
+    requireUuid(
+      paymentOrderId,
+      'PAYMENT_INVALID_ORDER_ID',
+      'This payment could not be verified.',
+    );
+    const response = await httpClient.post<unknown>(
+      `/api/v1/payments/orders/${paymentOrderId}/verify`,
+    );
+    const result = requireVerificationResult(response);
+    if (result.paymentOrderId !== paymentOrderId) {
+      throw new AppApiError(
+        'PAYMENT_VERIFICATION_ID_MISMATCH',
+        'Payment status belongs to a different payment. Please refresh and try again.',
+      );
+    }
+    return result;
   },
 };

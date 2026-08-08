@@ -36,6 +36,12 @@ export interface PaymentOrderSnapshot {
   updatedAt: string;
 }
 
+export interface PaymentVerificationResult {
+  paymentOrderId: string;
+  status: PaymentOrderStatus;
+  providerStatus: string | null;
+}
+
 export interface CashfreeHostedHandoff {
   provider: 'CASHFREE';
   paymentOrderId: string;

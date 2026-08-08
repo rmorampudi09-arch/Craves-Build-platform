@@ -5,6 +5,8 @@ export interface CustomerBrowsingLocation {
   addressId: string;
   label: string;
   displayName: string;
+  latitude: number;
+  longitude: number;
 }
 
 interface CustomerShellState {

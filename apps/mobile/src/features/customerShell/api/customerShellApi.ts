@@ -28,6 +28,22 @@ function boundedString(value: unknown, maxLength: number): string | null {
   return normalized && normalized.length <= maxLength ? normalized : null;
 }
 
+function coordinate(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+): number | null {
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
+    return null;
+  }
+  return value;
+}
+
 function validTimestamp(value: unknown, nullable = false): string | null {
   if (nullable && value == null) {
     return null;
@@ -81,16 +97,28 @@ function parseSavedLocation(value: unknown): CustomerBrowsingLocation | null {
   }
 
   const addressId = boundedString(item.id, 64);
-  if (!addressId || !UUID_PATTERN.test(addressId)) {
+  const latitude = coordinate(item.latitude, -90, 90);
+  const longitude = coordinate(item.longitude, -180, 180);
+  if (
+    !addressId ||
+    !UUID_PATTERN.test(addressId) ||
+    latitude === null ||
+    longitude === null
+  ) {
     return null;
   }
 
-  const label = boundedString(item.label, 40) ?? 'Saved address';
+  const label =
+    boundedString(item.addressLabel, 40) ??
+    boundedString(item.label, 40) ??
+    'Saved address';
   const areaName = boundedString(item.areaName, 120);
   const addressLine1 = boundedString(item.addressLine1, 160);
   const city = boundedString(item.city, 80);
   const state = boundedString(item.state, 80);
-  const fallbackParts = [addressLine1, city, state].filter((part): part is string => Boolean(part));
+  const fallbackParts = [addressLine1, city, state].filter(
+    (part): part is string => Boolean(part),
+  );
   const displayName = areaName ?? fallbackParts.join(', ');
 
   if (!displayName) {
@@ -102,11 +130,16 @@ function parseSavedLocation(value: unknown): CustomerBrowsingLocation | null {
     addressId,
     label,
     displayName,
+    latitude,
+    longitude,
   };
 }
 
 export function unreadNoticeCount(notices: readonly CustomerNotice[]): number {
-  return notices.reduce((count, notice) => count + (notice.readAt === null ? 1 : 0), 0);
+  return notices.reduce(
+    (count, notice) => count + (notice.readAt === null ? 1 : 0),
+    0,
+  );
 }
 
 export const customerShellApi = {
@@ -117,7 +150,9 @@ export const customerShellApi = {
     if (!Array.isArray(response)) {
       return [];
     }
-    return response.map(parseSavedLocation).filter((item): item is CustomerBrowsingLocation => item !== null);
+    return response
+      .map(parseSavedLocation)
+      .filter((item): item is CustomerBrowsingLocation => item !== null);
   },
 
   async listNotifications(limit = 100): Promise<CustomerNotice[]> {
@@ -129,6 +164,8 @@ export const customerShellApi = {
     if (!Array.isArray(response)) {
       return [];
     }
-    return response.map(parseNotice).filter((item): item is CustomerNotice => item !== null);
+    return response
+      .map(parseNotice)
+      .filter((item): item is CustomerNotice => item !== null);
   },
 };

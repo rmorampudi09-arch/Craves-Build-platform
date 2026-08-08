@@ -1,6 +1,13 @@
 import {httpClient} from '../../core/http/httpClient';
-import {customerShellApi, unreadNoticeCount, type CustomerNotice} from './api/customerShellApi';
-import {customerShellActions, customerShellReducer} from './state/customerShellSlice';
+import {
+  customerShellApi,
+  unreadNoticeCount,
+  type CustomerNotice,
+} from './api/customerShellApi';
+import {
+  customerShellActions,
+  customerShellReducer,
+} from './state/customerShellSlice';
 
 jest.mock('../../core/http/httpClient', () => ({
   httpClient: {
@@ -10,17 +17,19 @@ jest.mock('../../core/http/httpClient', () => ({
 
 const getMock = httpClient.get as jest.Mock;
 
-describe('P27 customer shell', () => {
+describe('P27/P31 customer shell', () => {
   beforeEach(() => {
     jest.resetAllMocks();
   });
 
-  it('propagates one selected location through shared state', () => {
+  it('propagates one selected location with exact discovery coordinates through shared state', () => {
     const location = {
       kind: 'SAVED_ADDRESS' as const,
       addressId: '11111111-1111-4111-8111-111111111111',
       label: 'HOME',
       displayName: 'Madhapur, Hyderabad',
+      latitude: 17.4483,
+      longitude: 78.3915,
     };
 
     const next = customerShellReducer(
@@ -30,8 +39,35 @@ describe('P27 customer shell', () => {
 
     expect(next.selectedLocation).toEqual(location);
     expect(
-      customerShellReducer(next, customerShellActions.resetCustomerShell()).selectedLocation,
+      customerShellReducer(next, customerShellActions.resetCustomerShell())
+        .selectedLocation,
     ).toBeNull();
+  });
+
+  it('maps saved-address coordinates from the exact backend response contract', async () => {
+    getMock.mockResolvedValueOnce([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        addressLabel: 'HOME',
+        addressLine1: 'Road 1',
+        areaName: 'Madhapur',
+        city: 'Hyderabad',
+        state: 'Telangana',
+        latitude: 17.4483,
+        longitude: 78.3915,
+      },
+    ]);
+
+    await expect(customerShellApi.listSavedLocations()).resolves.toEqual([
+      {
+        kind: 'SAVED_ADDRESS',
+        addressId: '11111111-1111-4111-8111-111111111111',
+        label: 'HOME',
+        displayName: 'Madhapur',
+        latitude: 17.4483,
+        longitude: 78.3915,
+      },
+    ]);
   });
 
   it('derives the notification badge only from readAt', () => {

@@ -25,6 +25,7 @@
 - **P37 — Search Query Orchestration: PARTIAL.** Shared Home/Chefs search-session state, debounce, exact-query cancellation, user/location-scoped query and scroll restoration, active-search pagination, and stale-result protection are implemented and CI-validated. Authoritative server-side dish/chef free-text search remains absent.
 - **P38 — Filter and Sort: PARTIAL.** The focused Filter and Sort route, separate draft/applied state, Reset/Apply/discard behavior, user/location scope, focused-route chrome hiding, Home/Chefs entry points, supported loaded-Home diet filtering/price ordering, and fail-closed unsupported controls are implemented and CI-validated. Full server-side filter/sort metadata/parameters remain absent.
 - **P39 — Dish Detail Data Contract: PARTIAL.** Exact public Catalog menu-item + kitchen composition, stable backend-ID query ownership, ordered media mapping, current price/availability validation, customer-safe kitchen allowlisting, explicit unsupported capability blockers, and the future favorite-cache reconciliation boundary are implemented and CI-validated. Full P39 scope remains blocked because the current branch has no authoritative cuisine, ingredients, allergens, customer reviews/aggregate rating, or dish-favorite read/mutation contract.
+- **P40 — Dish Detail UI and Interactions: PARTIAL.** The real typed Dish Detail route, immersive chrome, gallery, share, chef/kitchen facts, description, supported facts, sticky price/cart actions, fresh-detail revalidation before add/increase, price-change interception, cart reconciliation, lifecycle states, and exact stack-back source-position preservation are implemented and CI-validated. Full P40 acceptance remains blocked by the missing favorite contract, missing ingredients/reviews contracts, and absence of an approved dedicated single-dish Buy Now checkout intent.
 
 ### P31 evidence
 
@@ -76,7 +77,7 @@
 - Evidence commit: `bef00a0a0263c6b2b7a069f4f6c1f7ce9d888deb`.
 - Evidence: `docs/mobile-ui-rebuild/P37_SEARCH_QUERY_ORCHESTRATION.md`.
 - CI run/job: `31250802472` / `93086759138` — **SUCCESS**.
-- Outstanding blockers: no exact current-branch dish/chef server-search route/parameter/model; literal detail/back acceptance depends on later-owned detail routes.
+- Outstanding blockers: no exact current-branch dish/chef server-search route/parameter/model; literal detail/back acceptance depended on P40 and is now implemented for the supported Home source.
 
 ### P38 evidence
 
@@ -96,16 +97,27 @@
 - Evidence commit: `af46686d03ea5ded4c7011320ef875f83f862e58`.
 - Evidence: `docs/mobile-ui-rebuild/P39_DISH_DETAIL_DATA_CONTRACT.md`.
 - CI run/job: `31252552058` / `93091033108` — **SUCCESS**.
-- CI gates passed: dependency install, strict TypeScript, ESLint zero-warning gate, Jest, production Android JavaScript bundle, backend/APIM/infrastructure source guard.
 - Outstanding blockers: no authoritative cuisine identity/taxonomy on the public item; no ingredients/allergens contract; no customer dish review/aggregate-rating contract; no customer dish favorite read/mutation contract.
 
-**Current executed phase:** **P39 — Dish Detail Data Contract** is recorded **PARTIAL**. The exact available public Catalog detail/media/kitchen/price/availability subset and customer-scoped cache/entity ownership are implemented and CI-validated, while required cuisine/ingredients/allergens/reviews/favorite capabilities have no authoritative current-branch contract and are explicitly blocked rather than fabricated.
+### P40 evidence
 
-**Next phase in sequence:** **P40 — Dish Detail UI and Interactions** — **NOT STARTED**.
+- User explicitly authorized exactly the next single phase after P39 while P39 remained correctly recorded as PARTIAL.
+- Started from branch head: `179c2db312434714aa540fa0de7380b52b310638`.
+- Supporting implementation commit: `91249464e5fc52eab35f40153fcc4425e8f7d9b6`.
+- Validated implementation commit: `2c0219ca9dd526dad6a162cf09a6c33f02aa8dbb`.
+- Evidence commit: `d8526f16ce7042db71e59c1fbf3efbda4670d533`.
+- Evidence: `docs/mobile-ui-rebuild/P40_DISH_DETAIL_UI_AND_INTERACTIONS.md`.
+- CI run/job: `31253969455` / `93094455601` — **SUCCESS**.
+- CI gates passed: dependency install, strict TypeScript, ESLint zero-warning gate, Jest, production Android JavaScript bundle, backend/APIM/infrastructure source guard.
+- Outstanding blockers: no favorite read/mutation contract; no ingredients/allergens or reviews/rating contract; no dedicated single-dish Buy Now checkout intent that can operate without consuming the existing cart; public Kitchen Profile navigation remains P42/P43-owned.
+
+**Current executed phase:** **P40 — Dish Detail UI and Interactions** is recorded **PARTIAL**. Every supported current-branch P40 behavior is implemented and CI-validated, while unsupported required behaviors are fail-closed rather than fabricated.
+
+**Next phase in sequence:** **P41 — Dish Ingredients** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P40. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P41. Wait for explicit user direction.
 
 ---
 
@@ -113,10 +125,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31252552058`
-- Job ID: `93091033108`
-- Head SHA: `97f5bc10509cbfba17cf9f0a56ed15cdbefdcb94`
-- Phase: **P39 — Dish Detail Data Contract**
+- GitHub Actions run ID: `31253969455`
+- Job ID: `93094455601`
+- Head SHA: `2c0219ca9dd526dad6a162cf09a6c33f02aa8dbb`
+- Phase: **P40 — Dish Detail UI and Interactions**
 - Conclusion: **SUCCESS**
 - TypeScript: **SUCCESS**
 - ESLint: **SUCCESS**
@@ -138,66 +150,70 @@ The implementation workflow intentionally does **not** perform Java/Gradle/APK p
 
 ---
 
-## 3. P39 Implemented Dish Detail Data Contract Boundary
+## 3. P40 Implemented Dish Detail UI and Interaction Boundary
 
-P39 implements only the contract/model/cache boundary required for Guide Reference 13. It does not implement P40 screen composition.
+P40 consumes the P39 exact public detail contract and introduces no backend/APIM changes.
 
 Implemented behavior:
 
-- Uses exact existing public Catalog routes:
-  - `GET /api/v1/catalog/menu-items/{menuItemId}`,
-  - `GET /api/v1/catalog/kitchens/{kitchenId}`.
-- Validates the menu item from a stable backend UUID; synthetic card/index IDs fail closed.
-- Validates the returned item ID against the requested ID and the returned kitchen ID against the item's `kitchenId`.
-- Requires the public detail to remain `ACTIVE`, currently available, and positively priced rather than falling back to stale discovery-card price/availability.
-- Maps the supported detail fields: name/description/category/food type/current price/currency/serves/preparation/spice/package/thermobox/availability.
-- Maps all usable public menu-item image URLs while preserving backend response order.
-- Uses an explicit public kitchen allowlist: kitchen ID/name/display name/description/area/city/state only.
-- Does not expose kitchen identity ID, phone, email, or private pickup-address fields in the customer Dish Detail model.
-- Keeps absent optional backend fields nullable rather than generating replacement production data.
-- Exposes explicit contract gaps for cuisine, ingredients, allergens, reviews, and favorite state.
-- Adds a customer-scoped TanStack Query entity key using `userId + CUSTOMER + menuItemId`.
-- Defines a bounded invalidation helper for a future authoritative favorite mutation so affected detail and same-customer Home dish-list caches can be reconciled together.
-- Does not define or call a favorite endpoint because no accepted favorite contract exists.
-- Adds tests for route mapping, identity matching, privacy allowlisting, media ordering, nullable behavior, unsupported capability boundaries, stale-price/availability protection, entity keys, and cache invalidation scope.
+- Adds typed `CustomerDishDetail` routes to the Home/Chefs customer stacks while only wiring currently supported Home dish-card entry.
+- Opens Dish Detail from Home dish image/title using the stable backend `menuItemId`.
+- Keeps Dish Detail immersive by hiding bottom navigation and shared cart chrome while focused.
+- Uses native-stack back so the mounted source Home list returns at its exact prior position with existing search/filter state intact.
+- Renders ordered public media as a horizontally paged gallery with active thumbnail selection and a no-media fallback.
+- Implements native Share using authoritative dish/kitchen names.
+- Renders customer-safe kitchen display information from the P39 allowlist only.
+- Renders supported preparation, serves, spice and package facts and expandable description.
+- Renders explicit unsupported ingredient/allergen and review states instead of fake values.
+- Implements pull refresh plus loading, invalid-ID, session-required, offline, recoverable error and stale-data feedback.
+- Implements a sticky current-price action area with Add to Cart and in-cart quantity controls.
+- Re-fetches authoritative P39 detail immediately before Add/quantity increase, rejects identity drift, and surfaces a new price for customer review before mutation.
+- Reconciles the authoritative P30 cart mutation response and surfaces a server price change if it changes again between detail refresh and cart mutation.
+- Does not invent a same-kitchen-only rule: current order-service checkout intentionally supports a cart containing multiple kitchens and groups orders by kitchen.
+- Keeps favorite fail-closed because no server favorite contract exists.
+- Keeps Buy Now fail-closed because the only current checkout initiation converts the full existing cart; no dedicated single-dish checkout intent exists.
 
-### P39 acceptance blockers
+### P40 acceptance blockers
 
 The current branch has no authoritative contract for:
 
-- cuisine identity/value/taxonomy on public dish detail,
-- dish ingredients,
-- allergen metadata,
-- customer dish reviews or aggregate rating/review count,
-- customer dish favorite read/mutation state.
+- customer dish favorite read/mutation state,
+- dish ingredients and allergens,
+- customer reviews/aggregate rating/review count,
+- an approved dedicated single-dish Buy Now checkout intent that does not consume/corrupt the existing cart.
 
-Media is supported by the current public menu-item response and is implemented. No fake cuisine/ingredient/allergen/review/rating/favorite value or endpoint was introduced.
+The customer public Kitchen Profile route is later-owned by P42/P43 and was not pre-implemented.
 
-P39 therefore remains **PARTIAL**, not DONE.
+P40 therefore remains **PARTIAL**, not DONE.
 
 ---
 
-## 4. P39 Changed Files
+## 4. P40 Changed Files
 
 Implementation:
 
-- `apps/mobile/src/features/dishDetail/api/dishDetailApi.ts`
-- `apps/mobile/src/features/dishDetail/query/dishDetailQueries.ts`
+- `apps/mobile/src/features/dishDetail/screens/CustomerDishDetailScreen.tsx`
+- `apps/mobile/src/features/dishDetail/dishDetailPurchase.ts`
+- `apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx`
+- `apps/mobile/src/app/navigation/types.ts`
+- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
+- `apps/mobile/src/app/navigation/CustomerBottomNavController.tsx`
+- `apps/mobile/src/app/navigation/navigationPolicy.ts`
 
 Tests:
 
-- `apps/mobile/src/features/dishDetail/dishDetailApi.test.ts`
-- `apps/mobile/src/features/dishDetail/dishDetailQueries.test.ts`
+- `apps/mobile/src/features/dishDetail/dishDetailPurchase.test.ts`
+- `apps/mobile/src/app/navigation/navigationPolicy.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P39_DISH_DETAIL_DATA_CONTRACT.md`
+- `docs/mobile-ui-rebuild/P40_DISH_DETAIL_UI_AND_INTERACTIONS.md`
 
 Ledger:
 
 - `build.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P40 Dish Detail UI/navigation, Cart/Bill Summary UI, checkout/payment, public Kitchen Profile UI, or Chef-owner operational feature was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P41 Dish Ingredients screen, public Kitchen Profile UI, Cart/Bill Summary UI, checkout/payment UI, or Chef-owner operational feature was changed.
 
 ---
 
@@ -222,16 +238,16 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 - P37 owns shared Customer discovery-search orchestration.
 - P38 owns focused Customer Filter and Sort routing, draft/applied semantics, chrome policy, and supported current-contract filtering boundaries.
 - P39 owns the Customer Dish Detail server-data model, exact public Catalog item+kitchen composition, current-price/availability validation, media mapping, private customer entity cache key, and future favorite-cache reconciliation boundary.
+- P40 owns the supported Dish Detail route/UI, source-position back behavior, gallery/share/detail presentation, sticky cart actions and pre-mutation detail revalidation boundary.
 
 ### Later-phase boundaries
 
-- **P40** owns Dish Detail UI and interactions and remains **NOT STARTED**.
-- P41 owns the full Dish Ingredients screen; its exact data capability is currently blocked by the missing ingredient/allergen contract recorded by P39.
+- **P41** owns the full Dish Ingredients screen; its exact data capability remains blocked by the missing ingredient/allergen contract recorded by P39/P40.
 - P42/P43 own the customer-facing public Kitchen Profile contract/UI.
 - Later Customer favorite/notification routes remain owned by their phases in `phases.md`.
 - **P45** owns Cart screen data/pricing model extensions.
 - **P46** owns Cart and Bill Summary UI and its real navigation destination.
-- Checkout/payment remain P47+.
+- Checkout/payment remain P47+; P40 did not pre-implement those screens.
 
 ---
 
@@ -249,7 +265,7 @@ Accepted nearby-chef/kitchen discovery contract:
   - query: `latitude`, `longitude`, `radiusMeters`, `page`, `size`
   - authoritative paginated response: `DiscoveryDtos.NearbyKitchenDiscoveryResponse`.
 
-Accepted P39 public detail contracts:
+Accepted P39/P40 public detail contracts:
 
 - `GET /api/v1/catalog/menu-items/{menuItemId}`
   - authoritative response: `ApiDtos.MenuItemResponse`,
@@ -257,7 +273,18 @@ Accepted P39 public detail contracts:
   - includes current price/currency and ordered `images` metadata.
 - `GET /api/v1/catalog/kitchens/{kitchenId}`
   - authoritative response: `ApiDtos.KitchenProfileResponse`,
-  - mobile P39 maps only customer-safe public display/location fields and deliberately excludes identity/contact/private pickup-address fields.
+  - mobile maps only customer-safe public display/location fields and deliberately excludes identity/contact/private pickup-address fields.
+
+Accepted cart mutation contracts used by P40:
+
+- `POST /api/v1/cart/items` with `{menuItemId, quantity}`,
+- `PUT /api/v1/cart/items/{cartItemId}` with `{quantity}`,
+- `DELETE /api/v1/cart/items/{cartItemId}`.
+
+Existing checkout contract observed but **not accepted as P40 Buy Now**:
+
+- `POST /api/v1/checkout` with `CheckoutRequest(deliveryAddressId, note)` validates and converts the customer's full current cart.
+- No dedicated single-dish checkout-intent route/model is present in the current branch.
 
 Accepted customer-location/cart dependencies remain unchanged from prior phases.
 
@@ -273,6 +300,7 @@ Not accepted because no exact current-branch contract or registered product capa
 - dish allergen contract,
 - customer dish review/aggregate-rating contract,
 - customer dish favorite read/mutation contract,
+- dedicated single-dish Buy Now checkout intent,
 - nearby-kitchen final delivery-serviceability/ETA/rating/review/cuisine/favorite/verification/media/filter/sort fields,
 - real Customer Cart destination before P45/P46.
 
@@ -296,11 +324,12 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P37 Search Query Orchestration | **PARTIAL** | Debounce/cancellation/scoped query+scroll restoration/pagination validated by CI `31250802472`; exact server search contract remains unavailable. |
 | P38 Filter and Sort | **PARTIAL** | Focused route/draft-applied semantics/current-response supported filtering validated by CI `31251797224`; full server filter/sort contracts missing. |
 | P39 Dish Detail Data Contract | **PARTIAL** | Exact public Catalog detail/media/kitchen/current-price/cache boundary validated by CI `31252552058`; cuisine/ingredients/allergens/reviews/favorite contracts missing. |
-| P40 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
+| P40 Dish Detail UI and Interactions | **PARTIAL** | Supported route/UI/gallery/share/cart revalidation/back behavior validated by CI `31253969455`; favorite/ingredients/reviews/dedicated Buy Now contracts remain blocked. |
+| P41 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
 
 ---
 
-## 8. Explicitly Not Complete After P39 Work
+## 8. Explicitly Not Complete After P40 Work
 
 Do not describe any of the following as complete:
 
@@ -311,8 +340,8 @@ Do not describe any of the following as complete:
 - P37 real server-wide dish/chef free-text search,
 - P38 server-wide cuisine/popularity/rating/delivery-time/price/diet filter/sort coverage and result-count preview,
 - P39 cuisine/ingredients/allergens/reviews/favorite capabilities blocked by missing contracts,
-- **P40 Dish Detail UI and Interactions**, which has not started,
-- P41 Dish Ingredients UI/data completion,
+- P40 server-backed favorite, real ingredient/review previews, dedicated Buy Now checkout intent, or later-owned Kitchen Profile navigation,
+- **P41 Dish Ingredients**, which has not started,
 - customer-facing public Kitchen Profile implementation,
 - full Customer Cart/Bill Summary product screen,
 - checkout/payment end-to-end flow,

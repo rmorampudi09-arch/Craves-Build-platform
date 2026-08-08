@@ -53,7 +53,11 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
                 Address creation stays in its owning address-management phase.
               </Text>
               {status === 'error' ? (
-                <Pressable accessibilityRole="button" onPress={() => void refresh()}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    refresh();
+                  }}>
                   <Text style={styles.retryText}>Try again</Text>
                 </Pressable>
               ) : null}

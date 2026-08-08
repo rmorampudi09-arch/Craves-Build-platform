@@ -69,10 +69,24 @@ const IMMERSIVE_POLICY: RouteChromePolicy = {
   immersive: true,
 };
 
+/**
+ * Cart keeps the customer bottom navigation shown by the reference while
+ * suppressing the redundant floating View Cart control on the cart itself.
+ */
+const CART_POLICY: RouteChromePolicy = {
+  bottomNavigationVisible: true,
+  viewCartEligible: false,
+  immersive: false,
+};
+
 export function resolveRouteChromePolicy(
   domain: NavigationDomain,
   routeName?: RegisteredRouteName,
 ): RouteChromePolicy {
+  if (routeName === 'CustomerCart') {
+    return CART_POLICY;
+  }
+
   if (routeName && CURRENT_IMMERSIVE_ROUTES.has(routeName)) {
     return IMMERSIVE_POLICY;
   }

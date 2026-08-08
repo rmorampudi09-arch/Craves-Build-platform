@@ -43,6 +43,20 @@ describe('navigationPolicy', () => {
     }
   });
 
+  it('keeps customer bottom navigation on Cart but suppresses View Cart', () => {
+    expect(isCurrentImmersiveRoute('CustomerCart')).toBe(false);
+    expect(resolveRouteChromePolicy('Customer', 'CustomerCart')).toEqual({
+      bottomNavigationVisible: true,
+      viewCartEligible: false,
+      immersive: false,
+    });
+    expect(resolveRouteChromePolicy('Transactional', 'CustomerCart')).toEqual({
+      bottomNavigationVisible: true,
+      viewCartEligible: false,
+      immersive: false,
+    });
+  });
+
   it('never makes customer cart chrome eligible in the chef domain', () => {
     expect(resolveRouteChromePolicy('Chef')).toEqual({
       bottomNavigationVisible: true,

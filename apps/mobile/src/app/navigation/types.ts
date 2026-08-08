@@ -73,26 +73,37 @@ export type CustomerDishDetailStackParamList = {
 };
 
 /**
- * P25 customer shell types. Each bottom tab owns a stack navigator so later
- * product phases can add child routes without resetting sibling tab state.
+ * P46 registers the cart as the first real customer transactional route. It is
+ * shared by each customer tab stack so opening and closing Cart preserves the
+ * originating tab stack and its scroll/filter state.
+ */
+export type CustomerCartStackParamList = {
+  CustomerCart: undefined;
+};
+
+/**
+ * P25 customer shell types. Each bottom tab owns a stack navigator so product
+ * child routes can open without resetting sibling tab state.
  */
 export type CustomerHomeStackParamList = {
   CustomerHomeRoot: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
-} & CustomerDishDetailStackParamList;
+} & CustomerDishDetailStackParamList &
+  CustomerCartStackParamList;
 
 export type CustomerChefsStackParamList = {
   CustomerChefsRoot: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
-} & CustomerDishDetailStackParamList;
+} & CustomerDishDetailStackParamList &
+  CustomerCartStackParamList;
 
 export type CustomerOrdersStackParamList = {
   CustomerOrdersRoot: undefined;
-};
+} & CustomerCartStackParamList;
 
 export type CustomerProfileStackParamList = {
   CustomerProfileRoot: undefined;
-};
+} & CustomerCartStackParamList;
 
 export type CustomerTabParamList = {
   Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;
@@ -111,14 +122,17 @@ export type CustomerStackRouteName =
 export type CustomerDomainParamList = CustomerAccountStackParamList & CustomerTabParamList;
 
 /**
- * P11/P25 domain model. Transactional and modal route lists remain deliberately
- * unregistered until their owning implementation phases add real screens.
+ * P46 promotes CustomerCart into the logical Transactional domain while keeping
+ * the physical route inside the active customer tab stack so the reference
+ * bottom navigation remains visible and back restores the exact origin.
  */
+export type TransactionalStackParamList = CustomerCartStackParamList;
+
 export type NavigationDomainParamLists = {
   Auth: AuthStackParamList;
   Customer: CustomerDomainParamList;
   Chef: ChefAccountStackParamList;
-  Transactional: never;
+  Transactional: TransactionalStackParamList;
   Modal: never;
 };
 

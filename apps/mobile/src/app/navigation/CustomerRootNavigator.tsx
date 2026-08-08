@@ -3,11 +3,12 @@ import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
+import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
-import {CustomerHomeScreen} from '../../features/home/screens/CustomerHomeScreen';
+import {CustomerHomeRouteScreen} from '../../features/home/screens/CustomerHomeRouteScreen';
 import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
 import {Icon} from '../../shared/components/Icon';
@@ -127,7 +128,7 @@ function CustomerHomeStackNavigator() {
     <HomeStack.Navigator screenOptions={stackScreenOptions}>
       <HomeStack.Screen
         name="CustomerHomeRoot"
-        component={CustomerHomeScreen}
+        component={CustomerHomeRouteScreen}
         listeners={rootListeners}
       />
       <HomeStack.Screen
@@ -150,6 +151,7 @@ function CustomerHomeStackNavigator() {
         name="CustomerKitchenDishes"
         component={CustomerKitchenDishesScreen}
       />
+      <HomeStack.Screen name="CustomerCart" component={CustomerCartScreen} />
     </HomeStack.Navigator>
   );
 }
@@ -184,6 +186,7 @@ function CustomerChefsStackNavigator() {
         name="CustomerKitchenDishes"
         component={CustomerKitchenDishesScreen}
       />
+      <ChefsStack.Screen name="CustomerCart" component={CustomerCartScreen} />
     </ChefsStack.Navigator>
   );
 }
@@ -191,6 +194,7 @@ function CustomerChefsStackNavigator() {
 /**
  * P25 owns these remaining tab roots. Their product screens stay on the
  * accepted account-status surface until their owning phases are authorized.
+ * P46 only adds the shared Cart child route without implementing those roots.
  */
 function CustomerOrdersStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
@@ -202,6 +206,7 @@ function CustomerOrdersStackNavigator() {
         component={CustomerAccountStatusScreen}
         listeners={rootListeners}
       />
+      <OrdersStack.Screen name="CustomerCart" component={CustomerCartScreen} />
     </OrdersStack.Navigator>
   );
 }
@@ -216,6 +221,7 @@ function CustomerProfileStackNavigator() {
         component={CustomerAccountStatusScreen}
         listeners={rootListeners}
       />
+      <ProfileStack.Screen name="CustomerCart" component={CustomerCartScreen} />
     </ProfileStack.Navigator>
   );
 }

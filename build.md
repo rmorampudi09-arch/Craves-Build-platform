@@ -26,15 +26,16 @@
 - **P58 — Customer Profile — Empty Cart: DONE.** Reference 11 profile composition replaces the prior Profile placeholder, renders only approved P57 identity fields, capability-gates unsupported data, provides deterministic rows with real navigation or explicit blockers, uses the guarded P24 logout coordinator, and supports loading/empty/error/unsupported/refresh states.
 - **P59 — Customer Profile — Active Cart: DONE.** Reference 12 uses the same P58 Profile route with the shared authoritative View Cart overlay. Live cart count/subtotal, real Cart navigation, dynamic bottom clearance, and zero-item return to the P58 layout are implemented without copying or resetting cart state.
 - **P60 — Favorites — Empty Cart: PARTIAL.** Reference 19's real `CustomerFavorites` destination, Profile navigation, shared detail-route ownership, heart primitive, and fail-closed unsupported state are implemented. The current branch exposes no approved Favorites APIM/backend contract, so paginated favorites, search/counts, remove/toggle, cross-surface heart synchronization, and favorite-row Add to Cart remain explicitly unavailable rather than fabricated.
-- **P61 — Favorites — Active Cart: PARTIAL.** Reference 20 now uses the same P60 `CustomerFavorites` route through a state-driven active-cart wrapper. The shared authoritative View Cart overlay, live cart item count/food subtotal, real `CustomerCart` navigation, dynamic bottom clearance, and zero-item return are implemented without creating a second Favorites screen/store. Populated favorite-row Add/quantity/conflict/synchronization behavior remains blocked by the unchanged missing Favorites contract.
+- **P61 — Favorites — Active Cart: PARTIAL.** Reference 20 uses the same P60 `CustomerFavorites` route through a state-driven active-cart wrapper. The shared authoritative View Cart overlay, live cart item count/food subtotal, real `CustomerCart` navigation, dynamic bottom clearance, and zero-item return are implemented without creating a second Favorites screen/store. Populated favorite-row Add/quantity/conflict/synchronization behavior remains blocked by the unchanged missing Favorites contract.
+- **P62 — Notifications — Empty Cart: PARTIAL.** Reference 21 now has a real `CustomerNotifications` destination, shared bounded notification query/badge state, category chips, Today/Earlier grouping, strict read-on-open synchronization, pull-to-refresh/lifecycle states, and an ORDER/DELIVERY destination allowlist. True cursor pagination, authoritative global unread/category aggregates, aggregate mark-all-read, and dedicated current Notifications APIM provenance are not exposed by the accepted repository contract, so those capabilities remain explicitly unavailable rather than fabricated.
 
-**Current executed phase:** **P61 — Favorites — Active Cart** is **PARTIAL** at its defined implementation/static-contract scope.
+**Current executed phase:** **P62 — Notifications — Empty Cart** is **PARTIAL** at its defined implementation/static-contract scope.
 
-**Next phase in sequence:** **P62 — Notifications — Empty Cart** — **NOT STARTED**.
+**Next phase in sequence:** **P63 — Notifications — Active Cart** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P62. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P63. Wait for explicit user direction.
 
 ---
 
@@ -74,7 +75,8 @@
 | P59 | **DONE** | `0361027495ab2759f970a58d832fd151b5888bf4` | `P59_CUSTOMER_PROFILE_ACTIVE_CART.md` | `31271923654` / `93139241176` |
 | P60 | **PARTIAL** | `b98dcfc79c99680487e27363dc5172884cdf6e07` | `P60_FAVORITES_EMPTY_CART.md` | `31272588586` / `93140939951` |
 | P61 | **PARTIAL** | `38016775de4301e39ef6b2f6ea9c1bb4fdb5cd3b` | `P61_FAVORITES_ACTIVE_CART.md` | `31273123021` / `93142321916` |
-| P62 onward | **NOT STARTED / not accepted** | — | — | — |
+| P62 | **PARTIAL** | `992376808144b1fe8669982e4f204b1379158e25` | `P62_NOTIFICATIONS_EMPTY_CART.md` | `31274137746` / `93144883129` |
+| P63 onward | **NOT STARTED / not accepted** | — | — | — |
 
 ---
 
@@ -82,10 +84,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31273123021`
-- Job ID: `93142321916`
-- Head SHA: `38016775de4301e39ef6b2f6ea9c1bb4fdb5cd3b`
-- Phase: **P61 — Favorites — Active Cart**
+- GitHub Actions run ID: `31274137746`
+- Job ID: `93144883129`
+- Head SHA: `992376808144b1fe8669982e4f204b1379158e25`
+- Phase: **P62 — Notifications — Empty Cart**
 - Conclusion: **SUCCESS**
 - Dependency install: **SUCCESS**
 - TypeScript strict check: **SUCCESS**
@@ -98,58 +100,76 @@ No Java/Gradle/APK packaging was performed, consistent with the implementation-p
 
 ---
 
-## 4. P60 Favorites Contract Boundary Retained by P61
+## 4. P62 Notifications Contract Boundary
 
-P61 does not widen the P60 contract boundary. Current repository truth remains:
+P62 re-audited the current mobile/backend/APIM repository evidence before widening the existing header-notification foundation.
 
-- `infra/apim/**` has no Favorites/customer-favorites APIM domain or exact Favorites operation;
-- `apps/api/**` has no approved Favorites list/search/count/remove/toggle route;
-- the P02 inventory records the authoritative full OpenAPI as absent and requires later feature phases to re-establish exact contracts rather than infer them;
-- current mobile source has no server-backed Favorites API/query owner beyond P60's explicit fail-closed boundary;
-- the customer-web wishlist implementation uses browser `localStorage` and is not accepted as account/server truth for the mobile rebuild.
+Accepted exact operations found:
 
-Capabilities that remain `unsupported`:
+- backend controller: `services/notification-service/src/main/java/in/craves/notification/api/AppNotificationController.java`;
+- response model: `services/notification-service/src/main/java/in/craves/notification/api/AppNoticeResponse.java`;
+- `GET /api/v1/notifications/in-app` with a bounded `limit`;
+- `PATCH /api/v1/notifications/in-app/{noticeId}/read` for a UUID notification ID;
+- response fields: `id`, `title`, `body`, `noticeType`, `targetType`, `targetId`, `readAt`, `createdAt`.
 
-- paginated Favorites list;
-- Favorites search;
-- Favorites category counts;
-- remove/toggle favorite;
-- favorite-membership synchronization across customer surfaces;
-- favorite-row Add to Cart / quantity behavior whose favorite-row source does not exist under an approved server contract.
+Current missing contract capabilities:
 
-P61 does not invent endpoint paths, pagination parameters, response schemas, mutation semantics, local-only persistence, or a second Favorites store.
+- no cursor/page-token/offset pagination contract;
+- no authoritative global unread-count endpoint;
+- no authoritative category-count endpoint;
+- no aggregate mark-all-read operation;
+- no client-trusted arbitrary route/URL deep-link field;
+- no dedicated current Notifications APIM policy/source was found under `infra/apim/**` during the audit.
 
----
-
-## 5. P61 Implemented Active-Cart Boundary
-
-P61 implements the contract-independent portion of Reference 20 while retaining the same P60 Favorites route/composition:
-
-- `CustomerFavoritesRouteScreen` wraps the existing `CustomerFavoritesScreen`; no duplicate active-cart Favorites screen is created;
-- authoritative shared cart selectors provide live item count and supported food subtotal;
-- the existing `SharedViewCartOverlay` appears automatically for an active cart on `CustomerFavorites` and remains absent at zero items;
-- View Cart opens the real `CustomerCart` route inside the Profile stack, preserving the originating Favorites/Profile navigation state;
-- Favorites owns no copied cart snapshot and introduces no Favorites store;
-- dynamic bottom clearance prevents the floating View Cart control from covering final Favorites content;
-- when the cart becomes empty, the overlay and extra clearance disappear immediately and the same route returns to the P60 empty-cart presentation;
-- focused P61 tests cover active-cart visibility, clearance switching, and zero-item return.
-
-Reference 20's populated favorite-row Add/quantity/cart-conflict behavior remains blocked because no authoritative favorite row can be loaded. The `phases.md` acceptance condition **"No duplicate favorite store" is passed**, but the overall P61 phase remains PARTIAL due to the inherited exact-contract blocker.
+P62 therefore does not invent a cursor, aggregate response, mark-all mutation, gateway policy, destination URL, or synthetic server count. Category/unread values are explicitly bounded to the currently loaded latest-list window.
 
 ---
 
-## 6. P61 Changed Files
+## 5. P62 Implemented Empty-Cart Boundary
+
+P62 implements the supported portion of Reference 21:
+
+- `CustomerNotifications` is a typed destination in the existing Profile stack;
+- the shared customer header bell opens Notifications instead of acting as refresh-only UI;
+- a single private TanStack Query cache owns both inbox data and header-badge source data;
+- current strict response parsing remains fail-closed for malformed IDs/timestamps/target IDs;
+- the supported latest-100 window is stable-ID deduplicated and newest-first sorted;
+- category chips/counts are derived from only that loaded window;
+- Today/Earlier grouping and unread/read row presentation are implemented;
+- pull-to-refresh, skeleton, sign-in-required, empty, empty-category, error and retry states are implemented;
+- per-row read-on-open uses the exact PATCH, de-duplicates concurrent attempts, updates shared cache after success, and does not fake success on failure;
+- globally mounted customer headers observe the same cached read state without a duplicate notification store;
+- destination metadata is allowlisted to `ORDER -> CustomerOrderDetail` and `DELIVERY -> CustomerOrderTracking` only after validated UUID target IDs;
+- unknown/untrusted target types remain readable but do not navigate;
+- order detail/tracking routes are reused inside the Profile stack so Back returns to Notifications;
+- hitting the supported 100-record bound displays an explicit older-notifications limitation;
+- aggregate Mark All is visibly unavailable because the exact server capability does not exist;
+- the P62 empty-cart route intentionally does not mount View Cart or any P63 active-cart wrapper.
+
+Acceptance posture:
+
+- **Notification destination allowlisted/authorized: PASSED.**
+- **Unread badge synchronization mechanism: PASSED** through the shared private query cache; the number remains bounded rather than misrepresented as an authoritative all-history unread total.
+- **Overall P62: PARTIAL** because true pagination and required aggregate capabilities are not available from the accepted contract.
+
+---
+
+## 6. P62 Changed Files
 
 Implementation/test:
 
+- `apps/mobile/src/app/navigation/types.ts`
 - `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
-- `apps/mobile/src/features/favorites/customerFavoritesActiveCart.ts`
-- `apps/mobile/src/features/favorites/customerFavoritesActiveCart.test.ts`
-- `apps/mobile/src/features/favorites/screens/CustomerFavoritesRouteScreen.tsx`
+- `apps/mobile/src/features/customerShell/api/customerShellApi.ts`
+- `apps/mobile/src/features/customerShell/hooks/useCustomerHeaderState.ts`
+- `apps/mobile/src/features/notifications/domain/customerNotificationsModel.ts`
+- `apps/mobile/src/features/notifications/query/customerNotificationQueries.ts`
+- `apps/mobile/src/features/notifications/screens/CustomerNotificationsScreen.tsx`
+- `apps/mobile/src/features/notifications/customerNotificationsModel.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P61_FAVORITES_ACTIVE_CART.md`
+- `docs/mobile-ui-rebuild/P62_NOTIFICATIONS_EMPTY_CART.md`
 
 Ledger:
 
@@ -159,7 +179,7 @@ No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android
 
 ---
 
-## 7. Architecture Ownership After P61
+## 7. Architecture Ownership After P62
 
 - P19–P24 remain authoritative for authentication/session/onboarding/logout/private-cache cleanup.
 - P25–P30 remain authoritative for Customer shell/header/shared cart foundations, View Cart behavior, and cart mutation reconciliation.
@@ -173,23 +193,23 @@ No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android
 - P58 owns the shared Profile hub composition and supported menu/lifecycle behavior.
 - P59 owns the Profile-root active-cart wrapper and shared View Cart integration.
 - P60 owns the `CustomerFavorites` route registration, Profile-to-Favorites navigation, Favorites heart visual primitive, and explicit fail-closed Favorites capability boundary.
-- **P61 owns the Favorites-route active-cart wrapper, shared View Cart integration, real Cart navigation, and dynamic active-cart content clearance.**
-- **P62 — Notifications — Empty Cart has not started.**
+- P61 owns the Favorites-route active-cart wrapper, shared View Cart integration, real Cart navigation, and dynamic active-cart content clearance.
+- **P62 owns the `CustomerNotifications` empty-cart destination, shared notification query/badge synchronization, bounded category/list presentation, per-row read synchronization, and strict ORDER/DELIVERY destination allowlist.**
+- **P63 — Notifications — Active Cart has not started.**
 
 ---
 
-## 8. Explicitly Not Complete After P61
+## 8. Explicitly Not Complete After P62
 
 Do not describe any of the following as complete:
 
-- outstanding blockers recorded for P31–P56 that P61 did not explicitly supersede;
+- outstanding blockers recorded for P31–P56 that P62 did not explicitly supersede;
 - P52 true server pagination/cursor navigation beyond the newest 50 orders;
 - P52 global order totals or authoritative lifecycle-tab counts;
 - customer-authoritative reorder/cancellation/refund eligibility or mutations;
 - complete customer order-status lifecycle event history;
 - reward balance/tier/history backend support;
 - customer profile order-status aggregate-count backend support;
-- profile notification unread-count backend support through the P57 accepted contract;
 - chef role/eligibility summary or Profile role-switch/cart-retention contract support;
 - registered Edit Profile, Payments, or Contact us destination routes;
 - server-backed Favorites list/search/category counts;
@@ -198,7 +218,11 @@ Do not describe any of the following as complete:
 - favorite-row Add to Cart, quantity changes, cart-conflict flow, and Favorites scroll/filter preservation through those mutations;
 - P60 `phases.md` acceptance statement "Favorite heart synchronized across all surfaces";
 - populated/reference-certified P61 Favorites active-cart state;
-- P62 Notifications — Empty Cart or any later phase;
+- Notifications cursor/page-token pagination beyond the latest supported 100-record bounded list;
+- authoritative global Notifications unread/category aggregate counts;
+- aggregate Notifications mark-all-read;
+- dedicated current Notifications APIM policy provenance not present in the audited `infra/apim/**` tree;
+- P63 Notifications — Active Cart or any later phase;
 - live provider sandbox/device certification unless a later evidence record explicitly says so;
 - Chef operational/product screens;
 - full lifecycle/accessibility/performance/security audits;
@@ -211,15 +235,14 @@ Do not describe any of the following as complete:
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current implemented phase: P61 — Favorites — Active Cart — PARTIAL
-Validated implementation SHA: 38016775de4301e39ef6b2f6ea9c1bb4fdb5cd3b
-CI: 31273123021 / 93142321916 — SUCCESS
-Evidence: docs/mobile-ui-rebuild/P61_FAVORITES_ACTIVE_CART.md
-P61 implemented: same P60 CustomerFavorites route; shared authoritative View Cart overlay; live cart item count/food subtotal; real CustomerCart navigation; dynamic bottom clearance; zero-item return to P60 presentation; no duplicate Favorites store
-P60/P61 contract blocker: no approved Favorites APIM/backend operation exists for server-backed list/search/count/remove/toggle/synchronization or favorite-row Add/quantity behavior; local-only customer-web wishlist is not accepted as mobile account truth
-P61 acceptance passed: no duplicate favorite store
-P61 remains PARTIAL: populated favorite-row Add/quantity/conflict/synchronization behavior cannot be completed without the exact Favorites server contract
-Inherited blockers: retain all P31–P60 blockers not explicitly superseded
-Next phase: P62 — Notifications — Empty Cart — NOT STARTED
+Current implemented phase: P62 — Notifications — Empty Cart — PARTIAL
+Validated implementation SHA: 992376808144b1fe8669982e4f204b1379158e25
+CI: 31274137746 / 93144883129 — SUCCESS
+Evidence: docs/mobile-ui-rebuild/P62_NOTIFICATIONS_EMPTY_CART.md
+P62 implemented: real CustomerNotifications Profile-stack route; shared private list/badge query; latest-100 stable-ID dedupe/sort; category chips and bounded counts; Today/Earlier groups; unread/read visuals; pull refresh/lifecycle states; successful read-on-open shared-cache synchronization; strict ORDER/DELIVERY allowlist to existing order detail/tracking; no P63 View Cart behavior
+P62 acceptance passed: notification destinations are allowlisted/authorized; unread badge synchronizes through the shared query cache
+P62 remains PARTIAL: server exposes no cursor pagination, authoritative global unread/category aggregates, or aggregate mark-all-read; no dedicated current Notifications APIM policy source was found
+Inherited blockers: retain all P31–P61 blockers not explicitly superseded
+Next phase: P63 — Notifications — Active Cart — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

@@ -2,6 +2,7 @@ import type {QueryClient} from '@tanstack/react-query';
 import {clearPrivateQueryCache} from '../../../app/query/queryCache';
 import {appQueryClient} from '../../../app/query/queryClient';
 import type {AppDispatch} from '../../../app/store/store';
+import {cartActions} from '../../cart/state/cartSlice';
 import {customerShellActions} from '../../customerShell/state/customerShellSlice';
 import {authActions} from './authSlice';
 import {authService} from './authService';
@@ -36,6 +37,7 @@ export async function completeLogout(
       // The authenticated navigation root must still be removed below.
     }
   } finally {
+    dispatch(cartActions.resetCartDomain());
     dispatch(customerShellActions.resetCustomerShell());
     dispatch(authActions.signedOut());
   }

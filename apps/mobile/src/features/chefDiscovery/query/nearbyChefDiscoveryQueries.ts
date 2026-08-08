@@ -1,5 +1,6 @@
 import {
   useInfiniteQuery,
+  useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
@@ -62,15 +63,17 @@ export function invalidateNearbyChefDiscoveryQueries(
 export function useNearbyChefDiscoveryQuery(
   options: NearbyChefDiscoveryQueryOptions,
 ) {
+  const queryClient = useQueryClient();
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const location = useAppSelector(state => state.customerShell.selectedLocation);
   const queryEnabled = Boolean(identityId && location);
+  const queryKey =
+    identityId && location
+      ? createNearbyChefDiscoveryQueryKey(identityId, location, options)
+      : [...nearbyChefDiscoveryQueryPrefix, 'disabled'] as const;
 
   const query = useInfiniteQuery({
-    queryKey:
-      identityId && location
-        ? createNearbyChefDiscoveryQueryKey(identityId, location, options)
-        : [...nearbyChefDiscoveryQueryPrefix, 'disabled'],
+    queryKey,
     queryFn: ({pageParam, signal}) => {
       if (!location) {
         throw new Error('A saved customer location is required for nearby chef discovery.');
@@ -95,5 +98,7 @@ export function useNearbyChefDiscoveryQuery(
   return {
     ...query,
     locationRequired: location === null,
+    cancelPendingRequest: () =>
+      queryClient.cancelQueries({queryKey, exact: true}).then(() => undefined),
   };
 }

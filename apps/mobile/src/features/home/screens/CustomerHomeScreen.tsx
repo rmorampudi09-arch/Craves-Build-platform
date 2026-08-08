@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,8 +8,9 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
@@ -40,6 +41,12 @@ import {
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
+import {DiscoverySearchInput} from '../../discoverySearch/components/DiscoverySearchInput';
+import {
+  canRequestNextSearchPage,
+  isDiscoverySearchActive,
+} from '../../discoverySearch/discoverySearchOrchestration';
+import {useDiscoverySearchSession} from '../../discoverySearch/hooks/useDiscoverySearchSession';
 import type {NearbyDish} from '../api/homeFeedApi';
 import {
   filterHomeDishes,
@@ -52,7 +59,6 @@ import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 
 const HOME_RADIUS_METERS = 10_000;
 const HOME_PAGE_SIZE = 20;
-const SEARCH_DEBOUNCE_MS = 250;
 
 function HomeFeedSkeleton() {
   return (
@@ -179,25 +185,26 @@ function DishCard({
 export function CustomerHomeScreen() {
   const dispatch = useAppDispatch();
   const identity = useAppSelector(state => state.auth.identity);
+  const selectedLocation = useAppSelector(state => state.customerShell.selectedLocation);
   const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const cartMutations = useAppSelector(state => state.cart.mutations);
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
-  const [searchDraft, setSearchDraft] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const listRef = useRef<FlatList<NearbyDish>>(null);
 
   const feed = useHomeNearbyDishesQuery({
     radiusMeters: HOME_RADIUS_METERS,
     size: HOME_PAGE_SIZE,
   });
-
-  useEffect(() => {
-    const timer = setTimeout(() => setSearchQuery(searchDraft), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [searchDraft]);
+  const searchScopeKey =
+    identity?.id && selectedLocation
+      ? `${identity.id}:${selectedLocation.addressId}`
+      : null;
+  const search = useDiscoverySearchSession('HOME', searchScopeKey);
+  const restorePendingRef = useRef(search.scrollOffset > 0);
 
   const dishes = useMemo(
     () => flattenNearbyDishPages(feed.data?.pages),
@@ -205,8 +212,8 @@ export function CustomerHomeScreen() {
   );
   const categories = useMemo(() => getHomeCategories(dishes), [dishes]);
   const visibleDishes = useMemo(
-    () => filterHomeDishes(dishes, searchQuery, selectedCategory),
-    [dishes, searchQuery, selectedCategory],
+    () => filterHomeDishes(dishes, search.query, selectedCategory),
+    [dishes, search.query, selectedCategory],
   );
   const cartLinesByMenuItemId = useMemo(() => {
     const lines = new Map<string, CartLine>();
@@ -216,16 +223,84 @@ export function CustomerHomeScreen() {
     return lines;
   }, [cartSnapshot?.lines]);
 
+  useEffect(() => {
+    restorePendingRef.current = search.scrollOffset > 0;
+    if (search.scrollOffset === 0) {
+      listRef.current?.scrollToOffset({offset: 0, animated: false});
+    }
+  }, [searchScopeKey]);
+
   const firstName = identity?.displayName?.trim().split(/\s+/)[0] ?? null;
   const greeting = firstName ? `Hi ${firstName}` : 'Hello';
   const queryError = feed.error ? toAppApiError(feed.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
   const initialLoading = feed.isPending && dishes.length === 0 && !feed.locationRequired;
-  const hasFilters = Boolean(searchQuery.trim() || selectedCategory);
+  const searchActive = isDiscoverySearchActive(search.query);
+  const draftSearchActive = isDiscoverySearchActive(search.draft);
+  const hasFilters = Boolean(searchActive || selectedCategory);
 
   const retryFeed = () => {
     feed.refetch();
   };
+
+  const loadNextPage = useCallback(() => {
+    if (
+      canRequestNextSearchPage({
+        hasNextPage: feed.hasNextPage,
+        isFetchingNextPage: feed.isFetchingNextPage,
+        isDebouncing: search.isDebouncing,
+      })
+    ) {
+      void feed.fetchNextPage();
+    }
+  }, [feed, search.isDebouncing]);
+
+  const resetSearchPosition = useCallback(() => {
+    restorePendingRef.current = false;
+    listRef.current?.scrollToOffset({offset: 0, animated: false});
+  }, []);
+
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      if (feed.isFetchingNextPage) {
+        void feed.cancelPendingRequest();
+      }
+      resetSearchPosition();
+      search.setDraft(value);
+    },
+    [feed, resetSearchPosition, search],
+  );
+
+  const handleClearSearch = useCallback(() => {
+    if (feed.isFetchingNextPage) {
+      void feed.cancelPendingRequest();
+    }
+    resetSearchPosition();
+    search.clear();
+  }, [feed, resetSearchPosition, search]);
+
+  const saveListOffset = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      search.saveScrollOffset(event.nativeEvent.contentOffset.y);
+    },
+    [search],
+  );
+
+  const restoreListOffset = useCallback(() => {
+    if (
+      restorePendingRef.current &&
+      search.scrollOffset > 0 &&
+      visibleDishes.length > 0
+    ) {
+      restorePendingRef.current = false;
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({
+          offset: search.scrollOffset,
+          animated: false,
+        });
+      });
+    }
+  }, [search.scrollOffset, visibleDishes.length]);
 
   const handleMutationOutcome = (outcome: CartMutationOutcome) => {
     if (outcome.status === 'FAILED') {
@@ -263,8 +338,7 @@ export function CustomerHomeScreen() {
   };
 
   const clearFilters = () => {
-    setSearchDraft('');
-    setSearchQuery('');
+    handleClearSearch();
     setSelectedCategory(null);
   };
 
@@ -292,11 +366,31 @@ export function CustomerHomeScreen() {
         />
       );
     }
+    if (search.isDebouncing && draftSearchActive) {
+      return (
+        <View accessibilityLiveRegion="polite" style={styles.searchUpdating}>
+          <ActivityIndicator color={colors.flameRed} />
+          <Text style={styles.searchUpdatingText}>Updating search results…</Text>
+        </View>
+      );
+    }
     if (hasFilters && dishes.length > 0) {
+      if (searchActive && feed.hasNextPage) {
+        return (
+          <TerminalState
+            title="No match in the loaded results yet"
+            description="More live nearby results are available. Search the next page or clear your search."
+            actionLabel="Search next page"
+            onAction={loadNextPage}
+            secondaryActionLabel="Clear search"
+            onSecondaryAction={handleClearSearch}
+          />
+        );
+      }
       return (
         <TerminalState
           title="No matching meals"
-          description="Try a different search or category from the nearby meals already loaded."
+          description="Try a different search or category."
           actionLabel="Clear filters"
           onAction={clearFilters}
         />
@@ -330,16 +424,12 @@ export function CustomerHomeScreen() {
         </Text>
       </View>
       <View style={styles.searchWrap}>
-        <TextInput
-          accessibilityLabel="Search loaded nearby meals"
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setSearchDraft}
+        <DiscoverySearchInput
+          accessibilityLabel="Search nearby meals"
+          onChangeText={handleSearchChange}
+          onClear={handleClearSearch}
           placeholder="Search nearby dishes or kitchens"
-          placeholderTextColor={colors.placeholder}
-          returnKeyType="search"
-          style={styles.searchInput}
-          value={searchDraft}
+          value={search.draft}
         />
       </View>
       {categories.length > 0 ? (
@@ -396,6 +486,7 @@ export function CustomerHomeScreen() {
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-home">
       <FlatList
+        ref={listRef}
         data={visibleDishes}
         keyExtractor={item => item.id}
         keyboardShouldPersistTaps="handled"
@@ -410,13 +501,12 @@ export function CustomerHomeScreen() {
           ) : null
         }
         ListHeaderComponent={headerContent}
-        onEndReached={() => {
-          if (feed.hasNextPage && !feed.isFetchingNextPage && !hasFilters) {
-            feed.fetchNextPage();
-          }
-        }}
+        onContentSizeChange={restoreListOffset}
+        onEndReached={loadNextPage}
         onEndReachedThreshold={0.6}
+        onMomentumScrollEnd={saveListOffset}
         onScroll={bottomNavScroll.onScroll}
+        onScrollEndDrag={saveListOffset}
         refreshControl={
           <RefreshControl
             colors={[colors.flameRed]}
@@ -482,16 +572,6 @@ const styles = StyleSheet.create({
   searchWrap: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
-  },
-  searchInput: {
-    minHeight: 52,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.md,
-    fontSize: typography.body,
   },
   categoryRow: {
     gap: spacing.xs,
@@ -632,6 +712,17 @@ const styles = StyleSheet.create({
     color: colors.espressoBrown,
     fontSize: typography.body,
     fontWeight: fontWeight.bold,
+  },
+  searchUpdating: {
+    minHeight: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  searchUpdatingText: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
   },
   footerLoader: {
     paddingVertical: spacing.lg,

@@ -1,5 +1,6 @@
 import {
   useInfiniteQuery,
+  useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
@@ -94,16 +95,18 @@ export function invalidateCustomerHomeFeedQueries(
 export function useHomeNearbyDishesQuery(
   options: HomeNearbyDishQueryOptions,
 ) {
+  const queryClient = useQueryClient();
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const location = useAppSelector(state => state.customerShell.selectedLocation);
   const contractBlocker = getHomeFeedContractBlocker(options.filters);
   const queryEnabled = Boolean(identityId && location && !contractBlocker);
+  const queryKey =
+    identityId && location
+      ? createHomeNearbyDishesQueryKey(identityId, location, options)
+      : [...customerHomeFeedQueryPrefix, 'disabled'] as const;
 
   const query = useInfiniteQuery({
-    queryKey:
-      identityId && location
-        ? createHomeNearbyDishesQueryKey(identityId, location, options)
-        : [...customerHomeFeedQueryPrefix, 'disabled'],
+    queryKey,
     queryFn: ({pageParam, signal}) => {
       if (!location) {
         throw new Error('A saved customer location is required for discovery.');
@@ -129,5 +132,7 @@ export function useHomeNearbyDishesQuery(
     ...query,
     contractBlocker,
     locationRequired: location === null,
+    cancelPendingRequest: () =>
+      queryClient.cancelQueries({queryKey, exact: true}).then(() => undefined),
   };
 }

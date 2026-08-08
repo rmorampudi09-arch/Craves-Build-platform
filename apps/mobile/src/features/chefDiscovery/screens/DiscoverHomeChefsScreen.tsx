@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -6,10 +6,12 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
+import {useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {
   colors,
@@ -29,6 +31,12 @@ import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
+import {DiscoverySearchInput} from '../../discoverySearch/components/DiscoverySearchInput';
+import {
+  canRequestNextSearchPage,
+  isDiscoverySearchActive,
+} from '../../discoverySearch/discoverySearchOrchestration';
+import {useDiscoverySearchSession} from '../../discoverySearch/hooks/useDiscoverySearchSession';
 import type {NearbyKitchen} from '../api/nearbyChefDiscoveryApi';
 import {
   filterLoadedNearbyKitchens,
@@ -118,35 +126,110 @@ function KitchenCard({kitchen, onPress}: KitchenCardProps) {
 }
 
 export function DiscoverHomeChefsScreen() {
+  const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
+  const selectedLocation = useAppSelector(state => state.customerShell.selectedLocation);
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [boundaryNotice, setBoundaryNotice] = useState<string | null>(null);
+  const listRef = useRef<FlatList<NearbyKitchen>>(null);
 
   const discovery = useNearbyChefDiscoveryQuery({
     radiusMeters: DISCOVERY_RADIUS_METERS,
     size: DISCOVERY_PAGE_SIZE,
   });
+  const searchScopeKey =
+    identityId && selectedLocation
+      ? `${identityId}:${selectedLocation.addressId}`
+      : null;
+  const search = useDiscoverySearchSession('CHEFS', searchScopeKey);
+  const restorePendingRef = useRef(search.scrollOffset > 0);
 
   const kitchens = useMemo(
     () => flattenNearbyKitchenPages(discovery.data?.pages),
     [discovery.data?.pages],
   );
   const visibleKitchens = useMemo(
-    () => filterLoadedNearbyKitchens(kitchens, searchQuery),
-    [kitchens, searchQuery],
+    () => filterLoadedNearbyKitchens(kitchens, search.query),
+    [kitchens, search.query],
   );
+
+  useEffect(() => {
+    restorePendingRef.current = search.scrollOffset > 0;
+    if (search.scrollOffset === 0) {
+      listRef.current?.scrollToOffset({offset: 0, animated: false});
+    }
+  }, [searchScopeKey]);
 
   const queryError = discovery.error ? toAppApiError(discovery.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
   const initialLoading =
     discovery.isPending && kitchens.length === 0 && !discovery.locationRequired;
-  const searchActive = searchQuery.trim().length > 0;
+  const searchActive = isDiscoverySearchActive(search.query);
+  const draftSearchActive = isDiscoverySearchActive(search.draft);
 
   const retryDiscovery = () => {
     discovery.refetch();
   };
+
+  const loadNextPage = useCallback(() => {
+    if (
+      canRequestNextSearchPage({
+        hasNextPage: discovery.hasNextPage,
+        isFetchingNextPage: discovery.isFetchingNextPage,
+        isDebouncing: search.isDebouncing,
+      })
+    ) {
+      void discovery.fetchNextPage();
+    }
+  }, [discovery, search.isDebouncing]);
+
+  const resetSearchPosition = useCallback(() => {
+    restorePendingRef.current = false;
+    listRef.current?.scrollToOffset({offset: 0, animated: false});
+  }, []);
+
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      if (discovery.isFetchingNextPage) {
+        void discovery.cancelPendingRequest();
+      }
+      resetSearchPosition();
+      search.setDraft(value);
+    },
+    [discovery, resetSearchPosition, search],
+  );
+
+  const handleClearSearch = useCallback(() => {
+    if (discovery.isFetchingNextPage) {
+      void discovery.cancelPendingRequest();
+    }
+    resetSearchPosition();
+    search.clear();
+  }, [discovery, resetSearchPosition, search]);
+
+  const saveListOffset = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      search.saveScrollOffset(event.nativeEvent.contentOffset.y);
+    },
+    [search],
+  );
+
+  const restoreListOffset = useCallback(() => {
+    if (
+      restorePendingRef.current &&
+      search.scrollOffset > 0 &&
+      visibleKitchens.length > 0
+    ) {
+      restorePendingRef.current = false;
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({
+          offset: search.scrollOffset,
+          animated: false,
+        });
+      });
+    }
+  }, [search.scrollOffset, visibleKitchens.length]);
 
   const showFiltersBoundary = () => {
     setBoundaryNotice(
@@ -185,13 +268,33 @@ export function DiscoverHomeChefsScreen() {
         />
       );
     }
+    if (search.isDebouncing && draftSearchActive) {
+      return (
+        <View accessibilityLiveRegion="polite" style={styles.searchUpdating}>
+          <ActivityIndicator color={colors.flameRed} />
+          <Text style={styles.searchUpdatingText}>Updating search results…</Text>
+        </View>
+      );
+    }
     if (searchActive && kitchens.length > 0) {
+      if (discovery.hasNextPage) {
+        return (
+          <TerminalState
+            title="No match in the loaded results yet"
+            description="More live nearby kitchens are available. Search the next page or clear your search."
+            actionLabel="Search next page"
+            onAction={loadNextPage}
+            secondaryActionLabel="Clear search"
+            onSecondaryAction={handleClearSearch}
+          />
+        );
+      }
       return (
         <TerminalState
           title="No matching kitchens"
-          description="Try another name or area from the nearby kitchens already loaded."
+          description="Try another chef, kitchen name or area."
           actionLabel="Clear search"
-          onAction={() => setSearchQuery('')}
+          onAction={handleClearSearch}
         />
       );
     }
@@ -223,16 +326,13 @@ export function DiscoverHomeChefsScreen() {
       </View>
 
       <View style={styles.searchRow}>
-        <TextInput
-          accessibilityLabel="Search loaded nearby kitchens"
-          autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={setSearchQuery}
+        <DiscoverySearchInput
+          accessibilityLabel="Search nearby kitchens"
+          onChangeText={handleSearchChange}
+          onClear={handleClearSearch}
           placeholder="Search chefs, kitchens or area"
-          placeholderTextColor={colors.placeholder}
-          returnKeyType="search"
-          style={styles.searchInput}
-          value={searchQuery}
+          style={styles.searchField}
+          value={search.draft}
         />
         <Pressable
           accessibilityHint="Explains why advanced nearby-kitchen filters are unavailable"
@@ -284,6 +384,7 @@ export function DiscoverHomeChefsScreen() {
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="discover-home-chefs">
       <FlatList
+        ref={listRef}
         contentContainerStyle={styles.listContent}
         data={visibleKitchens}
         keyboardShouldPersistTaps="handled"
@@ -299,17 +400,12 @@ export function DiscoverHomeChefsScreen() {
           ) : null
         }
         ListHeaderComponent={headerContent}
-        onEndReached={() => {
-          if (
-            discovery.hasNextPage &&
-            !discovery.isFetchingNextPage &&
-            !searchActive
-          ) {
-            discovery.fetchNextPage();
-          }
-        }}
+        onContentSizeChange={restoreListOffset}
+        onEndReached={loadNextPage}
         onEndReachedThreshold={0.6}
+        onMomentumScrollEnd={saveListOffset}
         onScroll={bottomNavScroll.onScroll}
+        onScrollEndDrag={saveListOffset}
         refreshControl={
           <RefreshControl
             colors={[colors.flameRed]}
@@ -366,16 +462,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
   },
-  searchInput: {
+  searchField: {
     flex: 1,
-    minHeight: touchTarget.comfortable,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    paddingHorizontal: spacing.md,
   },
   filterButton: {
     minHeight: touchTarget.comfortable,
@@ -521,6 +609,17 @@ const styles = StyleSheet.create({
     color: colors.flameRed,
     fontSize: typography.small,
     fontWeight: fontWeight.bold,
+  },
+  searchUpdating: {
+    minHeight: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  searchUpdatingText: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
   },
   footerLoader: {
     paddingVertical: spacing.lg,

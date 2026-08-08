@@ -16,18 +16,19 @@
 ## 1. Current Control State
 
 - **P00–P30: DONE** at the implementation/static-contract level recorded by their accepted ledger/evidence records. Device/reference certification remains deferred where those records say so.
-- **P31–P54:** retain the exact DONE/PARTIAL status, ownership boundaries, blockers and validated CI recorded in their dedicated evidence documents and in the phase summary table below. Do not reinterpret a PARTIAL phase as DONE.
+- **P31–P55:** retain the exact DONE/PARTIAL status, ownership boundaries, blockers and validated CI recorded in their dedicated evidence documents and in the phase summary table below. Do not reinterpret a PARTIAL phase as DONE.
 - **P52 — Customer Orders Contract and Pagination: PARTIAL.** Exact `GET /api/v1/orders` newest-first customer order window, strict customer-safe response allowlisting, authoritative amount/status preservation, private customer-scoped query cache, raw-status window counts, conservative history-completeness signaling, cancellation, and invalidation remain authoritative. Full P52 acceptance is still blocked because the current server/APIM contract is fixed to the newest 50 orders and exposes no page/cursor parameters, global counts, or authoritative lifecycle-bucket mapping.
-- **P53 — My Orders — Empty Cart: PARTIAL.** The Orders tab root renders the supportable Reference 09 empty-cart experience over the exact P52 order window with shared header state, title/tabs, virtualized order cards, authoritative raw-status/total presentation, pull-to-refresh, loading/empty/error/offline behavior, fixed-window warning, per-tab scroll restoration, scroll-aware bottom navigation, and explicit fail-closed unsupported states. Detail/tracking/reorder and lifecycle-bucket blockers remain recorded in its evidence.
-- **P54 — My Orders — Active Cart: PARTIAL.** The same Orders route now renders the supportable Reference 10 active-cart state through the existing shared cart domain and `SharedViewCartOverlay`: active View Cart is state-driven, synchronized with authoritative cart item count/food subtotal, opens the real Customer Cart route, reserves dynamic bottom content clearance, and disappears immediately at zero items. Full P54 acceptance remains blocked because the exact reorder/cart merge-or-replacement validation capability is still unavailable and must not be invented.
+- **P53 — My Orders — Empty Cart: PARTIAL.** The Orders tab root renders the supportable Reference 09 experience over the exact P52 window with shared header state, title/tabs, virtualized order cards, authoritative raw-status/total presentation, pull-to-refresh, loading/empty/error/offline behavior, fixed-window warning, per-tab scroll restoration, scroll-aware bottom navigation, and explicit fail-closed unsupported states.
+- **P54 — My Orders — Active Cart: PARTIAL.** The same Orders route renders the supportable Reference 10 active-cart state through the shared cart domain and `SharedViewCartOverlay`. Full P54 acceptance remains blocked because the exact reorder/cart merge-or-replacement validation capability is still unavailable.
+- **P55 — Order Detail, Timeline, and Tracking: PARTIAL.** Typed owned-order detail and provider-neutral delivery-tracking child routes are implemented using the existing customer-safe Order Service/APIM contracts. Verified delivery history is rendered as the delivery timeline, with 30-second foreground-only controlled refresh for non-terminal delivery states, pull-to-refresh, HTTPS-only external tracking, private identity/order cache scope, list/detail reconciliation, and stale/offline/invalid/403/404 handling. Full P55 acceptance remains blocked because no customer/API contract currently exposes the order-status lifecycle event history required for a complete order timeline.
 
-**Current executed phase:** **P54 — My Orders — Active Cart** is **PARTIAL**. Every safe/supportable P54 behavior available through the current accepted cart/orders architecture is implemented and passed required mobile CI.
+**Current executed phase:** **P55 — Order Detail, Timeline, and Tracking** is **PARTIAL**. Every safe/supportable P55 behavior available through the current customer order/detail/delivery contracts is implemented and passed required mobile CI.
 
-**Next phase in sequence:** **P55 — Order Detail, Timeline, and Tracking** — **NOT STARTED**.
+**Next phase in sequence:** **P56 — Reorder, Cancellation, and Refund Eligibility** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P55. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P56. Wait for explicit user direction.
 
 ---
 
@@ -60,15 +61,17 @@
 | P52 | **PARTIAL** | `8222927c4556896c2d686b078b6eb5ec6465b60f` | `P52_CUSTOMER_ORDERS_CONTRACT_AND_PAGINATION.md` | `31265306860` / `93122377531` |
 | P53 | **PARTIAL** | `a89d67a14cb32195eb9e69739961be7450808285` | `P53_MY_ORDERS_EMPTY_CART.md` | `31266249367` / `93124744636` |
 | P54 | **PARTIAL** | `6320289f9c51dd866dc440c951a5a566ce7c081e` | `P54_MY_ORDERS_ACTIVE_CART.md` | `31266801670` / `93126154241` |
-| P55 onward | **NOT STARTED / not accepted** | — | — | — |
+| P55 | **PARTIAL** | `4bb32730c1cbae0556db686688cc4c088f7a415f` | `P55_ORDER_DETAIL_TIMELINE_TRACKING.md` | `31268384221` / `93130106434` |
+| P56 onward | **NOT STARTED / not accepted** | — | — | — |
 
-### P54 evidence
+### P55 evidence
 
-- User authorized exactly one next phase after P53 while P53 remained correctly recorded as PARTIAL.
-- Started from branch head: `6bda665b45bd08554d6a94425ed3a41f4f5d7c2b`.
-- Validated implementation/test commit: `6320289f9c51dd866dc440c951a5a566ce7c081e`.
-- Evidence: `docs/mobile-ui-rebuild/P54_MY_ORDERS_ACTIVE_CART.md`.
-- Final implementation CI run/job: `31266801670` / `93126154241` — **SUCCESS**.
+- User authorized exactly one next phase after P54 while P54 remained correctly recorded as PARTIAL.
+- Started from branch head: `8e16ac27e47b583b2b0f8fa5789913b1730a8925`.
+- Initial P55 implementation commit: `cedb8e0b47b8ce2086f0d3157f867d39a22f5b18`.
+- Final validated implementation/test commit after the lint-gate correction: `4bb32730c1cbae0556db686688cc4c088f7a415f`.
+- Evidence: `docs/mobile-ui-rebuild/P55_ORDER_DETAIL_TIMELINE_TRACKING.md`.
+- Final implementation CI run/job: `31268384221` / `93130106434` — **SUCCESS**.
 
 ---
 
@@ -76,10 +79,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31266801670`
-- Job ID: `93126154241`
-- Head SHA: `6320289f9c51dd866dc440c951a5a566ce7c081e`
-- Phase: **P54 — My Orders — Active Cart**
+- GitHub Actions run ID: `31268384221`
+- Job ID: `93130106434`
+- Head SHA: `4bb32730c1cbae0556db686688cc4c088f7a415f`
+- Phase: **P55 — Order Detail, Timeline, and Tracking**
 - Conclusion: **SUCCESS**
 - Dependency install: **SUCCESS**
 - TypeScript strict check: **SUCCESS**
@@ -92,73 +95,100 @@ No Java/Gradle/APK packaging was performed, consistent with the implementation-p
 
 ---
 
-## 4. P54 Implemented Boundary
+## 4. P55 Implemented Boundary
 
-P54 does not add a new order/cart endpoint. It composes the accepted P53 Orders screen with the accepted shared cart state and overlay implementation.
+P55 uses only the already-existing customer-owned read contracts:
 
-The Customer Orders tab now uses `CustomerOrdersRouteScreen`, which:
+```text
+GET /api/v1/orders/{orderId}
+GET /api/v1/orders/{orderId}/delivery-status
+```
 
-- keeps `CustomerOrdersScreen` as the one shared Orders composition for both empty- and active-cart states;
-- reads authoritative cart item count and food subtotal from the existing cart store selectors;
-- uses the existing Customer Orders route chrome policy to determine View Cart eligibility;
-- renders `SharedViewCartOverlay` only when the cart is active;
-- opens the existing `CustomerCart` screen from the Orders stack;
-- applies dynamic content clearance while the floating cart control is present;
-- removes that clearance immediately when the cart returns to zero items.
+The Orders stack now contains typed `CustomerOrderDetail` and `CustomerOrderTracking` child routes carrying only `orderId`. Card tap and `View Details` open the real detail route. The P53 supportable `Track Order` action opens the real delivery-tracking route. Back navigation remains inside the Orders stack so the Orders tab/list instance and prior scroll state are preserved.
 
-P54 therefore does not duplicate cart state or Orders state and does not interfere with P53 tabs, order queries, pull-to-refresh, scroll restoration, status presentation, or lifecycle/error states.
+Order detail:
 
-The shared View Cart boundary currently uses authoritative `foodSubtotal`. P54 does not invent taxes, fees, delivery, coupon-adjusted, or checkout totals beyond what the accepted cart domain exposes to the shared overlay.
+- reuses the accepted P52 customer-safe allowlist rather than exposing backend-only identity/contact/location fields;
+- validates UUID route IDs and verifies the returned order ID matches the requested ID;
+- caches by authenticated customer + order ID using the existing private query-key model;
+- reconciles refreshed detail into an already-present newest-50 list entry without inventing page insertion semantics;
+- renders verified kitchen, raw order status presentation, timestamps, items, bill, customer-safe delivery address, chef note and prep estimate;
+- handles invalid links, missing sessions, offline/stale state, 403 role denial, 404 missing/wrong-owner orders, retry and pull-to-refresh.
+
+Delivery tracking:
+
+- consumes only the current provider-neutral delivery-status endpoint;
+- supports the exact 14 current delivery states and rejects unknown states;
+- accepts the documented owned-order pre-delivery null projection;
+- enforces at most 100 chronological delivery-history entries and renders those events as the real delivery timeline;
+- strips raw/unapproved fields and makes only HTTPS tracking URLs externally openable;
+- refreshes every 30 seconds only while the app is foreground-active and the delivery is non-terminal;
+- stops automatic refresh for `DELIVERED`, `CANCELLED`, `RETURNED`, `FAILED` and non-retriable 4xx resource/access errors;
+- keeps pull-to-refresh available;
+- does not invent ETA, courier coordinates, a route map, cancellation result or refund result.
+
+P55 deliberately leaves `Reorder` fail-closed because P56 owns reorder/cancellation/refund eligibility and the P54 cart merge-or-replacement blocker remains unresolved.
 
 ---
 
-## 5. P54 Acceptance Blockers
+## 5. P55 Acceptance Blocker
 
-P54 records:
+P55 records:
 
 ```text
-P54_REORDER_CART_MERGE_CONTRACT_UNAVAILABLE
+P55_ORDER_STATUS_TIMELINE_CONTRACT_UNAVAILABLE
 ```
 
-Reference 10 and `phases.md` require reorder/cart conflicts to use an approved merge/replace decision flow. The current Orders surface still lacks an authoritative reorder eligibility/cart reconstruction/merge-replacement contract. P54 therefore preserves the P53 fail-closed Reorder state rather than locally cloning historical order lines or inventing kitchen-compatibility/merge rules.
+The Order Service maintains internal order-status history, but the current customer Order Controller/APIM/OpenAPI surface does not expose an owned-customer order-status event timeline. `GET /api/v1/orders/{orderId}` exposes only the current order status with `createdAt`/`updatedAt`. P55 therefore shows only verified current order status/timestamps in Order Detail and does not fabricate lifecycle events.
 
-P54 also inherits the still-open Orders constraints recorded by P52/P53:
+The separate delivery-status contract does expose authoritative bounded event history, so its exact history is implemented as the delivery timeline. Because `phases.md`/the guide require order detail + timeline + tracking, the missing public order-status timeline keeps P55 **PARTIAL**, not DONE.
+
+Existing upstream blockers still apply where not owned by P55:
 
 ```text
 CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE
-P53_ORDER_DETAIL_ROUTE_CONTRACT_UNAVAILABLE
-P53_TRACKING_ROUTE_CONTRACT_UNAVAILABLE
-P53_REORDER_ELIGIBILITY_CONTRACT_UNAVAILABLE
 P53_REFERENCE_ORDER_CARD_METADATA_UNAVAILABLE
 P53_NOTIFICATION_INBOX_ROUTE_UNAVAILABLE
+P53_REORDER_ELIGIBILITY_CONTRACT_UNAVAILABLE
+P54_REORDER_CART_MERGE_CONTRACT_UNAVAILABLE
 ```
 
-Because the required reorder/cart conflict capability remains absent, P54 is **PARTIAL**, not DONE.
+The earlier P53 detail/tracking route blockers are no longer active blockers after P55 because the exact existing owned-customer detail and delivery-status contracts have now been implemented.
 
 ---
 
-## 6. P54 Changed Files
+## 6. P55 Changed Files
 
 Implementation/test:
 
+- `apps/mobile/src/app/navigation/types.ts`
 - `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
-- `apps/mobile/src/features/customerOrders/customerOrdersActiveCart.ts`
-- `apps/mobile/src/features/customerOrders/customerOrdersActiveCart.test.ts`
-- `apps/mobile/src/features/customerOrders/screens/CustomerOrdersRouteScreen.tsx`
+- `apps/mobile/src/features/customerOrders/api/customerOrdersApi.ts`
+- `apps/mobile/src/features/customerOrders/api/customerOrderTrackingApi.ts`
+- `apps/mobile/src/features/customerOrders/components/CustomerOrderCard.tsx`
+- `apps/mobile/src/features/customerOrders/domain/customerOrderTrackingTypes.ts`
+- `apps/mobile/src/features/customerOrders/presentation/customerOrdersPresentation.ts`
+- `apps/mobile/src/features/customerOrders/presentation/customerOrderTrackingPresentation.ts`
+- `apps/mobile/src/features/customerOrders/query/customerOrdersQueries.ts`
+- `apps/mobile/src/features/customerOrders/screens/CustomerOrderDetailScreen.tsx`
+- `apps/mobile/src/features/customerOrders/screens/CustomerOrderTrackingScreen.tsx`
+- `apps/mobile/src/features/customerOrders/customerOrderDetailApi.test.ts`
+- `apps/mobile/src/features/customerOrders/customerOrderTrackingApi.test.ts`
+- `apps/mobile/src/features/customerOrders/customerOrderTrackingPresentation.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P54_MY_ORDERS_ACTIVE_CART.md`
+- `docs/mobile-ui-rebuild/P55_ORDER_DETAIL_TIMELINE_TRACKING.md`
 
 Ledger:
 
 - `build.md`
 
-No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android native source, or Gradle/APK configuration was changed.
+No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android native source, Gradle/APK, or AAB configuration was changed.
 
 ---
 
-## 7. Architecture Ownership After P54
+## 7. Architecture Ownership After P55
 
 - P19–P24 remain authoritative for authentication/session/onboarding/logout/private-cache cleanup.
 - P25–P30 remain authoritative for Customer shell/header/shared cart foundations, View Cart behavior, and cart mutation reconciliation.
@@ -167,26 +197,26 @@ No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android
 - P42–P44 remain authoritative for customer-facing Kitchen Profile and Kitchen All Dishes boundaries.
 - P45–P51 remain authoritative for their recorded Cart/checkout/payment/address orchestration boundaries and blockers.
 - P52 remains authoritative for the exact current customer Orders list response allowlist, returned-window model, private cache, raw-status counts, history-completeness guard and invalidation boundary.
-- P53 remains authoritative for the currently supportable My Orders composition, order-card presentation, lifecycle states, tab/scroll state, and fail-closed unsupported order-action presentation.
-- **P54 owns the Orders active-cart route chrome only: live shared View Cart composition, Cart navigation, and dynamic bottom content clearance.**
-- **P55 — Order Detail, Timeline, and Tracking has not started.**
-- P56 remains the future owner of exact reorder/cancellation/refund eligibility behavior.
+- P53 remains authoritative for My Orders composition, lifecycle states, tabs/scroll restoration and fail-closed actions not superseded by an exact later contract.
+- P54 remains authoritative for Orders active-cart View Cart composition and its reorder/cart merge blocker.
+- **P55 owns customer Order Detail navigation/query/presentation, provider-neutral Delivery Tracking navigation/query/presentation, exact delivery-history timeline rendering, and bounded foreground refresh.**
+- **P56 — Reorder, Cancellation, and Refund Eligibility has not started.**
 
 ---
 
-## 8. Explicitly Not Complete After P54
+## 8. Explicitly Not Complete After P55
 
 Do not describe any of the following as complete:
 
-- outstanding blockers recorded for P31–P53;
+- outstanding blockers recorded for P31–P54 that P55 did not explicitly supersede;
 - P52 true server pagination/cursor navigation beyond the newest 50 orders;
 - P52 global order totals or global per-status/lifecycle-tab counts;
 - authoritative mapping from backend statuses to `All`/`Upcoming`/`Completed`/`Cancelled`;
-- P53 real Order Detail/Tracking/Reorder destinations or eligibility;
-- P53 exact reference thumbnails/ratings/cuisine/human-readable order number where the contract does not supply them;
-- P54 approved reorder/cart merge-or-replacement flow;
-- P55 Order Detail/Timeline/Tracking;
+- exact reference thumbnails/ratings/cuisine/human-readable order number where the contract does not supply them;
+- approved reorder/cart merge-or-replacement flow;
+- a complete customer order-status lifecycle event timeline;
 - P56 reorder/cancellation/refund eligibility;
+- ETA/map/courier-location tracking not supplied by the accepted customer delivery contract;
 - checkout/payment end-to-end flow;
 - live provider sandbox/device certification unless a later evidence record explicitly says so;
 - Chef operational/product screens;
@@ -200,12 +230,12 @@ Do not describe any of the following as complete:
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current implemented phase: P54 — PARTIAL
-Validated implementation SHA: 6320289f9c51dd866dc440c951a5a566ce7c081e
-CI: 31266801670 / 93126154241 — SUCCESS
-Evidence: docs/mobile-ui-rebuild/P54_MY_ORDERS_ACTIVE_CART.md
-P54 blocker: P54_REORDER_CART_MERGE_CONTRACT_UNAVAILABLE
-Inherited Orders blockers: CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE; P53_ORDER_DETAIL_ROUTE_CONTRACT_UNAVAILABLE; P53_TRACKING_ROUTE_CONTRACT_UNAVAILABLE; P53_REORDER_ELIGIBILITY_CONTRACT_UNAVAILABLE; P53_REFERENCE_ORDER_CARD_METADATA_UNAVAILABLE; P53_NOTIFICATION_INBOX_ROUTE_UNAVAILABLE
-Next phase: P55 — Order Detail, Timeline, and Tracking — NOT STARTED
+Current implemented phase: P55 — PARTIAL
+Validated implementation SHA: 4bb32730c1cbae0556db686688cc4c088f7a415f
+CI: 31268384221 / 93130106434 — SUCCESS
+Evidence: docs/mobile-ui-rebuild/P55_ORDER_DETAIL_TIMELINE_TRACKING.md
+P55 blocker: P55_ORDER_STATUS_TIMELINE_CONTRACT_UNAVAILABLE
+Inherited Orders blockers: CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE; P53_REFERENCE_ORDER_CARD_METADATA_UNAVAILABLE; P53_NOTIFICATION_INBOX_ROUTE_UNAVAILABLE; P53_REORDER_ELIGIBILITY_CONTRACT_UNAVAILABLE; P54_REORDER_CART_MERGE_CONTRACT_UNAVAILABLE
+Next phase: P56 — Reorder, Cancellation, and Refund Eligibility — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

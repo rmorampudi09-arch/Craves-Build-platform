@@ -24,12 +24,14 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 - **P61 — Favorites — Active Cart: PARTIAL.** Active-cart wrapper is implemented; inherited Favorites contract gaps remain.
 - **P62 — Notifications — Empty Cart: PARTIAL.** Bounded current notification list/read behavior is implemented; true pagination/global aggregates/mark-all/current APIM provenance remain unavailable.
 - **P63 — Notifications — Active Cart: PARTIAL.** Shared active-cart wrapper is implemented; inherited P62 contract gaps and physical reference certification remain.
-- **P64 — Edit Customer Profile Domain/Form: PARTIAL.** Original/draft state, dirty-field detection, supported field schema/validation, server-validation mapping, unsaved-change protection, full-PUT save planning for the exact supported update contract, query reconciliation, and explicit avatar-contract blocking are implemented. It is not upgraded to DONE because guide-required photo/security/device/delete-account capabilities are not all exposed by approved contracts and no post-P64 CI evidence is recorded.
-- **P65 — Edit Customer Profile Active/Empty Visuals: PARTIAL.** References 23/24 now use one registered `CustomerProfileEdit` route/form. The active variant reads the authoritative cart selectors and reuses `SharedViewCartOverlay`; the empty variant removes the overlay at zero items; successful profile save writes and invalidates the shared profile query. Full reference/device certification and several guide-visible profile capabilities remain blocked/deferred.
+- **P64 — Edit Customer Profile Domain/Form: PARTIAL.** Original/draft state, dirty-field detection, supported field schema/validation, server-validation mapping, unsaved-change protection, full-PUT save planning for the exact supported update contract, query reconciliation, and explicit avatar-contract blocking are implemented. The later P65 integration CI validates this code in the accepted branch state, but guide-required photo/security/device/delete-account capabilities are not all exposed by approved contracts.
+- **P65 — Edit Customer Profile Active/Empty Visuals: PARTIAL.** References 23/24 use one registered `CustomerProfileEdit` route/form. The active variant reads the authoritative cart selectors and reuses `SharedViewCartOverlay`; the empty variant removes the overlay at zero items; successful profile save writes and invalidates the shared profile query. P65 implementation CI is successful. Full reference/device certification and several guide-visible profile capabilities remain blocked/deferred.
 
 **Current executed phase:** **P65 — Edit Customer Profile Active/Empty Visuals — PARTIAL** at implementation/static-contract scope.
 
-**P65 implementation/evidence head before this ledger update:** `46f34958bd8794f02c01d1f67772c60a6c5e365d`.
+**P65 validated implementation head:** `edf8674e31b0867eded2f4618667482994cb9ec2`.
+
+**P65 evidence update head:** `fff22adfc1ba32e1f2319a8747a548f1cb821288`.
 
 **Next phase in sequence:** **P66 — My Addresses Active/Empty Visuals — NOT STARTED**.
 
@@ -50,11 +52,11 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 | P61 | **PARTIAL** | `docs/mobile-ui-rebuild/P61_FAVORITES_ACTIVE_CART.md` | `31273123021` / `93142321916` — SUCCESS |
 | P62 | **PARTIAL** | `docs/mobile-ui-rebuild/P62_NOTIFICATIONS_EMPTY_CART.md` | `31274137746` / `93144883129` — SUCCESS |
 | P63 | **PARTIAL** | `docs/mobile-ui-rebuild/P63_NOTIFICATIONS_ACTIVE_CART.md` | `31274568039` / `93145968430` — SUCCESS |
-| P64 | **PARTIAL** | Existing P64 form/domain/API/query implementation on branch; no dedicated accepted evidence/CI record yet | **PENDING / not recorded** |
-| P65 | **PARTIAL** | `docs/mobile-ui-rebuild/P65_EDIT_CUSTOMER_PROFILE_ACTIVE_EMPTY_VISUALS.md` at `46f34958bd8794f02c01d1f67772c60a6c5e365d` | **PENDING — no workflow run found for the P65 head when checked** |
+| P64 | **PARTIAL** | Existing P64 form/domain/API/query implementation on branch; no separate accepted evidence document | `31276696857` / `93151316827` — SUCCESS as part of the P65 integrated branch state |
+| P65 | **PARTIAL** | `docs/mobile-ui-rebuild/P65_EDIT_CUSTOMER_PROFILE_ACTIVE_EMPTY_VISUALS.md`; validated implementation `edf8674e31b0867eded2f4618667482994cb9ec2` | `31276696857` / `93151316827` — SUCCESS |
 | P66 onward | **NOT STARTED / not accepted** | — | — |
 
-The last confirmed successful implementation CI remains P63. Do not claim P64/P65 CI success until a matching workflow run exists and is inspected.
+The P65 implementation workflow has been inspected and is successful. P65 remains PARTIAL only for the explicitly documented contract and physical visual-certification gaps.
 
 ---
 
@@ -109,7 +111,7 @@ Focused P65 coverage:
 
 - `apps/mobile/src/features/customerProfile/customerProfileEditVisuals.test.ts` verifies active View Cart visibility, zero-item hiding, dynamic clearance, and one shared route policy.
 
-**P65 status: PARTIAL.** The phase’s shared-route/cart-preservation/cache-refresh acceptance is implemented at client scope, but physical Android/reference-image certification is deferred and the missing photo/rewards/security/device/delete-account contracts prevent claiming the full 183-page reference composition as end-to-end complete.
+**P65 status: PARTIAL.** The phase’s shared-route/cart-preservation/cache-refresh acceptance and implementation CI are complete at client scope, but physical Android/reference-image certification is deferred and the missing photo/rewards/security/device/delete-account contracts prevent claiming the full 183-page reference composition as end-to-end complete.
 
 Evidence: `docs/mobile-ui-rebuild/P65_EDIT_CUSTOMER_PROFILE_ACTIVE_EMPTY_VISUALS.md`.
 
@@ -139,10 +141,16 @@ No backend, APIM, OpenAPI, database, infrastructure, package dependency, Android
 
 Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
-- Last confirmed successful run: P63 — `31274568039` / `93145968430`.
-- P65 head checked: `46f34958bd8794f02c01d1f67772c60a6c5e365d`.
-- Matching P65 workflow run at check time: **none returned**.
-- Therefore dependency install, strict TypeScript, ESLint, Jest, production Android JS bundle, and backend/APIM guard are **not claimed as newly validated for P65**.
+- GitHub Actions run ID: `31276696857`.
+- Job ID: `93151316827`.
+- Validated P65 implementation head: `edf8674e31b0867eded2f4618667482994cb9ec2`.
+- Job conclusion: **SUCCESS**.
+- Dependency install: **SUCCESS**.
+- TypeScript strict check: **SUCCESS**.
+- ESLint zero-warning gate: **SUCCESS**.
+- Jest: **SUCCESS**.
+- Production Android JavaScript bundle: **SUCCESS**.
+- Backend/APIM/infrastructure source guard: **SUCCESS**.
 - No Gradle/APK packaging was performed, consistent with the implementation-phase policy.
 
 ---
@@ -152,10 +160,11 @@ Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
 Current executed phase: P65 — Edit Customer Profile Active/Empty Visuals — PARTIAL
-P65 implementation/evidence head before ledger update: 46f34958bd8794f02c01d1f67772c60a6c5e365d
+P65 validated implementation head: edf8674e31b0867eded2f4618667482994cb9ec2
+P65 CI: 31276696857 / 93151316827 — SUCCESS
 P65 evidence: docs/mobile-ui-rebuild/P65_EDIT_CUSTOMER_PROFILE_ACTIVE_EMPTY_VISUALS.md
 P65 implemented: one shared CustomerProfileEdit route/form; active authoritative View Cart; zero-item empty variant; real CustomerCart navigation; cart preserved; successful save reconciles/invalidates shared profile cache
-P65 remains PARTIAL: missing approved profile photo/rewards/security/device/delete-account capabilities; device/reference certification deferred; no matching post-P65 CI run found at check time
+P65 remains PARTIAL: missing approved profile photo/rewards/security/device/delete-account capabilities; device/reference certification deferred
 Inherited blockers: retain all earlier phase blockers not explicitly superseded
 Next phase: P66 — My Addresses Active/Empty Visuals — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user

@@ -14,7 +14,7 @@
 
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-**Historical preservation:** The complete ledger through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P30 use dedicated evidence under `docs/mobile-ui-rebuild/`; this living ledger remains compact while those records preserve phase detail.
+**Historical preservation:** The complete ledger through P12 is preserved at `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md`. P13–P31 use dedicated evidence under `docs/mobile-ui-rebuild/`; this living ledger remains compact while those records preserve phase detail.
 
 ---
 
@@ -51,22 +51,26 @@
 - **P28 — Authoritative Cart Domain Skeleton: DONE** at implementation/static-contract level.
 - **P29 — Shared View Cart Overlay: DONE** at implementation/static-contract level; final device/reference certification remains later visual QA.
 - **P30 — Cart Add/Remove/Quantity Reconciliation: DONE** at implementation/static-contract level.
+- **P31 — Home Feed Data Contract and Query Model: PARTIAL** at implementation/static-contract level. Exact nearby-menu/location/pagination/cache behavior is implemented and validated; category/cuisine/full-home mapping remains blocked because the current branch has no authoritative concrete contract for those capabilities.
 
-P30 completion evidence:
+P31 evidence:
 
-- Started from accepted P29 ledger head: `e75ed7f56860026fccccd7ff9a1f3f0218faf2b3`.
-- Validated implementation commit: `1e7d8ec460098aaeaf993d5b34129d2c7b8a8f75`.
-- Evidence commit: `8ff11cac0bb550d72755e0ff46dda32f0f603c34`.
-- Evidence: `docs/mobile-ui-rebuild/P30_CART_ADD_REMOVE_QUANTITY_RECONCILIATION.md`.
-- CI run: `31231364244` — **SUCCESS**.
-- CI job: `93035709313` — **SUCCESS**.
-- Jest: **34 suites passed, 167 tests passed**.
+- Started from accepted P30 ledger head: `58ad6ffd46f09992d1ad1098dd4df7cc2c246bd0`.
+- Validated implementation commit: `641ef5321a886185e5956f966f1710e231ee2ad4`.
+- Evidence commit: `87da0591af6768ab5640f2167c61cc8439b026e8`.
+- Evidence: `docs/mobile-ui-rebuild/P31_HOME_FEED_DATA_CONTRACT_AND_QUERY_MODEL.md`.
+- CI run: `31243903844` — **SUCCESS**.
+- CI job: `93069234068` — **SUCCESS**.
+- Jest: **36 suites passed, 175 tests passed**.
+- Exact blocker: no authoritative current-branch home aggregation endpoint, cuisine taxonomy endpoint, `category` discovery query parameter, `cuisine` discovery query parameter, or cuisine field in the nearby-menu discovery response.
 
-**Next phase in sequence:** **P31 — Home Feed Data Contract and Query Model**.
+**Current phase in sequence:** **P31 — Home Feed Data Contract and Query Model** remains open because required category/cuisine/full-home contract mapping is blocked.
+
+**Next phase after P31:** **P32 — Customer Home — Empty Cart**, but it is **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P31 until the user explicitly authorizes the next phase.
+**Required action:** Stop. Do not pre-implement P32. Resolve/supply the missing P31 authoritative contracts or explicitly change the phase authority before advancing.
 
 ---
 
@@ -76,9 +80,10 @@ Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
 Run:
 
-- GitHub Actions run ID: `31231364244`
-- Head SHA: `1e7d8ec460098aaeaf993d5b34129d2c7b8a8f75`
-- Phase: **P30 — Cart Add/Remove/Quantity Reconciliation**
+- GitHub Actions run ID: `31243903844`
+- Job ID: `93069234068`
+- Head SHA: `641ef5321a886185e5956f966f1710e231ee2ad4`
+- Phase: **P31 — Home Feed Data Contract and Query Model**
 - Conclusion: **SUCCESS**
 
 Successful checks:
@@ -87,7 +92,7 @@ Successful checks:
 2. Node setup and `npm ci`,
 3. strict TypeScript (`tsc --noEmit`),
 4. ESLint with zero warnings,
-5. Jest including P30 focused coverage and prior regressions — 34 suites / 167 tests passed,
+5. Jest including P31 focused coverage and prior regressions — 36 suites / 175 tests passed,
 6. production Android JavaScript bundle generation with `react-native bundle`,
 7. backend/APIM/infrastructure source-change guard.
 
@@ -95,55 +100,64 @@ The implementation-phase workflow intentionally does **not** perform Java/Gradle
 
 ---
 
-## 3. P30 Accepted Cart Mutation/Reconciliation Behavior
+## 3. P31 Implemented Home Feed Query Boundary
 
-P30 extends the accepted P28 authoritative cart domain and P29 shared View Cart overlay with exact existing line mutation contracts. It does not implement P31 discovery, a Cart product screen, checkout, or payment.
+P31 reviewed the master guide's customer Home expectations against current backend/APIM reality before introducing mobile data contracts.
 
-Accepted behavior:
+Accepted exact contract behavior:
 
-- `POST /api/v1/cart/items` is used for add with exact `{menuItemId, quantity}` request shape.
-- `PUT /api/v1/cart/items/{cartItemId}` is used for quantity updates with exact `{quantity}` request shape.
-- `DELETE /api/v1/cart/items/{cartItemId}` is used for line removal.
-- Every mutation response is parsed as the existing authoritative `CartResponse`; invalid/inconsistent responses are rejected.
-- Add waits for authoritative server reconciliation because the backend can create or merge the cart line and refresh catalog/kitchen/price snapshots.
-- Quantity update optimistically changes only canonical line quantity; it does not fabricate server-owned line totals or food subtotal.
-- Remove optimistically removes the canonical line so derived item count/empty state/View Cart visibility react immediately.
-- Quantity/remove failures roll back to the prior snapshot only when no newer authoritative client acceptance revision has arrived.
-- All cart writes are serialized, preventing later intent from being overwritten by an earlier out-of-order mutation response.
-- Duplicate same-key taps are blocked while pending (`menu:<menuItemId>` for add; `line:<cartItemId>` for update/remove).
-- Existing request-id-aware mutation metadata remains authoritative for pending/failed state.
-- Only validated authoritative snapshots advance `clientRevision`; optimistic and rollback projections do not.
-- Existing P28 selectors remain the one source for item count, per-menu-item quantity, empty state, and server food subtotal, so current and future surfaces synchronize from one cart domain.
-- No backend/APIM contract was added or changed by P30.
+- Nearby menu data uses only `GET /api/v1/discovery/menu-items`.
+- Exact supported query parameters are `latitude`, `longitude`, `radiusMeters`, `page`, and `size`.
+- Mobile request validation matches the backend's location/radius/page/page-size bounds.
+- Nearby discovery responses are strictly parsed before they become usable mobile data.
+- Backend page metadata (`page`, `size`, `totalElements`, `totalPages`, `hasNext`) drives infinite-query pagination.
+- The selected saved customer address now carries validated latitude/longitude from the existing customer address response contract.
+- Home discovery query keys are private and scoped by authenticated customer identity, CUSTOMER role, saved-address ID, normalized filter intent, radius, and page size.
+- Changing the shared browsing location invalidates all Home discovery query variants without invalidating unrelated private domains.
+- Category/cuisine filter intent is represented in the query model, but transport is fail-closed when either unsupported filter is requested.
+- No hardcoded production feed, cuisine list, guessed category parameter, guessed cuisine parameter, or guessed Home aggregation URL was added.
+- No backend/APIM contract was added or changed by P31.
 
-### Guide alignment
+### P31 contract blocker
 
-The master guide requires centralized cart state, immediate mutation feedback, duplicate-mutation protection, reliable rollback for low-risk optimistic updates, server reconciliation, derived totals/badges/selectors, and protection against stale/out-of-order responses. P30 implements those rules without inventing pricing or later product-screen contracts.
+The current branch does not provide an authoritative concrete contract for:
+
+- a full Home-feed aggregation endpoint,
+- cuisine taxonomy,
+- server-side nearby `category` filtering,
+- server-side nearby `cuisine` filtering,
+- cuisine data in the current nearby-menu response,
+- the guide's logical recommendation aggregation capability.
+
+Because `agent.md` forbids inventing missing API contracts, P31 remains **PARTIAL** even though its exact supported subset passes CI.
 
 ---
 
-## 4. P30 Changed Files
+## 4. P31 Changed Files
 
 Implementation:
 
-- `apps/mobile/src/features/cart/api/cartApi.ts`
-- `apps/mobile/src/features/cart/state/cartSlice.ts`
-- `apps/mobile/src/features/cart/state/cartMutations.ts`
+- `apps/mobile/src/features/customerShell/state/customerShellSlice.ts`
+- `apps/mobile/src/features/customerShell/api/customerShellApi.ts`
+- `apps/mobile/src/features/customerShell/hooks/useCustomerHeaderState.ts`
+- `apps/mobile/src/features/home/api/homeFeedApi.ts`
+- `apps/mobile/src/features/home/query/homeFeedQueries.ts`
 
 Tests:
 
-- `apps/mobile/src/features/cart/cartDomain.test.ts`
-- `apps/mobile/src/features/cart/cartMutations.test.ts`
+- `apps/mobile/src/features/customerShell/customerShell.test.ts`
+- `apps/mobile/src/features/home/homeFeedApi.test.ts`
+- `apps/mobile/src/features/home/homeFeedQueries.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P30_CART_ADD_REMOVE_QUANTITY_RECONCILIATION.md`
+- `docs/mobile-ui-rebuild/P31_HOME_FEED_DATA_CONTRACT_AND_QUERY_MODEL.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, Home/discovery data model, Cart product screen, checkout, payment, or P31+ product behavior was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P32 Home screen, checkout, payment, or Chef product behavior was changed.
 
 ---
 
-## 5. Current Architecture Ownership After P30
+## 5. Current Architecture Ownership After P31 Work
 
 ### Authentication/session
 
@@ -157,11 +171,12 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 - P28 owns the one canonical cart read domain, server-total snapshot, selectors, dependency metadata, and mutation metadata skeleton.
 - P29 owns the reusable shared View Cart presentation/visibility contract.
 - P30 owns exact add/update/remove cart-line transport and reconciliation, bounded optimistic quantity/remove behavior, duplicate protection, serialized writes, and rollback/stale-response protection.
+- P31 currently owns the validated nearby Home-discovery adapter/query model, saved-location coordinate propagation, pagination/cache keys, location invalidation, and explicit fail-closed treatment of unsupported category/cuisine filter intent.
 
 ### Later-phase boundaries
 
-- **P31** owns Home feed/category/cuisine/location data contract/query mapping, pagination, and cache keys according to `phases.md`.
-- P32+ owns customer discovery/product screens according to `phases.md`.
+- **P31 remains open** until the missing authoritative category/cuisine/full-home contract is supplied/resolved or phase authority is explicitly changed.
+- **P32+** owns customer discovery/product screens according to `phases.md`; none was started by P31.
 - **P45** owns Cart screen data/pricing model extensions.
 - **P46** owns Cart and Bill Summary UI and its real navigation destination.
 - Checkout/payment remain P47+ according to `phases.md`.
@@ -170,16 +185,26 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 
 ## 6. Current Contract Status
 
-Previously accepted authentication/profile/onboarding and P27 customer-shell reads remain unchanged.
+Previously accepted authentication/profile/onboarding, P27 customer-shell reads, and P28–P30 cart contracts remain unchanged.
 
-Accepted customer cart mobile contract boundary now includes:
+Accepted current P31 mobile discovery contract boundary:
 
-- `GET /api/v1/cart` — P28 authoritative cart read.
-- `POST /api/v1/cart/items` — P30 add line/item quantity.
-- `PUT /api/v1/cart/items/{cartItemId}` — P30 set line quantity.
-- `DELETE /api/v1/cart/items/{cartItemId}` — P30 remove line.
+- `GET /api/v1/discovery/menu-items`
+  - query: `latitude`, `longitude`, `radiusMeters`, `page`, `size`
+  - authoritative paginated response from `DiscoveryDtos.NearbyMenuItemDiscoveryResponse`.
 
-No client-owned tax, fee, discount, delivery-fee, grand-total, stock, serviceability, or pricing-version field is invented when the current accepted cart response does not provide it.
+Accepted customer-location dependency:
+
+- existing saved-address response supplies `id`, `addressLabel`, `latitude`, and `longitude` used by the shared browsing-location state.
+
+Not accepted because no exact current-branch server/APIM contract was found:
+
+- Home aggregation URL,
+- cuisine taxonomy URL/model,
+- discovery `category` query parameter,
+- discovery `cuisine` query parameter,
+- cuisine response field,
+- recommendation aggregation URL/model.
 
 Live APIM/device runtime certification is not claimed by these static implementation phases unless a later evidence record explicitly says so.
 
@@ -201,18 +226,20 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P27 Shared Customer Header/Location/Notification Badge | **DONE** | CI `31229329651`. |
 | P28 Authoritative Cart Domain Skeleton | **DONE** | CI `31229985407`. |
 | P29 Shared View Cart Overlay | **DONE** | CI `31230836784`. |
-| P30 Cart Add/Remove/Quantity Reconciliation | **DONE** | Exact line writes, duplicate/stale/out-of-order protection, bounded optimistic rollback; CI `31231364244`. |
-| P31 onward | **NOT STARTED / not accepted** | No later phase is authorized by this record. |
+| P30 Cart Add/Remove/Quantity Reconciliation | **DONE** | CI `31231364244`. |
+| P31 Home Feed Data Contract and Query Model | **PARTIAL** | Exact nearby/location/pagination/cache/invalidation subset validated by CI `31243903844`; category/cuisine/full-home contract missing. |
+| P32 onward | **NOT STARTED / not accepted** | P31 is not DONE; no later phase was authorized or started. |
 
 ---
 
-## 8. Explicitly Not Complete After P30
+## 8. Explicitly Not Complete After P31 Work
 
 Do not describe any of the following as complete:
 
-- P31 Home feed/category/cuisine/location query model or discovery data integration,
-- Customer Home/Discovery/Chefs/Orders/Profile product screens merely because shell/header/cart foundations exist,
-- full dish-card/quantity-selector product UI merely because P30 mutation commands exist,
+- P31 exact category/cuisine/full-home aggregation mapping,
+- P32 Customer Home — Empty Cart,
+- Customer Home/Discovery/Chefs/Orders/Profile product screens merely because shell/header/cart/query foundations exist,
+- full dish-card/quantity-selector product UI merely because P30 mutation commands and P31 nearby data exist,
 - Customer Cart product screen/Bill Summary,
 - native GPS/location permission behavior or full serviceability/geocoding flows,
 - Notifications Center product route/actions merely because the P27 badge exists,

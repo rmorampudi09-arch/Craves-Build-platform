@@ -16,36 +16,17 @@
 ## 1. Current Control State
 
 - **P00–P30: DONE** at the implementation/static-contract level recorded by their accepted ledger/evidence records. Device/reference certification remains deferred where those records say so.
-- **P31 — Home Feed Data Contract and Query Model: PARTIAL.** Exact nearby-menu/location/pagination/cache behavior is implemented and validated. Category/cuisine/full-home mapping remains blocked because no authoritative concrete contract exists.
-- **P32 — Customer Home — Empty Cart: PARTIAL.** Supported Home root, nearby feed presentation, Add action, saved location, loaded-result filtering/search, pagination, refresh, bottom-nav scroll behavior, and lifecycle states are implemented and CI-validated. Richer favorite/full-search/category/cuisine/recommendation contracts and later-owned routes remain blocked.
-- **P33 — Customer Home — Active Cart: PARTIAL.** Same Home route reconciles dish cards to the authoritative cart snapshot and real quantity controls. P46 supplies the real Cart destination; remaining P33 blockers stay recorded in its evidence.
-- **P34 — Nearby Chef Discovery Contract: PARTIAL.** Exact `GET /api/v1/discovery/kitchens` transport, validated summary mapping, saved-location coordinates, pagination, cache identity, and invalidation are CI-validated. Final delivery-serviceability and richer kitchen fields remain missing.
-- **P35 — Discover Home Chefs — Empty Cart: PARTIAL.** Supported nearby-kitchen discovery surface, location, pagination, loaded-result search, refresh, lifecycle states, and scroll-aware bottom navigation are implemented. Richer rating/ETA/verification/media/favorite/server-search/filter capabilities remain blocked.
-- **P36 — Discover Home Chefs — Active Cart: PARTIAL.** Same Chefs route composes authoritative View Cart count/subtotal and zero-cart restoration. P46 supplies real Cart navigation; dish-level Add behavior/richer contract blockers remain as previously recorded.
-- **P37 — Search Query Orchestration: PARTIAL.** Debounce, cancellation, user/location-scoped query and scroll restoration, pagination, and stale-result protection are CI-validated. Server-wide dish/chef free-text search remains unavailable.
-- **P38 — Filter and Sort: PARTIAL.** Focused route, separate draft/applied state, Reset/Apply/discard behavior, route policy, and currently supportable filtering are CI-validated. Full server-side filter/sort metadata and parameters remain unavailable.
-- **P39 — Dish Detail Data Contract: PARTIAL.** Exact public Catalog item+kitchen composition, current price/availability, media mapping, customer-safe kitchen allowlist, stable cache identity, and future favorite reconciliation boundary are CI-validated. Cuisine/ingredients/allergens/reviews/favorite contracts remain missing.
-- **P40 — Dish Detail UI and Interactions: PARTIAL.** Typed route/UI, gallery/share, supported facts, sticky cart actions, current-detail revalidation, cart reconciliation, lifecycle states, and source-position back restoration are CI-validated. Favorite/ingredient/review data and dedicated Buy Now intent remain missing.
-- **P41 — Dish Ingredients: PARTIAL.** Typed child route, Dish Detail entry, immersive chrome, state-preserving back behavior, detail-query reuse, lifecycle states, and explicit ingredient/allergen fail-closed capability gate are CI-validated. Authoritative ingredient/allergen/dietary-warning payloads remain missing.
-- **P42 — Customer-Facing Kitchen Profile Contract: PARTIAL.** Exact current public active-kitchen and sellable-menu compatibility routes, customer-safe profile allowlisting, supported menu-summary/media mapping, stable customer+kitchen query ownership, and future favorite-cache reconciliation boundary are implemented and CI-validated. Verification, rating/reviews, order-count, final serviceability/ETA, kitchen-favorite, featured/top-dish ranking, kitchen hero/profile media, and paginated public kitchen-menu contracts remain absent.
-- **P43 — Customer-Facing Kitchen Profile UI: PARTIAL.** Typed immersive profile route, Chef Discovery → profile navigation, supported Reference 15 composition, public identity/location/tenure/about presentation, bounded non-ranked menu preview, real Dish Detail opening, real shared-cart Add/quantity reconciliation with pre-mutation profile revalidation, lifecycle states, pull-to-refresh, and profile scroll restoration are implemented and CI-validated. P44 supplies the real complete-menu destination, but P43 remains blocked by the missing P42 verification/rating/order/serviceability/favorite/featured/media contracts.
-- **P44 — Kitchen All Dishes: PARTIAL.** Typed immersive `CustomerKitchenDishes` route, real Kitchen Profile View all navigation, virtualized complete current-contract menu rendering, authoritative category filtering, Dish Detail opening, shared-cart Add/quantity reconciliation with pre-mutation menu revalidation, lifecycle states, pull-to-refresh, and list scroll/category preservation are implemented and CI-validated. Full Reference 16 acceptance remains blocked by the non-paginated public menu contract, missing rating/favorite/final-serviceability fields, and deferred physical-device/reference certification.
-- **P45 — Cart Screen Data and Pricing Model: PARTIAL.** The Cart screen has an explicit data/pricing composition model over the authoritative shared cart: exact cart items and server food subtotal are reused, unsupported pricing/address/ETA/coupon fields are marked unavailable instead of calculated, quantity targets map safely to update/remove/invalid, and checkout fails closed unless explicit server eligibility evidence exists. Full acceptance remains blocked because the current cart contract has no pre-checkout bill breakdown/quote, coupon result, delivery-address summary, ETA, or checkout-eligibility payload.
-- **P46 — Cart and Bill Summary UI: PARTIAL.** Typed `CustomerCart` is registered in all customer tab stacks; Home/Chefs View Cart opens it; grouped-kitchen virtualized lines, authoritative prices, quantity/remove mutations, pull-to-refresh, empty/error states, scroll-aware bottom navigation, fail-closed address/ETA/offers, expandable bill details, server food subtotal, and sticky checkout area are implemented and CI-validated. Full acceptance remains blocked by missing complete pre-checkout pricing, commerce address/ETA, coupon result/application, explicit checkout eligibility, cart-line media for exact reference fidelity, and deferred physical-device/reference certification.
-- **P47 — Address Selection for Commerce: PARTIAL.** Cart-origin saved-address selection reuses the exact authenticated saved-address contract/query, promotes the selected saved-address ID into the cart commerce dependency, keeps shared browsing location synchronized, preserves the existing Cart/tab origin, and invalidates the delivery quote when the address changes. Full acceptance remains blocked because the repository has no exact pre-checkout serviceability/fee/ETA quote/reprice contract and the rebuild does not yet have the later Checkout origin route.
-- **P48 — Delivery Quote/Reprice Orchestration: PARTIAL.** A shared quote-invalidation/readiness boundary centralizes address/cart/coupon dependency semantics, detects quote-relevant authoritative cart snapshot changes without timestamp noise, automatically marks an address-bound quote `STALE` after authoritative cart changes, keeps it `UNRESOLVED` without an address, preserves the last valid cart during background refresh, and fails closed with an explicit contract blocker. Full acceptance remains blocked because no exact address-aware pre-checkout quote/reprice endpoint and response schema exists for serviceability, fee, ETA, taxes, grand total, quote version, or expiry.
-- **P49 — Checkout Session Creation: PARTIAL.** Exact `POST /api/v1/checkout` and `GET /api/v1/checkout/{checkoutId}` mobile boundaries, validated authoritative checkout totals/status/order linkage, same-runtime duplicate-tap single-flight protection, successful same-intent result reuse, and uncertain-outcome replay blocking are implemented and CI-validated. Full acceptance remains blocked because checkout creation has no server-owned idempotency/replay key or intent-based recovery contract.
-- **P50 — Payment Eligibility and Provider Handoff: PARTIAL.** Exact owned payment-order create/read boundaries, strict response validation, authoritative checkout/payment ID and grand-total cross-checking, same-checkout duplicate preparation coalescing, and server-issued Cashfree handoff modeling are implemented and CI-validated. Raw payment credential collection is forbidden and native launch fails closed. Full acceptance remains blocked because no exact customer tokenized payment-method/eligibility contract exists and the current rebuild has no reviewed Cashfree React Native SDK/native configuration.
-- **P51 — Payment Success/Failure/Cancel Recovery: PARTIAL.** Exact owned backend payment verification, strict verification-response validation, provider-return trigger validation, payment/checkout ID and amount reconciliation, same-payment verification single-flight, manual verification retry, and fail-closed native-callback/terminal-new-attempt gates are implemented and CI-validated. Full acceptance remains blocked by the absent reviewed Cashfree native callback/deep-link integration, no exact fresh-payment-attempt contract after terminal failure/cancel, and current backend verify semantics that do not guarantee `FAILED`/`CANCELLED` transitions for ordinary non-paid provider statuses.
-- **P52 — Customer Orders Contract and Pagination: PARTIAL.** Exact `GET /api/v1/orders` newest-first customer order window, strict customer-safe response allowlisting, authoritative amount/status preservation, private customer-scoped query cache, raw-status window counts, conservative history-completeness signaling, cancellation, and invalidation are implemented and CI-validated. Full acceptance remains blocked because the current server/APIM contract is fixed to the newest 50 orders and exposes no page/cursor parameters, global counts, or authoritative lifecycle-bucket mapping.
+- **P31–P52:** retain the exact DONE/PARTIAL status, ownership boundaries, blockers and validated CI recorded in their dedicated evidence documents and in the phase summary table below. Do not reinterpret a PARTIAL phase as DONE.
+- **P52 — Customer Orders Contract and Pagination: PARTIAL.** Exact `GET /api/v1/orders` newest-first customer order window, strict customer-safe response allowlisting, authoritative amount/status preservation, private customer-scoped query cache, raw-status window counts, conservative history-completeness signaling, cancellation, and invalidation remain authoritative. Full P52 acceptance is still blocked because the current server/APIM contract is fixed to the newest 50 orders and exposes no page/cursor parameters, global counts, or authoritative lifecycle-bucket mapping.
+- **P53 — My Orders — Empty Cart: PARTIAL.** The Orders tab root now renders the supportable Reference 09 empty-cart experience over the exact P52 order window: shared location/notification header state, title/tabs, virtualized order cards, authoritative raw-status/total presentation, pull-to-refresh, loading/empty/error/offline behavior, fixed-window warning, per-tab scroll restoration, scroll-aware bottom navigation, and explicit fail-closed unsupported states. Full acceptance remains blocked because the backend has no authoritative lifecycle bucket mapping; exact order-detail/tracking child contracts/routes are later-owned by P55; authoritative reorder eligibility/cart reconstruction is not available; and the current list response lacks several reference-only order-card metadata fields. Active `View Cart` behavior was deliberately not added because it belongs to P54.
 
-**Current executed phase:** **P52 — Customer Orders Contract and Pagination** is **PARTIAL**. Every safe/supportable P52 behavior available through the exact current customer-order list contract is implemented and passed required mobile CI. Mobile does not fake pagination or claim global counts from a truncated 50-order server window.
+**Current executed phase:** **P53 — My Orders — Empty Cart** is **PARTIAL**. Every safe/supportable P53 behavior available through the exact current contracts is implemented and passed required mobile CI. Mobile does not invent lifecycle grouping, detail/tracking destinations, reorder eligibility, or missing reference metadata.
 
-**Next phase in sequence:** **P53 — My Orders — Empty Cart (UI)** — **NOT STARTED**.
+**Next phase in sequence:** **P54 — My Orders — Active Cart** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P53. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P54. Wait for explicit user direction.
 
 ---
 
@@ -76,17 +57,16 @@
 | P50 | **PARTIAL** | `3af5efb9caa46d13523858c4e65ac31c7cb776bf` | `P50_PAYMENT_ELIGIBILITY_AND_PROVIDER_HANDOFF.md` | `31263886724` / `93118801738` |
 | P51 | **PARTIAL** | `ce2a72cbf950b9a21389a55bcde748c60abbb4fd` | `P51_PAYMENT_SUCCESS_FAILURE_CANCEL_RECOVERY.md` | `31264513219` / `93120381991` |
 | P52 | **PARTIAL** | `8222927c4556896c2d686b078b6eb5ec6465b60f` | `P52_CUSTOMER_ORDERS_CONTRACT_AND_PAGINATION.md` | `31265306860` / `93122377531` |
-| P53 onward | **NOT STARTED / not accepted** | — | — | — |
+| P53 | **PARTIAL** | `a89d67a14cb32195eb9e69739961be7450808285` | `P53_MY_ORDERS_EMPTY_CART.md` | `31266249367` / `93124744636` |
+| P54 onward | **NOT STARTED / not accepted** | — | — | — |
 
-### P52 evidence commits
+### P53 evidence
 
-- User authorized exactly one next phase after P51 while P51 remained correctly recorded as PARTIAL.
-- Started from branch head: `4ade7c0fe267c8aab506fe6e06508383b3539e3c`.
-- Initial P52 commit: `1f511ea7ecb344c17e2437f2624826d8a6691241`.
-- Validated implementation/test commit: `8222927c4556896c2d686b078b6eb5ec6465b60f`.
-- Evidence commit: `2bdd2455a75fbc84c2df601dc02a63eed0434217`.
-- Evidence: `docs/mobile-ui-rebuild/P52_CUSTOMER_ORDERS_CONTRACT_AND_PAGINATION.md`.
-- Final implementation CI run/job: `31265306860` / `93122377531` — **SUCCESS**.
+- User authorized exactly one next phase after P52 while P52 remained correctly recorded as PARTIAL.
+- Started from branch head: `16711af7a9515e305906cb589dc3b43e66d5caea`.
+- Validated implementation/test commit: `a89d67a14cb32195eb9e69739961be7450808285`.
+- Evidence: `docs/mobile-ui-rebuild/P53_MY_ORDERS_EMPTY_CART.md`.
+- Final implementation CI run/job: `31266249367` / `93124744636` — **SUCCESS**.
 
 ---
 
@@ -94,10 +74,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31265306860`
-- Job ID: `93122377531`
-- Head SHA: `8222927c4556896c2d686b078b6eb5ec6465b60f`
-- Phase: **P52 — Customer Orders Contract and Pagination**
+- GitHub Actions run ID: `31266249367`
+- Job ID: `93124744636`
+- Head SHA: `a89d67a14cb32195eb9e69739961be7450808285`
+- Phase: **P53 — My Orders — Empty Cart**
 - Conclusion: **SUCCESS**
 - Dependency install: **SUCCESS**
 - TypeScript strict check: **SUCCESS**
@@ -110,105 +90,98 @@ No Java/Gradle/APK packaging was performed, consistent with the implementation-p
 
 ---
 
-## 4. P52 Implemented Boundary
+## 4. P53 Implemented Boundary
 
-P52 audited and uses only the exact current authenticated customer list operation:
+P53 uses the exact P52 authenticated customer order-list capability and does not introduce a new order endpoint:
 
 ```text
 GET /api/v1/orders
 ```
 
-Current Order Service returns the newest customer-owned rows only:
+The Orders tab now has a real `CustomerOrdersScreen` instead of the prior account-status placeholder. The screen composes the current shared Customer header/location state, Reference 09 title/tabs, virtualized order cards, authoritative raw backend status labels, authoritative kitchen/item/total data, loading and recovery states, pull-to-refresh, fixed-50 history-completeness warning, per-tab scroll preservation, and scroll-aware Customer bottom navigation.
 
-```text
-ORDER BY created_at DESC LIMIT 50
-```
+The empty-cart state intentionally contains **no active View Cart overlay**. P54 owns the active-cart state and has not started.
 
-The current controller/APIM operation exposes no list query parameters or page metadata. Mobile therefore calls the route with no invented `page`, `size`, `cursor`, `offset`, or `status` parameters.
-
-The response is parsed through a customer-safe allowlist. Exact backend order statuses and authoritative amounts/currency are preserved. Unknown statuses, malformed amounts/identifiers/timestamps, duplicate IDs, responses larger than the 50-row server window, and non-newest-first results fail closed.
-
-The private React Query cache is scoped by authenticated customer identity. P52 derives exact raw-status counts only from the authoritative returned window and marks history as `UNKNOWN_AFTER_SERVER_LIMIT` whenever all 50 server rows are present; it never interprets that saturated window as the customer's complete order history.
+P53 does not fabricate reference fields missing from the current exact list response. It does not invent chef rating/cuisine, dish thumbnails, illustrated chef avatars, or a server-defined human-readable CRV order number. Item-name tiles and a shared chef icon are used as conservative presentation fallbacks; the displayed short order reference is derived from the real order UUID and is not represented as a new backend field.
 
 ---
 
-## 5. P52 Acceptance Blockers
+## 5. P53 Acceptance Blockers
 
-P52 explicitly records:
+P53 explicitly records:
 
 ```text
-CUSTOMER_ORDERS_SERVER_PAGINATION_UNAVAILABLE
-CUSTOMER_ORDERS_GLOBAL_COUNTS_UNAVAILABLE
 CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE
+P53_ORDER_DETAIL_ROUTE_CONTRACT_UNAVAILABLE
+P53_TRACKING_ROUTE_CONTRACT_UNAVAILABLE
+P53_REORDER_ELIGIBILITY_CONTRACT_UNAVAILABLE
+P53_REFERENCE_ORDER_CARD_METADATA_UNAVAILABLE
+P53_NOTIFICATION_INBOX_ROUTE_UNAVAILABLE
 ```
 
-The backend/APIM currently provides only a newest-50 list. There is no exact server page/cursor contract and no global total/per-status count payload. Client-side slicing would paginate only a truncated window and is therefore not implemented as fake history pagination.
+The guide requires `All Orders`, `Upcoming`, `Completed`, and `Cancelled`, but the exact backend currently provides raw statuses only and no approved lifecycle-bucket mapping. Therefore only `All Orders` is authoritative; the remaining tabs fail closed with an explicit unavailable state rather than misclassifying customer orders.
 
-The guide's user-facing lifecycle tabs (`All`, `Upcoming`, `Completed`, `Cancelled`) also have no current authoritative mapping to the exact backend status enum. P52 preserves exact raw statuses rather than inventing product bucket membership.
+The phase acceptance also requires real order/detail/tracking/reorder navigation. Exact order-detail/timeline/tracking contracts and child routes are later-owned by P55, and authoritative reorder eligibility/cart reconstruction is not available through the current P52 list contract. P53 renders those reference actions as disabled/unavailable instead of creating placeholder routes, fake details, inferred tracking, or stale local reorder behavior.
 
-Because these owning-layer capabilities remain absent, P52 is **PARTIAL**, not DONE.
+Because these required capabilities remain absent, P53 is **PARTIAL**, not DONE.
 
 ---
 
-## 6. P52 Changed Files
+## 6. P53 Changed Files
 
 Implementation/test:
 
-- `apps/mobile/src/features/customerOrders/api/customerOrdersApi.ts`
-- `apps/mobile/src/features/customerOrders/domain/customerOrderTypes.ts`
-- `apps/mobile/src/features/customerOrders/domain/customerOrdersModel.ts`
-- `apps/mobile/src/features/customerOrders/query/customerOrdersQueries.ts`
-- `apps/mobile/src/features/customerOrders/customerOrdersApi.test.ts`
-- `apps/mobile/src/features/customerOrders/customerOrdersModel.test.ts`
+- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
+- `apps/mobile/src/features/customerOrders/screens/CustomerOrdersScreen.tsx`
+- `apps/mobile/src/features/customerOrders/components/CustomerOrderCard.tsx`
+- `apps/mobile/src/features/customerOrders/presentation/customerOrdersPresentation.ts`
+- `apps/mobile/src/features/customerOrders/customerOrdersPresentation.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P52_CUSTOMER_ORDERS_CONTRACT_AND_PAGINATION.md`
+- `docs/mobile-ui-rebuild/P53_MY_ORDERS_EMPTY_CART.md`
 
 Ledger:
 
 - `build.md`
 
-No Orders UI, backend, APIM, OpenAPI, database, infrastructure, package dependency, or Android native source was changed.
+No backend, APIM, OpenAPI, database, infrastructure, package dependency, or Android native source was changed.
 
 ---
 
-## 7. Architecture Ownership After P52
+## 7. Architecture Ownership After P53
 
 - P19–P24 remain authoritative for authentication/session/onboarding/logout/private-cache cleanup.
 - P25–P30 remain authoritative for Customer shell/header/shared cart foundations and mutation reconciliation.
-- P31–P38 remain authoritative for the currently supported discovery/search/filter boundaries described by their evidence records.
-- P39–P41 remain authoritative for Customer Dish Detail/ingredients boundaries.
-- P42–P44 remain authoritative for supported customer-facing Kitchen Profile and Kitchen All Dishes contract/UI boundaries.
-- P45 remains authoritative for Cart-screen data/pricing capability composition and fail-closed checkout evidence.
-- P46 remains authoritative for the supported Cart/bill-summary UI and Cart route.
-- P47 remains authoritative for Cart-origin saved delivery-address selection.
-- P48 remains authoritative for delivery-quote dependency invalidation/readiness orchestration and its missing quote/reprice blocker.
-- P49 remains authoritative for checkout create/read session boundaries and its missing server idempotency/recovery blocker.
-- P50 remains authoritative for payment-order creation/read preparation, amount cross-checking, handoff modeling, and its tokenized-method/native-launch blockers.
-- P51 remains authoritative for backend payment verification/recovery and its native-callback/new-attempt/backend-terminal-state blockers.
-- **P52 owns the exact current customer Orders list response allowlist, authoritative returned-window model, private query/cache key, raw-status window counts, history-completeness guard, and order-list invalidation boundary.**
-- **P53 — My Orders — Empty Cart (UI) has not started.**
+- P31–P38 remain authoritative for their recorded discovery/search/filter boundaries.
+- P39–P41 remain authoritative for Dish Detail/ingredients boundaries.
+- P42–P44 remain authoritative for customer-facing Kitchen Profile and Kitchen All Dishes boundaries.
+- P45–P51 remain authoritative for their recorded Cart/checkout/payment/address orchestration boundaries and blockers.
+- P52 remains authoritative for the exact current customer Orders list response allowlist, returned-window model, private cache, raw-status counts, history-completeness guard and invalidation boundary.
+- **P53 owns the currently supportable My Orders empty-cart tab-root UI, order-card presentation, UI lifecycle states, tab/scroll state and fail-closed unsupported order-action presentation.**
+- **P54 — My Orders — Active Cart has not started.**
+- P55 remains the future owner of exact order detail/timeline/tracking contracts and child routes.
 
 ---
 
-## 8. Explicitly Not Complete After P52
+## 8. Explicitly Not Complete After P53
 
 Do not describe any of the following as complete:
 
-- outstanding blockers recorded for P31–P51;
+- outstanding blockers recorded for P31–P52;
 - P52 true server pagination/cursor navigation beyond the newest 50 orders;
 - P52 global order totals or global per-status/lifecycle-tab counts;
-- P52 authoritative mapping from backend statuses to `All`/`Upcoming`/`Completed`/`Cancelled` presentation buckets;
-- **P53 — My Orders — Empty Cart (UI)**;
-- P54 — My Orders — Active Cart (UI);
+- authoritative mapping from backend statuses to `All`/`Upcoming`/`Completed`/`Cancelled`;
+- P53 real Order Detail/Tracking/Reorder destinations or eligibility;
+- P53 exact reference thumbnails/ratings/cuisine/human-readable order number where the contract does not supply them;
+- **P54 — My Orders — Active Cart**;
 - P55 Order Detail/Timeline/Tracking;
 - P56 reorder/cancellation/refund eligibility;
 - checkout/payment end-to-end flow;
 - live provider sandbox/device certification unless a later evidence record explicitly says so;
 - Chef operational/product screens;
 - full lifecycle/accessibility/performance/security audits;
-- final visual certification of all 52 references;
+- final physical-device visual certification of all 52 references;
 - final Android APK/AAB.
 
 ---
@@ -217,11 +190,11 @@ Do not describe any of the following as complete:
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current implemented phase: P52 — PARTIAL
-Validated implementation SHA: 8222927c4556896c2d686b078b6eb5ec6465b60f
-CI: 31265306860 / 93122377531 — SUCCESS
-Evidence: docs/mobile-ui-rebuild/P52_CUSTOMER_ORDERS_CONTRACT_AND_PAGINATION.md
-Blockers: CUSTOMER_ORDERS_SERVER_PAGINATION_UNAVAILABLE; CUSTOMER_ORDERS_GLOBAL_COUNTS_UNAVAILABLE; CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE; earlier recorded P31–P51 blockers remain
-Next phase: P53 — NOT STARTED
+Current implemented phase: P53 — PARTIAL
+Validated implementation SHA: a89d67a14cb32195eb9e69739961be7450808285
+CI: 31266249367 / 93124744636 — SUCCESS
+Evidence: docs/mobile-ui-rebuild/P53_MY_ORDERS_EMPTY_CART.md
+P53 blockers: CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE; P53_ORDER_DETAIL_ROUTE_CONTRACT_UNAVAILABLE; P53_TRACKING_ROUTE_CONTRACT_UNAVAILABLE; P53_REORDER_ELIGIBILITY_CONTRACT_UNAVAILABLE; P53_REFERENCE_ORDER_CARD_METADATA_UNAVAILABLE; P53_NOTIFICATION_INBOX_ROUTE_UNAVAILABLE
+Next phase: P54 — My Orders — Active Cart — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

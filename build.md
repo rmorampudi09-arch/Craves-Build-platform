@@ -34,15 +34,16 @@
 - **P46 — Cart and Bill Summary UI: PARTIAL.** Typed `CustomerCart` is registered in all customer tab stacks; Home/Chefs View Cart opens it; grouped-kitchen virtualized lines, authoritative prices, quantity/remove mutations, pull-to-refresh, empty/error states, scroll-aware bottom navigation, fail-closed address/ETA/offers, expandable bill details, server food subtotal, and sticky checkout area are implemented and CI-validated. Full acceptance remains blocked by missing complete pre-checkout pricing, commerce address/ETA, coupon result/application, explicit checkout eligibility, cart-line media for exact reference fidelity, and deferred physical-device/reference certification.
 - **P47 — Address Selection for Commerce: PARTIAL.** Cart-origin saved-address selection reuses the exact authenticated saved-address contract/query, promotes the selected saved-address ID into the cart commerce dependency, keeps shared browsing location synchronized, preserves the existing Cart/tab origin, and invalidates the delivery quote when the address changes. Full acceptance remains blocked because the repository has no exact pre-checkout serviceability/fee/ETA quote/reprice contract and the rebuild does not yet have the later Checkout origin route.
 - **P48 — Delivery Quote/Reprice Orchestration: PARTIAL.** A shared quote-invalidation/readiness boundary centralizes address/cart/coupon dependency semantics, detects quote-relevant authoritative cart snapshot changes without timestamp noise, automatically marks an address-bound quote `STALE` after authoritative cart changes, keeps it `UNRESOLVED` without an address, preserves the last valid cart during background refresh, and fails closed with an explicit contract blocker. Full acceptance remains blocked because no exact address-aware pre-checkout quote/reprice endpoint and response schema exists for serviceability, fee, ETA, taxes, grand total, quote version, or expiry.
-- **P49 — Checkout Session Creation: PARTIAL.** Exact `POST /api/v1/checkout` and `GET /api/v1/checkout/{checkoutId}` mobile boundaries, validated authoritative checkout totals/status/order linkage, same-runtime duplicate-tap single-flight protection, successful same-intent result reuse, and uncertain-outcome replay blocking are implemented and CI-validated. The server itself performs authoritative address/cart/menu/kitchen/charge revalidation. Full acceptance remains blocked because checkout creation has no server-owned idempotency/replay key or intent-based recovery contract, so safe retries across network uncertainty/process restart cannot be guaranteed by mobile memory alone.
+- **P49 — Checkout Session Creation: PARTIAL.** Exact `POST /api/v1/checkout` and `GET /api/v1/checkout/{checkoutId}` mobile boundaries, validated authoritative checkout totals/status/order linkage, same-runtime duplicate-tap single-flight protection, successful same-intent result reuse, and uncertain-outcome replay blocking are implemented and CI-validated. Full acceptance remains blocked because checkout creation has no server-owned idempotency/replay key or intent-based recovery contract.
+- **P50 — Payment Eligibility and Provider Handoff: PARTIAL.** Exact owned payment-order create/read boundaries, strict response validation, authoritative checkout/payment ID and grand-total cross-checking, same-checkout duplicate preparation coalescing, and server-issued Cashfree handoff modeling are implemented and CI-validated. Raw payment credential collection is forbidden and native launch fails closed. Full acceptance remains blocked because no exact customer tokenized payment-method/eligibility contract exists and the current rebuild has no reviewed Cashfree React Native SDK/native configuration.
 
-**Current executed phase:** **P49 — Checkout Session Creation** is **PARTIAL**. Every safe/supportable P49 behavior available through current authoritative contracts is implemented and passed the required mobile CI. Missing server idempotency/recovery is explicitly not fabricated.
+**Current executed phase:** **P50 — Payment Eligibility and Provider Handoff** is **PARTIAL**. Every safe/supportable P50 behavior available through current authoritative contracts is implemented and passed required mobile CI. Missing tokenized-method capability and native Cashfree launch support are explicitly not fabricated.
 
-**Next phase in sequence:** **P50 — Payment Eligibility and Provider Handoff** — **NOT STARTED**.
+**Next phase in sequence:** **P51 — Payment Success/Failure/Cancel Recovery** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P50. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P51. Wait for explicit user direction.
 
 ---
 
@@ -70,16 +71,17 @@
 | P47 | **PARTIAL** | `921bdc0af0e307a8e0c99d90a3f57e7d9d6aed41` | `P47_ADDRESS_SELECTION_FOR_COMMERCE.md` | `31260111878` / `93109503409` |
 | P48 | **PARTIAL** | `2bd26edbb687a5baaf104c3d4b73d47978c1b122` | `P48_DELIVERY_QUOTE_REPRICE_ORCHESTRATION.md` | `31260767948` / `93111102045` |
 | P49 | **PARTIAL** | `f722df0382b5dbe70dd500aae6bf6bab17b7074e` | `P49_CHECKOUT_SESSION_CREATION.md` | `31262925706` / `93116408514` |
-| P50 onward | **NOT STARTED / not accepted** | — | — | — |
+| P50 | **PARTIAL** | `3af5efb9caa46d13523858c4e65ac31c7cb776bf` | `P50_PAYMENT_ELIGIBILITY_AND_PROVIDER_HANDOFF.md` | `31263886724` / `93118801738` |
+| P51 onward | **NOT STARTED / not accepted** | — | — | — |
 
-### P49 evidence commits
+### P50 evidence commits
 
-- User authorized exactly one next phase after P48 while P48 remained correctly recorded as PARTIAL.
-- Started from branch head: `a08b70a2a9ac1f28435172abf70f11504512c224`.
-- Validated implementation commit: `f722df0382b5dbe70dd500aae6bf6bab17b7074e`.
-- Evidence commit: `6630bc97c0e88d253f63278cda044b746e79cc4c`.
-- Evidence: `docs/mobile-ui-rebuild/P49_CHECKOUT_SESSION_CREATION.md`.
-- Final implementation CI run/job: `31262925706` / `93116408514` — **SUCCESS**.
+- User authorized exactly one next phase after P49 while P49 remained correctly recorded as PARTIAL.
+- Started from branch head: `8ca9677dfb28cfd01a1fca0399d9e32f02924bd5`.
+- Validated implementation commit: `3af5efb9caa46d13523858c4e65ac31c7cb776bf`.
+- Evidence commit: `14a45a8e01439b70b5c960062436cf23efcd20aa`.
+- Evidence: `docs/mobile-ui-rebuild/P50_PAYMENT_ELIGIBILITY_AND_PROVIDER_HANDOFF.md`.
+- Final implementation CI run/job: `31263886724` / `93118801738` — **SUCCESS**.
 
 ---
 
@@ -87,10 +89,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31262925706`
-- Job ID: `93116408514`
-- Head SHA: `f722df0382b5dbe70dd500aae6bf6bab17b7074e`
-- Phase: **P49 — Checkout Session Creation**
+- GitHub Actions run ID: `31263886724`
+- Job ID: `93118801738`
+- Head SHA: `3af5efb9caa46d13523858c4e65ac31c7cb776bf`
+- Phase: **P50 — Payment Eligibility and Provider Handoff**
 - Conclusion: **SUCCESS**
 - Dependency install: **SUCCESS**
 - TypeScript strict check: **SUCCESS**
@@ -103,113 +105,66 @@ No Java/Gradle/APK packaging was performed, consistent with the implementation-p
 
 ---
 
-## 4. P49 Implemented Boundary
+## 4. P50 Implemented Boundary
 
-### Exact checkout create/read transport
-
-P49 audited current Order Service source and implemented only the exact supported customer checkout routes:
+P50 audited and used only the exact current customer payment operations:
 
 ```text
-POST /api/v1/checkout
-GET  /api/v1/checkout/{checkoutId}
+POST /api/v1/payments/orders
+GET  /api/v1/payments/orders/{paymentOrderId}
 ```
 
-The create request is the authoritative `CheckoutRequest(UUID deliveryAddressId, String note)`. Mobile sends only supported fields and does not invent a quote, eligibility, idempotency, or payment field.
+`POST /api/v1/payments/orders/{paymentOrderId}/verify` exists but is deliberately reserved for P51.
 
-`checkoutApi.ts` validates untrusted create/read responses before accepting them as a session. The typed boundary keeps server-owned checkout ID/status/currency, food subtotal, platform fee, tax amount, delivery fee, grand total, charge-policy ID, delivery-address ID, child order IDs/statuses, and creation timestamp. Child orders must link to the returned checkout, and create must return the requested saved-address ID.
+The server owns customer/checkout validation and provider-order creation. Mobile sends only the authoritative checkout UUID, validates all returned IDs/status/currency/amount/provider references/session material, and rejects mismatched or malformed responses.
 
-### Authoritative eligibility/revalidation ownership
+Before preparing a provider handoff, mobile requires the checkout and payment order to refer to the same checkout, requires the checkout and payment order to be `PAYMENT_PENDING`, and cross-checks payment amount/currency against the checkout's authoritative grand total/currency. No tax/fee/discount/payment amount is calculated by mobile.
 
-The current Order Service `checkout(...)` operation performs authoritative revalidation inside the side-effecting transaction before creating checkout/order rows:
+Same-checkout duplicate preparation taps are single-flighted. The resulting typed handoff contains only server-issued Cashfree order/session IDs plus authoritative amount metadata.
 
-- customer ownership;
-- active owned delivery-address validation;
-- cart validation;
-- active menu-item and kitchen refresh;
-- current charge-policy lookup;
-- server charge calculation;
-- checkout and child-order persistence;
-- cart clearing after successful creation.
-
-Mobile therefore does not calculate checkout totals or substitute local eligibility rules for server acceptance.
-
-### Duplicate-tap and uncertain-outcome safety
-
-`checkoutSessionCoordinator.ts` creates a stable same-runtime intent key from cart ID, cart client revision, saved delivery-address ID, and optional note.
-
-For the same intent it:
-
-- coalesces duplicate in-flight calls onto one checkout POST;
-- reuses the already-successful session instead of issuing another POST;
-- rejects a different intent while creation is still in flight.
-
-The generic HTTP retry policy already excludes POST from automatic retries.
-
-If checkout creation fails with an uncertain outcome (network/timeout/retriable-server/invalid-response style failure), the coordinator marks that exact intent uncertain and refuses to replay it. Without an authoritative recovery contract, retrying could create another checkout/order set after a lost response.
-
-A definitive non-retriable 4xx rejection is treated as not-created and may be attempted again after the caller corrects the input.
-
-### Focused tests
-
-`apps/mobile/src/features/checkout/checkoutSession.test.ts` verifies:
-
-- authoritative session/totals parsing;
-- child-order checkout linkage;
-- duplicate create-call coalescing;
-- successful same-intent result reuse;
-- different-intent blocking during an active create;
-- uncertain-outcome same-intent replay blocking;
-- definitive 400 retry allowance;
-- explicit server-idempotency capability blocker.
+Raw card/UPI/banking credential collection is forbidden. Provider secrets remain server-side.
 
 ---
 
-## 5. P49 Acceptance Blocker
+## 5. P50 Acceptance Blockers
 
-P49 requires idempotent checkout session creation such that duplicate/replayed create attempts cannot produce duplicate checkout/order side effects.
-
-Current backend source exposes no checkout `Idempotency-Key`, request/intent key, persisted replay token, or intent-based recovery lookup. The service generates a fresh checkout UUID and inserts checkout/order rows for each accepted create invocation.
-
-P49 therefore records:
+P50 explicitly records:
 
 ```text
-CHECKOUT_SERVER_IDEMPOTENCY_CONTRACT_UNAVAILABLE
+PAYMENT_METHOD_TOKEN_CONTRACT_UNAVAILABLE
+CASHFREE_NATIVE_PROVIDER_SDK_UNAVAILABLE
 ```
 
-P49 does **not**:
+The current customer payment API does not expose an exact tokenized saved payment-method/eligibility contract for cards, UPI instruments, wallets, COD, or net banking. The current rebuild also has no reviewed Cashfree React Native SDK/native payment configuration in `apps/mobile/package.json`/native source.
 
-- invent an idempotency header the server does not support;
-- automatically retry checkout POST after an uncertain outcome;
-- claim process-restart/network-replay safety from in-memory client coalescing;
-- bypass P48's missing pre-checkout quote/reprice blocker to enable the production Cart CTA;
-- start payment/provider behavior owned by P50.
+P50 therefore does **not** fabricate payment methods, collect raw credentials, add an unreviewed native SDK, fake provider authorization, call payment verification, or mark payment successful.
 
-Because authoritative server idempotency/recovery is absent, P49 is **PARTIAL**, not DONE.
+Because actual project-approved native provider launch and the tokenized method/eligibility capability remain absent, P50 is **PARTIAL**, not DONE.
 
 ---
 
-## 6. P49 Changed Files
+## 6. P50 Changed Files
 
 Implementation/test:
 
-- `apps/mobile/src/features/checkout/domain/checkoutTypes.ts`
-- `apps/mobile/src/features/checkout/api/checkoutApi.ts`
-- `apps/mobile/src/features/checkout/domain/checkoutSessionCoordinator.ts`
-- `apps/mobile/src/features/checkout/checkoutSession.test.ts`
+- `apps/mobile/src/features/payment/domain/paymentTypes.ts`
+- `apps/mobile/src/features/payment/api/paymentApi.ts`
+- `apps/mobile/src/features/payment/domain/paymentHandoffCoordinator.ts`
+- `apps/mobile/src/features/payment/paymentHandoff.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P49_CHECKOUT_SESSION_CREATION.md`
+- `docs/mobile-ui-rebuild/P50_PAYMENT_ELIGIBILITY_AND_PROVIDER_HANDOFF.md`
 
 Ledger:
 
 - `build.md`
 
-No backend, APIM, OpenAPI, database, infrastructure, payment/provider, or Android native build configuration was changed.
+No backend, APIM, OpenAPI, database, infrastructure, payment-provider server source, package dependency, or Android native payment configuration was changed.
 
 ---
 
-## 7. Architecture Ownership After P49
+## 7. Architecture Ownership After P50
 
 - P19–P24 remain authoritative for authentication/session/onboarding/logout/private-cache cleanup.
 - P25–P30 remain authoritative for Customer shell/header/shared cart foundations and mutation reconciliation.
@@ -218,26 +173,27 @@ No backend, APIM, OpenAPI, database, infrastructure, payment/provider, or Androi
 - P42–P44 remain authoritative for supported customer-facing Kitchen Profile and Kitchen All Dishes contract/UI boundaries.
 - P45 remains authoritative for Cart-screen data/pricing capability composition and fail-closed checkout evidence.
 - P46 remains authoritative for the supported Cart/bill-summary UI and Cart route.
-- P47 remains authoritative for Cart-origin saved delivery-address selection and promotion of the exact saved-address ID into the Cart dependency.
-- P48 remains authoritative for delivery-quote dependency invalidation/readiness orchestration and its explicit missing quote/reprice contract blocker.
-- **P49 owns the exact mobile checkout create/read session boundary, response validation, same-runtime duplicate creation coalescing, and fail-closed uncertain-create replay behavior.**
-- **P50 — Payment Eligibility and Provider Handoff has not started.**
-- Later payment/order/account/Chef phases remain not started unless an earlier evidence record explicitly says otherwise.
+- P47 remains authoritative for Cart-origin saved delivery-address selection.
+- P48 remains authoritative for delivery-quote dependency invalidation/readiness orchestration and its missing quote/reprice blocker.
+- P49 remains authoritative for checkout create/read session boundaries and its missing server idempotency/recovery blocker.
+- **P50 owns the exact mobile payment-order create/read preparation boundary, response validation, authoritative checkout/payment amount cross-check, same-checkout preparation coalescing, secure Cashfree handoff modeling, and fail-closed provider-launch capability gate.**
+- **P51 — Payment Success/Failure/Cancel Recovery has not started.**
 
 ---
 
-## 8. Explicitly Not Complete After P49
+## 8. Explicitly Not Complete After P50
 
 Do not describe any of the following as complete:
 
-- outstanding blockers recorded for P31–P48;
+- outstanding blockers recorded for P31–P49;
 - P48 authoritative pre-checkout quote/reprice network refresh and full serviceability/fee/ETA acceptance;
 - P49 authoritative server-side checkout idempotency/recovery across network replay/process restart;
-- production enabling of the Cart checkout CTA while its P45/P48 eligibility/pricing blockers remain unresolved;
-- **P50 — Payment Eligibility and Provider Handoff**;
+- P50 tokenized payment-method/eligibility capability;
+- P50 native Cashfree provider launch/authorization;
+- **P51 — Payment Success/Failure/Cancel Recovery**;
 - checkout/payment end-to-end flow;
+- live provider sandbox/device certification unless a later evidence record explicitly says so;
 - Chef operational/product screens;
-- live APIM/device runtime certification unless a later evidence record explicitly says so;
 - full lifecycle/accessibility/performance/security audits;
 - final visual certification of all 52 references;
 - final Android APK/AAB.
@@ -248,11 +204,11 @@ Do not describe any of the following as complete:
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current implemented phase: P49 — PARTIAL
-Validated implementation SHA: f722df0382b5dbe70dd500aae6bf6bab17b7074e
-CI: 31262925706 / 93116408514 — SUCCESS
-Evidence: docs/mobile-ui-rebuild/P49_CHECKOUT_SESSION_CREATION.md
-Blockers: authoritative server checkout idempotency/replay/recovery contract; P48 pre-checkout quote/reprice blocker remains; physical reference/device certification where applicable
-Next phase: P50 — NOT STARTED
+Current implemented phase: P50 — PARTIAL
+Validated implementation SHA: 3af5efb9caa46d13523858c4e65ac31c7cb776bf
+CI: 31263886724 / 93118801738 — SUCCESS
+Evidence: docs/mobile-ui-rebuild/P50_PAYMENT_ELIGIBILITY_AND_PROVIDER_HANDOFF.md
+Blockers: PAYMENT_METHOD_TOKEN_CONTRACT_UNAVAILABLE; CASHFREE_NATIVE_PROVIDER_SDK_UNAVAILABLE; earlier recorded P31–P49 blockers remain
+Next phase: P51 — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

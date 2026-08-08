@@ -23,6 +23,7 @@
 - **P35 — Discover Home Chefs — Empty Cart: PARTIAL.** The real Customer Chefs root renders the supported nearby-kitchen discovery surface using P34 data, saved location, pagination, loaded-result search, pull-to-refresh, lifecycle states, and scroll-aware bottom navigation. Full P35 acceptance remains blocked by missing cuisine/filter/favorite/rating/ETA/verification/media/server-search contracts and by the not-yet-registered public kitchen-profile route owned by later phases.
 - **P36 — Discover Home Chefs — Active Cart: PARTIAL.** The same Customer Chefs route composes the P35 discovery surface with the shared View Cart overlay, canonical cart item count/server subtotal, dynamic bottom clearance, and zero-cart restoration. Full P36 acceptance remains blocked because no real Customer Cart destination exists before P45/P46 and the nearby-kitchen response has no dish-level item/price payload for Reference 08 Add actions.
 - **P37 — Search Query Orchestration: PARTIAL.** Shared Home/Chefs search-session state, 250 ms debounce, exact-query cancellation, user/location-scoped query and scroll restoration, active-search pagination, and stale-result-safe client orchestration are implemented and CI-validated. Full P37 acceptance remains blocked because the current branch has no authoritative dish/chef server-search route, parameter, or response model, and literal detail/back acceptance depends on later-owned detail routes that are not registered yet.
+- **P38 — Filter and Sort: PARTIAL.** The focused `CustomerFilterSort` route, separate draft/applied filter state, Reset/Apply/discard behavior, user/location scope, focused-route chrome hiding, Home filter entry point, Chef filter entry point, supported loaded-Home diet filtering/price ordering, and fail-closed unsupported controls are implemented and CI-validated. Full P38 acceptance remains blocked because the current discovery contracts do not expose authoritative cuisine facets/IDs, popularity/rating/delivery-time sorting, server-wide filter/sort parameters, result-count preview, or kitchen-level filter fields.
 
 ### P31 evidence
 
@@ -76,16 +77,26 @@
 - Evidence: `docs/mobile-ui-rebuild/P37_SEARCH_QUERY_ORCHESTRATION.md`.
 - CI run/job: `31250802472` / `93086759138` — **SUCCESS**.
 - Jest at the validated gate: **42 suites / 197 tests passed**.
-- CI gates passed: dependency install, strict TypeScript, ESLint zero-warning gate, Jest, production Android JavaScript bundle, backend/APIM/infrastructure source guard.
 - Outstanding blockers: no exact current-branch dish/chef free-text server-search route/parameter/model; later-owned Dish/Public Kitchen detail destinations are not registered yet for a literal detail/back navigation acceptance exercise.
 
-**Current executed phase:** **P37 — Search Query Orchestration** is recorded **PARTIAL** because the supported shared client orchestration is implemented and CI-validated while the exact server search contracts and later detail-route dependencies required for full acceptance do not exist in the current authorized boundary.
+### P38 evidence
 
-**Next phase in sequence:** **P38 — Filter and Sort** — **NOT STARTED**.
+- User explicitly authorized exactly the next single phase after P37 while P37 remains correctly recorded as PARTIAL.
+- Started from branch head: `1fe4b862a42ffd1e6a28f80c02ae425805cd08fb`.
+- Validated implementation commit: `4465618e64908c48e535de7d8fe83cd03a3b9bcd`.
+- Evidence commit: `774f292ca1cfe041a98a980af441271ba68a5806`.
+- Evidence: `docs/mobile-ui-rebuild/P38_FILTER_AND_SORT.md`.
+- CI run/job: `31251797224` / `93089169496` — **SUCCESS**.
+- CI gates passed: dependency install, strict TypeScript, ESLint zero-warning gate, Jest, production Android JavaScript bundle, backend/APIM/infrastructure source guard.
+- Outstanding blockers: no authoritative cuisine taxonomy/facet IDs, popularity/rating/delivery-time/server-wide sort/filter parameters, result-count preview, or kitchen-level filter fields in the accepted discovery contracts.
+
+**Current executed phase:** **P38 — Filter and Sort** is recorded **PARTIAL** because the focused route, draft/apply/reset semantics, chrome policy, supported current-data behavior, and contract-safe failure boundaries are implemented and CI-validated while the complete server-side filter/sort metadata and parameters required for full Screen 17 acceptance do not exist.
+
+**Next phase in sequence:** **P39 — Dish Detail Data Contract** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P38. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P39. Wait for explicit user direction.
 
 ---
 
@@ -93,12 +104,12 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31250802472`
-- Job ID: `93086759138`
-- Head SHA: `1d9e084c8825faab7d2578e481c9fdd4cc6ae865`
-- Phase: **P37 — Search Query Orchestration**
+- GitHub Actions run ID: `31251797224`
+- Job ID: `93089169496`
+- Head SHA: `4465618e64908c48e535de7d8fe83cd03a3b9bcd`
+- Phase: **P38 — Filter and Sort**
 - Conclusion: **SUCCESS**
-- Jest: **42 suites / 197 tests passed**
+- Jest: **SUCCESS**
 
 Successful checks:
 
@@ -114,55 +125,57 @@ The implementation workflow intentionally does **not** perform Java/Gradle/APK p
 
 ---
 
-## 3. P37 Implemented Search Query Orchestration Boundary
+## 3. P38 Implemented Filter and Sort Boundary
 
-P37 follows the guide requirement to debounce user search input, cancel obsolete requests, keep list memory bounded, prevent stale response overwrite, and preserve safe search/list state through navigation where product routes allow it. It does not invent backend contracts and does not begin P38.
+P38 follows Screen 17's focused Filter and Sort interaction model without inventing discovery request parameters or response fields that are absent from the current branch contracts.
 
 Implemented behavior:
 
-- Added one shared `discoverySearch` Redux slice with independent `HOME` and `CHEFS` sessions rather than separate ad hoc screen stores.
-- Search sessions are scoped by authenticated identity plus selected saved-address ID; changing browsing scope resets the prior query and offset to prevent cross-context leakage.
-- Stores only controlled query draft and scroll offset. Server result pages remain in TanStack Query rather than being duplicated in Redux.
-- Added a shared **250 ms** debounce and whitespace normalization boundary.
-- Reused the existing TanStack infinite-query/AbortSignal transport path and exposed exact-query cancellation on Home and nearby-chef query hooks.
-- Cancels pending next-page work when the search draft changes or is cleared.
-- Keeps pagination available while search is active and blocks duplicate next-page work while a page request or debounce transition is in progress.
-- When loaded pages contain no match but the authoritative response says another page exists, presents `Search next page` instead of falsely claiming that no match exists in the full server dataset.
-- Keeps current query state independent from page-arrival state so a late page cannot replace a newer user query.
-- Persists query/scroll state outside transient screen-local state so the same browsing scope can restore it on re-entry; this is prepared for later detail/back routes without pre-implementing them.
-- Reuses a shared accessible clearable search input across Home and Chefs.
+- Added one typed `CustomerFilterSort` focused route to the existing Home and Chefs stacks.
+- Added one shared `discoveryFilters` Redux slice with independent user/location-scoped `HOME` and `CHEFS` applied sessions.
+- Keeps in-progress filter edits in screen-local draft state; draft changes do not trigger network calls or mutate the originating list.
+- `Reset` changes only the draft.
+- `Apply Filters` commits the draft once and returns to the origin.
+- List scroll offset resets only when applied filter criteria actually changed.
+- Back with unsaved draft changes asks before discarding; applied filters remain unchanged.
+- Registered `CustomerFilterSort` as immersive so bottom navigation is hidden while focused; the screen does not compose View Cart.
+- Home now exposes Filters beside search with an applied-filter count and applies supported current-response fields to the loaded result set.
+- Chefs now opens the real P38 route instead of the former filter-contract explanatory dead end.
+- Supported Home behavior uses only accepted `foodType` and `price` fields. Unsupported cuisine/popularity/rating/delivery-time/result-count capabilities remain disabled/fail closed rather than sending guessed parameters.
+- Tests cover scope isolation, normalized dirty-state comparison, supported Home filter/sort application, immutability, and scoped clear behavior.
 
-### P37 acceptance blockers
+### P38 acceptance blockers
 
-`phases.md` requires exact dish/chef search routes and models. The current branch only exposes location/radius/page/size pagination for `/api/v1/discovery/menu-items` and `/api/v1/discovery/kitchens`; there is no authoritative free-text server-search parameter or dedicated search endpoint/model to integrate. The literal detail/back acceptance journey also cannot be exercised end-to-end until later-owned Dish/Public Kitchen detail destinations are registered.
+The current discovery endpoints accept only location/radius/page/size. No authoritative cuisine taxonomy/facet IDs, popularity/rating/delivery-time sort, server-wide price/diet/filter parameters, result-count preview, or kitchen-level filter fields exist in the current branch contracts.
 
-No fake `q`, `query`, or `search` API parameter, placeholder detail route, or fabricated response model was introduced. P37 therefore remains **PARTIAL**, not DONE.
+No fake `cuisine`, `sort`, `diet`, `rating`, `eta`, `filter`, or similar API parameter was introduced. P38 therefore remains **PARTIAL**, not DONE.
 
 ---
 
-## 4. P37 Changed Files
+## 4. P38 Changed Files
 
 Implementation:
 
-- `apps/mobile/src/features/discoverySearch/state/discoverySearchSlice.ts`
-- `apps/mobile/src/features/discoverySearch/discoverySearchOrchestration.ts`
-- `apps/mobile/src/features/discoverySearch/hooks/useDiscoverySearchSession.ts`
-- `apps/mobile/src/features/discoverySearch/components/DiscoverySearchInput.tsx`
+- `apps/mobile/src/features/discoveryFilters/state/discoveryFilterSlice.ts`
+- `apps/mobile/src/features/discoveryFilters/discoveryFilterApplication.ts`
+- `apps/mobile/src/features/discoveryFilters/screens/CustomerFilterSortScreen.tsx`
 - `apps/mobile/src/app/store/store.ts`
-- `apps/mobile/src/features/home/query/homeFeedQueries.ts`
+- `apps/mobile/src/app/navigation/types.ts`
+- `apps/mobile/src/app/navigation/navigationPolicy.ts`
+- `apps/mobile/src/app/navigation/CustomerBottomNavController.tsx`
+- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
 - `apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx`
-- `apps/mobile/src/features/chefDiscovery/query/nearbyChefDiscoveryQueries.ts`
 - `apps/mobile/src/features/chefDiscovery/screens/DiscoverHomeChefsScreen.tsx`
 
 Tests:
 
-- `apps/mobile/src/features/discoverySearch/discoverySearchOrchestration.test.ts`
+- `apps/mobile/src/features/discoveryFilters/discoveryFilterApplication.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P37_SEARCH_QUERY_ORCHESTRATION.md`
+- `docs/mobile-ui-rebuild/P38_FILTER_AND_SORT.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P38 filter/sort implementation, Cart/Bill Summary UI, checkout/payment, public kitchen-profile implementation, or Chef-owner operational feature was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P39 Dish Detail data implementation, Cart/Bill Summary UI, checkout/payment, public kitchen-profile implementation, or Chef-owner operational feature was changed.
 
 ---
 
@@ -187,10 +200,11 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 - P35 owns the current supported Customer Chefs empty-cart discovery presentation and connection of the real Chefs tab root to P34 data.
 - P36 owns the supported same-route Customer Chefs active-cart chrome, canonical cart synchronization, shared View Cart composition, dynamic content clearance, and zero-cart restoration.
 - P37 owns the current shared Customer discovery-search orchestration: scoped query/scroll state, debounce, exact-query cancellation, active-search pagination gate, and stale-query protection on supported Home/Chefs live datasets.
+- P38 owns the focused Customer Filter and Sort route, draft/applied filter semantics, focused-route chrome policy, and supported current-contract filter application/fail-closed boundaries.
 
 ### Later-phase boundaries
 
-- **P38** owns the dedicated Filter and Sort experience.
+- **P39** owns Dish Detail data contract work and remains NOT STARTED.
 - Later Dish detail and public Kitchen profile phases own their real detail destinations and therefore the literal search-detail-back acceptance route.
 - Later Customer favorite/notification routes remain owned by their phases in `phases.md`.
 - **P45** owns Cart screen data/pricing model extensions.
@@ -222,7 +236,7 @@ Accepted cart dependencies:
 
 - canonical P28 cart snapshot and P30 add/set-quantity/remove-line mutations remain unchanged.
 
-P37 adds **no** backend/APIM contract. The current discovery endpoints do not expose a free-text query parameter.
+P38 adds **no** backend/APIM contract. The current discovery endpoints still accept only location/radius/page/size; P38 uses existing returned Home `foodType`/`price` fields for its supported loaded-result subset and refuses unsupported server filter intent.
 
 Not accepted because no exact current-branch contract or registered product route exists:
 
@@ -230,13 +244,16 @@ Not accepted because no exact current-branch contract or registered product rout
 - dedicated chef/kitchen free-text search route/model,
 - discovery `query`/`q`/`search` parameter,
 - Home aggregation URL/model,
-- cuisine taxonomy URL/model,
+- cuisine taxonomy URL/model or authoritative cuisine facet IDs,
 - discovery `category` parameter,
 - discovery `cuisine` parameter,
 - cuisine response field,
+- discovery server `sort`/popularity/rating/delivery-time/price parameters,
+- discovery server diet/filter parameters,
+- filter result-count preview contract,
 - recommendation aggregation URL/model,
 - favorite API/domain contract,
-- nearby-kitchen delivery-serviceability decision/ETA/rating/review/cuisine/favorite/verification/media fields,
+- nearby-kitchen delivery-serviceability decision/ETA/rating/review/cuisine/favorite/verification/media/filter/sort fields,
 - dish-level ID/price payload on the nearby-kitchen summary,
 - real Customer Dish/Public Kitchen detail destinations required for literal P37 detail/back acceptance,
 - real Customer Cart destination before P45/P46.
@@ -259,11 +276,12 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P35 Discover Home Chefs — Empty Cart | **PARTIAL** | Supported real Chefs-root discovery surface validated by CI `31249264023`; richer filters/profile route remain blocked. |
 | P36 Discover Home Chefs — Active Cart | **PARTIAL** | Shared View Cart/count/total/content-clearance behavior validated by CI `31249712277`; real Cart and dish Add requirements remain blocked. |
 | P37 Search Query Orchestration | **PARTIAL** | Shared debounce/cancellation/scoped query+scroll restoration/active-search pagination validated by CI `31250802472`; exact server dish/chef search contract and literal detail/back route proof remain unavailable. |
-| P38 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
+| P38 Filter and Sort | **PARTIAL** | Focused route, draft/applied semantics, chrome hiding, current-response Home filters and fail-closed unsupported options validated by CI `31251797224`; full server filter/sort metadata/contracts are missing. |
+| P39 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
 
 ---
 
-## 8. Explicitly Not Complete After P37 Work
+## 8. Explicitly Not Complete After P38 Work
 
 Do not describe any of the following as complete:
 
@@ -274,7 +292,8 @@ Do not describe any of the following as complete:
 - P36 Reference 08 dish Add behavior blocked by the current nearby-kitchen response,
 - P37 server-wide dish/chef free-text search using an exact backend search contract,
 - P37 literal detail/back acceptance until later real detail destinations are registered,
-- **P38 Filter and Sort**, which has not started,
+- P38 server-wide cuisine/popularity/rating/delivery-time/price/diet filter/sort coverage and result-count preview,
+- **P39 Dish Detail Data Contract**, which has not started,
 - full Customer Cart/Bill Summary product screen,
 - checkout/payment end-to-end flow,
 - Chef operational/product screens,

@@ -1,3 +1,4 @@
+import {invalidateCartDeliveryQuote} from './cartDeliveryQuote';
 import type {
   CartAddressDependency,
   CartDependencyStatus,
@@ -10,9 +11,9 @@ export interface CartAddressSelectionTransition {
 }
 
 /**
- * P47 keeps saved-address selection separate from quote orchestration. Selecting
- * a different authoritative saved address makes the existing delivery quote
- * stale; P48 owns the exact quote/reprice request that resolves that state.
+ * P47 selects the authoritative saved address. P48 centralizes the dependent
+ * quote invalidation rule so address, cart and later coupon changes cannot use
+ * different stale-quote semantics.
  */
 export function resolveCartAddressSelection(
   currentAddressId: string | null,
@@ -27,6 +28,12 @@ export function resolveCartAddressSelection(
       status: 'CURRENT',
       addressId: nextAddressId,
     },
-    deliveryQuoteStatus: changed ? 'STALE' : currentDeliveryQuoteStatus,
+    deliveryQuoteStatus: changed
+      ? invalidateCartDeliveryQuote(
+          currentDeliveryQuoteStatus,
+          true,
+          'ADDRESS_CHANGED',
+        )
+      : currentDeliveryQuoteStatus,
   };
 }

@@ -56,10 +56,15 @@ export type CustomerDishIngredientsRouteParams = {
   menuItemId: string;
 };
 
-/** Shared typed subroutes owned by the customer dish-detail experience. */
+export type CustomerKitchenProfileRouteParams = {
+  kitchenId: string;
+};
+
+/** Shared typed subroutes owned by customer discovery/detail experiences. */
 export type CustomerDishDetailStackParamList = {
   CustomerDishDetail: CustomerDishDetailRouteParams;
   CustomerDishIngredients: CustomerDishIngredientsRouteParams;
+  CustomerKitchenProfile: CustomerKitchenProfileRouteParams;
 };
 
 /**

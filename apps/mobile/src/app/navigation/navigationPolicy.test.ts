@@ -26,11 +26,12 @@ describe('navigationPolicy', () => {
     }
   });
 
-  it('keeps focused filter and dish routes immersive', () => {
+  it('keeps focused customer utility and detail routes immersive', () => {
     for (const routeName of [
       'CustomerFilterSort',
       'CustomerDishDetail',
       'CustomerDishIngredients',
+      'CustomerKitchenProfile',
     ] as const) {
       expect(isCurrentImmersiveRoute(routeName)).toBe(true);
       expect(resolveRouteChromePolicy('Customer', routeName)).toEqual({

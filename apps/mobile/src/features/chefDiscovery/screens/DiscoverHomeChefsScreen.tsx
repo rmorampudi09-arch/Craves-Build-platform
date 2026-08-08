@@ -79,7 +79,7 @@ function KitchenCard({kitchen, onPress}: KitchenCardProps) {
 
   return (
     <Pressable
-      accessibilityHint="Kitchen profile navigation is not available until the public kitchen profile contract is implemented."
+      accessibilityHint="Opens this kitchen's public profile and available-dish preview."
       accessibilityLabel={`Open ${title}`}
       accessibilityRole="button"
       onPress={() => onPress(kitchen)}
@@ -136,7 +136,6 @@ export function DiscoverHomeChefsScreen() {
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
-  const [boundaryNotice, setBoundaryNotice] = useState<string | null>(null);
   const listRef = useRef<FlatList<NearbyKitchen>>(null);
 
   const discovery = useNearbyChefDiscoveryQuery({
@@ -240,12 +239,12 @@ export function DiscoverHomeChefsScreen() {
     navigation.navigate('CustomerFilterSort', {origin: 'CHEFS'});
   };
 
-  const showKitchenProfileBoundary = (kitchen: NearbyKitchen) => {
-    const title = kitchen.displayName ?? kitchen.kitchenName;
-    setBoundaryNotice(
-      `${title} is available nearby, but the public kitchen-profile route and contract are not implemented yet.`,
-    );
-  };
+  const openKitchenProfile = useCallback(
+    (kitchen: NearbyKitchen) => {
+      navigation.navigate('CustomerKitchenProfile', {kitchenId: kitchen.id});
+    },
+    [navigation],
+  );
 
   const emptyState = (() => {
     if (discovery.locationRequired) {
@@ -359,13 +358,6 @@ export function DiscoverHomeChefsScreen() {
         </View>
       </View>
 
-      {boundaryNotice ? (
-        <RecoverableErrorBanner
-          message={boundaryNotice}
-          style={styles.inlineNotice}
-        />
-      ) : null}
-
       {queryError && kitchens.length > 0 ? (
         offline ? (
           <OfflineNotice
@@ -418,7 +410,7 @@ export function DiscoverHomeChefsScreen() {
           />
         }
         renderItem={({item}) => (
-          <KitchenCard kitchen={item} onPress={showKitchenProfileBoundary} />
+          <KitchenCard kitchen={item} onPress={openKitchenProfile} />
         )}
         scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
         showsVerticalScrollIndicator={false}

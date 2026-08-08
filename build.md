@@ -28,15 +28,16 @@
 - **P40 — Dish Detail UI and Interactions: PARTIAL.** Typed route/UI, gallery/share, supported facts, sticky cart actions, current-detail revalidation, cart reconciliation, lifecycle states, and source-position back restoration are CI-validated. Favorite/ingredient/review data and dedicated Buy Now intent remain missing.
 - **P41 — Dish Ingredients: PARTIAL.** Typed child route, Dish Detail entry, immersive chrome, state-preserving back behavior, detail-query reuse, lifecycle states, and explicit ingredient/allergen fail-closed capability gate are CI-validated. Authoritative ingredient/allergen/dietary-warning payloads remain missing.
 - **P42 — Customer-Facing Kitchen Profile Contract: PARTIAL.** Exact current public active-kitchen and sellable-menu compatibility routes, customer-safe profile allowlisting, supported menu-summary/media mapping, stable customer+kitchen query ownership, and future favorite-cache reconciliation boundary are implemented and CI-validated. Verification, rating/reviews, order-count, final serviceability/ETA, kitchen-favorite, featured/top-dish ranking, kitchen hero/profile media, and paginated public kitchen-menu contracts remain absent.
-- **P43 — Customer-Facing Kitchen Profile UI: PARTIAL.** Typed immersive profile route, Chef Discovery → profile navigation, supported Reference 15 composition, public identity/location/tenure/about presentation, bounded non-ranked menu preview, real Dish Detail opening, real shared-cart Add/quantity reconciliation with pre-mutation profile revalidation, lifecycle states, pull-to-refresh, and profile scroll restoration are implemented and CI-validated. Full P43 acceptance remains blocked by the missing P42 verification/rating/order/serviceability/favorite/featured/media contracts and by P44 ownership of the complete-menu destination.
+- **P43 — Customer-Facing Kitchen Profile UI: PARTIAL.** Typed immersive profile route, Chef Discovery → profile navigation, supported Reference 15 composition, public identity/location/tenure/about presentation, bounded non-ranked menu preview, real Dish Detail opening, real shared-cart Add/quantity reconciliation with pre-mutation profile revalidation, lifecycle states, pull-to-refresh, and profile scroll restoration are implemented and CI-validated. P44 now supplies the real complete-menu destination, but P43 remains blocked by the missing P42 verification/rating/order/serviceability/favorite/featured/media contracts.
+- **P44 — Kitchen All Dishes: PARTIAL.** Typed immersive `CustomerKitchenDishes` route, real Kitchen Profile View all navigation, virtualized complete current-contract menu rendering, authoritative category filtering, Dish Detail opening, shared-cart Add/quantity reconciliation with pre-mutation menu revalidation, lifecycle states, pull-to-refresh, and list scroll/category preservation are implemented and CI-validated. Full Reference 16 acceptance remains blocked by the non-paginated public menu contract, missing rating/favorite/final-serviceability fields, and deferred physical-device/reference certification.
 
-**Current executed phase:** **P43 — Customer-Facing Kitchen Profile UI** is **PARTIAL**. Every safe/supportable current-branch P43 UI/navigation/cart/lifecycle/state-preservation behavior implemented in this phase passed CI. Missing contract-dependent reference capabilities are shown honestly or withheld rather than fabricated.
+**Current executed phase:** **P44 — Kitchen All Dishes** is **PARTIAL**. Every safe/supportable current-branch P44 navigation/menu/filter/cart/lifecycle/state-preservation behavior implemented in this phase passed CI. Missing contract-dependent reference capabilities are withheld rather than fabricated.
 
-**Next phase in sequence:** **P44 — Kitchen All Dishes** — **NOT STARTED**.
+**Next phase in sequence:** **P45 — Cart Data / Pricing Composition** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P44. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P45. Wait for explicit user direction.
 
 ---
 
@@ -58,16 +59,17 @@
 | P41 | **PARTIAL** | `455d19bcc567e23496f33cc570922b91cee03841` | `P41_DISH_INGREDIENTS.md` | `31254643084` / `93096130239` |
 | P42 | **PARTIAL** | `30faa2d2a6d0f7ef4c860f1e166f23d764841c4d` | `P42_CUSTOMER_FACING_KITCHEN_PROFILE_CONTRACT.md` | `31255118989` / `93097257711` |
 | P43 | **PARTIAL** | `1925e4c2df9b8601308c4694d31bc39e09171723` | `P43_CUSTOMER_FACING_KITCHEN_PROFILE_UI.md` | `31255924625` / `93099137715` |
-| P44 onward | **NOT STARTED / not accepted** | — | — | — |
+| P44 | **PARTIAL** | `4aec92a750929f403e5e94bea1756a8bdbea62b7` | `P44_KITCHEN_ALL_DISHES.md` | `31256729097` / `93101120486` |
+| P45 onward | **NOT STARTED / not accepted** | — | — | — |
 
-### P43 evidence commits
+### P44 evidence commits
 
-- User authorized exactly one next phase after P42 while P42 remained correctly recorded as PARTIAL.
-- Started from branch head: `c85664b33948613e6be7707d91d3d106b2a85b3d`.
-- Validated implementation commit: `1925e4c2df9b8601308c4694d31bc39e09171723`.
-- Evidence commit: `1d56a293bedeed8c9ce22ec7bbd2743642136bb4`.
-- Evidence: `docs/mobile-ui-rebuild/P43_CUSTOMER_FACING_KITCHEN_PROFILE_UI.md`.
-- CI run/job: `31255924625` / `93099137715` — **SUCCESS**.
+- User authorized exactly one next phase after P43 while P43 remained correctly recorded as PARTIAL.
+- Started from branch head: `f5c5d73ba68ba906506afb40ff5faba9b8c24a28`.
+- Validated implementation commit: `4aec92a750929f403e5e94bea1756a8bdbea62b7`.
+- Evidence commit: `8f86f4f29fbfc003959fc5983b13f5c3115e09b1`.
+- Evidence: `docs/mobile-ui-rebuild/P44_KITCHEN_ALL_DISHES.md`.
+- CI run/job: `31256729097` / `93101120486` — **SUCCESS**.
 
 ---
 
@@ -75,10 +77,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31255924625`
-- Job ID: `93099137715`
-- Head SHA: `1925e4c2df9b8601308c4694d31bc39e09171723`
-- Phase: **P43 — Customer-Facing Kitchen Profile UI**
+- GitHub Actions run ID: `31256729097`
+- Job ID: `93101120486`
+- Head SHA: `4aec92a750929f403e5e94bea1756a8bdbea62b7`
+- Phase: **P44 — Kitchen All Dishes**
 - Conclusion: **SUCCESS**
 - Dependency install: **SUCCESS**
 - TypeScript strict check: **SUCCESS**
@@ -91,67 +93,73 @@ No Java/Gradle/APK packaging was performed, consistent with the implementation-p
 
 ---
 
-## 4. P43 Implemented UI Boundary
+## 4. P44 Implemented Boundary
 
-### Typed profile route and source navigation
+### Typed complete-menu route
 
-P43 adds `CustomerKitchenProfile` with only the stable `kitchenId` route parameter and registers it in both Customer Home and Chefs stack domains. Nearby Chef cards now open this real route instead of the former P42 boundary notice.
+P44 adds `CustomerKitchenDishes` with only the stable `kitchenId` route parameter and registers it in both Customer Home and Chefs stack domains. The P43 Kitchen Profile now exposes a real **View all** action to this route. Back/system return preserves the existing Kitchen Profile instance/state.
 
-The route is immersive under the existing customer chrome policy. Bottom navigation and shared View Cart chrome do not overlap the detail experience; the profile itself displays a compact live cart-count summary.
+The route is immersive under the existing focused customer detail policy. Bottom navigation and shared View Cart chrome do not overlap it; the screen itself shows a compact live cart-count summary.
 
-### Supported Reference 15 composition
+### Exact public menu contract
 
-The profile renders only data P42 can establish authoritatively:
+P44 reuses P42's existing validated API/query boundary:
 
-- display/kitchen identity,
-- area/city/state,
-- active public-kitchen state,
-- valid created-at tenure year,
-- public biography,
-- current sellable-menu count,
-- current sellable dish summaries and their usable public images.
+```http
+GET /api/v1/catalog/kitchens/{kitchenId}
+GET /api/v1/catalog/kitchens/{kitchenId}/menu-items
+```
 
-Because no public kitchen hero/profile image contract exists, P43 uses a branded initials/chef fallback rather than fake photography. It does not synthesize a verified badge, rating, review count, order count, final serviceability/ETA, or delivery promise.
+Backend sources:
 
-### Available-dish preview
+- `services/catalog-service/src/main/java/in/craves/catalog/web/PublicCatalogController.java`
+- `services/catalog-service/src/main/java/in/craves/catalog/service/CatalogService.java`
 
-P43 intentionally uses **Available dishes / Menu preview**, not “Top Dishes.” The preview preserves P42/backend category/name ordering, is bounded to four items, prefers a real primary dish image where available, and opens the existing real Customer Dish Detail route.
+Response models:
 
-The profile Menu action scrolls to this real menu preview. If more than four current sellable dishes exist, the UI indicates that more dishes exist but does not create P44's complete-menu screen or a fake View All destination.
+- `ApiDtos.KitchenProfileResponse`
+- `List<ApiDtos.MenuItemResponse>`
+
+The public menu service returns only ACTIVE + available dishes and orders them by `category, item_name`. The route has no pagination parameters, so P44 does not invent network pagination.
+
+### Virtualized menu and supported filters
+
+The complete current response is presented through `FlatList` with stable IDs and bounded render windows. Category chips are derived from actual returned category values, de-duplicated case-insensitively, and filter the current response without changing backend order.
+
+Rows render only supported item image/fallback, name, category, food type, preparation time, description, and current public price/currency. Missing reference rating/favorite/serviceability data is not synthesized.
 
 ### Authoritative cart reconciliation
 
-Preview dishes compose the existing shared cart snapshot and mutation state. Add/increment/decrement use the real cart mutation engine; duplicate taps are disabled while relevant work is pending. Add/increment refetches the P42 kitchen profile/menu before mutation, fails closed if a dish disappeared, and surfaces a changed price before proceeding. Cart mutation errors preserve valid profile data and are shown through the established recoverable notice.
+Every row composes the same shared cart snapshot/mutation engine used by P43 and other customer surfaces. Add/increment/decrement are real cart mutations. Add/increment refetches the current public kitchen/menu before mutation, fails closed if the dish disappeared, and surfaces price changes before proceeding.
 
-No second/local kitchen-profile cart domain is introduced.
+No P44-local cart state is introduced. The public endpoint already excludes unavailable dishes; stale availability is caught by the pre-mutation refetch instead of allowing a known-invalid add.
 
-### State and lifecycle
+### Lifecycle and return state
 
-P43 implements invalid-link, session-required, skeleton, retryable load failure, offline/recoverable refresh, pull-to-refresh, and empty-menu states. It records and restores profile scroll offset on focus return from Dish Detail, while the existing P37 discovery session remains authoritative for discovery-list restoration.
-
----
-
-## 5. P43 Acceptance Blockers
-
-Full Reference 15/P43 acceptance remains blocked because the current branch has no authoritative customer-facing contract for:
-
-- public kitchen verification/trust badge/status,
-- kitchen rating, reviews, or review count,
-- customer-facing fulfilled-order count,
-- final selected-address delivery serviceability or ETA,
-- kitchen favorite read/mutation,
-- featured/Top Dishes ranking,
-- kitchen/chef public hero/profile media.
-
-The visible Save control therefore reports that saving is unavailable; it does not manufacture local favorite state.
-
-Separately, **P44 owns Kitchen All Dishes** including the complete menu list/categories/filter/pagination/Add experience. P43 does not pre-implement P44, so the reference's full-menu destination is still not accepted.
-
-Because these guide-required behaviors remain unavailable, P43 is **PARTIAL**, not DONE.
+P44 implements invalid-link, session-required, loading skeleton, initial load error, offline/recoverable refresh error, pull-to-refresh, empty-menu, empty-filter, and cart-interaction error states. It restores the All Dishes FlatList offset when returning from Dish Detail and preserves the selected category while the route remains mounted.
 
 ---
 
-## 6. P43 Changed Files
+## 5. P44 Acceptance Blockers
+
+Full Reference 16/P44 acceptance remains blocked because the current branch has no authoritative customer-facing contract for:
+
+- paginated public kitchen-menu transport,
+- kitchen/dish rating aggregate,
+- kitchen/dish favorite read/mutation and therefore favorite-state synchronization,
+- final selected-address serviceability/ETA.
+
+The current unpaginated response is virtualized on-device, but client rendering virtualization is not misrepresented as scalable network pagination.
+
+Physical Android/reference-image verification was not performed in this implementation phase, so pixel-perfect Reference 16 certification is also deferred.
+
+P45/P46 own the real Cart destination and bill-summary flow. P44 does not pre-implement them.
+
+Because these guide-required capabilities remain unavailable, P44 is **PARTIAL**, not DONE.
+
+---
+
+## 6. P44 Changed Files
 
 Implementation/navigation:
 
@@ -159,28 +167,28 @@ Implementation/navigation:
 - `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
 - `apps/mobile/src/app/navigation/navigationPolicy.ts`
 - `apps/mobile/src/app/navigation/CustomerBottomNavController.tsx`
-- `apps/mobile/src/features/chefDiscovery/screens/DiscoverHomeChefsScreen.tsx`
-- `apps/mobile/src/features/kitchenProfile/kitchenProfilePresentation.ts`
+- `apps/mobile/src/features/kitchenProfile/kitchenDishesPresentation.ts`
+- `apps/mobile/src/features/kitchenProfile/screens/CustomerKitchenDishesScreen.tsx`
 - `apps/mobile/src/features/kitchenProfile/screens/CustomerKitchenProfileScreen.tsx`
 
 Tests:
 
 - `apps/mobile/src/app/navigation/navigationPolicy.test.ts`
-- `apps/mobile/src/features/kitchenProfile/kitchenProfilePresentation.test.ts`
+- `apps/mobile/src/features/kitchenProfile/kitchenDishesPresentation.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P43_CUSTOMER_FACING_KITCHEN_PROFILE_UI.md`
+- `docs/mobile-ui-rebuild/P44_KITCHEN_ALL_DISHES.md`
 
 Ledger:
 
 - `build.md`
 
-No backend, APIM, OpenAPI, infrastructure, database, Android native build configuration, P44 All Dishes implementation, checkout/payment, or Chef-owner operational feature was changed.
+No backend, APIM, OpenAPI, infrastructure, database, Android native build configuration, P45/P46 Cart implementation, checkout/payment, favorite service, review service, or Chef-owner operational feature was changed.
 
 ---
 
-## 7. Architecture Ownership After P43
+## 7. Architecture Ownership After P44
 
 - P19–P24 remain authoritative for authentication/session/onboarding/logout/private-cache cleanup.
 - P25–P30 remain authoritative for Customer shell/header/cart foundations.
@@ -189,22 +197,21 @@ No backend, APIM, OpenAPI, infrastructure, database, Android native build config
 - P40 owns supported Dish Detail UI/cart-revalidation/back behavior.
 - P41 owns the Dish Ingredients child-route/lifecycle/capability boundary.
 - P42 owns the customer-facing public Kitchen Profile data contract/query/cache boundary.
-- **P43 owns the supported Customer-Facing Kitchen Profile UI/navigation/menu-preview/cart/lifecycle/state-preservation boundary.**
-- **P44 owns Kitchen All Dishes UI/complete-menu behavior and has not started.**
-- P45/P46 own Cart screen data/pricing and Cart/Bill Summary UI.
+- P43 owns the supported Customer-Facing Kitchen Profile UI/navigation/menu-preview/cart/lifecycle/state-preservation boundary.
+- **P44 owns the supported Kitchen All Dishes route, current-contract virtualized complete-menu presentation, category filter, Dish Detail entry, shared-cart reconciliation, lifecycle, and return-state boundary.**
+- **P45/P46 own Cart data/pricing and Cart/Bill Summary and have not started.**
 - Later checkout/payment/order/account/Chef phases remain not started unless their earlier evidence says otherwise.
 
 ---
 
-## 8. Explicitly Not Complete After P43
+## 8. Explicitly Not Complete After P44
 
 Do not describe any of the following as complete:
 
-- the outstanding blockers recorded for P31–P42,
-- P43 verification/rating/review/order-count/serviceability/ETA/favorite/featured-ranking/kitchen-media/full-menu-destination acceptance,
-- physical-device/pixel-perfect Reference 15 certification,
-- **P44 Kitchen All Dishes**, including complete menu/categories/filter/pagination behavior,
-- full Customer Cart/Bill Summary,
+- the outstanding blockers recorded for P31–P43,
+- P44 scalable network pagination, rating, favorite synchronization, or final serviceability/ETA acceptance,
+- physical-device/pixel-perfect Reference 16 certification,
+- **P45/P46 Cart data/pricing and Cart/Bill Summary**,
 - checkout/payment end-to-end flow,
 - Chef operational/product screens,
 - live APIM/device runtime certification unless a later evidence record explicitly says so,

@@ -32,7 +32,7 @@ function profile(
 }
 
 describe('customerProfileUiModel', () => {
-  it('keeps P58 rows deterministic and blocks unregistered destinations explicitly', () => {
+  it('keeps rows deterministic, routes registered destinations, and blocks only later routes', () => {
     expect(CUSTOMER_PROFILE_MENU_ROWS.map(row => row.id)).toEqual([
       'favorites',
       'payments',
@@ -40,6 +40,10 @@ describe('customerProfileUiModel', () => {
       'contact',
       'logout',
     ]);
+
+    const favorites = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'favorites');
+    expect(favorites?.action).toBe('route-favorites');
+    expect(favorites?.icon).toBe('heart');
 
     const orders = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'orders');
     expect(orders?.action).toBe('route-orders');
@@ -50,7 +54,8 @@ describe('customerProfileUiModel', () => {
     const blocked = CUSTOMER_PROFILE_MENU_ROWS.filter(
       row => row.action === 'contract-blocker',
     );
-    expect(blocked).toHaveLength(3);
+    expect(blocked).toHaveLength(2);
+    expect(blocked.map(row => row.id)).toEqual(['payments', 'contact']);
     expect(blocked.every(row => Boolean(row.blockerMessage))).toBe(true);
   });
 

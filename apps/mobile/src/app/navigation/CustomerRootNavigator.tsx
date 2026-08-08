@@ -11,6 +11,7 @@ import {CustomerProfileRouteScreen} from '../../features/customerProfile/screens
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
+import {CustomerFavoritesScreen} from '../../features/favorites/screens/CustomerFavoritesScreen';
 import {CustomerHomeRouteScreen} from '../../features/home/screens/CustomerHomeRouteScreen';
 import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
@@ -218,7 +219,10 @@ function CustomerOrdersStackNavigator() {
   );
 }
 
-/** P59 keeps the P58 Profile hub and adds state-driven active-cart chrome. */
+/**
+ * P60 keeps the P58/P59 Profile root and registers the Favorites empty-cart
+ * destination plus the already-owned dish-detail journey needed by favorite rows.
+ */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -228,6 +232,26 @@ function CustomerProfileStackNavigator() {
         name="CustomerProfileRoot"
         component={CustomerProfileRouteScreen}
         listeners={rootListeners}
+      />
+      <ProfileStack.Screen
+        name="CustomerFavorites"
+        component={CustomerFavoritesScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerDishDetail"
+        component={CustomerDishDetailScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerDishIngredients"
+        component={CustomerDishIngredientsScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerKitchenProfile"
+        component={CustomerKitchenProfileScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerKitchenDishes"
+        component={CustomerKitchenDishesScreen}
       />
       <ProfileStack.Screen name="CustomerCart" component={CustomerCartScreen} />
     </ProfileStack.Navigator>

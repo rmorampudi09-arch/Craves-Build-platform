@@ -112,9 +112,16 @@ export type CustomerOrdersStackParamList = {
 } & CustomerOrderDetailStackParamList &
   CustomerCartStackParamList;
 
+/**
+ * P60 registers Favorites inside the Profile stack. Dish-detail child routes are
+ * shared so a future server-backed favorite row can open the existing detail
+ * journey without duplicating route contracts or resetting the Profile stack.
+ */
 export type CustomerProfileStackParamList = {
   CustomerProfileRoot: undefined;
-} & CustomerCartStackParamList;
+  CustomerFavorites: undefined;
+} & CustomerDishDetailStackParamList &
+  CustomerCartStackParamList;
 
 export type CustomerTabParamList = {
   Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;

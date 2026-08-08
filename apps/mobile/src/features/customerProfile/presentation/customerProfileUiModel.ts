@@ -5,6 +5,7 @@ export const CUSTOMER_PROFILE_ROUTE_BLOCKER_REASON =
   'not-registered-in-approved-mobile-route-contract' as const;
 
 export type CustomerProfileMenuAction =
+  | 'route-favorites'
   | 'route-orders'
   | 'contract-blocker'
   | 'logout';
@@ -19,7 +20,7 @@ export interface CustomerProfileMenuRowModel {
 }
 
 function blockedRow(
-  id: Extract<CustomerProfileMenuRowModel['id'], 'favorites' | 'payments' | 'contact'>,
+  id: Extract<CustomerProfileMenuRowModel['id'], 'payments' | 'contact'>,
   title: string,
   subtitle: string,
   icon: IconName,
@@ -35,7 +36,13 @@ function blockedRow(
 }
 
 export const CUSTOMER_PROFILE_MENU_ROWS: readonly CustomerProfileMenuRowModel[] = [
-  blockedRow('favorites', 'Favorites', 'Saved meals and kitchens', 'account'),
+  {
+    id: 'favorites',
+    title: 'Favorites',
+    subtitle: 'Saved meals and kitchens',
+    icon: 'heart',
+    action: 'route-favorites',
+  },
   blockedRow('payments', 'Payments', 'Payment methods and preferences', 'shield'),
   {
     id: 'orders',

@@ -18,7 +18,8 @@ export type IconName =
   | 'arrow-left'
   | 'check'
   | 'location'
-  | 'bell';
+  | 'bell'
+  | 'heart';
 
 interface Props {
   name: IconName;
@@ -123,6 +124,9 @@ export function Icon({
           <Path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" {...common} />
           <Path d="M10 21h4" {...common} />
         </>
+      )}
+      {name === 'heart' && (
+        <Path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" {...common} />
       )}
     </Svg>
   );

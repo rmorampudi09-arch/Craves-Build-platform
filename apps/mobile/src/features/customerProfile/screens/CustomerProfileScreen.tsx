@@ -267,6 +267,11 @@ export function CustomerProfileScreen() {
 
   const handleMenuPress = useCallback(
     (row: CustomerProfileMenuRowModel) => {
+      if (row.action === 'route-favorites') {
+        navigation.navigate('CustomerFavorites');
+        return;
+      }
+
       if (row.action === 'route-orders') {
         const tabs = navigation.getParent<CustomerTabsNavigation>();
         if (!tabs) {

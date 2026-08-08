@@ -37,14 +37,15 @@
 - **P49 — Checkout Session Creation: PARTIAL.** Exact `POST /api/v1/checkout` and `GET /api/v1/checkout/{checkoutId}` mobile boundaries, validated authoritative checkout totals/status/order linkage, same-runtime duplicate-tap single-flight protection, successful same-intent result reuse, and uncertain-outcome replay blocking are implemented and CI-validated. Full acceptance remains blocked because checkout creation has no server-owned idempotency/replay key or intent-based recovery contract.
 - **P50 — Payment Eligibility and Provider Handoff: PARTIAL.** Exact owned payment-order create/read boundaries, strict response validation, authoritative checkout/payment ID and grand-total cross-checking, same-checkout duplicate preparation coalescing, and server-issued Cashfree handoff modeling are implemented and CI-validated. Raw payment credential collection is forbidden and native launch fails closed. Full acceptance remains blocked because no exact customer tokenized payment-method/eligibility contract exists and the current rebuild has no reviewed Cashfree React Native SDK/native configuration.
 - **P51 — Payment Success/Failure/Cancel Recovery: PARTIAL.** Exact owned backend payment verification, strict verification-response validation, provider-return trigger validation, payment/checkout ID and amount reconciliation, same-payment verification single-flight, manual verification retry, and fail-closed native-callback/terminal-new-attempt gates are implemented and CI-validated. Full acceptance remains blocked by the absent reviewed Cashfree native callback/deep-link integration, no exact fresh-payment-attempt contract after terminal failure/cancel, and current backend verify semantics that do not guarantee `FAILED`/`CANCELLED` transitions for ordinary non-paid provider statuses.
+- **P52 — Customer Orders Contract and Pagination: PARTIAL.** Exact `GET /api/v1/orders` newest-first customer order window, strict customer-safe response allowlisting, authoritative amount/status preservation, private customer-scoped query cache, raw-status window counts, conservative history-completeness signaling, cancellation, and invalidation are implemented and CI-validated. Full acceptance remains blocked because the current server/APIM contract is fixed to the newest 50 orders and exposes no page/cursor parameters, global counts, or authoritative lifecycle-bucket mapping.
 
-**Current executed phase:** **P51 — Payment Success/Failure/Cancel Recovery** is **PARTIAL**. Every safe/supportable P51 behavior available through current authoritative contracts is implemented and passed required mobile CI. Provider callbacks/errors/cancellation are verification triggers only; mobile never declares payment success before backend verification plus checkout reconciliation.
+**Current executed phase:** **P52 — Customer Orders Contract and Pagination** is **PARTIAL**. Every safe/supportable P52 behavior available through the exact current customer-order list contract is implemented and passed required mobile CI. Mobile does not fake pagination or claim global counts from a truncated 50-order server window.
 
-**Next phase in sequence:** **P52 — Customer Orders Contract and Pagination** — **NOT STARTED**.
+**Next phase in sequence:** **P53 — My Orders — Empty Cart (UI)** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P52. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P53. Wait for explicit user direction.
 
 ---
 
@@ -74,17 +75,18 @@
 | P49 | **PARTIAL** | `f722df0382b5dbe70dd500aae6bf6bab17b7074e` | `P49_CHECKOUT_SESSION_CREATION.md` | `31262925706` / `93116408514` |
 | P50 | **PARTIAL** | `3af5efb9caa46d13523858c4e65ac31c7cb776bf` | `P50_PAYMENT_ELIGIBILITY_AND_PROVIDER_HANDOFF.md` | `31263886724` / `93118801738` |
 | P51 | **PARTIAL** | `ce2a72cbf950b9a21389a55bcde748c60abbb4fd` | `P51_PAYMENT_SUCCESS_FAILURE_CANCEL_RECOVERY.md` | `31264513219` / `93120381991` |
-| P52 onward | **NOT STARTED / not accepted** | — | — | — |
+| P52 | **PARTIAL** | `8222927c4556896c2d686b078b6eb5ec6465b60f` | `P52_CUSTOMER_ORDERS_CONTRACT_AND_PAGINATION.md` | `31265306860` / `93122377531` |
+| P53 onward | **NOT STARTED / not accepted** | — | — | — |
 
-### P51 evidence commits
+### P52 evidence commits
 
-- User authorized exactly one next phase after P50 while P50 remained correctly recorded as PARTIAL.
-- Started from branch head: `d6dcf639836644b29e0a304333450a0891c84002`.
-- Initial implementation commit: `8ef0a506b33af29717b0977dc9407423e85dc250`.
-- Validated implementation/test commit: `ce2a72cbf950b9a21389a55bcde748c60abbb4fd`.
-- Evidence commit: `41ea8707d873a2d3c86c31288470985cb3c1832e`.
-- Evidence: `docs/mobile-ui-rebuild/P51_PAYMENT_SUCCESS_FAILURE_CANCEL_RECOVERY.md`.
-- Final implementation CI run/job: `31264513219` / `93120381991` — **SUCCESS**.
+- User authorized exactly one next phase after P51 while P51 remained correctly recorded as PARTIAL.
+- Started from branch head: `4ade7c0fe267c8aab506fe6e06508383b3539e3c`.
+- Initial P52 commit: `1f511ea7ecb344c17e2437f2624826d8a6691241`.
+- Validated implementation/test commit: `8222927c4556896c2d686b078b6eb5ec6465b60f`.
+- Evidence commit: `2bdd2455a75fbc84c2df601dc02a63eed0434217`.
+- Evidence: `docs/mobile-ui-rebuild/P52_CUSTOMER_ORDERS_CONTRACT_AND_PAGINATION.md`.
+- Final implementation CI run/job: `31265306860` / `93122377531` — **SUCCESS**.
 
 ---
 
@@ -92,10 +94,10 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31264513219`
-- Job ID: `93120381991`
-- Head SHA: `ce2a72cbf950b9a21389a55bcde748c60abbb4fd`
-- Phase: **P51 — Payment Success/Failure/Cancel Recovery**
+- GitHub Actions run ID: `31265306860`
+- Job ID: `93122377531`
+- Head SHA: `8222927c4556896c2d686b078b6eb5ec6465b60f`
+- Phase: **P52 — Customer Orders Contract and Pagination**
 - Conclusion: **SUCCESS**
 - Dependency install: **SUCCESS**
 - TypeScript strict check: **SUCCESS**
@@ -108,69 +110,70 @@ No Java/Gradle/APK packaging was performed, consistent with the implementation-p
 
 ---
 
-## 4. P51 Implemented Boundary
+## 4. P52 Implemented Boundary
 
-P51 audited and used only the exact current customer verification/reconciliation operations:
+P52 audited and uses only the exact current authenticated customer list operation:
 
 ```text
-POST /api/v1/payments/orders/{paymentOrderId}/verify
-GET  /api/v1/checkout/{checkoutId}
+GET /api/v1/orders
 ```
 
-The Cashfree/provider signal is treated only as a reason to verify. For a Cashfree verify callback, the provider order ID must match the server-issued handoff order ID before verification begins.
+Current Order Service returns the newest customer-owned rows only:
 
-The backend verify response is strictly parsed as the existing payment-order ID/status/provider-status model. Mobile rejects malformed responses and payment-order ID mismatches.
+```text
+ORDER BY created_at DESC LIMIT 50
+```
 
-After verification, mobile re-reads the authoritative owned checkout. `SUCCEEDED` is emitted only when the backend payment is `PAID`, the checkout is `PAID`, the expected payment/checkout identities match, and the checkout grand total/currency still matches the active handoff. Contradictory authoritative states remain `RECONCILING`.
+The current controller/APIM operation exposes no list query parameters or page metadata. Mobile therefore calls the route with no invented `page`, `size`, `cursor`, `offset`, or `status` parameters.
 
-Provider error/cancellation signals cannot directly mark failure or cancellation. If the backend remains `PAYMENT_PENDING`, recovery stays `PENDING` and allows an explicit later verification retry. There is no automatic polling loop.
+The response is parsed through a customer-safe allowlist. Exact backend order statuses and authoritative amounts/currency are preserved. Unknown statuses, malformed amounts/identifiers/timestamps, duplicate IDs, responses larger than the 50-row server window, and non-newest-first results fail closed.
 
-Same-payment concurrent verification attempts are single-flighted. A different payment is blocked while recovery is active.
+The private React Query cache is scoped by authenticated customer identity. P52 derives exact raw-status counts only from the authoritative returned window and marks history as `UNKNOWN_AFTER_SERVER_LIMIT` whenever all 50 server rows are present; it never interprets that saturated window as the customer's complete order history.
 
 ---
 
-## 5. P51 Acceptance Blockers
+## 5. P52 Acceptance Blockers
 
-P51 explicitly records:
+P52 explicitly records:
 
 ```text
-CASHFREE_NATIVE_PROVIDER_CALLBACK_UNAVAILABLE
-PAYMENT_TERMINAL_RETRY_CONTRACT_UNAVAILABLE
+CUSTOMER_ORDERS_SERVER_PAGINATION_UNAVAILABLE
+CUSTOMER_ORDERS_GLOBAL_COUNTS_UNAVAILABLE
+CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE
 ```
 
-The current rebuild still has no reviewed Cashfree React Native SDK/native callback/deep-link configuration, so P51 cannot wire a real provider callback adapter without violating the no-invented/native-dependency rule.
+The backend/APIM currently provides only a newest-50 list. There is no exact server page/cursor contract and no global total/per-status count payload. Client-side slicing would paginate only a truncated window and is therefore not implemented as fake history pagination.
 
-The current payment-create behavior reuses the latest checkout payment order and there is no exact customer contract for starting/resetting a fresh provider payment attempt after a terminal failed/cancelled attempt. Mobile therefore does not fabricate a new-attempt flow.
+The guide's user-facing lifecycle tabs (`All`, `Upcoming`, `Completed`, `Cancelled`) also have no current authoritative mapping to the exact backend status enum. P52 preserves exact raw statuses rather than inventing product bucket membership.
 
-Current backend verification moves a payment to `PAID` when Cashfree reports `PAID`, but otherwise preserves the existing Craves payment status. Ordinary provider failure/cancellation therefore does not guarantee an authoritative `FAILED`/`CANCELLED` transition through the verify endpoint alone.
-
-Because these owning-layer capabilities remain absent, P51 is **PARTIAL**, not DONE.
+Because these owning-layer capabilities remain absent, P52 is **PARTIAL**, not DONE.
 
 ---
 
-## 6. P51 Changed Files
+## 6. P52 Changed Files
 
 Implementation/test:
 
-- `apps/mobile/src/features/payment/domain/paymentTypes.ts`
-- `apps/mobile/src/features/payment/api/paymentApi.ts`
-- `apps/mobile/src/features/payment/domain/paymentHandoffCoordinator.ts`
-- `apps/mobile/src/features/payment/domain/paymentRecoveryCoordinator.ts`
-- `apps/mobile/src/features/payment/paymentRecovery.test.ts`
+- `apps/mobile/src/features/customerOrders/api/customerOrdersApi.ts`
+- `apps/mobile/src/features/customerOrders/domain/customerOrderTypes.ts`
+- `apps/mobile/src/features/customerOrders/domain/customerOrdersModel.ts`
+- `apps/mobile/src/features/customerOrders/query/customerOrdersQueries.ts`
+- `apps/mobile/src/features/customerOrders/customerOrdersApi.test.ts`
+- `apps/mobile/src/features/customerOrders/customerOrdersModel.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P51_PAYMENT_SUCCESS_FAILURE_CANCEL_RECOVERY.md`
+- `docs/mobile-ui-rebuild/P52_CUSTOMER_ORDERS_CONTRACT_AND_PAGINATION.md`
 
 Ledger:
 
 - `build.md`
 
-No backend, APIM, OpenAPI, database, infrastructure, payment-provider server source, package dependency, or Android native payment configuration was changed.
+No Orders UI, backend, APIM, OpenAPI, database, infrastructure, package dependency, or Android native source was changed.
 
 ---
 
-## 7. Architecture Ownership After P51
+## 7. Architecture Ownership After P52
 
 - P19–P24 remain authoritative for authentication/session/onboarding/logout/private-cache cleanup.
 - P25–P30 remain authoritative for Customer shell/header/shared cart foundations and mutation reconciliation.
@@ -183,24 +186,24 @@ No backend, APIM, OpenAPI, database, infrastructure, payment-provider server sou
 - P48 remains authoritative for delivery-quote dependency invalidation/readiness orchestration and its missing quote/reprice blocker.
 - P49 remains authoritative for checkout create/read session boundaries and its missing server idempotency/recovery blocker.
 - P50 remains authoritative for payment-order creation/read preparation, amount cross-checking, handoff modeling, and its tokenized-method/native-launch blockers.
-- **P51 owns exact backend payment verification, provider-trigger validation, authoritative checkout reconciliation, success/failure/cancel recovery semantics, same-payment verification coalescing, and fail-closed native-callback/terminal-new-attempt capability gates.**
-- **P52 — Customer Orders Contract and Pagination has not started.**
+- P51 remains authoritative for backend payment verification/recovery and its native-callback/new-attempt/backend-terminal-state blockers.
+- **P52 owns the exact current customer Orders list response allowlist, authoritative returned-window model, private query/cache key, raw-status window counts, history-completeness guard, and order-list invalidation boundary.**
+- **P53 — My Orders — Empty Cart (UI) has not started.**
 
 ---
 
-## 8. Explicitly Not Complete After P51
+## 8. Explicitly Not Complete After P52
 
 Do not describe any of the following as complete:
 
-- outstanding blockers recorded for P31–P50;
-- P48 authoritative pre-checkout quote/reprice network refresh and full serviceability/fee/ETA acceptance;
-- P49 authoritative server-side checkout idempotency/recovery across network replay/process restart;
-- P50 tokenized payment-method/eligibility capability;
-- P50 native Cashfree provider launch/authorization;
-- P51 native Cashfree callback/deep-link adapter;
-- P51 fresh payment attempt after authoritative terminal failure/cancel;
-- P51 terminal failure/cancellation propagation where the current backend keeps non-paid verification pending;
-- **P52 — Customer Orders Contract and Pagination**;
+- outstanding blockers recorded for P31–P51;
+- P52 true server pagination/cursor navigation beyond the newest 50 orders;
+- P52 global order totals or global per-status/lifecycle-tab counts;
+- P52 authoritative mapping from backend statuses to `All`/`Upcoming`/`Completed`/`Cancelled` presentation buckets;
+- **P53 — My Orders — Empty Cart (UI)**;
+- P54 — My Orders — Active Cart (UI);
+- P55 Order Detail/Timeline/Tracking;
+- P56 reorder/cancellation/refund eligibility;
 - checkout/payment end-to-end flow;
 - live provider sandbox/device certification unless a later evidence record explicitly says so;
 - Chef operational/product screens;
@@ -214,11 +217,11 @@ Do not describe any of the following as complete:
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current implemented phase: P51 — PARTIAL
-Validated implementation SHA: ce2a72cbf950b9a21389a55bcde748c60abbb4fd
-CI: 31264513219 / 93120381991 — SUCCESS
-Evidence: docs/mobile-ui-rebuild/P51_PAYMENT_SUCCESS_FAILURE_CANCEL_RECOVERY.md
-Blockers: CASHFREE_NATIVE_PROVIDER_CALLBACK_UNAVAILABLE; PAYMENT_TERMINAL_RETRY_CONTRACT_UNAVAILABLE; current backend non-paid verify may remain PAYMENT_PENDING; earlier recorded P31–P50 blockers remain
-Next phase: P52 — NOT STARTED
+Current implemented phase: P52 — PARTIAL
+Validated implementation SHA: 8222927c4556896c2d686b078b6eb5ec6465b60f
+CI: 31265306860 / 93122377531 — SUCCESS
+Evidence: docs/mobile-ui-rebuild/P52_CUSTOMER_ORDERS_CONTRACT_AND_PAGINATION.md
+Blockers: CUSTOMER_ORDERS_SERVER_PAGINATION_UNAVAILABLE; CUSTOMER_ORDERS_GLOBAL_COUNTS_UNAVAILABLE; CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE; earlier recorded P31–P51 blockers remain
+Next phase: P53 — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

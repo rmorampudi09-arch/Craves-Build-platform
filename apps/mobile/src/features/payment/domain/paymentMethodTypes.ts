@@ -42,7 +42,6 @@ export interface BuildCustomerPaymentMethodsModelInput {
  */
 export function buildCustomerPaymentMethodsModel({
   cartItemCount,
-  selectedMethodId,
 }: BuildCustomerPaymentMethodsModelInput): CustomerPaymentMethodsScreenModel {
   const activeCart = cartItemCount > 0;
   const mode: CustomerPaymentMethodsMode = activeCart ? 'ACTIVE_CART' : 'EMPTY_CART';

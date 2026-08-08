@@ -4,6 +4,7 @@ import {
   parseCustomerAddress,
   toCustomerAddressUpdateRequest,
   type CustomerAddress,
+  type CustomerAddressUpdateRequest,
 } from '../domain/customerAddressContract';
 
 export const CUSTOMER_ADDRESSES_PATH = '/api/v1/customer/addresses';
@@ -42,6 +43,22 @@ function requireAddressId(addressId: string): void {
   }
 }
 
+async function updateCustomerAddress(
+  addressId: string,
+  request: CustomerAddressUpdateRequest,
+): Promise<CustomerAddress> {
+  requireAddressId(addressId);
+  const response = await httpClient.put<unknown>(
+    `${CUSTOMER_ADDRESSES_PATH}/${encodeURIComponent(addressId)}`,
+    request,
+  );
+  const updated = requireAddress(response);
+  if (updated.id !== addressId) {
+    throw new CustomerAddressesContractError();
+  }
+  return updated;
+}
+
 export const customerAddressesApi = {
   async list(signal?: AbortSignal): Promise<CustomerAddress[]> {
     const response = await httpClient.get<unknown>(CUSTOMER_ADDRESSES_PATH, {
@@ -51,17 +68,13 @@ export const customerAddressesApi = {
     return parseCustomerAddressesResponse(response);
   },
 
+  update: updateCustomerAddress,
+
   async setDefault(address: CustomerAddress): Promise<CustomerAddress> {
-    requireAddressId(address.id);
-    const response = await httpClient.put<unknown>(
-      `${CUSTOMER_ADDRESSES_PATH}/${encodeURIComponent(address.id)}`,
+    return updateCustomerAddress(
+      address.id,
       toCustomerAddressUpdateRequest(address, true),
     );
-    const updated = requireAddress(response);
-    if (updated.id !== address.id) {
-      throw new CustomerAddressesContractError();
-    }
-    return updated;
   },
 
   async delete(addressId: string): Promise<void> {

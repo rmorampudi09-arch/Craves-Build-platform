@@ -32,7 +32,10 @@ import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {resolveCartAddressSelection} from '../../cart/domain/cartAddressSelection';
 import {CART_DELIVERY_QUOTE_CONTRACT_BLOCKER} from '../../cart/domain/cartDeliveryQuote';
-import {selectCartDependencies, selectCartItemCount} from '../../cart/state/cartSelectors';
+import {
+  selectCartDependencies,
+  selectCartItemCount,
+} from '../../cart/state/cartSelectors';
 import {refreshCartSnapshot} from '../../cart/state/cartRefresh';
 import {cartActions} from '../../cart/state/cartSlice';
 import {invalidateCustomerHomeFeedQueries} from '../../home/query/homeFeedQueries';
@@ -49,6 +52,7 @@ import {
   useDeleteCustomerAddressMutation,
   useSetDefaultCustomerAddressMutation,
 } from '../query/customerAddressQueries';
+import {CustomerAddressEditorModal} from './CustomerAddressEditorModal';
 
 type AddressesNavigation = NativeStackNavigationProp<
   CustomerProfileStackParamList,
@@ -62,9 +66,17 @@ interface FeedbackState {
   message: string;
 }
 
+type EditorTarget =
+  | {mode: 'add'}
+  | {mode: 'edit'; address: CustomerAddress}
+  | null;
+
 function AddressesSkeleton() {
   return (
-    <View accessibilityLabel="Loading saved addresses" accessibilityRole="progressbar" style={styles.skeletonWrap}>
+    <View
+      accessibilityLabel="Loading saved addresses"
+      accessibilityRole="progressbar"
+      style={styles.skeletonWrap}>
       {[0, 1].map(item => (
         <View key={item} style={styles.skeletonCard}>
           <View style={styles.skeletonTitle} />
@@ -85,6 +97,7 @@ function AddressCard({
   settingDefault,
   onDelete,
   onDeliver,
+  onEdit,
   onSetDefault,
 }: {
   address: CustomerAddress;
@@ -94,6 +107,7 @@ function AddressCard({
   settingDefault: boolean;
   onDelete: () => void;
   onDeliver: () => void;
+  onEdit: () => void;
   onSetDefault: () => void;
 }) {
   const busy = deleting || delivering || settingDefault;
@@ -106,7 +120,9 @@ function AddressCard({
         </View>
         <View style={styles.addressHeadingCopy}>
           <View style={styles.labelRow}>
-            <Text style={styles.addressLabel}>{customerAddressLabel(address)}</Text>
+            <Text style={styles.addressLabel}>
+              {customerAddressLabel(address)}
+            </Text>
             {address.isDefault ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>Default</Text>
@@ -124,26 +140,35 @@ function AddressCard({
         </View>
       </View>
 
-      <Text style={styles.fullAddress}>{customerAddressDisplayLine(address)}</Text>
+      <Text style={styles.fullAddress}>
+        {customerAddressDisplayLine(address)}
+      </Text>
 
       <View style={styles.actions}>
         <Button
+          disabled={busy}
+          label="Edit"
+          onPress={onEdit}
+          style={styles.actionButton}
+          variant="outline"
+        />
+        <Button
           disabled={busy || address.isDefault}
-          label={address.isDefault ? 'Default address' : 'Set default'}
+          label={address.isDefault ? 'Default' : 'Set default'}
           loading={settingDefault}
           onPress={onSetDefault}
           style={styles.actionButton}
           variant="outline"
         />
-        <Button
-          disabled={busy}
-          label="Delete"
-          loading={deleting}
-          onPress={onDelete}
-          style={styles.actionButton}
-          variant="ghost"
-        />
       </View>
+      <Button
+        disabled={busy}
+        label="Delete"
+        loading={deleting}
+        onPress={onDelete}
+        style={styles.deleteButton}
+        variant="ghost"
+      />
       <Button
         disabled={busy}
         label={selected ? 'Deliver Here · Selected' : 'Deliver Here'}
@@ -155,7 +180,7 @@ function AddressCard({
   );
 }
 
-/** P66 shared My Addresses screen for both active and empty cart references. */
+/** P66 list plus the P67 partial Add/Edit address entry points. */
 export function CustomerAddressesScreen() {
   const navigation = useNavigation<AddressesNavigation>();
   const dispatch = useAppDispatch();
@@ -164,13 +189,16 @@ export function CustomerAddressesScreen() {
   const setDefaultMutation = useSetDefaultCustomerAddressMutation();
   const deleteMutation = useDeleteCustomerAddressMutation();
   const bottomNavScroll = useCustomerBottomNavScroll();
-  const selectedLocation = useAppSelector(state => state.customerShell.selectedLocation);
+  const selectedLocation = useAppSelector(
+    state => state.customerShell.selectedLocation,
+  );
   const cartDependencies = useAppSelector(selectCartDependencies);
   const itemCount = useAppSelector(selectCartItemCount);
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deliveringId, setDeliveringId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [editorTarget, setEditorTarget] = useState<EditorTarget>(null);
 
   const handleSetDefault = useCallback(
     async (address: CustomerAddress) => {
@@ -181,7 +209,10 @@ export function CustomerAddressesScreen() {
       setSettingDefaultId(address.id);
       try {
         await setDefaultMutation.mutateAsync(address);
-        setFeedback({tone: 'success', message: `${customerAddressLabel(address)} is now your default address.`});
+        setFeedback({
+          tone: 'success',
+          message: `${customerAddressLabel(address)} is now your default address.`,
+        });
       } catch (caught) {
         const error = toAppApiError(caught);
         setFeedback({tone: 'error', message: error.message});
@@ -294,7 +325,10 @@ export function CustomerAddressesScreen() {
       }
 
       if (itemCount === 0) {
-        setFeedback({tone: 'success', message: `${customerAddressLabel(address)} selected for delivery.`});
+        setFeedback({
+          tone: 'success',
+          message: `${customerAddressLabel(address)} selected for delivery.`,
+        });
         setDeliveringId(null);
         return;
       }
@@ -329,6 +363,11 @@ export function CustomerAddressesScreen() {
     addressesQuery.refetch().catch(() => undefined);
   }, [addressesQuery]);
 
+  const openAdd = useCallback(() => {
+    setFeedback(null);
+    setEditorTarget({mode: 'add'});
+  }, []);
+
   const body = (() => {
     if (addressesQuery.sessionRequired) {
       return (
@@ -342,7 +381,8 @@ export function CustomerAddressesScreen() {
       return <AddressesSkeleton />;
     }
     if (addressesQuery.isError) {
-      const invalidContract = addressesQuery.error instanceof CustomerAddressesContractError;
+      const invalidContract =
+        addressesQuery.error instanceof CustomerAddressesContractError;
       return (
         <TerminalState
           actionLabel="Try again"
@@ -359,8 +399,10 @@ export function CustomerAddressesScreen() {
     if (addressesQuery.addresses.length === 0) {
       return (
         <TerminalState
+          actionLabel="Add address"
+          description="Enter a delivery address manually. New-address persistence will activate when its approved backend contract is available."
+          onAction={openAdd}
           title="No saved addresses"
-          description="Your saved delivery addresses will appear here."
         />
       );
     }
@@ -385,6 +427,10 @@ export function CustomerAddressesScreen() {
                   setDeliveringId(null);
                 });
               }}
+              onEdit={() => {
+                setFeedback(null);
+                setEditorTarget({mode: 'edit', address});
+              }}
               onSetDefault={() => {
                 handleSetDefault(address).catch(() => undefined);
               }}
@@ -398,60 +444,99 @@ export function CustomerAddressesScreen() {
   })();
 
   return (
-    <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-addresses">
-      <View style={styles.root}>
-        <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Back"
-            accessibilityRole="button"
-            hitSlop={spacing.sm}
-            onPress={() => navigation.goBack()}
-            style={({pressed}) => [styles.backButton, pressed && styles.pressed]}>
-            <Icon name="arrow-left" color={colors.espressoBrown} size={iconSize.md} />
-          </Pressable>
-          <Text accessibilityRole="header" style={styles.title}>My Addresses</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          onScroll={bottomNavScroll.onScroll}
-          refreshControl={
-            addressesQuery.sessionRequired ? undefined : (
-              <RefreshControl
-                colors={[colors.flameRed]}
-                onRefresh={retry}
-                refreshing={addressesQuery.isRefetching}
-                tintColor={colors.flameRed}
-              />
-            )
-          }
-          scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
-          showsVerticalScrollIndicator={false}>
-          <View style={styles.intro}>
-            <Text style={styles.introTitle}>Saved delivery addresses</Text>
-            <Text style={styles.introCopy}>
-              Choose a default address, remove an address, or use Deliver Here for your current order.
-            </Text>
-          </View>
-          {feedback ? (
-            <View
-              accessibilityRole="alert"
-              style={[
-                styles.feedback,
-                feedback.tone === 'error' && styles.feedbackError,
-                feedback.tone === 'warning' && styles.feedbackWarning,
+    <>
+      <ScreenShell
+        edges={['top']}
+        keyboardAvoiding={false}
+        testID="customer-addresses">
+        <View style={styles.root}>
+          <View style={styles.header}>
+            <Pressable
+              accessibilityLabel="Back"
+              accessibilityRole="button"
+              hitSlop={spacing.sm}
+              onPress={() => navigation.goBack()}
+              style={({pressed}) => [
+                styles.backButton,
+                pressed && styles.pressed,
               ]}>
-              <Text style={styles.feedbackText}>{feedback.message}</Text>
-              {feedback.tone === 'warning' ? (
-                <Text style={styles.feedbackCode}>{CART_DELIVERY_QUOTE_CONTRACT_BLOCKER}</Text>
+              <Icon
+                name="arrow-left"
+                color={colors.espressoBrown}
+                size={iconSize.md}
+              />
+            </Pressable>
+            <Text accessibilityRole="header" style={styles.title}>
+              My Addresses
+            </Text>
+            <View style={styles.headerSpacer} />
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            onScroll={bottomNavScroll.onScroll}
+            refreshControl={
+              addressesQuery.sessionRequired ? undefined : (
+                <RefreshControl
+                  colors={[colors.flameRed]}
+                  onRefresh={retry}
+                  refreshing={addressesQuery.isRefetching}
+                  tintColor={colors.flameRed}
+                />
+              )
+            }
+            scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
+            showsVerticalScrollIndicator={false}>
+            <View style={styles.intro}>
+              <Text style={styles.introTitle}>Saved delivery addresses</Text>
+              <Text style={styles.introCopy}>
+                Add or edit address details, choose a default address, remove an
+                address, or use Deliver Here for your current order.
+              </Text>
+              {!addressesQuery.sessionRequired ? (
+                <Button
+                  label="Add new address"
+                  leftIcon="location"
+                  onPress={openAdd}
+                  style={styles.addButton}
+                  variant="outline"
+                />
               ) : null}
             </View>
-          ) : null}
-          {body}
-        </ScrollView>
-      </View>
-    </ScreenShell>
+
+            {feedback ? (
+              <View
+                accessibilityRole="alert"
+                style={[
+                  styles.feedback,
+                  feedback.tone === 'error' && styles.feedbackError,
+                  feedback.tone === 'warning' && styles.feedbackWarning,
+                ]}>
+                <Text style={styles.feedbackText}>{feedback.message}</Text>
+                {feedback.tone === 'warning' ? (
+                  <Text style={styles.feedbackCode}>
+                    {CART_DELIVERY_QUOTE_CONTRACT_BLOCKER}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {body}
+          </ScrollView>
+        </View>
+      </ScreenShell>
+
+      {editorTarget ? (
+        <CustomerAddressEditorModal
+          address={
+            editorTarget.mode === 'edit' ? editorTarget.address : undefined
+          }
+          addresses={addressesQuery.addresses}
+          mode={editorTarget.mode}
+          onClose={() => setEditorTarget(null)}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -502,26 +587,27 @@ const styles = StyleSheet.create({
   introCopy: {
     color: colors.textSecondary,
     fontSize: typography.small,
-    marginTop: spacing.xxs,
+    marginTop: spacing.xs,
   },
+  addButton: {marginTop: spacing.md, alignSelf: 'stretch'},
   feedback: {
     width: '100%',
     maxWidth: 640,
     alignSelf: 'center',
-    borderRadius: radius.md,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.creamDeep,
-    backgroundColor: colors.white,
     padding: spacing.md,
     marginBottom: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.success,
+    backgroundColor: colors.white,
   },
-  feedbackError: {borderColor: colors.error, backgroundColor: colors.errorSoft},
-  feedbackWarning: {borderColor: colors.creamDeep, backgroundColor: colors.surfaceWarm},
-  feedbackText: {color: colors.espressoBrown, fontSize: typography.small},
+  feedbackWarning: {borderColor: colors.warning},
+  feedbackError: {borderColor: colors.error},
+  feedbackText: {color: colors.textPrimary, fontSize: typography.small},
   feedbackCode: {
     color: colors.textSecondary,
     fontSize: typography.tiny,
-    marginTop: spacing.xxs,
+    marginTop: spacing.xs,
   },
   list: {
     width: '100%',
@@ -530,15 +616,19 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   addressCard: {
+    padding: spacing.md,
     borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
     backgroundColor: colors.white,
-    padding: spacing.lg,
     ...elevation.card,
   },
   addressCardSelected: {borderColor: colors.flameRed},
-  addressHeading: {flexDirection: 'row', gap: spacing.sm},
+  addressHeading: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
   addressIcon: {
     width: 40,
     height: 40,
@@ -547,21 +637,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.surfaceWarm,
   },
-  addressHeadingCopy: {minWidth: 0, flex: 1},
-  labelRow: {flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs},
+  addressHeadingCopy: {flex: 1, minWidth: 0},
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
   addressLabel: {
     color: colors.espressoBrown,
     fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },
   badge: {
-    borderRadius: radius.pill,
-    backgroundColor: colors.creamDeep,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xxs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceWarm,
   },
   badgeText: {
-    color: colors.espressoBrown,
+    color: colors.flameRed,
     fontSize: typography.tiny,
     fontWeight: fontWeight.semibold,
   },
@@ -569,10 +664,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xxs,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceWarm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs,
   },
   selectedBadgeText: {
     color: colors.flameRed,
@@ -580,20 +675,29 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   recipientName: {
-    color: colors.espressoBrown,
+    color: colors.textPrimary,
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
     marginTop: spacing.xs,
   },
-  phone: {color: colors.textSecondary, fontSize: typography.small, marginTop: spacing.xxs},
+  phone: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    marginTop: spacing.xxs,
+  },
   fullAddress: {
     color: colors.textSecondary,
-    fontSize: typography.body,
-    lineHeight: 22,
+    fontSize: typography.small,
+    lineHeight: 20,
     marginTop: spacing.md,
   },
-  actions: {flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md},
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
   actionButton: {flex: 1},
+  deleteButton: {marginTop: spacing.xs},
   deliverButton: {marginTop: spacing.sm},
   skeletonWrap: {
     width: '100%',
@@ -602,13 +706,33 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   skeletonCard: {
+    padding: spacing.md,
     borderRadius: radius.lg,
     backgroundColor: colors.white,
-    padding: spacing.lg,
     gap: spacing.sm,
   },
-  skeletonTitle: {width: '32%', height: 18, borderRadius: radius.sm, backgroundColor: colors.surfaceMuted},
-  skeletonLine: {width: '88%', height: 14, borderRadius: radius.sm, backgroundColor: colors.surfaceMuted},
-  skeletonLineShort: {width: '62%', height: 14, borderRadius: radius.sm, backgroundColor: colors.surfaceMuted},
-  skeletonActions: {height: 52, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, marginTop: spacing.sm},
+  skeletonTitle: {
+    width: '38%',
+    height: 20,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceMuted,
+  },
+  skeletonLine: {
+    width: '100%',
+    height: 14,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceMuted,
+  },
+  skeletonLineShort: {
+    width: '68%',
+    height: 14,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceMuted,
+  },
+  skeletonActions: {
+    width: '100%',
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+  },
 });

@@ -8,7 +8,10 @@ import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
 import {AppApiError} from '../../../core/http/apiError';
 import {customerAddressesApi} from '../api/customerAddressesApi';
-import type {CustomerAddress} from '../domain/customerAddressContract';
+import type {
+  CustomerAddress,
+  CustomerAddressUpdateRequest,
+} from '../domain/customerAddressContract';
 
 const CUSTOMER_ROLE = 'CUSTOMER' as const;
 const CUSTOMER_ADDRESSES_DOMAIN = 'customer-addresses';
@@ -61,6 +64,36 @@ export function useCustomerAddressesQuery() {
   };
 }
 
+function requireAddressSession(identityId: string | null): void {
+  if (!identityId) {
+    throw new AppApiError(
+      'SESSION_REQUIRED',
+      'Sign in again before changing your saved addresses.',
+    );
+  }
+}
+
+export function useUpdateCustomerAddressMutation() {
+  const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: [...customerAddressesQueryPrefix, 'update'],
+    mutationFn: ({
+      addressId,
+      request,
+    }: {
+      addressId: string;
+      request: CustomerAddressUpdateRequest;
+    }) => {
+      requireAddressSession(identityId);
+      return customerAddressesApi.update(addressId, request);
+    },
+    retry: false,
+    onSuccess: async () => invalidateCustomerAddressQueries(queryClient),
+  });
+}
+
 export function useSetDefaultCustomerAddressMutation() {
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const queryClient = useQueryClient();
@@ -68,12 +101,7 @@ export function useSetDefaultCustomerAddressMutation() {
   return useMutation({
     mutationKey: [...customerAddressesQueryPrefix, 'set-default'],
     mutationFn: (address: CustomerAddress) => {
-      if (!identityId) {
-        throw new AppApiError(
-          'SESSION_REQUIRED',
-          'Sign in again before changing your saved addresses.',
-        );
-      }
+      requireAddressSession(identityId);
       return customerAddressesApi.setDefault(address);
     },
     retry: false,
@@ -88,12 +116,7 @@ export function useDeleteCustomerAddressMutation() {
   return useMutation({
     mutationKey: [...customerAddressesQueryPrefix, 'delete'],
     mutationFn: (addressId: string) => {
-      if (!identityId) {
-        throw new AppApiError(
-          'SESSION_REQUIRED',
-          'Sign in again before deleting a saved address.',
-        );
-      }
+      requireAddressSession(identityId);
       return customerAddressesApi.delete(addressId);
     },
     retry: false,

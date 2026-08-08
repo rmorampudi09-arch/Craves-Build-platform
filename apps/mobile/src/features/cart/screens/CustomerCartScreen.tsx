@@ -270,7 +270,7 @@ export function CustomerCartScreen() {
 
   useEffect(() => {
     if (snapshotStatus === 'UNINITIALIZED') {
-      void refreshCart();
+      refreshCart();
     }
   }, [refreshCart, snapshotStatus]);
 
@@ -300,7 +300,7 @@ export function CustomerCartScreen() {
               text: 'Remove',
               style: 'destructive',
               onPress: () => {
-                void dispatch(removeCartItem({lineId: item.lineId})).then(
+                dispatch(removeCartItem({lineId: item.lineId})).then(
                   handleMutationOutcome,
                 );
               },
@@ -310,7 +310,7 @@ export function CustomerCartScreen() {
         return;
       }
 
-      void dispatch(
+      dispatch(
         setCartItemQuantity({
           lineId: item.lineId,
           quantity: interaction.quantity,
@@ -370,7 +370,7 @@ export function CustomerCartScreen() {
         <RecoverableErrorBanner
           message={visibleRefreshError}
           onRetry={() => {
-            void refreshCart();
+            refreshCart();
           }}
           style={styles.notice}
         />
@@ -465,7 +465,7 @@ export function CustomerCartScreen() {
           description={visibleRefreshError ?? 'Refresh to load your current cart.'}
           actionLabel="Try again"
           onAction={() => {
-            void refreshCart();
+            refreshCart();
           }}
           actionLoading={snapshotStatus === 'LOADING'}
         />
@@ -493,7 +493,7 @@ export function CustomerCartScreen() {
           <RefreshControl
             colors={[colors.flameRed]}
             onRefresh={() => {
-              void refreshCart();
+              refreshCart();
             }}
             refreshing={snapshotStatus === 'LOADING'}
             tintColor={colors.flameRed}
@@ -518,7 +518,7 @@ export function CustomerCartScreen() {
         variant="compact"
         onPressLocation={() => setLocationSelectorVisible(true)}
         onPressNotifications={() => {
-          void header.refreshNotifications();
+          header.refreshNotifications();
         }}
       />
 

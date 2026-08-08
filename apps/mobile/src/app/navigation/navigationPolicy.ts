@@ -38,8 +38,9 @@ const DOMAIN_DEFAULTS: Record<NavigationDomain, RouteChromePolicy> = {
 };
 
 /**
- * Authentication/account-resolution routes remain immersive. P25 customer tab
- * routes intentionally fall through to the Customer domain default.
+ * Authentication/account-resolution routes and focused customer utilities are
+ * immersive. Standard Customer tab roots intentionally fall through to the
+ * Customer domain default.
  */
 const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'Splash',
@@ -55,6 +56,7 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'ChefRegistration',
   'ChefAccountStatus',
   'StartupError',
+  'CustomerFilterSort',
 ]);
 
 const IMMERSIVE_POLICY: RouteChromePolicy = {

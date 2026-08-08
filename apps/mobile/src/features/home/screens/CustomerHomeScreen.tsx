@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -29,7 +30,13 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
-import {addCartItem} from '../../cart/state/cartMutations';
+import type {CartLine} from '../../cart/domain/cartTypes';
+import {
+  addCartItem,
+  removeCartItem,
+  setCartItemQuantity,
+  type CartMutationOutcome,
+} from '../../cart/state/cartMutations';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
@@ -65,12 +72,25 @@ function HomeFeedSkeleton() {
 interface DishCardProps {
   dish: NearbyDish;
   adding: boolean;
+  cartLine: CartLine | null;
+  changingQuantity: boolean;
   onAdd: (dishId: string) => void;
+  onDecrease: (line: CartLine) => void;
+  onIncrease: (line: CartLine) => void;
 }
 
-function DishCard({dish, adding, onAdd}: DishCardProps) {
+function DishCard({
+  dish,
+  adding,
+  cartLine,
+  changingQuantity,
+  onAdd,
+  onDecrease,
+  onIncrease,
+}: DishCardProps) {
   const kitchenName = dish.kitchenDisplayName ?? dish.kitchenName;
   const location = [dish.areaName, dish.city].filter(Boolean).join(', ');
+  const quantity = cartLine?.quantity ?? 0;
 
   return (
     <View style={styles.dishCard}>
@@ -107,13 +127,49 @@ function DishCard({dish, adding, onAdd}: DishCardProps) {
               {dish.foodType === 'NON_VEG' ? 'Non-veg' : dish.foodType === 'EGG' ? 'Egg' : 'Veg'}
             </Text>
           </View>
-          <Button
-            label="Add"
-            accessibilityLabel={`Add ${dish.itemName} to cart`}
-            loading={adding}
-            onPress={() => onAdd(dish.id)}
-            style={styles.addButton}
-          />
+          {cartLine && quantity > 0 ? (
+            <View
+              accessibilityLabel={`${dish.itemName} quantity ${quantity}`}
+              style={styles.quantitySelector}>
+              <Pressable
+                accessibilityLabel={`Decrease ${dish.itemName} quantity`}
+                accessibilityRole="button"
+                accessibilityState={{disabled: changingQuantity}}
+                disabled={changingQuantity}
+                onPress={() => onDecrease(cartLine)}
+                style={({pressed}) => [
+                  styles.quantityButton,
+                  pressed && styles.quantityButtonPressed,
+                  changingQuantity && styles.quantityButtonDisabled,
+                ]}>
+                <Text style={styles.quantityButtonText}>−</Text>
+              </Pressable>
+              <Text accessibilityLiveRegion="polite" style={styles.quantityText}>
+                {quantity}
+              </Text>
+              <Pressable
+                accessibilityLabel={`Increase ${dish.itemName} quantity`}
+                accessibilityRole="button"
+                accessibilityState={{disabled: changingQuantity}}
+                disabled={changingQuantity}
+                onPress={() => onIncrease(cartLine)}
+                style={({pressed}) => [
+                  styles.quantityButton,
+                  pressed && styles.quantityButtonPressed,
+                  changingQuantity && styles.quantityButtonDisabled,
+                ]}>
+                <Text style={styles.quantityButtonText}>+</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Button
+              label="Add"
+              accessibilityLabel={`Add ${dish.itemName} to cart`}
+              loading={adding}
+              onPress={() => onAdd(dish.id)}
+              style={styles.addButton}
+            />
+          )}
         </View>
       </View>
     </View>
@@ -123,6 +179,7 @@ function DishCard({dish, adding, onAdd}: DishCardProps) {
 export function CustomerHomeScreen() {
   const dispatch = useAppDispatch();
   const identity = useAppSelector(state => state.auth.identity);
+  const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const cartMutations = useAppSelector(state => state.cart.mutations);
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
@@ -151,6 +208,13 @@ export function CustomerHomeScreen() {
     () => filterHomeDishes(dishes, searchQuery, selectedCategory),
     [dishes, searchQuery, selectedCategory],
   );
+  const cartLinesByMenuItemId = useMemo(() => {
+    const lines = new Map<string, CartLine>();
+    for (const line of cartSnapshot?.lines ?? []) {
+      lines.set(line.menuItemId, line);
+    }
+    return lines;
+  }, [cartSnapshot?.lines]);
 
   const firstName = identity?.displayName?.trim().split(/\s+/)[0] ?? null;
   const greeting = firstName ? `Hi ${firstName}` : 'Hello';
@@ -163,13 +227,39 @@ export function CustomerHomeScreen() {
     feed.refetch();
   };
 
+  const handleMutationOutcome = (outcome: CartMutationOutcome) => {
+    if (outcome.status === 'FAILED') {
+      setMutationError(outcome.error.message);
+    }
+  };
+
   const handleAdd = (dishId: string) => {
     setMutationError(null);
-    dispatch(addCartItem({menuItemId: dishId, quantity: 1})).then(outcome => {
-      if (outcome.status === 'FAILED') {
-        setMutationError(outcome.error.message);
-      }
-    });
+    dispatch(addCartItem({menuItemId: dishId, quantity: 1})).then(handleMutationOutcome);
+  };
+
+  const handleIncrease = (line: CartLine) => {
+    setMutationError(null);
+    dispatch(
+      setCartItemQuantity({
+        lineId: line.lineId,
+        quantity: line.quantity + 1,
+      }),
+    ).then(handleMutationOutcome);
+  };
+
+  const handleDecrease = (line: CartLine) => {
+    setMutationError(null);
+    if (line.quantity <= 1) {
+      dispatch(removeCartItem({lineId: line.lineId})).then(handleMutationOutcome);
+      return;
+    }
+    dispatch(
+      setCartItemQuantity({
+        lineId: line.lineId,
+        quantity: line.quantity - 1,
+      }),
+    ).then(handleMutationOutcome);
   };
 
   const clearFilters = () => {
@@ -304,7 +394,7 @@ export function CustomerHomeScreen() {
   );
 
   return (
-    <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-home-empty-cart">
+    <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-home">
       <FlatList
         data={visibleDishes}
         keyExtractor={item => item.id}
@@ -335,13 +425,22 @@ export function CustomerHomeScreen() {
             tintColor={colors.flameRed}
           />
         }
-        renderItem={({item}) => (
-          <DishCard
-            dish={item}
-            adding={cartMutations[`menu:${item.id}`]?.status === 'PENDING'}
-            onAdd={handleAdd}
-          />
-        )}
+        renderItem={({item}) => {
+          const cartLine = cartLinesByMenuItemId.get(item.id) ?? null;
+          return (
+            <DishCard
+              dish={item}
+              adding={cartMutations[`menu:${item.id}`]?.status === 'PENDING'}
+              cartLine={cartLine}
+              changingQuantity={
+                cartLine ? cartMutations[`line:${cartLine.lineId}`]?.status === 'PENDING' : false
+              }
+              onAdd={handleAdd}
+              onDecrease={handleDecrease}
+              onIncrease={handleIncrease}
+            />
+          );
+        }}
         scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
@@ -497,6 +596,42 @@ const styles = StyleSheet.create({
   addButton: {
     minHeight: 48,
     minWidth: 104,
+  },
+  quantitySelector: {
+    minHeight: 48,
+    minWidth: 128,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: colors.flameRed,
+    borderRadius: radius.pill,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+  },
+  quantityButton: {
+    width: 44,
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityButtonPressed: {
+    backgroundColor: colors.surfaceWarm,
+  },
+  quantityButtonDisabled: {
+    opacity: 0.45,
+  },
+  quantityButtonText: {
+    color: colors.flameRed,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
+  quantityText: {
+    minWidth: 28,
+    textAlign: 'center',
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
   },
   footerLoader: {
     paddingVertical: spacing.lg,

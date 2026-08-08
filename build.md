@@ -18,7 +18,8 @@
 - **P00–P30: DONE** at the implementation/static-contract level recorded by their existing ledger/evidence records. Device/reference certification remains deferred where those records say so.
 - **P31 — Home Feed Data Contract and Query Model: PARTIAL.** Exact nearby-menu/location/pagination/cache behavior is implemented and validated. Category/cuisine/full-home mapping remains blocked because the current branch has no authoritative concrete contract for those capabilities.
 - **P32 — Customer Home — Empty Cart: PARTIAL.** The supported empty-cart Home root, exact nearby feed presentation, Add action, saved-location behavior, loaded-result search/category filtering, pagination, refresh, bottom-nav scroll behavior, and lifecycle states are implemented and CI-validated. Full P32 acceptance remains blocked by missing favorite/full-search/category/cuisine/recommendation contracts and by Chef/Dish/Notifications product routes that belong to later phases and are not registered yet.
-- **P33 — Customer Home — Active Cart: PARTIAL.** The same Home route now reconciles loaded dish cards to the authoritative cart snapshot, exposes real increment/decrement/remove quantity controls, protects duplicate line mutations, and returns to Add when a line reaches zero. The required visible View Cart/count/total and `View Cart -> Cart` action remain blocked because no Customer Cart product route is registered and P45/P46 own that later destination.
+- **P33 — Customer Home — Active Cart: PARTIAL.** The same Home route reconciles loaded dish cards to the authoritative cart snapshot, exposes real increment/decrement/remove quantity controls, protects duplicate line mutations, and returns to Add when a line reaches zero. The required visible View Cart/count/total and `View Cart -> Cart` action remain blocked because no Customer Cart product route is registered and P45/P46 own that later destination.
+- **P34 — Nearby Chef Discovery Contract: PARTIAL.** Exact `GET /api/v1/discovery/kitchens` transport, validated kitchen-summary mapping, saved-location coordinates, pagination, bounded cache identity, and targeted invalidation are implemented and CI-validated. Full P34 acceptance remains blocked because the current branch has no authoritative delivery-serviceability contract; the richer rating/ETA/cuisine/favorite/verification/media/search/filter/sort data required by the Discover Home Chefs references is also absent from the current nearby-kitchen contract.
 
 ### P31 evidence
 
@@ -51,13 +52,24 @@
 - Jest at that gate: **37 suites / 179 tests passed**.
 - Outstanding blocker: Reference 06 requires a functional `View Cart -> Cart` action, but no Customer Cart route is registered yet and P45/P46 own the Cart data/UI destination. No inert callback, unreachable route, or placeholder Cart screen was introduced.
 
-**Current executed phase:** **P33 — Customer Home — Active Cart** is recorded **PARTIAL** because the safe cart-quantity/reconciliation subset is complete and validated, while the destination-bound View Cart surface cannot be completed without pre-implementing P45/P46-owned work.
+### P34 evidence
 
-**Next phase in sequence:** **P34 — Nearby Chef Discovery Contract** — **NOT STARTED**.
+- User explicitly authorized the next single phase after P33; P33 remains correctly recorded as PARTIAL.
+- Started from branch head: `bdc157f09b4294b8de67436eeb16e0320ff8d006`.
+- Validated implementation commit: `02b17243ff9845825068d3dae4b01c05f5e3ac72`.
+- Evidence commit: `60bc159d78e3f410190acb6e13367c375ea1f821`.
+- Evidence: `docs/mobile-ui-rebuild/P34_NEARBY_CHEF_DISCOVERY_CONTRACT.md`.
+- CI run/job: `31248762726` / `93081608217` — **SUCCESS**.
+- CI gates passed: dependency install, strict TypeScript, ESLint, Jest, production Android JavaScript bundle, backend/APIM/infrastructure source guard.
+- Outstanding blocker: the Catalog/APIM discovery operation supplies radius-based active kitchen discovery but explicitly does not define delivery serviceability. No current exact contract was found for delivery ETA, rating, cuisine taxonomy/filtering, chef favorites, public verification/media, or chef-search/filter/sort parameters.
+
+**Current executed phase:** **P34 — Nearby Chef Discovery Contract** is recorded **PARTIAL** because the exact existing nearby-kitchen contract and query/cache boundary are implemented and validated, while the serviceability portion of P34 cannot be completed without an authoritative backend/APIM contract.
+
+**Next phase in sequence:** **P35 — Discover Home Chefs — Empty Cart** — **NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P34. Wait for explicit user direction.
+**Required action:** Stop. Do not pre-implement P35. Wait for explicit user direction.
 
 ---
 
@@ -65,19 +77,19 @@
 
 Workflow: `.github/workflows/mobile-phase1-ci.yml`
 
-- GitHub Actions run ID: `31248405375`
-- Job ID: `93080699835`
-- Head SHA: `bcb25866df664a77c8b83fa50c029f967d72a9be`
-- Phase: **P33 — Customer Home — Active Cart**
+- GitHub Actions run ID: `31248762726`
+- Job ID: `93081608217`
+- Head SHA: `02b17243ff9845825068d3dae4b01c05f5e3ac72`
+- Phase: **P34 — Nearby Chef Discovery Contract**
 - Conclusion: **SUCCESS**
 
 Successful checks:
 
 1. checkout `mobile-ui-rebuild-from-scratch`,
-2. Node `22.13.0` setup and `npm ci`,
+2. Node setup and dependency install from lockfile,
 3. strict TypeScript (`tsc --noEmit`),
-4. ESLint with zero warnings,
-5. Jest — **37 suites / 179 tests passed**, including cart mutation/domain and Home regressions,
+4. ESLint with zero-warning gate,
+5. Jest,
 6. production Android JavaScript bundle generation with `react-native bundle`,
 7. backend/APIM/infrastructure source-change guard.
 
@@ -85,56 +97,52 @@ The implementation workflow intentionally does **not** perform Java/Gradle/APK p
 
 ---
 
-## 3. P33 Implemented Customer Home Active-Cart Boundary
+## 3. P34 Implemented Nearby Chef Discovery Boundary
 
-P33 uses Reference 06 only within cart contracts and routes that already exist.
+P34 uses References 07 and 08 only to determine the required Discover Home Chefs data needs. It does not begin P35/P36 presentation work.
 
 Implemented behavior:
 
-- P33 extends the existing `CustomerHomeScreen`; it does not add a duplicate active-cart Home route or a second cart store.
-- Home reads the canonical P28/P30 cart snapshot and mutation registry.
-- Loaded nearby dishes are matched to canonical cart lines by `menuItemId`.
-- A dish with no current cart line shows the existing real Add action.
-- A dish with a positive cart quantity shows a quantity selector instead of Add.
-- Increment dispatches the existing P30 `setCartItemQuantity` mutation with the canonical line ID.
-- Decrement above one dispatches `setCartItemQuantity` with the next quantity.
-- Decrement at one dispatches the existing P30 `removeCartItem` mutation.
-- Line-scoped pending mutation state disables the quantity controls and protects repeated taps.
-- P30 optimistic cart snapshots provide immediate quantity/removal feedback; P30 rollback restores the previous valid snapshot if the server mutation fails.
-- Cart-only mutations do not refetch the Home discovery feed.
-- Removing a line to zero causes the same Home dish card to return immediately to Add through authoritative cart-state reconciliation.
-- Quantity controls have explicit accessibility labels/states and Android-sized touch targets.
-- The Home surface now uses the neutral `customer-home` test ID rather than encoding the P32 empty-cart state into the shared route.
+- Added a dedicated Customer nearby-chef discovery transport over the exact existing Catalog route `GET /api/v1/discovery/kitchens`.
+- Sends only `latitude`, `longitude`, `radiusMeters`, `page`, and `size`; no guide-only query parameter is invented.
+- Validates latitude/longitude, configured discovery radius ceiling, page, and page-size bounds before transport.
+- Zod-validates the exact `NearbyKitchenDiscoveryResponse`/`NearbyKitchenSummaryResponse` shape.
+- Rejects stale/mismatched response context when returned location, radius, page, or size differs from the request.
+- Preserves backend-provided distance and active-menu-item count as server-owned values.
+- Uses the established shared HTTP client and request dedupe behavior.
+- Added an infinite-query model using the authenticated CUSTOMER identity and existing saved browsing location.
+- Cache identity includes saved-address ID plus exact latitude/longitude, radius, and page size so coordinate changes cannot reuse stale nearby results.
+- Pagination trusts backend `hasNext`/page metadata.
+- Added targeted nearby-chef discovery invalidation without invalidating unrelated private query domains.
+- Added focused transport/query tests, including proof that rating, ETA, and favorite fields are not fabricated into the accepted response.
 
-### P33 acceptance blocker
+### P34 contract blocker
 
-Reference 06 also requires the Espresso Brown View Cart control to show live count/total and open Cart.
+Current backend/APIM evidence defines nearby radius filtering and only returns ACTIVE geocoded kitchens having at least one ACTIVE/available sellable menu item. That is useful availability filtering, but it is not an authoritative delivery-serviceability or ETA decision.
 
-The branch currently contains the reusable P29 `SharedViewCartOverlay`, but the Customer route registry/types contain no functional Cart product destination. `phases.md` assigns Cart data/pricing extensions to P45 and Cart/Bill Summary UI/navigation to P46.
+The existing APIM discovery handover explicitly excludes delivery serviceability and related delivery/provider/pricing-zone rules. Therefore P34 does not derive serviceability from distance, invent an ETA, or add fake rating/cuisine/favorite/verification/media/search/filter/sort fields.
 
-The guide, `plan.md`, and `agent.md` prohibit empty handlers, placeholder routes, unreachable UI, and pre-implementing later phases. Therefore P33 deliberately does **not**:
-
-- mount View Cart with a no-op `onOpenCart`,
-- invent a Cart route,
-- create a placeholder Cart screen,
-- pre-implement P45/P46,
-- claim View Cart count/total/inset behavior as complete.
-
-Therefore P33 is **PARTIAL**, not DONE.
+Therefore P34 is **PARTIAL**, not DONE.
 
 ---
 
-## 4. P33 Changed Files
+## 4. P34 Changed Files
 
 Implementation:
 
-- `apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx`
+- `apps/mobile/src/features/chefDiscovery/api/nearbyChefDiscoveryApi.ts`
+- `apps/mobile/src/features/chefDiscovery/query/nearbyChefDiscoveryQueries.ts`
+
+Tests:
+
+- `apps/mobile/src/features/chefDiscovery/nearbyChefDiscoveryApi.test.ts`
+- `apps/mobile/src/features/chefDiscovery/nearbyChefDiscoveryQueries.test.ts`
 
 Evidence:
 
-- `docs/mobile-ui-rebuild/P33_CUSTOMER_HOME_ACTIVE_CART.md`
+- `docs/mobile-ui-rebuild/P34_NEARBY_CHEF_DISCOVERY_CONTRACT.md`
 
-No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, Cart product route/UI, checkout/payment, P34 nearby-chef work, or other later phase was changed.
+No backend, OpenAPI, APIM, infrastructure, database, Android native build configuration, P35/P36 Discover Home Chefs UI, Cart/Checkout, or later Chef operational behavior was changed.
 
 ---
 
@@ -155,13 +163,15 @@ No backend, OpenAPI, APIM, infrastructure, database, Android native build config
 - P31 owns the validated nearby Home-discovery adapter/query model, saved-location coordinate propagation, pagination/cache keys, location invalidation, and fail-closed unsupported category/cuisine server-filter intent.
 - P32 owns the current supported Customer Home empty-cart presentation and its connection to those accepted shared foundations.
 - P33 owns the current supported active-cart Home card quantity/reconciliation behavior on that same Home route.
+- P34 owns the exact supported nearby-kitchen discovery transport/query/cache boundary for the Customer Chefs experience.
 
 ### Later-phase boundaries
 
-- **P34** owns the next Nearby Chef Discovery Contract phase and was not started.
-- Later Customer discovery/chef/dish/search/favorite/notification product routes remain owned by their phases in `phases.md`.
+- **P35** owns Discover Home Chefs — Empty Cart presentation and was not started.
+- **P36** owns the active-cart variant and was not started.
+- Later Customer chef-detail/dish/search/favorite/notification routes remain owned by their phases in `phases.md`.
 - **P45** owns Cart screen data/pricing model extensions.
-- **P46** owns Cart and Bill Summary UI and its real navigation destination; this is the current blocker for P33's functional View Cart action.
+- **P46** owns Cart and Bill Summary UI and its real navigation destination; this remains the blocker for P33's functional View Cart action.
 - Checkout/payment remain P47+.
 
 ---
@@ -173,6 +183,14 @@ Accepted Home discovery contract:
 - `GET /api/v1/discovery/menu-items`
   - query: `latitude`, `longitude`, `radiusMeters`, `page`, `size`
   - authoritative paginated response: `DiscoveryDtos.NearbyMenuItemDiscoveryResponse`.
+
+Accepted nearby-chef/kitchen discovery contract:
+
+- `GET /api/v1/discovery/kitchens`
+  - query: `latitude`, `longitude`, `radiusMeters`, `page`, `size`
+  - authoritative paginated response: `DiscoveryDtos.NearbyKitchenDiscoveryResponse`
+  - kitchen summary: `id`, names/description, area/city/state, exact kitchen coordinates, `distanceMeters`, `activeMenuItemCount`
+  - backend includes only ACTIVE geocoded kitchens within radius that have at least one qualifying ACTIVE/available menu item.
 
 Accepted customer-location dependency:
 
@@ -186,7 +204,7 @@ Accepted cart dependencies:
 - P30 remove-line transport/mutation,
 - line mutation pending/error metadata.
 
-No new backend/APIM contract was introduced by P33.
+No backend/APIM contract was added or changed by P34.
 
 Not accepted because no exact current-branch contract or registered product route exists:
 
@@ -197,6 +215,11 @@ Not accepted because no exact current-branch contract or registered product rout
 - cuisine response field,
 - recommendation aggregation URL/model,
 - favorite API/domain contract,
+- nearby-kitchen delivery-serviceability decision,
+- nearby-kitchen delivery ETA,
+- nearby-kitchen rating/review summary,
+- public nearby-kitchen verification/media summary,
+- nearby-chef search/filter/sort parameters,
 - current Customer Cart product route/destination before its P45/P46 owning phases.
 
 Live APIM/device runtime certification is not claimed by these static implementation phases unless a later evidence record explicitly says so.
@@ -213,18 +236,20 @@ Live APIM/device runtime certification is not claimed by these static implementa
 | P31 Home Feed Data Contract and Query Model | **PARTIAL** | Exact nearby/location/pagination/cache subset validated by CI `31243903844`; category/cuisine/full-home contracts missing. |
 | P32 Customer Home — Empty Cart | **PARTIAL** | Supported Home empty-cart surface validated by CI `31245957014`; favorite/full-search/server-category/cuisine/recommendation and later product-route actions remain blocked. |
 | P33 Customer Home — Active Cart | **PARTIAL** | Same-route cart quantity/add/remove reconciliation validated by CI `31248405375`; functional View Cart remains blocked on the P45/P46-owned Cart destination. |
-| P34 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
+| P34 Nearby Chef Discovery Contract | **PARTIAL** | Exact nearby-kitchen/location/pagination/query-cache subset validated by CI `31248762726`; authoritative delivery-serviceability and richer guide-required chef-summary contracts are missing. |
+| P35 onward | **NOT STARTED / not accepted** | No later phase is authorized. |
 
 ---
 
-## 8. Explicitly Not Complete After P33 Work
+## 8. Explicitly Not Complete After P34 Work
 
 Do not describe any of the following as complete:
 
 - P31 category/cuisine/full-home aggregation mapping,
 - P32 favorite/chef-detail/dish-detail/full-search/notification-center/recommendation acceptance items listed in its evidence,
 - P33 visible View Cart/count/total/Cart navigation/inset acceptance until the real Cart destination exists,
-- P34 Nearby Chef Discovery Contract or any later phase,
+- P34 delivery-serviceability/ETA/rating/cuisine/favorite/verification/media/search/filter/sort requirements where no exact backend contract exists,
+- P35/P36 Discover Home Chefs UI states,
 - full Customer Cart/Bill Summary product screen,
 - checkout/payment end-to-end flow,
 - Chef operational/product screens,

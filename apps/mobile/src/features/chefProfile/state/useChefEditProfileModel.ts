@@ -11,10 +11,7 @@ import {
   canEditChefKitchenProfile,
 } from '../domain/chefEditProfileForm';
 import {useChefEditProfileDraft} from './ChefEditProfileDraftProvider';
-import {
-  chefProfileKitchenQueryPrefix,
-  createChefProfileKitchenQueryKey,
-} from './chefProfileQuery';
+import {synchronizeChefProfileAfterSave} from './chefProfileSynchronization';
 
 export interface ChefEditProfileModel {
   saveState: 'idle' | 'submitting' | 'error' | 'success';
@@ -91,14 +88,9 @@ export function useChefEditProfileModel(): ChefEditProfileModel {
         request,
         controller.signal,
       );
-      const queryKey = createChefProfileKitchenQueryKey(identityId);
 
-      // P98 and future Chef identity surfaces consume this canonical cache. Update
-      // it immediately, then revalidate the complete Chef-profile domain so no
-      // mounted surface waits for a manual refresh.
-      queryClient.setQueryData<ChefKitchenProfile>(queryKey, updated);
       draftSession.commit(updated);
-      void queryClient.invalidateQueries({queryKey: chefProfileKitchenQueryPrefix});
+      void synchronizeChefProfileAfterSave(queryClient, identityId, updated);
       setSaveState('success');
       return updated;
     } catch (cause) {

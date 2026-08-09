@@ -38,6 +38,8 @@ import {
 } from '../../cart/state/cartSelectors';
 import {refreshCartSnapshot} from '../../cart/state/cartRefresh';
 import {cartActions} from '../../cart/state/cartSlice';
+import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
+import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {invalidateCustomerHomeFeedQueries} from '../../home/query/homeFeedQueries';
 import {customerShellActions} from '../../customerShell/state/customerShellSlice';
 import {CustomerAddressesContractError} from '../api/customerAddressesApi';
@@ -120,9 +122,7 @@ function AddressCard({
         </View>
         <View style={styles.addressHeadingCopy}>
           <View style={styles.labelRow}>
-            <Text style={styles.addressLabel}>
-              {customerAddressLabel(address)}
-            </Text>
+            <Text style={styles.addressLabel}>{customerAddressLabel(address)}</Text>
             {address.isDefault ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>Default</Text>
@@ -140,9 +140,7 @@ function AddressCard({
         </View>
       </View>
 
-      <Text style={styles.fullAddress}>
-        {customerAddressDisplayLine(address)}
-      </Text>
+      <Text style={styles.fullAddress}>{customerAddressDisplayLine(address)}</Text>
 
       <View style={styles.actions}>
         <Button
@@ -189,9 +187,7 @@ export function CustomerAddressesScreen() {
   const setDefaultMutation = useSetDefaultCustomerAddressMutation();
   const deleteMutation = useDeleteCustomerAddressMutation();
   const bottomNavScroll = useCustomerBottomNavScroll();
-  const selectedLocation = useAppSelector(
-    state => state.customerShell.selectedLocation,
-  );
+  const selectedLocation = useAppSelector(state => state.customerShell.selectedLocation);
   const cartDependencies = useAppSelector(selectCartDependencies);
   const itemCount = useAppSelector(selectCartItemCount);
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
@@ -398,11 +394,14 @@ export function CustomerAddressesScreen() {
     }
     if (addressesQuery.addresses.length === 0) {
       return (
-        <TerminalState
-          actionLabel="Add address"
-          description="Enter a delivery address manually. New-address persistence will activate when its approved backend contract is available."
-          onAction={openAdd}
-          title="No saved addresses"
+        <CustomerEmptyState
+          model={customerEmptyStateAdapters.noSavedAddresses(false)}
+          onAction={actionId => {
+            if (actionId === 'ADD_ADDRESS') {
+              openAdd();
+            }
+          }}
+          testID="customer-addresses-empty"
         />
       );
     }
@@ -456,10 +455,7 @@ export function CustomerAddressesScreen() {
               accessibilityRole="button"
               hitSlop={spacing.sm}
               onPress={() => navigation.goBack()}
-              style={({pressed}) => [
-                styles.backButton,
-                pressed && styles.pressed,
-              ]}>
+              style={({pressed}) => [styles.backButton, pressed && styles.pressed]}>
               <Icon
                 name="arrow-left"
                 color={colors.espressoBrown}
@@ -528,9 +524,7 @@ export function CustomerAddressesScreen() {
 
       {editorTarget ? (
         <CustomerAddressEditorModal
-          address={
-            editorTarget.mode === 'edit' ? editorTarget.address : undefined
-          }
+          address={editorTarget.mode === 'edit' ? editorTarget.address : undefined}
           addresses={addressesQuery.addresses}
           mode={editorTarget.mode}
           onClose={() => setEditorTarget(null)}

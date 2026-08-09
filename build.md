@@ -48,55 +48,71 @@
 - **P107 — Chef Preferences Contract:** COMPLETED at authorized contract-boundary scope; all Guide-52 preference state/ownership/integration requirements are modeled explicitly and fail closed while production persistence remains undefined. Evidence: `docs/mobile-ui-rebuild/P107_CHEF_PREFERENCES_CONTRACT.md`.
 - **P108 — Chef App Preferences UI:** PARTIAL at full Guide Reference-52 scope; a real typed/routed Profile-owned preference screen and fail-closed modal/control boundary are implemented while the P107 persistence/runtime gaps remain explicit. Evidence: `docs/mobile-ui-rebuild/P108_CHEF_APP_PREFERENCES_UI.md`.
 - **P109 — Chef Cross-Screen Reconciliation Audit:** PARTIAL at full Guide/product scope; all currently supported Chef reconciliation paths are audited and synchronized at the exact approved contract boundary, while payout-balance and analytics-total propagation remain blocked. Evidence: `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md`.
+- **P110 — Deep Link and Notification Routing Audit:** PARTIAL at full Guide/product scope; the exact currently available custom-scheme, auth/role-aware inbound routing, notification target validation, duplicate-stack protection, and native link registration boundary is implemented without fabricating blocked Offers or push-provider contracts. Evidence: `docs/mobile-ui-rebuild/P110_DEEP_LINK_NOTIFICATION_ROUTING_AUDIT.md`.
 
-**Current executed phase:** **P109 — Chef Cross-Screen Reconciliation Audit**.
+**Current executed phase:** **P110 — Deep Link and Notification Routing Audit**.
 
-**P109 implementation/code + evidence commit:** `266ee15944965774ff320eb2de6d74f965ccfa55`
+**P110 starting branch HEAD:** `2d5946682ae3e07fae969185f67f183645a507f6`  
+**P110 implementation head before evidence/ledger:** `a5fc7ffa660c7da894a5bfae304deb08e566cc43`  
+**P110 evidence commit:** `f6fdcd346a3437906068e428aab625b0acd897e6`
 
-### P109 implemented boundary
+### P110 implemented boundary
 
-- Re-read `agent.md`, `build.md`, `phases.md`, `plan.md`, the full implementation guide, and the implemented Chef P80–P108 boundaries; implemented only P109 and did not start P110.
-- Audited all seven P109 areas: order counts/status, notifications, active cards, payout balance, menu availability, analytics totals, and identity/verification.
-- Fixed the supported order-detail accept/reject gap: authoritative mutation/conflict responses now reconcile the shared operational order cache immediately before the existing server refresh, so Dashboard counters/active cards and Orders tabs move together without waiting for a second network round trip.
-- Preserved the existing single-source notification architecture: Chef header badge and Dashboard notifications use the same `chef-notifications` query cache.
-- Preserved the existing Menu/Dashboard synchronization from P93–P95, including optimistic availability rollback, authoritative response replacement, and revalidation.
-- Expanded successful Chef profile save reconciliation to invalidate `chef-business-information` as well as the canonical kitchen-profile domain, preventing immediate navigation from reusing stale verification state after a profile write.
-- Added a typed seven-area reconciliation audit matrix and focused source tests; it is guard/evidence state only and does not create a duplicate runtime store.
-- Kept payout balance and analytics totals explicitly fail-closed because the approved contracts do not exist; no earning-ledger value was relabeled as wallet balance and no order/earning/menu data was fabricated into analytics totals.
-- Customer UI, Chef visual design, backend, APIM, OpenAPI, database, infrastructure, dependencies, providers, secrets, and P110 were not changed.
+- Re-read `agent.md`, `build.md`, `phases.md`, `plan.md`, the full 183-page implementation guide, P11 navigation evidence, P70 Offers blocker evidence, and the current Customer/Chef navigation/resource screens; implemented only P110 and did not start P111.
+- Added `inboundRouting.ts` as one strict product inbound-routing policy while retaining the existing single `NavigationContainer`.
+- Allowlists only canonical `craves://customer`, `craves://chef`, `craves://order/<uuid>`, `craves://offer`, and `craves://kitchen/<uuid>` candidates; malformed IDs, arbitrary route names, extra paths, query/fragment payloads, wrong schemes, and non-canonical values fail closed.
+- Defers signed-out/unresolved candidates until the existing authentication/account-resolution state is safe; Customer/Chef root ownership is derived only from authoritative account resolution, not from the inbound URL.
+- Routes Order links by the resolved role, routes Kitchen links only to the Customer shell, and rejects wrong-role destinations rather than pushing a screen from another role tree.
+- Recognizes Offer as a canonical destination class but keeps it fail-closed because P70/P71 prohibit a fabricated production Offers route without an authoritative contract.
+- Wired cold-start and foreground URL events through React Native `Linking` into the existing root navigator and added current-route/resource matching plus a shared destination dedupe gate to prevent duplicate stacks from repeated taps.
+- Hardened customer notification routing so target IDs must be UUIDs and only ORDER, DELIVERY, and KITCHEN target types can create real destinations.
+- Added a per-notification in-flight guard so duplicate taps cannot race mark-read/navigation; the shared route dedupe gate is also applied to notification destinations.
+- Registered the `craves` custom scheme in Android and iOS and forwarded iOS incoming URLs through `RCTLinkingManager`.
+- Preserved existing destination-side server authority: customer order/tracking/kitchen and Chef order screens continue to render terminal/recovery states for invalid, missing, forbidden, deleted, inactive, or otherwise unavailable resources.
+- Did not add a push provider, universal/App Link domain, backend/APIM/OpenAPI route, dependency, duplicate navigation architecture, process-death restoration, or any P111 behavior.
 
-### P109 changed code files
+### P110 changed files
 
-- `apps/mobile/src/features/chefOrders/state/useChefOrderDecision.ts`
-- `apps/mobile/src/features/chefProfile/state/chefProfileSynchronization.ts`
-- `apps/mobile/src/features/chefProfile/state/chefProfileSynchronization.test.ts`
-- `apps/mobile/src/features/chefShell/domain/chefCrossScreenReconciliation.ts`
-- `apps/mobile/src/features/chefShell/domain/chefCrossScreenReconciliation.test.ts`
+Production/runtime:
+
+- `apps/mobile/src/app/navigation/inboundRouting.ts`
+- `apps/mobile/src/app/navigation/AppNavigator.tsx`
+- `apps/mobile/src/features/notifications/domain/customerNotificationsModel.ts`
+- `apps/mobile/src/features/notifications/screens/CustomerNotificationsScreen.tsx`
+- `apps/mobile/android/app/src/main/AndroidManifest.xml`
+- `apps/mobile/ios/CravesMobile/Info.plist`
+- `apps/mobile/ios/CravesMobile/AppDelegate.swift`
+
+Focused tests:
+
+- `apps/mobile/src/app/navigation/inboundRouting.test.ts`
+- `apps/mobile/src/features/notifications/customerNotificationsModel.test.ts`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md`
+- `docs/mobile-ui-rebuild/P110_DEEP_LINK_NOTIFICATION_ROUTING_AUDIT.md`
 - `build.md`
 
-### P109 validation / guard state
+### P110 validation / guard state
 
-- Focused Jest source is committed for the seven-area reconciliation audit matrix and the expanded profile/verification invalidation behavior.
-- The order-detail path uses the already-established `ChefOperationalProvider.reconcileOrderStatus` contract and retains the existing authoritative refresh/conflict handling.
-- Full repository Jest/typecheck/build execution is not claimed from this connector-only run.
-- GitHub Actions are intentionally not used as a P109 acceptance signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
+- Focused Jest source is committed for canonical link parsing, malformed-link rejection, auth/product-root deferral, role-aware order routing, Customer/Chef isolation, Kitchen routing, blocked Offer routing, route-dedupe behavior, and notification UUID/target allowlisting.
+- Compared P110 starting HEAD `2d5946682ae3e07fae969185f67f183645a507f6` with implementation head `a5fc7ffa660c7da894a5bfae304deb08e566cc43`; only the intended nine mobile/native/test files changed at the implementation boundary.
+- Re-read the existing server-backed Customer Order Detail, Customer Order Tracking, Customer Kitchen Profile, and Chef Order Detail error boundaries to verify missing/forbidden/unavailable resources fail safely after routing rather than treating a link as access authority.
+- Full repository Jest/typecheck/ESLint/bundle execution is not claimed from this connector-only run.
+- GitHub Actions are intentionally not used as a P110 acceptance signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
 
-### P109 retained blockers instead of fabricated capabilities
+### P110 retained blockers instead of fabricated capabilities
 
-1. No approved Chef wallet/payout-balance source.
-2. No approved payout transaction/eligibility/initiation/status propagation contract.
-3. No approved Chef analytics aggregate/date-range/time-series contract.
-4. No server-driven verification mutation/event contract beyond the current authoritative read/revalidation boundary.
+1. Coupons/Offers remains blocked by the P70/P71 missing authoritative list/eligibility/terms/savings contract and absence of a real production Offers route.
+2. No approved external push-notification provider/tap-delivery infrastructure is present to wire; P110 hardens the existing notification-inbox destination metadata only.
+3. No approved universal/App Links verified-domain/associated-domain contract is present, so P110 registers only the explicit `craves` custom scheme.
+4. Process-death/nested-route restoration belongs to P111 and was not started.
 
-**Next phase in sequence:** **P110 — NOT STARTED**.
+**Next phase in sequence:** **P111 — Process Restoration Regression — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED in this run.**
 
-**Required action:** Stop after P109. Do not pre-implement P110.
+**Required action:** Stop after P110. Do not pre-implement P111.
 
 ---
 
@@ -134,10 +150,11 @@ Evidence/ledger:
 | P107 | COMPLETED at authorized contract-boundary scope; persistence/runtime gaps remain explicit | `docs/mobile-ui-rebuild/P107_CHEF_PREFERENCES_CONTRACT.md` |
 | P108 | PARTIAL at full Guide Reference-52 scope; real routed fail-closed preference UI boundary implemented | `docs/mobile-ui-rebuild/P108_CHEF_APP_PREFERENCES_UI.md` |
 | P109 | PARTIAL at full Guide/product scope; supported reconciliation boundary implemented/audited | `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md` |
-| P110 onward | NOT STARTED / not accepted | — |
+| P110 | PARTIAL at full Guide/product scope; exact current deep-link/notification routing boundary implemented | `docs/mobile-ui-rebuild/P110_DEEP_LINK_NOTIFICATION_ROUTING_AUDIT.md` |
+| P111 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P110 work, re-read `plan.md`, `phases.md`, `agent.md`, this ledger, the full implementation guide, and the P109 evidence. Preserve the P109 fail-closed boundaries: do not invent payout balance/transactions or analytics totals from the available earning/order/menu sources, and do not replace the shared Chef query caches with duplicate local truth. P110 is not authorized in this run.
+Before any P111 work, re-read `plan.md`, `phases.md`, `agent.md`, this ledger, the full implementation guide, and the P110 evidence. Preserve the P110 fail-closed boundary: do not fabricate an Offers destination, push-provider integration, verified universal/App Link domain, or persist arbitrary inbound route stacks as part of P110. P111 is not authorized in this run.

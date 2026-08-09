@@ -50,17 +50,41 @@
 - **P109 — Chef Cross-Screen Reconciliation Audit:** PARTIAL at full Guide/product scope; all currently supported Chef reconciliation paths are audited and synchronized at the exact approved contract boundary, while payout-balance and analytics-total propagation remain blocked. Evidence: `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md`.
 - **P110 — Deep Link and Notification Routing Audit:** PARTIAL at full Guide/product scope; the exact currently available custom-scheme, auth/role-aware inbound routing, notification target validation, duplicate-stack protection, and native link registration boundary is implemented without fabricating blocked Offers or push-provider contracts. Evidence: `docs/mobile-ui-rebuild/P110_DEEP_LINK_NOTIFICATION_ROUTING_AUDIT.md`.
 - **P111 — Process Restoration and Background/Foreground Audit:** PARTIAL at full device/product-lifecycle scope; safe versioned role/tab/nested restoration, auth-root and role-navigator readiness protection, P110 initial-link precedence, session-lifecycle audit, and fail-closed draft/provider handling are implemented at the exact current mobile boundary. Evidence: `docs/mobile-ui-rebuild/P111_PROCESS_RESTORATION_BACKGROUND_FOREGROUND_AUDIT.md`.
-- **P112 — Lifecycle-State Matrix Completion:** USER-REPORTED PARTIAL before this run. No P112 branch ledger/evidence was present when P113 started, so P113 does not reclassify or fabricate P112 completion evidence.
+- **P112 — Lifecycle-State Matrix Completion:** DONE at authorized code/audit scope; the current Customer/Chef server-backed screen families were audited against the full lifecycle matrix, and the shared lifecycle policy now explicitly models empty, permission, retained-content pagination, and retained-content mutation-error states without fabricating blocked contracts. Evidence: `docs/mobile-ui-rebuild/P112_LIFECYCLE_STATE_MATRIX_COMPLETION.md`.
 - **P113 — Accessibility Audit:** PARTIAL at full device-validation scope; code-level accessibility audit/remediation is implemented for shared interaction primitives and critical Customer/Chef shell surfaces. Evidence: `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md`.
 - **P114 — Keyboard/Safe-Area/Responsive Audit:** PARTIAL at full device-validation scope; source-level IME/safe-area/responsive remediation is implemented for the inspected critical paths, while compact/standard/large device, IME, cutout, gesture-navigation, and enlarged-font runtime validation remain unclaimed. Evidence: `docs/mobile-ui-rebuild/P114_KEYBOARD_SAFE_AREA_RESPONSIVE_AUDIT.md`.
 
 **Current executed phase:** **P114 — Keyboard/Safe-Area/Responsive Audit**.
 
+### P112 authorized backfill completion
+
+**P112 backfill starting branch HEAD:** `ac046f01a2d18ed8766a1b99571552f765ec5413`  
+**P112 lifecycle implementation head:** `012c8bb1a4884c97767186b0746a825c7246cb31`  
+**P112 evidence head:** `4e70501e18ce7be63df95dd96f8872eca99185c5`
+
+- P112 was explicitly authorized after P113/P114 work already existed on the shared branch. The backfill preserves that later-phase work and does not rewind or reclassify it.
+- Re-read `agent.md`, `build.md`, `phases.md`, `plan.md`, the full 183-page implementation guide, P07 lifecycle evidence, P78 Reference-37 evidence, the current Customer/Chef feature tree, and the shared lifecycle primitives.
+- Audited the current Customer/Chef server-backed screen families for applicable skeleton, populated, background/stale refresh, pagination, empty, offline, permission, recoverable/terminal, and mutation states at their exact current contract boundaries.
+- Extended `ContentLifecycle` backward-compatibly with explicit empty and permission primary surfaces plus retained-content pagination loading/error and mutation-error handling. Existing callers are unchanged unless they opt into a new state.
+- Expanded the existing lifecycle regression suite for deterministic state priority and retained-content pagination/mutation behavior.
+- Contract-blocked Favorites/Reviews/Coupons/Chef subscription/payout capabilities remain explicitly blocked; P112 does not convert unavailable APIs into fake empty or success states.
+- No backend, APIM, OpenAPI, infrastructure, navigation, auth/session, provider, dependency, cache/persistence, P113 accessibility, or P114 responsive behavior was changed.
+- GitHub Actions were not invoked because the account Actions capacity is exhausted. Full local Jest/typecheck/ESLint/bundle execution and device lifecycle validation are not claimed from this connector-only run.
+
+**P112 changed files:**
+
+- `apps/mobile/src/shared/components/ContentLifecycle.tsx`
+- `apps/mobile/__tests__/LifecyclePrimitives.test.tsx`
+- `docs/mobile-ui-rebuild/P112_LIFECYCLE_STATE_MATRIX_COMPLETION.md`
+- `build.md`
+
+**P112 next-phase authorization:** none. This backfill run stops at P112 and does not start or modify P115.
+
+### P114 previously implemented boundary
+
 **P114 starting branch HEAD:** `34e7afcd03c3b57c989bd5a2e4ce92f626569fa1`  
 **P114 implementation head:** `0caf6c353b080648c9a7ee7f7ec8b92e03882ce1`  
 **P114 evidence head:** `ef96a2267da11bb0f3d16d815d0d7c71a88962a9`
-
-### P114 implemented boundary
 
 - Re-read `plan.md`, `phases.md`, `agent.md`, `build.md`, and the full implementation guide before implementing only P114; P115 reduced-motion work was not started.
 - Preserved the existing Android `adjustResize` ownership and did not add a competing Android keyboard offset. Scrollable shared/customer surfaces now expose explicit drag keyboard dismissal while retaining handled taps.
@@ -108,7 +132,7 @@ Evidence/ledger:
 
 **Next phase authorization:** **NONE AUTHORIZED in this run.**
 
-**Required action:** Stop after P114. Do not pre-implement P115.
+**Required action:** Stop. Do not pre-implement P115.
 
 ---
 
@@ -148,7 +172,7 @@ Evidence/ledger:
 | P109 | PARTIAL at full Guide/product scope; supported reconciliation boundary implemented/audited | `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md` |
 | P110 | PARTIAL at full Guide/product scope; exact current deep-link/notification routing boundary implemented | `docs/mobile-ui-rebuild/P110_DEEP_LINK_NOTIFICATION_ROUTING_AUDIT.md` |
 | P111 | PARTIAL at full device/product-lifecycle scope; safe current restoration/session/provider boundary implemented | `docs/mobile-ui-rebuild/P111_PROCESS_RESTORATION_BACKGROUND_FOREGROUND_AUDIT.md` |
-| P112 | USER-REPORTED PARTIAL before P113; no branch evidence located in this run | — |
+| P112 | DONE at authorized code/audit scope; lifecycle matrix audited and shared policy completed | `docs/mobile-ui-rebuild/P112_LIFECYCLE_STATE_MATRIX_COMPLETION.md` |
 | P113 | PARTIAL at full device-validation scope; code-level accessibility audit/remediation implemented | `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md` |
 | P114 | PARTIAL at full device-validation scope; source-level keyboard/safe-area/responsive remediation implemented | `docs/mobile-ui-rebuild/P114_KEYBOARD_SAFE_AREA_RESPONSIVE_AUDIT.md` |
 | P115 onward | NOT STARTED / not accepted | — |
@@ -157,4 +181,4 @@ Evidence/ledger:
 
 ## 3. Handoff
 
-Before any P115 work, re-read `plan.md`, `phases.md`, `agent.md`, this ledger, the full implementation guide, and the P113/P114 evidence. Preserve the P111 restoration/security boundary, P113 accessibility semantics/contrast/touch-target contracts, and P114 safe-area/responsive guardrails. Do not reinterpret source-level P114 remediation as device validation. P115 is not authorized in this run.
+P112 is now complete at its authorized code/audit boundary. Preserve its explicit empty/permission/pagination/mutation lifecycle policy together with the P111 restoration/security boundary, P113 accessibility semantics/contrast/touch-target contracts, and P114 safe-area/responsive guardrails. Contract-blocked features remain blocked; do not reinterpret lifecycle completeness as backend capability. P115 is not authorized in this P112 backfill run.

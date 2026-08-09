@@ -37,20 +37,21 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 - **P74 — Customer Settings Active/Empty Visuals: DONE at authorized code/CI scope.** Shared Settings route, account summary, established saved-location selection, notification/cart badges, active/empty cart states, legal/about/support surfaces, P24 logout, and focused hidden bottom-tab treatment were implemented and validated. Its temporary local-only preference affordances were intentionally superseded by P75 so unsupported production settings are no longer presented as authoritative mutations.
 - **P75 — Customer Settings Child Flows: PARTIAL.** Eleven typed Settings child routes are registered. Real Firebase re-authenticated password change, current-device logout, native Share, parent location integration, validation/error/disabled states, and focused tab treatment are implemented. Notification preference mutation, app-wide language/theme application, other-device session management, referral, membership, trusted legal content destinations, and runtime build metadata remain unavailable exact-contract blockers. The P75 support boundary is superseded by P76, but trusted support content/integration remains unavailable through P76's more specific blockers.
 - **P76 — Help and Support — Empty Cart: PARTIAL.** Screen 35 is implemented at the exact mobile-contract boundary on the existing typed Profile-stack support route. Shared location/notification behavior, back navigation, bottom-navigation-aware scrolling, immediate-help/quick-help/popular-topics/contact/reassurance structure, honest disabled support actions, and focused capability tests are implemented. Exact support configuration/content/availability/chat/ticket contracts are absent, and runtime Android comparison against the Screen 35 reference remains outstanding. Empty cart continues to hide View Cart through the canonical shared-cart rule.
+- **P77 — Help and Support — Active Cart: PARTIAL.** Screen 36 now reuses the P76 Help & Support composition through one typed route wrapper that reads canonical cart selectors, applies the existing customer route policy, renders the shared Espresso Brown View Cart with live item count/subtotal, opens the existing CustomerCart route, preserves cart state, adds active-cart content clearance, and returns immediately to the empty state at zero items. Exact support configuration/content/availability/chat/ticket contracts remain absent and runtime Android comparison against the Screen 36 reference remains outstanding.
 
-**Current executed phase:** **P76 — Help and Support — Empty Cart — PARTIAL at exact contract-backed scope**.
+**Current executed phase:** **P77 — Help and Support — Active Cart — PARTIAL at exact contract-backed scope**.
 
-**P76 validated mobile head:** `71cd7d730b7bb526424640f36032862c5ec75413`.
+**P77 validated mobile head:** `4d4d07208339d3b43cfc2c5d48acfbd495d6a022`.
 
-**P76 CI:** workflow run `31288445332`, job `93181381234` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+**P77 CI:** workflow run `31288996661`, job `93182864111` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 
-**P76 evidence:** `docs/mobile-ui-rebuild/P76_HELP_SUPPORT_EMPTY_CART.md`.
+**P77 evidence:** `docs/mobile-ui-rebuild/P77_HELP_SUPPORT_ACTIVE_CART.md`.
 
-**Next phase in sequence:** **P77 — Help and Support — Active Cart — NOT STARTED**.
+**Next phase in sequence:** **P78 — Customer Empty/Search/Offline/No-Data System — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P76. Do not pre-implement P77 without explicit user direction.
+**Required action:** Stop after P77. Do not pre-implement P78 without explicit user direction.
 
 ---
 
@@ -78,7 +79,8 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 | P74 | **DONE at code/CI scope** | `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`; validated mobile head `ae4de7be4e010fe621cf0516313991f5746ed4f4` | `31286578557` / `93176403664` — SUCCESS |
 | P75 | **PARTIAL** | `docs/mobile-ui-rebuild/P75_CUSTOMER_SETTINGS_CHILD_FLOWS.md`; validated mobile head `f5be75bef913d33492dc872af325f9a51d692f39` | `31287591983` / `93179133618` — SUCCESS |
 | P76 | **PARTIAL** | `docs/mobile-ui-rebuild/P76_HELP_SUPPORT_EMPTY_CART.md`; validated mobile head `71cd7d730b7bb526424640f36032862c5ec75413` | `31288445332` / `93181381234` — SUCCESS |
-| P77 onward | **NOT STARTED / not accepted** | — | — |
+| P77 | **PARTIAL** | `docs/mobile-ui-rebuild/P77_HELP_SUPPORT_ACTIVE_CART.md`; validated mobile head `4d4d07208339d3b43cfc2c5d48acfbd495d6a022` | `31288996661` / `93182864111` — SUCCESS |
+| P78 onward | **NOT STARTED / not accepted** | — | — |
 
 ---
 
@@ -214,7 +216,42 @@ Evidence: `docs/mobile-ui-rebuild/P76_HELP_SUPPORT_EMPTY_CART.md`.
 
 ---
 
-## 10. Validation State
+## 10. P77 Implemented Boundary
+
+**Guide ref:** 36.  
+**Phase:** Help and Support — Active Cart.
+
+P77 extends the existing typed `CustomerSettingsSupport` route rather than duplicating the screen. The P76 Help & Support composition remains the single support presentation, while a bounded route wrapper adds only shared active-cart chrome.
+
+Implemented at the mobile boundary:
+
+- canonical `selectCartItemCount` and `selectCartFoodSubtotal` selectors drive the state;
+- existing `CustomerSettingsSupport` customer route chrome policy determines View Cart eligibility;
+- shared `SharedViewCartOverlay` provides the Espresso Brown control, live item count and subtotal, animation, accessibility, and zero-item suppression;
+- View Cart navigates to the existing typed `CustomerCart` destination without clearing or copying cart state;
+- active-cart bottom content clearance prevents the floating cart control from covering support content and disappears when the cart empties;
+- existing P76 location, notification, back navigation, support-content composition, disabled contract-backed actions, and bottom-navigation-aware scrolling remain intact;
+- focused P77 unit coverage verifies active-cart visibility, content clearance, and immediate zero-item fallback;
+- backend/APIM/infrastructure source remains unchanged.
+
+P77 does **not** pretend the inherited support integrations are complete. These exact blockers remain:
+
+- `CUSTOMER_SUPPORT_CONFIGURATION_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_SUPPORT_HELP_CONTENT_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_SUPPORT_AVAILABILITY_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_SUPPORT_CHAT_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_SUPPORT_TICKET_CONTRACT_UNAVAILABLE`
+
+Until those contracts exist, P77 does not invent phone/email values, support availability, help content, chat/ticket success, or unapproved cart/order support-context fields. P77 also remains PARTIAL until runtime Android comparison against Screen 36 is completed.
+
+**P77 validated mobile head:** `4d4d07208339d3b43cfc2c5d48acfbd495d6a022`.  
+**P77 CI:** `31288996661` / `93182864111` — SUCCESS.
+
+Evidence: `docs/mobile-ui-rebuild/P77_HELP_SUPPORT_ACTIVE_CART.md`.
+
+---
+
+## 11. Validation State
 
 Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
@@ -223,24 +260,25 @@ Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 - P75 validated mobile head `f5be75bef913d33492dc872af325f9a51d692f39` passed run `31287591983`, job `93179133618`.
 - P76 initial implementation head `2963fffa4f79479810c40255eae7722b6f65673f` passed run `31288268203`, job `93180913182`.
 - P76 final validated mobile head `71cd7d730b7bb526424640f36032862c5ec75413` passed run `31288445332`, job `93181381234`.
-- For the final P76 run, dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+- P77 validated mobile head `4d4d07208339d3b43cfc2c5d48acfbd495d6a022` passed run `31288996661`, job `93182864111`.
+- For the P77 run, dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 - No Gradle/APK packaging was performed, consistent with implementation-phase policy.
 - Physical Android/reference-image certification remains a later visual-QA gate; no pixel-perfect certification is claimed from source/CI alone.
 
 ---
 
-## 11. Handoff
+## 12. Handoff
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current executed phase: P76 — Help and Support — Empty Cart — PARTIAL at exact contract-backed scope
-P76 validated mobile head: 71cd7d730b7bb526424640f36032862c5ec75413
-P76 evidence: docs/mobile-ui-rebuild/P76_HELP_SUPPORT_EMPTY_CART.md
-P76 CI: run 31288445332 / job 93181381234 — SUCCESS
-P76 implemented: Screen 35 composition on the existing typed support route; shared location/notification/back behavior; bottom-navigation-aware scrolling; immediate help, quick-help, popular-topics, contact actions and reassurance structure; honest disabled states; typed capability blockers and tests; canonical empty-cart View Cart suppression
-P76 no-fabrication boundary: no approved support config/content/availability/chat/ticket contracts exist, so contact details/articles/categories/ticket/chat success are not invented
+Current executed phase: P77 — Help and Support — Active Cart — PARTIAL at exact contract-backed scope
+P77 validated mobile head: 4d4d07208339d3b43cfc2c5d48acfbd495d6a022
+P77 evidence: docs/mobile-ui-rebuild/P77_HELP_SUPPORT_ACTIVE_CART.md
+P77 CI: run 31288996661 / job 93182864111 — SUCCESS
+P77 implemented: one shared Help & Support route; canonical cart selectors; shared active View Cart with live item count/subtotal; existing CustomerCart navigation; preserved cart state; dynamic bottom clearance; immediate empty-cart fallback; focused active-cart tests
+P77 no-fabrication boundary: inherited support configuration/content/availability/chat/ticket contracts remain unavailable, so support values, help content, chat/ticket success, and support-context fields are not invented
 Backend/APIM/infrastructure: unchanged
 Inherited blockers: retain all earlier phase blockers not explicitly superseded
-Next phase: P77 — Help and Support — Active Cart — NOT STARTED
-Next phase authorization: NONE AUTHORIZED — stop after P76
+Next phase: P78 — Customer Empty/Search/Offline/No-Data System — NOT STARTED
+Next phase authorization: NONE AUTHORIZED — stop after P77
 ```

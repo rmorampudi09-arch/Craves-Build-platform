@@ -2,6 +2,7 @@ import {httpClient} from '../../../core/http/httpClient';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type ChefBusinessVerificationStatus =
   | 'NOT_SUBMITTED'
@@ -32,8 +33,9 @@ export interface ChefBusinessProofDocument {
  * the current verification/document source for Guide Reference 49.
  *
  * Storage locators (blobContainer/blobName), identity IDs and reviewer identity
- * IDs are deliberately not exposed through this mobile contract because the
- * Business Information surface does not require them.
+ * IDs are validated when present in the server contract but deliberately not
+ * exposed through this mobile model because the Business Information surface
+ * does not require them.
  */
 export interface ChefBusinessVerificationRecord {
   id: string | null;
@@ -138,6 +140,8 @@ export function parseChefBusinessProofDocument(
     40,
   ) as ChefBusinessDocumentType | null;
   const originalFileName = requiredString(raw.originalFileName, 255);
+  const blobContainer = requiredString(raw.blobContainer, 100);
+  const blobName = requiredString(raw.blobName, 700);
   const contentType = requiredString(
     raw.contentType,
     120,
@@ -156,6 +160,8 @@ export function parseChefBusinessProofDocument(
     !documentType ||
     !DOCUMENT_TYPES.has(documentType) ||
     !originalFileName ||
+    !blobContainer ||
+    !blobName ||
     !contentType ||
     !DOCUMENT_CONTENT_TYPES.has(contentType) ||
     !status ||
@@ -236,8 +242,6 @@ export function parseChefBusinessVerificationRecord(
     rejectionReason === undefined ||
     submittedAt === undefined ||
     reviewedAt === undefined ||
-    (status === 'NOT_SUBMITTED' && id !== null) ||
-    (status !== 'NOT_SUBMITTED' && id === null) ||
     !Array.isArray(raw.documents) ||
     raw.documents.length > DOCUMENT_TYPES.size
   ) {
@@ -250,8 +254,66 @@ export function parseChefBusinessVerificationRecord(
   }
 
   const typedDocuments = documents as ChefBusinessProofDocument[];
-  if (new Set(typedDocuments.map(document => document.documentType)).size !== typedDocuments.length) {
+  if (
+    new Set(typedDocuments.map(document => document.documentType)).size !==
+    typedDocuments.length
+  ) {
     return null;
+  }
+
+  if (status === 'NOT_SUBMITTED') {
+    if (
+      id !== null ||
+      submittedAt !== null ||
+      reviewedAt !== null ||
+      reviewedByIdentityId !== null ||
+      rejectionReason !== null ||
+      typedDocuments.length !== 0
+    ) {
+      return null;
+    }
+  } else {
+    if (
+      id === null ||
+      phoneNumber === null ||
+      email === null ||
+      !EMAIL_PATTERN.test(email) ||
+      firstName === null ||
+      lastName === null ||
+      addressLine1 === null ||
+      city === null ||
+      state === null ||
+      submittedAt === null
+    ) {
+      return null;
+    }
+
+    if (
+      status === 'PENDING' &&
+      (reviewedAt !== null ||
+        reviewedByIdentityId !== null ||
+        rejectionReason !== null)
+    ) {
+      return null;
+    }
+
+    if (
+      status === 'APPROVED' &&
+      (reviewedAt === null ||
+        reviewedByIdentityId === null ||
+        rejectionReason !== null)
+    ) {
+      return null;
+    }
+
+    if (
+      status === 'REJECTED' &&
+      (reviewedAt === null ||
+        reviewedByIdentityId === null ||
+        rejectionReason === null)
+    ) {
+      return null;
+    }
   }
 
   return {

@@ -12,9 +12,15 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import {useNavigation, type NavigationProp} from '@react-navigation/native';
+import {
+  useNavigation,
+  type CompositeNavigationProp,
+} from '@react-navigation/native';
+import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import type {
+  ChefOrdersStackParamList,
   ChefProductStackParamList,
   ChefTabParamList,
 } from '../../../app/navigation/types';
@@ -34,6 +40,7 @@ import {ChefHeader} from '../../chefShell/components/ChefHeader';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
 import {
   CHEF_ORDER_TABS,
+  countOverdueChefPrepTimers,
   type ChefOrderTab,
   type ChefPrepTimer,
 } from '../domain/chefOrderTabs';
@@ -46,6 +53,17 @@ const TAB_LABELS: Record<ChefOrderTab, string> = {
   COMPLETED: 'Completed',
 };
 
+type ChefPreparingOrdersNavigation = CompositeNavigationProp<
+  NativeStackNavigationProp<
+    ChefOrdersStackParamList,
+    'ChefOrdersPreparing'
+  >,
+  CompositeNavigationProp<
+    BottomTabNavigationProp<ChefTabParamList, 'Orders'>,
+    NativeStackNavigationProp<ChefProductStackParamList>
+  >
+>;
+
 function shortOrderReference(orderId: string): string {
   return `#${orderId.replace(/-/g, '').slice(-8).toUpperCase()}`;
 }
@@ -55,8 +73,8 @@ function formatTimer(timer: ChefPrepTimer | undefined): string {
     return 'Prep time unavailable';
   }
   if (timer.isOverdue) {
-    const overdueMinutes = Math.max(1, Math.ceil(timer.elapsedMs / 60_000));
-    return `${overdueMinutes} min elapsed`;
+    const elapsedMinutes = Math.max(1, Math.ceil(timer.elapsedMs / 60_000));
+    return `${elapsedMinutes} min elapsed`;
   }
   const remainingMinutes = Math.max(1, Math.ceil(timer.remainingMs / 60_000));
   return `${remainingMinutes} min remaining`;
@@ -243,7 +261,7 @@ function PreparingOrderCard({
 }
 
 export function ChefPreparingOrdersScreen() {
-  const navigation = useNavigation<NavigationProp<ChefTabParamList>>();
+  const navigation = useNavigation<ChefPreparingOrdersNavigation>();
   const {
     orderTabs,
     ordersStatus,
@@ -260,8 +278,7 @@ export function ChefPreparingOrdersScreen() {
 
   const openOrder = React.useCallback(
     (orderId: string) => {
-      const parent = navigation.getParent<NavigationProp<ChefProductStackParamList>>();
-      parent?.navigate('ChefOrderDetail', {orderId});
+      navigation.navigate('ChefOrderDetail', {orderId});
     },
     [navigation],
   );
@@ -297,12 +314,8 @@ export function ChefPreparingOrdersScreen() {
   );
 
   const overdueCount = React.useMemo(
-    () =>
-      page.items.reduce(
-        (count, order) => count + (orderTabs.prepTimers[order.id]?.isOverdue ? 1 : 0),
-        0,
-      ),
-    [orderTabs.prepTimers, page.items],
+    () => countOverdueChefPrepTimers(orderTabs.prepTimers),
+    [orderTabs.prepTimers],
   );
 
   const onScroll = React.useCallback(
@@ -404,6 +417,7 @@ export function ChefPreparingOrdersScreen() {
         </View>
       ) : (
         <FlatList
+          style={styles.list}
           contentContainerStyle={[
             styles.listContent,
             page.items.length === 0 && styles.emptyListContent,
@@ -491,6 +505,7 @@ export function ChefPreparingOrdersScreen() {
 const styles = StyleSheet.create({
   safeArea: {flex: 1, backgroundColor: colors.surfaceBase},
   flex: {flex: 1, minWidth: 0},
+  list: {flex: 1},
   pressed: {opacity: 0.6},
   titleBlock: {paddingHorizontal: spacing.md, paddingTop: spacing.lg, paddingBottom: spacing.sm},
   title: {color: colors.textPrimary, fontSize: typography.hero, fontWeight: fontWeight.bold},

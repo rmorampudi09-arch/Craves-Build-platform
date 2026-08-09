@@ -1,4 +1,5 @@
 import type {QueryClient} from '@tanstack/react-query';
+import {chefBusinessInformationQueryPrefix} from '../../chefBusinessInformation/state/chefBusinessInformationQuery';
 import type {ChefKitchenProfile} from '../api/chefProfileApi';
 import {
   chefProfileKitchenQueryPrefix,
@@ -8,8 +9,8 @@ import {
 /**
  * All current Chef identity surfaces read the canonical chef-profile-kitchen
  * query. Update that cache synchronously so mounted surfaces change together,
- * then mark the profile domain stale so active observers revalidate against the
- * server without requiring a manual refresh.
+ * then revalidate both profile and business-verification reads so navigation to
+ * another Chef identity surface cannot reuse stale server state after a save.
  */
 export function synchronizeChefProfileAfterSave(
   queryClient: QueryClient,
@@ -20,7 +21,10 @@ export function synchronizeChefProfileAfterSave(
     createChefProfileKitchenQueryKey(identityId),
     updated,
   );
-  return queryClient
-    .invalidateQueries({queryKey: chefProfileKitchenQueryPrefix})
-    .then(() => undefined);
+  return Promise.all([
+    queryClient.invalidateQueries({queryKey: chefProfileKitchenQueryPrefix}),
+    queryClient.invalidateQueries({
+      queryKey: chefBusinessInformationQueryPrefix,
+    }),
+  ]).then(() => undefined);
 }

@@ -1,4 +1,5 @@
 import {QueryClient} from '@tanstack/react-query';
+import {createChefBusinessVerificationQueryKey} from '../../chefBusinessInformation/state/chefBusinessInformationQuery';
 import type {ChefKitchenProfile} from '../api/chefProfileApi';
 import {createChefProfileKitchenQueryKey} from './chefProfileQuery';
 import {synchronizeChefProfileAfterSave} from './chefProfileSynchronization';
@@ -27,17 +28,23 @@ const PROFILE: ChefKitchenProfile = {
 };
 
 describe('chef profile synchronization', () => {
-  it('updates the canonical Chef identity cache immediately and marks it stale', async () => {
+  it('updates the canonical Chef identity cache and revalidates verification state', async () => {
     const queryClient = new QueryClient({
       defaultOptions: {queries: {retry: false}},
     });
     const queryKey = createChefProfileKitchenQueryKey(IDENTITY_ID);
+    const verificationQueryKey =
+      createChefBusinessVerificationQueryKey(IDENTITY_ID);
     queryClient.setQueryData(queryKey, {...PROFILE, displayName: 'Old Name'});
+    queryClient.setQueryData(verificationQueryKey, {status: 'PENDING'});
 
     await synchronizeChefProfileAfterSave(queryClient, IDENTITY_ID, PROFILE);
 
     expect(queryClient.getQueryData(queryKey)).toEqual(PROFILE);
     expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+    expect(
+      queryClient.getQueryState(verificationQueryKey)?.isInvalidated,
+    ).toBe(true);
     queryClient.clear();
   });
 });

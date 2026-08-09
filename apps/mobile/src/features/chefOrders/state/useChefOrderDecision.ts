@@ -38,8 +38,14 @@ export function useChefOrderDecision(orderId: string): ChefOrderDecisionState {
         createChefOrderDetailQueryKey(identityId, order.id),
         order,
       );
+      operational.reconcileOrderStatus(
+        order.id,
+        order.status,
+        order.updatedAt,
+        order.prepTimeMinutes,
+      );
     },
-    [identityId, queryClient],
+    [identityId, operational, queryClient],
   );
 
   const run = React.useCallback(

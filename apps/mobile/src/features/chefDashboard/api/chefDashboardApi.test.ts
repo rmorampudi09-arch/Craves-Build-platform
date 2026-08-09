@@ -7,6 +7,7 @@ const EARNING_ID = '11111111-1111-4111-8111-111111111111';
 const ORDER_ID = '22222222-2222-4222-8222-222222222222';
 const MENU_ID = '33333333-3333-4333-8333-333333333333';
 const IMAGE_ID = '44444444-4444-4444-8444-444444444444';
+const KITCHEN_ID = '55555555-5555-4555-8555-555555555555';
 
 function earning(overrides: Record<string, unknown> = {}) {
   return {
@@ -33,6 +34,7 @@ function earning(overrides: Record<string, unknown> = {}) {
 function menuItem(overrides: Record<string, unknown> = {}) {
   return {
     id: MENU_ID,
+    kitchenId: KITCHEN_ID,
     itemName: 'Home-style meal',
     description: 'Rice, dal and curry',
     category: 'MEALS',
@@ -49,11 +51,15 @@ function menuItem(overrides: Record<string, unknown> = {}) {
     images: [
       {
         id: IMAGE_ID,
+        menuItemId: MENU_ID,
+        blobContainer: 'media',
+        blobName: 'public/dishes/menu.jpg',
         publicUrl: 'https://cdn.example.test/menu.jpg',
         sortOrder: 0,
         primary: true,
         contentType: 'image/jpeg',
         fileSizeBytes: 12345,
+        createdAt: '2026-08-09T07:30:00Z',
       },
     ],
     createdAt: '2026-08-09T07:00:00Z',
@@ -78,10 +84,11 @@ describe('chefDashboardApi parsing', () => {
     expect(parseChefDashboardEarnings([earning({netPayable: 999})])).toBeNull();
   });
 
-  it('accepts the exact chef menu-item shape', () => {
+  it('accepts the canonical exact chef menu-item shape', () => {
     expect(parseChefDashboardMenuItems([menuItem()])).toEqual([
       expect.objectContaining({
         id: MENU_ID,
+        kitchenId: KITCHEN_ID,
         currency: 'INR',
         status: 'ACTIVE',
         available: true,

@@ -212,6 +212,7 @@ function MenuItemCard({
 export function ChefMenuScreen() {
   const navigation = useNavigation<ChefMenuNavigation>();
   const menu = useChefMenuModel();
+  const {availabilityStateByItem, refresh, updateAvailability} = menu;
   const [searchQuery, setSearchQuery] = React.useState('');
   const [debouncedQuery, setDebouncedQuery] = React.useState('');
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null);
@@ -250,8 +251,8 @@ export function ChefMenuScreen() {
   }, []);
 
   const refreshMenu = React.useCallback(() => {
-    menu.refresh().catch(() => undefined);
-  }, [menu.refresh]);
+    refresh().catch(() => undefined);
+  }, [refresh]);
 
   const openItem = React.useCallback(
     (menuItemId: string) => {
@@ -263,15 +264,15 @@ export function ChefMenuScreen() {
   const renderItem = React.useCallback(
     ({item}: ListRenderItemInfo<ChefMenuItem>) => (
       <MenuItemCard
-        busy={Boolean(menu.availabilityStateByItem[item.id])}
+        busy={Boolean(availabilityStateByItem[item.id])}
         item={item}
         onOpen={() => openItem(item.id)}
         onToggleAvailability={available => {
-          menu.updateAvailability(item.id, available).catch(() => undefined);
+          updateAvailability(item.id, available).catch(() => undefined);
         }}
       />
     ),
-    [menu.availabilityStateByItem, menu.updateAvailability, openItem],
+    [availabilityStateByItem, openItem, updateAvailability],
   );
 
   const hasFilters =

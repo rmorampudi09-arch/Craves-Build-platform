@@ -49,6 +49,7 @@ function menuItem(
 ): ChefDashboardMenuItem {
   return {
     id,
+    kitchenId: '00000000-0000-4000-8000-000000000100',
     itemName: `Item ${id}`,
     description: null,
     category: 'MEALS',

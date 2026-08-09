@@ -271,21 +271,45 @@ export function ChefPreparingOrdersScreen() {
   const actions = useChefPreparingOrderActions();
   const page = orderTabs.pages.PREPARING;
   const initialScrollOffset = React.useRef(orderTabs.scrollState.PREPARING).current;
+  const latestScrollOffsetRef = React.useRef(initialScrollOffset);
+  const listRef = React.useRef<FlatList<ChefOperationalOrder>>(null);
 
   React.useEffect(() => {
     orderTabs.selectStatus('PREPARING');
   }, [orderTabs.selectStatus]);
 
+  const persistScrollOffset = React.useCallback(() => {
+    orderTabs.setScrollOffset('PREPARING', latestScrollOffsetRef.current);
+  }, [orderTabs.setScrollOffset]);
+
+  React.useEffect(
+    () => () => {
+      persistScrollOffset();
+    },
+    [persistScrollOffset],
+  );
+
   const openOrder = React.useCallback(
     (orderId: string) => {
+      persistScrollOffset();
       navigation.navigate('ChefOrderDetail', {orderId});
     },
-    [navigation],
+    [navigation, persistScrollOffset],
   );
 
   const refreshOrders = React.useCallback(() => {
     refresh().catch(() => undefined);
   }, [refresh]);
+
+  const changePage = React.useCallback(
+    (nextPage: number) => {
+      latestScrollOffsetRef.current = 0;
+      orderTabs.setScrollOffset('PREPARING', 0);
+      orderTabs.setPage('PREPARING', nextPage);
+      listRef.current?.scrollToOffset({offset: 0, animated: false});
+    },
+    [orderTabs.setPage, orderTabs.setScrollOffset],
+  );
 
   const confirmReady = React.useCallback(
     (orderId: string) => {
@@ -320,9 +344,12 @@ export function ChefPreparingOrdersScreen() {
 
   const onScroll = React.useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      orderTabs.setScrollOffset('PREPARING', event.nativeEvent.contentOffset.y);
+      latestScrollOffsetRef.current = Math.max(
+        0,
+        event.nativeEvent.contentOffset.y,
+      );
     },
-    [orderTabs],
+    [],
   );
 
   const renderItem = React.useCallback(
@@ -417,6 +444,7 @@ export function ChefPreparingOrdersScreen() {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           style={styles.list}
           contentContainerStyle={[
             styles.listContent,
@@ -441,7 +469,7 @@ export function ChefPreparingOrdersScreen() {
                   accessibilityLabel="Previous preparing orders page"
                   accessibilityRole="button"
                   disabled={page.page <= 1}
-                  onPress={() => orderTabs.setPage('PREPARING', page.page - 1)}
+                  onPress={() => changePage(page.page - 1)}
                   style={({pressed}) => [
                     styles.pageButton,
                     (pressed || page.page <= 1) && styles.pageButtonDisabled,
@@ -455,7 +483,7 @@ export function ChefPreparingOrdersScreen() {
                   accessibilityLabel="Next preparing orders page"
                   accessibilityRole="button"
                   disabled={!page.hasNextPage}
-                  onPress={() => orderTabs.setPage('PREPARING', page.page + 1)}
+                  onPress={() => changePage(page.page + 1)}
                   style={({pressed}) => [
                     styles.pageButton,
                     (pressed || !page.hasNextPage) && styles.pageButtonDisabled,
@@ -465,7 +493,9 @@ export function ChefPreparingOrdersScreen() {
               </View>
             ) : null
           }
+          onMomentumScrollEnd={persistScrollOffset}
           onScroll={onScroll}
+          onScrollEndDrag={persistScrollOffset}
           refreshControl={
             <RefreshControl
               colors={[colors.flameRed]}

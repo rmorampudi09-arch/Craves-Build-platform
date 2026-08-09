@@ -1,5 +1,6 @@
 import React, {PropsWithChildren} from 'react';
 import {StyleSheet} from 'react-native';
+import {responsiveLayout} from '../../../design/responsive';
 import {colors} from '../../../design/tokens';
 import {ScreenShell} from '../../../shared/components';
 
@@ -22,7 +23,7 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     width: '100%',
-    maxWidth: 560,
+    maxWidth: responsiveLayout.authContentMaxWidth,
     alignSelf: 'center',
   },
 });

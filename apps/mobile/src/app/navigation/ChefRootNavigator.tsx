@@ -26,6 +26,7 @@ import {ChefNewOrdersScreen} from '../../features/chefOrders/screens/ChefNewOrde
 import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrderDetailScreen';
 import {ChefPreparingOrdersScreen} from '../../features/chefOrders/screens/ChefPreparingOrdersScreen';
 import {ChefReadyOrdersScreen} from '../../features/chefOrders/screens/ChefReadyOrdersScreen';
+import {ChefEditProfileScreen} from '../../features/chefProfile/screens/ChefEditProfileScreen';
 import {ChefProfileScreen} from '../../features/chefProfile/screens/ChefProfileScreen';
 import {ChefEditProfileDraftProvider} from '../../features/chefProfile/state/ChefEditProfileDraftProvider';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
@@ -155,6 +156,11 @@ function ChefProfileNavigator() {
         initialRouteName="ChefProfileHome"
         screenOptions={stackScreenOptions}>
         <ProfileStack.Screen name="ChefProfileHome" component={ChefProfileScreen} />
+        <ProfileStack.Screen
+          name="ChefEditProfile"
+          component={ChefEditProfileScreen}
+          options={{gestureEnabled: false}}
+        />
       </ProfileStack.Navigator>
     </ChefEditProfileDraftProvider>
   );

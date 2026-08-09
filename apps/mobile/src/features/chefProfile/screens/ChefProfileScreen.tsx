@@ -82,7 +82,7 @@ const BUSINESS_ROWS: readonly AccountRowModel[] = [
     subtitle: 'Plan, billing and benefits',
     icon: 'ticket',
     blockerMessage:
-      'No approved Chef-facing subscription summary route is registered in the current mobile contract.',
+      'Subscription plan opens the protected Chef plan view; server-owned values remain fail-closed until approved contracts exist.',
   },
 ];
 
@@ -318,6 +318,10 @@ export function ChefProfileScreen() {
       }
       if (row.id === 'payouts') {
         navigation.navigate('ChefPayoutHistory');
+        return;
+      }
+      if (row.id === 'subscription') {
+        navigation.navigate('ChefSubscriptionPlan');
         return;
       }
       showBlocker(row.title, row.blockerMessage);

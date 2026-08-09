@@ -15,6 +15,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
+import {ChefAnalyticsScreen} from '../../features/chefAnalytics/screens/ChefAnalyticsScreen';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
 import {ChefAddMenuItemScreen} from '../../features/chefMenu/screens/ChefAddMenuItemScreen';
 import {ChefEditMenuItemScreen} from '../../features/chefMenu/screens/ChefEditMenuItemScreen';
@@ -113,10 +114,6 @@ function ChefShellRouteBoundary({title}: {title: string}) {
   );
 }
 
-function ChefAnalyticsBoundaryScreen() {
-  return <ChefShellRouteBoundary title="Analytics" />;
-}
-
 function ChefProfileBoundaryScreen() {
   return <ChefShellRouteBoundary title="Profile" />;
 }
@@ -208,7 +205,7 @@ function ChefTabsNavigator() {
       />
       <Tab.Screen
         name="Analytics"
-        component={ChefAnalyticsBoundaryScreen}
+        component={ChefAnalyticsScreen}
         options={{
           tabBarAccessibilityLabel: `${analyticsTab.label} tab`,
           tabBarLabel: analyticsTab.label,

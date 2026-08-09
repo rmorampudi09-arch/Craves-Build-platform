@@ -61,7 +61,7 @@ The overlay continues to return `null` when it is not eligible/visible, so a hid
 
 ## Non-goals / preserved boundaries
 
-- No P116 dark-mode or token-conformance work was started.
+- No P116 list/image/memory performance-audit work was started.
 - No screen was redesigned.
 - No route or navigation destination was added, removed, or renamed.
 - No backend, APIM, OpenAPI, auth/session, cache, persistence, payment, or business-domain contract changed.

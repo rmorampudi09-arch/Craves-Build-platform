@@ -6,16 +6,13 @@ import {authActions} from '../../auth/state/authSlice';
 
 /**
  * Switching away from Chef replaces the authenticated root. Chef-private query
- * state is removed before account resolution starts for the Customer role so a
- * later Customer screen cannot observe Chef-owned cached data.
+ * state must be removed before account resolution starts for the Customer role;
+ * if isolation fails, remain in the Chef root rather than risk cross-role data.
  */
 export async function switchChefToCustomerRole(
   dispatch: AppDispatch,
   queryClient: QueryClient = appQueryClient,
 ): Promise<void> {
-  try {
-    await clearPrivateQueryCache(queryClient, {role: 'CHEF'});
-  } finally {
-    dispatch(authActions.roleSelected('CUSTOMER'));
-  }
+  await clearPrivateQueryCache(queryClient, {role: 'CHEF'});
+  dispatch(authActions.roleSelected('CUSTOMER'));
 }

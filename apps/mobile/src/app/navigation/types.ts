@@ -140,10 +140,20 @@ export type ChefTabParamList = {
   Profile: undefined;
 };
 
+export type ChefOrderDetailRouteParams = {orderId: string};
+
+/** P85 adds the immersive Chef order-detail route without implementing P86 order tabs. */
+export type ChefProductStackParamList = {
+  ChefTabs: NavigatorScreenParams<ChefTabParamList> | undefined;
+  ChefOrderDetail: ChefOrderDetailRouteParams;
+};
+
 export type ChefTabRouteName = keyof ChefTabParamList;
+export type ChefProductStackRouteName = keyof ChefProductStackParamList;
 
 export type CustomerDomainParamList = CustomerAccountStackParamList & CustomerTabParamList;
-export type ChefDomainParamList = ChefAccountStackParamList & ChefTabParamList;
+export type ChefDomainParamList =
+  ChefAccountStackParamList & ChefTabParamList & ChefProductStackParamList;
 export type TransactionalStackParamList = CustomerCartStackParamList & CustomerPaymentMethodsStackParamList;
 
 export type NavigationDomainParamLists = {
@@ -159,4 +169,5 @@ export type RegisteredRouteName =
   | keyof RootStackParamList
   | CustomerTabRouteName
   | CustomerStackRouteName
-  | ChefTabRouteName;
+  | ChefTabRouteName
+  | ChefProductStackRouteName;

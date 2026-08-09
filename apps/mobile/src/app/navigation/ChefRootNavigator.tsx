@@ -1,10 +1,12 @@
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
+import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrderDetailScreen';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
 import {
   ChefOperationalProvider,
@@ -18,9 +20,10 @@ import {
   CHEF_TAB_STATE_OPTIONS,
   getChefTabDefinition,
 } from './chefTabs';
-import type {ChefTabParamList} from './types';
+import type {ChefProductStackParamList, ChefTabParamList} from './types';
 
 const Tab = createBottomTabNavigator<ChefTabParamList>();
+const Stack = createNativeStackNavigator<ChefProductStackParamList>();
 
 const dashboardTab = getChefTabDefinition('Dashboard');
 const ordersTab = getChefTabDefinition('Orders');
@@ -71,6 +74,11 @@ const tabScreenOptions = {
   },
 } as const;
 
+const stackScreenOptions = {
+  headerShown: false,
+  animation: 'fade' as const,
+};
+
 function ChefShellRouteBoundary({title}: {title: string}) {
   return (
     <SafeAreaView style={styles.routeSafeArea} edges={['top', 'left', 'right']}>
@@ -98,7 +106,7 @@ function ChefProfileBoundaryScreen() {
   return <ChefShellRouteBoundary title="Profile" />;
 }
 
-function ChefTabsNavigatorContent() {
+function ChefTabsNavigator() {
   const {counters} = useChefOperationalState();
   const ordersBadge =
     counters.pendingAcceptance > 99
@@ -163,10 +171,13 @@ function ChefTabsNavigatorContent() {
   );
 }
 
-function ChefTabsNavigator() {
+function ChefProductNavigator() {
   return (
     <ChefOperationalProvider>
-      <ChefTabsNavigatorContent />
+      <Stack.Navigator initialRouteName="ChefTabs" screenOptions={stackScreenOptions}>
+        <Stack.Screen name="ChefTabs" component={ChefTabsNavigator} />
+        <Stack.Screen name="ChefOrderDetail" component={ChefOrderDetailScreen} />
+      </Stack.Navigator>
     </ChefOperationalProvider>
   );
 }
@@ -223,7 +234,7 @@ export function ChefRootNavigator() {
     );
   }
 
-  return <ChefTabsNavigator />;
+  return <ChefProductNavigator />;
 }
 
 const styles = StyleSheet.create({

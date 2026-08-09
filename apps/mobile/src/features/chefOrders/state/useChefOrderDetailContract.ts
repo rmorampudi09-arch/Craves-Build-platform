@@ -13,6 +13,14 @@ import {
 
 const CHEF_ROLE = 'CHEF' as const;
 
+export function createChefOrderDetailQueryKey(identityId: string, orderId: string) {
+  return createPrivateQueryKey('chef-order-detail', {
+    userId: identityId,
+    role: CHEF_ROLE,
+    entityId: orderId,
+  });
+}
+
 export interface ChefOrderDetailQueryContract {
   data: ChefOrderDetailContractModel | null;
   status: 'pending' | 'error' | 'success';
@@ -30,11 +38,7 @@ export function useChefOrderDetailContract(
   const queryKey = React.useMemo(
     () =>
       identityId && validatedOrderId
-        ? createPrivateQueryKey('chef-order-detail', {
-            userId: identityId,
-            role: CHEF_ROLE,
-            entityId: validatedOrderId,
-          })
+        ? createChefOrderDetailQueryKey(identityId, validatedOrderId)
         : ([
             'craves',
             'v1',

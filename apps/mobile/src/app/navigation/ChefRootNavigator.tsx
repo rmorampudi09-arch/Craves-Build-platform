@@ -21,10 +21,15 @@ import {
   CHEF_TAB_STATE_OPTIONS,
   getChefTabDefinition,
 } from './chefTabs';
-import type {ChefProductStackParamList, ChefTabParamList} from './types';
+import type {
+  ChefOrdersStackParamList,
+  ChefProductStackParamList,
+  ChefTabParamList,
+} from './types';
 
 const Tab = createBottomTabNavigator<ChefTabParamList>();
 const Stack = createNativeStackNavigator<ChefProductStackParamList>();
+const OrdersStack = createNativeStackNavigator<ChefOrdersStackParamList>();
 
 const dashboardTab = getChefTabDefinition('Dashboard');
 const ordersTab = getChefTabDefinition('Orders');
@@ -103,6 +108,19 @@ function ChefProfileBoundaryScreen() {
   return <ChefShellRouteBoundary title="Profile" />;
 }
 
+function ChefOrdersNavigator() {
+  return (
+    <OrdersStack.Navigator
+      initialRouteName="ChefOrdersPreparing"
+      screenOptions={stackScreenOptions}>
+      <OrdersStack.Screen
+        name="ChefOrdersPreparing"
+        component={ChefPreparingOrdersScreen}
+      />
+    </OrdersStack.Navigator>
+  );
+}
+
 function ChefTabsNavigator() {
   const {counters} = useChefOperationalState();
   const ordersBadge =
@@ -125,7 +143,7 @@ function ChefTabsNavigator() {
       />
       <Tab.Screen
         name="Orders"
-        component={ChefPreparingOrdersScreen}
+        component={ChefOrdersNavigator}
         options={{
           tabBarAccessibilityLabel:
             counters.pendingAcceptance > 0

@@ -119,16 +119,18 @@ function StatusTabs({
     <View accessibilityRole="tablist" style={styles.tabStrip}>
       {CHEF_ORDER_TABS.map(tab => {
         const selected = tab === 'PREPARING';
-        const enabled = selected || tab === 'NEW';
+        const enabled = tab !== 'COMPLETED';
+        const hint =
+          tab === 'NEW'
+            ? 'Shows new orders awaiting a response.'
+            : tab === 'PREPARING'
+              ? 'Shows orders currently being prepared.'
+              : tab === 'READY'
+                ? 'Shows prepared orders waiting for pickup.'
+                : 'Completed orders are implemented in a later phase.';
         return (
           <Pressable
-            accessibilityHint={
-              enabled
-                ? selected
-                  ? 'Shows orders currently being prepared.'
-                  : 'Shows new orders awaiting a response.'
-                : 'This order status screen is implemented in a later phase.'
-            }
+            accessibilityHint={hint}
             accessibilityLabel={`${TAB_LABELS[tab]}, ${counts[tab]} orders`}
             accessibilityRole="tab"
             accessibilityState={{selected, disabled: !enabled}}
@@ -308,6 +310,12 @@ export function ChefPreparingOrdersScreen() {
         persistScrollOffset();
         orderTabs.selectStatus('NEW');
         navigation.navigate('ChefOrdersNew');
+        return;
+      }
+      if (tab === 'READY') {
+        persistScrollOffset();
+        orderTabs.selectStatus('READY');
+        navigation.navigate('ChefOrdersReady');
         return;
       }
       if (tab === 'PREPARING') {

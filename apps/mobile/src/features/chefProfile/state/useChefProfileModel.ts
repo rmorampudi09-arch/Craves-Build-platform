@@ -1,11 +1,9 @@
 import React from 'react';
 import {useQuery} from '@tanstack/react-query';
-import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
 import {useChefDashboardModel} from '../../chefDashboard/state/useChefDashboardModel';
 import {chefProfileApi} from '../api/chefProfileApi';
-
-const CHEF_ROLE = 'CHEF' as const;
+import {createChefProfileKitchenQueryKey} from './chefProfileQuery';
 
 export function useChefProfileModel() {
   const identity = useAppSelector(state => state.auth.identity);
@@ -15,10 +13,7 @@ export function useChefProfileModel() {
   const kitchenQueryKey = React.useMemo(
     () =>
       identity?.id
-        ? createPrivateQueryKey('chef-profile-kitchen', {
-            userId: identity.id,
-            role: CHEF_ROLE,
-          })
+        ? createChefProfileKitchenQueryKey(identity.id)
         : (['craves', 'v1', 'private', 'chef-profile-kitchen', 'signed-out'] as const),
     [identity?.id],
   );

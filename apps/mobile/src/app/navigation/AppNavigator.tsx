@@ -3,6 +3,7 @@ import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import type {RootStackParamList} from './types';
 import {CustomerRootNavigator} from './CustomerRootNavigator';
+import {ChefRootNavigator} from './ChefRootNavigator';
 import {useAppSelector} from '../store/hooks';
 import {useBootstrap} from '../../features/auth/hooks/useBootstrap';
 import {useSessionLifecycle} from '../../features/auth/hooks/useSessionLifecycle';
@@ -79,11 +80,13 @@ function ChefAccountNavigator({
 }: {
   resolution: Exclude<AccountResolution, {flow: 'CUSTOMER'}>;
 }) {
+  if (resolution.flow === 'CHEF') {
+    return <ChefRootNavigator />;
+  }
+
   const status: ChefApplicationStatus = resolution.onboardingStatus;
   const initialRouteName =
-    resolution.flow === 'CHEF_ONBOARDING' && status === 'NOT_SUBMITTED'
-      ? 'ChefRegistration'
-      : 'ChefAccountStatus';
+    status === 'NOT_SUBMITTED' ? 'ChefRegistration' : 'ChefAccountStatus';
 
   return (
     <ChefStack.Navigator screenOptions={screenOptions} initialRouteName={initialRouteName}>

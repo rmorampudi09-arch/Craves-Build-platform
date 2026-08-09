@@ -1,4 +1,5 @@
 import React from 'react';
+import {AppState, type AppStateStatus} from 'react-native';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
@@ -29,6 +30,10 @@ import {
   type ChefOrderTabScrollState,
   type ChefPrepTimer,
 } from '../../chefOrders/domain/chefOrderTabs';
+import {
+  getChefOrderNearRealtimeIntervalMs,
+  reconcileChefOperationalOrderSnapshots,
+} from '../../chefOrders/domain/chefOrderEventReconciliation';
 
 const CHEF_ROLE = 'CHEF' as const;
 const EMPTY_COUNTERS: ChefOperationalCounters = {
@@ -77,6 +82,8 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const [tabUiState, setTabUiState] = React.useState(createInitialChefOrderTabUiState);
   const [clockSampleMs, setClockSampleMs] = React.useState(() => Date.now());
+  const [appState, setAppState] = React.useState<AppStateStatus>(AppState.currentState);
+  const previousAppStateRef = React.useRef<AppStateStatus>(AppState.currentState);
 
   const ordersQueryKey = React.useMemo(
     () =>
@@ -102,9 +109,21 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
 
   const ordersQuery = useQuery({
     queryKey: ordersQueryKey,
-    queryFn: ({signal}) => chefOperationalApi.listOrders(signal),
+    queryFn: async ({signal}) => {
+      const incoming = await chefOperationalApi.listOrders(signal);
+      const current =
+        queryClient.getQueryData<ChefOperationalOrder[]>(ordersQueryKey) ?? [];
+      return reconcileChefOperationalOrderSnapshots(current, incoming);
+    },
     enabled: identityId !== null,
     staleTime: 15_000,
+    refetchInterval: query =>
+      getChefOrderNearRealtimeIntervalMs({
+        hasIdentity: identityId !== null,
+        isAppActive: appState === 'active',
+        failureCount: query.state.fetchFailureCount,
+      }),
+    refetchIntervalInBackground: false,
   });
   const notificationsQuery = useQuery({
     queryKey: notificationsQueryKey,
@@ -138,6 +157,33 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
     [orders, notices],
   );
   const tabCounts = React.useMemo(() => deriveChefOrderTabCounts(orders), [orders]);
+
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      const previousAppState = previousAppStateRef.current;
+      previousAppStateRef.current = nextAppState;
+      setAppState(nextAppState);
+
+      if (identityId === null) {
+        return;
+      }
+
+      if (nextAppState === 'active' && previousAppState !== 'active') {
+        void queryClient.invalidateQueries({
+          queryKey: ordersQueryKey,
+          exact: true,
+          refetchType: 'active',
+        });
+        return;
+      }
+
+      if (nextAppState !== 'active' && previousAppState === 'active') {
+        void queryClient.cancelQueries({queryKey: ordersQueryKey, exact: true});
+      }
+    });
+
+    return () => subscription.remove();
+  }, [identityId, ordersQueryKey, queryClient]);
 
   React.useEffect(() => {
     if (!identityId || tabCounts.PREPARING === 0) {

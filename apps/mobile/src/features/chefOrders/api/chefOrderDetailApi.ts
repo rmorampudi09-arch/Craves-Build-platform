@@ -370,4 +370,17 @@ export const chefOrderDetailApi = {
     );
     return requireOrderResponse(response);
   },
+
+  async markReadyForPickup(
+    orderId: string,
+    signal?: AbortSignal,
+  ): Promise<ChefOrderDetail> {
+    const id = requireChefOrderId(orderId);
+    const response = await httpClient.post<unknown>(
+      `/api/v1/chef/orders/${encodeURIComponent(id)}/ready-for-pickup`,
+      undefined,
+      {signal},
+    );
+    return requireOrderResponse(response);
+  },
 };

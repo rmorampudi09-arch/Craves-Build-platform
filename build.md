@@ -47,64 +47,56 @@
 - **P106 — Chef Subscription Plan UI:** PARTIAL at full Guide Reference-51 scope; the real typed/routed Chef Subscription Plan screen, Profile entry path, reference-structure unavailable states, and non-runnable plan-management boundary are implemented at the exact P105 contract boundary without fabricated plan/pricing/benefit data. Evidence: `docs/mobile-ui-rebuild/P106_CHEF_SUBSCRIPTION_PLAN_UI.md`.
 - **P107 — Chef Preferences Contract:** COMPLETED at authorized contract-boundary scope; all Guide-52 preference state/ownership/integration requirements are modeled explicitly and fail closed while production persistence remains undefined. Evidence: `docs/mobile-ui-rebuild/P107_CHEF_PREFERENCES_CONTRACT.md`.
 - **P108 — Chef App Preferences UI:** PARTIAL at full Guide Reference-52 scope; a real typed/routed Profile-owned preference screen and fail-closed modal/control boundary are implemented while the P107 persistence/runtime gaps remain explicit. Evidence: `docs/mobile-ui-rebuild/P108_CHEF_APP_PREFERENCES_UI.md`.
+- **P109 — Chef Cross-Screen Reconciliation Audit:** PARTIAL at full Guide/product scope; all currently supported Chef reconciliation paths are audited and synchronized at the exact approved contract boundary, while payout-balance and analytics-total propagation remain blocked. Evidence: `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md`.
 
-**Current executed phase:** **P108 — Chef App Preferences UI**.
+**Current executed phase:** **P109 — Chef Cross-Screen Reconciliation Audit**.
 
-**P108 implementation/code + evidence commit:** `879fa8b525e1b7960bede7bdec80329e0b2fa8a3`
+**P109 implementation/code + evidence commit:** `266ee15944965774ff320eb2de6d74f965ccfa55`
 
-### P108 implemented boundary
+### P109 implemented boundary
 
-- Re-read `agent.md`, `build.md`, `phases.md`, `plan.md`, the full Guide Reference 52, P107 evidence/contract, and the current Chef Profile/navigation implementation; implemented only P108 and did not start P109.
-- Added the typed `ChefAppPreferences` route to the existing Chef Profile stack and connected the existing Profile -> App preferences row to it.
-- Added a real `ChefAppPreferencesScreen` using the existing Chef header, Profile-stack ownership, design tokens, safe-area handling, and retained bottom navigation.
-- Added Guide-52 presentation groups for Notifications, Language & region, Recipes/order preferences, Privacy, Reminder interval, Data & storage, and Appearance.
-- Derived every visible control from the P107 contract boundary; values remain `null`, writes remain `false`, and interactions are explanation-only until production persistence/runtime contracts exist.
-- Added explicit unavailable UI treatment for Auto Accept Orders and system appearance rather than presenting misleading working switches.
-- Added a dismissible explanation modal for unavailable capabilities; closing it creates no local preference draft and no placeholder save.
-- Did not create Chef preference AsyncStorage/MMKV state, fake endpoints, hard-coded language/currency/preparation/reminder options, local Auto Accept behavior, fake notification writes, destructive storage controls, or a non-functional Save action.
-- Customer UI, backend, APIM, OpenAPI, database, infrastructure, dependencies, providers, secrets, and P109 were not changed.
+- Re-read `agent.md`, `build.md`, `phases.md`, `plan.md`, the full implementation guide, and the implemented Chef P80–P108 boundaries; implemented only P109 and did not start P110.
+- Audited all seven P109 areas: order counts/status, notifications, active cards, payout balance, menu availability, analytics totals, and identity/verification.
+- Fixed the supported order-detail accept/reject gap: authoritative mutation/conflict responses now reconcile the shared operational order cache immediately before the existing server refresh, so Dashboard counters/active cards and Orders tabs move together without waiting for a second network round trip.
+- Preserved the existing single-source notification architecture: Chef header badge and Dashboard notifications use the same `chef-notifications` query cache.
+- Preserved the existing Menu/Dashboard synchronization from P93–P95, including optimistic availability rollback, authoritative response replacement, and revalidation.
+- Expanded successful Chef profile save reconciliation to invalidate `chef-business-information` as well as the canonical kitchen-profile domain, preventing immediate navigation from reusing stale verification state after a profile write.
+- Added a typed seven-area reconciliation audit matrix and focused source tests; it is guard/evidence state only and does not create a duplicate runtime store.
+- Kept payout balance and analytics totals explicitly fail-closed because the approved contracts do not exist; no earning-ledger value was relabeled as wallet balance and no order/earning/menu data was fabricated into analytics totals.
+- Customer UI, Chef visual design, backend, APIM, OpenAPI, database, infrastructure, dependencies, providers, secrets, and P110 were not changed.
 
-### P108 changed code files
+### P109 changed code files
 
-- `apps/mobile/src/features/chefPreferences/domain/chefPreferencesUiBoundary.ts`
-- `apps/mobile/src/features/chefPreferences/domain/chefPreferencesUiBoundary.test.ts`
-- `apps/mobile/src/features/chefPreferences/screens/ChefAppPreferencesScreen.tsx`
-- `apps/mobile/src/app/navigation/types.ts`
-- `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
-- `apps/mobile/src/features/chefProfile/screens/ChefProfileScreen.tsx`
+- `apps/mobile/src/features/chefOrders/state/useChefOrderDecision.ts`
+- `apps/mobile/src/features/chefProfile/state/chefProfileSynchronization.ts`
+- `apps/mobile/src/features/chefProfile/state/chefProfileSynchronization.test.ts`
+- `apps/mobile/src/features/chefShell/domain/chefCrossScreenReconciliation.ts`
+- `apps/mobile/src/features/chefShell/domain/chefCrossScreenReconciliation.test.ts`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P108_CHEF_APP_PREFERENCES_UI.md`
+- `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md`
 - `build.md`
 
-### P108 validation / guard state
+### P109 validation / guard state
 
-- TypeScript syntax transpile validation passed for the reconstructed P108 TS/TSX change set.
-- The P108 domain/UI boundary passed a focused strict TypeScript check against the P107-compatible type surface and direct runtime assertions for 7 sections, 9 fail-closed controls, modal open/close behavior, and absence of fabricated option values.
-- Focused Jest source is committed, but full repository Jest/typecheck/build execution is not claimed from this connector-only run.
-- GitHub Actions are intentionally not used as a P108 acceptance signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
-- Reference-image/device visual certification is not claimed, so P108 remains PARTIAL at full Guide completion scope.
+- Focused Jest source is committed for the seven-area reconciliation audit matrix and the expanded profile/verification invalidation behavior.
+- The order-detail path uses the already-established `ChefOperationalProvider.reconcileOrderStatus` contract and retains the existing authoritative refresh/conflict handling.
+- Full repository Jest/typecheck/build execution is not claimed from this connector-only run.
+- GitHub Actions are intentionally not used as a P109 acceptance signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
 
-### P108 retained blockers instead of fabricated Guide capabilities
+### P109 retained blockers instead of fabricated capabilities
 
-1. No approved authenticated Chef preferences read/update contract.
-2. No Chef notification-preference persistence reconciled with push registration and OS permission state.
-3. No app-wide Chef localization preference propagation contract.
-4. No app-wide Chef currency metadata/preference propagation contract.
-5. No app-wide Chef appearance/theme propagation contract.
-6. No authoritative default-preparation-time option/persistence contract.
-7. No Auto Accept persistence, eligibility, confirmation, and safe new-orders-only activation contract.
-8. No authoritative reminder-interval persistence/metadata contract.
-9. No safe Chef storage/cache-management contract protecting authentication and unsynced drafts.
-10. No Chef App Preferences privacy/security settings contract.
-11. No reference-image visual verification/full Android device validation in this run.
+1. No approved Chef wallet/payout-balance source.
+2. No approved payout transaction/eligibility/initiation/status propagation contract.
+3. No approved Chef analytics aggregate/date-range/time-series contract.
+4. No server-driven verification mutation/event contract beyond the current authoritative read/revalidation boundary.
 
-**Next phase in sequence:** **P109 — NOT STARTED**.
+**Next phase in sequence:** **P110 — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED in this run.**
 
-**Required action:** Stop after P108. Do not pre-implement P109.
+**Required action:** Stop after P109. Do not pre-implement P110.
 
 ---
 
@@ -141,10 +133,11 @@ Evidence/ledger:
 | P106 | PARTIAL at full Guide Reference-51 scope; real fail-closed Chef Subscription Plan UI boundary implemented | `docs/mobile-ui-rebuild/P106_CHEF_SUBSCRIPTION_PLAN_UI.md` |
 | P107 | COMPLETED at authorized contract-boundary scope; persistence/runtime gaps remain explicit | `docs/mobile-ui-rebuild/P107_CHEF_PREFERENCES_CONTRACT.md` |
 | P108 | PARTIAL at full Guide Reference-52 scope; real routed fail-closed preference UI boundary implemented | `docs/mobile-ui-rebuild/P108_CHEF_APP_PREFERENCES_UI.md` |
-| P109 onward | NOT STARTED / not accepted | — |
+| P109 | PARTIAL at full Guide/product scope; supported reconciliation boundary implemented/audited | `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md` |
+| P110 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P109 work, re-read `plan.md`, `phases.md`, `agent.md`, this ledger, the full implementation guide, and the P107/P108 evidence. P108 intentionally keeps all preference writes fail-closed because no approved end-to-end Chef preference read/update/runtime contract exists. Do not bypass those retained blockers with device-local fake success, invented preference endpoints, hard-coded language/currency/preparation/reminder values, local Auto Accept behavior, unsafe cache clearing, or pretend save states. P109 is not authorized in this run.
+Before any P110 work, re-read `plan.md`, `phases.md`, `agent.md`, this ledger, the full implementation guide, and the P109 evidence. Preserve the P109 fail-closed boundaries: do not invent payout balance/transactions or analytics totals from the available earning/order/menu sources, and do not replace the shared Chef query caches with duplicate local truth. P110 is not authorized in this run.

@@ -232,7 +232,7 @@ export function ChefCompletedOrdersScreen() {
 
   React.useEffect(() => {
     orderTabs.selectStatus('COMPLETED');
-  }, [orderTabs.selectStatus]);
+  }, [orderTabs, orderTabs.selectStatus]);
 
   React.useEffect(() => {
     if (page.items.length === 0) {
@@ -245,7 +245,7 @@ export function ChefCompletedOrdersScreen() {
 
   const persistScrollOffset = React.useCallback(() => {
     orderTabs.setScrollOffset('COMPLETED', latestScrollOffsetRef.current);
-  }, [orderTabs.setScrollOffset]);
+  }, [orderTabs, orderTabs.setScrollOffset]);
 
   React.useEffect(
     () => () => {
@@ -284,7 +284,7 @@ export function ChefCompletedOrdersScreen() {
       }
       orderTabs.selectStatus('COMPLETED');
     },
-    [navigation, orderTabs.selectStatus, persistScrollOffset],
+    [navigation, orderTabs, orderTabs.selectStatus, persistScrollOffset],
   );
 
   const refreshOrders = React.useCallback(() => {
@@ -298,7 +298,7 @@ export function ChefCompletedOrdersScreen() {
       orderTabs.setPage('COMPLETED', nextPage);
       listRef.current?.scrollToOffset({offset: 0, animated: false});
     },
-    [orderTabs.setPage, orderTabs.setScrollOffset],
+    [orderTabs, orderTabs.setPage, orderTabs.setScrollOffset],
   );
 
   const onScroll = React.useCallback(

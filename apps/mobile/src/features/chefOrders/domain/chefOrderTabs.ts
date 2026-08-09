@@ -211,3 +211,12 @@ export function deriveChefPrepTimers(
   }
   return timers;
 }
+
+export function countOverdueChefPrepTimers(
+  prepTimers: Readonly<Record<string, ChefPrepTimer>>,
+): number {
+  return Object.values(prepTimers).reduce(
+    (count, timer) => count + (timer.isOverdue ? 1 : 0),
+    0,
+  );
+}

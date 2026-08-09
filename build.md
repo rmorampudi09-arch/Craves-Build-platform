@@ -43,70 +43,76 @@
 - **P102 — Chef Business Information UI/Document Flow:** PARTIAL at full Guide Reference-49 scope; the registered real Business Information screen, verification/document metadata presentation, supported kitchen edit navigation, independent loading/refresh/error states, and explicit fail-closed unsupported document/service-area/cuisine/payout actions are implemented at the exact P101 backend boundary. Evidence: `docs/mobile-ui-rebuild/P102_CHEF_BUSINESS_INFORMATION_UI_DOCUMENT_FLOW.md`.
 - **P103 — Chef Payout Contract and Eligibility:** PARTIAL at full Guide/product-contract scope; the exact Chef earning-ledger response is typed/validated as a non-runnable source boundary, while missing payout summary/balance/series/transactions/bank/eligibility/initiation/detail capabilities remain fail-closed. Evidence: `docs/mobile-ui-rebuild/P103_CHEF_PAYOUT_CONTRACT_ELIGIBILITY.md`.
 - **P104 — Chef Payout History UI/Withdraw Flow:** PARTIAL at full Guide Reference-50 scope; the real typed/routed payout-history surface, Overview/Transactions local state, Profile/shared-Chef-menu entry paths, explicit unavailable financial states, and disabled fail-closed Withdraw Now action are implemented at the exact P103 contract boundary without fabricated money data or payout mutation. Evidence: `docs/mobile-ui-rebuild/P104_CHEF_PAYOUT_HISTORY_UI_WITHDRAW_FLOW.md`.
+- **P105 — Chef Subscription Contract:** BLOCKED at full Guide/product-contract scope; a strict Guide-51 fail-closed Chef platform-subscription boundary is implemented, and the repository's customer meal-subscription routes are explicitly excluded from reuse. Evidence: `docs/mobile-ui-rebuild/P105_CHEF_SUBSCRIPTION_CONTRACT.md`.
 
-**Current executed phase:** **P104 — Chef Payout History UI/Withdraw Flow**.
+**Current executed phase:** **P105 — Chef Subscription Contract**.
 
-**P104 phase start commit:** `3c1981f7d5185d241d0d2b9b0d85a5d6edc753d3`  
-**P104 implementation/code end:** `9c8f1780590e0004199694d1128a6b924d911544`
+**P105 phase start commit:** `e4bac0a0e36160c74f47030a9e7d519e358e8279`  
+**P105 implementation/code end:** `564bcdf72bc662b1ca260da75c6bf259fcd69f96`  
+**P105 evidence commit:** `af9287e65bb340fb4d4c6037e0814e0d987037a7`
 
-### P104 implemented boundary
+### P105 implemented boundary
 
-- Re-read the authorized control docs and full Guide Reference 50 and implemented only P104; no P105 subscription work was started.
-- Added `ChefPayoutHistory` to the existing typed Chef Profile stack and registered the real screen without creating a second navigator or shell.
-- Connected the existing Profile `Payouts` row and shared Chef menu to the Payout History route; the standard Chef bottom tabs remain visible and customer cart state remains absent.
-- Added a Reference-50-aligned protected payout surface with Earnings Overview/Transactions tabs, balance/earnings/paid-out KPI structure, recent payout, payout trend, date-range control, transaction state, help/refresh explanations, and Withdraw Now.
-- Server-owned financial values stay empty/unavailable because the current repository lacks approved payout summary, balance, trend, transaction, bank, eligibility, initiation, and detail contracts.
-- Added a small presentation/domain boundary carrying real selected-tab state while keeping date range, summary, available balance, series, and transaction page explicitly unavailable.
-- `Withdraw Now` is intentionally disabled. Mobile does not invent eligibility, minimums, bank verification, idempotency, confirmation/re-authentication, provider state, or money movement.
-- No runnable HTTP wrapper was added for the source-only Chef earnings path because the approved APIM operation still does not exist.
-- No dependency, customer-screen, backend, APIM, OpenAPI, database, infrastructure, settlement-admin, bank-identifier, payout-provider, or secret change was made.
+- Re-read `agent.md`, `build.md`, `phases.md`, `plan.md`, and full Guide Reference 51 and implemented only P105; no P106 UI/navigation work was started.
+- Audited the current Subscription Service controller, DTOs, service authorization/business rules, APIM configuration, and customer mobile subscription handover.
+- Confirmed the existing `/api/v1/subscriptions*` and `/api/v1/admin/subscription*` contracts model customer meal-plan subscriptions and chef/admin maintenance of sellable meal plans, not a Chef purchasing/managing a CRAVES platform plan.
+- Added a typed Guide-51 capability model for plan catalogue, current plan, eligibility, pricing, feature entitlements, change/cancel/renew, effective dates, and billing-provider integration.
+- Every required Chef platform-subscription capability remains explicit `BACKEND_CONTRACT_UNAVAILABLE`; the contract model status is `blocked`.
+- Added explicit excluded-source metadata for the customer/admin meal-subscription routes to prevent accidental semantic reuse in future P106 work.
+- Added fail-closed mutation boundaries for change/cancel/renew with `allowed: false`.
+- No HTTP wrapper was added because no exact Chef platform-subscription APIM/backend contract exists.
+- No Basic/Premium/Pro tier values, price, tax, benefit, eligibility, proration, effective date, provider state, or subscription mutation route was fabricated.
+- No navigation, screen, profile-row, customer-screen, backend, APIM, OpenAPI, database, infrastructure, dependency, provider, or secret change was made.
 
-### P104 changed code files
+### P105 changed code files
 
-- `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
-- `apps/mobile/src/app/navigation/types.ts`
-- `apps/mobile/src/features/chefPayout/domain/chefPayoutHistoryBoundary.ts`
-- `apps/mobile/src/features/chefPayout/domain/chefPayoutHistoryBoundary.test.ts`
-- `apps/mobile/src/features/chefPayout/screens/ChefPayoutHistoryScreen.tsx`
-- `apps/mobile/src/features/chefProfile/screens/ChefProfileScreen.tsx`
-- `apps/mobile/src/features/chefShell/components/ChefHeader.tsx`
+- `apps/mobile/src/features/chefSubscription/domain/chefSubscriptionContract.ts`
+- `apps/mobile/src/features/chefSubscription/domain/chefSubscriptionContract.test.ts`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P104_CHEF_PAYOUT_HISTORY_UI_WITHDRAW_FLOW.md`
+- `docs/mobile-ui-rebuild/P105_CHEF_SUBSCRIPTION_CONTRACT.md`
 - `build.md`
 
-### P104 validation / guard state
+### P105 exact sources / contract distinction
 
-- `GitHub.compare_commits` from phase-start HEAD `3c1981f7d5185d241d0d2b9b0d85a5d6edc753d3` through code end `9c8f1780590e0004199694d1128a6b924d911544` is fast-forward and contains only the seven P104 code/test files listed above.
-- The Profile follow-up commit diff was checked separately: it only updates the payout-row message, adds `navigation.navigate('ChefPayoutHistory')`, and normalizes the final newline.
-- Focused test source verifies no invented financial state, blocked withdrawal, local tab-state behavior, approved-APIM explanation, and absence of fabricated payout/withdraw/bank route strings.
-- Focused Jest test source was added, but Jest execution is not claimed from this connector-only run.
-- GitHub Actions are intentionally not claimed as a P104 pass/fail signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
-- Full workspace dependency installation, strict TypeScript, ESLint, Jest execution, production Android bundle/build, emulator/device behavior, performance profiling, and Reference-50 pixel validation are **not recorded as passing or failing for P104** from this connector-only implementation run.
-- The authoritative guide identifies Reference 50 as source page 42 / `image50.jpeg`; the direct page-42 visual could not be surfaced through the available File Library multimodal view in this run, so exact pixel comparison is not claimed.
-- P104 remains **PARTIAL at full Guide scope** because the required production financial contracts and direct runtime/visual verification are still unavailable; mobile does not fabricate them.
+- `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, full 183-page authority, Guide Reference 51 / source page 43 / `image51.jpeg`.
+- `services/subscription-service/src/main/java/in/craves/subscription/web/SubscriptionController.java`.
+- `services/subscription-service/src/main/java/in/craves/subscription/web/ApiDtos.java`.
+- `services/subscription-service/src/main/java/in/craves/subscription/service/SubscriptionService.java`.
+- `scripts/configure-subscription-apim.sh`.
+- `docs/handover/2026-07-30-customer-mobile-subscription-plans.md`.
 
-### P104 retained blockers instead of fabricated Guide capabilities
+The audited service uses weekly/monthly sellable meal plans and customer subscriptions with service dates/delivery-address semantics. Those contracts are not the Guide-51 Chef platform-membership contract and are not reclassified for mobile.
 
-1. No approved APIM mobile exposure for the existing Chef earnings ledger read.
-2. No aggregate earnings/payout summary or period semantics.
-3. No authoritative available/withdrawable balance.
-4. No payout trend/time-series/date-bucket contract.
-5. No payout transaction history/detail contract.
-6. No masked Chef bank-destination contract.
-7. No withdrawal eligibility/minimum/verification contract.
-8. No withdrawal-initiation endpoint or idempotency contract.
-9. No confirmation/re-authentication/provider status state machine.
-10. No authoritative payout-to-Dashboard wallet reconciliation contract.
-11. No API-backed pagination/offline/refresh lifecycle for payout history.
-12. No recorded direct Reference-50 pixel or Android runtime validation in this connector-only run.
+### P105 validation / guard state
 
-**Next phase in sequence:** **P105 — Chef Subscription Contract — NOT STARTED**.
+- `GitHub.compare_commits` from phase-start HEAD `e4bac0a0e36160c74f47030a9e7d519e358e8279` through code end `564bcdf72bc662b1ca260da75c6bf259fcd69f96` is fast-forward by two commits and contains exactly the two P105 code/test files listed above.
+- Source review confirms all ten Guide-51 contract capabilities fail closed and no fabricated Chef subscription route is present.
+- Focused test source covers blocked capabilities, excluded customer meal-subscription routes, disabled change/cancel/renew, and absence of fabricated tier/endpoint values.
+- Focused Jest execution is not claimed from this connector-only run.
+- GitHub Actions are intentionally not claimed as a P105 pass/fail signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
+- Full workspace dependency installation, strict TypeScript, ESLint, Jest execution, production Android bundle/build, emulator/device behavior, and Reference-51 visual validation are **not recorded as passing or failing for P105** from this connector-only contract phase.
+- P105 is **BLOCKED at full Guide/product-contract scope** because the exact Chef platform-subscription API/entitlement/billing contract does not exist in the audited repository surface. The mobile boundary is intentionally non-runnable rather than deceptive.
+
+### P105 retained blockers instead of fabricated Guide capabilities
+
+1. No approved Chef platform plan catalogue contract.
+2. No current Chef platform subscription contract.
+3. No Chef plan eligibility contract.
+4. No authoritative pricing/currency/tax/billing-cycle contract.
+5. No feature-entitlement contract.
+6. No upgrade/downgrade/proration/idempotency contract.
+7. No Chef platform cancellation contract.
+8. No renewal/reactivation contract.
+9. No effective-date/pending/grace-period/cancel-date state model.
+10. No mobile billing-provider integration contract for Chef platform subscription.
+
+**Next phase in sequence:** **P106 — Chef Subscription Plan UI — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P104. Do not pre-implement P105 without explicit user direction.
+**Required action:** Stop after P105. Do not pre-implement P106 without explicit user direction.
 
 ---
 
@@ -139,10 +145,11 @@ Evidence/ledger:
 | P102 | PARTIAL at full Guide scope; exact current Chef Business Information UI/document-flow boundary implemented | `docs/mobile-ui-rebuild/P102_CHEF_BUSINESS_INFORMATION_UI_DOCUMENT_FLOW.md` |
 | P103 | PARTIAL at full Guide/product-contract scope; exact Chef financial source + fail-closed payout eligibility boundary implemented | `docs/mobile-ui-rebuild/P103_CHEF_PAYOUT_CONTRACT_ELIGIBILITY.md` |
 | P104 | PARTIAL at full Guide Reference-50 scope; real fail-closed payout-history UI/withdraw boundary implemented | `docs/mobile-ui-rebuild/P104_CHEF_PAYOUT_HISTORY_UI_WITHDRAW_FLOW.md` |
-| P105 onward | NOT STARTED / not accepted | — |
+| P105 | BLOCKED at full Guide/product-contract scope; fail-closed Chef platform-subscription boundary implemented | `docs/mobile-ui-rebuild/P105_CHEF_SUBSCRIPTION_CONTRACT.md` |
+| P106 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P105 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, P104 evidence, and the current Chef Profile/Payout/Dashboard implementations. Preserve the P103/P104 fail-closed financial boundary: do not derive aggregate earnings or available/withdrawable balance from ledger rows; do not invent bank, payout-series, payout-transaction, eligibility, initiation, transaction-detail, settlement, subscription, or billing routes; do not call the backend earnings path from mobile until an approved APIM operation exists; never expose full bank/payment identifiers; do not alter backend/APIM without explicit phase authority; and do not advance beyond the single explicitly authorized phase.
+Before any P106 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, and P105 evidence. Preserve the P105 ownership boundary: the existing `/api/v1/subscriptions*` and `/api/v1/admin/subscription*` contracts are customer meal-plan/sellable-plan contracts and must not be presented as the Chef's CRAVES platform membership. Do not invent current plan, Basic/Premium/Pro pricing/benefits, entitlements, eligibility, proration, effective dates, billing-provider behavior, or change/cancel/renew routes. Do not alter backend/APIM without explicit authority, and do not advance beyond the single explicitly authorized phase.

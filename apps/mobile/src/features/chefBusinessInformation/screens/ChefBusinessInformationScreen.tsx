@@ -26,7 +26,6 @@ import {
 } from '../../../design/tokens';
 import {Icon, type IconName} from '../../../shared/components/Icon';
 import {ChefHeader} from '../../chefShell/components/ChefHeader';
-import type {ChefKitchenProfile} from '../../chefProfile/api/chefProfileApi';
 import {useChefEditProfileDraft} from '../../chefProfile/state/ChefEditProfileDraftProvider';
 import type {ChefBusinessProofDocument} from '../api/chefBusinessInformationApi';
 import {

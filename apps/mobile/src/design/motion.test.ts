@@ -3,6 +3,7 @@ import {
   motionSafety,
   motionTransitions,
   resolveMotion,
+  resolveReducedMotionAnimation,
   shouldAnimateListChanges,
 } from './motion';
 
@@ -35,6 +36,13 @@ describe('shared motion baseline', () => {
     expect(viewCart.useSpring).toBe(false);
     expect(skeleton.animate).toBe(false);
     expect(skeleton.continuous).toBe(false);
+  });
+
+  it('resolves platform transitions to none when reduced motion is enabled', () => {
+    expect(resolveReducedMotionAnimation('fade', false)).toBe('fade');
+    expect(resolveReducedMotionAnimation('slide', false)).toBe('slide');
+    expect(resolveReducedMotionAnimation('fade', true)).toBe('none');
+    expect(resolveReducedMotionAnimation('slide', true)).toBe('none');
   });
 
   it('keeps critical navigation and error presentation free of animation delays', () => {

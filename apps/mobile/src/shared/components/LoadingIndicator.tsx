@@ -8,9 +8,12 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {
+  borderWidth,
   colors,
   fontWeight,
+  radius,
   spacing,
   textDefaults,
   typography,
@@ -35,6 +38,14 @@ export function LoadingIndicator({
   style,
   testID,
 }: LoadingIndicatorProps) {
+  const reduceMotionEnabled = useReducedMotionPreference();
+  const staticIndicatorSize =
+    typeof size === 'number'
+      ? size
+      : size === 'large'
+        ? spacing.xl
+        : spacing.lg;
+
   return (
     <View
       accessible={accessible}
@@ -46,12 +57,27 @@ export function LoadingIndicator({
       importantForAccessibility={accessible ? 'yes' : 'no-hide-descendants'}
       style={[styles.row, style]}
       testID={testID}>
-      <ActivityIndicator
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        color={color}
-        size={size}
-      />
+      {reduceMotionEnabled ? (
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={[
+            styles.staticIndicator,
+            {
+              borderColor: color,
+              height: staticIndicatorSize,
+              width: staticIndicatorSize,
+            },
+          ]}
+        />
+      ) : (
+        <ActivityIndicator
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          color={color}
+          size={size}
+        />
+      )}
       {label ? (
         <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.label}>
           {label}
@@ -67,6 +93,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
+  },
+  staticIndicator: {
+    borderRadius: radius.pill,
+    borderWidth: borderWidth.emphasis,
+    opacity: 0.72,
   },
   label: {
     color: colors.textSecondary,

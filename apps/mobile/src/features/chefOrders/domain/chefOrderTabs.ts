@@ -12,10 +12,10 @@ const MAX_PAGE_SIZE = 50;
 const CHEF_ROLE = 'CHEF' as const;
 
 const TAB_STATUSES: Record<ChefOrderTab, ReadonlySet<ChefOperationalOrderStatus>> = {
-  NEW: new Set(['CHEF_ACCEPTANCE_PENDING']),
-  PREPARING: new Set(['CHEF_ACCEPTED', 'PREPARING']),
-  READY: new Set(['READY_FOR_PICKUP']),
-  COMPLETED: new Set(['DELIVERED']),
+  NEW: new Set<ChefOperationalOrderStatus>(['CHEF_ACCEPTANCE_PENDING']),
+  PREPARING: new Set<ChefOperationalOrderStatus>(['CHEF_ACCEPTED', 'PREPARING']),
+  READY: new Set<ChefOperationalOrderStatus>(['READY_FOR_PICKUP']),
+  COMPLETED: new Set<ChefOperationalOrderStatus>(['DELIVERED']),
 };
 
 export type ChefOrderTabCounts = Record<ChefOrderTab, number>;
@@ -177,8 +177,8 @@ export function deriveChefPrepTimer(
 ): ChefPrepTimer | null {
   if (
     !chefOrderBelongsToTab(order, 'PREPARING') ||
-    order.prepTimeMinutes === null ||
-    order.updatedAt === null ||
+    order.prepTimeMinutes == null ||
+    order.updatedAt == null ||
     !Number.isFinite(nowMs)
   ) {
     return null;

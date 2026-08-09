@@ -38,9 +38,9 @@ const ORDER_STATUSES = new Set<ChefOperationalOrderStatus>([
 export interface ChefOperationalOrder {
   id: string;
   status: ChefOperationalOrderStatus;
-  prepTimeMinutes: number | null;
-  createdAt: string | null;
-  updatedAt: string | null;
+  prepTimeMinutes?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface ChefOperationalNotice {

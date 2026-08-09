@@ -19,6 +19,7 @@ The current mobile tree's concrete motion surfaces were reviewed at the existing
 - Chef product/order/profile native stacks used `fade` unconditionally.
 - Customer Location Selector used a React Native `Modal` slide transition unconditionally.
 - Customer Address Editor used a React Native `Modal` slide transition unconditionally.
+- The shared loading primitive used a continuously spinning native `ActivityIndicator` without a reduced-motion visual equivalent.
 - The shared Skeleton component is currently static; there is no running shimmer/loop to suppress.
 
 ## Implementation
@@ -54,6 +55,10 @@ Their visibility, dismissal, backdrop, accessibility-modal, and form behavior ar
 
 The overlay continues to return `null` when it is not eligible/visible, so a hidden overlay cannot intercept input.
 
+### Loading indicator
+
+`apps/mobile/src/shared/components/LoadingIndicator.tsx` keeps the existing native `ActivityIndicator` when reduced motion is off. When reduced motion is enabled it substitutes a static token-based ring while retaining the same progressbar/busy accessibility semantics and optional label. Loading state therefore remains visible without continuous rotation.
+
 ## Non-goals / preserved boundaries
 
 - No P116 dark-mode or token-conformance work was started.
@@ -69,8 +74,8 @@ The overlay continues to return `null` when it is not eligible/visible, so a hid
 
 - Re-read the P115 phase boundary and motion guidance before implementation.
 - Reviewed the concrete current motion/reduced-motion call sites identified in the mobile tree.
-- Re-fetched the modified branch files after writes to confirm the intended reduced-motion wiring is present.
-- Kept normal transition values unchanged and introduced only a `none` equivalent under the platform reduced-motion preference.
+- Re-fetched modified branch files/commit diffs after writes to confirm the intended reduced-motion wiring and narrow file scope.
+- Kept normal transition values unchanged and introduced low/no-motion equivalents only under the platform reduced-motion preference.
 
 ### Validation not claimed
 
@@ -83,6 +88,7 @@ Therefore P115 remains **PARTIAL at full runtime/device-validation scope** until
 Production/runtime:
 
 - `apps/mobile/src/design/motion.ts`
+- `apps/mobile/src/shared/components/LoadingIndicator.tsx`
 - `apps/mobile/src/features/cart/components/SharedViewCartOverlay.tsx`
 - `apps/mobile/src/app/navigation/AppNavigator.tsx`
 - `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`

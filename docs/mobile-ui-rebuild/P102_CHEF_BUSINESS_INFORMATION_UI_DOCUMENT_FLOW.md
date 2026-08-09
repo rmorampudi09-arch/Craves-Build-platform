@@ -3,7 +3,8 @@
 **Guide reference:** 49 — Chef Business Information  
 **Branch:** `mobile-ui-rebuild-from-scratch`  
 **Authorized phase only:** P102  
-**Start commit:** `59a2f19a8b097a74408b715d468e5e8cd2732a2c`
+**Start commit:** `59a2f19a8b097a74408b715d468e5e8cd2732a2c`  
+**Final code commit:** `4c8ec13d22fe91e4b688536e7118f1a3e512283f`
 
 ## Implemented boundary
 
@@ -21,10 +22,12 @@ No backend, APIM, infrastructure, database, or server-source changes are part of
 - Chef Business Information route reachable from Chef Profile.
 - Existing Chef header/notification behavior retained, with an explicit back-to-Profile control.
 - Pull-to-refresh over the two independent server sources while retaining last valid query data when available.
-- Loading skeleton, source-specific recoverable errors, retry controls, populated and empty-document states.
+- Initial skeleton, independent partial-source loading states, source-specific recoverable errors, retry controls, populated state, and empty-document state.
+- A partial-source result never labels a still-pending source as failed; verification and kitchen loading states remain independent.
 - Verification banner driven only by `NOT_SUBMITTED`, `PENDING`, `APPROVED`, or `REJECTED` from the Chef application service.
 - Application-level rejection reason is shown when the backend returns one.
 - Business overview tiles use only authoritative/derived values: application verification state, proof metadata count, and kitchen status.
+- Business overview uses a readable warm surface/border treatment so heading/metric hierarchy remains accessible with the existing Espresso/Flame token system.
 - Aadhaar/PAN proof rows show only the safe metadata exposed by the P101 mobile model: file name, content type, size, persisted `UPLOADED` metadata state, and timestamps.
 - Proof rows expand/collapse to show metadata details.
 - The screen explicitly does **not** reinterpret `UPLOADED` as document-level verified/valid/rejected/expired state.
@@ -61,7 +64,9 @@ Therefore P102 does not open a native file picker or transmit a selected file. *
 - business-address formatting from existing kitchen fields;
 - kitchen status labels.
 
-Source-level compare from the P102 start commit confirms the implementation is limited to the Business Information feature, Chef Profile entry/navigation, typed route registration, tests, and this evidence.
+Source-level compare from the P102 start commit confirms the implementation is limited to the Business Information feature, Chef Profile entry/navigation, typed route registration, tests, phase evidence, and the phase ledger.
+
+GitHub Actions execution is not claimed because the account's monthly Actions capacity is exhausted. Project dependency installation, strict TypeScript execution, ESLint, Jest execution, Android bundle/build, emulator/device behavior, and Reference-49 pixel comparison are not recorded as passing or failing from this connector-only implementation run.
 
 ## Phase status
 

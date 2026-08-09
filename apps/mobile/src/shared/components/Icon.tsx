@@ -7,6 +7,11 @@ export type IconName =
   | 'chef'
   | 'home'
   | 'orders'
+  | 'cart'
+  | 'search'
+  | 'wifi-off'
+  | 'star'
+  | 'ticket'
   | 'phone'
   | 'mail'
   | 'lock'
@@ -68,6 +73,35 @@ export function Icon({
         <>
           <Rect x="5" y="3" width="14" height="18" rx="2" {...common} />
           <Path d="M8.5 8h7M8.5 12h7M8.5 16h4" {...common} />
+        </>
+      )}
+      {name === 'cart' && (
+        <>
+          <Path d="M3.5 4h2l2.1 10.1a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 1.9-1.4L21 8H7" {...common} />
+          <Circle cx="10" cy="20" r="1" {...common} />
+          <Circle cx="18" cy="20" r="1" {...common} />
+        </>
+      )}
+      {name === 'search' && (
+        <>
+          <Circle cx="10.5" cy="10.5" r="6.5" {...common} />
+          <Path d="m15.5 15.5 5 5" {...common} />
+        </>
+      )}
+      {name === 'wifi-off' && (
+        <>
+          <Path d="M2.5 8.8A15.2 15.2 0 0 1 7 6.3M10.5 5.1a15.2 15.2 0 0 1 11 3.7" {...common} />
+          <Path d="M5.5 12.2A10.3 10.3 0 0 1 9 10.4M12.5 9.9a10.3 10.3 0 0 1 6 2.3" {...common} />
+          <Path d="M9 15.5a5.2 5.2 0 0 1 6 0M12 19h.01M3 3l18 18" {...common} />
+        </>
+      )}
+      {name === 'star' && (
+        <Path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z" {...common} />
+      )}
+      {name === 'ticket' && (
+        <>
+          <Path d="M4 6.5h16v4a2.5 2.5 0 0 0 0 5v2H4v-2a2.5 2.5 0 0 0 0-5v-4Z" {...common} />
+          <Path d="M12 8v2M12 14v2" {...common} />
         </>
       )}
       {name === 'phone' && (

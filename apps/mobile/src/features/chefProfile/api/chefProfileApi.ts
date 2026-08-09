@@ -27,6 +27,29 @@ export interface ChefKitchenProfile {
   updatedAt: string;
 }
 
+/**
+ * Exact Catalog Service KitchenProfileRequest contract used by
+ * PUT /api/v1/kitchens/me. PUT is a complete replacement/upsert request, not a
+ * partial profile patch, so callers must preserve fields that are not edited.
+ */
+export interface ChefKitchenProfileRequest {
+  kitchenName: string;
+  displayName: string | null;
+  description: string | null;
+  phoneNumber: string | null;
+  email: string | null;
+  addressLine1: string;
+  addressLine2: string | null;
+  landmark: string | null;
+  areaName: string | null;
+  city: string;
+  state: string;
+  postalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  status: ChefKitchenStatus;
+}
+
 const KITCHEN_STATUSES = new Set<ChefKitchenStatus>([
   'DRAFT',
   'ACTIVE',
@@ -155,16 +178,30 @@ export function parseChefKitchenProfile(value: unknown): ChefKitchenProfile | nu
   };
 }
 
+function parseKitchenResponse(value: unknown): ChefKitchenProfile {
+  const parsed = parseChefKitchenProfile(value);
+  if (!parsed) {
+    throw new Error('Chef kitchen profile returned an unsupported response.');
+  }
+  return parsed;
+}
+
 export const chefProfileApi = {
   async getKitchen(signal?: AbortSignal): Promise<ChefKitchenProfile> {
     const response = await httpClient.get<unknown>('/api/v1/kitchens/me', {
       signal,
       dedupeKey: 'chef-profile:kitchen',
     });
-    const parsed = parseChefKitchenProfile(response);
-    if (!parsed) {
-      throw new Error('Chef kitchen profile returned an unsupported response.');
-    }
-    return parsed;
+    return parseKitchenResponse(response);
+  },
+
+  async replaceKitchen(
+    request: ChefKitchenProfileRequest,
+    signal?: AbortSignal,
+  ): Promise<ChefKitchenProfile> {
+    const response = await httpClient.put<unknown>('/api/v1/kitchens/me', request, {
+      signal,
+    });
+    return parseKitchenResponse(response);
   },
 };

@@ -3,7 +3,9 @@
 **Branch:** `mobile-ui-rebuild-from-scratch`  
 **Authorized phase:** P79 only  
 **Guide source:** Full 183-page `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`  
-**Phase acceptance:** A supported customer-domain mutation must update every required customer surface without a manual refresh.
+**Phase acceptance:** A supported customer-domain mutation must update every required customer surface without a manual refresh.  
+**Validated mobile code head:** `bbaa6c185863a72bff4733be832eda50f107afa9`  
+**CI:** run `31300386960` / job `93212116865` — **SUCCESS**
 
 ## 1. Audit result
 
@@ -73,7 +75,9 @@ Existing phase tests continue to cover:
 - order detail-to-list reconciliation;
 - search query and scroll-offset restoration.
 
-The repository implementation CI remains the required code-level gate: dependency install, strict TypeScript, ESLint, Jest, production Android JavaScript bundle and backend/APIM/infrastructure source guard.
+The required repository implementation CI passed on the validated mobile code head: dependency install, strict TypeScript, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all succeeded in run `31300386960`, job `93212116865`.
+
+No APK/AAB was built, consistent with the implementation-phase policy.
 
 ## 6. Phase boundary
 

@@ -5,7 +5,7 @@ import {cartActions} from '../../cart/state/cartSlice';
 import {customerShellActions} from '../../customerShell/state/customerShellSlice';
 import {discoveryFilterActions} from '../../discoveryFilters/state/discoveryFilterSlice';
 import {discoverySearchActions} from '../../discoverySearch/state/discoverySearchSlice';
-import {paymentMethodActions} from '../../payment/state/paymentMethodSlice';
+import {clearPrimaryPaymentMethod} from '../../payment/state/paymentMethodSlice';
 
 type ClearCustomerPrivateCache = () => Promise<void>;
 
@@ -13,7 +13,7 @@ export function resetCustomerRoleReduxState(dispatch: AppDispatch) {
   dispatch(customerShellActions.resetCustomerShell());
   dispatch(discoveryFilterActions.resetDiscoveryFilters());
   dispatch(discoverySearchActions.resetDiscoverySearch());
-  dispatch(paymentMethodActions.clearPrimaryPaymentMethod());
+  dispatch(clearPrimaryPaymentMethod());
   dispatch(cartActions.resetCartDomain());
 }
 

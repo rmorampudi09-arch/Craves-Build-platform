@@ -7,6 +7,7 @@ export type IconName =
   | 'chef'
   | 'home'
   | 'orders'
+  | 'analytics'
   | 'cart'
   | 'search'
   | 'wifi-off'
@@ -73,6 +74,12 @@ export function Icon({
         <>
           <Rect x="5" y="3" width="14" height="18" rx="2" {...common} />
           <Path d="M8.5 8h7M8.5 12h7M8.5 16h4" {...common} />
+        </>
+      )}
+      {name === 'analytics' && (
+        <>
+          <Path d="M4 20V10M10 20V4M16 20v-7M22 20H2" {...common} />
+          <Path d="M4 10h3M10 4h3M16 13h3" {...common} />
         </>
       )}
       {name === 'cart' && (

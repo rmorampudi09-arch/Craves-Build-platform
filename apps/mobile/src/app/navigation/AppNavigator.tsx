@@ -1,7 +1,21 @@
 import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
+import {Linking} from 'react-native';
+import {
+  CommonActions,
+  NavigationContainer,
+  createNavigationContainerRef,
+  type ParamListBase,
+} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import type {RootStackParamList} from './types';
+import {
+  inboundRouteDedupe,
+  parseInboundUrl,
+  resolveInboundRoute,
+  type InboundRouteCandidate,
+  type InboundRouteContext,
+  type InboundRouteDestination,
+} from './inboundRouting';
 import {CustomerRootNavigator} from './CustomerRootNavigator';
 import {ChefRootNavigator} from './ChefRootNavigator';
 import {useAppSelector} from '../store/hooks';
@@ -24,11 +38,13 @@ import type {
   AccountResolution,
   ChefApplicationStatus,
 } from '../../features/auth/domain/types';
+import type {AuthState} from '../../features/auth/state/authSlice';
 
 const AuthStack = createNativeStackNavigator<RootStackParamList>();
 const ResolutionStack = createNativeStackNavigator<RootStackParamList>();
 const CustomerStack = createNativeStackNavigator<RootStackParamList>();
 const ChefStack = createNativeStackNavigator<RootStackParamList>();
+const navigationRef = createNavigationContainerRef<ParamListBase>();
 
 const screenOptions = {
   headerShown: false,
@@ -112,10 +128,208 @@ function AuthenticatedNavigator({resolution}: {resolution: AccountResolution | n
   return <ChefAccountNavigator resolution={resolution} />;
 }
 
+function inboundContextFromAuth(auth: AuthState): InboundRouteContext {
+  if (auth.bootstrapStatus !== 'authenticated') {
+    return {
+      authenticated: false,
+      authorizedRole: null,
+      productReady: false,
+    };
+  }
+
+  const resolution = auth.accountResolution;
+  if (!resolution) {
+    return {
+      authenticated: true,
+      authorizedRole: null,
+      productReady: false,
+    };
+  }
+
+  if (resolution.flow === 'CUSTOMER') {
+    return {
+      authenticated: true,
+      authorizedRole: 'CUSTOMER',
+      productReady: resolution.onboardingStatus === 'READY',
+    };
+  }
+
+  if (resolution.flow === 'CHEF') {
+    return {
+      authenticated: true,
+      authorizedRole: 'CHEF',
+      productReady: true,
+    };
+  }
+
+  return {
+    authenticated: true,
+    authorizedRole: resolution.authorizedRole,
+    productReady: false,
+  };
+}
+
+function currentRouteMatches(destination: InboundRouteDestination): boolean {
+  const currentRoute = navigationRef.getCurrentRoute();
+  if (!currentRoute) {
+    return false;
+  }
+  const params = currentRoute.params as Record<string, unknown> | undefined;
+
+  switch (destination.kind) {
+    case 'CUSTOMER_HOME':
+      return currentRoute.name === 'CustomerHomeRoot';
+    case 'CHEF_HOME':
+      return currentRoute.name === 'Dashboard';
+    case 'CUSTOMER_ORDER_DETAIL':
+      return (
+        currentRoute.name === 'CustomerOrderDetail' &&
+        params?.orderId === destination.orderId
+      );
+    case 'CUSTOMER_ORDER_TRACKING':
+      return (
+        currentRoute.name === 'CustomerOrderTracking' &&
+        params?.orderId === destination.orderId
+      );
+    case 'CHEF_ORDER_DETAIL':
+      return currentRoute.name === 'ChefOrderDetail' && params?.orderId === destination.orderId;
+    case 'CUSTOMER_KITCHEN_PROFILE':
+      return (
+        currentRoute.name === 'CustomerKitchenProfile' &&
+        params?.kitchenId === destination.kitchenId
+      );
+  }
+}
+
+function dispatchInboundDestination(destination: InboundRouteDestination) {
+  switch (destination.kind) {
+    case 'CUSTOMER_HOME':
+      navigationRef.dispatch(CommonActions.navigate({name: 'Home'}));
+      return;
+    case 'CHEF_HOME':
+      navigationRef.dispatch(
+        CommonActions.navigate({name: 'ChefTabs', params: {screen: 'Dashboard'}}),
+      );
+      return;
+    case 'CUSTOMER_ORDER_DETAIL':
+      navigationRef.dispatch(
+        CommonActions.navigate({
+          name: 'Orders',
+          params: {
+            screen: 'CustomerOrderDetail',
+            params: {orderId: destination.orderId},
+          },
+        }),
+      );
+      return;
+    case 'CUSTOMER_ORDER_TRACKING':
+      navigationRef.dispatch(
+        CommonActions.navigate({
+          name: 'Orders',
+          params: {
+            screen: 'CustomerOrderTracking',
+            params: {orderId: destination.orderId},
+          },
+        }),
+      );
+      return;
+    case 'CHEF_ORDER_DETAIL':
+      navigationRef.dispatch(
+        CommonActions.navigate({
+          name: 'ChefOrderDetail',
+          params: {orderId: destination.orderId},
+        }),
+      );
+      return;
+    case 'CUSTOMER_KITCHEN_PROFILE':
+      navigationRef.dispatch(
+        CommonActions.navigate({
+          name: 'Chefs',
+          params: {
+            screen: 'CustomerKitchenProfile',
+            params: {kitchenId: destination.kitchenId},
+          },
+        }),
+      );
+  }
+}
+
 export function AppNavigator() {
   const status = useBootstrap();
   useSessionLifecycle();
   const auth = useAppSelector(state => state.auth);
+  const authRef = React.useRef(auth);
+  const pendingInboundRef = React.useRef<InboundRouteCandidate | null>(null);
+  authRef.current = auth;
+
+  const attemptInboundRoute = React.useCallback((candidate: InboundRouteCandidate) => {
+    const resolution = resolveInboundRoute(candidate, inboundContextFromAuth(authRef.current));
+
+    if (resolution.status === 'DEFER') {
+      pendingInboundRef.current = candidate;
+      return;
+    }
+
+    if (resolution.status === 'BLOCKED') {
+      pendingInboundRef.current = null;
+      return;
+    }
+
+    if (!navigationRef.isReady()) {
+      pendingInboundRef.current = candidate;
+      return;
+    }
+
+    const {destination} = resolution;
+    pendingInboundRef.current = null;
+
+    if (currentRouteMatches(destination) || !inboundRouteDedupe.claim(destination)) {
+      return;
+    }
+
+    try {
+      dispatchInboundDestination(destination);
+    } catch {
+      inboundRouteDedupe.release(destination);
+      pendingInboundRef.current = candidate;
+    }
+  }, []);
+
+  const flushPendingInboundRoute = React.useCallback(() => {
+    const pending = pendingInboundRef.current;
+    if (pending) {
+      attemptInboundRoute(pending);
+    }
+  }, [attemptInboundRoute]);
+
+  React.useEffect(() => {
+    flushPendingInboundRoute();
+  }, [auth.bootstrapStatus, auth.accountResolution, flushPendingInboundRoute]);
+
+  React.useEffect(() => {
+    let active = true;
+
+    const handleUrl = (url: string) => {
+      const candidate = parseInboundUrl(url);
+      if (candidate) {
+        attemptInboundRoute(candidate);
+      }
+    };
+
+    Linking.getInitialURL()
+      .then(url => {
+        if (active && url) {
+          handleUrl(url);
+        }
+      })
+      .catch(() => undefined);
+
+    const subscription = Linking.addEventListener('url', event => handleUrl(event.url));
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [attemptInboundRoute]);
 
   if (status === 'idle' || status === 'restoring') {
     return <SplashScreen />;
@@ -126,7 +340,10 @@ export function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={flushPendingInboundRoute}
+      onStateChange={flushPendingInboundRoute}>
       {auth.bootstrapStatus === 'authenticated' ? (
         <AuthenticatedNavigator resolution={auth.accountResolution} />
       ) : (

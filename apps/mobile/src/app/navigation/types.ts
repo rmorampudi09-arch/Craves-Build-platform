@@ -120,13 +120,14 @@ export type CustomerOrdersStackParamList = {
   CustomerCartStackParamList &
   CustomerPaymentMethodsStackParamList;
 
-/** P66 adds the shared My Addresses destination after P65 Edit Profile. */
+/** P74 adds the customer Settings active/empty-cart destination. */
 export type CustomerProfileStackParamList = {
   CustomerProfileRoot: undefined;
   CustomerProfileEdit: undefined;
   CustomerAddresses: undefined;
   CustomerFavorites: undefined;
   CustomerNotifications: undefined;
+  CustomerSettings: undefined;
 } & CustomerDishDetailStackParamList &
   CustomerOrderDetailStackParamList &
   CustomerCartStackParamList &

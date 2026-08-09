@@ -139,13 +139,18 @@ export type ChefOrdersStackParamList = {
   ChefOrdersCompleted: undefined;
 };
 
+/** P98 registers only the Chef profile root. P99+ child forms remain unregistered. */
+export type ChefProfileStackParamList = {
+  ChefProfileHome: undefined;
+};
+
 /** P80 establishes Chef product ownership without pre-implementing later Chef surfaces. */
 export type ChefTabParamList = {
   Dashboard: undefined;
   Orders: NavigatorScreenParams<ChefOrdersStackParamList> | undefined;
   Menu: undefined;
   Analytics: undefined;
-  Profile: undefined;
+  Profile: NavigatorScreenParams<ChefProfileStackParamList> | undefined;
 };
 
 export type ChefOrderDetailRouteParams = {orderId: string};
@@ -163,6 +168,7 @@ export type ChefProductStackParamList = {
 
 export type ChefTabRouteName = keyof ChefTabParamList;
 export type ChefOrdersStackRouteName = keyof ChefOrdersStackParamList;
+export type ChefProfileStackRouteName = keyof ChefProfileStackParamList;
 export type ChefProductStackRouteName = keyof ChefProductStackParamList;
 
 export type CustomerDomainParamList = CustomerAccountStackParamList & CustomerTabParamList;
@@ -170,6 +176,7 @@ export type ChefDomainParamList =
   ChefAccountStackParamList &
   ChefTabParamList &
   ChefOrdersStackParamList &
+  ChefProfileStackParamList &
   ChefProductStackParamList;
 export type TransactionalStackParamList = CustomerCartStackParamList & CustomerPaymentMethodsStackParamList;
 
@@ -188,4 +195,5 @@ export type RegisteredRouteName =
   | CustomerStackRouteName
   | ChefTabRouteName
   | ChefOrdersStackRouteName
+  | ChefProfileStackRouteName
   | ChefProductStackRouteName;

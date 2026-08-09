@@ -40,20 +40,23 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 - **P77 — Help and Support — Active Cart: PARTIAL.** Screen 36 now reuses the P76 Help & Support composition through one typed route wrapper that reads canonical cart selectors, applies the existing customer route policy, renders the shared Espresso Brown View Cart with live item count/subtotal, opens the existing CustomerCart route, preserves cart state, adds active-cart content clearance, and returns immediately to the empty state at zero items. Exact support configuration/content/availability/chat/ticket contracts remain absent and runtime Android comparison against the Screen 36 reference remains outstanding.
 - **P78 — Customer Empty/Search/Offline/No-Data System: PARTIAL.** One configurable eight-state model/component plus small context adapters is implemented. Live authoritative Cart, Orders, Home Search/Offline, and Saved Addresses surfaces now use it where their data contracts permit. Exact search query preservation, conditional recovery actions, reduced-motion-aware state animation, the no-loop `OFFLINE -> ONLINE` recovery edge, and canonical zero-item View Cart suppression are covered. Live approved connectivity event sourcing, runtime Guide Ref 37 Android comparison, and contract-blocked Favorites/Reviews/Coupons host activation remain outstanding.
 - **P79 — Customer Cross-Screen Reconciliation Audit: PARTIAL.** Existing contract-backed cart, notification, profile, order, search/query/scroll and navigation ownership was audited. The concrete stale saved-address/location path is fixed: authoritative address mutations now reconcile the canonical address cache and selected global location, and location changes invalidate both Home and Nearby-Chef discovery queries. Favorites, rewards/profile aggregate order counters, offers/reviews, and address-aware delivery quote/reprice remain unavailable exact-contract boundaries.
+- **P80 — Chef Root Shell and Role Isolation: DONE at authorized code/CI scope.** Approved Chef accounts now enter a separate typed five-tab product shell with Dashboard, Orders, Menu, Analytics, and Profile. Customer-private React Query data and customer-only Redux state are cleared before the Chef shell becomes usable, the shell fails closed if isolation fails, and no customer View Cart/cart tab/cart icon/reserved cart UI is registered in the Chef domain. P81+ Chef operational screens/data remain intentionally unimplemented.
 
-**Current executed phase:** **P79 — Customer Cross-Screen Reconciliation Audit — PARTIAL at exact contract-backed scope**.
+**Current executed phase:** **P80 — Chef Root Shell and Role Isolation — DONE at authorized code/CI scope**.
 
-**P79 validated mobile code head:** `bbaa6c185863a72bff4733be832eda50f107afa9`.
+**P80 start commit:** `28d57054a5c3a4d2e04398a8a3662f2e8d19fcc1`.
 
-**P79 CI:** workflow run `31300386960`, job `93212116865` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+**P80 validated mobile code head:** `92925304027e52884eca8efedf83a7090ec12d3d`.
 
-**P79 evidence:** `docs/mobile-ui-rebuild/P79_CUSTOMER_CROSS_SCREEN_RECONCILIATION_AUDIT.md`.
+**P80 CI:** workflow run `31301169438`, job `93214080252` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 
-**Next phase in sequence:** **P80 — Chef Root Shell and Role Isolation — NOT STARTED**.
+**P80 evidence:** `docs/mobile-ui-rebuild/P80_CHEF_ROOT_SHELL_ROLE_ISOLATION.md`.
+
+**Next phase in sequence:** **P81 — Chef Shared Header/Badge/Operational Counters — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P79. Do not pre-implement P80 without explicit user direction.
+**Required action:** Stop after P80. Do not pre-implement P81 without explicit user direction.
 
 ---
 
@@ -84,7 +87,8 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 | P77 | **PARTIAL** | `docs/mobile-ui-rebuild/P77_HELP_SUPPORT_ACTIVE_CART.md`; validated mobile head `4d4d07208339d3b43cfc2c5d48acfbd495d6a022` | `31288996661` / `93182864111` — SUCCESS |
 | P78 | **PARTIAL** | `docs/mobile-ui-rebuild/P78_CUSTOMER_EMPTY_SEARCH_OFFLINE_NO_DATA_SYSTEM.md`; validated mobile code head `3e3a1c9926c449473fc8bf96a64c731c2b7db025` | `31299091228` / `93208855335` — SUCCESS |
 | P79 | **PARTIAL** | `docs/mobile-ui-rebuild/P79_CUSTOMER_CROSS_SCREEN_RECONCILIATION_AUDIT.md`; validated mobile code head `bbaa6c185863a72bff4733be832eda50f107afa9` | `31300386960` / `93212116865` — SUCCESS |
-| P80 onward | **NOT STARTED / not accepted** | — | — |
+| P80 | **DONE at code/CI scope** | `docs/mobile-ui-rebuild/P80_CHEF_ROOT_SHELL_ROLE_ISOLATION.md`; validated mobile code head `92925304027e52884eca8efedf83a7090ec12d3d` | `31301169438` / `93214080252` — SUCCESS |
+| P81 onward | **NOT STARTED / not accepted** | — | — |
 
 ---
 
@@ -330,7 +334,39 @@ Evidence: `docs/mobile-ui-rebuild/P79_CUSTOMER_CROSS_SCREEN_RECONCILIATION_AUDIT
 
 ---
 
-## 13. Validation State
+## 13. P80 Implemented Boundary
+
+**Phase:** Chef Root Shell and Role Isolation.
+
+P80 establishes the Chef product root only; it does not pre-implement later Chef feature screens.
+
+Implemented at the mobile boundary:
+
+- authenticated approved `flow: CHEF` accounts enter a separate `ChefRootNavigator`, while `CHEF_ONBOARDING` continues to use the existing registration/account-status flow;
+- a typed independent Chef navigation domain exposes exactly Dashboard, Orders, Menu, Analytics, and Profile in the approved order;
+- the Chef shell uses its own bottom-tab surface, not `CustomerBottomTabBar` or customer bottom-navigation visibility state;
+- no customer View Cart overlay, cart route, cart icon, or reserved cart space exists in the Chef tab contract;
+- active Chef tabs use Flame Red, inactive tabs use the established muted token, and tab stacks preserve their local state across tab changes;
+- a semantic Analytics icon was added to the existing shared icon component;
+- the five tab destinations remain structural P80 route boundaries only, leaving dashboard/order/menu/analytics/profile product content for their later authorized phases.
+
+Role isolation before the Chef shell becomes usable:
+
+- role-scoped customer-private React Query entries are cancelled and removed through the existing private-query cache helper;
+- customer browsing location, discovery filters, discovery search/query/scroll state, selected primary payment method, and the customer cart domain are reset through their existing Redux actions;
+- local customer Redux cleanup runs even if private-query cleanup rejects;
+- `ChefRootNavigator` fails closed and exposes a retry boundary instead of rendering the five-tab shell if isolation does not resolve successfully.
+
+P80 introduces no backend/APIM/database changes and no duplicate auth, store, or query infrastructure.
+
+**P80 validated mobile code head:** `92925304027e52884eca8efedf83a7090ec12d3d`.  
+**P80 CI:** `31301169438` / `93214080252` — SUCCESS.
+
+Evidence: `docs/mobile-ui-rebuild/P80_CHEF_ROOT_SHELL_ROLE_ISOLATION.md`.
+
+---
+
+## 14. Validation State
 
 Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
@@ -342,25 +378,26 @@ Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 - P77 validated mobile head `4d4d07208339d3b43cfc2c5d48acfbd495d6a022` passed run `31288996661`, job `93182864111`.
 - P78 validated mobile code head `3e3a1c9926c449473fc8bf96a64c731c2b7db025` passed run `31299091228`, job `93208855335`.
 - P79 validated mobile code head `bbaa6c185863a72bff4733be832eda50f107afa9` passed run `31300386960`, job `93212116865`.
-- For the P79 run, dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+- P80 validated mobile code head `92925304027e52884eca8efedf83a7090ec12d3d` passed run `31301169438`, job `93214080252`.
+- For the P80 run, dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 - No Gradle/APK packaging was performed, consistent with implementation-phase policy.
 - Physical Android/reference-image certification remains a later visual-QA gate; no pixel-perfect certification is claimed from source/CI alone.
 
 ---
 
-## 14. Handoff
+## 15. Handoff
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current executed phase: P79 — Customer Cross-Screen Reconciliation Audit — PARTIAL at exact contract-backed scope
-P79 validated mobile code head: bbaa6c185863a72bff4733be832eda50f107afa9
-P79 evidence: docs/mobile-ui-rebuild/P79_CUSTOMER_CROSS_SCREEN_RECONCILIATION_AUDIT.md
-P79 CI: run 31300386960 / job 93212116865 — SUCCESS
-P79 implemented: audited canonical customer cart/location/notification/profile/order/search/restoration ownership; centralized Home + Nearby-Chef location invalidation; immediate authoritative address-cache reconciliation; selected-address edit/delete reconciliation into global location state; focused tests
-P79 no-fabrication boundary: Favorites, Rewards, aggregate profile order counters, offers/reviews, and address-aware delivery quote/reprice remain blocked by missing approved contracts
+Current executed phase: P80 — Chef Root Shell and Role Isolation — DONE at authorized code/CI scope
+P80 start commit: 28d57054a5c3a4d2e04398a8a3662f2e8d19fcc1
+P80 validated mobile code head: 92925304027e52884eca8efedf83a7090ec12d3d
+P80 evidence: docs/mobile-ui-rebuild/P80_CHEF_ROOT_SHELL_ROLE_ISOLATION.md
+P80 CI: run 31301169438 / job 93214080252 — SUCCESS
+P80 implemented: separate typed Chef root shell with Dashboard / Orders / Menu / Analytics / Profile; approved Chef routing; independent bottom-tab surface; customer-private React Query cleanup; customer-only Redux reset; fail-closed retry boundary; focused no-cart/isolation tests
+P80 no-fabrication boundary: tab destinations are structural shell boundaries only; Chef shared header/counters, dashboard data, orders, menu management, analytics, profile, notifications, payouts/subscriptions, and other P81+ functionality remain unimplemented
 Backend/APIM/infrastructure: unchanged
-Chef/P80 source: untouched
 Inherited blockers: retain all earlier phase blockers not explicitly superseded
-Next phase: P80 — Chef Root Shell and Role Isolation — NOT STARTED
-Next phase authorization: NONE AUTHORIZED — stop after P79
+Next phase: P81 — Chef Shared Header/Badge/Operational Counters — NOT STARTED
+Next phase authorization: NONE AUTHORIZED — stop after P80
 ```

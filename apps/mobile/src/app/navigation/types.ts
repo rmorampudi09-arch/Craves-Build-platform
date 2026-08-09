@@ -139,9 +139,10 @@ export type ChefOrdersStackParamList = {
   ChefOrdersCompleted: undefined;
 };
 
-/** P98 registers only the Chef profile root. P99+ child forms remain unregistered. */
+/** P100 registers the focused Chef Edit Profile child route from Guide Reference 48. */
 export type ChefProfileStackParamList = {
   ChefProfileHome: undefined;
+  ChefEditProfile: undefined;
 };
 
 /** P80 establishes Chef product ownership without pre-implementing later Chef surfaces. */

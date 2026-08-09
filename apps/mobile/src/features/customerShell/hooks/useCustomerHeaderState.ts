@@ -4,9 +4,9 @@ import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import type {CustomerTabParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
-import {invalidateCustomerHomeFeedQueries} from '../../home/query/homeFeedQueries';
 import {useCustomerNotificationsListQuery} from '../../notifications/query/customerNotificationQueries';
 import {customerShellApi, unreadNoticeCount} from '../api/customerShellApi';
+import {invalidateCustomerLocationDependentQueries} from '../query/customerLocationReconciliation';
 import {
   customerShellActions,
   type CustomerBrowsingLocation,
@@ -81,7 +81,7 @@ export function useCustomerLocationOptions() {
     dispatch(customerShellActions.locationSelected(location));
 
     if (changed) {
-      invalidateCustomerHomeFeedQueries(queryClient);
+      invalidateCustomerLocationDependentQueries(queryClient);
     }
   };
 

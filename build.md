@@ -29,81 +29,87 @@
 - **P88 — Chef Orders — New:** PARTIAL at full Guide completion scope; implemented to the exact currently available mobile/backend contract boundary. Evidence: `docs/mobile-ui-rebuild/P88_CHEF_ORDERS_NEW.md`.
 - **P89 — Chef Ready for Pickup:** PARTIAL at full Guide completion scope; Ready UI/read/revalidation/reconciliation and cross-tab Ready entry are implemented to the exact current Chef/backend boundary. Evidence: `docs/mobile-ui-rebuild/P89_CHEF_READY_FOR_PICKUP.md`.
 - **P90 — Chef Completed Orders:** PARTIAL at full Guide completion scope; bounded read-only Completed history/detail and all-tab Completed entry are implemented to the exact current Chef/backend boundary. Evidence: `docs/mobile-ui-rebuild/P90_CHEF_COMPLETED_ORDERS.md`.
+- **P91 — Chef Realtime/Near-Realtime Order Event Reconciliation:** DONE at authorized code scope; near-real-time refetch/reconciliation is implemented through the existing exact Chef orders contract without inventing a push transport. Evidence: `docs/mobile-ui-rebuild/P91_CHEF_REALTIME_ORDER_RECONCILIATION.md`. GitHub Actions validation is not claimed because the account's monthly Actions capacity is exhausted.
 
-**Current executed phase:** **P90 — Chef Completed Orders**.
+**Current executed phase:** **P91 — Chef Realtime/Near-Realtime Order Event Reconciliation**.
 
-**P90 phase start commit:** `a3e29b687f80dc14cd5a45f07652e7854108c094`  
-**P90 implementation/code end:** `ab10161d36d64f692e7708744be6705fc9442979`  
-**P90 evidence commit:** `d080b627697701afb4ce0ea3e7745f28a04f2c9e`
+**P91 phase start commit:** `88ef519bf6da4d3ab33d935dc658a285b6262cde`  
+**P91 implementation/code end:** `024a01902e443fb3bed8018f843d4b563499b3ef`  
+**P91 evidence commit:** `cd725a1225806ff03d34ca9f40a213264712e0b7`
 
-### P90 implemented boundary
+### P91 implemented boundary
 
-- Registered typed logical route `ChefOrdersCompleted` in the existing nested Chef Orders navigator.
-- Reused the P86 shared Chef order ownership where backend `DELIVERED` maps to the `COMPLETED` tab. No second lifecycle model/store was created.
-- Added a dedicated virtualized Completed screen with completed count, delivered-order cards, server-update age, item/address summaries, read-only labeling, order-detail navigation, pull refresh, bounded paging, skeleton, empty/error/retry states, and independent Completed scroll preservation.
-- `View Details` is the only order-level Completed action. No Accept, Reject, Mark Ready, pickup, or other active-order mutation is exposed on completed cards.
-- New, Preparing, and Ready now expose Completed as an enabled destination. Each transition preserves the source scroll position, updates the shared selected status, and navigates through `ChefOrdersCompleted`.
-- Completed can navigate back to New, Preparing, and Ready through the same status strip.
-- Completed timing copy uses only server `updatedAt` and explicitly labels it as server update age. No delivery time is inferred because the current list contract exposes no dedicated `deliveredAt`.
-- Reports, Insights, date filtering, and post-delivery calling stay hidden rather than becoming fake/no-op controls while their exact contracts are absent.
-- Chef bottom navigation/header remain intact and no customer cart state was introduced.
+- Preserved `ChefOperationalProvider` as the single shared owner of Chef operational orders, Dashboard/order counters, New/Preparing/Ready/Completed projections, and server-derived preparation timers.
+- Reused the exact existing `GET /api/v1/chef/orders` read path; no second API client, query client, store, lifecycle model, WebSocket/SSE/socket.io/FCM event channel, or backend route was created.
+- Added a 30-second automatic order refresh cadence only while an authenticated Chef session is active and the React Native app is in the foreground.
+- Automatic refresh stops while signed out or backgrounded. Leaving the foreground cancels the exact active orders query; returning to the foreground immediately invalidates/revalidates that query.
+- Read failures exponentially back off from the 30-second baseline and cap at five minutes, preventing an aggressive fixed-frequency failure loop.
+- Existing manual/pull refresh remains unchanged.
+- Added timestamp-aware bounded-snapshot reconciliation before fetched orders replace cache state.
+- Incoming rows older than a newer cached `updatedAt` cannot regress lifecycle state after a mutation or overlapping request.
+- Duplicate incoming IDs collapse to the newest timestamped representation.
+- Conflicting equal-timestamp or timestamp-less status rows fail closed to the current cached lifecycle rather than guessing order progression.
+- Genuinely newer rows and new order IDs are accepted normally.
+- Rows absent from the incoming authoritative bounded snapshot are removed so the client does not accumulate an unbounded synthetic history.
+- Because tab counts and Dashboard operational counters continue deriving from the same reconciled snapshot, lifecycle moves update the existing shared surfaces through one ownership path rather than per-screen copies.
 
-### P90 exact contracts / authority review
+### P91 exact contract / authority review
 
-Chef order contracts available on the branch:
+Exact read contract used:
 
 - `GET /api/v1/chef/orders`
-- `GET /api/v1/chef/orders/{orderId}`
-- `POST /api/v1/chef/orders/{orderId}/accept`
-- `POST /api/v1/chef/orders/{orderId}/reject`
-- `POST /api/v1/chef/orders/{orderId}/ready-for-pickup`
 
-For P90 specifically, the existing list contract supplies `DELIVERED` lifecycle rows and the existing detail contract supplies authoritative order detail.
+The current mobile/backend surface inspected for P91 exposes no approved Chef WebSocket topic, SSE endpoint, socket.io/Pusher transport, or Firebase Messaging event-subscription contract for order lifecycle events. The phase definition explicitly allows a project-supported event/**refetch** mechanism, so P91 uses the existing typed query/refetch path instead of fabricating a realtime protocol.
 
-The Chef controller exposes **no** Completed-only endpoint, status/date query parameters, page/cursor contract, dedicated `deliveredAt`, completion-report/metrics endpoint, or post-delivery contact authorization/privacy-window signal.
+No backend, APIM, OpenAPI, infrastructure, controller, or server-pipeline source was changed.
 
-### P90 changed code files
+### P91 changed code files
 
-- `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
-- `apps/mobile/src/app/navigation/types.ts`
-- `apps/mobile/src/features/chefOrders/domain/chefCompletedOrders.ts`
-- `apps/mobile/src/features/chefOrders/domain/chefCompletedOrders.test.ts`
-- `apps/mobile/src/features/chefOrders/screens/ChefCompletedOrdersScreen.tsx`
-- `apps/mobile/src/features/chefOrders/screens/ChefNewOrdersScreen.tsx`
-- `apps/mobile/src/features/chefOrders/screens/ChefPreparingOrdersScreen.tsx`
-- `apps/mobile/src/features/chefOrders/screens/ChefReadyOrdersScreen.tsx`
+- `apps/mobile/src/features/chefOrders/domain/chefOrderEventReconciliation.ts`
+- `apps/mobile/src/features/chefOrders/domain/chefOrderEventReconciliation.test.ts`
+- `apps/mobile/src/features/chefShell/state/ChefOperationalProvider.tsx`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P90_CHEF_COMPLETED_ORDERS.md`
+- `docs/mobile-ui-rebuild/P91_CHEF_REALTIME_ORDER_RECONCILIATION.md`
 - `build.md`
 
-### P90 validation / guard state
+### P91 focused test source
 
-- Phase-start → code-end compare is exactly one commit ahead and contains only the eight `apps/mobile` paths listed above.
-- No `services/`, `openapi/`, `infra/`, or `apps/api/` source changed during P90 implementation.
-- Existing P86 test source verifies `DELIVERED` → `COMPLETED` tab mapping/counting plus independent Completed page/scroll state.
-- P90 adds focused test source for honest completed server-update timestamp age, including malformed/missing values and future clock skew.
-- GitHub Actions validation is not claimed for P90. The repository's monthly GitHub Actions capacity is exhausted, and the user explicitly authorized continuing development without Actions for now.
-- Therefore repository `npm ci`, TypeScript, ESLint, Jest, Android bundle, and backend-guard commands are **not recorded as passing or failing for P90**.
-- The current connector environment does not provide an executable private-workspace checkout for project-wide local Android/runtime validation, so local repository certification is not claimed.
+`chefOrderEventReconciliation.test.ts` covers:
 
-### P90 full-Guide blockers retained instead of fabricated
+- no automatic refresh while signed out/backgrounded;
+- foreground baseline cadence;
+- bounded exponential failure backoff;
+- rejection of older lifecycle snapshots;
+- acceptance of newer lifecycle snapshots;
+- duplicate incoming-order collapse;
+- fail-closed equal/missing timestamp conflicts;
+- insertion of new orders and removal of rows missing from the authoritative bounded snapshot.
 
-1. **True server Completed paging/filtering:** `GET /api/v1/chef/orders` remains a bounded feed without Completed/status/date/page/cursor parameters.
-2. **Authoritative delivered timestamp/date range:** list rows expose `updatedAt`, not `deliveredAt`; delivery-date filtering/exact delivery timestamps are not guessed.
-3. **Completion reports/metrics:** no exact completion-report or metrics contract is exposed.
-4. **Insights/Analytics parity:** authoritative completion metrics required by the Guide are unavailable and broader Chef Analytics remains outside P90.
-5. **Post-delivery contact privacy window:** no exact Chef authorization/privacy-window signal exists for after-delivery customer calling, so Completed adds no call action.
-6. **Item thumbnails/media:** the Chef list projection contains item identity/name/quantity but no authoritative item-media field.
-7. **Reference Image 43 visual certification:** Guide text is readable, but the embedded image is not independently renderable through current repository/file tooling; pixel-level certification is not claimed.
-8. **Android/device certification and repository CI:** monthly GitHub Actions capacity is exhausted and no emulator/device validation occurred in this phase.
+### P91 validation / guard state
 
-**Next phase in sequence:** **P91 — Chef Realtime Order Reconciliation — NOT STARTED**.
+- Phase-start → code-end compare is exactly one commit ahead and contains exactly the three `apps/mobile` paths listed above.
+- No `services/`, `openapi/`, `infra/`, `apps/api/`, backend/APIM, or server pipeline source changed in the P91 implementation commit.
+- No new package/dependency was added for sockets, push messaging, or another realtime stack.
+- Focused Jest test **source** was added and reviewed, but test execution is not claimed.
+- The user explicitly reported that the account's monthly GitHub Actions limit is exhausted and authorized continuing without Actions. GitHub Actions was therefore not treated as a phase pass/fail signal.
+- Repository `npm ci`, TypeScript, ESLint, Jest execution, Android JavaScript bundle generation, and backend guard commands are **not recorded as passing or failing for P91**.
+- The current connector environment does not expose an executable private-workspace checkout/emulator, so local repository/device certification is not claimed.
+
+### P91 retained boundary instead of fabricated behavior
+
+1. **No true server-push event transport:** the exact current repository surface does not expose an approved Chef WebSocket/SSE/FCM order-event subscription contract. P91 therefore implements near-real-time bounded refetch/reconciliation only.
+2. **Existing newest-100 list ceiling remains:** `GET /api/v1/chef/orders` still owns the bounded server snapshot and does not become a history/event stream in this phase.
+3. **No invented event payload ordering/version:** reconciliation uses the existing authoritative `updatedAt` field. Equal/missing ordering metadata with conflicting statuses fails closed rather than inferring lifecycle progression.
+4. **No background polling:** app-background order polling is intentionally disabled; foreground resume revalidates immediately.
+5. **CI/device certification:** GitHub Actions capacity is exhausted and no emulator/device execution occurred in this phase.
+
+**Next phase in sequence:** **P92 — Chef Menu Contract Model — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P90. Do not pre-implement P91 without explicit user direction.
+**Required action:** Stop after P91. Do not pre-implement P92 without explicit user direction.
 
 ---
 
@@ -122,10 +128,11 @@ Evidence/ledger:
 | P88 | PARTIAL at full Guide scope; exact current contract boundary implemented | `docs/mobile-ui-rebuild/P88_CHEF_ORDERS_NEW.md` |
 | P89 | PARTIAL at full Guide scope; Ready UI/revalidation/cross-tab entry boundary implemented | `docs/mobile-ui-rebuild/P89_CHEF_READY_FOR_PICKUP.md` |
 | P90 | PARTIAL at full Guide scope; bounded read-only Completed history/detail boundary implemented | `docs/mobile-ui-rebuild/P90_CHEF_COMPLETED_ORDERS.md` |
-| P91 onward | NOT STARTED / not accepted | — |
+| P91 | DONE at authorized code scope; near-real-time refetch/reconciliation implemented; Actions not claimed | `docs/mobile-ui-rebuild/P91_CHEF_REALTIME_ORDER_RECONCILIATION.md` |
+| P92 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P91 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, and P86–P90 evidence. Preserve the shared Chef order query/tab/reconciliation ownership. Do not add backend/APIM changes or pre-implement realtime reconciliation without separate authorization.
+Before any P92 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, and the recent Chef evidence including P86–P91. Preserve the shared Chef operational/query ownership established through P81/P86/P91. Do not add backend/APIM changes or begin Chef Menu work without separate authorization.

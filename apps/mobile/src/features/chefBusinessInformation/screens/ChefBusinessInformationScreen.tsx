@@ -266,6 +266,18 @@ function SourceUnavailable({
   );
 }
 
+function SourceLoading({label}: {label: string}) {
+  return (
+    <View
+      accessibilityLabel={label}
+      accessibilityRole="progressbar"
+      style={styles.sourceLoadingCard}>
+      <ActivityIndicator color={colors.flameRed} size="small" />
+      <Text style={styles.sourceLoadingText}>{label}</Text>
+    </View>
+  );
+}
+
 export function ChefBusinessInformationScreen() {
   const navigation = useNavigation<BusinessNavigation>();
   const model = useChefBusinessInformationModel();
@@ -383,6 +395,8 @@ export function ChefBusinessInformationScreen() {
                   </View>
                 );
               })()
+            ) : model.verificationStatus === 'pending' ? (
+              <SourceLoading label="Loading verification status…" />
             ) : (
               <SourceUnavailable
                 title="Verification status unavailable"
@@ -465,6 +479,14 @@ export function ChefBusinessInformationScreen() {
                       </Text>
                     </View>
                   )
+                ) : model.verificationStatus === 'pending' ? (
+                  <View style={styles.emptyDocuments}>
+                    <ActivityIndicator color={colors.flameRed} size="small" />
+                    <Text style={styles.emptyDocumentsTitle}>Loading document list…</Text>
+                    <Text style={styles.emptyDocumentsText}>
+                      Craves is waiting for the current verification record before showing proof metadata.
+                    </Text>
+                  </View>
                 ) : (
                   <View style={styles.emptyDocuments}>
                     <Text style={styles.emptyDocumentsTitle}>Document list unavailable</Text>
@@ -531,6 +553,8 @@ export function ChefBusinessInformationScreen() {
                       }
                     />
                   </>
+                ) : model.kitchenStatus === 'pending' ? (
+                  <SourceLoading label="Loading kitchen details…" />
                 ) : (
                   <SourceUnavailable
                     title="Kitchen details unavailable"
@@ -670,7 +694,9 @@ const styles = StyleSheet.create({
   },
   overviewCard: {
     borderRadius: radius.lg,
-    backgroundColor: colors.espressoBrown,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceWarmStrong,
     padding: spacing.md,
   },
   sectionHeader: {gap: spacing.xxs},
@@ -882,6 +908,22 @@ const styles = StyleSheet.create({
     color: colors.flameRed,
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
+  },
+  sourceLoadingCard: {
+    minHeight: 92,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    padding: spacing.md,
+  },
+  sourceLoadingText: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
   },
   guidanceCard: {
     borderRadius: radius.lg,

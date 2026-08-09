@@ -3,7 +3,7 @@
 **Status:** PARTIAL at full Guide/product-contract scope; exact current mobile/backend/APIM boundary implemented  
 **Guide refs:** 44 — Chef Menu; 45 — Chef Add New Menu Item  
 **Phase start commit:** `ec78b211fb52cc46b66200de012195c446c90ed7`  
-**Implementation/code end:** `da396494a0d1d776d4869891a8a28e14596514a0`  
+**Final implementation/code end:** `2b59e2c96e8835562b34a1ebf83b5c275b50ea1e`  
 **GitHub Actions:** not claimed; the user reported the account's monthly Actions capacity is exhausted and explicitly authorized continuing without treating Actions as a blocker.
 
 ## Implemented boundary
@@ -16,12 +16,14 @@ P92 establishes one canonical mobile contract for the exact Chef Menu surface th
   - spice level: `MILD | MEDIUM | SPICY`.
 - Added the full current `MenuItemResponse` projection, including `kitchenId` and complete image ownership/storage metadata that the earlier Dashboard-only projection did not retain.
 - Added the exact `MenuItemRequest` and `AvailabilityRequest` mobile request shapes.
-- Added strict fail-closed parsers for menu items, image records, UUID identity, timestamps, booleans, integer delivery metadata, price minimum, and server enum values.
+- Added strict fail-closed parsers for menu items, image records, UUID identity, timestamps, booleans, numeric price, integer delivery/media metadata, image ownership, and server enum values.
+- Unknown-response parsing does not coerce numeric strings into numbers; mismatched image-to-item ownership is rejected.
 - Matched the backend request validation primitives that are explicit in `ApiDtos.MenuItemRequest`: required name/category/food type/price/package weight/thermobox flag, positive serving/preparation integers when supplied, and price minimum `0.01`.
+- Exposed the exact create/replace server defaults for later UI/domain consumers: currency `INR`, availability `false`, and status `DRAFT` when the corresponding optional values are omitted/null/blank according to the service behavior.
 - Added the exact currently allowed backend menu-image MIME types: JPEG, PNG, and WebP.
 - Added exact wrappers over the existing shared `httpClient` for all five currently approved Chef Menu routes. No second transport client or hard-coded API base URL was introduced.
 - Image upload passes the multipart `file` body and the exact `primary` request parameter without manually setting a multipart boundary.
-- Added explicit typed contract-gap metadata for Guide capabilities that are not backed by an approved endpoint/semantics today, instead of fabricating routes or states.
+- Added typed `BACKEND_CONTRACT_UNAVAILABLE` capability records for Guide behavior that is not backed by an approved endpoint/semantics today, instead of fabricating routes or states.
 - Removed the duplicate Dashboard-owned menu transport model. P82 Dashboard keeps compatibility aliases but now delegates menu parsing and list reads to the P92 canonical Chef Menu contract.
 
 ## Exact current Chef Menu routes
@@ -56,8 +58,8 @@ The Master Guide asks for broader Chef Menu behavior than the current five-route
 6. **Incomplete draft saving:** `MenuItemRequest` still requires core fields even when `status=DRAFT`; there is no separate partial-draft contract that permits the Guide's incomplete draft behavior.
 7. **Duplicate/name checks:** no validation/name-check endpoint exists.
 8. **Media management beyond upload:** no image delete, reorder, or post-upload set-primary route exists.
-9. **Explicit catalog synchronization mutation:** customer visibility is derived from the shared persisted menu state; there is no separate sync route.
-10. **Configured media size discovery:** backend maximum image size is runtime configuration and no client-readable capability endpoint exposes it.
+9. **Explicit catalog publication/synchronization acknowledgement:** customer visibility is derived from shared persisted menu state; there is no separate sync/acknowledgement route.
+10. **Configured media size/count discovery:** backend maximum image size is runtime configuration and no client-readable capability contract exposes it or a configured image-count limit.
 
 ## Changed code files
 
@@ -66,24 +68,29 @@ The Master Guide asks for broader Chef Menu behavior than the current five-route
 - `apps/mobile/src/features/chefDashboard/api/chefDashboardApi.ts` — narrow deduplication/refactor to reuse the canonical P92 model.
 - `apps/mobile/src/features/chefDashboard/api/chefDashboardApi.test.ts` — fixture updated to the complete canonical server response shape.
 
+Evidence/ledger paths:
+
+- `docs/mobile-ui-rebuild/P92_CHEF_MENU_CONTRACT_MODEL.md`
+- `build.md`
+
 ## Focused test source added/updated
 
 The P92 test source covers:
 
 - exhaustive status/food/spice enum values;
-- exact backend image MIME types and multipart field name;
-- complete item/image response parsing;
-- fail-closed unsupported enum and malformed primitive handling;
+- exact backend image MIME types, multipart field name, and service defaults;
+- complete item/image response parsing and image ownership;
+- fail-closed unsupported enum, malformed primitive, timestamp, boolean, and numeric-string handling;
 - exact `0.01` request price minimum and positive integer delivery metadata;
 - exact list/create/PUT replacement/availability/image-upload routes and request shapes;
 - malformed menu-item ID rejection before writes;
-- explicit contract gaps so later UI does not invent visibility/delete/detail/category behavior;
+- typed missing-contract records so later UI does not invent visibility/delete/detail/category/media-policy behavior;
 - P82 Dashboard compatibility against the canonical full response shape.
 
 ## Validation / guard state
 
-- Phase-start → implementation-code-end compare is ahead only within four `apps/mobile` files listed above.
-- No `services/`, `openapi/`, `infra/`, `apps/api/`, APIM, controller, or server-pipeline source changed in P92 implementation.
+- P92 source changes are confined to the four `apps/mobile` files listed above; P92 documentation/ledger changes are confined to this evidence file and `build.md`.
+- No `services/`, `openapi/`, `infra/`, `apps/api/`, APIM, controller, deployment, or server-pipeline source changed in P92.
 - No dependency/package was added.
 - Focused Jest test **source** was added/updated and manually reviewed against the current controller/DTO/service/APIM source.
 - GitHub Actions execution is intentionally not used as a phase pass/fail signal because the user reported the monthly Actions limit is exhausted.

@@ -36,77 +36,81 @@
 - **P95 — Chef Menu Edit/Mutation Hardening:** PARTIAL at full Guide scope; exact current-contract full replacement editing, server-returned cache reconciliation, duplicate-submit guarding, and unsaved-change protection are implemented. Image replacement and structured field-level server binding remain blocked by missing exact contracts/dependencies. Evidence: `docs/mobile-ui-rebuild/P95_CHEF_MENU_EDIT_MUTATION_HARDENING.md`.
 - **P96 — Chef Analytics Contract Model:** PARTIAL at full Guide/product-contract scope; Guide-46 analytics capabilities are modeled fail-closed and the existing Orders/Earnings/Menu reads are classified only as reconciliation sources, not fabricated analytics. Evidence: `docs/mobile-ui-rebuild/P96_CHEF_ANALYTICS_CONTRACT_MODEL.md`.
 - **P97 — Chef Analytics UI:** PARTIAL at full Guide scope; the real Analytics tab structure, KPI/chart/item/report unavailable states, reference-range presentation, and accessibility semantics are implemented at the exact fail-closed P96 analytics boundary. Evidence: `docs/mobile-ui-rebuild/P97_CHEF_ANALYTICS_UI.md`.
+- **P98 — Chef Account Profile:** PARTIAL at full Guide scope; the real `ChefProfileHome` hub, exact kitchen/business-status read, synchronized operational summary, safe role switch/logout, and explicit child-contract blockers are implemented at the exact current mobile/backend boundary. Evidence: `docs/mobile-ui-rebuild/P98_CHEF_ACCOUNT_PROFILE.md`.
 
-**Current executed phase:** **P97 — Chef Analytics UI**.
+**Current executed phase:** **P98 — Chef Account Profile**.
 
-**P97 phase start commit:** `5efa20a775bee8c379eee099027cfb7b301d4c03`  
-**P97 implementation/code end:** `334cf163ff935ee4bbcc192e2679a5b8297a2852`
+**P98 phase start commit:** `d036180e10a014ef3cf6babe7e5511dfbd3e18b8`  
+**P98 implementation/code end:** `4c96b4b5c355b2b601f4289c79c8b63490d01b65`
 
-### P97 implemented boundary
+### P98 implemented boundary
 
-- Re-read Guide Reference 46 and retained the P96 rule that missing analytics business definitions must fail closed rather than be reconstructed from raw operational sources.
-- Replaced the generic Chef Analytics boundary with a real `ChefAnalyticsScreen` on the existing typed `Analytics` tab; no duplicate navigation route/container was introduced.
-- Reused `ChefHeader`, current Chef bottom-tab shell, design tokens, icon component, safe areas, and existing role isolation.
-- Added the six required analytics KPI positions: Earnings, Orders, Items sold, Average order value, New customers, and Rating.
-- KPI values/trends remain `null` in the presentation boundary and render as explicit unavailable states rather than zeroes or estimates.
-- Added reference-only `This week` and `Custom` range chips. They have no backend request values/date bounds/timezone/comparison semantics and remain disabled while the P96 date-range contract is unavailable.
-- Added earnings-series, order-status, top-selling-items, and detailed-report sections with explicit unavailable UI. No fake line points, percentages, rankings, report export, or drill-down route is generated.
-- Disabled report/range controls expose accessibility state and reasons; unavailable KPI/chart/list regions provide meaningful screen-reader summaries.
-- No chart or KPI animation is started while data is unavailable, so the blocked state adds no input-blocking or reduced-motion-hostile motion.
-- The existing Chef tab mounting policy continues to preserve Analytics tab local UI/scroll state across tab changes.
-- Added focused presentation tests proving no numeric zero fallback, trend, range request semantics, series, ranking, comparison, or report availability is manufactured.
-- P98 Chef Account Profile was not started.
+- Re-read Guide Reference 47 / source page 39 and implemented only the Chef Account Profile phase.
+- Replaced the generic Chef Profile placeholder with a real typed `ChefProfileHome` stack root while preserving the existing Chef bottom navigation and shared header/notification surface.
+- Added strict typed parsing and an abortable React Query read for the already-approved `GET /api/v1/kitchens/me` contract; no endpoint URL or response field was invented.
+- Reused authenticated Identity and AccountResolution as the account/approved-Chef sources instead of duplicating auth state.
+- Reused the existing Chef Dashboard/operational model so Profile summary values stay synchronized with active orders, sellable menu items, and unread Chef notifications.
+- Unknown/error metric sources render `—` instead of misleading zeroes; Orders/Menu metrics drill into existing real Chef tabs.
+- Added real kitchen business status for `DRAFT`, `ACTIVE`, `INACTIVE`, and `SUSPENDED`, plus prominent suspended-operation warnings.
+- Added profile/business loading, refresh, retry, error, and contract-unavailable states.
+- Added grouped Business, Settings & support, and Account rows. Rows with real current behavior execute it; missing P99+ routes/contracts show explicit blockers instead of dead taps or fabricated data.
+- Edit Profile remains visibly Chef-specific but blocked because P99 is a separate unauthorized phase; it does not open the customer editor.
+- Added confirmed logout through the existing `completeLogout` coordinator.
+- Added confirmed Chef -> Customer switching only when the signed-in identity owns the Customer role. Chef-private query state is cleared first; isolation failure keeps the user in the Chef root rather than risking cross-role leakage.
+- Added focused kitchen-parser and role-switch/cache-isolation test source.
+- No customer cart/View Cart control appears in the Chef Profile implementation.
+- P99 Chef Edit Profile was not started.
 
-### P97 exact sources / boundaries used
+### P98 exact sources / boundaries used
 
-- `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, Guide Reference 46 / source page 38 / `image46.jpeg` — Analytics visual/behavior specification, including the this-week reference state.
-- `apps/mobile/src/features/chefAnalytics/domain/chefAnalyticsContract.ts` — P96 fail-closed source of truth for unavailable analytics capabilities.
-- `docs/mobile-ui-rebuild/P96_CHEF_ANALYTICS_CONTRACT_MODEL.md` — exact missing-contract audit and source-only reconciliation limitations.
-- `apps/mobile/src/app/navigation/ChefRootNavigator.tsx` / `chefTabs.ts` — existing Chef Analytics tab and state-preserving shell.
-- `apps/mobile/src/features/chefShell/components/ChefHeader.tsx` — existing shared Chef header/menu/notification surface.
-- Existing Chef Orders/Earnings/Menu routes remain reconciliation sources only and are not queried by P97 to derive business analytics.
+- `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, Guide Reference 47 / source page 39 / `image47.jpeg` — Chef account hub requirements and logical route `ChefProfileHome`.
+- `scripts/apim/configure-chef-kitchen-profile-apim.sh` — approved APIM ownership for `api/v1/kitchens/me`.
+- `services/catalog-service/.../KitchenController.java` and `ApiDtos.KitchenProfileResponse` — exact current kitchen-profile response and status semantics.
+- Existing auth `Identity`, `AccountResolution`, `completeLogout`, private query key/cache cleanup, and root account-resolution behavior.
+- Existing `useChefDashboardModel` and Chef operational provider — exact synchronized active-order/menu/notification sources.
+- Existing Chef tab/header/navigation shell and CRAVES design tokens.
 
-### P97 changed code files
+### P98 changed code files
 
-- `apps/mobile/src/features/chefAnalytics/domain/chefAnalyticsPresentation.ts`
-- `apps/mobile/src/features/chefAnalytics/domain/chefAnalyticsPresentation.test.ts`
-- `apps/mobile/src/features/chefAnalytics/screens/ChefAnalyticsScreen.tsx`
+- `apps/mobile/src/app/navigation/types.ts`
 - `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
+- `apps/mobile/src/features/chefProfile/api/chefProfileApi.ts`
+- `apps/mobile/src/features/chefProfile/api/chefProfileApi.test.ts`
+- `apps/mobile/src/features/chefProfile/state/useChefProfileModel.ts`
+- `apps/mobile/src/features/chefProfile/state/chefProfileRoleSwitch.ts`
+- `apps/mobile/src/features/chefProfile/state/chefProfileRoleSwitch.test.ts`
+- `apps/mobile/src/features/chefProfile/screens/ChefProfileScreen.tsx`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P97_CHEF_ANALYTICS_UI.md`
+- `docs/mobile-ui-rebuild/P98_CHEF_ACCOUNT_PROFILE.md`
 - `build.md`
 
-### P97 validation / guard state
+### P98 validation / guard state
 
-- `GitHub.compare_commits` confirms implementation/code end `334cf163ff935ee4bbcc192e2679a5b8297a2852` is six fast-forward commits ahead of the P96 ledger HEAD `5efa20a775bee8c379eee099027cfb7b301d4c03` and changes only the four P97 mobile files listed above.
-- No `services/`, `openapi/`, `infra/`, APIM/backend/controller, deployment, workflow, package/dependency, customer, or P98+ Chef source changed in the implementation diff.
-- Local TypeScript 5.8.3 `transpileModule` parsing emitted zero diagnostics for the P97 presentation source, focused test source, and `ChefAnalyticsScreen.tsx` source.
-- A local strict TypeScript check of the P97 presentation model against the P96 contract shape emitted zero diagnostics.
-- Focused Jest test source exists, but project Jest execution is not claimed from the connector-only repository environment.
-- GitHub Actions are intentionally not used as a P97 pass/fail signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
-- Full workspace dependency install, project TypeScript 6.0.3 strict typecheck, ESLint, Jest execution, Android bundle/build, emulator/device behavior, and pixel-level Screen-46 visual comparison are **not recorded as passing or failing for P97**.
+- `GitHub.compare_commits` confirms code end `4c96b4b5c355b2b601f4289c79c8b63490d01b65` is twelve fast-forward commits ahead of phase-start/P97-ledger HEAD `d036180e10a014ef3cf6babe7e5511dfbd3e18b8` and changes exactly the eight P98 mobile files listed above.
+- No `services/`, `openapi/`, `infra/`, APIM/backend/controller, deployment, workflow, package/dependency, customer, or P99+ Chef source changed in the implementation diff.
+- Exact backend/APIM source was inspected before the mobile kitchen-profile path/model was added.
+- Focused tests were added for strict kitchen profile parsing and Chef-private cache isolation during role switching.
+- GitHub Actions are intentionally not used as a P98 pass/fail signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
+- Project dependency install, project TypeScript 6.0.3 strict typecheck, ESLint, Jest execution, Android bundle/build, emulator/device behavior, and pixel-level Screen-47 visual comparison are **not recorded as passing or failing for P98** from this connector-only implementation run.
 
-### P97 retained blockers instead of fabricated analytics
+### P98 retained blockers instead of fabricated profile/business data
 
-1. No approved Chef analytics aggregate/KPI endpoint or authoritative KPI formulas.
-2. No approved preset/custom date-range request semantics, timezone contract, range validation, or comparison logic.
-3. No backend-defined earnings time-series/bucket contract.
-4. No authoritative date-ranged order-status metrics aggregate.
-5. No item-performance/top-items contract or ranking semantics.
-6. No new/returning-customer analytics contract.
-7. No Chef rating/review analytics contract.
-8. No prior-period comparison/delta/trend contract.
-9. No report-detail/export analytics endpoint.
-10. Because there is no analytics request path, range-change cancellation/deduplication cannot be truthfully exercised; controls remain disabled instead.
-11. Because there is no authoritative analytics series/value set, populated chart/KPI animation cannot be truthfully exercised; the blocked state intentionally has no chart/KPI animation.
+1. No approved standalone Chef/business verification-status read contract was found; approved Chef access is shown separately and is not mislabeled as business verification.
+2. No approved Chef-facing subscription-summary route/model was found.
+3. Existing earnings data does not define payout history/destination/eligibility/initiation for the dedicated Payout experience.
+4. P99 Chef Edit Profile is a separate phase and remains unregistered/unimplemented.
+5. Chef Business Information editing is a later dedicated screen/phase and remains unregistered/unimplemented.
+6. Chef App Preferences is a later dedicated screen/phase and remains unregistered/unimplemented.
+7. No approved Chef-specific Security or Help/Support child route exists in the current mobile route contract.
+8. Pixel-level Android reference comparison and the complete reference animation gate cannot be truthfully claimed from this connector-only run.
 
-**Next phase in sequence:** **P98 — Chef Account Profile — NOT STARTED**.
+**Next phase in sequence:** **P99 — Chef Edit Profile — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P97. Do not pre-implement P98 without explicit user direction.
+**Required action:** Stop after P98. Do not pre-implement P99 without explicit user direction.
 
 ---
 
@@ -132,10 +136,11 @@ Evidence/ledger:
 | P95 | PARTIAL at full Guide scope; exact full-replacement edit/mutation hardening boundary implemented | `docs/mobile-ui-rebuild/P95_CHEF_MENU_EDIT_MUTATION_HARDENING.md` |
 | P96 | PARTIAL at full Guide/product-contract scope; fail-closed Analytics contract boundary implemented | `docs/mobile-ui-rebuild/P96_CHEF_ANALYTICS_CONTRACT_MODEL.md` |
 | P97 | PARTIAL at full Guide scope; fail-closed real Analytics tab UI boundary implemented | `docs/mobile-ui-rebuild/P97_CHEF_ANALYTICS_UI.md` |
-| P98 onward | NOT STARTED / not accepted | — |
+| P98 | PARTIAL at full Guide scope; exact Chef Profile/kitchen/status/session boundary implemented | `docs/mobile-ui-rebuild/P98_CHEF_ACCOUNT_PROFILE.md` |
+| P99 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P98 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, P96 contract evidence, P97 UI evidence, and the current `features/chefAnalytics` implementation. Preserve the P96/P97 fail-closed analytics boundary until approved analytics contracts exist. P98 is a separate Chef Account Profile phase and requires separate authorization; do not add account/business/payout/subscription/profile work early, and do not add backend/APIM changes without explicit phase authority.
+Before any P99 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, P98 evidence, and the current `features/chefProfile` implementation. Preserve the P98 fail-closed contract boundary: do not invent business verification, Chef subscription, payout, security/support, or later profile child contracts. P99 is a separate Chef Edit Profile phase and requires separate authorization; do not register or implement it early, and do not add backend/APIM changes without explicit phase authority.

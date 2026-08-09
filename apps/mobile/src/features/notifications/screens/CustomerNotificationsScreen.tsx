@@ -11,7 +11,10 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
-import {inboundRouteDedupe} from '../../../app/navigation/inboundRouting';
+import {
+  inboundRouteDedupe,
+  type InboundRouteDestination,
+} from '../../../app/navigation/inboundRouting';
 import type {CustomerProfileStackParamList} from '../../../app/navigation/types';
 import {
   borderWidth,
@@ -162,16 +165,23 @@ export function CustomerNotificationsScreen() {
           return;
         }
 
-        const inboundDestination =
-          destination.route === 'CustomerOrderTracking'
-            ? ({
-                kind: 'CUSTOMER_ORDER_TRACKING',
-                orderId: destination.orderId,
-              } as const)
-            : ({
-                kind: 'CUSTOMER_ORDER_DETAIL',
-                orderId: destination.orderId,
-              } as const);
+        let inboundDestination: InboundRouteDestination;
+        if (destination.route === 'CustomerOrderTracking') {
+          inboundDestination = {
+            kind: 'CUSTOMER_ORDER_TRACKING',
+            orderId: destination.orderId,
+          };
+        } else if (destination.route === 'CustomerKitchenProfile') {
+          inboundDestination = {
+            kind: 'CUSTOMER_KITCHEN_PROFILE',
+            kitchenId: destination.kitchenId,
+          };
+        } else {
+          inboundDestination = {
+            kind: 'CUSTOMER_ORDER_DETAIL',
+            orderId: destination.orderId,
+          };
+        }
 
         if (!inboundRouteDedupe.claim(inboundDestination)) {
           return;
@@ -180,6 +190,10 @@ export function CustomerNotificationsScreen() {
         try {
           if (destination.route === 'CustomerOrderTracking') {
             navigation.navigate('CustomerOrderTracking', {orderId: destination.orderId});
+            return;
+          }
+          if (destination.route === 'CustomerKitchenProfile') {
+            navigation.navigate('CustomerKitchenProfile', {kitchenId: destination.kitchenId});
             return;
           }
           navigation.navigate('CustomerOrderDetail', {orderId: destination.orderId});

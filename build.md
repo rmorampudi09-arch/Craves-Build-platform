@@ -44,75 +44,69 @@
 - **P103 — Chef Payout Contract and Eligibility:** PARTIAL at full Guide/product-contract scope; the exact Chef earning-ledger response is typed/validated as a non-runnable source boundary, while missing payout summary/balance/series/transactions/bank/eligibility/initiation/detail capabilities remain fail-closed. Evidence: `docs/mobile-ui-rebuild/P103_CHEF_PAYOUT_CONTRACT_ELIGIBILITY.md`.
 - **P104 — Chef Payout History UI/Withdraw Flow:** PARTIAL at full Guide Reference-50 scope; the real typed/routed payout-history surface, Overview/Transactions local state, Profile/shared-Chef-menu entry paths, explicit unavailable financial states, and disabled fail-closed Withdraw Now action are implemented at the exact P103 contract boundary without fabricated money data or payout mutation. Evidence: `docs/mobile-ui-rebuild/P104_CHEF_PAYOUT_HISTORY_UI_WITHDRAW_FLOW.md`.
 - **P105 — Chef Subscription Contract:** BLOCKED at full Guide/product-contract scope; a strict Guide-51 fail-closed Chef platform-subscription boundary is implemented, and the repository's customer meal-subscription routes are explicitly excluded from reuse. Evidence: `docs/mobile-ui-rebuild/P105_CHEF_SUBSCRIPTION_CONTRACT.md`.
+- **P106 — Chef Subscription Plan UI:** PARTIAL at full Guide Reference-51 scope; the real typed/routed Chef Subscription Plan screen, Profile entry path, reference-structure unavailable states, and non-runnable plan-management boundary are implemented at the exact P105 contract boundary without fabricated plan/pricing/benefit data. Evidence: `docs/mobile-ui-rebuild/P106_CHEF_SUBSCRIPTION_PLAN_UI.md`.
 
-**Current executed phase:** **P105 — Chef Subscription Contract**.
+**Current executed phase:** **P106 — Chef Subscription Plan UI**.
 
-**P105 phase start commit:** `e4bac0a0e36160c74f47030a9e7d519e358e8279`  
-**P105 implementation/code end:** `564bcdf72bc662b1ca260da75c6bf259fcd69f96`  
-**P105 evidence commit:** `af9287e65bb340fb4d4c6037e0814e0d987037a7`
+**P106 phase start commit:** `bba0543da67b2b2571c70afb45c129d7c296784a`  
+**P106 implementation/code end:** `2803914efaffd65f000a9e6d44c9889d23433ebd`  
+**P106 evidence commit:** `a492060aca6a38da3521df2c2717221a3e0d6c62`
 
-### P105 implemented boundary
+### P106 implemented boundary
 
-- Re-read `agent.md`, `build.md`, `phases.md`, `plan.md`, and full Guide Reference 51 and implemented only P105; no P106 UI/navigation work was started.
-- Audited the current Subscription Service controller, DTOs, service authorization/business rules, APIM configuration, and customer mobile subscription handover.
-- Confirmed the existing `/api/v1/subscriptions*` and `/api/v1/admin/subscription*` contracts model customer meal-plan subscriptions and chef/admin maintenance of sellable meal plans, not a Chef purchasing/managing a CRAVES platform plan.
-- Added a typed Guide-51 capability model for plan catalogue, current plan, eligibility, pricing, feature entitlements, change/cancel/renew, effective dates, and billing-provider integration.
-- Every required Chef platform-subscription capability remains explicit `BACKEND_CONTRACT_UNAVAILABLE`; the contract model status is `blocked`.
-- Added explicit excluded-source metadata for the customer/admin meal-subscription routes to prevent accidental semantic reuse in future P106 work.
-- Added fail-closed mutation boundaries for change/cancel/renew with `allowed: false`.
-- No HTTP wrapper was added because no exact Chef platform-subscription APIM/backend contract exists.
-- No Basic/Premium/Pro tier values, price, tax, benefit, eligibility, proration, effective date, provider state, or subscription mutation route was fabricated.
-- No navigation, screen, profile-row, customer-screen, backend, APIM, OpenAPI, database, infrastructure, dependency, provider, or secret change was made.
+- Re-read `agent.md`, `build.md`, `phases.md`, `plan.md`, full Guide Reference 51, and the P105 contract boundary; implemented only P106 and did not start P107.
+- Registered typed route `ChefSubscriptionPlan` inside the existing Chef Profile stack and wired the existing Profile `Subscription plan` row to it.
+- Kept the screen inside the Profile tab navigator so the existing Chef bottom navigation remains stable; no Customer cart/view-cart state was added.
+- Reused `ChefHeader`, design tokens, shared icons, safe-area handling, and the established Chef navigation architecture.
+- Added a P106 presentation-boundary model derived from the P105 fail-closed contract instead of creating a parallel API/service architecture.
+- Implemented truthfully representable Reference-51 structure: current-plan banner, plan catalogue unavailable state, annual-savings unavailable banner, comparison capability section, manage-plan CTA boundary, change/cancel/renew explanation actions, support CTA boundary, and back/Profile navigation.
+- Kept all server-owned plan state empty: current plan, billing cycle, pricing, eligibility, subscription status, annual savings, plan catalogue items, and feature matrix entries.
+- Kept high-impact `changePlan`, `cancelPlan`, and `renewPlan` actions non-runnable with `allowed: false`; no confirmation/proration/effective-date/idempotency semantics were invented.
+- Did not reuse customer meal-subscription/admin sellable-plan endpoints, did not fabricate Chef endpoints, and did not turn reference-only Basic/Premium/Pro names, prices, currency, tax, benefits, eligibility, or billing-provider state into runtime data.
+- No backend, APIM, OpenAPI, database, infrastructure, dependency, provider, secret, customer-screen, or unrelated Chef-flow change was made.
 
-### P105 changed code files
+### P106 changed code files
 
-- `apps/mobile/src/features/chefSubscription/domain/chefSubscriptionContract.ts`
-- `apps/mobile/src/features/chefSubscription/domain/chefSubscriptionContract.test.ts`
+- `apps/mobile/src/features/chefSubscription/domain/chefSubscriptionPlanBoundary.ts`
+- `apps/mobile/src/features/chefSubscription/domain/chefSubscriptionPlanBoundary.test.ts`
+- `apps/mobile/src/features/chefSubscription/screens/ChefSubscriptionPlanScreen.tsx`
+- `apps/mobile/src/app/navigation/types.ts`
+- `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
+- `apps/mobile/src/features/chefProfile/screens/ChefProfileScreen.tsx`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P105_CHEF_SUBSCRIPTION_CONTRACT.md`
+- `docs/mobile-ui-rebuild/P106_CHEF_SUBSCRIPTION_PLAN_UI.md`
 - `build.md`
 
-### P105 exact sources / contract distinction
+### P106 validation / guard state
 
-- `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, full 183-page authority, Guide Reference 51 / source page 43 / `image51.jpeg`.
-- `services/subscription-service/src/main/java/in/craves/subscription/web/SubscriptionController.java`.
-- `services/subscription-service/src/main/java/in/craves/subscription/web/ApiDtos.java`.
-- `services/subscription-service/src/main/java/in/craves/subscription/service/SubscriptionService.java`.
-- `scripts/configure-subscription-apim.sh`.
-- `docs/handover/2026-07-30-customer-mobile-subscription-plans.md`.
+- `GitHub.compare_commits` from phase-start HEAD `bba0543da67b2b2571c70afb45c129d7c296784a` through code end `2803914efaffd65f000a9e6d44c9889d23433ebd` is fast-forward by six commits and contains exactly the six P106 code/test/navigation/profile files listed above.
+- The existing `ChefProfileScreen.tsx` diff is limited to the subscription-row boundary copy and `ChefSubscriptionPlan` navigation branch; unrelated Profile logic/styles remain unchanged.
+- Source review confirms the route is registered in the existing Chef Profile stack and inherits Chef bottom navigation.
+- Focused test source covers empty authoritative plan values, disabled change/cancel/renew actions, blocked support destination, and absence of reference-only tier/currency values.
+- GitHub Actions are intentionally not claimed as a P106 pass/fail signal because the account's monthly Actions capacity is exhausted and the user explicitly instructed continuing without it.
+- Full workspace dependency installation, strict TypeScript execution, ESLint execution, Jest execution, production Android bundle/build, emulator/device behavior, and Reference-51 pixel-level visual validation are **not recorded as passing or failing for P106** from this connector-only phase.
+- P106 is **PARTIAL at full Guide Reference-51 scope** because authoritative Chef subscription data/mutation/billing contracts still do not exist. The UI is intentionally transparent and non-runnable where those contracts are required.
 
-The audited service uses weekly/monthly sellable meal plans and customer subscriptions with service dates/delivery-address semantics. Those contracts are not the Guide-51 Chef platform-membership contract and are not reclassified for mobile.
+### P106 retained blockers instead of fabricated Guide capabilities
 
-### P105 validation / guard state
-
-- `GitHub.compare_commits` from phase-start HEAD `e4bac0a0e36160c74f47030a9e7d519e358e8279` through code end `564bcdf72bc662b1ca260da75c6bf259fcd69f96` is fast-forward by two commits and contains exactly the two P105 code/test files listed above.
-- Source review confirms all ten Guide-51 contract capabilities fail closed and no fabricated Chef subscription route is present.
-- Focused test source covers blocked capabilities, excluded customer meal-subscription routes, disabled change/cancel/renew, and absence of fabricated tier/endpoint values.
-- Focused Jest execution is not claimed from this connector-only run.
-- GitHub Actions are intentionally not claimed as a P105 pass/fail signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
-- Full workspace dependency installation, strict TypeScript, ESLint, Jest execution, production Android bundle/build, emulator/device behavior, and Reference-51 visual validation are **not recorded as passing or failing for P105** from this connector-only contract phase.
-- P105 is **BLOCKED at full Guide/product-contract scope** because the exact Chef platform-subscription API/entitlement/billing contract does not exist in the audited repository surface. The mobile boundary is intentionally non-runnable rather than deceptive.
-
-### P105 retained blockers instead of fabricated Guide capabilities
-
-1. No approved Chef platform plan catalogue contract.
-2. No current Chef platform subscription contract.
+1. No approved Chef platform plan catalogue/current-plan contract.
+2. No authoritative pricing/currency/tax/billing-cycle/annual-savings contract.
 3. No Chef plan eligibility contract.
-4. No authoritative pricing/currency/tax/billing-cycle contract.
-5. No feature-entitlement contract.
-6. No upgrade/downgrade/proration/idempotency contract.
+4. No feature-entitlement matrix contract.
+5. No subscription pending/failed/grace-period/cancelled/effective-date state model.
+6. No upgrade/downgrade confirmation/proration/idempotency contract.
 7. No Chef platform cancellation contract.
 8. No renewal/reactivation contract.
-9. No effective-date/pending/grace-period/cancel-date state model.
-10. No mobile billing-provider integration contract for Chef platform subscription.
+9. No Chef platform billing-provider integration contract.
+10. No approved Chef subscription-specific support destination.
 
-**Next phase in sequence:** **P106 — Chef Subscription Plan UI — NOT STARTED**.
+**Next phase in sequence:** **P107 — Chef Preferences Contract — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P105. Do not pre-implement P106 without explicit user direction.
+**Required action:** Stop after P106. Do not pre-implement P107 without explicit user direction.
 
 ---
 
@@ -146,10 +140,11 @@ The audited service uses weekly/monthly sellable meal plans and customer subscri
 | P103 | PARTIAL at full Guide/product-contract scope; exact Chef financial source + fail-closed payout eligibility boundary implemented | `docs/mobile-ui-rebuild/P103_CHEF_PAYOUT_CONTRACT_ELIGIBILITY.md` |
 | P104 | PARTIAL at full Guide Reference-50 scope; real fail-closed payout-history UI/withdraw boundary implemented | `docs/mobile-ui-rebuild/P104_CHEF_PAYOUT_HISTORY_UI_WITHDRAW_FLOW.md` |
 | P105 | BLOCKED at full Guide/product-contract scope; fail-closed Chef platform-subscription boundary implemented | `docs/mobile-ui-rebuild/P105_CHEF_SUBSCRIPTION_CONTRACT.md` |
-| P106 onward | NOT STARTED / not accepted | — |
+| P106 | PARTIAL at full Guide Reference-51 scope; real fail-closed Chef Subscription Plan UI boundary implemented | `docs/mobile-ui-rebuild/P106_CHEF_SUBSCRIPTION_PLAN_UI.md` |
+| P107 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P106 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, and P105 evidence. Preserve the P105 ownership boundary: the existing `/api/v1/subscriptions*` and `/api/v1/admin/subscription*` contracts are customer meal-plan/sellable-plan contracts and must not be presented as the Chef's CRAVES platform membership. Do not invent current plan, Basic/Premium/Pro pricing/benefits, entitlements, eligibility, proration, effective dates, billing-provider behavior, or change/cancel/renew routes. Do not alter backend/APIM without explicit authority, and do not advance beyond the single explicitly authorized phase.
+Before any P107 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, and P106 evidence. Preserve the P105/P106 ownership boundary: the existing `/api/v1/subscriptions*` and `/api/v1/admin/subscription*` contracts are customer meal-plan/sellable-plan contracts and must not be presented as the Chef's CRAVES platform membership. Do not invent current plan, Basic/Premium/Pro pricing/benefits, entitlements, eligibility, proration, effective dates, billing-provider behavior, or change/cancel/renew routes. Do not alter backend/APIM without explicit authority, and do not advance beyond the single explicitly authorized phase.

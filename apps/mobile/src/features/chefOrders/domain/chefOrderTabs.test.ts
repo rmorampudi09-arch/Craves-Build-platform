@@ -1,5 +1,6 @@
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
 import {
+  countOverdueChefPrepTimers,
   createChefOrderTabQueryKey,
   createInitialChefOrderTabUiState,
   deriveChefOrderTabCounts,
@@ -79,5 +80,36 @@ describe('chefOrderTabs P86 architecture', () => {
     expect(first).toMatchObject({elapsedMs: 600_000, remainingMs: 1_200_000, isOverdue: false});
     expect(later).toMatchObject({elapsedMs: 1_500_000, remainingMs: 300_000, isOverdue: false});
     expect(first?.serverDueAtMs).toBe(later?.serverDueAtMs);
+  });
+
+  it('counts overdue preparation timers across the full preparing projection, not only the visible page', () => {
+    expect(
+      countOverdueChefPrepTimers({
+        first: {
+          orderId: 'first',
+          serverStartedAtMs: 1,
+          serverDueAtMs: 2,
+          elapsedMs: 3,
+          remainingMs: 0,
+          isOverdue: true,
+        },
+        second: {
+          orderId: 'second',
+          serverStartedAtMs: 1,
+          serverDueAtMs: 5,
+          elapsedMs: 2,
+          remainingMs: 3,
+          isOverdue: false,
+        },
+        third: {
+          orderId: 'third',
+          serverStartedAtMs: 1,
+          serverDueAtMs: 2,
+          elapsedMs: 4,
+          remainingMs: 0,
+          isOverdue: true,
+        },
+      }),
+    ).toBe(2);
   });
 });

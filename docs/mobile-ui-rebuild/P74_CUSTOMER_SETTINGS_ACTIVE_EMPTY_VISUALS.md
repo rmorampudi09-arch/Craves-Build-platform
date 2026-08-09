@@ -2,9 +2,9 @@
 
 **Branch:** `mobile-ui-rebuild-from-scratch`  
 **Guide refs:** 33 and 34  
-**Status:** **IMPLEMENTED — FINAL CI IN PROGRESS**  
-**Mobile implementation head:** `35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62`  
-**CI:** run `31286064248`, job `93175010142` — **IN PROGRESS** at checkpoint
+**Status:** **IMPLEMENTED — CI SUCCESS**  
+**Validated mobile head:** `ae4de7be4e010fe621cf0516313991f5746ed4f4`  
+**CI:** run `31286578557`, job `93176403664` — **SUCCESS**
 
 ## Scope executed
 
@@ -46,6 +46,7 @@ The P74 settings values are device-local UI preferences scoped to the signed-in 
 - `apps/mobile/src/app/navigation/types.ts`
 - `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
 - `apps/mobile/src/features/customerProfile/screens/CustomerProfileRouteScreen.tsx`
+- `apps/mobile/jest.setup.js` (P74 validation-only AsyncStorage mock)
 - `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`
 - `build.md`
 
@@ -53,18 +54,16 @@ No backend, APIM, OpenAPI, database, infrastructure, Android native source, Grad
 
 ## Validation status
 
-The P74 mobile-source push triggered `.github/workflows/mobile-phase1-ci.yml` run `31286064248`, job `93175010142` against implementation head `35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62`.
+The initial P74 mobile-source run `31286064248` failed at Jest after TypeScript and ESLint had passed. The issue was isolated to AsyncStorage test-environment mocking rather than production Settings behavior. Two test-only follow-up commits refined the mock, ending at validated mobile head `ae4de7be4e010fe621cf0516313991f5746ed4f4`.
 
-Observed at this checkpoint:
+Replacement workflow `.github/workflows/mobile-phase1-ci.yml` run `31286578557`, job `93176403664` completed successfully:
 
 - dependency install — **SUCCESS**
 - TypeScript strict check — **SUCCESS**
 - ESLint — **SUCCESS**
-- Jest — **IN PROGRESS**
-- production Android JavaScript bundle — pending
-- backend/APIM/infrastructure source guard — pending
-
-This evidence intentionally does **not** claim final CI success before the run concludes.
+- Jest — **SUCCESS**
+- production Android JavaScript bundle — **SUCCESS**
+- backend/APIM/infrastructure source guard — **SUCCESS**
 
 Static implementation checks additionally confirm:
 
@@ -79,14 +78,14 @@ Static implementation checks additionally confirm:
 - preferences use the already installed `@react-native-async-storage/async-storage` dependency;
 - P75/P76 child flows remain unimplemented and explicitly blocked.
 
-No Gradle/APK packaging was performed, consistent with the implementation-phase policy.
+No Gradle/APK packaging was performed, consistent with the implementation-phase policy. Physical Android/reference-image certification remains a later visual-QA gate; this phase is complete at its authorized code/CI scope without claiming pixel-perfect device certification.
 
 ## Handoff
 
 ```text
-Executed phase: P74 — Customer Settings Active/Empty Visuals — IMPLEMENTED / FINAL CI IN PROGRESS
-Mobile implementation head: 35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62
-CI: run 31286064248 / job 93175010142 — TypeScript + ESLint passed; Jest still running at checkpoint
+Executed phase: P74 — Customer Settings Active/Empty Visuals — IMPLEMENTED / CI SUCCESS
+Validated mobile head: ae4de7be4e010fe621cf0516313991f5746ed4f4
+CI: run 31286578557 / job 93176403664 — SUCCESS
 Implemented: Settings route; account summary; persisted language/notification/appearance values; existing location selector; notification badge; empty/active cart header states; real cart navigation; legal/about/support rows; P24 logout; Save Changes; hidden bottom nav
 Deferred by phase boundary: P75 Customer Settings Child Flows; P76/P77 Help and Support flows
 Next phase: P75 — Customer Settings Child Flows — NOT STARTED

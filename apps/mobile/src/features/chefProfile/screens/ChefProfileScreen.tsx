@@ -151,7 +151,7 @@ function profileDisplayName(
   identityDisplayName: string | null | undefined,
 ): string {
   const identityName = identityDisplayName?.trim();
-  return kitchen?.displayName ?? kitchen?.kitchenName ?? identityName || 'Chef account';
+  return kitchen?.displayName ?? kitchen?.kitchenName ?? (identityName || 'Chef account');
 }
 
 function ProfileSkeleton() {

@@ -83,5 +83,5 @@ export function getChefAnalyticsBlockedPresentation(): ChefAnalyticsBlockedPrese
 }
 
 export function chefAnalyticsUnavailableAccessibilityLabel(label: string): string {
-  return `${label} unavailable. No estimate is shown because the approved Chef analytics data contract is not available.`;
+  return `${label} unavailable. No estimate is shown because complete analytics data is not available.`;
 }

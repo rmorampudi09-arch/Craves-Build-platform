@@ -53,8 +53,9 @@
 - **P112 — Lifecycle-State Matrix Completion:** DONE at authorized code/audit scope; the current Customer/Chef server-backed screen families were audited against the full lifecycle matrix, and the shared lifecycle policy now explicitly models empty, permission, retained-content pagination, and retained-content mutation-error states without fabricating blocked contracts. Evidence: `docs/mobile-ui-rebuild/P112_LIFECYCLE_STATE_MATRIX_COMPLETION.md`.
 - **P113 — Accessibility Audit:** PARTIAL at full device-validation scope; code-level accessibility audit/remediation is implemented for shared interaction primitives and critical Customer/Chef shell surfaces. Evidence: `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md`.
 - **P114 — Keyboard/Safe-Area/Responsive Audit:** PARTIAL at full device-validation scope; source-level IME/safe-area/responsive remediation is implemented for the inspected critical paths, while compact/standard/large device, IME, cutout, gesture-navigation, and enlarged-font runtime validation remain unclaimed. Evidence: `docs/mobile-ui-rebuild/P114_KEYBOARD_SAFE_AREA_RESPONSIVE_AUDIT.md`.
+- **P115 — Reduced Motion and Animation Audit:** PARTIAL at full runtime/device-validation scope; source-level reduced-motion remediation is implemented across shared motion, auth/customer/chef stack transitions, View Cart, and current slide modal surfaces. Evidence: `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md`.
 
-**Current executed phase:** **P114 — Keyboard/Safe-Area/Responsive Audit**.
+**Current executed phase:** **P115 — Reduced Motion and Animation Audit**.
 
 ### P112 authorized backfill completion
 
@@ -128,11 +129,61 @@ Evidence/ledger:
 2. The customer checkout launcher remains governed by the existing availability/status contract; no native checkout screen exists in the inspected mobile route graph and P114 does not fabricate one.
 3. P113 remains PARTIAL at its previously recorded full accessibility/device-validation scope; P114 does not reclassify it.
 
-**Next phase in sequence:** **P115 — Reduced-Motion Audit — NOT STARTED**.
+### P115 implemented boundary
+
+**P115 starting branch HEAD:** `d281b02b40d03830a851312b31fbc4f60b184b4f`  
+**P115 implementation/evidence head before ledger:** `3ec02ba8890dd7b68381ef975a1174d407b05782`
+
+- Re-read `plan.md`, `phases.md`, `agent.md`, `build.md`, and the full implementation guide before implementing only P115.
+- Preserved the existing shared duration/easing/spring policy, transform/opacity-only shared transitions, bounded-list rule, and zero animation delay for critical navigation/error presentation.
+- Added one shared platform transition resolver so native-stack and React Native Modal transitions preserve their normal animation but resolve to `none` when platform reduced motion is enabled.
+- Auth/account `fade_from_bottom`, Customer `fade`, and Chef `fade` stack transitions now honor the shared reduced-motion preference without changing route hierarchy, route names, role/auth routing, tabs, gestures, deep links, or restoration ownership.
+- Customer Location Selector and Customer Address Editor retain `slide` normally and use `none` under reduced motion.
+- Shared View Cart now uses the existing conservative shared reduced-motion hook instead of a duplicate nullable accessibility subscription; its hidden state remains unmounted and cannot intercept taps.
+- Customer floating bottom navigation was inspected and retained because it already uses the shared reduced-motion policy and disables pointer events/accessibility exposure while hidden.
+- The shared Skeleton is currently static, so no running continuous loop exists to suppress.
+- P116 dark-mode/token-conformance work was not started.
+
+### P115 changed files
+
+Production/runtime:
+
+- `apps/mobile/src/design/motion.ts`
+- `apps/mobile/src/features/cart/components/SharedViewCartOverlay.tsx`
+- `apps/mobile/src/app/navigation/AppNavigator.tsx`
+- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
+- `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
+- `apps/mobile/src/features/customerShell/components/CustomerLocationSelector.tsx`
+- `apps/mobile/src/features/customerAddresses/screens/CustomerAddressEditorModal.tsx`
+
+Focused test source:
+
+- `apps/mobile/src/design/motion.test.ts`
+
+Evidence/ledger:
+
+- `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md`
+- `build.md`
+
+### P115 validation / guard state
+
+- Focused test source covers normal platform transition preservation plus `none` resolution under reduced motion, in addition to the existing shared motion safety assertions.
+- Modified files were re-fetched from the authoritative branch to confirm the intended source wiring.
+- Local Jest/typecheck/ESLint/Metro/bundle execution is not claimed: this environment could not obtain a local checkout because `github.com` DNS resolution failed.
+- GitHub Actions were intentionally not invoked because the user reported the account's Actions limit is reached.
+- Runtime reduced-motion OFF/ON behavior, native-stack transitions, modal presentation/dismissal, and View Cart/bottom-nav behavior remain unclaimed until a real device/emulator pass is run.
+
+### P115 retained gaps instead of fabricated verification
+
+1. Full P115 acceptance remains PARTIAL because executable local checks and a real device/emulator reduced-motion matrix were not available in this connector-only run.
+2. No passing CI, simulator, emulator, or device result is claimed.
+3. P114 remains PARTIAL at its previously recorded device-validation scope; P115 does not reclassify it.
+
+**Next phase in sequence:** **P116 — Dark-Mode and Token Conformance Review — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED in this run.**
 
-**Required action:** Stop. Do not pre-implement P115.
+**Required action:** Stop. Do not pre-implement P116.
 
 ---
 
@@ -175,10 +226,11 @@ Evidence/ledger:
 | P112 | DONE at authorized code/audit scope; lifecycle matrix audited and shared policy completed | `docs/mobile-ui-rebuild/P112_LIFECYCLE_STATE_MATRIX_COMPLETION.md` |
 | P113 | PARTIAL at full device-validation scope; code-level accessibility audit/remediation implemented | `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md` |
 | P114 | PARTIAL at full device-validation scope; source-level keyboard/safe-area/responsive remediation implemented | `docs/mobile-ui-rebuild/P114_KEYBOARD_SAFE_AREA_RESPONSIVE_AUDIT.md` |
-| P115 onward | NOT STARTED / not accepted | — |
+| P115 | PARTIAL at full runtime/device-validation scope; source-level reduced-motion audit/remediation implemented | `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md` |
+| P116 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-P112 is now complete at its authorized code/audit boundary. Preserve its explicit empty/permission/pagination/mutation lifecycle policy together with the P111 restoration/security boundary, P113 accessibility semantics/contrast/touch-target contracts, and P114 safe-area/responsive guardrails. Contract-blocked features remain blocked; do not reinterpret lifecycle completeness as backend capability. P115 is not authorized in this P112 backfill run.
+P115 is the current executed phase and is implemented at source/audit scope. Preserve P112 lifecycle policy, P111 restoration/security boundaries, P113 accessibility semantics, P114 safe-area/responsive guardrails, and the new P115 reduced-motion equivalents. Contract-blocked features remain blocked. P116 is the next phase in sequence but is not authorized in this run.

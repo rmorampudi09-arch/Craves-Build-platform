@@ -8,9 +8,15 @@ jest.mock('react-native-config', () => ({
   },
 }));
 
-jest.mock('@react-native-async-storage/async-storage', () =>
-  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
-);
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn(async () => null),
+    setItem: jest.fn(async () => undefined),
+    removeItem: jest.fn(async () => undefined),
+    clear: jest.fn(async () => undefined),
+  },
+}));
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(async () => null),

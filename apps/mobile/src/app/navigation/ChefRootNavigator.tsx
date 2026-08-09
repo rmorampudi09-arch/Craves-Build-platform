@@ -7,6 +7,7 @@ import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
 import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrderDetailScreen';
+import {ChefPreparingOrdersScreen} from '../../features/chefOrders/screens/ChefPreparingOrdersScreen';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
 import {
   ChefOperationalProvider,
@@ -90,10 +91,6 @@ function ChefShellRouteBoundary({title}: {title: string}) {
   );
 }
 
-function ChefOrdersBoundaryScreen() {
-  return <ChefShellRouteBoundary title="Orders" />;
-}
-
 function ChefMenuBoundaryScreen() {
   return <ChefShellRouteBoundary title="Menu" />;
 }
@@ -128,7 +125,7 @@ function ChefTabsNavigator() {
       />
       <Tab.Screen
         name="Orders"
-        component={ChefOrdersBoundaryScreen}
+        component={ChefPreparingOrdersScreen}
         options={{
           tabBarAccessibilityLabel:
             counters.pendingAcceptance > 0

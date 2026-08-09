@@ -30,86 +30,101 @@
 - **P89 — Chef Ready for Pickup:** PARTIAL at full Guide completion scope; Ready UI/read/revalidation/reconciliation and cross-tab Ready entry are implemented to the exact current Chef/backend boundary. Evidence: `docs/mobile-ui-rebuild/P89_CHEF_READY_FOR_PICKUP.md`.
 - **P90 — Chef Completed Orders:** PARTIAL at full Guide completion scope; bounded read-only Completed history/detail and all-tab Completed entry are implemented to the exact current Chef/backend boundary. Evidence: `docs/mobile-ui-rebuild/P90_CHEF_COMPLETED_ORDERS.md`.
 - **P91 — Chef Realtime/Near-Realtime Order Event Reconciliation:** DONE at authorized code scope; near-real-time refetch/reconciliation is implemented through the existing exact Chef orders contract without inventing a push transport. Evidence: `docs/mobile-ui-rebuild/P91_CHEF_REALTIME_ORDER_RECONCILIATION.md`. GitHub Actions validation is not claimed because the account's monthly Actions capacity is exhausted.
+- **P92 — Chef Menu Contract Model:** PARTIAL at full Guide/product-contract scope; the complete currently approved five-route Chef Menu contract is typed, parsed, tested at source level, and centralized for mobile without inventing missing Guide capabilities. Evidence: `docs/mobile-ui-rebuild/P92_CHEF_MENU_CONTRACT_MODEL.md`. GitHub Actions validation is not claimed because the account's monthly Actions capacity is exhausted.
 
-**Current executed phase:** **P91 — Chef Realtime/Near-Realtime Order Event Reconciliation**.
+**Current executed phase:** **P92 — Chef Menu Contract Model**.
 
-**P91 phase start commit:** `88ef519bf6da4d3ab33d935dc658a285b6262cde`  
-**P91 implementation/code end:** `024a01902e443fb3bed8018f843d4b563499b3ef`  
-**P91 evidence commit:** `cd725a1225806ff03d34ca9f40a213264712e0b7`
+**P92 phase start commit:** `ec78b211fb52cc46b66200de012195c446c90ed7`  
+**P92 implementation/code end:** `da396494a0d1d776d4869891a8a28e14596514a0`  
+**P92 evidence commit:** `4e65cb27a6978b7a09351c0894bcef927e4b1cc8`
 
-### P91 implemented boundary
+### P92 implemented boundary
 
-- Preserved `ChefOperationalProvider` as the single shared owner of Chef operational orders, Dashboard/order counters, New/Preparing/Ready/Completed projections, and server-derived preparation timers.
-- Reused the exact existing `GET /api/v1/chef/orders` read path; no second API client, query client, store, lifecycle model, WebSocket/SSE/socket.io/FCM event channel, or backend route was created.
-- Added a 30-second automatic order refresh cadence only while an authenticated Chef session is active and the React Native app is in the foreground.
-- Automatic refresh stops while signed out or backgrounded. Leaving the foreground cancels the exact active orders query; returning to the foreground immediately invalidates/revalidates that query.
-- Read failures exponentially back off from the 30-second baseline and cap at five minutes, preventing an aggressive fixed-frequency failure loop.
-- Existing manual/pull refresh remains unchanged.
-- Added timestamp-aware bounded-snapshot reconciliation before fetched orders replace cache state.
-- Incoming rows older than a newer cached `updatedAt` cannot regress lifecycle state after a mutation or overlapping request.
-- Duplicate incoming IDs collapse to the newest timestamped representation.
-- Conflicting equal-timestamp or timestamp-less status rows fail closed to the current cached lifecycle rather than guessing order progression.
-- Genuinely newer rows and new order IDs are accepted normally.
-- Rows absent from the incoming authoritative bounded snapshot are removed so the client does not accumulate an unbounded synthetic history.
-- Because tab counts and Dashboard operational counters continue deriving from the same reconciled snapshot, lifecycle moves update the existing shared surfaces through one ownership path rather than per-screen copies.
+- Created one canonical mobile Chef Menu contract/API model under `features/chefMenu`.
+- Typed the exact server enums: `DRAFT|ACTIVE|INACTIVE`, `VEG|NON_VEG|EGG`, and `MILD|MEDIUM|SPICY`.
+- Modeled the complete current menu-item and image responses, including `kitchenId`, media ownership/storage fields, availability, status, and server timestamps.
+- Modeled exact `MenuItemRequest` and `AvailabilityRequest` request shapes and explicit backend validation primitives, including the `0.01` minimum price and positive integer delivery metadata.
+- Modeled the exact image MIME allowlist: JPEG, PNG, WebP.
+- Added wrappers over the existing central `httpClient` for the exact five approved routes only: list, create, PUT replace, availability patch, and image upload.
+- Image upload uses multipart `file` with the exact `primary` request parameter and does not manually set a multipart Content-Type boundary.
+- Added explicit contract-gap metadata for Guide-required behavior whose server contract is absent.
+- Removed the earlier Dashboard-specific duplicate Chef menu transport model. Dashboard retains compatibility aliases but now delegates menu reads/parsing to P92's canonical contract.
+- P93 Chef Menu UI and P94 Add/Edit UI were not started.
 
-### P91 exact contract / authority review
+### P92 exact contracts / authority review
 
-Exact read contract used:
+Exact routes present in the current Catalog Service + Chef Menu APIM configuration:
 
-- `GET /api/v1/chef/orders`
+1. `GET /api/v1/kitchens/me/menu-items`
+2. `POST /api/v1/kitchens/me/menu-items`
+3. `PUT /api/v1/kitchens/me/menu-items/{menuItemId}`
+4. `PATCH /api/v1/kitchens/me/menu-items/{menuItemId}/availability`
+5. `POST /api/v1/kitchens/me/menu-items/{menuItemId}/images?primary={boolean}` with multipart `file`
 
-The current mobile/backend surface inspected for P91 exposes no approved Chef WebSocket topic, SSE endpoint, socket.io/Pusher transport, or Firebase Messaging event-subscription contract for order lifecycle events. The phase definition explicitly allows a project-supported event/**refetch** mechanism, so P91 uses the existing typed query/refetch path instead of fabricating a realtime protocol.
+Important current semantics:
 
-No backend, APIM, OpenAPI, infrastructure, controller, or server-pipeline source was changed.
+- PUT is a full replacement using `MenuItemRequest`, not a partial patch.
+- Backend defaults currency to `INR`, status to `DRAFT`, and null/omitted availability to false for create/replace.
+- Public catalog visibility currently requires both `status=ACTIVE` and `is_available=true`.
+- The dedicated availability request is only `{available, reason?}`; P92 does not invent a visibility field or synthetic stock enum.
+- Media type is contractually JPEG/PNG/WebP; max media bytes are runtime configuration and no client-readable capability endpoint exposes the deployed value.
 
-### P91 changed code files
+No backend, APIM, OpenAPI, infrastructure, controller, deployment, or server-pipeline source was changed.
 
-- `apps/mobile/src/features/chefOrders/domain/chefOrderEventReconciliation.ts`
-- `apps/mobile/src/features/chefOrders/domain/chefOrderEventReconciliation.test.ts`
-- `apps/mobile/src/features/chefShell/state/ChefOperationalProvider.tsx`
+### P92 changed code files
+
+- `apps/mobile/src/features/chefMenu/api/chefMenuApi.ts`
+- `apps/mobile/src/features/chefMenu/api/chefMenuApi.test.ts`
+- `apps/mobile/src/features/chefDashboard/api/chefDashboardApi.ts`
+- `apps/mobile/src/features/chefDashboard/api/chefDashboardApi.test.ts`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P91_CHEF_REALTIME_ORDER_RECONCILIATION.md`
+- `docs/mobile-ui-rebuild/P92_CHEF_MENU_CONTRACT_MODEL.md`
 - `build.md`
 
-### P91 focused test source
+### P92 focused test source
 
-`chefOrderEventReconciliation.test.ts` covers:
+The focused source covers:
 
-- no automatic refresh while signed out/backgrounded;
-- foreground baseline cadence;
-- bounded exponential failure backoff;
-- rejection of older lifecycle snapshots;
-- acceptance of newer lifecycle snapshots;
-- duplicate incoming-order collapse;
-- fail-closed equal/missing timestamp conflicts;
-- insertion of new orders and removal of rows missing from the authoritative bounded snapshot.
+- exhaustive menu/food/spice enum values and image MIME types;
+- full response parsing including media ownership fields;
+- fail-closed malformed IDs, timestamps, booleans, prices, and unsupported enum values;
+- exact `0.01` price minimum and positive delivery metadata;
+- exact list/create/PUT replace/availability/image-upload routes and bodies;
+- malformed menu-item ID rejection before writes;
+- explicit missing-contract metadata;
+- P82 Dashboard compatibility against the canonical full Chef Menu response shape.
 
-### P91 validation / guard state
+### P92 validation / guard state
 
-- Phase-start → code-end compare is exactly one commit ahead and contains exactly the three `apps/mobile` paths listed above.
-- No `services/`, `openapi/`, `infra/`, `apps/api/`, backend/APIM, or server pipeline source changed in the P91 implementation commit.
-- No new package/dependency was added for sockets, push messaging, or another realtime stack.
-- Focused Jest test **source** was added and reviewed, but test execution is not claimed.
-- The user explicitly reported that the account's monthly GitHub Actions limit is exhausted and authorized continuing without Actions. GitHub Actions was therefore not treated as a phase pass/fail signal.
-- Repository `npm ci`, TypeScript, ESLint, Jest execution, Android JavaScript bundle generation, and backend guard commands are **not recorded as passing or failing for P91**.
-- The current connector environment does not expose an executable private-workspace checkout/emulator, so local repository/device certification is not claimed.
+- Phase-start → implementation-code-end compare contains only the four `apps/mobile` paths listed above.
+- No `services/`, `openapi/`, `infra/`, `apps/api/`, backend/APIM, or server-pipeline source changed during P92 implementation.
+- No package/dependency was added.
+- Focused Jest test **source** was added/updated and reviewed against current controller/DTO/service/APIM source; execution is not claimed.
+- The user explicitly reported that the account's monthly GitHub Actions limit is exhausted and authorized continuing without Actions. Actions are therefore not treated as a P92 pass/fail signal.
+- Repository `npm ci`, TypeScript, ESLint, Jest execution, Android JavaScript bundle generation, and device/emulator validation are **not recorded as passing or failing for P92**.
+- The current connector environment does not expose an executable private-workspace checkout, so local command execution is not claimed.
 
-### P91 retained boundary instead of fabricated behavior
+### P92 retained blockers instead of fabricated behavior
 
-1. **No true server-push event transport:** the exact current repository surface does not expose an approved Chef WebSocket/SSE/FCM order-event subscription contract. P91 therefore implements near-real-time bounded refetch/reconciliation only.
-2. **Existing newest-100 list ceiling remains:** `GET /api/v1/chef/orders` still owns the bounded server snapshot and does not become a history/event stream in this phase.
-3. **No invented event payload ordering/version:** reconciliation uses the existing authoritative `updatedAt` field. Equal/missing ordering metadata with conflicting statuses fails closed rather than inferring lifecycle progression.
-4. **No background polling:** app-background order polling is intentionally disabled; foreground resume revalidates immediately.
-5. **CI/device certification:** GitHub Actions capacity is exhausted and no emulator/device execution occurred in this phase.
+1. No Chef-owned menu-item detail GET route.
+2. No server search/filter/category/summary/pagination parameters on the menu list.
+3. No category/subcategory metadata endpoint.
+4. No separately named visibility field/mutation or authoritative `Hidden` mapping beyond existing status/availability state.
+5. No delete or duplicate mutation.
+6. No incomplete/partial draft-save contract; current `MenuItemRequest` still requires core fields even for `status=DRAFT`.
+7. No duplicate/name-check endpoint.
+8. No image delete/reorder/post-upload set-primary mutations.
+9. No explicit catalog-sync mutation; customer catalog derives from persisted menu state.
+10. No client-readable configured media-size capability.
+11. GitHub Actions/device certification remains unavailable for this phase because of the reported account limit and connector execution boundary.
 
-**Next phase in sequence:** **P92 — Chef Menu Contract Model — NOT STARTED**.
+**Next phase in sequence:** **P93 — Chef Menu UI — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P91. Do not pre-implement P92 without explicit user direction.
+**Required action:** Stop after P92. Do not pre-implement P93 without explicit user direction.
 
 ---
 
@@ -129,10 +144,11 @@ Evidence/ledger:
 | P89 | PARTIAL at full Guide scope; Ready UI/revalidation/cross-tab entry boundary implemented | `docs/mobile-ui-rebuild/P89_CHEF_READY_FOR_PICKUP.md` |
 | P90 | PARTIAL at full Guide scope; bounded read-only Completed history/detail boundary implemented | `docs/mobile-ui-rebuild/P90_CHEF_COMPLETED_ORDERS.md` |
 | P91 | DONE at authorized code scope; near-real-time refetch/reconciliation implemented; Actions not claimed | `docs/mobile-ui-rebuild/P91_CHEF_REALTIME_ORDER_RECONCILIATION.md` |
-| P92 onward | NOT STARTED / not accepted | — |
+| P92 | PARTIAL at full Guide/product-contract scope; exact current five-route menu contract centralized | `docs/mobile-ui-rebuild/P92_CHEF_MENU_CONTRACT_MODEL.md` |
+| P93 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P92 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, and the recent Chef evidence including P86–P91. Preserve the shared Chef operational/query ownership established through P81/P86/P91. Do not add backend/APIM changes or begin Chef Menu work without separate authorization.
+Before any P93 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, P92 evidence, and the canonical `features/chefMenu/api/chefMenuApi.ts`. Preserve the single Chef Menu contract established in P92 and the shared Chef operational ownership established through P81/P86/P91. Do not add backend/APIM changes or invent missing menu capabilities without separate authorization.

@@ -160,4 +160,20 @@ describe('chefOrderDetailApi contract', () => {
       chefOrderDetailApi.getOrder('not-an-order-id'),
     ).rejects.toThrow('Chef order ID must be a UUID.');
   });
+
+  it('uses the exact ready-for-pickup route without inventing unsupported request fields or headers', async () => {
+    const post = jest
+      .spyOn(httpClient, 'post')
+      .mockResolvedValue(order({status: 'READY_FOR_PICKUP', prepTimeMinutes: 35}));
+
+    await expect(chefOrderDetailApi.markReadyForPickup(ORDER_ID)).resolves.toEqual(
+      expect.objectContaining({status: 'READY_FOR_PICKUP'}),
+    );
+
+    expect(post).toHaveBeenCalledWith(
+      `/api/v1/chef/orders/${ORDER_ID}/ready-for-pickup`,
+      undefined,
+      {signal: undefined},
+    );
+  });
 });

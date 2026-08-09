@@ -5,7 +5,7 @@ Status: **PARTIAL at full Guide completion scope; the mobile Ready surface is im
 ## Phase boundary
 
 - Phase start: `39616ddd754af45082952fcc5c39bcbdaa4fefd7`.
-- P89 code end: `9c0a169fdee5399a3f9b21ed7419cf4ccfdb5418`.
+- P89 code end: `d6f237fab92bf4097a561429bcfff030ebe0b3bd`.
 - P90 / Completed Orders was not implemented or started.
 
 ## Scope implemented
@@ -18,7 +18,8 @@ Status: **PARTIAL at full Guide completion scope; the mobile Ready surface is im
 - `Not Picked Up Yet` also revalidates the authoritative order first. If the order already progressed, shared state is reconciled. If it remains Ready, no support/escalation mutation is invented because no Chef pickup-escalation contract is exposed.
 - Both actions use a per-order duplicate-action guard and preserve the existing shared Chef operational snapshot/reconciliation ownership.
 - Ready status age is derived only from the exposed server `updatedAt` timestamp. It is deliberately labeled as the latest server update age, not as a fabricated pickup ETA or dedicated `readyAt` timestamp.
-- Completed remains outside P89 and is not registered as a completed-order screen.
+- Enabled the Ready status entry from both the existing New and Preparing order strips. Each entry preserves that tab's scroll offset, updates the shared selected-status state, and navigates through the typed `ChefOrdersReady` route.
+- Completed remains disabled in New, Preparing, and Ready because P90 is outside the authorized phase.
 
 ## Exact contracts available to P89
 
@@ -50,6 +51,8 @@ No client-side action can falsely mark an order picked up. No fake delivery-part
 - `apps/mobile/src/features/chefOrders/domain/chefReadyOrders.test.ts`
 - `apps/mobile/src/features/chefOrders/screens/ChefReadyOrdersScreen.tsx`
 - `apps/mobile/src/features/chefOrders/state/useChefReadyOrderActions.ts`
+- `apps/mobile/src/features/chefOrders/screens/ChefNewOrdersScreen.tsx`
+- `apps/mobile/src/features/chefOrders/screens/ChefPreparingOrdersScreen.tsx`
 
 Evidence / ledger:
 
@@ -58,9 +61,10 @@ Evidence / ledger:
 
 ## Validation / guard state
 
-- Phase-start → code-end compare contains only the six `apps/mobile` files listed above. No `services/`, `openapi/`, `infra/`, or `apps/api/` source was modified.
-- GitHub Actions run `31311462022` for code-end commit `9c0a169fdee5399a3f9b21ed7419cf4ccfdb5418` concluded failure before any validation step started.
-- Job `validate-mobile-code` (`93239812581`) reports `steps=[]`, `runner_id=0`, and an empty runner name.
+- Phase-start → code-end compare contains only the eight `apps/mobile` files listed above. No `services/`, `openapi/`, `infra/`, or `apps/api/` source was modified.
+- The two final cross-tab commits are narrowly scoped diffs: `9f065b4ce4c09b89a65c642f867ff3d5ad8ee969` enables Ready from Preparing, and `d6f237fab92bf4097a561429bcfff030ebe0b3bd` enables Ready from New. P90/Completed remains disabled.
+- GitHub Actions run `31311678399` for final code-end commit `d6f237fab92bf4097a561429bcfff030ebe0b3bd` concluded failure before any validation step started.
+- Job `validate-mobile-code` (`93240328517`) reports no runnable steps.
 - Therefore repository `npm ci`, strict TypeScript, ESLint, Jest, Android bundle, and backend-guard commands did not execute. This is not recorded as a code-test failure and is not recorded as a pass.
 - A focused unit test source was added for Ready status-age derivation, including malformed/missing timestamps and future clock skew. It is not claimed as executed by repository CI.
 - The current connector environment does not provide an executable checkout of the private mobile workspace, so project-wide local validation is not claimed.
@@ -75,11 +79,10 @@ Evidence / ledger:
 6. **True server pagination/status query:** inherited P86 blocker; `GET /api/v1/chef/orders` remains a bounded list without status/page/cursor parameters.
 7. **Reference Image 42 certification:** the 183-page Guide text is readable, but the embedded image is not independently renderable in the current repository/file tooling, so pixel-level certification is not claimed.
 8. **Android/device certification and repository CI:** no emulator/device run occurred and the GitHub runner never started a validation step.
-9. **Cross-tab entry wiring:** `ChefOrdersReady` is registered and the Ready screen can navigate back to New/Preparing, but the older P87/P88 local status-strip implementations still need their Ready button enablement consolidated into the shared status-tab component. That pre-existing duplicated-tab architecture is not falsely marked complete.
 
 ## Completion classification
 
-P89 is therefore **PARTIAL**, not DONE. The Ready UI/read/revalidation/reconciliation boundary is implemented, but the Guide's pickup handoff, partner details/ETA/contact, escalation workflow, full cross-tab entry behavior, device verification, and CI completion gates cannot all be satisfied from the current contracts/execution environment.
+P89 is therefore **PARTIAL**, not DONE. The Ready UI/read/revalidation/reconciliation boundary and New/Preparing → Ready entry behavior are implemented, but the Guide's pickup handoff, partner details/ETA/contact, escalation workflow, authoritative ready timestamp, server paging/status query, device verification, and CI completion gates cannot all be satisfied from the current contracts/execution environment.
 
 ## Stop boundary
 

@@ -140,13 +140,31 @@ function CustomerHomeStackNavigator() {
         component={CustomerHomeRouteScreen}
         listeners={rootListeners}
       />
-      <HomeStack.Screen name="CustomerFilterSort" component={CustomerFilterSortScreen} />
-      <HomeStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
-      <HomeStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
-      <HomeStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <HomeStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
+      <HomeStack.Screen
+        name="CustomerFilterSort"
+        component={CustomerFilterSortScreen}
+      />
+      <HomeStack.Screen
+        name="CustomerDishDetail"
+        component={CustomerDishDetailScreen}
+      />
+      <HomeStack.Screen
+        name="CustomerDishIngredients"
+        component={CustomerDishIngredientsScreen}
+      />
+      <HomeStack.Screen
+        name="CustomerKitchenProfile"
+        component={CustomerKitchenProfileScreen}
+      />
+      <HomeStack.Screen
+        name="CustomerKitchenDishes"
+        component={CustomerKitchenDishesScreen}
+      />
       <HomeStack.Screen name="CustomerCart" component={CustomerCartScreen} />
-      <HomeStack.Screen name="CustomerPaymentMethods" component={CustomerPaymentMethodsRouteScreen} />
+      <HomeStack.Screen
+        name="CustomerPaymentMethods"
+        component={CustomerPaymentMethodsRouteScreen}
+      />
     </HomeStack.Navigator>
   );
 }
@@ -161,13 +179,31 @@ function CustomerChefsStackNavigator() {
         component={DiscoverHomeChefsRouteScreen}
         listeners={rootListeners}
       />
-      <ChefsStack.Screen name="CustomerFilterSort" component={CustomerFilterSortScreen} />
-      <ChefsStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
-      <ChefsStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
-      <ChefsStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <ChefsStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
+      <ChefsStack.Screen
+        name="CustomerFilterSort"
+        component={CustomerFilterSortScreen}
+      />
+      <ChefsStack.Screen
+        name="CustomerDishDetail"
+        component={CustomerDishDetailScreen}
+      />
+      <ChefsStack.Screen
+        name="CustomerDishIngredients"
+        component={CustomerDishIngredientsScreen}
+      />
+      <ChefsStack.Screen
+        name="CustomerKitchenProfile"
+        component={CustomerKitchenProfileScreen}
+      />
+      <ChefsStack.Screen
+        name="CustomerKitchenDishes"
+        component={CustomerKitchenDishesScreen}
+      />
       <ChefsStack.Screen name="CustomerCart" component={CustomerCartScreen} />
-      <ChefsStack.Screen name="CustomerPaymentMethods" component={CustomerPaymentMethodsRouteScreen} />
+      <ChefsStack.Screen
+        name="CustomerPaymentMethods"
+        component={CustomerPaymentMethodsRouteScreen}
+      />
     </ChefsStack.Navigator>
   );
 }
@@ -183,15 +219,24 @@ function CustomerOrdersStackNavigator() {
         component={CustomerOrdersRouteScreen}
         listeners={rootListeners}
       />
-      <OrdersStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
-      <OrdersStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
+      <OrdersStack.Screen
+        name="CustomerOrderDetail"
+        component={CustomerOrderDetailScreen}
+      />
+      <OrdersStack.Screen
+        name="CustomerOrderTracking"
+        component={CustomerOrderTrackingScreen}
+      />
       <OrdersStack.Screen name="CustomerCart" component={CustomerCartScreen} />
-      <OrdersStack.Screen name="CustomerPaymentMethods" component={CustomerPaymentMethodsRouteScreen} />
+      <OrdersStack.Screen
+        name="CustomerPaymentMethods"
+        component={CustomerPaymentMethodsRouteScreen}
+      />
     </OrdersStack.Navigator>
   );
 }
 
-/** P74 keeps Settings inside the Profile stack while hiding tab chrome on focus. */
+/** P74 keeps Settings inside the existing Profile child routes. */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
 
@@ -202,19 +247,55 @@ function CustomerProfileStackNavigator() {
         component={CustomerProfileRouteScreen}
         listeners={rootListeners}
       />
-      <ProfileStack.Screen name="CustomerProfileEdit" component={CustomerProfileEditRouteScreen} />
-      <ProfileStack.Screen name="CustomerAddresses" component={CustomerAddressesRouteScreen} />
-      <ProfileStack.Screen name="CustomerFavorites" component={CustomerFavoritesRouteScreen} />
-      <ProfileStack.Screen name="CustomerNotifications" component={CustomerNotificationsRouteScreen} />
-      <ProfileStack.Screen name="CustomerSettings" component={CustomerSettingsRouteScreen} />
-      <ProfileStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
-      <ProfileStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
-      <ProfileStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
-      <ProfileStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
-      <ProfileStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <ProfileStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
+      <ProfileStack.Screen
+        name="CustomerProfileEdit"
+        component={CustomerProfileEditRouteScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerAddresses"
+        component={CustomerAddressesRouteScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerFavorites"
+        component={CustomerFavoritesRouteScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerNotifications"
+        component={CustomerNotificationsRouteScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerSettings"
+        component={CustomerSettingsRouteScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerOrderDetail"
+        component={CustomerOrderDetailScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerOrderTracking"
+        component={CustomerOrderTrackingScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerDishDetail"
+        component={CustomerDishDetailScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerDishIngredients"
+        component={CustomerDishIngredientsScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerKitchenProfile"
+        component={CustomerKitchenProfileScreen}
+      />
+      <ProfileStack.Screen
+        name="CustomerKitchenDishes"
+        component={CustomerKitchenDishesScreen}
+      />
       <ProfileStack.Screen name="CustomerCart" component={CustomerCartScreen} />
-      <ProfileStack.Screen name="CustomerPaymentMethods" component={CustomerPaymentMethodsRouteScreen} />
+      <ProfileStack.Screen
+        name="CustomerPaymentMethods"
+        component={CustomerPaymentMethodsRouteScreen}
+      />
     </ProfileStack.Navigator>
   );
 }
@@ -235,10 +316,26 @@ function CustomerTabsNavigator() {
       screenOptions={tabScreenOptions}
       screenListeners={tabScreenListeners}
       tabBar={CustomerBottomTabBar}>
-      <Tab.Screen name="Home" component={CustomerHomeStackNavigator} options={homeTabOptions} />
-      <Tab.Screen name="Chefs" component={CustomerChefsStackNavigator} options={chefsTabOptions} />
-      <Tab.Screen name="Orders" component={CustomerOrdersStackNavigator} options={ordersTabOptions} />
-      <Tab.Screen name="Profile" component={CustomerProfileStackNavigator} options={profileTabOptions} />
+      <Tab.Screen
+        name="Home"
+        component={CustomerHomeStackNavigator}
+        options={homeTabOptions}
+      />
+      <Tab.Screen
+        name="Chefs"
+        component={CustomerChefsStackNavigator}
+        options={chefsTabOptions}
+      />
+      <Tab.Screen
+        name="Orders"
+        component={CustomerOrdersStackNavigator}
+        options={ordersTabOptions}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={CustomerProfileStackNavigator}
+        options={profileTabOptions}
+      />
     </Tab.Navigator>
   );
 }

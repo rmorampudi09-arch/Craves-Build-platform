@@ -110,19 +110,23 @@ function PreparingSkeleton() {
 
 function StatusTabs({
   counts,
+  onSelect,
 }: {
   counts: Record<ChefOrderTab, number>;
+  onSelect: (tab: ChefOrderTab) => void;
 }) {
   return (
     <View accessibilityRole="tablist" style={styles.tabStrip}>
       {CHEF_ORDER_TABS.map(tab => {
         const selected = tab === 'PREPARING';
-        const enabled = selected;
+        const enabled = selected || tab === 'NEW';
         return (
           <Pressable
             accessibilityHint={
               enabled
-                ? 'Shows orders currently being prepared.'
+                ? selected
+                  ? 'Shows orders currently being prepared.'
+                  : 'Shows new orders awaiting a response.'
                 : 'This order status screen is implemented in a later phase.'
             }
             accessibilityLabel={`${TAB_LABELS[tab]}, ${counts[tab]} orders`}
@@ -130,6 +134,7 @@ function StatusTabs({
             accessibilityState={{selected, disabled: !enabled}}
             disabled={!enabled}
             key={tab}
+            onPress={() => onSelect(tab)}
             style={[styles.tab, selected && styles.tabSelected]}>
             <Text style={[styles.tabText, selected && styles.tabTextSelected]}>
               {TAB_LABELS[tab]}
@@ -297,6 +302,21 @@ export function ChefPreparingOrdersScreen() {
     [navigation, persistScrollOffset],
   );
 
+  const selectStatusTab = React.useCallback(
+    (tab: ChefOrderTab) => {
+      if (tab === 'NEW') {
+        persistScrollOffset();
+        orderTabs.selectStatus('NEW');
+        navigation.navigate('ChefOrdersNew');
+        return;
+      }
+      if (tab === 'PREPARING') {
+        orderTabs.selectStatus('PREPARING');
+      }
+    },
+    [navigation, orderTabs.selectStatus, persistScrollOffset],
+  );
+
   const refreshOrders = React.useCallback(() => {
     refresh().catch(() => undefined);
   }, [refresh]);
@@ -386,7 +406,7 @@ export function ChefPreparingOrdersScreen() {
           Keep preparation moving and mark each order ready when packaging is complete.
         </Text>
       </View>
-      <StatusTabs counts={orderTabs.tabCounts} />
+      <StatusTabs counts={orderTabs.tabCounts} onSelect={selectStatusTab} />
 
       <View style={styles.summaryBanner}>
         <View style={styles.summaryIcon}>

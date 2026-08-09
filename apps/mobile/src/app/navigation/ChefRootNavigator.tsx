@@ -6,6 +6,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
+import {ChefNewOrdersScreen} from '../../features/chefOrders/screens/ChefNewOrdersScreen';
 import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrderDetailScreen';
 import {ChefPreparingOrdersScreen} from '../../features/chefOrders/screens/ChefPreparingOrdersScreen';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
@@ -111,12 +112,13 @@ function ChefProfileBoundaryScreen() {
 function ChefOrdersNavigator() {
   return (
     <OrdersStack.Navigator
-      initialRouteName="ChefOrdersPreparing"
+      initialRouteName="ChefOrdersNew"
       screenOptions={stackScreenOptions}>
       <OrdersStack.Screen
         name="ChefOrdersPreparing"
         component={ChefPreparingOrdersScreen}
       />
+      <OrdersStack.Screen name="ChefOrdersNew" component={ChefNewOrdersScreen} />
     </OrdersStack.Navigator>
   );
 }

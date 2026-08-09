@@ -131,9 +131,10 @@ export type CustomerStackRouteName =
   | keyof CustomerOrdersStackParamList
   | keyof CustomerProfileStackParamList;
 
-/** P87 registers the exact Guide logical route without pre-implementing P88+ screens. */
+/** P88 extends the Chef Orders stack only through the newly authorized New screen. */
 export type ChefOrdersStackParamList = {
   ChefOrdersPreparing: undefined;
+  ChefOrdersNew: undefined;
 };
 
 /** P80 establishes Chef product ownership without pre-implementing later Chef surfaces. */

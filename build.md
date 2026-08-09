@@ -50,68 +50,76 @@
 - **P109 — Chef Cross-Screen Reconciliation Audit:** PARTIAL at full Guide/product scope; all currently supported Chef reconciliation paths are audited and synchronized at the exact approved contract boundary, while payout-balance and analytics-total propagation remain blocked. Evidence: `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md`.
 - **P110 — Deep Link and Notification Routing Audit:** PARTIAL at full Guide/product scope; the exact currently available custom-scheme, auth/role-aware inbound routing, notification target validation, duplicate-stack protection, and native link registration boundary is implemented without fabricating blocked Offers or push-provider contracts. Evidence: `docs/mobile-ui-rebuild/P110_DEEP_LINK_NOTIFICATION_ROUTING_AUDIT.md`.
 - **P111 — Process Restoration and Background/Foreground Audit:** PARTIAL at full device/product-lifecycle scope; safe versioned role/tab/nested restoration, auth-root and role-navigator readiness protection, P110 initial-link precedence, session-lifecycle audit, and fail-closed draft/provider handling are implemented at the exact current mobile boundary. Evidence: `docs/mobile-ui-rebuild/P111_PROCESS_RESTORATION_BACKGROUND_FOREGROUND_AUDIT.md`.
+- **P112 — Lifecycle-State Matrix Completion:** USER-REPORTED PARTIAL before this run. No P112 branch ledger/evidence was present when P113 started, so P113 does not reclassify or fabricate P112 completion evidence.
+- **P113 — Accessibility Audit:** PARTIAL at full device-validation scope; code-level accessibility audit/remediation is implemented for shared interaction primitives and critical Customer/Chef shell surfaces. Evidence: `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md`.
 
-**Current executed phase:** **P111 — Process Restoration and Background/Foreground Audit**.
+**Current executed phase:** **P113 — Accessibility Audit**.
 
-**P111 starting branch HEAD:** `e2ae2805eb72f35135b1580d6ef6e1cfbc9bb7c6`  
-**P111 initial implementation head:** `a2422e615a8d574fcc273ebd3f3f4104ee4d89b8`  
-**P111 final runtime hardening head:** `ae90152e0d715dc41785a53957733c9c90d6c663`  
-**P111 evidence refresh commit:** `a097a2b09d592b3f42b53cf16be138b36128b02e`
+**P113 starting branch HEAD:** `1c0169f1b0a49f8302ca4f82466e41614d858e5c`  
+**P113 implementation head:** `f76625392cbe7d228182be35de2825d6239830ce`
 
-### P111 implemented boundary
+### P113 implemented boundary
 
-- Re-read `agent.md`, `build.md`, `phases.md`, `plan.md`, the full 183-page implementation guide, P110 evidence/current inbound routing, Customer/Chef navigator trees, auth bootstrap/session lifecycle/session manager, draft-bearing Chef/profile/menu flows, and payment handoff/recovery code; implemented only P111 and did not start P112.
-- Added a versioned minimal process-restoration policy instead of persisting raw React Navigation state.
-- Persists only an allowlisted product role guard, selected Customer/Chef tab or supported nested destination, and bounded route resource IDs; arbitrary params, server responses, tokens, form values, media, and payment/provider session data cannot enter the schema.
-- Uses the already-installed AsyncStorage dependency only for this validated non-sensitive snapshot; malformed/obsolete/cross-stack snapshots fail closed and are removed.
-- Keeps backend auth/account resolution as the sole Customer/Chef root authority. A stored role mismatch is cleared rather than used to select a shell.
-- Waits for both authoritative product readiness and actual matching role-navigator registration before consuming restoration or deferred inbound routing; Chef state is therefore not consumed during the existing role-isolation gate before `ChefProductNavigator`/`ChefTabs` mounts.
-- Gives a valid P110 cold-start inbound link precedence over stale saved navigation and keeps that link pending until its role navigator is registered.
-- Clears restoration state on anonymous/sign-out state and resets inbound-route dedupe state with the session boundary.
-- Restores supported Customer and Chef tab/nested/read-only detail context through the existing single `NavigationContainer`; no duplicate navigator/store/API architecture was added.
-- Draft-bearing/transient forms collapse to their safe owner tab instead of persisting profile/contact/address/menu/filter values. Mounted in-memory drafts remain intact across ordinary background/foreground transitions while the process survives.
-- Audited the existing session lifecycle: startup restore occurs before product-root rendering; access token remains memory-only; refresh credential remains secure-storage-only; refresh is single-flight; refresh timers pause in background and stale sessions refresh on foreground.
-- Audited the current Cashfree boundary: native launch/callback remain explicitly blocked, payment handoff/provider session identifiers remain memory-only, and P111 never serializes them.
-- No backend, APIM, OpenAPI, infrastructure, dependency, provider SDK, native provider callback, or unrelated screen change was introduced.
+- Re-read `agent.md`, `build.md`, `phases.md`, `plan.md`, the full 183-page implementation guide, the shared design-system interaction primitives, Customer shell/header/location-selector surfaces, Chef shell/menu/notification surfaces, auth role selector, search input, and shared lifecycle states; implemented only P113 and did not start P114.
+- Preserved the approved exact Flame Red token `#F62E18` for brand/non-text accents while adding a text-safe red for normal-sized text-bearing actions that must satisfy the Guide's 4.5:1 contrast target.
+- Added darker semantic text colors for success/warning/info badges, strengthened secondary/placeholder text contrast, and committed a focused pure Jest contrast/touch-target/font-scaling contract test.
+- Hardened shared `SegmentedControl`, `Chip`, `PressableCard`, `Button`, `IconButton`, `LoadingIndicator`, lifecycle, and input semantics so role, selected/checked, disabled, busy/loading, and error/offline announcements are exposed without duplicate spinner stops.
+- Auth role selection now uses radio semantics; discovery search exposes search-field semantics.
+- Replaced nested accessible backdrop/sheet Pressables in the Customer location selector and Chef workspace menu with non-accessible sibling dismissal backdrops plus modal content surfaces, preserving natural focus order and existing visual hierarchy.
+- Customer saved-location rows expose radio checked state; Customer/Chef modal headings, retry/loading/error states, and Chef notification mutation states expose the relevant accessibility semantics.
+- Notification badges use minimum rather than fixed height so scaled badge text can grow instead of being forced into an 18 dp box.
+- Kept shared text scaling enabled and the existing Android-first 48 dp minimum interaction target.
+- No backend, APIM, OpenAPI, auth/session ownership, payment provider, navigation-route, persistence, cache, dependency, or unrelated product-flow behavior was changed.
 
-### P111 changed files
+### P113 changed files
 
 Production/runtime:
 
-- `apps/mobile/src/app/navigation/AppNavigator.tsx`
-- `apps/mobile/src/app/navigation/processRestoration.ts`
-- `apps/mobile/src/app/navigation/processRestorationStorage.ts`
+- `apps/mobile/src/design/tokens.ts`
+- `apps/mobile/src/shared/components/Badge.tsx`
+- `apps/mobile/src/shared/components/Button.tsx`
+- `apps/mobile/src/shared/components/IconButton.tsx`
+- `apps/mobile/src/shared/components/LoadingIndicator.tsx`
+- `apps/mobile/src/shared/components/Chip.tsx`
+- `apps/mobile/src/shared/components/PressableCard.tsx`
+- `apps/mobile/src/shared/components/SegmentedControl.tsx`
+- `apps/mobile/src/shared/components/InputField.tsx`
+- `apps/mobile/src/shared/components/LifecycleStates.tsx`
+- `apps/mobile/src/shared/components/ContentLifecycle.tsx`
+- `apps/mobile/src/features/auth/components/RoleSelector.tsx`
+- `apps/mobile/src/features/discoverySearch/components/DiscoverySearchInput.tsx`
+- `apps/mobile/src/features/customerShell/components/CustomerHeader.tsx`
+- `apps/mobile/src/features/customerShell/components/CustomerLocationSelector.tsx`
+- `apps/mobile/src/features/chefShell/components/ChefHeader.tsx`
 
 Focused tests:
 
-- `apps/mobile/src/app/navigation/processRestoration.test.ts`
+- `apps/mobile/src/design/accessibilityContracts.test.ts`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P111_PROCESS_RESTORATION_BACKGROUND_FOREGROUND_AUDIT.md`
+- `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md`
 - `build.md`
 
-### P111 validation / guard state
+### P113 validation / guard state
 
-- Focused Jest source is committed for Customer tab/nested capture, draft-route collapse, Chef nested restoration, role-mismatch rejection, provider/payment-shaped field rejection, and malformed-resource fallback.
-- The initial code boundary `e2ae2805eb72f35135b1580d6ef6e1cfbc9bb7c6..a2422e615a8d574fcc273ebd3f3f4104ee4d89b8` changed only the intended four mobile navigation/test files.
-- Follow-up review found and fixed the Chef isolation timing edge; final runtime hardening commit `ae90152e0d715dc41785a53957733c9c90d6c663` gates restoration and P110 deferred inbound routing on actual role-navigator registration.
-- Final phase comparison remains limited to the four mobile navigation/test files plus P111 evidence and this ledger; no backend/native-provider/unrelated-screen files changed.
-- Re-read `useBootstrap`, `useSessionLifecycle`, `sessionManager`, secure refresh-token storage ownership, payment handoff/recovery blockers, and Customer/Chef route registration against the new persistence schema.
-- Full repository Jest/typecheck/ESLint/bundle execution and device/emulator process recreation are not claimed from this connector-only run.
-- GitHub Actions are intentionally not used as a P111 acceptance signal because the account's monthly Actions capacity is exhausted and this run was explicitly authorized to continue without it.
+- Source review is aligned to the React Native 0.85 accessibility API used by the workspace; no new dependency or experimental focus-order API was introduced.
+- Focused test source covers the approved Flame Red invariant, normal-text contrast pairs, scalable-text default, and 48 dp Android-first touch target.
+- Phase implementation comparison `1c0169f1b0a49f8302ca4f82466e41614d858e5c..f76625392cbe7d228182be35de2825d6239830ce` is limited to the intended accessibility production/test files plus P113 evidence.
+- Full repository Jest/typecheck/ESLint/bundle execution and real TalkBack/VoiceOver/device font-scaling verification are not claimed from this connector-only run.
+- GitHub Actions are intentionally not used as a P113 acceptance signal because the account's monthly Actions capacity is exhausted and this run was explicitly authorized to continue without it.
 
-### P111 retained gaps instead of fabricated capabilities
+### P113 retained gaps instead of fabricated verification
 
-1. Device/emulator process-death and real background/foreground verification remains unclaimed from this connector-only run.
-2. Full form-draft persistence across process death remains intentionally unsupported until an approved retention/security/migration policy identifies genuinely safe draft fields.
-3. Active Cashfree native provider launch/callback lifecycle remains blocked by the existing missing SDK/callback adapter; provider/payment session credentials remain intentionally non-persisted.
+1. Real TalkBack/VoiceOver traversal of critical Customer and Chef journeys remains unclaimed until a device/emulator accessibility pass is run.
+2. Real device/emulator verification at enlarged system font sizes remains unclaimed; P114 responsive/IME/safe-area work is intentionally not started here.
+3. P112 remains the user's pre-existing PARTIAL state with no branch evidence found in this run; P113 does not backfill or relabel it.
 
-**Next phase in sequence:** **P112 — Lifecycle-State Matrix Completion — NOT STARTED**.
+**Next phase in sequence:** **P114 — Keyboard/Safe-Area/Responsive Audit — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED in this run.**
 
-**Required action:** Stop after P111. Do not pre-implement P112.
+**Required action:** Stop after P113. Do not pre-implement P114.
 
 ---
 
@@ -151,10 +159,12 @@ Evidence/ledger:
 | P109 | PARTIAL at full Guide/product scope; supported reconciliation boundary implemented/audited | `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md` |
 | P110 | PARTIAL at full Guide/product scope; exact current deep-link/notification routing boundary implemented | `docs/mobile-ui-rebuild/P110_DEEP_LINK_NOTIFICATION_ROUTING_AUDIT.md` |
 | P111 | PARTIAL at full device/product-lifecycle scope; safe current restoration/session/provider boundary implemented | `docs/mobile-ui-rebuild/P111_PROCESS_RESTORATION_BACKGROUND_FOREGROUND_AUDIT.md` |
-| P112 onward | NOT STARTED / not accepted | — |
+| P112 | USER-REPORTED PARTIAL before P113; no branch evidence located in this run | — |
+| P113 | PARTIAL at full device-validation scope; code-level accessibility audit/remediation implemented | `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md` |
+| P114 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P112 work, re-read `plan.md`, `phases.md`, `agent.md`, this ledger, the full implementation guide, and the P111 evidence. Preserve the P111 fail-closed boundary: do not persist raw React Navigation state, form contents, payment/provider credentials, tokens, or cross-role destinations. Continue to let authoritative auth/account resolution choose the Customer/Chef root, and wait for the matching role navigator to register before consuming deferred routing/restoration. P112 is not authorized in this run.
+Before any P114 work, re-read `plan.md`, `phases.md`, `agent.md`, this ledger, the full implementation guide, and the P113 evidence. Preserve the P111 restoration/security boundary and the P113 accessibility semantics/contrast/touch-target contracts. Do not revert the approved `#F62E18` brand token; use the text-safe accessibility token only where normal text requires the stronger contrast target. P114 is not authorized in this run.

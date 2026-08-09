@@ -66,11 +66,15 @@ function menuItem(
       ? [
           {
             id: '99999999-9999-4999-8999-999999999999',
+            menuItemId: id,
+            blobContainer: 'menu',
+            blobName: 'item.jpg',
             publicUrl: 'https://cdn.example.test/item.jpg',
             sortOrder: 0,
             primary: true,
             contentType: 'image/jpeg',
             fileSizeBytes: 100,
+            createdAt: '2026-08-09T07:00:00Z',
           },
         ]
       : [],

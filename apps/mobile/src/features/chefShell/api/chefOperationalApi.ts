@@ -122,6 +122,18 @@ function parseOrderItemSummary(
   return {id, itemName, quantity};
 }
 
+function parseOrderItemSummaries(
+  value: unknown,
+): ChefOperationalOrderItemSummary[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .slice(0, 100)
+    .map(parseOrderItemSummary)
+    .filter((item): item is ChefOperationalOrderItemSummary => item !== null);
+}
+
 function parseDeliverySummary(
   value: unknown,
 ): ChefOperationalDeliverySummary | null {
@@ -152,12 +164,7 @@ function parseOrder(value: unknown): ChefOperationalOrder | null {
   const prepTimeMinutes = optionalPositiveInteger(order.prepTimeMinutes);
   const createdAt = validTimestamp(order.createdAt, true);
   const updatedAt = validTimestamp(order.updatedAt, true);
-  const rawItems = order.items == null
-    ? []
-    : Array.isArray(order.items)
-      ? order.items.slice(0, 100)
-      : null;
-  const items = rawItems?.map(parseOrderItemSummary) ?? null;
+  const items = parseOrderItemSummaries(order.items);
   const deliverySummary = parseDeliverySummary(order.deliveryAddress);
   if (
     !id ||
@@ -166,10 +173,7 @@ function parseOrder(value: unknown): ChefOperationalOrder | null {
     !ORDER_STATUSES.has(status) ||
     (order.prepTimeMinutes != null && prepTimeMinutes === null) ||
     (order.createdAt != null && createdAt === null) ||
-    (order.updatedAt != null && updatedAt === null) ||
-    !items ||
-    items.some(item => item === null) ||
-    (order.deliveryAddress != null && deliverySummary === null)
+    (order.updatedAt != null && updatedAt === null)
   ) {
     return null;
   }
@@ -177,7 +181,7 @@ function parseOrder(value: unknown): ChefOperationalOrder | null {
     id,
     status,
     kitchenName: optionalString(order.kitchenName, 180),
-    items: items as ChefOperationalOrderItemSummary[],
+    items,
     deliverySummary,
     prepTimeMinutes,
     createdAt,

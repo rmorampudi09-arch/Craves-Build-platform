@@ -139,9 +139,10 @@ export type ChefOrdersStackParamList = {
   ChefOrdersCompleted: undefined;
 };
 
-/** P100 registers the focused Chef Edit Profile child route from Guide Reference 48. */
+/** P102 adds the focused Chef Business Information route while preserving P100 edit profile. */
 export type ChefProfileStackParamList = {
   ChefProfileHome: undefined;
+  ChefBusinessInformation: undefined;
   ChefEditProfile: undefined;
 };
 

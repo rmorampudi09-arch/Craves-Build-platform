@@ -60,9 +60,11 @@ function useHideCustomerBottomTabs(navigation: SettingsNavigation) {
 function ChildScaffold({title, subtitle, children}: ChildScaffoldProps) {
   const navigation = useNavigation<SettingsNavigation>();
   useHideCustomerBottomTabs(navigation);
-
   return (
-    <ScreenShell edges={['top']} keyboardAvoiding testID={`customer-settings-${title.toLowerCase().replace(/\s+/g, '-')}`}>
+    <ScreenShell
+      edges={['top']}
+      keyboardAvoiding
+      testID={`customer-settings-${title.toLowerCase().replace(/\s+/g, '-')}`}>
       <View style={styles.root}>
         <View style={styles.header}>
           <Pressable
@@ -89,12 +91,7 @@ function ChildScaffold({title, subtitle, children}: ChildScaffoldProps) {
   );
 }
 
-interface CapabilityNoticeProps {
-  title: string;
-  body: string;
-}
-
-function CapabilityNotice({title, body}: CapabilityNoticeProps) {
+function CapabilityNotice({title, body}: {title: string; body: string}) {
   return (
     <View style={styles.notice} accessibilityRole="text">
       <Icon name="shield" size={iconSize.sm} color={colors.flameRed} />
@@ -167,27 +164,30 @@ export function CustomerSettingsPrivacySecurityScreen() {
   const navigation = useNavigation<SettingsNavigation>();
   const dispatch = useAppDispatch();
   const [loggingOut, setLoggingOut] = useState(false);
-
   const logout = useCallback(() => {
     if (loggingOut) {
       return;
     }
-    Alert.alert('Sign out of this device?', 'Your secure session will be revoked and local private state cleared.', [
-      {text: 'Cancel', style: 'cancel'},
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: async () => {
-          setLoggingOut(true);
-          try {
-            await completeLogout(dispatch);
-          } catch {
-            setLoggingOut(false);
-            Alert.alert('Could not sign out', 'Please try again.');
-          }
+    Alert.alert(
+      'Sign out of this device?',
+      'Your secure session will be revoked and local private state cleared.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Sign out',
+          style: 'destructive',
+          onPress: async () => {
+            setLoggingOut(true);
+            try {
+              await completeLogout(dispatch);
+            } catch {
+              setLoggingOut(false);
+              Alert.alert('Could not sign out', 'Please try again.');
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   }, [dispatch, loggingOut]);
 
   return (
@@ -224,12 +224,10 @@ export function CustomerSettingsChangePasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
   const validation = useMemo(
     () => validatePasswordChange({currentPassword, newPassword, confirmPassword}),
     [confirmPassword, currentPassword, newPassword],
   );
-
   const submit = useCallback(async () => {
     if (submitting || hasPasswordChangeErrors(validation)) {
       return;
@@ -266,7 +264,6 @@ export function CustomerSettingsChangePasswordScreen() {
           style={styles.input}
         />
         {validation.currentPassword ? <Text style={styles.fieldError}>{validation.currentPassword}</Text> : null}
-
         <Text style={styles.fieldLabel}>New password</Text>
         <TextInput
           accessibilityLabel="New password"
@@ -278,7 +275,6 @@ export function CustomerSettingsChangePasswordScreen() {
           style={styles.input}
         />
         {validation.newPassword ? <Text style={styles.fieldError}>{validation.newPassword}</Text> : null}
-
         <Text style={styles.fieldLabel}>Confirm new password</Text>
         <TextInput
           accessibilityLabel="Confirm new password"
@@ -291,7 +287,6 @@ export function CustomerSettingsChangePasswordScreen() {
         />
         {validation.confirmPassword ? <Text style={styles.fieldError}>{validation.confirmPassword}</Text> : null}
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
-
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Update password"
@@ -302,7 +297,11 @@ export function CustomerSettingsChangePasswordScreen() {
             (submitting || hasPasswordChangeErrors(validation)) && styles.primaryButtonDisabled,
             pressed ? styles.primaryButtonPressed : null,
           ]}>
-          {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>Update password</Text>}
+          {submitting ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <Text style={styles.primaryButtonText}>Update password</Text>
+          )}
         </Pressable>
       </View>
     </ChildScaffold>
@@ -373,7 +372,6 @@ export function CustomerSettingsShareScreen() {
       setSharing(false);
     }
   }, [sharing]);
-
   return (
     <ChildScaffold title="Share Craves" subtitle="Use the native share sheet">
       <View style={styles.card}>
@@ -490,6 +488,6 @@ const styles = StyleSheet.create({
   primaryButtonPressed: {opacity: 0.8},
   primaryButtonText: {color: colors.white, fontSize: typography.body, fontWeight: fontWeight.bold},
   aboutCard: {padding: spacing.xl, alignItems: 'center', borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
-  aboutBrand: {color: colors.espressoBrown, fontSize: typography.display, fontWeight: fontWeight.extrabold},
+  aboutBrand: {color: colors.espressoBrown, fontSize: typography.title, fontWeight: fontWeight.extrabold},
   aboutBody: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.body, textAlign: 'center'},
 });

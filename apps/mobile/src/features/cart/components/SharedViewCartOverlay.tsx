@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  AccessibilityInfo,
   Animated,
   Easing,
   Pressable,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 import {useAppSelector} from '../../../app/store/hooks';
 import {resolveMotion} from '../../../design/motion';
+import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {
   colors,
   elevation,
@@ -39,36 +39,12 @@ export function SharedViewCartOverlay({
   const subtotal = useAppSelector(selectCartFoodSubtotal);
   const visible = isViewCartOverlayVisible({itemCount, subtotal}, routePolicy);
   const progress = React.useRef(new Animated.Value(0)).current;
-  const [reduceMotionEnabled, setReduceMotionEnabled] = React.useState<boolean | null>(null);
-
-  React.useEffect(() => {
-    let mounted = true;
-
-    AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
-      if (mounted) {
-        setReduceMotionEnabled(enabled);
-      }
-    });
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotionEnabled,
-    );
-
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
-  }, []);
+  const reduceMotionEnabled = useReducedMotionPreference();
 
   React.useEffect(() => {
     if (!visible) {
       progress.stopAnimation();
       progress.setValue(0);
-      return;
-    }
-
-    if (reduceMotionEnabled === null) {
       return;
     }
 

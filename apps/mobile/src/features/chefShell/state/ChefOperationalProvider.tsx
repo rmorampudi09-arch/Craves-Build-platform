@@ -209,6 +209,18 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
     [ordersQueryKey, queryClient],
   );
 
+  const selectStatus = React.useCallback((status: ChefOrderTab) => {
+    setTabUiState(current => selectChefOrderTab(current, status));
+  }, []);
+
+  const setPage = React.useCallback((status: ChefOrderTab, page: number) => {
+    setTabUiState(current => updateChefOrderTabPage(current, status, page));
+  }, []);
+
+  const setScrollOffset = React.useCallback((status: ChefOrderTab, offset: number) => {
+    setTabUiState(current => updateChefOrderTabScroll(current, status, offset));
+  }, []);
+
   const orderTabs = React.useMemo<ChefOrderTabsOperationalState>(
     () => ({
       selectedStatus: tabUiState.selectedStatus,
@@ -218,13 +230,20 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       scrollState: tabUiState.scrollState,
       pages,
       queryKeys,
-      selectStatus: status => setTabUiState(current => selectChefOrderTab(current, status)),
-      setPage: (status, page) =>
-        setTabUiState(current => updateChefOrderTabPage(current, status, page)),
-      setScrollOffset: (status, offset) =>
-        setTabUiState(current => updateChefOrderTabScroll(current, status, offset)),
+      selectStatus,
+      setPage,
+      setScrollOffset,
     }),
-    [pages, prepTimers, queryKeys, tabCounts, tabUiState],
+    [
+      pages,
+      prepTimers,
+      queryKeys,
+      selectStatus,
+      setPage,
+      setScrollOffset,
+      tabCounts,
+      tabUiState,
+    ],
   );
 
   const value = React.useMemo<ChefOperationalContextValue>(

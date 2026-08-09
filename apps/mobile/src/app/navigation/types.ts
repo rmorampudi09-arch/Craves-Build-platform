@@ -131,13 +131,25 @@ export type CustomerStackRouteName =
   | keyof CustomerOrdersStackParamList
   | keyof CustomerProfileStackParamList;
 
+/** P80 establishes Chef product ownership without pre-implementing P81+ screens. */
+export type ChefTabParamList = {
+  Dashboard: undefined;
+  Orders: undefined;
+  Menu: undefined;
+  Analytics: undefined;
+  Profile: undefined;
+};
+
+export type ChefTabRouteName = keyof ChefTabParamList;
+
 export type CustomerDomainParamList = CustomerAccountStackParamList & CustomerTabParamList;
+export type ChefDomainParamList = ChefAccountStackParamList & ChefTabParamList;
 export type TransactionalStackParamList = CustomerCartStackParamList & CustomerPaymentMethodsStackParamList;
 
 export type NavigationDomainParamLists = {
   Auth: AuthStackParamList;
   Customer: CustomerDomainParamList;
-  Chef: ChefAccountStackParamList;
+  Chef: ChefDomainParamList;
   Transactional: TransactionalStackParamList;
   Modal: never;
 };
@@ -146,4 +158,5 @@ export type NavigationDomain = keyof NavigationDomainParamLists;
 export type RegisteredRouteName =
   | keyof RootStackParamList
   | CustomerTabRouteName
-  | CustomerStackRouteName;
+  | CustomerStackRouteName
+  | ChefTabRouteName;

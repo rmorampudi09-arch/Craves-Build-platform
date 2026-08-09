@@ -16,6 +16,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefAnalyticsScreen} from '../../features/chefAnalytics/screens/ChefAnalyticsScreen';
+import {ChefBusinessInformationScreen} from '../../features/chefBusinessInformation/screens/ChefBusinessInformationScreen';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
 import {ChefAddMenuItemScreen} from '../../features/chefMenu/screens/ChefAddMenuItemScreen';
 import {ChefEditMenuItemScreen} from '../../features/chefMenu/screens/ChefEditMenuItemScreen';
@@ -156,6 +157,10 @@ function ChefProfileNavigator() {
         initialRouteName="ChefProfileHome"
         screenOptions={stackScreenOptions}>
         <ProfileStack.Screen name="ChefProfileHome" component={ChefProfileScreen} />
+        <ProfileStack.Screen
+          name="ChefBusinessInformation"
+          component={ChefBusinessInformationScreen}
+        />
         <ProfileStack.Screen
           name="ChefEditProfile"
           component={ChefEditProfileScreen}

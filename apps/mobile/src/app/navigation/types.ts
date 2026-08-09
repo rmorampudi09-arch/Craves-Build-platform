@@ -131,10 +131,11 @@ export type CustomerStackRouteName =
   | keyof CustomerOrdersStackParamList
   | keyof CustomerProfileStackParamList;
 
-/** P88 extends the Chef Orders stack only through the newly authorized New screen. */
+/** P89 extends the Chef Orders stack through the newly authorized Ready screen. */
 export type ChefOrdersStackParamList = {
   ChefOrdersPreparing: undefined;
   ChefOrdersNew: undefined;
+  ChefOrdersReady: undefined;
 };
 
 /** P80 establishes Chef product ownership without pre-implementing later Chef surfaces. */

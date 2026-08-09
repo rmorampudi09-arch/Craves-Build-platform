@@ -67,15 +67,31 @@ describe('chefOperationalApi parsing', () => {
     ]);
   });
 
-  it('fails closed on unsupported order status or malformed P87 summary data', () => {
+  it('fails closed on unsupported authoritative status while degrading malformed display-only summaries', () => {
     expect(
       parseChefOperationalOrders([{id: ORDER_ID, status: 'UNKNOWN_STATUS'}]),
     ).toBeNull();
     expect(
       parseChefOperationalOrders([
-        {id: ORDER_ID, status: 'PREPARING', items: [{id: 'bad', itemName: 'Meal', quantity: 1}]},
+        {
+          id: ORDER_ID,
+          status: 'PREPARING',
+          items: [{id: 'bad', itemName: 'Meal', quantity: 1}],
+          deliveryAddress: {areaName: 'Indiranagar'},
+        },
       ]),
-    ).toBeNull();
+    ).toEqual([
+      {
+        id: ORDER_ID,
+        status: 'PREPARING',
+        kitchenName: null,
+        items: [],
+        deliverySummary: null,
+        prepTimeMinutes: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]);
   });
 
   it('fails closed on malformed server timer fields', () => {

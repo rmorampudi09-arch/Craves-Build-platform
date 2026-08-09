@@ -33,6 +33,8 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
+import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {CustomerOrderCard} from '../components/CustomerOrderCard';
@@ -214,9 +216,24 @@ export function CustomerOrdersScreen() {
       );
     }
     if (queryError && !snapshot) {
+      if (offline) {
+        return (
+          <CustomerEmptyState
+            actionPending={ordersQuery.isFetching}
+            connectivity="OFFLINE"
+            model={customerEmptyStateAdapters.noInternet()}
+            onAction={actionId => {
+              if (actionId === 'RETRY') {
+                refresh();
+              }
+            }}
+            testID="customer-orders-offline"
+          />
+        );
+      }
       return (
         <TerminalState
-          title={offline ? 'You appear to be offline' : 'Orders could not be loaded'}
+          title="Orders could not be loaded"
           description={queryError.message}
           actionLabel="Try again"
           onAction={refresh}
@@ -234,13 +251,17 @@ export function CustomerOrdersScreen() {
       );
     }
     return (
-      <TerminalState
-        title="No orders yet"
-        description="Once you place an order, its live status and total will appear here."
-        actionLabel="Discover meals"
-        onAction={openDiscovery}
-        secondaryActionLabel="Refresh"
-        onSecondaryAction={refresh}
+      <CustomerEmptyState
+        actionPending={ordersQuery.isRefetching}
+        model={customerEmptyStateAdapters.noOrders()}
+        onAction={actionId => {
+          if (actionId === 'BROWSE_MEALS') {
+            openDiscovery();
+          } else if (actionId === 'REFRESH') {
+            refresh();
+          }
+        }}
+        testID="customer-orders-empty"
       />
     );
   })();

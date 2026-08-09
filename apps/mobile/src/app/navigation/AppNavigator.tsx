@@ -309,6 +309,12 @@ export function AppNavigator() {
       return;
     }
 
+    const role = productRoleFromAuth(authRef.current);
+    if (!role || !navigationRootMatchesRole(role)) {
+      pendingInboundRef.current = candidate;
+      return;
+    }
+
     const {destination} = resolution;
     pendingInboundRef.current = null;
 

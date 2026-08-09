@@ -22,6 +22,7 @@ import {
 import type {CustomerDishDetailStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
+import {shouldStackCriticalActions} from '../../../design/responsive';
 import {
   borderWidth,
   colors,
@@ -100,7 +101,7 @@ export function CustomerDishDetailScreen() {
   const navigation = useNavigation<DishDetailNavigation>();
   const route = useRoute<DishDetailRoute>();
   const dispatch = useAppDispatch();
-  const {width} = useWindowDimensions();
+  const {fontScale, width} = useWindowDimensions();
   const detail = useCustomerDishDetailQuery(route.params.menuItemId);
   const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const cartMutations = useAppSelector(state => state.cart.mutations);
@@ -112,6 +113,7 @@ export function CustomerDishDetailScreen() {
   const [interactionNotice, setInteractionNotice] = useState<string | null>(null);
   const galleryRef = useRef<ScrollView>(null);
   const galleryWidth = Math.max(1, width);
+  const stackPurchaseActions = shouldStackCriticalActions(width, fontScale);
 
   const dish = detail.data;
   const cartLine = useMemo<CartLine | null>(
@@ -348,6 +350,7 @@ export function CustomerDishDetailScreen() {
         </View>
 
         <ScrollView
+          keyboardDismissMode="on-drag"
           refreshControl={
             <RefreshControl
               colors={[colors.flameRed]}
@@ -434,8 +437,16 @@ export function CustomerDishDetailScreen() {
               )
             ) : null}
 
-            <View style={styles.titleRow}>
-              <View style={styles.titleCopy}>
+            <View
+              style={[
+                styles.titleRow,
+                stackPurchaseActions && styles.titleRowStacked,
+              ]}>
+              <View
+                style={[
+                  styles.titleCopy,
+                  stackPurchaseActions && styles.titleCopyStacked,
+                ]}>
                 <Text accessibilityRole="header" style={styles.title}>
                   {dish.itemName}
                 </Text>
@@ -548,7 +559,11 @@ export function CustomerDishDetailScreen() {
               {purchaseMessage}
             </Text>
           ) : null}
-          <View style={styles.purchaseHeading}>
+          <View
+            style={[
+              styles.purchaseHeading,
+              stackPurchaseActions && styles.purchaseHeadingStacked,
+            ]}>
             <View>
               <Text style={styles.purchaseLabel}>Current price</Text>
               <Text style={styles.purchasePrice}>
@@ -562,11 +577,18 @@ export function CustomerDishDetailScreen() {
               </View>
             ) : null}
           </View>
-          <View style={styles.purchaseActions}>
+          <View
+            style={[
+              styles.purchaseActions,
+              stackPurchaseActions && styles.purchaseActionsStacked,
+            ]}>
             {cartLine ? (
               <View
                 accessibilityLabel={`${dish.itemName} quantity ${cartLine.quantity}`}
-                style={styles.quantitySelector}>
+                style={[
+                  styles.quantitySelector,
+                  stackPurchaseActions && styles.quantitySelectorStacked,
+                ]}>
                 <Pressable
                   accessibilityLabel={`Decrease ${dish.itemName} quantity`}
                   accessibilityRole="button"
@@ -601,7 +623,11 @@ export function CustomerDishDetailScreen() {
                 accessibilityHint="Checks the latest availability and price before adding"
                 loading={purchaseBusy}
                 onPress={revalidateAndIncrease}
-                style={styles.purchaseAction}
+                style={
+                  stackPurchaseActions
+                    ? styles.purchaseActionStacked
+                    : styles.purchaseAction
+                }
               />
             )}
             <Button
@@ -613,7 +639,11 @@ export function CustomerDishDetailScreen() {
                 )
               }
               variant="outline"
-              style={styles.purchaseAction}
+              style={
+                stackPurchaseActions
+                  ? styles.purchaseActionStacked
+                  : styles.purchaseAction
+              }
             />
           </View>
         </View>
@@ -706,7 +736,12 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingTop: spacing.md,
   },
+  titleRowStacked: {
+    flexDirection: 'column',
+    gap: spacing.xs,
+  },
   titleCopy: {flex: 1, minWidth: 0},
+  titleCopyStacked: {flex: 0, width: '100%'},
   title: {
     color: colors.espressoBrown,
     fontSize: typography.hero,
@@ -826,6 +861,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  purchaseHeadingStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
   purchaseLabel: {color: colors.textSecondary, fontSize: typography.tiny},
   purchasePrice: {
     marginTop: spacing.xxs,
@@ -833,7 +872,12 @@ const styles = StyleSheet.create({
     fontSize: typography.heading,
     fontWeight: fontWeight.extrabold,
   },
-  revalidatingRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
+  revalidatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
   revalidatingText: {color: colors.textSecondary, fontSize: typography.tiny},
   purchaseActions: {
     marginTop: spacing.sm,
@@ -841,7 +885,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  purchaseActionsStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
   purchaseAction: {flex: 1, minWidth: 0},
+  purchaseActionStacked: {width: '100%'},
   quantitySelector: {
     flex: 1,
     minHeight: touchTarget.comfortable,
@@ -853,6 +902,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     overflow: 'hidden',
     backgroundColor: colors.white,
+  },
+  quantitySelectorStacked: {
+    flex: 0,
+    width: '100%',
   },
   quantityButton: {
     width: touchTarget.minimum,

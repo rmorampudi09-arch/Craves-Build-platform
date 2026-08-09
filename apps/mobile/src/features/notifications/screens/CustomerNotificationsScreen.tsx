@@ -11,6 +11,7 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
+import {inboundRouteDedupe} from '../../../app/navigation/inboundRouting';
 import type {CustomerProfileStackParamList} from '../../../app/navigation/types';
 import {
   borderWidth,
@@ -116,7 +117,7 @@ export function CustomerNotificationsScreen() {
   const bottomNavScroll = useCustomerBottomNavScroll();
   const notificationsQuery = useCustomerNotificationsListQuery();
   const markRead = useMarkCustomerNotificationRead();
-  const pendingReadIds = useRef(new Set<string>());
+  const pendingOpenIds = useRef(new Set<string>());
   const [selectedCategory, setSelectedCategory] = useState<CustomerNotificationCategory>('ALL');
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
 
@@ -138,30 +139,56 @@ export function CustomerNotificationsScreen() {
 
   const openNotice = useCallback(
     async (notice: CustomerNotice) => {
-      if (notice.readAt === null && !pendingReadIds.current.has(notice.id)) {
-        pendingReadIds.current.add(notice.id);
-        try {
-          await markRead.mutateAsync(notice.id);
-        } catch {
-          Alert.alert(
-            'Notification could not be marked read',
-            'Please try again before opening this notification.',
-          );
-          return;
-        } finally {
-          pendingReadIds.current.delete(notice.id);
-        }
+      if (pendingOpenIds.current.has(notice.id)) {
+        return;
       }
+      pendingOpenIds.current.add(notice.id);
 
-      const destination = resolveCustomerNotificationDestination(notice);
-      if (!destination) {
-        return;
+      try {
+        if (notice.readAt === null) {
+          try {
+            await markRead.mutateAsync(notice.id);
+          } catch {
+            Alert.alert(
+              'Notification could not be marked read',
+              'Please try again before opening this notification.',
+            );
+            return;
+          }
+        }
+
+        const destination = resolveCustomerNotificationDestination(notice);
+        if (!destination) {
+          return;
+        }
+
+        const inboundDestination =
+          destination.route === 'CustomerOrderTracking'
+            ? ({
+                kind: 'CUSTOMER_ORDER_TRACKING',
+                orderId: destination.orderId,
+              } as const)
+            : ({
+                kind: 'CUSTOMER_ORDER_DETAIL',
+                orderId: destination.orderId,
+              } as const);
+
+        if (!inboundRouteDedupe.claim(inboundDestination)) {
+          return;
+        }
+
+        try {
+          if (destination.route === 'CustomerOrderTracking') {
+            navigation.navigate('CustomerOrderTracking', {orderId: destination.orderId});
+            return;
+          }
+          navigation.navigate('CustomerOrderDetail', {orderId: destination.orderId});
+        } catch {
+          inboundRouteDedupe.release(inboundDestination);
+        }
+      } finally {
+        pendingOpenIds.current.delete(notice.id);
       }
-      if (destination.route === 'CustomerOrderTracking') {
-        navigation.navigate('CustomerOrderTracking', {orderId: destination.orderId});
-        return;
-      }
-      navigation.navigate('CustomerOrderDetail', {orderId: destination.orderId});
     },
     [markRead, navigation],
   );

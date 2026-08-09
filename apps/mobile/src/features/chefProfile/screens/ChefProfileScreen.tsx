@@ -74,7 +74,7 @@ const BUSINESS_ROWS: readonly AccountRowModel[] = [
     subtitle: 'Settlement history and payout details',
     icon: 'analytics',
     blockerMessage:
-      'Payout history requires the dedicated Chef payout route and payout-read contract before it can open safely.',
+      'Payout history opens the protected Chef payout view; unavailable financial capabilities remain fail-closed until approved contracts exist.',
   },
   {
     id: 'subscription',
@@ -314,6 +314,10 @@ export function ChefProfileScreen() {
     (row: AccountRowModel) => {
       if (row.id === 'business-information') {
         navigation.navigate('ChefBusinessInformation');
+        return;
+      }
+      if (row.id === 'payouts') {
+        navigation.navigate('ChefPayoutHistory');
         return;
       }
       showBlocker(row.title, row.blockerMessage);

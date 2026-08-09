@@ -28,28 +28,27 @@
 - **P87 — Chef Preparing Orders:** PARTIAL at full Guide completion scope; implemented and correctness-hardened to the exact currently authorized mobile/backend boundary. Evidence: `docs/mobile-ui-rebuild/P87_CHEF_PREPARING_ORDERS.md`.
 - **P88 — Chef Orders — New:** PARTIAL at full Guide completion scope; implemented to the exact currently available mobile/backend contract boundary. Evidence: `docs/mobile-ui-rebuild/P88_CHEF_ORDERS_NEW.md`.
 - **P89 — Chef Ready for Pickup:** PARTIAL at full Guide completion scope; Ready UI/read/revalidation/reconciliation and cross-tab Ready entry are implemented to the exact current Chef/backend boundary. Evidence: `docs/mobile-ui-rebuild/P89_CHEF_READY_FOR_PICKUP.md`.
+- **P90 — Chef Completed Orders:** PARTIAL at full Guide completion scope; bounded read-only Completed history/detail and all-tab Completed entry are implemented to the exact current Chef/backend boundary. Evidence: `docs/mobile-ui-rebuild/P90_CHEF_COMPLETED_ORDERS.md`.
 
-**Current executed phase:** **P89 — Chef Ready for Pickup**.
+**Current executed phase:** **P90 — Chef Completed Orders**.
 
-**P89 phase start commit:** `39616ddd754af45082952fcc5c39bcbdaa4fefd7`  
-**P89 implementation/code end:** `d6f237fab92bf4097a561429bcfff030ebe0b3bd`  
-**P89 evidence commit:** `5f91fc172b47a2203a3a1b33d480ce9c2ecd012a`
+**P90 phase start commit:** `a3e29b687f80dc14cd5a45f07652e7854108c094`  
+**P90 implementation/code end:** `ab10161d36d64f692e7708744be6705fc9442979`  
+**P90 evidence commit:** `d080b627697701afb4ce0ea3e7745f28a04f2c9e`
 
-### P89 implemented boundary
+### P90 implemented boundary
 
-- Registered typed logical route `ChefOrdersReady` in the existing nested Chef Orders navigator. P90 / Completed was not registered or implemented.
-- Reused the P86 shared Chef order ownership for Ready projection/count, bounded client page, independent Ready scroll state, shared refresh, Chef counters, and immediate authoritative status reconciliation.
-- Added a virtualized Ready-for-Pickup screen with Ready summary, safe order cards, server-update age, item/address summaries, order-detail navigation, pull refresh, bounded paging, skeleton, empty/error/retry states, mutation/revalidation progress, feedback, and pickup-handoff tip.
-- Delivery-partner assignment, ETA, identity/contact, and customer-note/media values are not fabricated. The screen shows an explicit safe fallback where no Chef-facing contract exists.
-- `Order Picked Up` has a real protected handler: it re-reads the authoritative Chef order, reconciles shared state, recognizes actual `OUT_FOR_DELIVERY` / `DELIVERED` progression, and refuses to fake a Ready → picked-up transition when the server still reports `READY_FOR_PICKUP`.
-- `Not Picked Up Yet` also revalidates/reconciles first and explicitly reports that no escalation request was sent when the Chef escalation contract is absent.
-- Per-order duplicate-action guards prevent simultaneous pickup checks/escalation checks.
-- Ready timing copy uses only server `updatedAt` and labels it as update age. No dedicated `readyAt` or pickup ETA is guessed.
-- New and Preparing now both expose Ready as an enabled status destination. Each transition preserves source-tab scroll state, updates the shared selected status, and navigates through the typed `ChefOrdersReady` route.
-- Completed remains disabled across New, Preparing, and Ready, preserving the P90 boundary.
+- Registered typed logical route `ChefOrdersCompleted` in the existing nested Chef Orders navigator.
+- Reused the P86 shared Chef order ownership where backend `DELIVERED` maps to the `COMPLETED` tab. No second lifecycle model/store was created.
+- Added a dedicated virtualized Completed screen with completed count, delivered-order cards, server-update age, item/address summaries, read-only labeling, order-detail navigation, pull refresh, bounded paging, skeleton, empty/error/retry states, and independent Completed scroll preservation.
+- `View Details` is the only order-level Completed action. No Accept, Reject, Mark Ready, pickup, or other active-order mutation is exposed on completed cards.
+- New, Preparing, and Ready now expose Completed as an enabled destination. Each transition preserves the source scroll position, updates the shared selected status, and navigates through `ChefOrdersCompleted`.
+- Completed can navigate back to New, Preparing, and Ready through the same status strip.
+- Completed timing copy uses only server `updatedAt` and explicitly labels it as server update age. No delivery time is inferred because the current list contract exposes no dedicated `deliveredAt`.
+- Reports, Insights, date filtering, and post-delivery calling stay hidden rather than becoming fake/no-op controls while their exact contracts are absent.
 - Chef bottom navigation/header remain intact and no customer cart state was introduced.
 
-### P89 exact contracts / authority review
+### P90 exact contracts / authority review
 
 Chef order contracts available on the branch:
 
@@ -59,52 +58,52 @@ Chef order contracts available on the branch:
 - `POST /api/v1/chef/orders/{orderId}/reject`
 - `POST /api/v1/chef/orders/{orderId}/ready-for-pickup`
 
-The Chef controller exposes **no** Ready → picked-up mutation, pickup idempotency contract, delivery-partner assignment/status/contact/ETA endpoint, or pickup escalation/support mutation.
+For P90 specifically, the existing list contract supplies `DELIVERED` lifecycle rows and the existing detail contract supplies authoritative order detail.
 
-A separate route exists at `GET /api/v1/orders/{orderId}/delivery-status`, but its controller calls `getForCustomer(...)`; P89 does not cross that customer-only authorization boundary for the Chef role.
+The Chef controller exposes **no** Completed-only endpoint, status/date query parameters, page/cursor contract, dedicated `deliveredAt`, completion-report/metrics endpoint, or post-delivery contact authorization/privacy-window signal.
 
-### P89 changed code files
+### P90 changed code files
 
 - `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
 - `apps/mobile/src/app/navigation/types.ts`
-- `apps/mobile/src/features/chefOrders/domain/chefReadyOrders.ts`
-- `apps/mobile/src/features/chefOrders/domain/chefReadyOrders.test.ts`
-- `apps/mobile/src/features/chefOrders/screens/ChefReadyOrdersScreen.tsx`
-- `apps/mobile/src/features/chefOrders/state/useChefReadyOrderActions.ts`
+- `apps/mobile/src/features/chefOrders/domain/chefCompletedOrders.ts`
+- `apps/mobile/src/features/chefOrders/domain/chefCompletedOrders.test.ts`
+- `apps/mobile/src/features/chefOrders/screens/ChefCompletedOrdersScreen.tsx`
 - `apps/mobile/src/features/chefOrders/screens/ChefNewOrdersScreen.tsx`
 - `apps/mobile/src/features/chefOrders/screens/ChefPreparingOrdersScreen.tsx`
+- `apps/mobile/src/features/chefOrders/screens/ChefReadyOrdersScreen.tsx`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P89_CHEF_READY_FOR_PICKUP.md`
+- `docs/mobile-ui-rebuild/P90_CHEF_COMPLETED_ORDERS.md`
 - `build.md`
 
-### P89 validation / guard state
+### P90 validation / guard state
 
-- Phase-start → code-end compare contains only the eight `apps/mobile` paths listed above. No `services/`, `openapi/`, `infra/`, or `apps/api/` source changed during P89 code implementation.
-- Final navigation commits are narrowly scoped: `9f065b4ce4c09b89a65c642f867ff3d5ad8ee969` enables Ready from Preparing and `d6f237fab92bf4097a561429bcfff030ebe0b3bd` enables Ready from New; Completed stays disabled.
-- GitHub Actions push run `31311678399` for final code-end commit `d6f237fab92bf4097a561429bcfff030ebe0b3bd` completed with failure before runner startup.
-- Job `validate-mobile-code` (`93240328517`) reports no runnable steps.
-- Therefore repository `npm ci`, TypeScript, ESLint, Jest, Android bundle, and backend-guard commands did not execute. The run is not recorded as a code-test failure and is not recorded as a pass.
-- Focused test source exists for Ready status-age derivation, including malformed/missing timestamps and future-skew handling; repository execution is not claimed.
-- The current connector environment does not provide an executable checkout of the private workspace, so project-wide local validation is not claimed.
+- Phase-start → code-end compare is exactly one commit ahead and contains only the eight `apps/mobile` paths listed above.
+- No `services/`, `openapi/`, `infra/`, or `apps/api/` source changed during P90 implementation.
+- Existing P86 test source verifies `DELIVERED` → `COMPLETED` tab mapping/counting plus independent Completed page/scroll state.
+- P90 adds focused test source for honest completed server-update timestamp age, including malformed/missing values and future clock skew.
+- GitHub Actions validation is not claimed for P90. The repository's monthly GitHub Actions capacity is exhausted, and the user explicitly authorized continuing development without Actions for now.
+- Therefore repository `npm ci`, TypeScript, ESLint, Jest, Android bundle, and backend-guard commands are **not recorded as passing or failing for P90**.
+- The current connector environment does not provide an executable private-workspace checkout for project-wide local Android/runtime validation, so local repository certification is not claimed.
 
-### P89 full-Guide blockers retained instead of fabricated
+### P90 full-Guide blockers retained instead of fabricated
 
-1. **Pickup confirmation:** no Chef-facing Ready → picked-up mutation/idempotency contract exists.
-2. **Delivery partner data:** no Chef-facing assignment/status/contact/ETA read contract exists. The customer delivery-status read model is customer-authorized and is not reused.
-3. **Pickup escalation:** no exact Chef support/escalation mutation exists for `Not Picked Up Yet`.
-4. **Dedicated ready timestamp:** Chef order responses expose `updatedAt`, not `readyAt`; the UI therefore labels server update age only.
-5. **Item media/customer note projection:** no authoritative safe card-level media/customer-note contract is exposed by the current Chef list response.
-6. **P86 pagination blocker:** Chef orders still have no status/page/cursor API; Ready uses the bounded existing list projection.
-7. **Reference Image 42 visual certification:** Guide text is readable, but the embedded image is not independently renderable through the current file/repository tooling; pixel-level certification is not claimed.
-8. **Android/device certification and project CI:** no emulator/device validation occurred and the GitHub runner started zero validation steps.
+1. **True server Completed paging/filtering:** `GET /api/v1/chef/orders` remains a bounded feed without Completed/status/date/page/cursor parameters.
+2. **Authoritative delivered timestamp/date range:** list rows expose `updatedAt`, not `deliveredAt`; delivery-date filtering/exact delivery timestamps are not guessed.
+3. **Completion reports/metrics:** no exact completion-report or metrics contract is exposed.
+4. **Insights/Analytics parity:** authoritative completion metrics required by the Guide are unavailable and broader Chef Analytics remains outside P90.
+5. **Post-delivery contact privacy window:** no exact Chef authorization/privacy-window signal exists for after-delivery customer calling, so Completed adds no call action.
+6. **Item thumbnails/media:** the Chef list projection contains item identity/name/quantity but no authoritative item-media field.
+7. **Reference Image 43 visual certification:** Guide text is readable, but the embedded image is not independently renderable through current repository/file tooling; pixel-level certification is not claimed.
+8. **Android/device certification and repository CI:** monthly GitHub Actions capacity is exhausted and no emulator/device validation occurred in this phase.
 
-**Next phase in sequence:** **P90 — Chef Completed Orders — NOT STARTED**.
+**Next phase in sequence:** **P91 — Chef Realtime Order Reconciliation — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P89. Do not pre-implement P90 without explicit user direction.
+**Required action:** Stop after P90. Do not pre-implement P91 without explicit user direction.
 
 ---
 
@@ -122,10 +121,11 @@ Evidence/ledger:
 | P87 | PARTIAL at full Guide scope; exact authorized boundary implemented/hardened | `docs/mobile-ui-rebuild/P87_CHEF_PREPARING_ORDERS.md` |
 | P88 | PARTIAL at full Guide scope; exact current contract boundary implemented | `docs/mobile-ui-rebuild/P88_CHEF_ORDERS_NEW.md` |
 | P89 | PARTIAL at full Guide scope; Ready UI/revalidation/cross-tab entry boundary implemented | `docs/mobile-ui-rebuild/P89_CHEF_READY_FOR_PICKUP.md` |
-| P90 onward | NOT STARTED / not accepted | — |
+| P90 | PARTIAL at full Guide scope; bounded read-only Completed history/detail boundary implemented | `docs/mobile-ui-rebuild/P90_CHEF_COMPLETED_ORDERS.md` |
+| P91 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P90 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, and P86–P89 evidence. Preserve the shared Chef order query/tab/reconciliation ownership. Do not add backend/APIM changes or pre-implement Completed Orders without separate authorization.
+Before any P91 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, and P86–P90 evidence. Preserve the shared Chef order query/tab/reconciliation ownership. Do not add backend/APIM changes or pre-implement realtime reconciliation without separate authorization.

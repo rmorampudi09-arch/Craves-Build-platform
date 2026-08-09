@@ -106,7 +106,7 @@ function activeRouteChain(state: NavigationStateLike): NavigationRouteLike[] {
 
   while (current?.routes.length) {
     const index = Math.min(Math.max(current.index ?? 0, 0), current.routes.length - 1);
-    const route = current.routes[index];
+    const route: NavigationRouteLike = current.routes[index];
     chain.push(route);
     current = route.state;
   }

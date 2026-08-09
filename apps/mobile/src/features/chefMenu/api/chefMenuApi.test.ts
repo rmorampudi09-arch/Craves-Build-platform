@@ -5,6 +5,7 @@ import {
   CHEF_MENU_IMAGE_CONTENT_TYPES,
   CHEF_MENU_IMAGE_FILE_FIELD,
   CHEF_MENU_ITEM_STATUSES,
+  CHEF_MENU_SERVER_DEFAULTS,
   CHEF_MENU_SPICE_LEVELS,
   chefMenuApi,
   parseChefMenuItem,
@@ -15,6 +16,7 @@ import {
 const MENU_ITEM_ID = '123e4567-e89b-42d3-a456-426614174000';
 const KITCHEN_ID = '123e4567-e89b-42d3-a456-426614174001';
 const IMAGE_ID = '123e4567-e89b-42d3-a456-426614174002';
+const OTHER_MENU_ITEM_ID = '123e4567-e89b-42d3-a456-426614174003';
 
 const menuItem = {
   id: MENU_ITEM_ID,
@@ -69,7 +71,7 @@ describe('chefMenuApi contract model', () => {
     jest.restoreAllMocks();
   });
 
-  it('locks the exact backend enums and media content types', () => {
+  it('locks the exact backend enums, media content types, and service defaults', () => {
     expect(CHEF_MENU_ITEM_STATUSES).toEqual(['DRAFT', 'ACTIVE', 'INACTIVE']);
     expect(CHEF_MENU_FOOD_TYPES).toEqual(['VEG', 'NON_VEG', 'EGG']);
     expect(CHEF_MENU_SPICE_LEVELS).toEqual(['MILD', 'MEDIUM', 'SPICY']);
@@ -79,30 +81,67 @@ describe('chefMenuApi contract model', () => {
       'image/webp',
     ]);
     expect(CHEF_MENU_IMAGE_FILE_FIELD).toBe('file');
+    expect(CHEF_MENU_SERVER_DEFAULTS).toEqual({
+      currency: 'INR',
+      available: false,
+      status: 'DRAFT',
+    });
   });
 
   it('keeps missing Guide capabilities explicit instead of inventing routes or enums', () => {
-    expect(CHEF_MENU_CONTRACT_GAPS.itemDetail).toContain('No chef-owned');
-    expect(CHEF_MENU_CONTRACT_GAPS.listQuery).toContain('no search');
-    expect(CHEF_MENU_CONTRACT_GAPS.visibility).toContain('status plus available');
-    expect(CHEF_MENU_CONTRACT_GAPS.deleteOrDuplicate).toContain('No delete');
+    expect(CHEF_MENU_CONTRACT_GAPS.itemDetail.reason).toContain('No chef-owned');
+    expect(CHEF_MENU_CONTRACT_GAPS.listQuery.reason).toContain('no search');
+    expect(CHEF_MENU_CONTRACT_GAPS.visibility.reason).toContain(
+      'status plus available',
+    );
+    expect(CHEF_MENU_CONTRACT_GAPS.deleteOrDuplicate.reason).toContain(
+      'No delete',
+    );
+    expect(CHEF_MENU_CONTRACT_GAPS.mediaPolicy.reason).toContain(
+      'runtime-configured',
+    );
+    expect(CHEF_MENU_CONTRACT_GAPS.categoryMetadata).toEqual(
+      expect.objectContaining({
+        availability: 'unavailable',
+        code: 'BACKEND_CONTRACT_UNAVAILABLE',
+      }),
+    );
   });
 
   it('parses the complete menu item response including media ownership fields', () => {
     expect(parseChefMenuItem(menuItem)).toEqual(menuItem);
   });
 
-  it('rejects unsupported server enum values instead of guessing', () => {
+  it('rejects unsupported server enum and media values instead of guessing', () => {
     expect(parseChefMenuItem({...menuItem, status: 'HIDDEN'})).toBeNull();
     expect(parseChefMenuItem({...menuItem, foodType: 'VEGAN'})).toBeNull();
     expect(parseChefMenuItem({...menuItem, spiceLevel: 'HOT'})).toBeNull();
+    expect(
+      parseChefMenuItem({
+        ...menuItem,
+        images: [{...menuItem.images[0], contentType: 'image/gif'}],
+      }),
+    ).toBeNull();
   });
 
   it('rejects malformed identity, boolean, numeric and timestamp fields', () => {
     expect(parseChefMenuItem({...menuItem, id: 'not-a-uuid'})).toBeNull();
     expect(parseChefMenuItem({...menuItem, available: 'true'})).toBeNull();
     expect(parseChefMenuItem({...menuItem, price: 0})).toBeNull();
+    expect(parseChefMenuItem({...menuItem, price: '199'})).toBeNull();
+    expect(
+      parseChefMenuItem({...menuItem, unitPackageWeightGrams: '450'}),
+    ).toBeNull();
     expect(parseChefMenuItem({...menuItem, updatedAt: 'not-a-date'})).toBeNull();
+  });
+
+  it('rejects media that does not belong to the containing menu item', () => {
+    expect(
+      parseChefMenuItem({
+        ...menuItem,
+        images: [{...menuItem.images[0], menuItemId: OTHER_MENU_ITEM_ID}],
+      }),
+    ).toBeNull();
   });
 
   it('rejects a list when any row violates the exact item contract', () => {

@@ -21,9 +21,9 @@ import {
   CustomerSettingsReferralScreen,
   CustomerSettingsShareScreen,
   CustomerSettingsSubscriptionScreen,
-  CustomerSettingsSupportScreen,
 } from '../../features/customerSettings/screens/CustomerSettingsChildScreens';
 import {CustomerSettingsRouteScreen} from '../../features/customerSettings/screens/CustomerSettingsRouteScreen';
+import {CustomerHelpSupportScreen} from '../../features/customerSupport/screens/CustomerHelpSupportScreen';
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
@@ -188,7 +188,7 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen name="CustomerSettingsAbout" component={CustomerSettingsAboutScreen} />
       <ProfileStack.Screen name="CustomerSettingsShare" component={CustomerSettingsShareScreen} />
       <ProfileStack.Screen name="CustomerSettingsReferral" component={CustomerSettingsReferralScreen} />
-      <ProfileStack.Screen name="CustomerSettingsSupport" component={CustomerSettingsSupportScreen} />
+      <ProfileStack.Screen name="CustomerSettingsSupport" component={CustomerHelpSupportScreen} />
       <ProfileStack.Screen name="CustomerSettingsSubscription" component={CustomerSettingsSubscriptionScreen} />
       <ProfileStack.Screen name="CustomerSettingsLegal" component={CustomerSettingsLegalScreen} />
       <ProfileStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />

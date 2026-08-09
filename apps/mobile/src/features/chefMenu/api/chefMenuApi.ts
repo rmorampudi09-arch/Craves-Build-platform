@@ -6,10 +6,18 @@ const UUID_PATTERN =
 export const CHEF_MENU_ITEM_STATUSES = ['DRAFT', 'ACTIVE', 'INACTIVE'] as const;
 export const CHEF_MENU_FOOD_TYPES = ['VEG', 'NON_VEG', 'EGG'] as const;
 export const CHEF_MENU_SPICE_LEVELS = ['MILD', 'MEDIUM', 'SPICY'] as const;
+export const CHEF_MENU_IMAGE_CONTENT_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+] as const;
+export const CHEF_MENU_IMAGE_FILE_FIELD = 'file' as const;
 
 export type ChefMenuItemStatus = (typeof CHEF_MENU_ITEM_STATUSES)[number];
 export type ChefMenuFoodType = (typeof CHEF_MENU_FOOD_TYPES)[number];
 export type ChefMenuSpiceLevel = (typeof CHEF_MENU_SPICE_LEVELS)[number];
+export type ChefMenuImageContentType =
+  (typeof CHEF_MENU_IMAGE_CONTENT_TYPES)[number];
 
 export interface ChefMenuItemImage {
   id: string;
@@ -45,7 +53,7 @@ export interface ChefMenuItem {
   updatedAt: string;
 }
 
-/** Exact JSON body accepted by MenuItemRequest. PUT is replacement, not partial update. */
+/** Exact JSON body accepted by the backend MenuItemRequest record. */
 export interface ChefMenuItemRequest {
   itemName: string;
   description?: string | null;
@@ -67,16 +75,6 @@ export interface ChefMenuAvailabilityRequest {
   reason?: string | null;
 }
 
-/**
- * Exact multipart field names for POST /api/v1/kitchens/me/menu-items/{menuItemId}/images.
- * The caller owns FormData construction so React Native file objects remain platform-native.
- * Do not manually set the multipart Content-Type boundary.
- */
-export const CHEF_MENU_IMAGE_FORM_FIELDS = {
-  file: 'file',
-  primary: 'primary',
-} as const;
-
 const STATUS_SET = new Set<string>(CHEF_MENU_ITEM_STATUSES);
 const FOOD_TYPE_SET = new Set<string>(CHEF_MENU_FOOD_TYPES);
 const SPICE_LEVEL_SET = new Set<string>(CHEF_MENU_SPICE_LEVELS);
@@ -91,8 +89,8 @@ function requiredString(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
   }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function optionalString(value: unknown): string | null {
@@ -251,7 +249,7 @@ export function parseChefMenuItem(value: unknown): ChefMenuItem | null {
     category,
     foodType,
     price,
-    currency,
+    currency: currency.toUpperCase(),
     servesCount,
     preparationTimeMinutes,
     spiceLevel,
@@ -407,11 +405,14 @@ export const chefMenuApi = {
   async uploadImage(
     menuItemId: string,
     formData: FormData,
+    primary = false,
     signal?: AbortSignal,
   ): Promise<ChefMenuItemImage> {
     const id = requireMenuItemId(menuItemId);
     const response = await httpClient.post<unknown>(
-      `/api/v1/kitchens/me/menu-items/${encodeURIComponent(id)}/images`,
+      `/api/v1/kitchens/me/menu-items/${encodeURIComponent(id)}/images?primary=${
+        primary ? 'true' : 'false'
+      }`,
       formData,
       {signal},
     );

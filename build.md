@@ -39,75 +39,80 @@
 - **P98 — Chef Account Profile:** PARTIAL at full Guide scope; the real `ChefProfileHome` hub, exact kitchen/business-status read, synchronized operational summary, safe role switch/logout, and explicit child-contract blockers are implemented at the exact current mobile/backend boundary. Evidence: `docs/mobile-ui-rebuild/P98_CHEF_ACCOUNT_PROFILE.md`.
 - **P99 — Chef Edit Profile Domain/Form:** PARTIAL at full Guide/product-contract scope; exact current kitchen GET/PUT replacement form domain, draft persistence, validation, suspended read-only safety, duplicate-safe/abortable save model, and canonical Chef identity cache synchronization are implemented without inventing missing photo/cuisine/service-area/business-validation contracts. Evidence: `docs/mobile-ui-rebuild/P99_CHEF_EDIT_PROFILE_DOMAIN_FORM.md`.
 - **P100 — Chef Edit Profile UI:** PARTIAL at full Guide completion scope; the typed `ChefEditProfile` route, focused reference-aligned form UI, exact P99 field editing/save integration, dirty-back protection, suspended read-only state, loading/retry/error/mutation states, and explicit capability blockers are implemented without fabricating missing Guide contracts. Evidence: `docs/mobile-ui-rebuild/P100_CHEF_EDIT_PROFILE_UI.md`.
+- **P101 — Chef Business Information Contract:** PARTIAL at full Guide/product-contract scope; exact current kitchen/application/proof-document sources are modeled fail-closed for mobile, sensitive storage/reviewer identifiers are excluded from the Business Information model, and missing approved-Chef document-maintenance/service-area/cuisine/payout contracts remain explicit. Evidence: `docs/mobile-ui-rebuild/P101_CHEF_BUSINESS_INFORMATION_CONTRACT.md`.
 
-**Current executed phase:** **P100 — Chef Edit Profile UI**.
+**Current executed phase:** **P101 — Chef Business Information Contract**.
 
-**P100 phase start commit:** `2987fce76fae91cc0a11b89006579138335bf838`  
-**P100 implementation/code end:** `d4b1be7194beb0694a037f5739fb2ddb68c8ccb5`  
-**P100 evidence commit:** `c25a7566d776aecc8385defe14c3dd1f2299faed`
+**P101 phase start commit:** `c5bb79ed99d9975f12d40a6e3cf2de883f67acde`  
+**P101 implementation/code end:** `616a8f069306d1288e35dded471f7e0931a38229`  
+**P101 evidence commit:** `75ee003bf6acaafa50c002b0ca4516520d4934c8`
 
-### P100 implemented boundary
+### P101 implemented boundary
 
-- Re-read Guide Reference 48 / source page 40 and implemented only the P100 Chef Edit Profile UI phase; P101 and later Chef Profile child screens remain untouched.
-- Registered typed `ChefEditProfile` in the existing Profile stack and disabled stack gesture removal so unsaved-form navigation remains deliberate.
-- Replaced the P98 Edit Profile blocker with the real Chef-specific route. Entry seeds the existing P99 draft from the canonical kitchen profile before navigation; the screen also defensively hydrates from the existing query if entered without a seeded draft.
-- Added a focused form screen using the existing design tokens, safe area, keyboard avoidance, warm surfaces, Flame Red primary action, Espresso Brown hierarchy, accessible touch targets, scalable React Native text behavior, and scrollable sections.
-- Rendered exact current-contract editable fields only: display name, phone, email, bio/description, kitchen name, address line 1/2, landmark, area name, city, state, and postal code.
-- Reused the P99 Zod schema for field-level validation and added the reference bio character counter.
-- Wired Save Changes to the existing P99 duplicate-safe/abortable mutation model. Save is unavailable until dirty, shows mutation progress, keeps safe recoverable error details visible, and only reports success after the parsed server response commits.
-- Preserved the P99 canonical cache synchronization so successful save refreshes Chef identity/profile consumers rather than producing a UI-only optimistic success.
-- Added `beforeRemove` dirty-state confirmation that protects header/system back. Explicit discard clears the P99 draft before continuing the blocked navigation action.
-- Kept suspended kitchens read-only with a visible operational explanation and no write path.
-- Added initial loading skeleton behavior plus non-fabricating profile-read failure/retry behavior through the existing query model.
-- Kept visible photo Change/Remove controls real, but routed them to the P99 typed `PHOTO_UPLOAD` blocker because no approved Chef upload/remove endpoint or picker policy exists.
-- Kept cuisine/specialty, business-validation, service-area-selection, and social-link reference areas as real explanatory controls backed by the existing P99 typed blocker list; no empty handlers or fake success paths were added.
-- Kept the route under the existing Chef tab shell; the existing tab bar already hides on keyboard. No parallel Chef navigation or customer View Cart state was introduced.
-- No logging was added; therefore no new sensitive logging exposure was introduced.
-- No backend/APIM/OpenAPI/infrastructure/workflow/dependency/customer code changed.
+- Re-read Guide Reference 49 / source page 41 and implemented only the P101 contract phase; P102 Reference-49 UI/document flow remains untouched.
+- Added a dedicated `chefBusinessInformation` feature contract boundary without adding a screen, route, navigator, duplicate HTTP client, backend route, or new dependency.
+- Added a strict safe parser for the exact current `ChefApplicationResponse` used as the backend-authoritative verification/document source.
+- Validated the exact current application lifecycle: `NOT_SUBMITTED`, `PENDING`, `APPROVED`, and `REJECTED`, including required ID/review/rejection invariants instead of accepting impossible state combinations.
+- Validated the current proof-document contract: `AADHAAR_CARD`/`PAN_CARD`, one row per type, persisted status `UPLOADED`, PDF/JPEG/PNG content types, non-empty file metadata, UUIDs, and timestamps.
+- The parser validates server storage/reviewer identifiers where they are part of the exact response but intentionally does not expose `identityId`, `reviewedByIdentityId`, `blobContainer`, or `blobName` through the Reference-49 mobile model.
+- Added a real deduped `GET /api/v1/chef/application` read through the existing authenticated shared HTTP client; no alternate application endpoint was invented.
+- Modeled `GET|PUT /api/v1/kitchens/me` as the current exact Chef-owned business/kitchen profile source already established by P99/P100.
+- Modeled current application verification status and current onboarding proof metadata as supported exact sources.
+- Recorded `POST /api/v1/chef/application/proof-files` as the real multipart onboarding proof source (`documentType` + `file`) while explicitly refusing to classify it as approved-Chef document maintenance: the current service rejects document changes after `APPROVED`.
+- Marked approved-Chef document update/resubmission, per-document validity/expiry/rejection/renewal, service-area management, cuisine/specialty taxonomy, and payout setup/configuration status as unavailable at the current exact backend boundary.
+- Explicitly preserved the distinction between the existing earnings ledger and payout configuration; earnings history is not treated as payout setup.
+- Added focused parser/contract tests covering least-privilege output, lifecycle invariants, document type/status/content-type validation, document uniqueness, exact source paths, and fail-closed missing capabilities.
+- No logging was added, and no sensitive document/storage values are logged.
+- No backend/APIM/OpenAPI/infrastructure/workflow/dependency/customer/navigation/UI/P102 code changed.
 
-### P100 exact sources / boundaries used
+### P101 exact sources / boundaries used
 
-- `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, full 183-page authority, Guide Reference 48 / source page 40 / `image48.jpeg`.
-- `plan.md`, `phases.md`, `agent.md`, and the P99 build/evidence state.
-- `docs/mobile-ui-rebuild/P99_CHEF_EDIT_PROFILE_DOMAIN_FORM.md` — exact form/draft/save/cache boundary and retained missing capabilities.
-- Existing `ChefEditProfileDraftProvider`, `chefEditProfileFormSchema`, `useChefEditProfileModel`, `useChefProfileModel`, design tokens, Icon component, Chef navigation, and current tab shell.
-- Current exact `KitchenProfileRequest`/`GET|PUT /api/v1/kitchens/me` boundary established and source-verified in P99; P100 did not alter it.
+- `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, full 183-page authority, Guide Reference 49 / source page 41 / `image49.jpeg`.
+- `plan.md`, `phases.md`, `agent.md`, `build.md`, and P100 evidence.
+- `services/user-chef-service/src/main/java/in/craves/userchef/web/ChefApplicationController.java` — exact `GET|POST /api/v1/chef/application` and `POST /proof-files` ownership.
+- `services/user-chef-service/src/main/java/in/craves/userchef/web/ApiDtos.java` — exact Chef application/document response types, application statuses, and proof types.
+- `services/user-chef-service/src/main/java/in/craves/userchef/service/ChefApplicationService.java` — authoritative lifecycle rules, same-type proof replacement, and approved-application document-change rejection.
+- `services/user-chef-service/src/main/java/in/craves/userchef/service/BlobDocumentStorageService.java` plus `DocumentStoreProperties.java` — allowed PDF/JPEG/PNG types and backend-configured file-size enforcement/current 10 MiB default.
+- `services/user-chef-service/src/main/resources/db/migration/V1__user_chef_schema.sql` — persisted application/document constraints, including document status `UPLOADED` only and one row per application/document type.
+- `scripts/apim/configure-chef-application-apim.sh` — exact APIM path and GET/POST/proof-file operations.
+- Existing P99/P100 Catalog kitchen contract and shared mobile `httpClient` architecture.
 
-### P100 changed code files
+### P101 changed code files
 
-- `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
-- `apps/mobile/src/app/navigation/types.ts`
-- `apps/mobile/src/features/chefProfile/screens/ChefProfileScreen.tsx`
-- `apps/mobile/src/features/chefProfile/screens/ChefEditProfileScreen.tsx`
+- `apps/mobile/src/features/chefBusinessInformation/api/chefBusinessInformationApi.ts`
+- `apps/mobile/src/features/chefBusinessInformation/api/chefBusinessInformationApi.test.ts`
+- `apps/mobile/src/features/chefBusinessInformation/domain/chefBusinessInformationContract.ts`
+- `apps/mobile/src/features/chefBusinessInformation/domain/chefBusinessInformationContract.test.ts`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P100_CHEF_EDIT_PROFILE_UI.md`
+- `docs/mobile-ui-rebuild/P101_CHEF_BUSINESS_INFORMATION_CONTRACT.md`
 - `build.md`
 
-### P100 validation / guard state
+### P101 validation / guard state
 
-- `GitHub.compare_commits` from phase-start HEAD `2987fce76fae91cc0a11b89006579138335bf838` to code end `d4b1be7194beb0694a037f5739fb2ddb68c8ccb5` shows four fast-forward implementation commits and exactly the four P100 mobile code files listed above.
-- Source-level review confirms the route is typed/registered, Profile Edit opens the correct Chef form, current-contract fields mutate the P99 draft, all visible P100 controls have handlers, Save uses the P99 real mutation path, dirty back navigation is protected, and suspended kitchens remain read-only.
-- Existing P99 focused tests remain the source coverage for form hydration/schema validation/full-request preservation/suspended write prevention/dirty draft behavior/canonical commit/cache synchronization. No new P100 dependency was added.
-- GitHub Actions are intentionally not claimed as a P100 pass/fail signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
-- Project dependency installation, project TypeScript 6.0.3 strict typecheck, ESLint, Jest execution, Android bundle/build, emulator/device keyboard/back behavior, font-scale verification, and pixel-level Screen-48 comparison are **not recorded as passing or failing for P100** from this connector-only implementation run.
-- P100 remains **PARTIAL** because the Guide's full completion gate requires real photo upload progress/error/retry plus device/pixel verification, neither of which can be truthfully claimed at the current exact-contract/tool boundary.
+- `GitHub.compare_commits` from phase-start HEAD `c5bb79ed99d9975f12d40a6e3cf2de883f67acde` to code end `616a8f069306d1288e35dded471f7e0931a38229` shows two fast-forward implementation commits and exactly the four P101 mobile code/test files listed above.
+- Source-level review confirms the only runtime network call added is exact `GET /api/v1/chef/application` through the existing authenticated shared HTTP client, while the capability/source model records only repository-verified current routes.
+- Focused Jest test source was added for parser/state/source/capability behavior, but Jest execution is not claimed from this connector-only run.
+- No new dependency was added.
+- GitHub Actions are intentionally not claimed as a P101 pass/fail signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
+- Project dependency installation, project TypeScript 6.0.3 strict typecheck, ESLint, Jest execution, Android bundle/build, emulator/device behavior, and Reference-49 pixel validation are **not recorded as passing or failing for P101** from this connector-only implementation run.
+- P101 remains **PARTIAL** because the full Guide Reference-49 product contract requires capabilities that do not exist in the current exact backend surface and must not be fabricated.
 
-### P100 retained blockers instead of fabricated Guide capabilities
+### P101 retained blockers instead of fabricated Guide capabilities
 
-1. No approved Chef profile photo upload/remove endpoint was found; the mobile package also has no approved native image-picker/upload policy for this flow. Therefore real upload progress/error/retry remains blocked rather than simulated.
-2. No approved Chef cuisine metadata/read-write contract was found.
-3. No Chef service-area lookup/selection endpoint was found; the exact request supports only current address/`areaName`/coordinate fields.
-4. No separate Chef business-validation/serviceability capability is exposed by the inspected current backend boundary.
-5. Social-link fields are absent from the exact current `KitchenProfileRequest` contract.
-6. Pixel-level Android reference comparison, keyboard/gesture-device behavior, font-scale verification, and the complete reference animation gate cannot be truthfully claimed from this connector-only run.
+1. Current `/api/v1/chef/application/proof-files` is an onboarding/KYC upload boundary and rejects document changes after `APPROVED`; approved-Chef document update/resubmission is not currently contracted.
+2. No per-document verification/rejection/expiry/renewal state or actionable document-level reason contract exists; current persisted proof status is only `UPLOADED`.
+3. No approved Chef service-area list/radius/polygon/serviceability management contract exists; current kitchen profile has only `areaName` and coordinates.
+4. No approved Chef cuisine/specialty taxonomy/read-write contract exists.
+5. No approved Chef payout bank destination/configuration/setup-status contract exists; the earnings ledger is not payout setup.
+6. P102 owns the Reference-49 visual screen, document flow, secure file selection/validation/progress/retry UI, detail/edit navigation, and any presentation of unavailable exact-contract capabilities; none was pre-implemented in P101.
 
-**Next phase in sequence:** **P101 — Chef Business Information Domain/Form — NOT STARTED**.
+**Next phase in sequence:** **P102 — Chef Business Information UI/Document Flow — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P100. Do not pre-implement P101 without explicit user direction.
+**Required action:** Stop after P101. Do not pre-implement P102 without explicit user direction.
 
 ---
 
@@ -136,10 +141,11 @@ Evidence/ledger:
 | P98 | PARTIAL at full Guide scope; exact Chef Profile/kitchen/status/session boundary implemented | `docs/mobile-ui-rebuild/P98_CHEF_ACCOUNT_PROFILE.md` |
 | P99 | PARTIAL at full Guide/product-contract scope; exact current Chef Edit Profile domain/form boundary implemented | `docs/mobile-ui-rebuild/P99_CHEF_EDIT_PROFILE_DOMAIN_FORM.md` |
 | P100 | PARTIAL at full Guide scope; exact current Chef Edit Profile UI boundary implemented | `docs/mobile-ui-rebuild/P100_CHEF_EDIT_PROFILE_UI.md` |
-| P101 onward | NOT STARTED / not accepted | — |
+| P101 | PARTIAL at full Guide/product-contract scope; exact current Chef Business Information contract boundary implemented | `docs/mobile-ui-rebuild/P101_CHEF_BUSINESS_INFORMATION_CONTRACT.md` |
+| P102 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P101 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, P100 evidence, P99 evidence, and the current `features/chefProfile` implementation. Preserve the exact P99/P100 boundary: reuse the current Chef profile query/draft/save/navigation architecture; do not invent photo/cuisine/service-area/business-validation/social-link contracts; do not alter backend/APIM without explicit phase authority; and do not advance beyond the single explicitly authorized phase.
+Before any P102 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, P101 evidence, P100 evidence, and the current `features/chefBusinessInformation` plus `features/chefProfile` implementation. Preserve the P101 exact-contract boundary: verification/application status and current proof metadata remain backend-authoritative; do not invent per-document expiry/rejection/renewal states, approved-Chef document maintenance, service-area, cuisine, or payout-setup contracts; do not expose storage/reviewer identifiers; do not alter backend/APIM without explicit phase authority; and do not advance beyond the single explicitly authorized phase.

@@ -48,27 +48,12 @@ export type CustomerFilterSortRouteParams = {
   origin: 'HOME' | 'CHEFS';
 };
 
-export type CustomerDishDetailRouteParams = {
-  menuItemId: string;
-};
+export type CustomerDishDetailRouteParams = {menuItemId: string};
+export type CustomerDishIngredientsRouteParams = {menuItemId: string};
+export type CustomerKitchenProfileRouteParams = {kitchenId: string};
+export type CustomerKitchenDishesRouteParams = {kitchenId: string};
+export type CustomerOrderRouteParams = {orderId: string};
 
-export type CustomerDishIngredientsRouteParams = {
-  menuItemId: string;
-};
-
-export type CustomerKitchenProfileRouteParams = {
-  kitchenId: string;
-};
-
-export type CustomerKitchenDishesRouteParams = {
-  kitchenId: string;
-};
-
-export type CustomerOrderRouteParams = {
-  orderId: string;
-};
-
-/** Shared typed subroutes owned by customer discovery/detail experiences. */
 export type CustomerDishDetailStackParamList = {
   CustomerDishDetail: CustomerDishDetailRouteParams;
   CustomerDishIngredients: CustomerDishIngredientsRouteParams;
@@ -76,30 +61,14 @@ export type CustomerDishDetailStackParamList = {
   CustomerKitchenDishes: CustomerKitchenDishesRouteParams;
 };
 
-/** P55 customer order child routes use the order ID only. */
 export type CustomerOrderDetailStackParamList = {
   CustomerOrderDetail: CustomerOrderRouteParams;
   CustomerOrderTracking: CustomerOrderRouteParams;
 };
 
-/**
- * P46 registers the cart as the first real customer transactional route. It is
- * shared by each customer tab stack so opening and closing Cart preserves the
- * originating tab stack and its scroll/filter state.
- */
-export type CustomerCartStackParamList = {
-  CustomerCart: undefined;
-};
+export type CustomerCartStackParamList = {CustomerCart: undefined};
+export type CustomerPaymentMethodsStackParamList = {CustomerPaymentMethods: undefined};
 
-/** P68 adds the shared active/empty-cart Payment Methods destination. */
-export type CustomerPaymentMethodsStackParamList = {
-  CustomerPaymentMethods: undefined;
-};
-
-/**
- * P25 customer shell types. Each bottom tab owns a stack navigator so product
- * child routes can open without resetting sibling tab state.
- */
 export type CustomerHomeStackParamList = {
   CustomerHomeRoot: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
@@ -120,7 +89,21 @@ export type CustomerOrdersStackParamList = {
   CustomerCartStackParamList &
   CustomerPaymentMethodsStackParamList;
 
-/** P74 adds the customer Settings active/empty-cart destination. */
+/** P75 registers the complete customer Settings child-route surface. */
+export type CustomerSettingsChildStackParamList = {
+  CustomerSettingsNotifications: undefined;
+  CustomerSettingsPrivacySecurity: undefined;
+  CustomerSettingsChangePassword: undefined;
+  CustomerSettingsLanguage: undefined;
+  CustomerSettingsAppearance: undefined;
+  CustomerSettingsAbout: undefined;
+  CustomerSettingsShare: undefined;
+  CustomerSettingsReferral: undefined;
+  CustomerSettingsSupport: undefined;
+  CustomerSettingsSubscription: undefined;
+  CustomerSettingsLegal: undefined;
+};
+
 export type CustomerProfileStackParamList = {
   CustomerProfileRoot: undefined;
   CustomerProfileEdit: undefined;
@@ -128,7 +111,8 @@ export type CustomerProfileStackParamList = {
   CustomerFavorites: undefined;
   CustomerNotifications: undefined;
   CustomerSettings: undefined;
-} & CustomerDishDetailStackParamList &
+} & CustomerSettingsChildStackParamList &
+  CustomerDishDetailStackParamList &
   CustomerOrderDetailStackParamList &
   CustomerCartStackParamList &
   CustomerPaymentMethodsStackParamList;
@@ -148,13 +132,7 @@ export type CustomerStackRouteName =
   | keyof CustomerProfileStackParamList;
 
 export type CustomerDomainParamList = CustomerAccountStackParamList & CustomerTabParamList;
-
-/**
- * P68 keeps Cart and Payment Methods in the logical Transactional domain while
- * preserving the physical route inside the active customer tab stack.
- */
-export type TransactionalStackParamList = CustomerCartStackParamList &
-  CustomerPaymentMethodsStackParamList;
+export type TransactionalStackParamList = CustomerCartStackParamList & CustomerPaymentMethodsStackParamList;
 
 export type NavigationDomainParamLists = {
   Auth: AuthStackParamList;

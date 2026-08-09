@@ -1,10 +1,13 @@
 import {
+  EmailAuthProvider,
   getAuth,
   getIdToken,
+  reauthenticateWithCredential,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
   signOut,
+  updatePassword,
 } from '@react-native-firebase/auth';
 
 let phoneConfirmation: Awaited<ReturnType<typeof signInWithPhoneNumber>> | null = null;
@@ -30,6 +33,16 @@ export const firebaseAuth = {
   },
   async sendPasswordReset(email: string): Promise<void> {
     await sendPasswordResetEmail(getAuth(), email.trim());
+  },
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const user = getAuth().currentUser;
+    if (!user?.email) {
+      throw new Error('PASSWORD_CHANGE_REQUIRES_EMAIL_SESSION');
+    }
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, newPassword);
+    await getIdToken(user, true);
   },
   async signOut(): Promise<void> {
     phoneConfirmation = null;

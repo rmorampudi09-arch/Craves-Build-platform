@@ -10,9 +10,13 @@ import {
   View,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
+import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NavigationProp} from '@react-navigation/native';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
-import type {CustomerCartStackParamList} from '../../../app/navigation/types';
+import type {
+  CustomerCartStackParamList,
+  CustomerTabParamList,
+} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {
   colors,
@@ -26,11 +30,10 @@ import {
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
-import {
-  RecoverableErrorBanner,
-  TerminalState,
-} from '../../../shared/components/LifecycleStates';
+import {RecoverableErrorBanner, TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
+import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
@@ -274,6 +277,15 @@ export function CustomerCartScreen() {
     }
   }, [refreshCart, snapshotStatus]);
 
+  const browseMeals = useCallback(() => {
+    const tabs = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
+    if (tabs) {
+      tabs.navigate('Home');
+      return;
+    }
+    navigation.goBack();
+  }, [navigation]);
+
   const handleMutationOutcome = useCallback((outcome: CartMutationOutcome) => {
     if (outcome.status === 'FAILED') {
       setInteractionError(outcome.error.message);
@@ -376,10 +388,7 @@ export function CustomerCartScreen() {
         />
       ) : null}
       {interactionError ? (
-        <RecoverableErrorBanner
-          message={interactionError}
-          style={styles.notice}
-        />
+        <RecoverableErrorBanner message={interactionError} style={styles.notice} />
       ) : null}
 
       {model ? (
@@ -414,11 +423,7 @@ export function CustomerCartScreen() {
       </View>
     ) : null;
 
-  const renderSectionHeader = ({
-    section,
-  }: {
-    section: CartKitchenSectionModel;
-  }) => (
+  const renderSectionHeader = ({section}: {section: CartKitchenSectionModel}) => (
     <View style={styles.kitchenHeader}>
       <Text style={styles.kitchenName}>{section.kitchenName}</Text>
       <Text style={styles.kitchenMeta}>
@@ -437,9 +442,7 @@ export function CustomerCartScreen() {
     />
   );
 
-  const checkoutEnabled = Boolean(
-    model?.checkout.enabled && model.billSummary.complete,
-  );
+  const checkoutEnabled = Boolean(model?.checkout.enabled && model.billSummary.complete);
   const foodSubtotal = model?.billSummary.foodSubtotal.amount ?? null;
   const checkoutStatus = model
     ? getCartCheckoutStatusCopy(model.checkout, model.billSummary.complete)
@@ -459,6 +462,21 @@ export function CustomerCartScreen() {
     }
 
     if (!model) {
+      if (snapshotErrorCode === 'NETWORK_ERROR') {
+        return (
+          <CustomerEmptyState
+            actionPending={snapshotStatus === 'LOADING'}
+            connectivity="OFFLINE"
+            model={customerEmptyStateAdapters.noInternet()}
+            onAction={actionId => {
+              if (actionId === 'RETRY') {
+                refreshCart();
+              }
+            }}
+            testID="customer-cart-offline"
+          />
+        );
+      }
       return (
         <TerminalState
           title="Cart could not be loaded"
@@ -480,12 +498,15 @@ export function CustomerCartScreen() {
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={
-          <TerminalState
-            title="Your cart is empty"
-            description="Add a meal from Home or Chefs and it will appear here instantly."
-            actionLabel="Back to browsing"
-            onAction={() => navigation.goBack()}
+          <CustomerEmptyState
+            model={customerEmptyStateAdapters.emptyCart()}
+            onAction={actionId => {
+              if (actionId === 'BROWSE_MEALS') {
+                browseMeals();
+              }
+            }}
             style={styles.emptyState}
+            testID="customer-cart-empty"
           />
         }
         onScroll={bottomNavScroll.onScroll}

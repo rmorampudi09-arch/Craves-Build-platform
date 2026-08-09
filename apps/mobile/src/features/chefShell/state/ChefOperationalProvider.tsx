@@ -85,8 +85,11 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
     },
   });
 
-  const orders = ordersQuery.data ?? [];
-  const notices = notificationsQuery.data ?? [];
+  const orders = React.useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
+  const notices = React.useMemo(
+    () => notificationsQuery.data ?? [],
+    [notificationsQuery.data],
+  );
   const counters = React.useMemo(
     () => deriveChefOperationalCounters(orders, notices),
     [orders, notices],

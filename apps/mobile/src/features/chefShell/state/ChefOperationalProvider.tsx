@@ -11,6 +11,23 @@ import {
   deriveChefOperationalCounters,
   type ChefOperationalCounters,
 } from '../domain/chefOperationalCounters';
+import {
+  CHEF_ORDER_TABS,
+  createChefOrderTabQueryKey,
+  createInitialChefOrderTabUiState,
+  deriveChefOrderTabCounts,
+  deriveChefOrderTabPage,
+  deriveChefPrepTimers,
+  selectChefOrderTab,
+  updateChefOrderTabPage,
+  updateChefOrderTabScroll,
+  type ChefOrderTab,
+  type ChefOrderTabCounts,
+  type ChefOrderTabPage,
+  type ChefOrderTabPageState,
+  type ChefOrderTabScrollState,
+  type ChefPrepTimer,
+} from '../../chefOrders/domain/chefOrderTabs';
 
 const CHEF_ROLE = 'CHEF' as const;
 const EMPTY_COUNTERS: ChefOperationalCounters = {
@@ -20,10 +37,24 @@ const EMPTY_COUNTERS: ChefOperationalCounters = {
   unreadNotifications: 0,
 };
 
+export interface ChefOrderTabsOperationalState {
+  selectedStatus: ChefOrderTab;
+  ordersPage: ChefOrderTabPageState;
+  tabCounts: ChefOrderTabCounts;
+  prepTimers: Record<string, ChefPrepTimer>;
+  scrollState: ChefOrderTabScrollState;
+  pages: Record<ChefOrderTab, ChefOrderTabPage>;
+  queryKeys: Record<ChefOrderTab, readonly unknown[]>;
+  selectStatus: (status: ChefOrderTab) => void;
+  setPage: (status: ChefOrderTab, page: number) => void;
+  setScrollOffset: (status: ChefOrderTab, offset: number) => void;
+}
+
 interface ChefOperationalContextValue {
   counters: ChefOperationalCounters;
   orders: ChefOperationalOrder[];
   notices: ChefOperationalNotice[];
+  orderTabs: ChefOrderTabsOperationalState;
   ordersStatus: 'pending' | 'error' | 'success';
   notificationsStatus: 'pending' | 'error' | 'success';
   isRefreshing: boolean;
@@ -37,6 +68,9 @@ const ChefOperationalContext = React.createContext<ChefOperationalContextValue |
 export function ChefOperationalProvider({children}: React.PropsWithChildren) {
   const queryClient = useQueryClient();
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
+  const [tabUiState, setTabUiState] = React.useState(createInitialChefOrderTabUiState);
+  const [clockSampleMs, setClockSampleMs] = React.useState(() => Date.now());
+
   const ordersQueryKey = React.useMemo(
     () =>
       identityId
@@ -96,16 +130,79 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
     () => deriveChefOperationalCounters(orders, notices),
     [orders, notices],
   );
+  const tabCounts = React.useMemo(() => deriveChefOrderTabCounts(orders), [orders]);
+
+  React.useEffect(() => {
+    if (!identityId || tabCounts.PREPARING === 0) {
+      return undefined;
+    }
+    setClockSampleMs(Date.now());
+    const timerId = setInterval(() => setClockSampleMs(Date.now()), 15_000);
+    return () => clearInterval(timerId);
+  }, [identityId, tabCounts.PREPARING]);
+
+  const pages = React.useMemo<Record<ChefOrderTab, ChefOrderTabPage>>(
+    () => ({
+      NEW: deriveChefOrderTabPage(orders, 'NEW', tabUiState.ordersPage.NEW),
+      PREPARING: deriveChefOrderTabPage(orders, 'PREPARING', tabUiState.ordersPage.PREPARING),
+      READY: deriveChefOrderTabPage(orders, 'READY', tabUiState.ordersPage.READY),
+      COMPLETED: deriveChefOrderTabPage(orders, 'COMPLETED', tabUiState.ordersPage.COMPLETED),
+    }),
+    [orders, tabUiState.ordersPage],
+  );
+
+  const queryKeys = React.useMemo<Record<ChefOrderTab, readonly unknown[]>>(() => {
+    const fallback = (status: ChefOrderTab) =>
+      ['craves', 'v1', 'private', 'chef-order-tab', status, 'signed-out'] as const;
+    return {
+      NEW: identityId
+        ? createChefOrderTabQueryKey(identityId, 'NEW', pages.NEW.page, pages.NEW.pageSize)
+        : fallback('NEW'),
+      PREPARING: identityId
+        ? createChefOrderTabQueryKey(identityId, 'PREPARING', pages.PREPARING.page, pages.PREPARING.pageSize)
+        : fallback('PREPARING'),
+      READY: identityId
+        ? createChefOrderTabQueryKey(identityId, 'READY', pages.READY.page, pages.READY.pageSize)
+        : fallback('READY'),
+      COMPLETED: identityId
+        ? createChefOrderTabQueryKey(identityId, 'COMPLETED', pages.COMPLETED.page, pages.COMPLETED.pageSize)
+        : fallback('COMPLETED'),
+    };
+  }, [identityId, pages]);
+
+  const prepTimers = React.useMemo(
+    () => deriveChefPrepTimers(orders, clockSampleMs),
+    [clockSampleMs, orders],
+  );
 
   const refresh = React.useCallback(async () => {
     await Promise.allSettled([ordersQuery.refetch(), notificationsQuery.refetch()]);
   }, [notificationsQuery, ordersQuery]);
+
+  const orderTabs = React.useMemo<ChefOrderTabsOperationalState>(
+    () => ({
+      selectedStatus: tabUiState.selectedStatus,
+      ordersPage: tabUiState.ordersPage,
+      tabCounts,
+      prepTimers,
+      scrollState: tabUiState.scrollState,
+      pages,
+      queryKeys,
+      selectStatus: status => setTabUiState(current => selectChefOrderTab(current, status)),
+      setPage: (status, page) =>
+        setTabUiState(current => updateChefOrderTabPage(current, status, page)),
+      setScrollOffset: (status, offset) =>
+        setTabUiState(current => updateChefOrderTabScroll(current, status, offset)),
+    }),
+    [pages, prepTimers, queryKeys, tabCounts, tabUiState],
+  );
 
   const value = React.useMemo<ChefOperationalContextValue>(
     () => ({
       counters: identityId ? counters : EMPTY_COUNTERS,
       orders: identityId ? orders : [],
       notices,
+      orderTabs,
       ordersStatus: ordersQuery.status,
       notificationsStatus: notificationsQuery.status,
       isRefreshing: ordersQuery.isFetching || notificationsQuery.isFetching,
@@ -124,12 +221,29 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       notices,
       notificationsQuery.isFetching,
       notificationsQuery.status,
+      orderTabs,
       orders,
       ordersQuery.isFetching,
       ordersQuery.status,
       refresh,
     ],
   );
+
+  React.useEffect(() => {
+    if (identityId === null) {
+      setTabUiState(createInitialChefOrderTabUiState());
+    }
+  }, [identityId]);
+
+  React.useEffect(() => {
+    for (const tab of CHEF_ORDER_TABS) {
+      const effectivePage = pages[tab].page;
+      if (tabUiState.ordersPage[tab] !== effectivePage) {
+        setTabUiState(current => updateChefOrderTabPage(current, tab, effectivePage));
+        break;
+      }
+    }
+  }, [pages, tabUiState.ordersPage]);
 
   return (
     <ChefOperationalContext.Provider value={value}>

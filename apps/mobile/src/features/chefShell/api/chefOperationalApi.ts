@@ -2,6 +2,7 @@ import {httpClient} from '../../../core/http/httpClient';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_JAVA_INTEGER = 2_147_483_647;
 
 export type ChefOperationalOrderStatus =
   | 'PAYMENT_PENDING'
@@ -37,6 +38,9 @@ const ORDER_STATUSES = new Set<ChefOperationalOrderStatus>([
 export interface ChefOperationalOrder {
   id: string;
   status: ChefOperationalOrderStatus;
+  prepTimeMinutes: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface ChefOperationalNotice {
@@ -74,6 +78,16 @@ function validTimestamp(value: unknown, nullable = false): string | null {
   return value;
 }
 
+function optionalPositiveInteger(value: unknown): number | null {
+  if (value == null) {
+    return null;
+  }
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= MAX_JAVA_INTEGER
+    ? parsed
+    : null;
+}
+
 function parseOrder(value: unknown): ChefOperationalOrder | null {
   const order = asRecord(value);
   if (!order) {
@@ -81,10 +95,21 @@ function parseOrder(value: unknown): ChefOperationalOrder | null {
   }
   const id = boundedString(order.id, 64);
   const status = boundedString(order.status, 40) as ChefOperationalOrderStatus | null;
-  if (!id || !UUID_PATTERN.test(id) || !status || !ORDER_STATUSES.has(status)) {
+  const prepTimeMinutes = optionalPositiveInteger(order.prepTimeMinutes);
+  const createdAt = validTimestamp(order.createdAt, true);
+  const updatedAt = validTimestamp(order.updatedAt, true);
+  if (
+    !id ||
+    !UUID_PATTERN.test(id) ||
+    !status ||
+    !ORDER_STATUSES.has(status) ||
+    (order.prepTimeMinutes != null && prepTimeMinutes === null) ||
+    (order.createdAt != null && createdAt === null) ||
+    (order.updatedAt != null && updatedAt === null)
+  ) {
     return null;
   }
-  return {id, status};
+  return {id, status, prepTimeMinutes, createdAt, updatedAt};
 }
 
 function orderArrayFromResponse(value: unknown): unknown[] | null {

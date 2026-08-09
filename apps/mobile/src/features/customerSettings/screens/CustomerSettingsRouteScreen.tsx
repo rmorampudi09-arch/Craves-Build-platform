@@ -1,14 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import React, {useCallback, useState} from 'react';
+import {Alert, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -28,7 +19,6 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {Button} from '../../../shared/components/Button';
 import {Icon, type IconName} from '../../../shared/components/Icon';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
@@ -48,62 +38,6 @@ type SettingsNavigation = NativeStackNavigationProp<
 >;
 type CustomerTabsNavigation = BottomTabNavigationProp<CustomerTabParamList>;
 
-type LanguagePreference = 'English' | 'Hindi';
-type AppearancePreference = 'System' | 'Light' | 'Dark';
-
-type CustomerSettingsPreferences = {
-  language: LanguagePreference;
-  notificationsEnabled: boolean;
-  appearance: AppearancePreference;
-};
-
-const DEFAULT_PREFERENCES: CustomerSettingsPreferences = {
-  language: 'English',
-  notificationsEnabled: true,
-  appearance: 'System',
-};
-
-const LANGUAGE_OPTIONS: readonly LanguagePreference[] = ['English', 'Hindi'];
-const APPEARANCE_OPTIONS: readonly AppearancePreference[] = [
-  'System',
-  'Light',
-  'Dark',
-];
-
-function preferenceStorageKey(identityId: string): string {
-  return `craves.customer.settings.v1.${identityId}`;
-}
-
-function parsePreferences(raw: string | null): CustomerSettingsPreferences {
-  if (!raw) {
-    return DEFAULT_PREFERENCES;
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<CustomerSettingsPreferences>;
-    return {
-      language: LANGUAGE_OPTIONS.includes(parsed.language as LanguagePreference)
-        ? (parsed.language as LanguagePreference)
-        : DEFAULT_PREFERENCES.language,
-      notificationsEnabled:
-        typeof parsed.notificationsEnabled === 'boolean'
-          ? parsed.notificationsEnabled
-          : DEFAULT_PREFERENCES.notificationsEnabled,
-      appearance: APPEARANCE_OPTIONS.includes(
-        parsed.appearance as AppearancePreference,
-      )
-        ? (parsed.appearance as AppearancePreference)
-        : DEFAULT_PREFERENCES.appearance,
-    };
-  } catch {
-    return DEFAULT_PREFERENCES;
-  }
-}
-
-function cycleValue<T extends string>(values: readonly T[], current: T): T {
-  const index = values.indexOf(current);
-  return values[(index + 1) % values.length] ?? values[0];
-}
-
 interface SettingsRowProps {
   icon: IconName;
   title: string;
@@ -111,18 +45,9 @@ interface SettingsRowProps {
   value?: string;
   destructive?: boolean;
   onPress?: () => void;
-  right?: React.ReactNode;
 }
 
-function SettingsRow({
-  icon,
-  title,
-  subtitle,
-  value,
-  destructive = false,
-  onPress,
-  right,
-}: SettingsRowProps) {
+function SettingsRow({icon, title, subtitle, value, destructive = false, onPress}: SettingsRowProps) {
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
@@ -130,10 +55,7 @@ function SettingsRow({
       accessibilityHint={subtitle}
       disabled={!onPress}
       onPress={onPress}
-      style={({pressed}) => [
-        styles.row,
-        pressed && onPress ? styles.rowPressed : null,
-      ]}>
+      style={({pressed}) => [styles.row, pressed && onPress ? styles.rowPressed : null]}>
       <View style={[styles.rowIcon, destructive && styles.rowIconDanger]}>
         <Icon
           name={icon}
@@ -142,16 +64,11 @@ function SettingsRow({
         />
       </View>
       <View style={styles.rowCopy}>
-        <Text style={[styles.rowTitle, destructive && styles.dangerText]}>
-          {title}
-        </Text>
+        <Text style={[styles.rowTitle, destructive && styles.dangerText]}>{title}</Text>
         <Text style={styles.rowSubtitle}>{subtitle}</Text>
       </View>
       {value ? <Text style={styles.rowValue}>{value}</Text> : null}
-      {right ??
-        (onPress ? (
-          <Icon name="chevron-right" size={iconSize.xs} color={colors.placeholder} />
-        ) : null)}
+      {onPress ? <Icon name="chevron-right" size={iconSize.xs} color={colors.placeholder} /> : null}
     </Pressable>
   );
 }
@@ -159,92 +76,23 @@ function SettingsRow({
 export function CustomerSettingsRouteScreen() {
   const navigation = useNavigation<SettingsNavigation>();
   const dispatch = useAppDispatch();
-  const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const itemCount = useAppSelector(selectCartItemCount);
   const profileQuery = useCustomerProfileQuery();
   const header = useCustomerHeaderState();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
-  const [preferences, setPreferences] =
-    useState<CustomerSettingsPreferences>(DEFAULT_PREFERENCES);
-  const [savedPreferences, setSavedPreferences] =
-    useState<CustomerSettingsPreferences>(DEFAULT_PREFERENCES);
-  const [loadingPreferences, setLoadingPreferences] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const hideBottomTabBar = useCallback(() => {
     const tabs = navigation.getParent<CustomerTabsNavigation>();
     tabs?.setOptions({tabBarStyle: {display: 'none'}});
-    return () => {
-      tabs?.setOptions({tabBarStyle: undefined});
-    };
+    return () => tabs?.setOptions({tabBarStyle: undefined});
   }, [navigation]);
-
   useFocusEffect(hideBottomTabBar);
-
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      if (!identityId) {
-        if (active) {
-          setPreferences(DEFAULT_PREFERENCES);
-          setSavedPreferences(DEFAULT_PREFERENCES);
-          setLoadingPreferences(false);
-        }
-        return;
-      }
-      try {
-        const raw = await AsyncStorage.getItem(preferenceStorageKey(identityId));
-        if (!active) {
-          return;
-        }
-        const next = parsePreferences(raw);
-        setPreferences(next);
-        setSavedPreferences(next);
-      } finally {
-        if (active) {
-          setLoadingPreferences(false);
-        }
-      }
-    }
-    load().catch(() => {
-      if (active) {
-        setLoadingPreferences(false);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [identityId]);
-
-  const dirty = useMemo(
-    () => JSON.stringify(preferences) !== JSON.stringify(savedPreferences),
-    [preferences, savedPreferences],
-  );
 
   const profile =
     profileQuery.contractState.status === 'ready'
       ? profileQuery.contractState.data.profile
       : null;
-
-  const handleSave = useCallback(async () => {
-    if (!identityId || saving) {
-      return;
-    }
-    setSaving(true);
-    try {
-      await AsyncStorage.setItem(
-        preferenceStorageKey(identityId),
-        JSON.stringify(preferences),
-      );
-      setSavedPreferences(preferences);
-      Alert.alert('Settings saved', 'Your customer preferences were saved on this device.');
-    } catch {
-      Alert.alert('Settings not saved', 'Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  }, [identityId, preferences, saving]);
 
   const handleLogout = useCallback(() => {
     if (loggingOut) {
@@ -268,16 +116,7 @@ export function CustomerSettingsRouteScreen() {
     ]);
   }, [dispatch, loggingOut]);
 
-  const showChildFlowBlocker = useCallback((title: string) => {
-    Alert.alert(
-      `${title} unavailable`,
-      'This child destination is not registered in the approved P74 mobile route contract yet.',
-    );
-  }, []);
-
-  const openCart = useCallback(() => {
-    navigation.navigate('CustomerCart');
-  }, [navigation]);
+  const openCart = useCallback(() => navigation.navigate('CustomerCart'), [navigation]);
 
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-settings">
@@ -297,11 +136,7 @@ export function CustomerSettingsRouteScreen() {
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={
-              header.badgeLabel
-                ? `Notifications, ${header.badgeLabel} unread`
-                : 'Notifications'
-            }
+            accessibilityLabel={header.badgeLabel ? `Notifications, ${header.badgeLabel} unread` : 'Notifications'}
             onPress={header.openNotifications}
             style={styles.headerButton}>
             <Icon name="bell" size={iconSize.md} color={colors.espressoBrown} />
@@ -313,49 +148,41 @@ export function CustomerSettingsRouteScreen() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={
-              itemCount > 0 ? `Cart, ${itemCount} items` : 'Cart, empty'
-            }
+            accessibilityLabel={itemCount > 0 ? `Cart, ${itemCount} items` : 'Cart, empty'}
             onPress={openCart}
             style={styles.headerButton}>
             <Text style={styles.cartGlyph}>🛍️</Text>
             {itemCount > 0 ? (
               <View style={styles.headerBadge}>
-                <Text style={styles.headerBadgeText}>
-                  {itemCount > 99 ? '99+' : itemCount}
-                </Text>
+                <Text style={styles.headerBadgeText}>{itemCount > 99 ? '99+' : itemCount}</Text>
               </View>
             ) : null}
           </Pressable>
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.content}>
             <Text style={styles.sectionEyebrow}>ACCOUNT</Text>
             <View style={styles.accountCard}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {profile ? resolveCustomerProfileInitials(profile) : 'C'}
-                </Text>
+                <Text style={styles.avatarText}>{profile ? resolveCustomerProfileInitials(profile) : 'C'}</Text>
               </View>
               <View style={styles.accountCopy}>
-                <Text style={styles.accountName}>
-                  {profile ? resolveCustomerProfileDisplayName(profile) : 'Craves customer'}
-                </Text>
-                <Text style={styles.accountMeta}>
-                  {profile?.email ?? 'Email unavailable'}
-                </Text>
-                <Text style={styles.accountMeta}>
-                  {profile
-                    ? resolveCustomerProfilePhoneLabel(profile)
-                    : 'Phone unavailable'}
-                </Text>
-                <Text style={styles.accountMeta}>
-                  {header.locationDisplayName}
-                </Text>
+                <Text style={styles.accountName}>{profile ? resolveCustomerProfileDisplayName(profile) : 'Craves customer'}</Text>
+                <Text style={styles.accountMeta}>{profile?.email ?? 'Email unavailable'}</Text>
+                <Text style={styles.accountMeta}>{profile ? resolveCustomerProfilePhoneLabel(profile) : 'Phone unavailable'}</Text>
+                <Text style={styles.accountMeta}>{header.locationDisplayName}</Text>
               </View>
+            </View>
+
+            <Text style={styles.sectionEyebrow}>ACCOUNT SETTINGS</Text>
+            <View style={styles.card}>
+              <SettingsRow
+                icon="shield"
+                title="Privacy & Security"
+                subtitle="Password and current-session controls"
+                onPress={() => navigation.navigate('CustomerSettingsPrivacySecurity')}
+              />
             </View>
 
             <Text style={styles.sectionEyebrow}>PREFERENCES</Text>
@@ -363,14 +190,8 @@ export function CustomerSettingsRouteScreen() {
               <SettingsRow
                 icon="mail"
                 title="Language"
-                subtitle="Language preference"
-                value={preferences.language}
-                onPress={() =>
-                  setPreferences(current => ({
-                    ...current,
-                    language: cycleValue(LANGUAGE_OPTIONS, current.language),
-                  }))
-                }
+                subtitle="App-wide language preference"
+                onPress={() => navigation.navigate('CustomerSettingsLanguage')}
               />
               <View style={styles.divider} />
               <SettingsRow
@@ -384,79 +205,68 @@ export function CustomerSettingsRouteScreen() {
               <SettingsRow
                 icon="bell"
                 title="Notifications"
-                subtitle="Local notification preference"
-                right={
-                  <Switch
-                    accessibilityLabel="Notifications preference"
-                    value={preferences.notificationsEnabled}
-                    onValueChange={value =>
-                      setPreferences(current => ({
-                        ...current,
-                        notificationsEnabled: value,
-                      }))
-                    }
-                    trackColor={{false: colors.border, true: colors.creamDeep}}
-                    thumbColor={
-                      preferences.notificationsEnabled
-                        ? colors.flameRed
-                        : colors.placeholder
-                    }
-                  />
-                }
+                subtitle="Push, email and SMS preferences"
+                onPress={() => navigation.navigate('CustomerSettingsNotifications')}
               />
               <View style={styles.divider} />
               <SettingsRow
                 icon="eye"
                 title="Appearance"
-                subtitle="Display preference"
-                value={preferences.appearance}
-                onPress={() =>
-                  setPreferences(current => ({
-                    ...current,
-                    appearance: cycleValue(APPEARANCE_OPTIONS, current.appearance),
-                  }))
-                }
+                subtitle="System, light or dark theme"
+                onPress={() => navigation.navigate('CustomerSettingsAppearance')}
               />
             </View>
 
-            <Text style={styles.preferenceNote}>
-              Language, notification and appearance choices are persisted as customer UI
-              preferences. P75 owns deeper child flows and app-wide application rules.
-            </Text>
-
-            <Text style={styles.sectionEyebrow}>OTHER</Text>
+            <Text style={styles.sectionEyebrow}>SHARE & MEMBERSHIP</Text>
             <View style={styles.card}>
               <SettingsRow
+                icon="mail"
+                title="Share Craves"
+                subtitle="Open the native share sheet"
+                onPress={() => navigation.navigate('CustomerSettingsShare')}
+              />
+              <View style={styles.divider} />
+              <SettingsRow
+                icon="account"
+                title="Referral"
+                subtitle="Invite and reward status"
+                onPress={() => navigation.navigate('CustomerSettingsReferral')}
+              />
+              <View style={styles.divider} />
+              <SettingsRow
                 icon="orders"
-                title="Terms & Conditions"
-                subtitle="Legal terms"
-                onPress={() => showChildFlowBlocker('Terms & Conditions')}
+                title="Membership"
+                subtitle="Subscription and benefits"
+                onPress={() => navigation.navigate('CustomerSettingsSubscription')}
+              />
+            </View>
+
+            <Text style={styles.sectionEyebrow}>SUPPORT & INFO</Text>
+            <View style={styles.card}>
+              <SettingsRow
+                icon="mail"
+                title="Get Support"
+                subtitle="Help and contact destination"
+                onPress={() => navigation.navigate('CustomerSettingsSupport')}
               />
               <View style={styles.divider} />
               <SettingsRow
                 icon="shield"
-                title="Privacy Policy"
-                subtitle="Privacy and data information"
-                onPress={() => showChildFlowBlocker('Privacy Policy')}
+                title="Legal"
+                subtitle="Terms & Conditions and Privacy Policy"
+                onPress={() => navigation.navigate('CustomerSettingsLegal')}
               />
               <View style={styles.divider} />
               <SettingsRow
                 icon="account"
                 title="About Craves"
-                subtitle="App information"
-                onPress={() => Alert.alert('About Craves', 'Craves mobile • version 0.0.1')}
+                subtitle="Application information"
+                onPress={() => navigation.navigate('CustomerSettingsAbout')}
               />
             </View>
 
-            <Text style={styles.sectionEyebrow}>SUPPORT</Text>
+            <Text style={styles.sectionEyebrow}>SESSION</Text>
             <View style={styles.card}>
-              <SettingsRow
-                icon="mail"
-                title="Get Support"
-                subtitle="Help categories and contact actions"
-                onPress={() => showChildFlowBlocker('Support')}
-              />
-              <View style={styles.divider} />
               <SettingsRow
                 icon="lock"
                 title={loggingOut ? 'Logging out…' : 'Logout'}
@@ -466,20 +276,13 @@ export function CustomerSettingsRouteScreen() {
               />
             </View>
 
-            <Button
-              label="Save Changes"
-              loading={saving}
-              disabled={loadingPreferences || !identityId || !dirty}
-              onPress={handleSave}
-              style={styles.saveButton}
-            />
+            <Text style={styles.phaseNote}>
+              P75 routes are registered. Actions without an approved production contract are capability-gated inside their child screen rather than simulated locally.
+            </Text>
           </View>
         </ScrollView>
 
-        <CustomerLocationSelector
-          visible={locationSelectorVisible}
-          onClose={() => setLocationSelectorVisible(false)}
-        />
+        <CustomerLocationSelector visible={locationSelectorVisible} onClose={() => setLocationSelectorVisible(false)} />
       </View>
     </ScreenShell>
   );
@@ -498,125 +301,32 @@ const styles = StyleSheet.create({
     borderBottomWidth: borderWidth.standard,
     borderBottomColor: colors.border,
   },
-  headerButton: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  headerButton: {width: touchTarget.minimum, height: touchTarget.minimum, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center'},
   headerTitleWrap: {minWidth: 0, flex: 1},
-  headerTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
+  headerTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
   headerSubtitle: {color: colors.textSecondary, fontSize: typography.tiny},
   cartGlyph: {fontSize: 20},
-  headerBadge: {
-    position: 'absolute',
-    top: 1,
-    right: 0,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 3,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.flameRed,
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
+  headerBadge: {position: 'absolute', top: 1, right: 0, minWidth: 18, height: 18, paddingHorizontal: 3, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.flameRed, borderWidth: 2, borderColor: colors.white},
   headerBadgeText: {color: colors.white, fontSize: 9, fontWeight: fontWeight.bold},
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.lg,
-  },
+  scrollContent: {flexGrow: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.lg},
   content: {width: '100%', maxWidth: 640, alignSelf: 'center'},
-  sectionEyebrow: {
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.extrabold,
-    letterSpacing: 0.8,
-  },
-  accountCard: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    ...elevation.card,
-  },
-  avatar: {
-    width: 58,
-    height: 58,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.creamDeep,
-  },
-  avatarText: {
-    color: colors.flameRed,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.extrabold,
-  },
+  sectionEyebrow: {marginTop: spacing.md, marginBottom: spacing.xs, color: colors.textSecondary, fontSize: typography.tiny, fontWeight: fontWeight.extrabold, letterSpacing: 0.8},
+  accountCard: {flexDirection: 'row', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white, ...elevation.card},
+  avatar: {width: 58, height: 58, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.creamDeep},
+  avatarText: {color: colors.flameRed, fontSize: typography.heading, fontWeight: fontWeight.extrabold},
   accountCopy: {minWidth: 0, flex: 1, gap: spacing.xxs},
-  accountName: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
+  accountName: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
   accountMeta: {color: colors.textSecondary, fontSize: typography.small},
-  card: {
-    overflow: 'hidden',
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-  },
-  row: {
-    minHeight: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
+  card: {overflow: 'hidden', borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
+  row: {minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm},
   rowPressed: {backgroundColor: colors.surfaceMuted},
-  rowIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
-  },
+  rowIcon: {width: 38, height: 38, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarm},
   rowIconDanger: {backgroundColor: colors.surfaceMuted},
   rowCopy: {minWidth: 0, flex: 1},
-  rowTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
+  rowTitle: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.semibold},
   rowSubtitle: {marginTop: 2, color: colors.textSecondary, fontSize: typography.tiny},
-  rowValue: {
-    maxWidth: '28%',
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
+  rowValue: {maxWidth: '28%', color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.semibold},
   dangerText: {color: colors.error},
   divider: {height: borderWidth.standard, marginLeft: 66, backgroundColor: colors.border},
-  preferenceNote: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    lineHeight: 18,
-  },
-  saveButton: {marginTop: spacing.xl, marginBottom: spacing.xxl},
+  phaseNote: {marginTop: spacing.md, marginBottom: spacing.xxl, color: colors.textSecondary, fontSize: typography.tiny, lineHeight: 18},
 });

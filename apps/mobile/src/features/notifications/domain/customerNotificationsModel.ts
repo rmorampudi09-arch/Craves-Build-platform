@@ -1,3 +1,4 @@
+import {isInboundResourceId} from '../../../app/navigation/inboundRouting';
 import type {CustomerNotice} from '../../customerShell/api/customerShellApi';
 
 export type CustomerNotificationCategory =
@@ -162,7 +163,7 @@ export function formatCustomerNotificationTimestamp(
 export function resolveCustomerNotificationDestination(
   notice: CustomerNotice,
 ): CustomerNotificationDestination | null {
-  if (!notice.targetId) {
+  if (!isInboundResourceId(notice.targetId)) {
     return null;
   }
   switch (normalizedToken(notice.targetType)) {

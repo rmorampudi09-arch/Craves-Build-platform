@@ -13,6 +13,22 @@ export const CHEF_MENU_IMAGE_CONTENT_TYPES = [
 ] as const;
 export const CHEF_MENU_IMAGE_FILE_FIELD = 'file' as const;
 
+/** Guide-required capabilities that have no approved exact backend/APIM contract today. */
+export const CHEF_MENU_CONTRACT_GAPS = {
+  itemDetail: 'No chef-owned menu-item detail GET route is exposed.',
+  listQuery:
+    'The chef-owned list route exposes no search, filter, category, page, cursor, or summary parameters.',
+  categoryMetadata: 'No chef menu category/subcategory metadata route is exposed.',
+  visibility:
+    'No separate visibility contract exists; backend state is status plus available only.',
+  deleteOrDuplicate: 'No delete or duplicate menu-item mutation is exposed.',
+  draftRules:
+    'No separate draft-save or draft-validation contract exists beyond MenuItemRequest status=DRAFT.',
+  duplicateNameCheck: 'No menu item duplicate/name-check route is exposed.',
+  mediaManagement:
+    'Upload is exposed, but media delete, reorder, and set-primary-after-upload routes are not exposed.',
+} as const;
+
 export type ChefMenuItemStatus = (typeof CHEF_MENU_ITEM_STATUSES)[number];
 export type ChefMenuFoodType = (typeof CHEF_MENU_FOOD_TYPES)[number];
 export type ChefMenuSpiceLevel = (typeof CHEF_MENU_SPICE_LEVELS)[number];
@@ -24,7 +40,7 @@ export interface ChefMenuItemImage {
   menuItemId: string;
   blobContainer: string;
   blobName: string;
-  contentType: string;
+  contentType: ChefMenuImageContentType;
   fileSizeBytes: number;
   publicUrl: string | null;
   sortOrder: number;
@@ -78,6 +94,7 @@ export interface ChefMenuAvailabilityRequest {
 const STATUS_SET = new Set<string>(CHEF_MENU_ITEM_STATUSES);
 const FOOD_TYPE_SET = new Set<string>(CHEF_MENU_FOOD_TYPES);
 const SPICE_LEVEL_SET = new Set<string>(CHEF_MENU_SPICE_LEVELS);
+const IMAGE_CONTENT_TYPE_SET = new Set<string>(CHEF_MENU_IMAGE_CONTENT_TYPES);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -108,9 +125,9 @@ function instant(value: unknown): string | null {
     : null;
 }
 
-function positiveNumber(value: unknown): number | null {
+function price(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  return Number.isFinite(parsed) && parsed >= 0.01 ? parsed : null;
 }
 
 function positiveInteger(value: unknown): number | null {
@@ -153,8 +170,11 @@ export function parseChefMenuItemImage(value: unknown): ChefMenuItemImage | null
   const menuItemId = uuid(raw.menuItemId);
   const blobContainer = requiredString(raw.blobContainer);
   const blobName = requiredString(raw.blobName);
-  const contentType = requiredString(raw.contentType);
-  const fileSizeBytes = nonNegativeInteger(raw.fileSizeBytes);
+  const contentType = parseEnum<ChefMenuImageContentType>(
+    raw.contentType,
+    IMAGE_CONTENT_TYPE_SET,
+  );
+  const fileSizeBytes = positiveInteger(raw.fileSizeBytes);
   const sortOrder = nonNegativeInteger(raw.sortOrder);
   const primary = exactBoolean(raw.primary);
   const createdAt = instant(raw.createdAt);
@@ -198,7 +218,7 @@ export function parseChefMenuItem(value: unknown): ChefMenuItem | null {
   const itemName = requiredString(raw.itemName);
   const category = requiredString(raw.category);
   const foodType = parseEnum<ChefMenuFoodType>(raw.foodType, FOOD_TYPE_SET);
-  const price = positiveNumber(raw.price);
+  const itemPrice = price(raw.price);
   const currency = requiredString(raw.currency);
   const servesCount = optionalPositiveInteger(raw.servesCount);
   const preparationTimeMinutes = optionalPositiveInteger(
@@ -224,7 +244,7 @@ export function parseChefMenuItem(value: unknown): ChefMenuItem | null {
     !itemName ||
     !category ||
     !foodType ||
-    price === null ||
+    itemPrice === null ||
     !currency ||
     (raw.servesCount != null && servesCount === null) ||
     (raw.preparationTimeMinutes != null && preparationTimeMinutes === null) ||
@@ -248,7 +268,7 @@ export function parseChefMenuItem(value: unknown): ChefMenuItem | null {
     description: optionalString(raw.description),
     category,
     foodType,
-    price,
+    price: itemPrice,
     currency: currency.toUpperCase(),
     servesCount,
     preparationTimeMinutes,
@@ -285,8 +305,8 @@ export function validateChefMenuItemRequest(
   if (!FOOD_TYPE_SET.has(request.foodType)) {
     throw new Error('Menu item food type is unsupported.');
   }
-  if (positiveNumber(request.price) === null) {
-    throw new Error('Menu item price must be greater than zero.');
+  if (price(request.price) === null) {
+    throw new Error('Menu item price must be at least 0.01.');
   }
   if (positiveInteger(request.unitPackageWeightGrams) === null) {
     throw new Error('Package weight must be a positive integer.');

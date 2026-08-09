@@ -3,7 +3,7 @@ import {cartActions} from '../../cart/state/cartSlice';
 import {customerShellActions} from '../../customerShell/state/customerShellSlice';
 import {discoveryFilterActions} from '../../discoveryFilters/state/discoveryFilterSlice';
 import {discoverySearchActions} from '../../discoverySearch/state/discoverySearchSlice';
-import {paymentMethodActions} from '../../payment/state/paymentMethodSlice';
+import {clearPrimaryPaymentMethod} from '../../payment/state/paymentMethodSlice';
 import {
   isolateChefRole,
   resetCustomerRoleReduxState,
@@ -13,7 +13,7 @@ const expectedCustomerResetActions = [
   customerShellActions.resetCustomerShell(),
   discoveryFilterActions.resetDiscoveryFilters(),
   discoverySearchActions.resetDiscoverySearch(),
-  paymentMethodActions.clearPrimaryPaymentMethod(),
+  clearPrimaryPaymentMethod(),
   cartActions.resetCartDomain(),
 ];
 

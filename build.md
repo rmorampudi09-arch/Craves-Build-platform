@@ -30,13 +30,13 @@
 - **P89 — Chef Ready for Pickup:** PARTIAL at full Guide completion scope; Ready UI/read/revalidation/reconciliation and cross-tab Ready entry are implemented to the exact current Chef/backend boundary. Evidence: `docs/mobile-ui-rebuild/P89_CHEF_READY_FOR_PICKUP.md`.
 - **P90 — Chef Completed Orders:** PARTIAL at full Guide completion scope; bounded read-only Completed history/detail and all-tab Completed entry are implemented to the exact current Chef/backend boundary. Evidence: `docs/mobile-ui-rebuild/P90_CHEF_COMPLETED_ORDERS.md`.
 - **P91 — Chef Realtime/Near-Realtime Order Event Reconciliation:** DONE at authorized code scope; near-real-time refetch/reconciliation is implemented through the existing exact Chef orders contract without inventing a push transport. Evidence: `docs/mobile-ui-rebuild/P91_CHEF_REALTIME_ORDER_RECONCILIATION.md`. GitHub Actions validation is not claimed because the account's monthly Actions capacity is exhausted.
-- **P92 — Chef Menu Contract Model:** PARTIAL at full Guide/product-contract scope; the complete currently approved five-route Chef Menu contract is typed, parsed, tested at source level, and centralized for mobile without inventing missing Guide capabilities. Evidence: `docs/mobile-ui-rebuild/P92_CHEF_MENU_CONTRACT_MODEL.md`. GitHub Actions validation is not claimed because the account's monthly Actions capacity is exhausted.
+- **P92 — Chef Menu Contract Model:** PARTIAL at full Guide/product-contract scope; the complete currently approved five-route Chef Menu contract is typed, fail-closed parsed, source-tested, and centralized for mobile without inventing missing Guide capabilities. Evidence: `docs/mobile-ui-rebuild/P92_CHEF_MENU_CONTRACT_MODEL.md`. GitHub Actions validation is not claimed because the account's monthly Actions capacity is exhausted.
 
 **Current executed phase:** **P92 — Chef Menu Contract Model**.
 
 **P92 phase start commit:** `ec78b211fb52cc46b66200de012195c446c90ed7`  
-**P92 implementation/code end:** `da396494a0d1d776d4869891a8a28e14596514a0`  
-**P92 evidence commit:** `4e65cb27a6978b7a09351c0894bcef927e4b1cc8`
+**P92 final implementation/code end:** `2b59e2c96e8835562b34a1ebf83b5c275b50ea1e`  
+**P92 refreshed evidence commit:** `66f998088e9f5c3d058d678c3ec34c2cd5e47386`
 
 ### P92 implemented boundary
 
@@ -45,9 +45,11 @@
 - Modeled the complete current menu-item and image responses, including `kitchenId`, media ownership/storage fields, availability, status, and server timestamps.
 - Modeled exact `MenuItemRequest` and `AvailabilityRequest` request shapes and explicit backend validation primitives, including the `0.01` minimum price and positive integer delivery metadata.
 - Modeled the exact image MIME allowlist: JPEG, PNG, WebP.
+- Hardened unknown-response parsing so numeric strings are not silently coerced and image records must belong to their containing menu item.
+- Exposed exact create/replace service defaults for later consumers: `INR`, `DRAFT`, and unavailable/false when the corresponding optional inputs are omitted/null/blank according to server behavior.
 - Added wrappers over the existing central `httpClient` for the exact five approved routes only: list, create, PUT replace, availability patch, and image upload.
 - Image upload uses multipart `file` with the exact `primary` request parameter and does not manually set a multipart Content-Type boundary.
-- Added explicit contract-gap metadata for Guide-required behavior whose server contract is absent.
+- Added typed `BACKEND_CONTRACT_UNAVAILABLE` records for Guide-required behavior whose server contract is absent.
 - Removed the earlier Dashboard-specific duplicate Chef menu transport model. Dashboard retains compatibility aliases but now delegates menu reads/parsing to P92's canonical contract.
 - P93 Chef Menu UI and P94 Add/Edit UI were not started.
 
@@ -87,19 +89,20 @@ Evidence/ledger:
 
 The focused source covers:
 
-- exhaustive menu/food/spice enum values and image MIME types;
+- exhaustive menu/food/spice enum values, image MIME types, and server defaults;
 - full response parsing including media ownership fields;
-- fail-closed malformed IDs, timestamps, booleans, prices, and unsupported enum values;
+- fail-closed malformed IDs, timestamps, booleans, numeric strings, prices, and unsupported enum/media values;
+- cross-item image ownership rejection;
 - exact `0.01` price minimum and positive delivery metadata;
 - exact list/create/PUT replace/availability/image-upload routes and bodies;
 - malformed menu-item ID rejection before writes;
-- explicit missing-contract metadata;
+- typed missing-contract metadata;
 - P82 Dashboard compatibility against the canonical full Chef Menu response shape.
 
 ### P92 validation / guard state
 
-- Phase-start → implementation-code-end compare contains only the four `apps/mobile` paths listed above.
-- No `services/`, `openapi/`, `infra/`, `apps/api/`, backend/APIM, or server-pipeline source changed during P92 implementation.
+- P92 source-code changes are confined to the four `apps/mobile` paths listed above; evidence/ledger changes are confined to the P92 evidence file and `build.md`.
+- No `services/`, `openapi/`, `infra/`, `apps/api/`, backend/APIM, controller, deployment, or server-pipeline source changed during P92.
 - No package/dependency was added.
 - Focused Jest test **source** was added/updated and reviewed against current controller/DTO/service/APIM source; execution is not claimed.
 - The user explicitly reported that the account's monthly GitHub Actions limit is exhausted and authorized continuing without Actions. Actions are therefore not treated as a P92 pass/fail signal.
@@ -116,8 +119,8 @@ The focused source covers:
 6. No incomplete/partial draft-save contract; current `MenuItemRequest` still requires core fields even for `status=DRAFT`.
 7. No duplicate/name-check endpoint.
 8. No image delete/reorder/post-upload set-primary mutations.
-9. No explicit catalog-sync mutation; customer catalog derives from persisted menu state.
-10. No client-readable configured media-size capability.
+9. No explicit catalog publication/sync acknowledgement mutation; customer catalog derives from persisted menu state.
+10. No client-readable configured media-size/image-count capability.
 11. GitHub Actions/device certification remains unavailable for this phase because of the reported account limit and connector execution boundary.
 
 **Next phase in sequence:** **P93 — Chef Menu UI — NOT STARTED**.
@@ -144,7 +147,7 @@ The focused source covers:
 | P89 | PARTIAL at full Guide scope; Ready UI/revalidation/cross-tab entry boundary implemented | `docs/mobile-ui-rebuild/P89_CHEF_READY_FOR_PICKUP.md` |
 | P90 | PARTIAL at full Guide scope; bounded read-only Completed history/detail boundary implemented | `docs/mobile-ui-rebuild/P90_CHEF_COMPLETED_ORDERS.md` |
 | P91 | DONE at authorized code scope; near-real-time refetch/reconciliation implemented; Actions not claimed | `docs/mobile-ui-rebuild/P91_CHEF_REALTIME_ORDER_RECONCILIATION.md` |
-| P92 | PARTIAL at full Guide/product-contract scope; exact current five-route menu contract centralized | `docs/mobile-ui-rebuild/P92_CHEF_MENU_CONTRACT_MODEL.md` |
+| P92 | PARTIAL at full Guide/product-contract scope; exact current five-route menu contract centralized/hardened | `docs/mobile-ui-rebuild/P92_CHEF_MENU_CONTRACT_MODEL.md` |
 | P93 onward | NOT STARTED / not accepted | — |
 
 ---

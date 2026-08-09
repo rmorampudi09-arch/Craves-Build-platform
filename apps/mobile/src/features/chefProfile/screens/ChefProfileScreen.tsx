@@ -63,10 +63,10 @@ const BUSINESS_ROWS: readonly AccountRowModel[] = [
   {
     id: 'business-information',
     title: 'Business information',
-    subtitle: 'Kitchen details, address and operating status',
+    subtitle: 'Verification, documents, kitchen details and business status',
     icon: 'chef',
     blockerMessage:
-      'Business information has its own approved Chef flow and is not registered in this mobile route yet.',
+      'Business information is available in the dedicated Chef business flow.',
   },
   {
     id: 'payouts',
@@ -311,8 +311,14 @@ export function ChefProfileScreen() {
   );
 
   const handleBlockedRow = React.useCallback(
-    (row: AccountRowModel) => showBlocker(row.title, row.blockerMessage),
-    [showBlocker],
+    (row: AccountRowModel) => {
+      if (row.id === 'business-information') {
+        navigation.navigate('ChefBusinessInformation');
+        return;
+      }
+      showBlocker(row.title, row.blockerMessage);
+    },
+    [navigation, showBlocker],
   );
 
   const handleEditProfile = React.useCallback(() => {
@@ -536,7 +542,7 @@ export function ChefProfileScreen() {
               <View style={styles.businessDetailRow}>
                 <Text style={styles.businessDetailLabel}>Verification</Text>
                 <Text style={styles.businessDetailMuted}>
-                  Separate verification contract unavailable
+                  Open Business information for the verification record
                 </Text>
               </View>
             </View>

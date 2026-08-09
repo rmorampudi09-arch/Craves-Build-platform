@@ -38,20 +38,21 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 - **P75 — Customer Settings Child Flows: PARTIAL.** Eleven typed Settings child routes are registered. Real Firebase re-authenticated password change, current-device logout, native Share, parent location integration, validation/error/disabled states, and focused tab treatment are implemented. Notification preference mutation, app-wide language/theme application, other-device session management, referral, membership, trusted legal content destinations, and runtime build metadata remain unavailable exact-contract blockers. The P75 support boundary is superseded by P76, but trusted support content/integration remains unavailable through P76's more specific blockers.
 - **P76 — Help and Support — Empty Cart: PARTIAL.** Screen 35 is implemented at the exact mobile-contract boundary on the existing typed Profile-stack support route. Shared location/notification behavior, back navigation, bottom-navigation-aware scrolling, immediate-help/quick-help/popular-topics/contact/reassurance structure, honest disabled support actions, and focused capability tests are implemented. Exact support configuration/content/availability/chat/ticket contracts are absent, and runtime Android comparison against the Screen 35 reference remains outstanding. Empty cart continues to hide View Cart through the canonical shared-cart rule.
 - **P77 — Help and Support — Active Cart: PARTIAL.** Screen 36 now reuses the P76 Help & Support composition through one typed route wrapper that reads canonical cart selectors, applies the existing customer route policy, renders the shared Espresso Brown View Cart with live item count/subtotal, opens the existing CustomerCart route, preserves cart state, adds active-cart content clearance, and returns immediately to the empty state at zero items. Exact support configuration/content/availability/chat/ticket contracts remain absent and runtime Android comparison against the Screen 36 reference remains outstanding.
+- **P78 — Customer Empty/Search/Offline/No-Data System: PARTIAL.** One configurable eight-state model/component plus small context adapters is implemented. Live authoritative Cart, Orders, Home Search/Offline, and Saved Addresses surfaces now use it where their data contracts permit. Exact search query preservation, conditional recovery actions, reduced-motion-aware state animation, the no-loop `OFFLINE -> ONLINE` recovery edge, and canonical zero-item View Cart suppression are covered. Live approved connectivity event sourcing, runtime Guide Ref 37 Android comparison, and contract-blocked Favorites/Reviews/Coupons host activation remain outstanding.
 
-**Current executed phase:** **P77 — Help and Support — Active Cart — PARTIAL at exact contract-backed scope**.
+**Current executed phase:** **P78 — Customer Empty/Search/Offline/No-Data System — PARTIAL at exact contract-backed scope**.
 
-**P77 validated mobile head:** `4d4d07208339d3b43cfc2c5d48acfbd495d6a022`.
+**P78 validated mobile code head:** `3e3a1c9926c449473fc8bf96a64c731c2b7db025`.
 
-**P77 CI:** workflow run `31288996661`, job `93182864111` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+**P78 CI:** workflow run `31299091228`, job `93208855335` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 
-**P77 evidence:** `docs/mobile-ui-rebuild/P77_HELP_SUPPORT_ACTIVE_CART.md`.
+**P78 evidence:** `docs/mobile-ui-rebuild/P78_CUSTOMER_EMPTY_SEARCH_OFFLINE_NO_DATA_SYSTEM.md`.
 
-**Next phase in sequence:** **P78 — Customer Empty/Search/Offline/No-Data System — NOT STARTED**.
+**Next phase in sequence:** **P79 — Customer Cross-Screen Reconciliation Audit — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P77. Do not pre-implement P78 without explicit user direction.
+**Required action:** Stop after P78. Do not pre-implement P79 without explicit user direction.
 
 ---
 
@@ -80,7 +81,8 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 | P75 | **PARTIAL** | `docs/mobile-ui-rebuild/P75_CUSTOMER_SETTINGS_CHILD_FLOWS.md`; validated mobile head `f5be75bef913d33492dc872af325f9a51d692f39` | `31287591983` / `93179133618` — SUCCESS |
 | P76 | **PARTIAL** | `docs/mobile-ui-rebuild/P76_HELP_SUPPORT_EMPTY_CART.md`; validated mobile head `71cd7d730b7bb526424640f36032862c5ec75413` | `31288445332` / `93181381234` — SUCCESS |
 | P77 | **PARTIAL** | `docs/mobile-ui-rebuild/P77_HELP_SUPPORT_ACTIVE_CART.md`; validated mobile head `4d4d07208339d3b43cfc2c5d48acfbd495d6a022` | `31288996661` / `93182864111` — SUCCESS |
-| P78 onward | **NOT STARTED / not accepted** | — | — |
+| P78 | **PARTIAL** | `docs/mobile-ui-rebuild/P78_CUSTOMER_EMPTY_SEARCH_OFFLINE_NO_DATA_SYSTEM.md`; validated mobile code head `3e3a1c9926c449473fc8bf96a64c731c2b7db025` | `31299091228` / `93208855335` — SUCCESS |
+| P79 onward | **NOT STARTED / not accepted** | — | — |
 
 ---
 
@@ -251,7 +253,44 @@ Evidence: `docs/mobile-ui-rebuild/P77_HELP_SUPPORT_ACTIVE_CART.md`.
 
 ---
 
-## 11. Validation State
+## 11. P78 Implemented Boundary
+
+**Guide ref:** 37.  
+**Phase:** Customer Empty/Search/Offline/No-Data System.
+
+P78 implements the shared state-system layer rather than eight duplicate screens.
+
+Implemented at the mobile boundary:
+
+- one typed eight-state model with explicit `originRoute`, illustration, title/copy, primary/secondary CTA, optional exact preserved search query, and conditional capability flags;
+- one reusable `CustomerEmptyState` component with shared tokens, accessible semantics, reusable actions, reduced-motion-aware fade/scale treatment, and no embedded transport/business API logic;
+- small adapters for Empty Cart, No Orders, No Search Results, No Favorites, No Internet, No Saved Addresses, No Reviews, and No Coupons;
+- live integration into authoritative Cart, Orders, Home Search/Offline, and Saved Addresses paths;
+- exact search-query preservation and contextual clear/browse recovery;
+- search pagination safety: when another server page exists, Home does not falsely declare final no-results;
+- `OFFLINE -> ONLINE` recovery-edge logic that does not re-fire for repeated same-state connectivity values;
+- optional `Use current location` and offline-browse actions only when an approved host capability exists;
+- canonical zero-item View Cart suppression remains owned by the existing shared cart/route policy rather than P78;
+- focused unit coverage for all eight models, query preservation, capability-gated actions, and no-loop recovery semantics;
+- backend/APIM/infrastructure source remains unchanged.
+
+P78 stays intentionally fail-closed at missing-contract/platform boundaries:
+
+- Favorites runtime no-data activation remains blocked by P60/P61 exact Favorites contract gaps.
+- Coupons runtime no-data activation remains blocked by P70/P71 offers/apply/reprice contract gaps.
+- Reviews runtime no-data activation remains blocked by P72/P73 review list/action contract gaps.
+- Saved Addresses does not expose current-location recovery because P67's native permission/geocode path remains unavailable.
+- The current approved mobile stack has no live connectivity event source to drive automatic recovery; P78 supplies source-agnostic edge semantics without inventing a dependency or polling loop.
+- Runtime Android visual/interaction certification against Guide Reference 37 remains outstanding.
+
+**P78 validated mobile code head:** `3e3a1c9926c449473fc8bf96a64c731c2b7db025`.  
+**P78 CI:** `31299091228` / `93208855335` — SUCCESS.
+
+Evidence: `docs/mobile-ui-rebuild/P78_CUSTOMER_EMPTY_SEARCH_OFFLINE_NO_DATA_SYSTEM.md`.
+
+---
+
+## 12. Validation State
 
 Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
@@ -261,24 +300,25 @@ Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 - P76 initial implementation head `2963fffa4f79479810c40255eae7722b6f65673f` passed run `31288268203`, job `93180913182`.
 - P76 final validated mobile head `71cd7d730b7bb526424640f36032862c5ec75413` passed run `31288445332`, job `93181381234`.
 - P77 validated mobile head `4d4d07208339d3b43cfc2c5d48acfbd495d6a022` passed run `31288996661`, job `93182864111`.
-- For the P77 run, dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+- P78 validated mobile code head `3e3a1c9926c449473fc8bf96a64c731c2b7db025` passed run `31299091228`, job `93208855335`.
+- For the P78 run, dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 - No Gradle/APK packaging was performed, consistent with implementation-phase policy.
 - Physical Android/reference-image certification remains a later visual-QA gate; no pixel-perfect certification is claimed from source/CI alone.
 
 ---
 
-## 12. Handoff
+## 13. Handoff
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current executed phase: P77 — Help and Support — Active Cart — PARTIAL at exact contract-backed scope
-P77 validated mobile head: 4d4d07208339d3b43cfc2c5d48acfbd495d6a022
-P77 evidence: docs/mobile-ui-rebuild/P77_HELP_SUPPORT_ACTIVE_CART.md
-P77 CI: run 31288996661 / job 93182864111 — SUCCESS
-P77 implemented: one shared Help & Support route; canonical cart selectors; shared active View Cart with live item count/subtotal; existing CustomerCart navigation; preserved cart state; dynamic bottom clearance; immediate empty-cart fallback; focused active-cart tests
-P77 no-fabrication boundary: inherited support configuration/content/availability/chat/ticket contracts remain unavailable, so support values, help content, chat/ticket success, and support-context fields are not invented
+Current executed phase: P78 — Customer Empty/Search/Offline/No-Data System — PARTIAL at exact contract-backed scope
+P78 validated mobile code head: 3e3a1c9926c449473fc8bf96a64c731c2b7db025
+P78 evidence: docs/mobile-ui-rebuild/P78_CUSTOMER_EMPTY_SEARCH_OFFLINE_NO_DATA_SYSTEM.md
+P78 CI: run 31299091228 / job 93208855335 — SUCCESS
+P78 implemented: one configurable eight-state model/component with small adapters; live Cart, Orders, Home Search/Offline, and Saved Addresses integration; exact query preservation; conditional recovery actions; reduced-motion-aware animation; OFFLINE->ONLINE no-loop edge policy; canonical empty-cart View Cart suppression; focused tests
+P78 no-fabrication boundary: Favorites/Reviews/Coupons hosts remain contract-blocked, current-location recovery remains blocked by P67, and automatic connectivity recovery awaits an approved live connectivity event source
 Backend/APIM/infrastructure: unchanged
 Inherited blockers: retain all earlier phase blockers not explicitly superseded
-Next phase: P78 — Customer Empty/Search/Offline/No-Data System — NOT STARTED
-Next phase authorization: NONE AUTHORIZED — stop after P77
+Next phase: P79 — Customer Cross-Screen Reconciliation Audit — NOT STARTED
+Next phase authorization: NONE AUTHORIZED — stop after P78
 ```

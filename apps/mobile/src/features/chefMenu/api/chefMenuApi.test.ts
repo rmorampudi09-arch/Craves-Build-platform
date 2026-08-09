@@ -1,5 +1,6 @@
 import {httpClient} from '../../../core/http/httpClient';
 import {
+  CHEF_MENU_CONTRACT_GAPS,
   CHEF_MENU_FOOD_TYPES,
   CHEF_MENU_IMAGE_CONTENT_TYPES,
   CHEF_MENU_IMAGE_FILE_FIELD,
@@ -80,6 +81,13 @@ describe('chefMenuApi contract model', () => {
     expect(CHEF_MENU_IMAGE_FILE_FIELD).toBe('file');
   });
 
+  it('keeps missing Guide capabilities explicit instead of inventing routes or enums', () => {
+    expect(CHEF_MENU_CONTRACT_GAPS.itemDetail).toContain('No chef-owned');
+    expect(CHEF_MENU_CONTRACT_GAPS.listQuery).toContain('no search');
+    expect(CHEF_MENU_CONTRACT_GAPS.visibility).toContain('status plus available');
+    expect(CHEF_MENU_CONTRACT_GAPS.deleteOrDuplicate).toContain('No delete');
+  });
+
   it('parses the complete menu item response including media ownership fields', () => {
     expect(parseChefMenuItem(menuItem)).toEqual(menuItem);
   });
@@ -107,8 +115,8 @@ describe('chefMenuApi contract model', () => {
       validateChefMenuItemRequest({...request, itemName: ' '}),
     ).toThrow('Menu item name is required.');
     expect(() =>
-      validateChefMenuItemRequest({...request, price: 0}),
-    ).toThrow('Menu item price must be greater than zero.');
+      validateChefMenuItemRequest({...request, price: 0.001}),
+    ).toThrow('Menu item price must be at least 0.01.');
     expect(() =>
       validateChefMenuItemRequest({...request, unitPackageWeightGrams: 0}),
     ).toThrow('Package weight must be a positive integer.');

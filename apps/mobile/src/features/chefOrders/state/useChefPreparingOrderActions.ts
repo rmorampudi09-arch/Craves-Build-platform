@@ -193,6 +193,14 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
           latest.updatedAt,
           latest.prepTimeMinutes,
         );
+        if (!isPreparingStatus(latest.status)) {
+          operational.refresh().catch(() => undefined);
+          throw new AppApiError(
+            'CHEF_ORDER_NOT_PREPARING',
+            'This order is no longer in Preparing. The latest status has been loaded.',
+            409,
+          );
+        }
         const phone = callablePhone(latest);
         if (!phone) {
           throw new AppApiError(

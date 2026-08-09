@@ -281,11 +281,11 @@ export function ChefPreparingOrdersScreen() {
 
   React.useEffect(() => {
     orderTabs.selectStatus('PREPARING');
-  }, [orderTabs.selectStatus]);
+  }, [orderTabs, orderTabs.selectStatus]);
 
   const persistScrollOffset = React.useCallback(() => {
     orderTabs.setScrollOffset('PREPARING', latestScrollOffsetRef.current);
-  }, [orderTabs.setScrollOffset]);
+  }, [orderTabs, orderTabs.setScrollOffset]);
 
   React.useEffect(
     () => () => {
@@ -326,7 +326,7 @@ export function ChefPreparingOrdersScreen() {
         orderTabs.selectStatus('PREPARING');
       }
     },
-    [navigation, orderTabs.selectStatus, persistScrollOffset],
+    [navigation, orderTabs, orderTabs.selectStatus, persistScrollOffset],
   );
 
   const refreshOrders = React.useCallback(() => {
@@ -340,7 +340,7 @@ export function ChefPreparingOrdersScreen() {
       orderTabs.setPage('PREPARING', nextPage);
       listRef.current?.scrollToOffset({offset: 0, animated: false});
     },
-    [orderTabs.setPage, orderTabs.setScrollOffset],
+    [orderTabs, orderTabs.setPage, orderTabs.setScrollOffset],
   );
 
   const confirmReady = React.useCallback(

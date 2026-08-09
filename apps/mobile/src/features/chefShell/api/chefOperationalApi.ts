@@ -35,9 +35,23 @@ const ORDER_STATUSES = new Set<ChefOperationalOrderStatus>([
   'REFUND_FAILED',
 ]);
 
+export interface ChefOperationalOrderItemSummary {
+  id: string;
+  itemName: string;
+  quantity: number;
+}
+
+export interface ChefOperationalDeliverySummary {
+  areaName: string | null;
+  city: string;
+}
+
 export interface ChefOperationalOrder {
   id: string;
   status: ChefOperationalOrderStatus;
+  kitchenName: string | null;
+  items: ChefOperationalOrderItemSummary[];
+  deliverySummary: ChefOperationalDeliverySummary | null;
   prepTimeMinutes?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -68,6 +82,10 @@ function boundedString(value: unknown, maxLength: number): string | null {
   return normalized && normalized.length <= maxLength ? normalized : null;
 }
 
+function optionalString(value: unknown, maxLength: number): string | null {
+  return value == null || value === '' ? null : boundedString(value, maxLength);
+}
+
 function validTimestamp(value: unknown, nullable = false): string | null {
   if (nullable && value == null) {
     return null;
@@ -88,6 +106,42 @@ function optionalPositiveInteger(value: unknown): number | null {
     : null;
 }
 
+function parseOrderItemSummary(
+  value: unknown,
+): ChefOperationalOrderItemSummary | null {
+  const raw = asRecord(value);
+  if (!raw) {
+    return null;
+  }
+  const id = boundedString(raw.id, 64);
+  const itemName = boundedString(raw.itemName, 180);
+  const quantity = optionalPositiveInteger(raw.quantity);
+  if (!id || !UUID_PATTERN.test(id) || !itemName || quantity === null) {
+    return null;
+  }
+  return {id, itemName, quantity};
+}
+
+function parseDeliverySummary(
+  value: unknown,
+): ChefOperationalDeliverySummary | null {
+  if (value == null) {
+    return null;
+  }
+  const raw = asRecord(value);
+  if (!raw) {
+    return null;
+  }
+  const city = boundedString(raw.city, 120);
+  if (!city) {
+    return null;
+  }
+  return {
+    areaName: optionalString(raw.areaName, 120),
+    city,
+  };
+}
+
 function parseOrder(value: unknown): ChefOperationalOrder | null {
   const order = asRecord(value);
   if (!order) {
@@ -98,6 +152,13 @@ function parseOrder(value: unknown): ChefOperationalOrder | null {
   const prepTimeMinutes = optionalPositiveInteger(order.prepTimeMinutes);
   const createdAt = validTimestamp(order.createdAt, true);
   const updatedAt = validTimestamp(order.updatedAt, true);
+  const rawItems = order.items == null
+    ? []
+    : Array.isArray(order.items)
+      ? order.items.slice(0, 100)
+      : null;
+  const items = rawItems?.map(parseOrderItemSummary) ?? null;
+  const deliverySummary = parseDeliverySummary(order.deliveryAddress);
   if (
     !id ||
     !UUID_PATTERN.test(id) ||
@@ -105,11 +166,23 @@ function parseOrder(value: unknown): ChefOperationalOrder | null {
     !ORDER_STATUSES.has(status) ||
     (order.prepTimeMinutes != null && prepTimeMinutes === null) ||
     (order.createdAt != null && createdAt === null) ||
-    (order.updatedAt != null && updatedAt === null)
+    (order.updatedAt != null && updatedAt === null) ||
+    !items ||
+    items.some(item => item === null) ||
+    (order.deliveryAddress != null && deliverySummary === null)
   ) {
     return null;
   }
-  return {id, status, prepTimeMinutes, createdAt, updatedAt};
+  return {
+    id,
+    status,
+    kitchenName: optionalString(order.kitchenName, 180),
+    items: items as ChefOperationalOrderItemSummary[],
+    deliverySummary,
+    prepTimeMinutes,
+    createdAt,
+    updatedAt,
+  };
 }
 
 function orderArrayFromResponse(value: unknown): unknown[] | null {

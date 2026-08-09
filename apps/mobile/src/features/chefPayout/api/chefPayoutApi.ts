@@ -1,10 +1,13 @@
-import {httpClient} from '../../../core/http/httpClient';
-
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 const MONEY_PATTERN = /^-?\d{1,10}(?:\.\d{1,2})?$/;
 
+/**
+ * Exact Integration Service backend path audited for P103. The current branch
+ * does not expose a corresponding approved APIM mobile operation, so this
+ * module deliberately does not create a runtime HTTP wrapper for it.
+ */
 export const CHEF_EARNINGS_ROUTE = '/api/v1/chef/earnings' as const;
 export const CHEF_EARNINGS_DEFAULT_LIMIT = 100;
 export const CHEF_EARNINGS_MAX_LIMIT = 500;
@@ -215,26 +218,3 @@ export function parseChefEarningLedger(
 
   return entries;
 }
-
-function parseChefEarningLedgerResponse(value: unknown): ChefEarningLedgerEntry[] {
-  const parsed = parseChefEarningLedger(value);
-  if (!parsed) {
-    throw new Error('Chef earnings returned an unsupported financial response.');
-  }
-  return parsed;
-}
-
-export const chefPayoutApi = {
-  async getEarnings(
-    limit = CHEF_EARNINGS_DEFAULT_LIMIT,
-    signal?: AbortSignal,
-  ): Promise<ChefEarningLedgerEntry[]> {
-    const boundedLimit = normalizeChefEarningsLimit(limit);
-    const response = await httpClient.get<unknown>(CHEF_EARNINGS_ROUTE, {
-      signal,
-      params: {limit: boundedLimit},
-      dedupeKey: `chef-payout:earnings:${boundedLimit}`,
-    });
-    return parseChefEarningLedgerResponse(response);
-  },
-};

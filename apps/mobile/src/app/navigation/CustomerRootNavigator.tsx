@@ -1,6 +1,8 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {resolveReducedMotionAnimation} from '../../design/motion';
+import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
@@ -82,7 +84,6 @@ function ProfileTabIcon({color, size}: TabIconProps) {
   return <Icon name={profileTab.icon} color={color} size={size} />;
 }
 
-const stackScreenOptions = {headerShown: false, animation: 'fade' as const};
 const tabScreenOptions = {
   headerShown: false,
   ...CUSTOMER_TAB_STATE_OPTIONS,
@@ -119,6 +120,20 @@ const profileTabOptions = {
   tabBarIcon: ProfileTabIcon,
 };
 
+function useCustomerStackScreenOptions() {
+  const reduceMotionEnabled = useReducedMotionPreference();
+  return React.useMemo(
+    () => ({
+      headerShown: false,
+      animation: resolveReducedMotionAnimation(
+        'fade' as const,
+        reduceMotionEnabled,
+      ),
+    }),
+    [reduceMotionEnabled],
+  );
+}
+
 function useCustomerTabRootListeners() {
   const showBottomNav = useCustomerBottomNavReveal();
   return React.useMemo(() => ({focus: showBottomNav}), [showBottomNav]);
@@ -126,6 +141,7 @@ function useCustomerTabRootListeners() {
 
 function CustomerHomeStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
+  const stackScreenOptions = useCustomerStackScreenOptions();
   return (
     <HomeStack.Navigator screenOptions={stackScreenOptions}>
       <HomeStack.Screen name="CustomerHomeRoot" component={CustomerHomeRouteScreen} listeners={rootListeners} />
@@ -142,6 +158,7 @@ function CustomerHomeStackNavigator() {
 
 function CustomerChefsStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
+  const stackScreenOptions = useCustomerStackScreenOptions();
   return (
     <ChefsStack.Navigator screenOptions={stackScreenOptions}>
       <ChefsStack.Screen name="CustomerChefsRoot" component={DiscoverHomeChefsRouteScreen} listeners={rootListeners} />
@@ -158,6 +175,7 @@ function CustomerChefsStackNavigator() {
 
 function CustomerOrdersStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
+  const stackScreenOptions = useCustomerStackScreenOptions();
   return (
     <OrdersStack.Navigator screenOptions={stackScreenOptions}>
       <OrdersStack.Screen name="CustomerOrdersRoot" component={CustomerOrdersRouteScreen} listeners={rootListeners} />
@@ -172,6 +190,7 @@ function CustomerOrdersStackNavigator() {
 /** P75 keeps every Settings child route inside the existing Profile stack. */
 function CustomerProfileStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
+  const stackScreenOptions = useCustomerStackScreenOptions();
   return (
     <ProfileStack.Navigator screenOptions={stackScreenOptions}>
       <ProfileStack.Screen name="CustomerProfileRoot" component={CustomerProfileRouteScreen} listeners={rootListeners} />

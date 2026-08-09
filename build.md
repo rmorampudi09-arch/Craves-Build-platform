@@ -49,13 +49,14 @@
 - **P108 — Chef App Preferences UI:** PARTIAL at full Guide Reference-52 scope; a real typed/routed Profile-owned preference screen and fail-closed modal/control boundary are implemented while the P107 persistence/runtime gaps remain explicit. Evidence: `docs/mobile-ui-rebuild/P108_CHEF_APP_PREFERENCES_UI.md`.
 - **P109 — Chef Cross-Screen Reconciliation Audit:** PARTIAL at full Guide/product scope; all currently supported Chef reconciliation paths are audited and synchronized at the exact approved contract boundary, while payout-balance and analytics-total propagation remain blocked. Evidence: `docs/mobile-ui-rebuild/P109_CHEF_CROSS_SCREEN_RECONCILIATION_AUDIT.md`.
 - **P110 — Deep Link and Notification Routing Audit:** PARTIAL at full Guide/product scope; the exact currently available custom-scheme, auth/role-aware inbound routing, notification target validation, duplicate-stack protection, and native link registration boundary is implemented without fabricating blocked Offers or push-provider contracts. Evidence: `docs/mobile-ui-rebuild/P110_DEEP_LINK_NOTIFICATION_ROUTING_AUDIT.md`.
-- **P111 — Process Restoration and Background/Foreground Audit:** PARTIAL at full device/product-lifecycle scope; safe versioned role/tab/nested restoration, auth-root protection, P110 initial-link precedence, session-lifecycle audit, and fail-closed draft/provider handling are implemented at the exact current mobile boundary. Evidence: `docs/mobile-ui-rebuild/P111_PROCESS_RESTORATION_BACKGROUND_FOREGROUND_AUDIT.md`.
+- **P111 — Process Restoration and Background/Foreground Audit:** PARTIAL at full device/product-lifecycle scope; safe versioned role/tab/nested restoration, auth-root and role-navigator readiness protection, P110 initial-link precedence, session-lifecycle audit, and fail-closed draft/provider handling are implemented at the exact current mobile boundary. Evidence: `docs/mobile-ui-rebuild/P111_PROCESS_RESTORATION_BACKGROUND_FOREGROUND_AUDIT.md`.
 
 **Current executed phase:** **P111 — Process Restoration and Background/Foreground Audit**.
 
 **P111 starting branch HEAD:** `e2ae2805eb72f35135b1580d6ef6e1cfbc9bb7c6`  
-**P111 implementation head before evidence/ledger:** `a2422e615a8d574fcc273ebd3f3f4104ee4d89b8`  
-**P111 evidence commit:** `fc7d538d2ea2d8f844372d0e7f0226335678e874`
+**P111 initial implementation head:** `a2422e615a8d574fcc273ebd3f3f4104ee4d89b8`  
+**P111 final runtime hardening head:** `ae90152e0d715dc41785a53957733c9c90d6c663`  
+**P111 evidence refresh commit:** `a097a2b09d592b3f42b53cf16be138b36128b02e`
 
 ### P111 implemented boundary
 
@@ -64,7 +65,8 @@
 - Persists only an allowlisted product role guard, selected Customer/Chef tab or supported nested destination, and bounded route resource IDs; arbitrary params, server responses, tokens, form values, media, and payment/provider session data cannot enter the schema.
 - Uses the already-installed AsyncStorage dependency only for this validated non-sensitive snapshot; malformed/obsolete/cross-stack snapshots fail closed and are removed.
 - Keeps backend auth/account resolution as the sole Customer/Chef root authority. A stored role mismatch is cleared rather than used to select a shell.
-- Waits for product readiness before restoration and gives a valid P110 cold-start inbound link precedence over stale saved navigation.
+- Waits for both authoritative product readiness and actual matching role-navigator registration before consuming restoration or deferred inbound routing; Chef state is therefore not consumed during the existing role-isolation gate before `ChefProductNavigator`/`ChefTabs` mounts.
+- Gives a valid P110 cold-start inbound link precedence over stale saved navigation and keeps that link pending until its role navigator is registered.
 - Clears restoration state on anonymous/sign-out state and resets inbound-route dedupe state with the session boundary.
 - Restores supported Customer and Chef tab/nested/read-only detail context through the existing single `NavigationContainer`; no duplicate navigator/store/API architecture was added.
 - Draft-bearing/transient forms collapse to their safe owner tab instead of persisting profile/contact/address/menu/filter values. Mounted in-memory drafts remain intact across ordinary background/foreground transitions while the process survives.
@@ -92,7 +94,9 @@ Evidence/ledger:
 ### P111 validation / guard state
 
 - Focused Jest source is committed for Customer tab/nested capture, draft-route collapse, Chef nested restoration, role-mismatch rejection, provider/payment-shaped field rejection, and malformed-resource fallback.
-- Compared P111 starting HEAD `e2ae2805eb72f35135b1580d6ef6e1cfbc9bb7c6` with implementation head `a2422e615a8d574fcc273ebd3f3f4104ee4d89b8`; the implementation boundary is fast-forward/ahead and changes only the intended four mobile navigation/test files.
+- The initial code boundary `e2ae2805eb72f35135b1580d6ef6e1cfbc9bb7c6..a2422e615a8d574fcc273ebd3f3f4104ee4d89b8` changed only the intended four mobile navigation/test files.
+- Follow-up review found and fixed the Chef isolation timing edge; final runtime hardening commit `ae90152e0d715dc41785a53957733c9c90d6c663` gates restoration and P110 deferred inbound routing on actual role-navigator registration.
+- Final phase comparison remains limited to the four mobile navigation/test files plus P111 evidence and this ledger; no backend/native-provider/unrelated-screen files changed.
 - Re-read `useBootstrap`, `useSessionLifecycle`, `sessionManager`, secure refresh-token storage ownership, payment handoff/recovery blockers, and Customer/Chef route registration against the new persistence schema.
 - Full repository Jest/typecheck/ESLint/bundle execution and device/emulator process recreation are not claimed from this connector-only run.
 - GitHub Actions are intentionally not used as a P111 acceptance signal because the account's monthly Actions capacity is exhausted and this run was explicitly authorized to continue without it.
@@ -153,4 +157,4 @@ Evidence/ledger:
 
 ## 3. Handoff
 
-Before any P112 work, re-read `plan.md`, `phases.md`, `agent.md`, this ledger, the full implementation guide, and the P111 evidence. Preserve the P111 fail-closed boundary: do not persist raw React Navigation state, form contents, payment/provider credentials, tokens, or cross-role destinations. Continue to let authoritative auth/account resolution choose the Customer/Chef root. P112 is not authorized in this run.
+Before any P112 work, re-read `plan.md`, `phases.md`, `agent.md`, this ledger, the full implementation guide, and the P111 evidence. Preserve the P111 fail-closed boundary: do not persist raw React Navigation state, form contents, payment/provider credentials, tokens, or cross-role destinations. Continue to let authoritative auth/account resolution choose the Customer/Chef root, and wait for the matching role navigator to register before consuming deferred routing/restoration. P112 is not authorized in this run.

@@ -41,11 +41,17 @@ export function ContentLifecycle({
   if (!hasContent && loading) {
     return (
       <View
+        accessible
         accessibilityLabel="Loading content"
+        accessibilityLiveRegion="polite"
         accessibilityRole="progressbar"
         accessibilityState={{busy: true}}
         testID={testID}>
-        {skeleton}
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants">
+          {skeleton}
+        </View>
       </View>
     );
   }

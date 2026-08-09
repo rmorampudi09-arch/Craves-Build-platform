@@ -11,14 +11,23 @@ interface Props {
 }
 
 const options = [
-  {value: 'CUSTOMER', label: 'Customer'},
-  {value: 'CHEF', label: 'Chef'},
+  {
+    value: 'CUSTOMER',
+    label: 'Customer',
+    accessibilityLabel: 'Customer account type',
+  },
+  {
+    value: 'CHEF',
+    label: 'Chef',
+    accessibilityLabel: 'Chef account type',
+  },
 ] as const;
 
 export function RoleSelector({value, onChange, disabled = false}: Props) {
   return (
     <SegmentedControl<AuthRole>
       accessibilityLabel="Account type"
+      accessibilityOptionRole="radio"
       value={value}
       options={options}
       onChange={onChange}

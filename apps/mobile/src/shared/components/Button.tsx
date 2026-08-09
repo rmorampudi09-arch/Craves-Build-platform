@@ -55,7 +55,7 @@ export function Button({
   const reduceMotion = useReducedMotionPreference();
   const blocked = disabled || loading;
   const foreground =
-    variant === 'primary' ? colors.white : colors.flameRed;
+    variant === 'primary' ? colors.white : colors.flameRedAccessible;
 
   return (
     <Pressable
@@ -78,6 +78,7 @@ export function Button({
       ]}>
       {loading ? (
         <LoadingIndicator
+          accessible={false}
           accessibilityLabel={`${label} in progress`}
           color={foreground}
           size="small"
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   primary: {
-    backgroundColor: colors.flameRed,
+    backgroundColor: colors.flameRedAccessible,
     ...elevation.primaryAction,
   },
   outline: {
@@ -147,6 +148,6 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   altLabel: {
-    color: colors.flameRed,
+    color: colors.flameRedAccessible,
   },
 });

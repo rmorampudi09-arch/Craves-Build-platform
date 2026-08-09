@@ -40,6 +40,7 @@ export function DiscoverySearchInput({
     <View style={[styles.container, style]}>
       <TextInput
         accessibilityLabel={accessibilityLabel}
+        accessibilityRole="search"
         autoCapitalize="none"
         autoCorrect={false}
         onChangeText={onChangeText}
@@ -94,7 +95,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceWarm,
   },
   clearText: {
-    color: colors.flameRed,
+    color: colors.flameRedAccessible,
     fontSize: typography.tiny,
     fontWeight: fontWeight.bold,
   },

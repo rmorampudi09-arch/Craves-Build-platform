@@ -23,6 +23,7 @@ export interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void;
   disabled?: boolean;
   accessibilityLabel?: string;
+  accessibilityOptionRole?: 'tab' | 'radio';
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
@@ -33,12 +34,16 @@ export function SegmentedControl<T extends string>({
   onChange,
   disabled = false,
   accessibilityLabel,
+  accessibilityOptionRole = 'tab',
   style,
   testID,
 }: SegmentedControlProps<T>) {
+  const groupRole = accessibilityOptionRole === 'radio' ? 'radiogroup' : 'tablist';
+
   return (
     <View
       accessible={false}
+      accessibilityRole={groupRole}
       accessibilityLabel={accessibilityLabel}
       style={[styles.wrapper, style]}
       testID={testID}>
@@ -47,9 +52,13 @@ export function SegmentedControl<T extends string>({
         return (
           <Pressable
             key={option.value}
-            accessibilityRole="button"
+            accessibilityRole={accessibilityOptionRole}
             accessibilityLabel={option.accessibilityLabel ?? option.label}
-            accessibilityState={{disabled, selected}}
+            accessibilityState={
+              accessibilityOptionRole === 'radio'
+                ? {disabled, checked: selected}
+                : {disabled, selected}
+            }
             disabled={disabled}
             onPress={() => onChange(option.value)}
             style={({pressed}) => [
@@ -89,7 +98,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
   },
-  selected: {backgroundColor: colors.flameRed},
+  selected: {backgroundColor: colors.flameRedAccessible},
   disabled: {opacity: 0.48},
   pressed: {opacity: 0.82},
   label: {

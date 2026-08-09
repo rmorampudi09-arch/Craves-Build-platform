@@ -55,6 +55,7 @@ export function IconButton({
       ]}>
       {loading ? (
         <LoadingIndicator
+          accessible={false}
           accessibilityLabel={`${accessibilityLabel} in progress`}
           color={foreground}
         />

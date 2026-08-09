@@ -24,7 +24,7 @@ export interface ChipProps {
 
 export function Chip({
   label,
-  selected = false,
+  selected,
   disabled = false,
   onPress,
   accessibilityLabel,
@@ -32,18 +32,22 @@ export function Chip({
   testID,
 }: ChipProps) {
   const reduceMotion = useReducedMotionPreference();
+  const selectable = selected !== undefined;
+  const isSelected = selected ?? false;
 
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={selectable ? 'togglebutton' : 'button'}
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{disabled, selected}}
+      accessibilityState={
+        selectable ? {disabled, checked: isSelected} : {disabled}
+      }
       disabled={disabled}
       onPress={onPress}
       testID={testID}
       style={({pressed}) => [
         styles.base,
-        selected && styles.selected,
+        isSelected && styles.selected,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
         pressed && !disabled && !reduceMotion && styles.pressedMotion,
@@ -51,7 +55,7 @@ export function Chip({
       ]}>
       <Text
         allowFontScaling={textDefaults.allowFontScaling}
-        style={[styles.label, selected && styles.selectedLabel]}>
+        style={[styles.label, isSelected && styles.selectedLabel]}>
         {label}
       </Text>
     </Pressable>
@@ -71,7 +75,7 @@ const styles = StyleSheet.create({
   },
   selected: {
     borderColor: colors.flameRed,
-    backgroundColor: colors.flameRed,
+    backgroundColor: colors.flameRedAccessible,
   },
   disabled: {opacity: 0.48},
   pressed: {opacity: 0.84},

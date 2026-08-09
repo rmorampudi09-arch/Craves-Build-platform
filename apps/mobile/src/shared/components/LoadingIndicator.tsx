@@ -17,6 +17,7 @@ import {
 } from '../../design/tokens';
 
 export interface LoadingIndicatorProps {
+  accessible?: boolean;
   accessibilityLabel?: string;
   label?: string;
   color?: string;
@@ -26,6 +27,7 @@ export interface LoadingIndicatorProps {
 }
 
 export function LoadingIndicator({
+  accessible = true,
   accessibilityLabel = 'Loading',
   label,
   color = colors.flameRed,
@@ -35,10 +37,13 @@ export function LoadingIndicator({
 }: LoadingIndicatorProps) {
   return (
     <View
-      accessible
-      accessibilityRole="progressbar"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityLiveRegion="polite"
+      accessible={accessible}
+      accessibilityElementsHidden={!accessible}
+      accessibilityRole={accessible ? 'progressbar' : undefined}
+      accessibilityLabel={accessible ? accessibilityLabel : undefined}
+      accessibilityLiveRegion={accessible ? 'polite' : 'none'}
+      accessibilityState={accessible ? {busy: true} : undefined}
+      importantForAccessibility={accessible ? 'yes' : 'no-hide-descendants'}
       style={[styles.row, style]}
       testID={testID}>
       <ActivityIndicator

@@ -123,6 +123,7 @@ export function InputField({
       </View>
       {error ? (
         <Text
+          accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
           allowFontScaling={textDefaults.allowFontScaling}
           style={styles.errorText}>

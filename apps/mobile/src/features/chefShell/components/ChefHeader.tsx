@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Modal,
   Pressable,
@@ -19,6 +18,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
 import {chefCounterBadgeLabel} from '../domain/chefOperationalCounters';
 import {useChefOperationalState} from '../state/ChefOperationalProvider';
 import type {ChefOperationalNotice} from '../api/chefOperationalApi';
@@ -107,12 +107,18 @@ export function ChefHeader({title}: Props) {
         onRequestClose={() => setMenuVisible(false)}
         transparent
         visible={menuVisible}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close Chef menu"
-          onPress={() => setMenuVisible(false)}
-          style={styles.backdrop}>
-          <View style={styles.menuPanel}>
+        <View style={styles.backdrop}>
+          <Pressable
+            accessible={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            onPress={() => setMenuVisible(false)}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            accessibilityViewIsModal
+            onAccessibilityEscape={() => setMenuVisible(false)}
+            style={styles.menuPanel}>
             <Text accessibilityRole="header" style={styles.panelTitle}>
               Chef workspace
             </Text>
@@ -139,7 +145,7 @@ export function ChefHeader({title}: Props) {
               <Icon name="chevron-right" size={18} color={colors.textSecondary} />
             </Pressable>
           </View>
-        </Pressable>
+        </View>
       </Modal>
 
       <Modal
@@ -148,7 +154,10 @@ export function ChefHeader({title}: Props) {
         transparent
         visible={notificationsVisible}>
         <View style={styles.notificationBackdrop}>
-          <View style={styles.notificationPanel}>
+          <View
+            accessibilityViewIsModal
+            onAccessibilityEscape={() => setNotificationsVisible(false)}
+            style={styles.notificationPanel}>
             <View style={styles.panelHeader}>
               <View style={styles.panelHeaderCopy}>
                 <Text accessibilityRole="header" style={styles.panelTitle}>
@@ -169,16 +178,24 @@ export function ChefHeader({title}: Props) {
 
             {notificationsStatus === 'pending' && notices.length === 0 ? (
               <View style={styles.centerState}>
-                <ActivityIndicator color={colors.flameRed} />
-                <Text style={styles.stateText}>Loading notifications…</Text>
+                <LoadingIndicator
+                  accessibilityLabel="Loading Chef notifications"
+                  label="Loading notifications…"
+                />
               </View>
             ) : notificationsStatus === 'error' && notices.length === 0 ? (
               <View style={styles.centerState}>
-                <Text style={styles.stateTitle}>Notifications unavailable</Text>
+                <Text
+                  accessibilityLiveRegion="assertive"
+                  accessibilityRole="alert"
+                  style={styles.stateTitle}>
+                  Notifications unavailable
+                </Text>
                 <Text style={styles.stateText}>Try again when your connection is available.</Text>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Retry Chef notifications"
+                  accessibilityState={{disabled: isRefreshing, busy: isRefreshing}}
                   disabled={isRefreshing}
                   onPress={() => {
                     refresh().catch(() => undefined);
@@ -192,7 +209,9 @@ export function ChefHeader({title}: Props) {
               </View>
             ) : notices.length === 0 ? (
               <View style={styles.centerState}>
-                <Text style={styles.stateTitle}>No notifications yet</Text>
+                <Text accessibilityRole="header" style={styles.stateTitle}>
+                  No notifications yet
+                </Text>
                 <Text style={styles.stateText}>New Chef updates will appear here.</Text>
               </View>
             ) : (
@@ -236,6 +255,7 @@ function NotificationRow({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Mark ${notice.title} as read`}
+          accessibilityState={{disabled: marking, busy: marking}}
           disabled={marking}
           onPress={() => onMarkRead(notice.id)}
           style={({pressed}) => [styles.readButton, (pressed || marking) && styles.pressed]}>
@@ -283,12 +303,13 @@ const styles = StyleSheet.create({
     top: 2,
     right: 0,
     minWidth: 18,
-    height: 18,
+    minHeight: 18,
     paddingHorizontal: 4,
+    paddingVertical: 1,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.flameRed,
+    backgroundColor: colors.flameRedAccessible,
     borderWidth: 2,
     borderColor: colors.white,
   },
@@ -338,11 +359,11 @@ const styles = StyleSheet.create({
   panelHeaderCopy: {flex: 1},
   panelSubtitle: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
   closeButton: {minHeight: touchTarget.minimum, justifyContent: 'center', paddingHorizontal: spacing.sm},
-  closeText: {color: colors.flameRed, fontSize: typography.body, fontWeight: fontWeight.semibold},
+  closeText: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.semibold},
   centerState: {minHeight: 220, alignItems: 'center', justifyContent: 'center', padding: spacing.xl},
   stateTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold, textAlign: 'center'},
   stateText: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small, textAlign: 'center'},
-  retryButton: {minHeight: touchTarget.minimum, marginTop: spacing.md, justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.flameRed, paddingHorizontal: spacing.lg},
+  retryButton: {minHeight: touchTarget.minimum, marginTop: spacing.md, justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.flameRedAccessible, paddingHorizontal: spacing.lg},
   retryText: {color: colors.white, fontSize: typography.body, fontWeight: fontWeight.semibold},
   notificationList: {padding: spacing.md, gap: spacing.sm},
   notificationRow: {borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.white},
@@ -351,6 +372,6 @@ const styles = StyleSheet.create({
   notificationTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
   notificationBody: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small},
   readButton: {alignSelf: 'flex-start', minHeight: touchTarget.minimum, justifyContent: 'center', marginTop: spacing.xs, paddingRight: spacing.sm},
-  readButtonText: {color: colors.flameRed, fontSize: typography.small, fontWeight: fontWeight.semibold},
+  readButtonText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.semibold},
   readLabel: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small},
 });

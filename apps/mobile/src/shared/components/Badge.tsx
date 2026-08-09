@@ -67,8 +67,8 @@ const toneStyles = StyleSheet.create({
 
 const toneTextStyles = StyleSheet.create({
   neutral: {color: colors.textPrimary},
-  success: {color: colors.success},
-  warning: {color: colors.warning},
+  success: {color: colors.successText},
+  warning: {color: colors.warningText},
   error: {color: colors.error},
-  info: {color: colors.info},
+  info: {color: colors.infoText},
 });

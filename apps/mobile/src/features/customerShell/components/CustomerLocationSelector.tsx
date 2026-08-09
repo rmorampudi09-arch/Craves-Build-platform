@@ -7,7 +7,6 @@ import {
 } from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -26,6 +25,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
 import {resolveCartAddressSelection} from '../../cart/domain/cartAddressSelection';
 import {cartActions} from '../../cart/state/cartSlice';
 import {
@@ -70,16 +70,22 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
       onRequestClose={onClose}
       transparent
       visible={visible}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Close location selector"
-        onPress={onClose}
-        style={styles.backdrop}>
-        <Pressable onPress={() => undefined} style={styles.sheet}>
-          <View style={styles.handle} />
+      <View style={styles.backdrop}>
+        <Pressable
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          onPress={onClose}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          accessibilityViewIsModal
+          onAccessibilityEscape={onClose}
+          style={styles.sheet}>
+          <View accessibilityElementsHidden style={styles.handle} />
           <View style={styles.headingRow}>
             <View style={styles.headingCopy}>
-              <Text style={styles.title}>
+              <Text accessibilityRole="header" style={styles.title}>
                 {commerceSelection ? 'Choose delivery address' : 'Choose location'}
               </Text>
               <Text style={styles.subtitle}>
@@ -120,18 +126,23 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
 
           {status === 'pending' ? (
             <View style={styles.stateBox}>
-              <ActivityIndicator color={colors.flameRed} />
-              <Text style={styles.stateText}>Loading saved locations…</Text>
+              <LoadingIndicator
+                accessibilityLabel="Loading saved locations"
+                label="Loading saved locations…"
+              />
             </View>
           ) : locations.length === 0 ? (
             <View style={styles.stateBox}>
-              <Text style={styles.stateTitle}>No saved locations yet</Text>
+              <Text accessibilityRole="header" style={styles.stateTitle}>
+                No saved locations yet
+              </Text>
               <Text style={styles.stateText}>
                 Your saved delivery addresses will appear here.
               </Text>
               {status === 'error' ? (
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityLabel="Retry saved locations"
                   onPress={() => {
                     refresh();
                   }}>
@@ -145,8 +156,8 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
                 const selected = selectedAddressId === location.addressId;
                 return (
                   <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{selected}}
+                    accessibilityRole="radio"
+                    accessibilityState={{checked: selected}}
                     key={location.addressId}
                     onPress={() => {
                       selectLocation(location);
@@ -190,8 +201,8 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
               })}
             </ScrollView>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -299,7 +310,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   retryText: {
-    color: colors.flameRed,
+    color: colors.flameRedAccessible,
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
     marginTop: spacing.xs,

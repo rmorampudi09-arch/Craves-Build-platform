@@ -42,7 +42,7 @@ export function CustomerHeader({
       </Pressable>
 
       {title ? (
-        <Text numberOfLines={1} style={styles.title}>
+        <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
           {title}
         </Text>
       ) : null}
@@ -128,12 +128,13 @@ const styles = StyleSheet.create({
     top: 3,
     right: 1,
     minWidth: 18,
-    height: 18,
+    minHeight: 18,
     paddingHorizontal: 4,
+    paddingVertical: 1,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.flameRed,
+    backgroundColor: colors.flameRedAccessible,
     borderWidth: 2,
     borderColor: colors.white,
   },

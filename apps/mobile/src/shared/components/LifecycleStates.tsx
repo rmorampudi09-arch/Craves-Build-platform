@@ -62,6 +62,7 @@ export function RecoverableErrorBanner({
 }: NoticeProps) {
   return (
     <View
+      accessibilityLiveRegion="assertive"
       accessibilityRole="alert"
       testID={testID}
       style={[styles.notice, styles.errorNotice, style]}>
@@ -91,6 +92,7 @@ export function OfflineNotice({
 }: NoticeProps) {
   return (
     <View
+      accessibilityLiveRegion="polite"
       accessibilityRole="alert"
       testID={testID}
       style={[styles.notice, styles.offlineNotice, style]}>
@@ -138,6 +140,7 @@ export function TerminalState({
     <View testID={testID} style={[styles.terminal, style]}>
       <Text
         allowFontScaling={textDefaults.allowFontScaling}
+        accessibilityLiveRegion="polite"
         accessibilityRole="header"
         style={styles.title}>
         {title}

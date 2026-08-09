@@ -27,24 +27,28 @@ export function PressableCard({
   accessibilityLabel,
   accessibilityHint,
   disabled = false,
-  selected = false,
+  selected,
   style,
   testID,
 }: PressableCardProps) {
   const reduceMotion = useReducedMotionPreference();
+  const selectable = selected !== undefined;
+  const isSelected = selected ?? false;
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{disabled, selected}}
+      accessibilityState={
+        selectable ? {disabled, selected: isSelected} : {disabled}
+      }
       disabled={disabled}
       onPress={onPress}
       testID={testID}
       style={({pressed}) => [
         styles.base,
-        selected && styles.selected,
+        isSelected && styles.selected,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
         pressed && !disabled && !reduceMotion && styles.pressedMotion,

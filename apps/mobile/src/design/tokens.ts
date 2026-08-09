@@ -1,5 +1,10 @@
 export const colors = {
   flameRed: '#F62E18',
+  /**
+   * Text-safe red for normal-sized action copy and text-bearing red surfaces.
+   * Keep flameRed for exact brand accents where the 3:1 non-text target applies.
+   */
+  flameRedAccessible: '#D92714',
   flameRedSoft: '#FF5548',
   espresso: '#261A15',
   espressoBrown: '#261A15',
@@ -8,18 +13,21 @@ export const colors = {
   white: '#FFFFFF',
   ink: '#1F1B19',
   textPrimary: '#261A15',
-  textSecondary: '#736B67',
-  mutedText: '#736B67',
-  placeholder: '#A8A19C',
+  textSecondary: '#706864',
+  mutedText: '#706864',
+  placeholder: '#7D7570',
   border: '#E3DDD8',
   borderStrong: '#D5CEC8',
   success: '#29B47B',
+  successText: '#166B49',
   successSoft: '#E8F7F1',
   warning: '#D98C16',
+  warningText: '#7A4A00',
   warningSoft: '#FFF4DF',
   error: '#C72C21',
   errorSoft: '#FDEAE8',
   info: '#2F6FED',
+  infoText: '#1F4FAF',
   infoSoft: '#EAF0FF',
   muted: '#F7F5F3',
   surfaceBase: '#FFFFFF',

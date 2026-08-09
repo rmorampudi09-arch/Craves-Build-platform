@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   },
   staticIndicator: {
     borderRadius: radius.pill,
-    borderWidth: borderWidth.emphasis,
+    borderWidth: borderWidth.strong,
     opacity: 0.72,
   },
   label: {

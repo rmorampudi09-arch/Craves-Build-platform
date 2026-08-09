@@ -6,6 +6,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
+import {ChefCompletedOrdersScreen} from '../../features/chefOrders/screens/ChefCompletedOrdersScreen';
 import {ChefNewOrdersScreen} from '../../features/chefOrders/screens/ChefNewOrdersScreen';
 import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrderDetailScreen';
 import {ChefPreparingOrdersScreen} from '../../features/chefOrders/screens/ChefPreparingOrdersScreen';
@@ -121,6 +122,10 @@ function ChefOrdersNavigator() {
       />
       <OrdersStack.Screen name="ChefOrdersNew" component={ChefNewOrdersScreen} />
       <OrdersStack.Screen name="ChefOrdersReady" component={ChefReadyOrdersScreen} />
+      <OrdersStack.Screen
+        name="ChefOrdersCompleted"
+        component={ChefCompletedOrdersScreen}
+      />
     </OrdersStack.Navigator>
   );
 }

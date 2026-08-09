@@ -2,7 +2,9 @@
 
 **Branch:** `mobile-ui-rebuild-from-scratch`  
 **Guide refs:** 33 and 34  
-**Status:** **IMPLEMENTED — CI CHECK NOT AVAILABLE ON DIRECT BRANCH PUSH**
+**Status:** **IMPLEMENTED — FINAL CI IN PROGRESS**  
+**Mobile implementation head:** `35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62`  
+**CI:** run `31286064248`, job `93175010142` — **IN PROGRESS** at checkpoint
 
 ## Scope executed
 
@@ -45,14 +47,26 @@ The P74 settings values are device-local UI preferences scoped to the signed-in 
 - `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
 - `apps/mobile/src/features/customerProfile/screens/CustomerProfileRouteScreen.tsx`
 - `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`
+- `build.md`
 
 No backend, APIM, OpenAPI, database, infrastructure, Android native source, Gradle/APK, or AAB configuration was intentionally changed for P74.
 
 ## Validation status
 
-The GitHub connector reported no pull-request workflow run and no commit-status checks for the direct branch implementation head at the time of the P74 checkpoint. Therefore this evidence does **not** claim CI success that did not run.
+The P74 mobile-source push triggered `.github/workflows/mobile-phase1-ci.yml` run `31286064248`, job `93175010142` against implementation head `35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62`.
 
-Static implementation checks performed against the branch contracts:
+Observed at this checkpoint:
+
+- dependency install — **SUCCESS**
+- TypeScript strict check — **SUCCESS**
+- ESLint — **SUCCESS**
+- Jest — **IN PROGRESS**
+- production Android JavaScript bundle — pending
+- backend/APIM/infrastructure source guard — pending
+
+This evidence intentionally does **not** claim final CI success before the run concludes.
+
+Static implementation checks additionally confirm:
 
 - route name added to `CustomerProfileStackParamList`;
 - route registered in `CustomerRootNavigator`;
@@ -70,9 +84,10 @@ No Gradle/APK packaging was performed, consistent with the implementation-phase 
 ## Handoff
 
 ```text
-Executed phase: P74 — Customer Settings Active/Empty Visuals
+Executed phase: P74 — Customer Settings Active/Empty Visuals — IMPLEMENTED / FINAL CI IN PROGRESS
+Mobile implementation head: 35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62
+CI: run 31286064248 / job 93175010142 — TypeScript + ESLint passed; Jest still running at checkpoint
 Implemented: Settings route; account summary; persisted language/notification/appearance values; existing location selector; notification badge; empty/active cart header states; real cart navigation; legal/about/support rows; P24 logout; Save Changes; hidden bottom nav
-Validation: direct branch push has no associated PR workflow/status check in the connector, so CI success is not claimed
 Deferred by phase boundary: P75 Customer Settings Child Flows; P76/P77 Help and Support flows
 Next phase: P75 — Customer Settings Child Flows — NOT STARTED
 Authorization for P75: NONE

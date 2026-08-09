@@ -30,11 +30,12 @@ type SupportNavigation = NativeStackNavigationProp<
 interface ContractUnavailableCardProps {
   title: string;
   detail: string;
+  testID: string;
 }
 
-function ContractUnavailableCard({title, detail}: ContractUnavailableCardProps) {
+function ContractUnavailableCard({title, detail, testID}: ContractUnavailableCardProps) {
   return (
-    <View style={styles.unavailableCard} accessibilityRole="summary">
+    <View style={styles.unavailableCard} accessibilityRole="summary" testID={testID}>
       <View style={styles.unavailableIcon}>
         <Icon name="shield" size={iconSize.sm} color={colors.textSecondary} />
       </View>
@@ -50,9 +51,10 @@ interface DisabledSupportActionProps {
   icon: IconName;
   title: string;
   detail: string;
+  testID: string;
 }
 
-function DisabledSupportAction({icon, title, detail}: DisabledSupportActionProps) {
+function DisabledSupportAction({icon, title, detail, testID}: DisabledSupportActionProps) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -60,6 +62,7 @@ function DisabledSupportAction({icon, title, detail}: DisabledSupportActionProps
       accessibilityHint={detail}
       accessibilityState={{disabled: true}}
       disabled
+      testID={testID}
       style={styles.supportAction}>
       <View style={styles.actionIcon}>
         <Icon name={icon} size={iconSize.sm} color={colors.textSecondary} />
@@ -119,7 +122,9 @@ export function CustomerHelpSupportScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
           <View style={styles.content}>
-            <View style={styles.immediateHelpCard}>
+            <View
+              style={styles.immediateHelpCard}
+              testID={`support-blocker-${availability.blocker}`}>
               <View style={styles.immediateHelpIcon}>
                 <Icon name="phone" size={iconSize.lg} color={colors.flameRed} />
               </View>
@@ -127,15 +132,16 @@ export function CustomerHelpSupportScreen() {
                 <Text style={styles.cardEyebrow}>IMMEDIATE HELP</Text>
                 <Text style={styles.immediateHelpTitle}>Need help now?</Text>
                 <Text style={styles.immediateHelpDetail}>
-                  {availability.reason}
+                  Live support availability is temporarily unavailable.
                 </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Call Us"
-                accessibilityHint={configuration.reason}
+                accessibilityHint="Phone support is temporarily unavailable"
                 accessibilityState={{disabled: true}}
                 disabled
+                testID={`support-blocker-${configuration.blocker}`}
                 style={styles.callButton}>
                 <Text style={styles.callButtonText}>Call Us</Text>
               </Pressable>
@@ -144,13 +150,15 @@ export function CustomerHelpSupportScreen() {
             <Text style={styles.sectionTitle}>Quick Help</Text>
             <ContractUnavailableCard
               title="Help categories unavailable"
-              detail={helpContent.reason}
+              detail="Verified help categories are not available right now."
+              testID={`support-blocker-${helpContent.blocker}-categories`}
             />
 
             <Text style={styles.sectionTitle}>Popular Help Topics</Text>
             <ContractUnavailableCard
               title="Help articles unavailable"
-              detail={helpContent.reason}
+              detail="Verified help articles are not available right now."
+              testID={`support-blocker-${helpContent.blocker}-articles`}
             />
 
             <Text style={styles.sectionTitle}>Contact Support</Text>
@@ -158,38 +166,38 @@ export function CustomerHelpSupportScreen() {
               <DisabledSupportAction
                 icon="phone"
                 title="Call Us"
-                detail={configuration.reason}
+                detail="Phone support is temporarily unavailable."
+                testID={`support-blocker-${configuration.blocker}-call`}
               />
               <View style={styles.divider} />
               <DisabledSupportAction
                 icon="mail"
                 title="Email Us"
-                detail={configuration.reason}
+                detail="Email support is temporarily unavailable."
+                testID={`support-blocker-${configuration.blocker}-email`}
               />
               <View style={styles.divider} />
               <DisabledSupportAction
                 icon="account"
                 title="Start Chat"
-                detail={chat.reason}
+                detail="Chat support is temporarily unavailable."
+                testID={`support-blocker-${chat.blocker}`}
               />
               <View style={styles.divider} />
               <DisabledSupportAction
                 icon="orders"
                 title="Create Support Ticket"
-                detail={ticket.reason}
+                detail="Support tickets are temporarily unavailable."
+                testID={`support-blocker-${ticket.blocker}`}
               />
             </View>
 
             <View style={styles.reassuranceBanner}>
               <Icon name="shield" size={iconSize.sm} color={colors.espressoBrown} />
               <Text style={styles.reassuranceText}>
-                Support requests stay disabled until verified support configuration and contracts are available. No request is simulated locally.
+                Support contact options are temporarily unavailable. Nothing will be sent unless you choose an enabled support option.
               </Text>
             </View>
-
-            <Text style={styles.referenceNote}>
-              This is the P76 empty-cart reference state. The shared cart overlay remains hidden when the established cart item count is zero.
-            </Text>
           </View>
         </ScrollView>
 
@@ -405,11 +413,5 @@ const styles = StyleSheet.create({
     color: colors.espressoBrown,
     fontSize: typography.small,
     lineHeight: 20,
-  },
-  referenceNote: {
-    marginTop: spacing.md,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    lineHeight: 18,
   },
 });

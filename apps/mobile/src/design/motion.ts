@@ -199,3 +199,14 @@ export function shouldAnimateListChanges(
     visibleChangedItemCount <= motionSafety.maxAnimatedListBatchItems
   );
 }
+
+/**
+ * Resolve platform-owned transitions (native-stack and React Native Modal)
+ * through the same reduced-motion policy as Animated-based surfaces.
+ */
+export function resolveReducedMotionAnimation<T extends string>(
+  animation: T,
+  reduceMotionEnabled: boolean,
+): T | 'none' {
+  return reduceMotionEnabled ? 'none' : animation;
+}

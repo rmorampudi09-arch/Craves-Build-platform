@@ -43,23 +43,24 @@ Historical implementation detail is preserved under `docs/mobile-ui-rebuild/`. `
 - **P80 — Chef Root Shell and Role Isolation: DONE at authorized code/CI scope.** Approved Chef accounts enter a separate typed five-tab shell with Dashboard, Orders, Menu, Analytics, and Profile. Customer-private query/Redux state is cleared before entry; the shell fails closed if isolation fails; no customer cart UI is registered in the Chef domain.
 - **P81 — Chef Shared Header/Badge/Operational Counters: DONE at authorized code/CI scope.** All five Chef route boundaries use one shared Chef header/menu and one Chef-scoped TanStack Query operational-state owner. Notification and Orders counters derive from authoritative Chef order/in-app notification contracts; no copied per-screen counter state or polling loop was introduced.
 - **P82 — Chef Dashboard Contract Model: DONE at authorized code/CI scope.** A typed, role-scoped dashboard data/query boundary reuses P81 orders/notifications and maps the exact existing Chef earnings and Chef-owned menu contracts. Missing dashboard aggregation, wallet/withdraw eligibility, sales analytics, Chef reviews, and business insights remain explicit typed unavailable capabilities rather than fabricated values.
-- **P83 — Chef Dashboard UI: DONE at authorized code/CI scope.** Guide Reference 38 now renders the Chef dashboard with shared header/greeting, contract-backed order KPIs, pull-to-refresh, quick actions, active-order lifecycle states, and Chef bottom navigation. Wallet/Withdraw, sales series, reviews, and business insights remain explicit unavailable/disabled UI because P82 established that their exact contracts do not exist.
+- **P83 — Chef Dashboard UI: DONE at authorized code/CI scope.** Guide Reference 38 renders the Chef dashboard with shared header/greeting, contract-backed order KPIs, pull-to-refresh, quick actions, active-order lifecycle states, and Chef bottom navigation. Wallet/Withdraw, sales series, reviews, and business insights remain explicit unavailable/disabled UI because P82 established that their exact contracts do not exist.
+- **P84 — Chef Order Detail Contract: DONE at authorized code/CI scope.** Guide Reference 39 now has a strict Chef order-detail read/accept/reject contract boundary, server-authorized customer delivery/contact snapshot parsing, Chef-scoped detail query ownership, server-status decision candidates that always require revalidation, and typed unavailable boundaries for the missing acceptance deadline, timeline, customer note, payment-method detail, and separate contact/chat authorization contracts.
 
-**Current executed phase:** **P83 — Chef Dashboard UI — DONE at authorized code/CI scope**.
+**Current executed phase:** **P84 — Chef Order Detail Contract — DONE at authorized code/CI scope**.
 
-**P83 start commit:** `9e9eafd2d6aa76d229619cde966a9890a470cf0d`.
+**P84 start commit:** `b3f6f4a81db7a7c2a5df9c2a7f53688674c56660`.
 
-**P83 validated mobile code head:** `36d5650cb7648f3f8eaf899ce796615da832e88b`.
+**P84 validated mobile code head:** `270897f7e59950f88fcc38ed121cb21f5e1cd148`.
 
-**P83 CI:** workflow run `31304732867`, job `93223151270` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+**P84 CI:** workflow run `31305596449`, job `93225354790` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 
-**P83 evidence:** `docs/mobile-ui-rebuild/P83_CHEF_DASHBOARD_UI.md`.
+**P84 evidence:** `docs/mobile-ui-rebuild/P84_CHEF_ORDER_DETAIL_CONTRACT.md`.
 
-**Next phase in sequence:** **P84 — Chef Order Detail Contract — NOT STARTED**.
+**Next phase in sequence:** **P85 — Chef New Order Detail UI/Actions — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P83. Do not pre-implement P84 without explicit user direction.
+**Required action:** Stop after P84. Do not pre-implement P85 without explicit user direction.
 
 ---
 
@@ -94,67 +95,92 @@ Historical implementation detail is preserved under `docs/mobile-ui-rebuild/`. `
 | P81 | **DONE at code/CI scope** | `docs/mobile-ui-rebuild/P81_CHEF_SHARED_HEADER_BADGE_OPERATIONAL_COUNTERS.md`; validated mobile code head `fa3009c975fddb683760485c1482183e14ef0cf4` | `31302720042` / `93217987955` — SUCCESS |
 | P82 | **DONE at code/CI scope** | `docs/mobile-ui-rebuild/P82_CHEF_DASHBOARD_CONTRACT_MODEL.md`; validated mobile code head `dc2bbc4b574863db4d1e806598a4b75e5a2765c5` | `31303531996` / `93220074043` — SUCCESS |
 | P83 | **DONE at code/CI scope** | `docs/mobile-ui-rebuild/P83_CHEF_DASHBOARD_UI.md`; validated mobile code head `36d5650cb7648f3f8eaf899ce796615da832e88b` | `31304732867` / `93223151270` — SUCCESS |
-| P84 onward | **NOT STARTED / not accepted** | — | — |
+| P84 | **DONE at code/CI scope** | `docs/mobile-ui-rebuild/P84_CHEF_ORDER_DETAIL_CONTRACT.md`; validated mobile code head `270897f7e59950f88fcc38ed121cb21f5e1cd148` | `31305596449` / `93225354790` — SUCCESS |
+| P85 onward | **NOT STARTED / not accepted** | — | — |
 
 ---
 
-## 3. P83 Implemented Boundary
+## 3. P84 Implemented Boundary
 
-**Phase:** Chef Dashboard UI.  
-**Guide reference:** 38 — Chef Dashboard.
+**Phase:** Chef Order Detail Contract.  
+**Guide reference:** 39 — Chef New Order Detail.
 
-P83 is the Reference-38 visual/composition phase. It consumes the P82 contract model and does not introduce backend/APIM/infrastructure behavior.
+P84 establishes the Reference-39 mobile contract/data/query boundary only. It does not register or render the P85 detail UI.
 
-### Reference-faithful composition
+### Exact read/action contracts
 
-The Dashboard tab now owns a real Chef screen rather than the P80 placeholder and includes:
+P84 maps the existing authenticated Chef contracts:
 
-- shared P81 Chef header and notification behavior;
-- authenticated display-name greeting with time-of-day copy;
-- wallet card with explicit unavailable balance and disabled Withdraw;
-- four authoritative order KPI cards: new, active, ready, total;
-- sales-overview surface with a working 7/30/90-day local selector;
-- quick actions for the already registered Orders, Menu, Analytics, and Profile Chef tabs;
-- active-order loading, retry/error, empty, and populated states;
-- explicit Recent Reviews unavailable state;
-- explicit Business Insight unavailable state;
-- pull-to-refresh over the established P82 data sources;
-- existing Chef bottom navigation with no Customer cart UI.
+- `GET /api/v1/chef/orders/{orderId}`;
+- `POST /api/v1/chef/orders/{orderId}/accept` with `{ prepTimeMinutes, note }` and optional `Idempotency-Key`;
+- `POST /api/v1/chef/orders/{orderId}/reject` with `{ reason }` and optional `Idempotency-Key`.
 
-### Honest contract gaps
+The shared mobile HTTP transport remains the single bearer/correlation/error boundary. The server verifies Chef role and kitchen ownership before returning order detail or allowing a decision.
 
-P83 does not synthesize Reference-38 values that P82 proved unavailable. The UI remains explicit and fail-closed for:
+### Authorized detail model
 
-- wallet/withdrawable balance;
-- payout eligibility, destination, and withdrawal initiation;
-- sales analytics aggregate/time series;
-- Chef recent reviews read model;
-- Chef business insights.
+The strict P84 parser exposes only Chef-detail data required by the future screen:
 
-The earnings ledger is not treated as a wallet. Withdraw remains disabled rather than invoking a fabricated mutation. Sales shows no invented chart values.
+- order/checkout/kitchen identifiers and kitchen name;
+- authoritative order status;
+- currency plus food/platform/tax/delivery/grand totals;
+- Chef response note and preparation time when present;
+- immutable customer delivery/contact snapshot authorized by server-side Chef order ownership;
+- full delivery address plus latitude/longitude;
+- order item names, categories/food types, prices, quantities, and line totals;
+- server creation/update timestamps.
 
-### Navigation boundary
+`customerIdentityId` is deliberately discarded from the mobile presentation contract because P85 does not need it.
 
-All implemented P83 actions route only to already registered Chef tab destinations. Active-order rows route to the existing Orders workspace; P83 does not invent the P84 Chef order-detail contract or detail route.
+### Server-authoritative actionability
+
+`CHEF_ACCEPTANCE_PENDING` from the latest detail read is treated only as an Accept/Reject **candidate** state. The derived model always sets `requiresServerRevalidation: true`.
+
+Mobile does not implement a parallel order state machine. The Order Service remains authoritative for:
+
+- current transition eligibility;
+- database-time acceptance expiry;
+- row locking/concurrency;
+- idempotent repeat handling;
+- conflict/error outcomes.
+
+P85 must re-read immediately before a decision and treat the mutation response/error as final authority.
+
+### Explicit Guide-39 contract gaps
+
+P84 does not fabricate data absent from the current public Chef contract. Typed `BACKEND_CONTRACT_UNAVAILABLE` boundaries remain for:
+
+- authoritative `acceptanceDeadline`/countdown — `chef_acceptance_expires_at` is stored internally but not returned in `OrderResponse`;
+- status timeline — internal `order_status_history` has no approved public Chef read endpoint;
+- customer checkout/order note — not returned in the current Chef `OrderResponse`;
+- customer payment-method detail — only totals/currency/order status are available;
+- separate contact authorization, chat, masking-policy payload, and support-event logging contracts.
+
+The returned customer phone/name remain usable only as the server-authorized immutable order contact snapshot. P84 does **not** interpret that snapshot as a separate chat/contact-permission contract.
+
+Critically, mobile does not calculate `createdAt + 30 minutes`; the Chef acceptance window begins after verified payment, so that would create a false SLA.
+
+### Query ownership
+
+`useChefOrderDetailContract(orderId)` provides a private Chef-scoped TanStack Query key containing authenticated user, `CHEF` role, and order ID; abortable reads; bounded staleness; explicit refresh; and no polling. P81 remains the shared list/counter owner, avoiding duplicate Chef operational state.
 
 ### Files changed
 
-- `apps/mobile/src/features/chefDashboard/screens/ChefDashboardScreen.tsx`
-- `apps/mobile/src/features/chefDashboard/domain/chefDashboardPresentation.ts`
-- `apps/mobile/src/features/chefDashboard/domain/chefDashboardPresentation.test.ts`
-- `apps/mobile/src/features/chefDashboard/domain/chefDashboardModel.ts`
-- `apps/mobile/src/features/chefDashboard/domain/chefDashboardModel.test.ts`
-- `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
+- `apps/mobile/src/features/chefOrders/api/chefOrderDetailApi.ts`
+- `apps/mobile/src/features/chefOrders/api/chefOrderDetailApi.test.ts`
+- `apps/mobile/src/features/chefOrders/domain/chefOrderDetailModel.ts`
+- `apps/mobile/src/features/chefOrders/domain/chefOrderDetailModel.test.ts`
+- `apps/mobile/src/features/chefOrders/state/useChefOrderDetailContract.ts`
 
-**P83 validated mobile code head:** `36d5650cb7648f3f8eaf899ce796615da832e88b`.  
-**P83 CI:** `31304732867` / `93223151270` — SUCCESS.  
-**P83 evidence:** `docs/mobile-ui-rebuild/P83_CHEF_DASHBOARD_UI.md`.
+**P84 validated mobile code head:** `270897f7e59950f88fcc38ed121cb21f5e1cd148`.  
+**P84 CI:** `31305596449` / `93225354790` — SUCCESS.  
+**P84 evidence:** `docs/mobile-ui-rebuild/P84_CHEF_ORDER_DETAIL_CONTRACT.md`.
 
-### P84+ boundary
+### P85+ boundary
 
-P83 does **not** implement Chef Order Detail Contract, Chef order-detail navigation/acceptance lifecycle, later Chef Menu/Analytics/Profile surfaces, new backend endpoints, or any P84+ work. **P84 remains NOT STARTED.**
+P84 does **not** add a Chef order-detail screen/route, sticky Accept/Reject UI, mutation orchestration, duplicate-tap UI guards, call/chat/map-deep-link UI, immersive bottom-nav treatment, or later preparing/ready/completed order screens. **P85 remains NOT STARTED.**
 
-Physical Android/reference-image certification remains a later visual-QA gate; P83 is complete only at authorized code/CI scope.
+Physical Android/reference-image certification remains a later visual-QA gate; P84 is complete only at authorized code/CI scope.
 
 ---
 
@@ -172,9 +198,10 @@ Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 - P80 validated mobile code head `92925304027e52884eca8efedf83a7090ec12d3d` passed run `31301169438`, job `93214080252`.
 - P81 validated mobile code head `fa3009c975fddb683760485c1482183e14ef0cf4` passed run `31302720042`, job `93217987955`.
 - P82 validated mobile code head `dc2bbc4b574863db4d1e806598a4b75e5a2765c5` passed run `31303531996`, job `93220074043`.
-- **P83 validated mobile code head `36d5650cb7648f3f8eaf899ce796615da832e88b` passed run `31304732867`, job `93223151270`.**
+- P83 validated mobile code head `36d5650cb7648f3f8eaf899ce796615da832e88b` passed run `31304732867`, job `93223151270`.
+- **P84 validated mobile code head `270897f7e59950f88fcc38ed121cb21f5e1cd148` passed run `31305596449`, job `93225354790`.**
 
-P83 CI confirmed:
+P84 CI confirmed:
 
 - dependency install from lockfile — success;
 - TypeScript strict check — success;
@@ -189,15 +216,15 @@ No per-phase APK/AAB was built, consistent with the project build policy.
 
 ## 5. Active Handoff / Authorization
 
-**Accepted implementation state:** P83 Chef Dashboard UI is complete at authorized code/CI scope.
+**Accepted implementation state:** P84 Chef Order Detail Contract is complete at authorized code/CI scope.
 
 **Authoritative code evidence:**
 
-- P83 start: `9e9eafd2d6aa76d229619cde966a9890a470cf0d`;
-- P83 validated mobile code: `36d5650cb7648f3f8eaf899ce796615da832e88b`;
-- P83 evidence: `docs/mobile-ui-rebuild/P83_CHEF_DASHBOARD_UI.md`;
-- P83 CI: `31304732867` / `93223151270` — SUCCESS.
+- P84 start: `b3f6f4a81db7a7c2a5df9c2a7f53688674c56660`;
+- P84 validated mobile code: `270897f7e59950f88fcc38ed121cb21f5e1cd148`;
+- P84 evidence: `docs/mobile-ui-rebuild/P84_CHEF_ORDER_DETAIL_CONTRACT.md`;
+- P84 CI: `31305596449` / `93225354790` — SUCCESS.
 
-**Next phase:** P84 — Chef Order Detail Contract — NOT STARTED.
+**Next phase:** P85 — Chef New Order Detail UI/Actions — NOT STARTED.
 
-**Authorization:** NONE. Do not begin P84 until the user explicitly authorizes the next phase.
+**Authorization:** NONE. Do not begin P85 until the user explicitly authorizes the next phase.

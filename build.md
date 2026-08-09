@@ -40,20 +40,20 @@
 - **P99 — Chef Edit Profile Domain/Form:** PARTIAL at full Guide/product-contract scope; exact current kitchen GET/PUT replacement form domain, draft persistence, validation, suspended read-only safety, duplicate-safe/abortable save model, and canonical Chef identity cache synchronization are implemented without inventing missing photo/cuisine/service-area/business-validation contracts. Evidence: `docs/mobile-ui-rebuild/P99_CHEF_EDIT_PROFILE_DOMAIN_FORM.md`.
 - **P100 — Chef Edit Profile UI:** PARTIAL at full Guide completion scope; the typed `ChefEditProfile` route, focused reference-aligned form UI, exact P99 field editing/save integration, dirty-back protection, suspended read-only state, loading/retry/error/mutation states, and explicit capability blockers are implemented without fabricating missing Guide contracts. Evidence: `docs/mobile-ui-rebuild/P100_CHEF_EDIT_PROFILE_UI.md`.
 - **P101 — Chef Business Information Contract:** PARTIAL at full Guide/product-contract scope; exact current kitchen/application/proof-document sources are modeled fail-closed for mobile, sensitive storage/reviewer identifiers are excluded from the Business Information model, and missing approved-Chef document-maintenance/service-area/cuisine/payout contracts remain explicit. Evidence: `docs/mobile-ui-rebuild/P101_CHEF_BUSINESS_INFORMATION_CONTRACT.md`.
-- **P102 — Chef Business Information UI/Document Flow:** PARTIAL at full Guide Reference-49 scope; the registered real Business Information screen, verification/document metadata presentation, supported kitchen edit navigation, lifecycle/refresh/error states, and explicit fail-closed unsupported document/service-area/cuisine/payout actions are implemented at the exact P101 backend boundary. Evidence: `docs/mobile-ui-rebuild/P102_CHEF_BUSINESS_INFORMATION_UI_DOCUMENT_FLOW.md`.
+- **P102 — Chef Business Information UI/Document Flow:** PARTIAL at full Guide Reference-49 scope; the registered real Business Information screen, verification/document metadata presentation, supported kitchen edit navigation, independent loading/refresh/error states, and explicit fail-closed unsupported document/service-area/cuisine/payout actions are implemented at the exact P101 backend boundary. Evidence: `docs/mobile-ui-rebuild/P102_CHEF_BUSINESS_INFORMATION_UI_DOCUMENT_FLOW.md`.
 
 **Current executed phase:** **P102 — Chef Business Information UI/Document Flow**.
 
 **P102 phase start commit:** `59a2f19a8b097a74408b715d468e5e8cd2732a2c`  
-**P102 implementation/code end:** `792eb70600d108caf39e4b7652ce6d0b9f852625`  
-**P102 evidence commit:** `845ff479065b4796aee1548e56b106e1ad6ddf97`
+**P102 implementation/code end:** `4c8ec13d22fe91e4b688536e7118f1a3e512283f`  
+**P102 evidence commit:** `cb910880536fd26586a7113839abac97f44065f5`
 
 ### P102 implemented boundary
 
 - Re-read Guide Reference 49 and implemented only the authorized P102 UI/document-flow phase; no P103 payout-contract work was started.
 - Added typed `ChefBusinessInformation` navigation under the existing Chef Profile stack and made the existing Business information profile row open it.
 - Added private TanStack Query ownership for the P101 Chef application verification source while reusing the existing canonical Chef kitchen query key/source instead of creating duplicate server state.
-- Added a real Chef Business Information screen with the existing Chef header/notification behavior, explicit Profile back control, pull-to-refresh, last-valid-query retention, initial skeleton, partial-source rendering, source-specific error states, and retry controls.
+- Added a real Chef Business Information screen with the existing Chef header/notification behavior, explicit Profile back control, pull-to-refresh, last-valid-query retention, initial skeleton, independent partial-source loading, source-specific error states, and retry controls.
 - Added a backend-authoritative verification banner for `NOT_SUBMITTED`, `PENDING`, `APPROVED`, and `REJECTED`; application-level rejection reason is shown when present.
 - Added Business overview values derived only from exact current data: application verification state, proof metadata count, and kitchen status. No invented business KPI was introduced.
 - Added Aadhaar/PAN document rows from the P101 safe response model with file name/content type/size/timestamps and expandable detail state.
@@ -62,6 +62,7 @@
 - Added kitchen/business-address edit actions that reuse the existing P100 full-replacement Chef Edit Profile draft/route.
 - Service area shows only the current kitchen `areaName` as a profile-area label. Service-area management, cuisine/specialty, and payout setup controls have explicit unavailable outcomes instead of fabricated routes or data.
 - Added verification/security guidance and a real Learn more handler; sensitive storage locators/reviewer identifiers/document bytes are not exposed or logged.
+- Hardened partial-source loading so a still-pending verification or kitchen source is not mislabeled as an error, and corrected the Business overview surface to maintain readable contrast with existing design tokens.
 - Added focused pure presentation tests for verification state/rejection reason, safe document metadata formatting, address formatting, and kitchen status labels.
 - No dependency, customer-screen, backend, APIM, OpenAPI, database, infrastructure, or server-source change was made.
 
@@ -91,7 +92,7 @@ Evidence/ledger:
 
 ### P102 validation / guard state
 
-- `GitHub.compare_commits` from phase-start HEAD `59a2f19a8b097a74408b715d468e5e8cd2732a2c` to evidence commit `845ff479065b4796aee1548e56b106e1ad6ddf97` shows nine fast-forward phase commits and only the eight P102 mobile code/test files plus the P102 evidence file listed above.
+- `GitHub.compare_commits` from phase-start HEAD `59a2f19a8b097a74408b715d468e5e8cd2732a2c` to evidence commit `cb910880536fd26586a7113839abac97f44065f5` shows twelve fast-forward phase commits and exactly the eight P102 mobile code/test files plus P102 evidence and ledger files listed above.
 - Navigation compare is narrow: `ChefRootNavigator.tsx` adds the Business Information screen registration and `types.ts` adds the typed route; existing Chef product/tab ownership is unchanged.
 - The Chef Profile diff is limited to making the existing Business information row reachable and replacing its obsolete verification blocker text; unrelated Profile/account behaviors are preserved.
 - Source-level review confirms P102 adds no runtime write/upload endpoint and no new dependency; its real network reads remain the exact P101 application GET and existing kitchen GET.

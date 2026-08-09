@@ -12,6 +12,31 @@ export interface ProcessRestorationStorage {
   clear(): Promise<void>;
 }
 
+function isRegisteredCustomerTarget(snapshot: ProcessRestorationSnapshot): boolean {
+  const target = snapshot.target;
+  if (target.kind === 'CUSTOMER_TAB') return true;
+
+  if (target.kind === 'CUSTOMER_SCREEN') {
+    if (target.screen === 'CustomerCart' || target.screen === 'CustomerPaymentMethods') {
+      return true;
+    }
+    return target.tab === 'Profile';
+  }
+
+  if (target.kind !== 'CUSTOMER_RESOURCE') return true;
+  if (
+    target.route.screen === 'CustomerOrderDetail' ||
+    target.route.screen === 'CustomerOrderTracking'
+  ) {
+    return target.tab === 'Orders' || target.tab === 'Profile';
+  }
+  return target.tab === 'Home' || target.tab === 'Chefs' || target.tab === 'Profile';
+}
+
+function isRegisteredSnapshot(snapshot: ProcessRestorationSnapshot): boolean {
+  return snapshot.role !== 'CUSTOMER' || isRegisteredCustomerTarget(snapshot);
+}
+
 export const processRestorationStorage: ProcessRestorationStorage = {
   async read() {
     const serialized = await AsyncStorage.getItem(PROCESS_RESTORATION_STORAGE_KEY);
@@ -19,7 +44,7 @@ export const processRestorationStorage: ProcessRestorationStorage = {
 
     try {
       const parsed = parseProcessRestorationSnapshot(JSON.parse(serialized));
-      if (parsed) return parsed;
+      if (parsed && isRegisteredSnapshot(parsed)) return parsed;
     } catch {
       // Invalid or obsolete process-restoration state is non-authoritative and
       // must never prevent a safe application start.
@@ -31,7 +56,7 @@ export const processRestorationStorage: ProcessRestorationStorage = {
 
   async write(snapshot) {
     const safeSnapshot = parseProcessRestorationSnapshot(snapshot);
-    if (!safeSnapshot) {
+    if (!safeSnapshot || !isRegisteredSnapshot(safeSnapshot)) {
       throw new Error('Refusing to persist an unsafe navigation restoration snapshot.');
     }
     await AsyncStorage.setItem(

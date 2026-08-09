@@ -2,7 +2,8 @@
 
 **Branch:** `mobile-ui-rebuild-from-scratch`  
 **Phase start:** `e2ae2805eb72f35135b1580d6ef6e1cfbc9bb7c6`  
-**Implementation/code end:** `a2422e615a8d574fcc273ebd3f3f4104ee4d89b8`  
+**Initial implementation head:** `a2422e615a8d574fcc273ebd3f3f4104ee4d89b8`  
+**Final runtime hardening head:** `ae90152e0d715dc41785a53957733c9c90d6c663`  
 **Status:** PARTIAL at full device/product-lifecycle scope; the safe restoration/session/provider boundary is implemented and audited at the exact currently approved mobile boundary.  
 **Next phase:** P112 — Lifecycle-State Matrix Completion — NOT STARTED.
 
@@ -69,18 +70,20 @@ Added `processRestorationStorage.ts` using the already-installed AsyncStorage de
 - Customer tab/screen ownership is checked so a corrupted snapshot cannot navigate a Profile-only route through another Customer stack.
 - No new dependency, backend route, APIM operation, or alternate navigation container was introduced.
 
-### Root/role authority and deep-link precedence
+### Root/role authority, navigator readiness, and deep-link precedence
 
 `AppNavigator.tsx` now loads the safe restoration snapshot but does not use it to choose a product root.
 
 - Existing backend account resolution remains the sole authority for Customer vs Chef ownership.
-- Restoration waits until authentication/account resolution marks the product shell ready.
+- Restoration waits until authentication/account resolution marks the product shell ready **and** the matching Customer/Chef navigator is actually registered.
+- Chef restoration therefore does not settle during the existing `isolateChefRole` gate before `ChefProductNavigator` mounts.
+- The same role-navigator readiness gate protects deferred P110 inbound links so a Chef cold-start link is not consumed before `ChefTabs` exists.
 - A stored snapshot whose role differs from the authoritative resolved role is cleared rather than rendered.
 - Anonymous/sign-out state clears persisted restoration state and resets the inbound-route dedupe cache.
 - P110 cold-start deep links are checked before process restoration; a valid initial inbound destination wins instead of being overwritten by stale saved navigation.
 - Restoration dispatches through the existing single `NavigationContainer` and existing nested navigators; no duplicate stack architecture was added.
 
-This keeps the P111 acceptance boundary that persisted state can never select or flash the wrong Customer/Chef root.
+This keeps the P111 acceptance boundary that persisted state can never select the wrong Customer/Chef root, and it prevents restoration/inbound work from being prematurely consumed while the role navigator is not yet mounted.
 
 ## Background/foreground and session audit
 
@@ -146,7 +149,8 @@ No backend, APIM, OpenAPI, infrastructure, payment-provider, native-provider, de
 
 ## Validation / guard state
 
-- `GitHub.compare_commits` from phase start `e2ae2805eb72f35135b1580d6ef6e1cfbc9bb7c6` to implementation head `a2422e615a8d574fcc273ebd3f3f4104ee4d89b8` is fast-forward/ahead and limits the implementation diff to the four intended mobile navigation/test files listed above.
+- The initial implementation boundary from phase start `e2ae2805eb72f35135b1580d6ef6e1cfbc9bb7c6` to `a2422e615a8d574fcc273ebd3f3f4104ee4d89b8` changes only the four intended mobile navigation/test files.
+- Follow-up P111 review found and corrected the Chef isolation timing edge: final runtime hardening commit `ae90152e0d715dc41785a53957733c9c90d6c663` gates both restoration and deferred inbound routing on actual role-navigator registration.
 - The current session lifecycle, secure refresh storage, Cashfree handoff/recovery blockers, Customer/Chef navigator ownership, and P110 initial-link routing were re-read against the new restoration boundary.
 - GitHub Actions are intentionally not used as a P111 acceptance signal because the account's monthly Actions capacity is exhausted and this run was explicitly authorized to continue without it.
 - From this connector-only run, project dependency install, TypeScript strict compilation, ESLint, Jest execution, Android/iOS process-recreation behavior, real background/foreground device behavior, and native provider callback behavior are **not claimed as passing or failing**.

@@ -29,6 +29,10 @@ function isPreparingStatus(status: ChefOrderDetail['status']): boolean {
   return status === 'CHEF_ACCEPTED' || status === 'PREPARING';
 }
 
+function isReadyStatus(status: ChefOrderDetail['status']): boolean {
+  return status === 'READY_FOR_PICKUP';
+}
+
 function callablePhone(detail: ChefOrderDetail): string | null {
   const phone = detail.deliveryAddress?.contactPhoneNumber.trim() ?? '';
   if (!phone) {
@@ -118,13 +122,20 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
       try {
         const latest = await chefOrderDetailApi.getOrder(orderId);
         cacheDetail(latest);
+        operational.reconcileOrderStatus(
+          latest.id,
+          latest.status,
+          latest.updatedAt,
+          latest.prepTimeMinutes,
+        );
+
+        if (isReadyStatus(latest.status)) {
+          operational.refresh().catch(() => undefined);
+          setFeedback({kind: 'success', message: 'Order is already ready for pickup.'});
+          return;
+        }
+
         if (!isPreparingStatus(latest.status)) {
-          operational.reconcileOrderStatus(
-            latest.id,
-            latest.status,
-            latest.updatedAt,
-            latest.prepTimeMinutes,
-          );
           operational.refresh().catch(() => undefined);
           throw new AppApiError(
             'CHEF_ORDER_NOT_PREPARING',
@@ -146,7 +157,11 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
       } catch (cause: unknown) {
         const appError = cause instanceof AppApiError ? cause : toAppApiError(cause);
         if (appError.status === 409) {
-          await reconcileLatest(orderId);
+          const latest = await reconcileLatest(orderId);
+          if (latest && isReadyStatus(latest.status)) {
+            setFeedback({kind: 'success', message: 'Order is already ready for pickup.'});
+            return;
+          }
         }
         setFeedback({
           kind: 'error',

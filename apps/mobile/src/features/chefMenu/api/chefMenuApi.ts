@@ -13,21 +13,58 @@ export const CHEF_MENU_IMAGE_CONTENT_TYPES = [
 ] as const;
 export const CHEF_MENU_IMAGE_FILE_FIELD = 'file' as const;
 
+/** Exact service defaults applied when optional MenuItemRequest values are absent/blank. */
+export const CHEF_MENU_SERVER_DEFAULTS = {
+  currency: 'INR',
+  available: false,
+  status: 'DRAFT',
+} as const;
+
+export interface ChefMenuContractGap {
+  availability: 'unavailable';
+  code: 'BACKEND_CONTRACT_UNAVAILABLE';
+  reason: string;
+}
+
+function unavailable(reason: string): ChefMenuContractGap {
+  return {
+    availability: 'unavailable',
+    code: 'BACKEND_CONTRACT_UNAVAILABLE',
+    reason,
+  };
+}
+
 /** Guide-required capabilities that have no approved exact backend/APIM contract today. */
 export const CHEF_MENU_CONTRACT_GAPS = {
-  itemDetail: 'No chef-owned menu-item detail GET route is exposed.',
-  listQuery:
+  itemDetail: unavailable('No chef-owned menu-item detail GET route is exposed.'),
+  listQuery: unavailable(
     'The chef-owned list route exposes no search, filter, category, page, cursor, or summary parameters.',
-  categoryMetadata: 'No chef menu category/subcategory metadata route is exposed.',
-  visibility:
+  ),
+  categoryMetadata: unavailable(
+    'No chef menu category/subcategory metadata route is exposed.',
+  ),
+  visibility: unavailable(
     'No separate visibility contract exists; backend state is status plus available only.',
-  deleteOrDuplicate: 'No delete or duplicate menu-item mutation is exposed.',
-  draftRules:
+  ),
+  deleteOrDuplicate: unavailable(
+    'No delete or duplicate menu-item mutation is exposed.',
+  ),
+  draftRules: unavailable(
     'No separate draft-save or draft-validation contract exists beyond MenuItemRequest status=DRAFT.',
-  duplicateNameCheck: 'No menu item duplicate/name-check route is exposed.',
-  mediaManagement:
+  ),
+  duplicateNameCheck: unavailable(
+    'No menu item duplicate/name-check route is exposed.',
+  ),
+  mediaManagement: unavailable(
     'Upload is exposed, but media delete, reorder, and set-primary-after-upload routes are not exposed.',
-} as const;
+  ),
+  mediaPolicy: unavailable(
+    'Allowed upload content types are known, but the maximum file size is runtime-configured and no client-readable image-count/size policy contract is exposed.',
+  ),
+  catalogPublication: unavailable(
+    'No separate catalog publication/synchronization acknowledgement contract is exposed.',
+  ),
+} as const satisfies Record<string, ChefMenuContractGap>;
 
 export type ChefMenuItemStatus = (typeof CHEF_MENU_ITEM_STATUSES)[number];
 export type ChefMenuFoodType = (typeof CHEF_MENU_FOOD_TYPES)[number];
@@ -126,13 +163,15 @@ function instant(value: unknown): string | null {
 }
 
 function price(value: unknown): number | null {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) && parsed >= 0.01 ? parsed : null;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0.01
+    ? value
+    : null;
 }
 
 function positiveInteger(value: unknown): number | null {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : null;
 }
 
 function optionalPositiveInteger(value: unknown): number | null {
@@ -140,8 +179,9 @@ function optionalPositiveInteger(value: unknown): number | null {
 }
 
 function nonNegativeInteger(value: unknown): number | null {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null;
 }
 
 function exactBoolean(value: unknown): boolean | null {
@@ -256,7 +296,7 @@ export function parseChefMenuItem(value: unknown): ChefMenuItem | null {
     !createdAt ||
     !updatedAt ||
     !images ||
-    images.some(image => image === null)
+    images.some(image => image === null || image.menuItemId !== id)
   ) {
     return null;
   }

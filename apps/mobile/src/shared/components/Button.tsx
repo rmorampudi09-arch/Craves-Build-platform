@@ -136,6 +136,7 @@ const styles = StyleSheet.create({
     transform: [{scale: 0.985}],
   },
   row: {
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -143,9 +144,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   label: {
+    flexShrink: 1,
     fontSize: typography.button,
     fontWeight: fontWeight.semibold,
     color: colors.white,
+    textAlign: 'center',
   },
   altLabel: {
     color: colors.flameRedAccessible,

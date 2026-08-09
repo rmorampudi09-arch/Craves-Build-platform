@@ -42,6 +42,8 @@ import {
   setCartItemQuantity,
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
+import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
+import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
@@ -206,8 +208,9 @@ function DishCard({
 }
 
 export function CustomerHomeScreen() {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<CustomerHomeStackParamList, 'CustomerHomeRoot'>>();
+  const navigation = useNavigation<
+    NativeStackNavigationProp<CustomerHomeStackParamList, 'CustomerHomeRoot'>
+  >();
   const dispatch = useAppDispatch();
   const identity = useAppSelector(state => state.auth.identity);
   const selectedLocation = useAppSelector(state => state.customerShell.selectedLocation);
@@ -411,9 +414,24 @@ export function CustomerHomeScreen() {
       return <HomeFeedSkeleton />;
     }
     if (queryError && dishes.length === 0) {
+      if (offline) {
+        return (
+          <CustomerEmptyState
+            actionPending={feed.isFetching}
+            connectivity="OFFLINE"
+            model={customerEmptyStateAdapters.noInternet()}
+            onAction={actionId => {
+              if (actionId === 'RETRY') {
+                retryFeed();
+              }
+            }}
+            testID="customer-home-offline"
+          />
+        );
+      }
       return (
         <TerminalState
-          title={offline ? 'You appear to be offline' : 'Meals could not be loaded'}
+          title="Meals could not be loaded"
           description={queryError.message}
           actionLabel="Try again"
           onAction={retryFeed}
@@ -441,10 +459,25 @@ export function CustomerHomeScreen() {
           />
         );
       }
+      if (searchActive) {
+        return (
+          <CustomerEmptyState
+            model={customerEmptyStateAdapters.noSearchResults(search.query)}
+            onAction={actionId => {
+              if (actionId === 'CLEAR_SEARCH') {
+                handleClearSearch();
+              } else if (actionId === 'BROWSE_MEALS') {
+                clearFilters();
+              }
+            }}
+            testID="customer-home-no-search-results"
+          />
+        );
+      }
       return (
         <TerminalState
           title="No matching meals"
-          description="Try a different search, category or filter."
+          description="Try a different category or filter."
           actionLabel="Clear filters"
           onAction={clearFilters}
         />
@@ -527,10 +560,7 @@ export function CustomerHomeScreen() {
         </View>
       </View>
       {mutationError ? (
-        <RecoverableErrorBanner
-          message={mutationError}
-          style={styles.inlineNotice}
-        />
+        <RecoverableErrorBanner message={mutationError} style={styles.inlineNotice} />
       ) : null}
       {queryError && dishes.length > 0 ? (
         offline ? (
@@ -590,7 +620,9 @@ export function CustomerHomeScreen() {
               adding={cartMutations[`menu:${item.id}`]?.status === 'PENDING'}
               cartLine={cartLine}
               changingQuantity={
-                cartLine ? cartMutations[`line:${cartLine.lineId}`]?.status === 'PENDING' : false
+                cartLine
+                  ? cartMutations[`line:${cartLine.lineId}`]?.status === 'PENDING'
+                  : false
               }
               onAdd={handleAdd}
               onDecrease={handleDecrease}

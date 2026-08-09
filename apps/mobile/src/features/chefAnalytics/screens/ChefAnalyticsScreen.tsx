@@ -77,7 +77,7 @@ function EarningsUnavailableCard() {
   return (
     <View
       accessible
-      accessibilityLabel="Earnings trend unavailable. No chart values are shown because the approved Chef analytics series contract is not available."
+      accessibilityLabel="Earnings trend unavailable. No chart values are shown because complete analytics data is not available."
       style={styles.chartCard}>
       <View style={styles.chartHeader}>
         <View>
@@ -126,7 +126,7 @@ function OrderStatusUnavailableCard() {
         <View style={styles.donutCopy}>
           <Text style={styles.unavailableTitle}>Breakdown unavailable</Text>
           <Text style={styles.unavailableCopy}>
-            Status totals remain blank until an authoritative date-ranged metric is available.
+            Status totals remain blank until complete date-ranged reporting data is available.
           </Text>
         </View>
       </View>
@@ -138,7 +138,7 @@ function TopItemsUnavailableCard() {
   return (
     <View
       accessible
-      accessibilityLabel="Top selling items unavailable. No item ranking is estimated from raw menu or order records."
+      accessibilityLabel="Top selling items unavailable. No item ranking is shown without complete item-performance data."
       style={styles.listCard}>
       <View style={styles.emptyIcon}>
         <Icon color={colors.flameRed} name="chef" size={24} />
@@ -146,7 +146,7 @@ function TopItemsUnavailableCard() {
       <View style={styles.flex}>
         <Text style={styles.unavailableTitle}>Item performance unavailable</Text>
         <Text style={styles.unavailableCopy}>
-          Top-item ranking is not inferred from operational menu or order records.
+          No ranking is shown without complete item-performance data.
         </Text>
       </View>
     </View>
@@ -162,10 +162,10 @@ function DetailedReportUnavailableBanner() {
       <View style={styles.flex}>
         <Text style={styles.insightTitle}>Detailed reports unavailable</Text>
         <Text style={styles.insightCopy}>
-          Report details and export are disabled until an approved analytics contract is available.
+          Report details and export are disabled until complete analytics reporting is supported.
         </Text>
         <Pressable
-          accessibilityHint="Detailed reports require an approved Chef analytics report contract."
+          accessibilityHint="Detailed analytics reports are unavailable right now."
           accessibilityLabel="View detailed report unavailable"
           accessibilityRole="button"
           accessibilityState={{disabled: true}}
@@ -207,14 +207,14 @@ export function ChefAnalyticsScreen() {
           <View style={styles.flex}>
             <Text style={styles.blockedTitle}>Analytics data is unavailable</Text>
             <Text style={styles.blockedCopy}>
-              The required summary and date-range data is not available yet. Craves will not estimate business metrics from incomplete sources.
+              Complete summary and date-range data is not available yet. Craves will not estimate missing business metrics.
             </Text>
           </View>
         </View>
 
         <View style={styles.section}>
           <SectionHeading
-            subtitle="The reference state is this week. Range changes are locked until server date semantics are defined."
+            subtitle="The reference state is this week. Range changes are unavailable until date filtering is supported."
             title="Date range"
           />
           <ScrollView
@@ -226,7 +226,7 @@ export function ChefAnalyticsScreen() {
               const selected = model.selectedReferenceRange === option.id;
               return (
                 <Pressable
-                  accessibilityHint="Date filtering is unavailable because the approved Chef analytics date-range contract is missing."
+                  accessibilityHint="Date filtering is unavailable right now."
                   accessibilityRole="tab"
                   accessibilityState={{
                     disabled: !model.dateRangeInteractionAvailable,
@@ -270,7 +270,7 @@ export function ChefAnalyticsScreen() {
 
         <View style={styles.section}>
           <SectionHeading
-            subtitle="No chart points are rendered without a backend-defined series."
+            subtitle="No chart points are rendered without complete reporting data."
             title="Earnings trend"
           />
           <EarningsUnavailableCard />
@@ -283,7 +283,7 @@ export function ChefAnalyticsScreen() {
 
         <View style={styles.section}>
           <SectionHeading
-            subtitle="Rankings require authoritative item-performance definitions."
+            subtitle="Rankings require complete item-performance data."
             title="Top selling items"
           />
           <TopItemsUnavailableCard />
@@ -296,7 +296,7 @@ export function ChefAnalyticsScreen() {
         <View style={styles.contractFootnote}>
           <Icon color={colors.textSecondary} name="shield" size={18} />
           <Text style={styles.contractFootnoteText}>
-            {model.unavailableCapabilities.length} analytics capabilities are currently unavailable. Existing Chef Orders, Earnings and Menu data remains available in their own operational screens.
+            Complete analytics reporting is not available yet. Existing Chef Orders, Earnings and Menu data remains available in their own operational screens.
           </Text>
         </View>
       </ScrollView>
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
     borderWidth: 1,
-    borderColor: '#F0D3A4',
+    borderColor: colors.warning,
     borderRadius: radius.lg,
     backgroundColor: colors.warningSoft,
     padding: spacing.md,
@@ -536,9 +536,9 @@ const styles = StyleSheet.create({
     height: 104,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 12,
+    borderWidth: spacing.sm,
     borderColor: colors.border,
-    borderRadius: 52,
+    borderRadius: radius.pill,
     backgroundColor: colors.white,
   },
   donutDash: {

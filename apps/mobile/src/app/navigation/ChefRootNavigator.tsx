@@ -26,12 +26,12 @@ import {ChefNewOrdersScreen} from '../../features/chefOrders/screens/ChefNewOrde
 import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrderDetailScreen';
 import {ChefPreparingOrdersScreen} from '../../features/chefOrders/screens/ChefPreparingOrdersScreen';
 import {ChefReadyOrdersScreen} from '../../features/chefOrders/screens/ChefReadyOrdersScreen';
+import {ChefProfileScreen} from '../../features/chefProfile/screens/ChefProfileScreen';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
 import {
   ChefOperationalProvider,
   useChefOperationalState,
 } from '../../features/chefShell/state/ChefOperationalProvider';
-import {ChefHeader} from '../../features/chefShell/components/ChefHeader';
 import {Icon} from '../../shared/components/Icon';
 import {
   CHEF_TAB_ACTIVE_COLOR,
@@ -42,12 +42,14 @@ import {
 import type {
   ChefOrdersStackParamList,
   ChefProductStackParamList,
+  ChefProfileStackParamList,
   ChefTabParamList,
 } from './types';
 
 const Tab = createBottomTabNavigator<ChefTabParamList>();
 const Stack = createNativeStackNavigator<ChefProductStackParamList>();
 const OrdersStack = createNativeStackNavigator<ChefOrdersStackParamList>();
+const ProfileStack = createNativeStackNavigator<ChefProfileStackParamList>();
 
 const dashboardTab = getChefTabDefinition('Dashboard');
 const ordersTab = getChefTabDefinition('Orders');
@@ -103,21 +105,6 @@ const stackScreenOptions = {
   animation: 'fade' as const,
 };
 
-function ChefShellRouteBoundary({title}: {title: string}) {
-  return (
-    <SafeAreaView style={styles.routeSafeArea} edges={['top', 'left', 'right']}>
-      <ChefHeader title={title} />
-      <View style={styles.routeContent}>
-        <Text style={styles.routeTitle}>{title}</Text>
-      </View>
-    </SafeAreaView>
-  );
-}
-
-function ChefProfileBoundaryScreen() {
-  return <ChefShellRouteBoundary title="Profile" />;
-}
-
 type ChefMenuNavigation = CompositeNavigationProp<
   BottomTabNavigationProp<ChefTabParamList, 'Menu'>,
   NativeStackNavigationProp<ChefProductStackParamList>
@@ -157,6 +144,16 @@ function ChefOrdersNavigator() {
         component={ChefCompletedOrdersScreen}
       />
     </OrdersStack.Navigator>
+  );
+}
+
+function ChefProfileNavigator() {
+  return (
+    <ProfileStack.Navigator
+      initialRouteName="ChefProfileHome"
+      screenOptions={stackScreenOptions}>
+      <ProfileStack.Screen name="ChefProfileHome" component={ChefProfileScreen} />
+    </ProfileStack.Navigator>
   );
 }
 
@@ -214,7 +211,7 @@ function ChefTabsNavigator() {
       />
       <Tab.Screen
         name="Profile"
-        component={ChefProfileBoundaryScreen}
+        component={ChefProfileNavigator}
         options={{
           tabBarAccessibilityLabel: `${profileTab.label} tab`,
           tabBarLabel: profileTab.label,
@@ -328,20 +325,6 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   pressed: {opacity: 0.65},
-  routeSafeArea: {
-    flex: 1,
-    backgroundColor: colors.surfaceBase,
-  },
-  routeContent: {
-    flex: 1,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-  },
-  routeTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.bold,
-  },
   ordersBadge: {
     backgroundColor: colors.flameRed,
     color: colors.white,

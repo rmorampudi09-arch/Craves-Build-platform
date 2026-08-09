@@ -131,10 +131,15 @@ export type CustomerStackRouteName =
   | keyof CustomerOrdersStackParamList
   | keyof CustomerProfileStackParamList;
 
-/** P80 establishes Chef product ownership without pre-implementing P81+ screens. */
+/** P87 registers the exact Guide logical route without pre-implementing P88+ screens. */
+export type ChefOrdersStackParamList = {
+  ChefOrdersPreparing: undefined;
+};
+
+/** P80 establishes Chef product ownership without pre-implementing later Chef surfaces. */
 export type ChefTabParamList = {
   Dashboard: undefined;
-  Orders: undefined;
+  Orders: NavigatorScreenParams<ChefOrdersStackParamList> | undefined;
   Menu: undefined;
   Analytics: undefined;
   Profile: undefined;
@@ -142,18 +147,22 @@ export type ChefTabParamList = {
 
 export type ChefOrderDetailRouteParams = {orderId: string};
 
-/** P85 adds the immersive Chef order-detail route without implementing P86 order tabs. */
+/** P85 adds the immersive Chef order-detail route. */
 export type ChefProductStackParamList = {
   ChefTabs: NavigatorScreenParams<ChefTabParamList> | undefined;
   ChefOrderDetail: ChefOrderDetailRouteParams;
 };
 
 export type ChefTabRouteName = keyof ChefTabParamList;
+export type ChefOrdersStackRouteName = keyof ChefOrdersStackParamList;
 export type ChefProductStackRouteName = keyof ChefProductStackParamList;
 
 export type CustomerDomainParamList = CustomerAccountStackParamList & CustomerTabParamList;
 export type ChefDomainParamList =
-  ChefAccountStackParamList & ChefTabParamList & ChefProductStackParamList;
+  ChefAccountStackParamList &
+  ChefTabParamList &
+  ChefOrdersStackParamList &
+  ChefProductStackParamList;
 export type TransactionalStackParamList = CustomerCartStackParamList & CustomerPaymentMethodsStackParamList;
 
 export type NavigationDomainParamLists = {
@@ -170,4 +179,5 @@ export type RegisteredRouteName =
   | CustomerTabRouteName
   | CustomerStackRouteName
   | ChefTabRouteName
+  | ChefOrdersStackRouteName
   | ChefProductStackRouteName;

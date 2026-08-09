@@ -11,10 +11,12 @@ import {
 function item(
   overrides: Partial<ChefMenuItem> & Pick<ChefMenuItem, 'id' | 'itemName'>,
 ): ChefMenuItem {
+  const {id, itemName, ...rest} = overrides;
+
   return {
-    id: overrides.id,
+    id,
     kitchenId: '00000000-0000-4000-8000-000000000100',
-    itemName: overrides.itemName,
+    itemName,
     description: null,
     category: 'Mains',
     foodType: 'VEG',
@@ -30,7 +32,7 @@ function item(
     images: [],
     createdAt: '2026-08-09T10:00:00Z',
     updatedAt: '2026-08-09T10:00:00Z',
-    ...overrides,
+    ...rest,
   };
 }
 

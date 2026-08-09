@@ -151,11 +151,12 @@ export type ChefTabParamList = {
 export type ChefOrderDetailRouteParams = {orderId: string};
 export type ChefMenuItemDetailRouteParams = {menuItemId: string};
 
-/** P93 adds read-only Chef menu item navigation without inventing a detail endpoint. */
+/** P94 adds the focused Add New Menu Item form route outside the Chef bottom tabs. */
 export type ChefProductStackParamList = {
   ChefTabs: NavigatorScreenParams<ChefTabParamList> | undefined;
   ChefOrderDetail: ChefOrderDetailRouteParams;
   ChefMenuItemDetail: ChefMenuItemDetailRouteParams;
+  ChefAddMenuItem: undefined;
 };
 
 export type ChefTabRouteName = keyof ChefTabParamList;

@@ -1,11 +1,22 @@
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
-import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {
+  createBottomTabNavigator,
+  type BottomTabNavigationProp,
+} from '@react-navigation/bottom-tabs';
+import {
+  useNavigation,
+  type CompositeNavigationProp,
+} from '@react-navigation/native';
+import {
+  createNativeStackNavigator,
+  type NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
+import {ChefAddMenuItemScreen} from '../../features/chefMenu/screens/ChefAddMenuItemScreen';
 import {ChefMenuScreen} from '../../features/chefMenu/screens/ChefMenuScreen';
 import {ChefMenuItemDetailScreen} from '../../features/chefMenu/screens/ChefMenuItemDetailScreen';
 import {ChefCompletedOrdersScreen} from '../../features/chefOrders/screens/ChefCompletedOrdersScreen';
@@ -109,6 +120,29 @@ function ChefProfileBoundaryScreen() {
   return <ChefShellRouteBoundary title="Profile" />;
 }
 
+type ChefMenuNavigation = CompositeNavigationProp<
+  BottomTabNavigationProp<ChefTabParamList, 'Menu'>,
+  NativeStackNavigationProp<ChefProductStackParamList>
+>;
+
+function ChefMenuTabScreen() {
+  const navigation = useNavigation<ChefMenuNavigation>();
+  return (
+    <View style={styles.menuScreenBoundary}>
+      <ChefMenuScreen />
+      <View style={styles.menuCreateBar}>
+        <Pressable
+          accessibilityLabel="Add new Chef menu item"
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('ChefAddMenuItem')}
+          style={({pressed}) => [styles.menuCreateButton, pressed && styles.pressed]}>
+          <Text style={styles.menuCreateButtonText}>+ Add new item</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function ChefOrdersNavigator() {
   return (
     <OrdersStack.Navigator
@@ -164,7 +198,7 @@ function ChefTabsNavigator() {
       />
       <Tab.Screen
         name="Menu"
-        component={ChefMenuScreen}
+        component={ChefMenuTabScreen}
         options={{
           tabBarAccessibilityLabel: `${menuTab.label} tab`,
           tabBarLabel: menuTab.label,
@@ -203,6 +237,7 @@ function ChefProductNavigator() {
           name="ChefMenuItemDetail"
           component={ChefMenuItemDetailScreen}
         />
+        <Stack.Screen name="ChefAddMenuItem" component={ChefAddMenuItemScreen} />
       </Stack.Navigator>
     </ChefOperationalProvider>
   );
@@ -211,7 +246,9 @@ function ChefProductNavigator() {
 export function ChefRootNavigator() {
   const dispatch = useAppDispatch();
   const [isolationAttempt, setIsolationAttempt] = React.useState(0);
-  const [isolationState, setIsolationState] = React.useState<'pending' | 'ready' | 'error'>('pending');
+  const [isolationState, setIsolationState] = React.useState<
+    'pending' | 'ready' | 'error'
+  >('pending');
 
   React.useEffect(() => {
     let mounted = true;
@@ -239,7 +276,9 @@ export function ChefRootNavigator() {
       <SafeAreaView style={styles.isolationSafeArea}>
         <View style={styles.isolationContent}>
           <Text accessibilityRole="header" style={styles.isolationTitle}>
-            {isolationState === 'error' ? 'Chef workspace unavailable' : 'Preparing Chef workspace'}
+            {isolationState === 'error'
+              ? 'Chef workspace unavailable'
+              : 'Preparing Chef workspace'}
           </Text>
           {isolationState === 'error' ? (
             <>
@@ -264,6 +303,28 @@ export function ChefRootNavigator() {
 }
 
 const styles = StyleSheet.create({
+  menuScreenBoundary: {flex: 1},
+  menuCreateBar: {
+    backgroundColor: colors.white,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  menuCreateButton: {
+    alignItems: 'center',
+    backgroundColor: colors.flameRed,
+    borderRadius: 999,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: spacing.lg,
+  },
+  menuCreateButtonText: {
+    color: colors.white,
+    fontSize: typography.button,
+    fontWeight: fontWeight.bold,
+  },
+  pressed: {opacity: 0.65},
   routeSafeArea: {
     flex: 1,
     backgroundColor: colors.surfaceBase,

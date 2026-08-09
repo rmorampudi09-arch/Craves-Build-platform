@@ -34,13 +34,13 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 - **P71 — Coupons/Offers — Active Cart: BLOCKED.** No approved apply/remove/replace mutation or authoritative repriced-cart response exists.
 - **P72 — My Reviews — Empty Cart: BLOCKED.** No executable customer review list/readiness/summary/write contract exists.
 - **P73 — My Reviews — Active Cart and Review Actions: BLOCKED.** Canonical active-cart capability exists, but required review contracts/actions remain absent.
-- **P74 — Customer Settings Active/Empty Visuals: IMPLEMENTED / VALIDATION IN PROGRESS.** Shared Settings route, account summary, persisted lightweight preferences, established saved-location selection, notification/cart badges, active/empty cart states, legal/about/support rows, P24 logout, Save Changes, and focused hidden bottom-tab treatment are implemented. P75/P76 child flows remain explicit blockers and were not started.
+- **P74 — Customer Settings Active/Empty Visuals: DONE at authorized code/CI scope.** Shared Settings route, account summary, persisted lightweight preferences, established saved-location selection, notification/cart badges, active/empty cart states, legal/about/support rows, P24 logout, Save Changes, and focused hidden bottom-tab treatment are implemented. P75/P76 child flows remain explicit blockers and were not started. Physical device/reference certification remains deferred to later visual QA and is not claimed here.
 
-**Current executed phase:** **P74 — Customer Settings Active/Empty Visuals — implementation complete; final CI gate in progress**.
+**Current executed phase:** **P74 — Customer Settings Active/Empty Visuals — DONE at authorized code/CI scope**.
 
-**P74 mobile implementation head:** `35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62`.
+**P74 validated mobile head:** `ae4de7be4e010fe621cf0516313991f5746ed4f4`.
 
-**P74 CI:** workflow run `31286064248`, job `93175010142` — **IN PROGRESS** at ledger update. TypeScript strict check and ESLint have passed; remaining Jest/bundle/source-guard steps must finish before this ledger may claim CI success.
+**P74 CI:** workflow run `31286578557`, job `93176403664` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 
 **P74 evidence:** `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`.
 
@@ -73,7 +73,7 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 | P71 | **BLOCKED** | `docs/mobile-ui-rebuild/P71_COUPONS_OFFERS_ACTIVE_CART.md` | Not triggered — docs/ledger only |
 | P72 | **BLOCKED** | `docs/mobile-ui-rebuild/P72_MY_REVIEWS_EMPTY_CART.md` | Not triggered — docs/ledger only |
 | P73 | **BLOCKED** | `docs/mobile-ui-rebuild/P73_MY_REVIEWS_ACTIVE_CART.md` | Not triggered — docs/ledger only |
-| P74 | **IMPLEMENTED / CI IN PROGRESS** | `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`; mobile head `35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62` | `31286064248` / `93175010142` — IN PROGRESS |
+| P74 | **DONE at code/CI scope** | `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`; validated mobile head `ae4de7be4e010fe621cf0516313991f5746ed4f4` | `31286578557` / `93176403664` — SUCCESS |
 | P75 onward | **NOT STARTED / not accepted** | — | — |
 
 ---
@@ -160,7 +160,7 @@ P74 implements one shared Settings route without crossing into P75 child flows:
 
 P74 does **not** fabricate or pre-implement P75/P76 behavior. Deeper notification preferences, privacy/security/password-change, legal/content routing, app-wide language/theme application, Share/Referral/Subscription destinations, and Help/Support child flows remain explicit unavailable-child states until their owning phases and exact contracts are authorized.
 
-**P74 implementation status:** complete at code level. Final phase validation remains pending until workflow run `31286064248` finishes.
+**P74 implementation status:** complete at authorized code/CI scope. The initial CI run failed at Jest due to the AsyncStorage test mock; a test-only fix was applied, and replacement run `31286578557` / job `93176403664` passed all required implementation gates at validated mobile head `ae4de7be4e010fe621cf0516313991f5746ed4f4`.
 
 Evidence: `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`.
 
@@ -170,12 +170,13 @@ Evidence: `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`
 
 Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
-- Latest previously completed mobile-source validation: P68 run `31281213495`, job `93162733549` — **SUCCESS**.
 - P69/P70/P71/P72/P73 were docs/ledger-only checkpoints and did not trigger the mobile path-filtered workflow.
-- P74 mobile implementation head `35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62` triggered run `31286064248`, job `93175010142`.
-- At this ledger update, dependency install, TypeScript strict check, and ESLint are **SUCCESS**; Jest is **IN PROGRESS**; bundle and backend/APIM/infrastructure source guard are pending.
-- This ledger intentionally does not claim P74 CI success before the run concludes.
+- Initial P74 run `31286064248` / job `93175010142` failed at Jest after dependency install, TypeScript, and ESLint succeeded.
+- The failure was isolated to the AsyncStorage test-environment mock; production behavior was not changed to bypass the test.
+- P74 validated mobile head `ae4de7be4e010fe621cf0516313991f5746ed4f4` triggered replacement run `31286578557`, job `93176403664` — **SUCCESS**.
+- Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 - No Gradle/APK packaging was performed, consistent with implementation-phase policy.
+- Physical Android/reference-image certification remains a later visual-QA gate; no pixel-perfect certification is claimed from source/CI alone.
 
 ---
 
@@ -183,10 +184,10 @@ Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current executed phase: P74 — Customer Settings Active/Empty Visuals — IMPLEMENTED / CI IN PROGRESS
-P74 mobile implementation head: 35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62
+Current executed phase: P74 — Customer Settings Active/Empty Visuals — DONE at authorized code/CI scope
+P74 validated mobile head: ae4de7be4e010fe621cf0516313991f5746ed4f4
 P74 evidence: docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md
-P74 CI: run 31286064248 / job 93175010142 — in progress at ledger update
+P74 CI: run 31286578557 / job 93176403664 — SUCCESS
 P74 implemented: typed Settings route; Profile entry point; account summary; persisted local UI preferences; established saved-location selector; notification badge; active/empty cart header states; real cart navigation; legal/about/support rows; P24 logout; Save Changes; bottom-tab hidden while Settings is focused
 P74 no-fabrication boundary: P75 settings child flows and P76/P77 support flows are not implemented
 Inherited blockers: retain P69–P73 and all earlier phase blockers not explicitly superseded

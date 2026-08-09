@@ -1,6 +1,6 @@
 import React from 'react';
 import {useQueryClient} from '@tanstack/react-query';
-import {toAppApiError, type AppApiError} from '../../../core/http/apiError';
+import {AppApiError, toAppApiError} from '../../../core/http/apiError';
 import {useAppSelector} from '../../../app/store/hooks';
 import {chefOrderDetailApi, type ChefOrderDetail} from '../api/chefOrderDetailApi';
 import {
@@ -48,7 +48,13 @@ export function useChefOrderDecision(orderId: string): ChefOrderDecisionState {
       execute: () => Promise<ChefOrderDecisionResult>,
     ): Promise<ChefOrderDetail> => {
       if (activeRef.current) {
-        return activeRef.current;
+        return Promise.reject(
+          new AppApiError(
+            'CHEF_ORDER_DECISION_IN_PROGRESS',
+            'An order decision is already in progress.',
+            409,
+          ),
+        );
       }
 
       setAction(kind);

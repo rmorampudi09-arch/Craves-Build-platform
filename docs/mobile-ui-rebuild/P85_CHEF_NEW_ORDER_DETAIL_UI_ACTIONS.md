@@ -2,7 +2,7 @@
 
 ## Status
 
-**DONE at authorized code scope; repository CI is the completion gate for this commit.**
+**DONE at authorized code scope. CI execution is externally blocked before runner startup.**
 
 P85 implements Guide Reference 39's Chef New Order Detail presentation/action boundary on `mobile-ui-rebuild-from-scratch` and stops before P86 Chef Order Tab Query Architecture.
 
@@ -40,9 +40,11 @@ The screen explains those unavailable capabilities in place while retaining the 
 - `apps/mobile/src/features/chefOrders/state/useChefOrderDetailContract.ts`
 - `docs/mobile-ui-rebuild/P85_CHEF_NEW_ORDER_DETAIL_UI_ACTIONS.md`
 
-## Validation contract
+## Validation
 
-The repository workflow must pass the same mobile gates used by the rebuild before P85 is reported complete: strict TypeScript, ESLint, Jest, Android production JS bundle, and source-boundary guard. The decision tests cover server revalidation, stale-state mutation prevention, duplicate accept/reject blocking, stable idempotency, and masked contact output.
+Focused tests were added for server revalidation, stale-state mutation prevention, duplicate accept/reject blocking, stable idempotency, and masked contact output. The full repository CI workflow was triggered by the P85 push, but GitHub refused to start the runner because the repository account has a failed-payment/spending-limit restriction. The failure annotation is infrastructure-only and occurs before checkout or any TypeScript/lint/Jest/build step.
+
+Required workflow gates remain: strict TypeScript, ESLint, Jest, Android production JS bundle, and source-boundary guard. They must be rerun after the GitHub Actions billing/spending restriction is cleared; this document does not claim those gates executed.
 
 ## Phase boundary
 

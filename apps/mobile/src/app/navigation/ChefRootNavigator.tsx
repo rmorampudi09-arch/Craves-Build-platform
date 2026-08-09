@@ -9,6 +9,7 @@ import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDash
 import {ChefNewOrdersScreen} from '../../features/chefOrders/screens/ChefNewOrdersScreen';
 import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrderDetailScreen';
 import {ChefPreparingOrdersScreen} from '../../features/chefOrders/screens/ChefPreparingOrdersScreen';
+import {ChefReadyOrdersScreen} from '../../features/chefOrders/screens/ChefReadyOrdersScreen';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
 import {
   ChefOperationalProvider,
@@ -119,6 +120,7 @@ function ChefOrdersNavigator() {
         component={ChefPreparingOrdersScreen}
       />
       <OrdersStack.Screen name="ChefOrdersNew" component={ChefNewOrdersScreen} />
+      <OrdersStack.Screen name="ChefOrdersReady" component={ChefReadyOrdersScreen} />
     </OrdersStack.Navigator>
   );
 }

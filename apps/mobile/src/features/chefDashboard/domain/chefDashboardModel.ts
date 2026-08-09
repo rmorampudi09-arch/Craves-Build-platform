@@ -21,6 +21,12 @@ export interface ChefDashboardContractGap {
 }
 
 export const CHEF_DASHBOARD_CONTRACT_GAPS = {
+  aggregation: {
+    availability: 'unavailable',
+    code: 'BACKEND_CONTRACT_UNAVAILABLE',
+    reason:
+      'No approved Chef dashboard aggregate endpoint is present; P82 composes only existing authoritative sources.',
+  },
   analytics: {
     availability: 'unavailable',
     code: 'BACKEND_CONTRACT_UNAVAILABLE',
@@ -31,7 +37,19 @@ export const CHEF_DASHBOARD_CONTRACT_GAPS = {
     availability: 'unavailable',
     code: 'BACKEND_CONTRACT_UNAVAILABLE',
     reason:
-      'The earnings ledger does not define payout destination, withdrawal eligibility, or payout initiation.',
+      'The earnings ledger does not define wallet balance, payout destination, withdrawal eligibility, or payout initiation.',
+  },
+  reviews: {
+    availability: 'unavailable',
+    code: 'BACKEND_CONTRACT_UNAVAILABLE',
+    reason:
+      'No approved Chef recent-reviews/read-model contract is present in the repository.',
+  },
+  businessInsights: {
+    availability: 'unavailable',
+    code: 'BACKEND_CONTRACT_UNAVAILABLE',
+    reason:
+      'No approved Chef business-insight contract is present in the repository.',
   },
 } as const satisfies Record<string, ChefDashboardContractGap>;
 
@@ -68,11 +86,14 @@ export interface ChefDashboardNotificationSummary {
 }
 
 export interface ChefDashboardModel {
+  aggregation: ChefDashboardContractGap;
   orders: ChefDashboardOrderSummary;
   earnings: ChefDashboardEarningsSummary;
   menu: ChefDashboardMenuSummary;
   notifications: ChefDashboardNotificationSummary;
   analytics: ChefDashboardContractGap;
+  reviews: ChefDashboardContractGap;
+  businessInsights: ChefDashboardContractGap;
 }
 
 function roundCurrency(value: number): number {
@@ -178,10 +199,13 @@ export function deriveChefDashboardModel(input: {
   notices: readonly ChefOperationalNotice[];
 }): ChefDashboardModel {
   return {
+    aggregation: CHEF_DASHBOARD_CONTRACT_GAPS.aggregation,
     orders: deriveOrderSummary(input.orders),
     earnings: deriveEarningsSummary(input.earnings),
     menu: deriveMenuSummary(input.menuItems),
     notifications: deriveNotificationSummary(input.notices),
     analytics: CHEF_DASHBOARD_CONTRACT_GAPS.analytics,
+    reviews: CHEF_DASHBOARD_CONTRACT_GAPS.reviews,
+    businessInsights: CHEF_DASHBOARD_CONTRACT_GAPS.businessInsights,
   };
 }

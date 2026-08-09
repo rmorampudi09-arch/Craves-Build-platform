@@ -131,20 +131,18 @@ These blockers prevent P75 from being marked fully DONE against the guide’s pr
 
 ## 6. Validation
 
-GitHub Actions mobile implementation run `31287591983`, job `93179133618`, was triggered for mobile head `f5be75bef913d33492dc872af325f9a51d692f39`.
+GitHub Actions mobile implementation run `31287591983`, job `93179133618`, completed **SUCCESS** for validated mobile head `f5be75bef913d33492dc872af325f9a51d692f39`.
 
-At evidence creation time:
+Passed gates:
 
-- dependency install: PASS;
-- TypeScript strict check: PASS;
-- ESLint: PASS;
-- Jest: in progress;
-- production Android JavaScript bundle: pending;
-- backend/APIM/infrastructure source guard: pending.
+- dependency install;
+- TypeScript strict check;
+- ESLint with zero warnings allowed;
+- Jest, including the focused P75 password/capability model tests;
+- production Android JavaScript bundle;
+- backend/APIM/infrastructure source guard.
 
-The final ledger must record the completed outcome before this phase is handed off as validated.
-
-No APK/AAB was produced. Physical Android/reference-image certification remains a later visual-QA gate and is not claimed by this phase.
+No APK/AAB was produced, consistent with the implementation-phase policy. Physical Android/reference-image certification remains a later visual-QA gate and is not claimed by this phase.
 
 ## 7. Phase boundary
 

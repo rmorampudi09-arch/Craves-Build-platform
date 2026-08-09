@@ -5,6 +5,7 @@ import {useAppSelector} from '../../../app/store/hooks';
 import {
   chefOperationalApi,
   type ChefOperationalNotice,
+  type ChefOperationalOrder,
 } from '../api/chefOperationalApi';
 import {
   deriveChefOperationalCounters,
@@ -21,6 +22,7 @@ const EMPTY_COUNTERS: ChefOperationalCounters = {
 
 interface ChefOperationalContextValue {
   counters: ChefOperationalCounters;
+  orders: ChefOperationalOrder[];
   notices: ChefOperationalNotice[];
   ordersStatus: 'pending' | 'error' | 'success';
   notificationsStatus: 'pending' | 'error' | 'success';
@@ -102,6 +104,7 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
   const value = React.useMemo<ChefOperationalContextValue>(
     () => ({
       counters: identityId ? counters : EMPTY_COUNTERS,
+      orders: identityId ? orders : [],
       notices,
       ordersStatus: ordersQuery.status,
       notificationsStatus: notificationsQuery.status,
@@ -121,6 +124,7 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       notices,
       notificationsQuery.isFetching,
       notificationsQuery.status,
+      orders,
       ordersQuery.isFetching,
       ordersQuery.status,
       refresh,

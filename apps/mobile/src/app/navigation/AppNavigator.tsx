@@ -182,6 +182,17 @@ function productRoleFromAuth(auth: AuthState): ProductRole | null {
   return context.productReady ? context.authorizedRole : null;
 }
 
+function navigationRootMatchesRole(role: ProductRole): boolean {
+  if (!navigationRef.isReady()) return false;
+  const routeNames = navigationRef.getRootState().routeNames;
+  return role === 'CUSTOMER'
+    ? routeNames.includes('Home') &&
+        routeNames.includes('Chefs') &&
+        routeNames.includes('Orders') &&
+        routeNames.includes('Profile')
+    : routeNames.includes('ChefTabs');
+}
+
 function currentRouteMatches(destination: InboundRouteDestination): boolean {
   const currentRoute = navigationRef.getCurrentRoute();
   if (!currentRoute) {
@@ -331,7 +342,7 @@ export function AppNavigator() {
     }
 
     const role = productRoleFromAuth(authRef.current);
-    if (!role) return;
+    if (!role || !navigationRootMatchesRole(role)) return;
 
     if (initialInboundWinsRef.current) {
       restorationSettledRef.current = true;
@@ -365,7 +376,7 @@ export function AppNavigator() {
   const persistCurrentRestoration = React.useCallback(() => {
     if (!restorationSettledRef.current || !navigationRef.isReady()) return;
     const role = productRoleFromAuth(authRef.current);
-    if (!role) return;
+    if (!role || !navigationRootMatchesRole(role)) return;
 
     const snapshot = captureProcessRestorationSnapshot(
       navigationRef.getRootState() as unknown as NavigationStateLike,

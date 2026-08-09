@@ -11,6 +11,7 @@ import {
   ListSkeleton,
   PermissionState,
   SectionSkeleton,
+  resolveContentLifecyclePrimaryState,
 } from '../src/shared/components';
 
 async function render(element: ReactElement) {
@@ -58,6 +59,109 @@ describe('shared lifecycle primitives', () => {
     expect(
       renderer.root.findAllByProps({testID: 'unavailable-content'}),
     ).toHaveLength(0);
+  });
+
+  test('resolves permission, terminal, and empty states explicitly', () => {
+    const base = {
+      hasContent: false,
+      loading: false,
+      empty: false,
+      permissionBlocked: false,
+      hasPermissionState: false,
+      hasTerminalState: false,
+      hasEmptyState: false,
+    };
+
+    expect(
+      resolveContentLifecyclePrimaryState({
+        ...base,
+        permissionBlocked: true,
+        hasPermissionState: true,
+      }),
+    ).toBe('permission');
+    expect(
+      resolveContentLifecyclePrimaryState({...base, hasTerminalState: true}),
+    ).toBe('terminal');
+    expect(
+      resolveContentLifecyclePrimaryState({
+        ...base,
+        empty: true,
+        hasEmptyState: true,
+      }),
+    ).toBe('empty');
+  });
+
+  test('renders explicit permission and empty surfaces without content', async () => {
+    const permissionRenderer = await render(
+      <ContentLifecycle
+        hasContent={false}
+        permissionBlocked
+        permissionState={<View testID="permission-blocked" />}
+        skeleton={<View testID="initial-skeleton" />}
+      />,
+    );
+    expect(
+      permissionRenderer.root.findByProps({testID: 'permission-blocked'}),
+    ).toBeTruthy();
+
+    const emptyRenderer = await render(
+      <ContentLifecycle
+        hasContent={false}
+        empty
+        emptyState={<View testID="empty-state" />}
+        skeleton={<View testID="initial-skeleton" />}
+      />,
+    );
+    expect(emptyRenderer.root.findByProps({testID: 'empty-state'})).toBeTruthy();
+  });
+
+  test('keeps content mounted for pagination loading and pagination errors', async () => {
+    const loadingRenderer = await render(
+      <ContentLifecycle
+        hasContent
+        loadingMore
+        testID="orders"
+        skeleton={<View testID="initial-skeleton" />}>
+        <Text testID="paged-content">Loaded page</Text>
+      </ContentLifecycle>,
+    );
+
+    expect(loadingRenderer.root.findByProps({testID: 'paged-content'})).toBeTruthy();
+    expect(
+      loadingRenderer.root.findByProps({testID: 'orders-pagination-loading'}),
+    ).toBeTruthy();
+
+    const errorRenderer = await render(
+      <ContentLifecycle
+        hasContent
+        paginationError="Could not load more orders."
+        testID="orders"
+        skeleton={<View testID="initial-skeleton" />}>
+        <Text testID="paged-content">Loaded page</Text>
+      </ContentLifecycle>,
+    );
+
+    expect(errorRenderer.root.findByProps({testID: 'paged-content'})).toBeTruthy();
+    expect(
+      errorRenderer.root.findByProps({testID: 'orders-pagination-error'}),
+    ).toBeTruthy();
+  });
+
+  test('keeps valid content visible when a mutation fails', async () => {
+    const renderer = await render(
+      <ContentLifecycle
+        hasContent
+        mutationError="Could not save this change."
+        testID="profile"
+        skeleton={<View testID="initial-skeleton" />}>
+        <Text testID="profile-content">Existing profile</Text>
+      </ContentLifecycle>,
+    );
+
+    expect(renderer.root.findByProps({testID: 'profile-content'})).toBeTruthy();
+    expect(
+      renderer.root.findByProps({testID: 'profile-mutation-error'}),
+    ).toBeTruthy();
   });
 
   test('renders reusable section, list, and permission states', async () => {

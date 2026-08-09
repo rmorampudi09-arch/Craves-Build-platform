@@ -1,7 +1,10 @@
+import type {ChefMenuItem} from '../api/chefMenuApi';
 import {
   EMPTY_CHEF_MENU_FORM,
   buildChefMenuItemRequest,
+  buildChefMenuReplacementRequest,
   chefMenuFormSchema,
+  chefMenuItemToFormValues,
   type ChefMenuFormValues,
 } from './chefMenuForm';
 
@@ -19,7 +22,28 @@ const validForm: ChefMenuFormValues = {
   available: true,
 };
 
-describe('chef menu add-item form', () => {
+const existingItem: ChefMenuItem = {
+  id: '11111111-1111-4111-8111-111111111111',
+  kitchenId: '22222222-2222-4222-8222-222222222222',
+  itemName: 'Old Paneer',
+  description: null,
+  category: 'Mains',
+  foodType: 'VEG',
+  price: 199,
+  currency: 'INR',
+  servesCount: 1,
+  preparationTimeMinutes: 20,
+  spiceLevel: 'MILD',
+  unitPackageWeightGrams: 350,
+  thermoboxRequired: false,
+  available: false,
+  status: 'INACTIVE',
+  images: [],
+  createdAt: '2026-08-01T10:00:00Z',
+  updatedAt: '2026-08-08T10:00:00Z',
+};
+
+describe('chef menu item form', () => {
   it('fails closed when backend-required create fields are missing', () => {
     const result = chefMenuFormSchema.safeParse(EMPTY_CHEF_MENU_FORM);
     expect(result.success).toBe(false);
@@ -79,5 +103,44 @@ describe('chef menu add-item form', () => {
       chefMenuFormSchema.safeParse({...validForm, preparationTimeMinutes: '1.5'})
         .success,
     ).toBe(false);
+  });
+
+  it('prefills every writable replacement field from the canonical item', () => {
+    expect(chefMenuItemToFormValues(existingItem)).toEqual({
+      itemName: 'Old Paneer',
+      description: '',
+      category: 'Mains',
+      foodType: 'VEG',
+      price: '199',
+      servesCount: '1',
+      preparationTimeMinutes: '20',
+      spiceLevel: 'MILD',
+      unitPackageWeightGrams: '350',
+      thermoboxRequired: false,
+      available: false,
+    });
+  });
+
+  it('builds a full PUT replacement while preserving currency and status', () => {
+    expect(
+      buildChefMenuReplacementRequest(
+        {...validForm, available: true},
+        existingItem,
+      ),
+    ).toEqual({
+      itemName: 'Paneer Tikka',
+      description: 'Charred paneer with peppers.',
+      category: 'Starters',
+      foodType: 'VEG',
+      price: 249.5,
+      servesCount: 2,
+      preparationTimeMinutes: 35,
+      spiceLevel: 'MEDIUM',
+      unitPackageWeightGrams: 450,
+      thermoboxRequired: true,
+      available: true,
+      currency: 'INR',
+      status: 'INACTIVE',
+    });
   });
 });

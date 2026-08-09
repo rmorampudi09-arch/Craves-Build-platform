@@ -230,6 +230,16 @@ export function ChefMenuItemDetailScreen({navigation, route}: Props) {
           />
           <DetailRow label="Backend status" value={item.status} />
         </View>
+
+        <Pressable
+          accessibilityLabel={`Edit ${item.itemName}`}
+          accessibilityRole="button"
+          onPress={() =>
+            navigation.navigate('ChefEditMenuItem', {menuItemId: item.id})
+          }
+          style={({pressed}) => [styles.editAction, pressed && styles.pressed]}>
+          <Text style={styles.editActionText}>Edit item</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -367,6 +377,21 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
     textAlign: 'right',
+  },
+  editAction: {
+    ...elevation.primaryAction,
+    alignItems: 'center',
+    backgroundColor: colors.flameRed,
+    borderRadius: radius.pill,
+    justifyContent: 'center',
+    marginTop: spacing.md,
+    minHeight: touchTarget.comfortable,
+    paddingHorizontal: spacing.lg,
+  },
+  editActionText: {
+    color: colors.white,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
   },
   centerState: {
     alignItems: 'center',

@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {
   CHEF_MENU_FOOD_TYPES,
   CHEF_MENU_SPICE_LEVELS,
+  type ChefMenuItem,
   type ChefMenuItemRequest,
 } from '../api/chefMenuApi';
 
@@ -75,10 +76,7 @@ function optionalInteger(value: string): number | null {
   return normalized.length === 0 ? null : Number(normalized);
 }
 
-export function buildChefMenuItemRequest(
-  values: ChefMenuFormValues,
-  intent: ChefMenuSubmitIntent,
-): ChefMenuItemRequest {
+function parsedRequestFields(values: ChefMenuFormValues) {
   const parsed = chefMenuFormSchema.parse(values);
   const description = parsed.description.trim();
 
@@ -94,6 +92,55 @@ export function buildChefMenuItemRequest(
     unitPackageWeightGrams: Number(parsed.unitPackageWeightGrams),
     thermoboxRequired: parsed.thermoboxRequired,
     available: parsed.available,
+  } satisfies Omit<ChefMenuItemRequest, 'currency' | 'status'>;
+}
+
+export function buildChefMenuItemRequest(
+  values: ChefMenuFormValues,
+  intent: ChefMenuSubmitIntent,
+): ChefMenuItemRequest {
+  return {
+    ...parsedRequestFields(values),
     status: intent === 'SAVE_DRAFT' ? 'DRAFT' : 'ACTIVE',
+  };
+}
+
+/**
+ * PUT is a full-replacement contract. Editing therefore pre-fills every writable
+ * request field from the canonical list response rather than manufacturing a
+ * partial patch object.
+ */
+export function chefMenuItemToFormValues(item: ChefMenuItem): ChefMenuFormValues {
+  return {
+    itemName: item.itemName,
+    description: item.description ?? '',
+    category: item.category,
+    foodType: item.foodType,
+    price: String(item.price),
+    servesCount: item.servesCount == null ? '' : String(item.servesCount),
+    preparationTimeMinutes:
+      item.preparationTimeMinutes == null
+        ? ''
+        : String(item.preparationTimeMinutes),
+    spiceLevel: item.spiceLevel ?? '',
+    unitPackageWeightGrams: String(item.unitPackageWeightGrams),
+    thermoboxRequired: item.thermoboxRequired,
+    available: item.available,
+  };
+}
+
+/**
+ * Preserve server-owned edit context that is not changed by the P95 form.
+ * Currency and status are sent because PUT replaces the complete MenuItemRequest;
+ * availability is intentionally editable because it is an approved request field.
+ */
+export function buildChefMenuReplacementRequest(
+  values: ChefMenuFormValues,
+  existingItem: ChefMenuItem,
+): ChefMenuItemRequest {
+  return {
+    ...parsedRequestFields(values),
+    currency: existingItem.currency,
+    status: existingItem.status,
   };
 }

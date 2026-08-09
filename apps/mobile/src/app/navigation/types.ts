@@ -150,13 +150,15 @@ export type ChefTabParamList = {
 
 export type ChefOrderDetailRouteParams = {orderId: string};
 export type ChefMenuItemDetailRouteParams = {menuItemId: string};
+export type ChefMenuItemEditRouteParams = {menuItemId: string};
 
-/** P94 adds the focused Add New Menu Item form route outside the Chef bottom tabs. */
+/** P95 adds the focused edit route while preserving the existing P94 create route. */
 export type ChefProductStackParamList = {
   ChefTabs: NavigatorScreenParams<ChefTabParamList> | undefined;
   ChefOrderDetail: ChefOrderDetailRouteParams;
   ChefMenuItemDetail: ChefMenuItemDetailRouteParams;
   ChefAddMenuItem: undefined;
+  ChefEditMenuItem: ChefMenuItemEditRouteParams;
 };
 
 export type ChefTabRouteName = keyof ChefTabParamList;

@@ -17,6 +17,7 @@ import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
 import {ChefAddMenuItemScreen} from '../../features/chefMenu/screens/ChefAddMenuItemScreen';
+import {ChefEditMenuItemScreen} from '../../features/chefMenu/screens/ChefEditMenuItemScreen';
 import {ChefMenuScreen} from '../../features/chefMenu/screens/ChefMenuScreen';
 import {ChefMenuItemDetailScreen} from '../../features/chefMenu/screens/ChefMenuItemDetailScreen';
 import {ChefCompletedOrdersScreen} from '../../features/chefOrders/screens/ChefCompletedOrdersScreen';
@@ -238,6 +239,11 @@ function ChefProductNavigator() {
           component={ChefMenuItemDetailScreen}
         />
         <Stack.Screen name="ChefAddMenuItem" component={ChefAddMenuItemScreen} />
+        <Stack.Screen
+          name="ChefEditMenuItem"
+          component={ChefEditMenuItemScreen}
+          options={{gestureEnabled: false}}
+        />
       </Stack.Navigator>
     </ChefOperationalProvider>
   );

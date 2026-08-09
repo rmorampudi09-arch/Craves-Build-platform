@@ -6,6 +6,7 @@ import {
   chefOperationalApi,
   type ChefOperationalNotice,
   type ChefOperationalOrder,
+  type ChefOperationalOrderStatus,
 } from '../api/chefOperationalApi';
 import {
   deriveChefOperationalCounters,
@@ -60,6 +61,12 @@ interface ChefOperationalContextValue {
   isRefreshing: boolean;
   markingNoticeId: string | null;
   refresh: () => Promise<void>;
+  reconcileOrderStatus: (
+    orderId: string,
+    status: ChefOperationalOrderStatus,
+    updatedAt?: string | null,
+    prepTimeMinutes?: number | null,
+  ) => void;
   markNotificationRead: (noticeId: string) => void;
 }
 
@@ -179,6 +186,29 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
     await Promise.allSettled([ordersQuery.refetch(), notificationsQuery.refetch()]);
   }, [notificationsQuery, ordersQuery]);
 
+  const reconcileOrderStatus = React.useCallback(
+    (
+      orderId: string,
+      status: ChefOperationalOrderStatus,
+      updatedAt?: string | null,
+      prepTimeMinutes?: number | null,
+    ) => {
+      queryClient.setQueryData<ChefOperationalOrder[]>(ordersQueryKey, current =>
+        current?.map(order =>
+          order.id === orderId
+            ? {
+                ...order,
+                status,
+                ...(updatedAt !== undefined ? {updatedAt} : {}),
+                ...(prepTimeMinutes !== undefined ? {prepTimeMinutes} : {}),
+              }
+            : order,
+        ),
+      );
+    },
+    [ordersQueryKey, queryClient],
+  );
+
   const orderTabs = React.useMemo<ChefOrderTabsOperationalState>(
     () => ({
       selectedStatus: tabUiState.selectedStatus,
@@ -208,6 +238,7 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       isRefreshing: ordersQuery.isFetching || notificationsQuery.isFetching,
       markingNoticeId: markReadMutation.isPending ? markReadMutation.variables ?? null : null,
       refresh,
+      reconcileOrderStatus,
       markNotificationRead: noticeId => {
         if (!markReadMutation.isPending) {
           markReadMutation.mutate(noticeId);
@@ -225,6 +256,7 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       orders,
       ordersQuery.isFetching,
       ordersQuery.status,
+      reconcileOrderStatus,
       refresh,
     ],
   );

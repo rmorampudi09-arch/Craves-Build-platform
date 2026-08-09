@@ -6,6 +6,8 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
+import {ChefMenuScreen} from '../../features/chefMenu/screens/ChefMenuScreen';
+import {ChefMenuItemDetailScreen} from '../../features/chefMenu/screens/ChefMenuItemDetailScreen';
 import {ChefCompletedOrdersScreen} from '../../features/chefOrders/screens/ChefCompletedOrdersScreen';
 import {ChefNewOrdersScreen} from '../../features/chefOrders/screens/ChefNewOrdersScreen';
 import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrderDetailScreen';
@@ -99,10 +101,6 @@ function ChefShellRouteBoundary({title}: {title: string}) {
   );
 }
 
-function ChefMenuBoundaryScreen() {
-  return <ChefShellRouteBoundary title="Menu" />;
-}
-
 function ChefAnalyticsBoundaryScreen() {
   return <ChefShellRouteBoundary title="Analytics" />;
 }
@@ -166,7 +164,7 @@ function ChefTabsNavigator() {
       />
       <Tab.Screen
         name="Menu"
-        component={ChefMenuBoundaryScreen}
+        component={ChefMenuScreen}
         options={{
           tabBarAccessibilityLabel: `${menuTab.label} tab`,
           tabBarLabel: menuTab.label,
@@ -201,6 +199,10 @@ function ChefProductNavigator() {
       <Stack.Navigator initialRouteName="ChefTabs" screenOptions={stackScreenOptions}>
         <Stack.Screen name="ChefTabs" component={ChefTabsNavigator} />
         <Stack.Screen name="ChefOrderDetail" component={ChefOrderDetailScreen} />
+        <Stack.Screen
+          name="ChefMenuItemDetail"
+          component={ChefMenuItemDetailScreen}
+        />
       </Stack.Navigator>
     </ChefOperationalProvider>
   );

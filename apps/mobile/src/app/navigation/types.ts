@@ -149,11 +149,13 @@ export type ChefTabParamList = {
 };
 
 export type ChefOrderDetailRouteParams = {orderId: string};
+export type ChefMenuItemDetailRouteParams = {menuItemId: string};
 
-/** P85 adds the immersive Chef order-detail route. */
+/** P93 adds read-only Chef menu item navigation without inventing a detail endpoint. */
 export type ChefProductStackParamList = {
   ChefTabs: NavigatorScreenParams<ChefTabParamList> | undefined;
   ChefOrderDetail: ChefOrderDetailRouteParams;
+  ChefMenuItemDetail: ChefMenuItemDetailRouteParams;
 };
 
 export type ChefTabRouteName = keyof ChefTabParamList;

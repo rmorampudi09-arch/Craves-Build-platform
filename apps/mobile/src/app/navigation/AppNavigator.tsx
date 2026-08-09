@@ -27,6 +27,8 @@ import {processRestorationStorage} from './processRestorationStorage';
 import {CustomerRootNavigator} from './CustomerRootNavigator';
 import {ChefRootNavigator} from './ChefRootNavigator';
 import {useAppSelector} from '../store/hooks';
+import {resolveReducedMotionAnimation} from '../../design/motion';
+import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {useBootstrap} from '../../features/auth/hooks/useBootstrap';
 import {useSessionLifecycle} from '../../features/auth/hooks/useSessionLifecycle';
 import {SplashScreen} from '../../features/auth/screens/SplashScreen';
@@ -54,12 +56,22 @@ const CustomerStack = createNativeStackNavigator<RootStackParamList>();
 const ChefStack = createNativeStackNavigator<RootStackParamList>();
 const navigationRef = createNavigationContainerRef<ParamListBase>();
 
-const screenOptions = {
-  headerShown: false,
-  animation: 'fade_from_bottom' as const,
-};
+function useAuthStackScreenOptions() {
+  const reduceMotionEnabled = useReducedMotionPreference();
+  return React.useMemo(
+    () => ({
+      headerShown: false,
+      animation: resolveReducedMotionAnimation(
+        'fade_from_bottom' as const,
+        reduceMotionEnabled,
+      ),
+    }),
+    [reduceMotionEnabled],
+  );
+}
 
 function AuthNavigator() {
+  const screenOptions = useAuthStackScreenOptions();
   return (
     <AuthStack.Navigator screenOptions={screenOptions} initialRouteName="RoleSelection">
       <AuthStack.Screen name="RoleSelection" component={RoleSelectionScreen} />
@@ -73,6 +85,7 @@ function AuthNavigator() {
 }
 
 function AccountResolutionNavigator() {
+  const screenOptions = useAuthStackScreenOptions();
   return (
     <ResolutionStack.Navigator screenOptions={screenOptions} initialRouteName="AccountRouter">
       <ResolutionStack.Screen name="AccountRouter" component={AccountRouterScreen} />
@@ -85,6 +98,8 @@ function CustomerAccountNavigator({
 }: {
   resolution: Extract<AccountResolution, {flow: 'CUSTOMER'}>;
 }) {
+  const screenOptions = useAuthStackScreenOptions();
+
   if (resolution.onboardingStatus === 'READY') {
     return <CustomerRootNavigator />;
   }
@@ -104,6 +119,8 @@ function ChefAccountNavigator({
 }: {
   resolution: Exclude<AccountResolution, {flow: 'CUSTOMER'}>;
 }) {
+  const screenOptions = useAuthStackScreenOptions();
+
   if (resolution.flow === 'CHEF') {
     return <ChefRootNavigator />;
   }

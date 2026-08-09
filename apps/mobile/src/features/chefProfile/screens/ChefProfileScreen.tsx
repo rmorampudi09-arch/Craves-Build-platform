@@ -9,8 +9,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import {useNavigation} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
+import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import type {
@@ -43,7 +43,6 @@ type ProfileNavigation = NativeStackNavigationProp<
 type ChefTabsNavigation = BottomTabNavigationProp<ChefTabParamList>;
 
 type BlockedDestination =
-  | 'edit-profile'
   | 'business-information'
   | 'payouts'
   | 'subscription'
@@ -66,7 +65,7 @@ const BUSINESS_ROWS: readonly AccountRowModel[] = [
     subtitle: 'Kitchen details, address and operating status',
     icon: 'chef',
     blockerMessage:
-      'Business information editing has its own approved Chef flow and is not registered in this phase yet.',
+      'Business information has its own approved Chef flow and is not registered in this mobile route yet.',
   },
   {
     id: 'payouts',
@@ -93,7 +92,7 @@ const SETTINGS_ROWS: readonly AccountRowModel[] = [
     subtitle: 'Notifications and Chef workspace preferences',
     icon: 'bell',
     blockerMessage:
-      'Chef app preferences have a dedicated screen that is not registered in this phase yet.',
+      'Chef app preferences have a dedicated screen that is not registered in the current mobile route yet.',
   },
   {
     id: 'security',
@@ -119,7 +118,9 @@ function initials(value: string): string {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2);
-  return parts.length > 0 ? parts.map(part => part[0]?.toUpperCase() ?? '').join('') : 'C';
+  return parts.length > 0
+    ? parts.map(part => part[0]?.toUpperCase() ?? '').join('')
+    : 'C';
 }
 
 function kitchenStatusLabel(status: ChefKitchenStatus): string {
@@ -149,7 +150,8 @@ function profileDisplayName(
   kitchen: ChefKitchenProfile | null,
   identityDisplayName: string | null | undefined,
 ): string {
-  return kitchen?.displayName ?? kitchen?.kitchenName ?? identityDisplayName?.trim() || 'Chef account';
+  const identityName = identityDisplayName?.trim();
+  return kitchen?.displayName ?? kitchen?.kitchenName ?? identityName || 'Chef account';
 }
 
 function ProfileSkeleton() {
@@ -262,7 +264,12 @@ export function ChefProfileScreen() {
   const identity = model.identity;
   const kitchen = model.kitchen;
   const displayName = profileDisplayName(kitchen, identity?.displayName);
-  const contact = kitchen?.email ?? identity?.email ?? kitchen?.phoneNumber ?? identity?.phoneNumber ?? null;
+  const contact =
+    kitchen?.email ??
+    identity?.email ??
+    kitchen?.phoneNumber ??
+    identity?.phoneNumber ??
+    null;
   const chefAccessApproved =
     model.accountResolution?.flow === 'CHEF' &&
     model.accountResolution.onboardingStatus === 'APPROVED';
@@ -309,7 +316,7 @@ export function ChefProfileScreen() {
   const handleEditProfile = React.useCallback(() => {
     showBlocker(
       'Edit profile',
-      'The Chef edit-profile form is a separate approved screen and is not registered in this phase yet.',
+      'The Chef edit-profile form is a separate approved screen and is not registered in the current mobile route yet.',
     );
   }, [showBlocker]);
 
@@ -330,10 +337,14 @@ export function ChefProfileScreen() {
   }, [dispatch, loggingOut, switchingRole]);
 
   const confirmLogout = React.useCallback(() => {
-    Alert.alert('Logout?', 'You will need to sign in again to use your Craves account.', [
-      {text: 'Cancel', style: 'cancel'},
-      {text: 'Logout', style: 'destructive', onPress: performLogout},
-    ]);
+    Alert.alert(
+      'Logout?',
+      'You will need to sign in again to use your Craves account.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {text: 'Logout', style: 'destructive', onPress: performLogout},
+      ],
+    );
   }, [performLogout]);
 
   const performRoleSwitch = React.useCallback(async () => {
@@ -407,7 +418,9 @@ export function ChefProfileScreen() {
               </View>
               {contact ? <Text style={styles.identityMeta}>{contact}</Text> : null}
               <Text style={styles.identityMeta}>
-                {kitchen ? `${kitchen.city}, ${kitchen.state}` : 'Business details loading separately'}
+                {kitchen
+                  ? `${kitchen.city}, ${kitchen.state}`
+                  : 'Business details load independently'}
               </Text>
             </View>
           </View>
@@ -439,8 +452,12 @@ export function ChefProfileScreen() {
         <View style={styles.metricsCard}>
           <View style={styles.sectionHeadingRow}>
             <View>
-              <Text style={styles.sectionTitleInline}>Live summary</Text>
-              <Text style={styles.sectionCaption}>Synchronized with Chef workspace data</Text>
+              <Text style={[styles.sectionTitleInline, styles.metricsCardTitle]}>
+                Live summary
+              </Text>
+              <Text style={[styles.sectionCaption, styles.metricsCardCaption]}>
+                Synchronized with Chef workspace data
+              </Text>
             </View>
             {model.dashboard.isRefreshing ? (
               <ActivityIndicator color={colors.flameRed} size="small" />
@@ -525,7 +542,11 @@ export function ChefProfileScreen() {
         </View>
 
         <Section title="Business" rows={BUSINESS_ROWS} onRowPress={handleBlockedRow} />
-        <Section title="Settings & support" rows={SETTINGS_ROWS} onRowPress={handleBlockedRow} />
+        <Section
+          title="Settings & support"
+          rows={SETTINGS_ROWS}
+          onRowPress={handleBlockedRow}
+        />
 
         <View style={styles.sectionWrap}>
           <Text style={styles.sectionTitle}>Account</Text>
@@ -604,7 +625,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     ...elevation.card,
   },
-  identityTopRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  identityTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   avatar: {
     width: 64,
     height: 64,
@@ -621,7 +646,12 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.extrabold,
   },
   identityCopy: {flex: 1, minWidth: 0},
-  nameRow: {flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs},
+  nameRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   profileName: {
     color: colors.textPrimary,
     fontSize: typography.hero,
@@ -637,8 +667,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xxs,
   },
-  approvedBadgeText: {color: colors.success, fontSize: typography.tiny, fontWeight: fontWeight.bold},
-  identityMeta: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
+  approvedBadgeText: {
+    color: colors.success,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
+  },
+  identityMeta: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
   editButton: {
     minHeight: touchTarget.minimum,
     marginTop: spacing.md,
@@ -649,7 +687,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
-  editButtonText: {color: colors.flameRed, fontSize: typography.button, fontWeight: fontWeight.bold},
+  editButtonText: {
+    color: colors.flameRed,
+    fontSize: typography.button,
+    fontWeight: fontWeight.bold,
+  },
   issueCard: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -660,17 +702,39 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   issueCopy: {flex: 1},
-  issueTitle: {color: colors.error, fontSize: typography.body, fontWeight: fontWeight.bold},
-  issueText: {marginTop: spacing.xxs, color: colors.textPrimary, fontSize: typography.small},
+  issueTitle: {
+    color: colors.error,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  issueText: {
+    marginTop: spacing.xxs,
+    color: colors.textPrimary,
+    fontSize: typography.small,
+  },
   metricsCard: {
     borderRadius: radius.lg,
     backgroundColor: colors.espressoBrown,
     padding: spacing.md,
   },
-  sectionHeadingRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm},
-  sectionTitleInline: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold},
+  sectionHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  sectionTitleInline: {
+    color: colors.textPrimary,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
+  sectionCaption: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
   metricsCardTitle: {color: colors.white},
-  sectionCaption: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
+  metricsCardCaption: {color: colors.creamDeep},
   metricsRow: {flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md},
   metricTile: {
     flex: 1,
@@ -682,8 +746,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.sm,
   },
-  metricValue: {color: colors.flameRed, fontSize: typography.hero, fontWeight: fontWeight.extrabold},
-  metricLabel: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny, textAlign: 'center'},
+  metricValue: {
+    color: colors.flameRed,
+    fontSize: typography.hero,
+    fontWeight: fontWeight.extrabold,
+  },
+  metricLabel: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    textAlign: 'center',
+  },
   businessStatusCard: {
     borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
@@ -692,38 +765,159 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   businessHeadingCopy: {flex: 1},
-  statusPill: {borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, maxWidth: '46%'},
-  statusText: {fontSize: typography.tiny, fontWeight: fontWeight.bold, textAlign: 'center'},
+  statusPill: {
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    maxWidth: '46%',
+  },
+  statusText: {
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
+    textAlign: 'center',
+  },
   businessDetails: {marginTop: spacing.sm},
-  businessDetailRow: {minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', gap: spacing.md},
-  businessDetailLabel: {width: 84, color: colors.textSecondary, fontSize: typography.small},
-  businessDetailValue: {flex: 1, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
-  businessDetailMuted: {flex: 1, color: colors.textSecondary, fontSize: typography.small},
-  businessError: {marginTop: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, padding: spacing.md},
-  businessErrorTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
-  businessErrorText: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
-  retryButton: {alignSelf: 'flex-start', minHeight: touchTarget.minimum, marginTop: spacing.sm, justifyContent: 'center', paddingRight: spacing.md},
-  retryButtonText: {color: colors.flameRed, fontSize: typography.body, fontWeight: fontWeight.semibold},
-  businessLoadingRow: {minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  businessDetailRow: {
+    minHeight: touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  businessDetailLabel: {
+    width: 84,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
+  businessDetailValue: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: typography.body,
+    fontWeight: fontWeight.semibold,
+  },
+  businessDetailMuted: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
+  businessError: {
+    marginTop: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+    padding: spacing.md,
+  },
+  businessErrorTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  businessErrorText: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    minHeight: touchTarget.minimum,
+    marginTop: spacing.sm,
+    justifyContent: 'center',
+    paddingRight: spacing.md,
+  },
+  retryButtonText: {
+    color: colors.flameRed,
+    fontSize: typography.body,
+    fontWeight: fontWeight.semibold,
+  },
+  businessLoadingRow: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   sectionWrap: {gap: spacing.xs},
-  sectionTitle: {marginLeft: spacing.xxs, color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
-  sectionCard: {borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white, overflow: 'hidden'},
-  accountRow: {minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm},
-  rowIcon: {width: 38, height: 38, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarm},
+  sectionTitle: {
+    marginLeft: spacing.xxs,
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  sectionCard: {
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+  },
+  accountRow: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  rowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceWarm,
+  },
   rowIconDanger: {backgroundColor: colors.errorSoft},
   rowCopy: {flex: 1, minWidth: 0},
-  rowTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
-  rowSubtitle: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
+  rowTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.body,
+    fontWeight: fontWeight.semibold,
+  },
+  rowSubtitle: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
   logoutText: {color: colors.error},
-  divider: {height: borderWidth.standard, backgroundColor: colors.border, marginLeft: 66},
+  divider: {
+    height: borderWidth.standard,
+    backgroundColor: colors.border,
+    marginLeft: 66,
+  },
   pressed: {opacity: 0.62},
   disabled: {opacity: 0.45},
-  skeletonCard: {borderRadius: radius.lg, backgroundColor: colors.white, padding: spacing.md, gap: spacing.md},
-  skeletonIdentity: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
-  skeletonAvatar: {width: 64, height: 64, borderRadius: radius.pill, backgroundColor: colors.surfaceMuted},
+  skeletonCard: {
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  skeletonIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  skeletonAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+  },
   skeletonCopy: {flex: 1, gap: spacing.xs},
-  skeletonLineWide: {height: 18, width: '72%', borderRadius: radius.pill, backgroundColor: colors.surfaceMuted},
-  skeletonLine: {height: 12, width: '52%', borderRadius: radius.pill, backgroundColor: colors.surfaceMuted},
+  skeletonLineWide: {
+    height: 18,
+    width: '72%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+  },
+  skeletonLine: {
+    height: 12,
+    width: '52%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+  },
   skeletonMetricRow: {flexDirection: 'row', gap: spacing.xs},
-  skeletonMetric: {flex: 1, height: 78, borderRadius: radius.md, backgroundColor: colors.surfaceMuted},
+  skeletonMetric: {
+    flex: 1,
+    height: 78,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+  },
 });

@@ -70,7 +70,7 @@ describe('customerNotificationsModel', () => {
     expect(groups.map(group => group.title)).toEqual(['Today', 'Earlier']);
   });
 
-  it('allowlists only ORDER and DELIVERY destinations with UUID target metadata', () => {
+  it('allowlists only ORDER, DELIVERY and KITCHEN destinations with UUID target metadata', () => {
     expect(resolveCustomerNotificationDestination(notice())).toEqual({
       route: 'CustomerOrderDetail',
       orderId: '22222222-2222-4222-8222-222222222222',
@@ -80,6 +80,12 @@ describe('customerNotificationsModel', () => {
     ).toEqual({
       route: 'CustomerOrderTracking',
       orderId: '22222222-2222-4222-8222-222222222222',
+    });
+    expect(
+      resolveCustomerNotificationDestination(notice({targetType: 'KITCHEN'})),
+    ).toEqual({
+      route: 'CustomerKitchenProfile',
+      kitchenId: '22222222-2222-4222-8222-222222222222',
     });
     expect(
       resolveCustomerNotificationDestination(

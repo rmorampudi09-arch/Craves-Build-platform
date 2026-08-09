@@ -34,21 +34,22 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 - **P71 — Coupons/Offers — Active Cart: BLOCKED.** No approved apply/remove/replace mutation or authoritative repriced-cart response exists.
 - **P72 — My Reviews — Empty Cart: BLOCKED.** No executable customer review list/readiness/summary/write contract exists.
 - **P73 — My Reviews — Active Cart and Review Actions: BLOCKED.** Canonical active-cart capability exists, but required review contracts/actions remain absent.
-- **P74 — Customer Settings Active/Empty Visuals: DONE at authorized code/CI scope.** Shared Settings route, account summary, persisted lightweight preferences, established saved-location selection, notification/cart badges, active/empty cart states, legal/about/support rows, P24 logout, Save Changes, and focused hidden bottom-tab treatment are implemented. P75/P76 child flows remain explicit blockers and were not started. Physical device/reference certification remains deferred to later visual QA and is not claimed here.
+- **P74 — Customer Settings Active/Empty Visuals: DONE at authorized code/CI scope.** Shared Settings route, account summary, established saved-location selection, notification/cart badges, active/empty cart states, legal/about/support surfaces, P24 logout, and focused hidden bottom-tab treatment were implemented and validated. Its temporary local-only preference affordances were intentionally superseded by P75 so unsupported production settings are no longer presented as authoritative mutations.
+- **P75 — Customer Settings Child Flows: PARTIAL.** Eleven typed Settings child routes are registered. Real Firebase re-authenticated password change, current-device logout, native Share, parent location integration, validation/error/disabled states, and focused tab treatment are implemented. Notification preference mutation, app-wide language/theme application, other-device session management, referral, membership, trusted legal/support content destinations, and runtime build metadata remain unavailable exact-contract blockers and are explicitly capability-gated rather than fabricated. P76 was not started.
 
-**Current executed phase:** **P74 — Customer Settings Active/Empty Visuals — DONE at authorized code/CI scope**.
+**Current executed phase:** **P75 — Customer Settings Child Flows — PARTIAL at exact contract-backed scope**.
 
-**P74 validated mobile head:** `ae4de7be4e010fe621cf0516313991f5746ed4f4`.
+**P75 validated mobile head:** `f5be75bef913d33492dc872af325f9a51d692f39`.
 
-**P74 CI:** workflow run `31286578557`, job `93176403664` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+**P75 CI:** workflow run `31287591983`, job `93179133618` — **SUCCESS**. Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 
-**P74 evidence:** `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`.
+**P75 evidence:** `docs/mobile-ui-rebuild/P75_CUSTOMER_SETTINGS_CHILD_FLOWS.md`.
 
-**Next phase in sequence:** **P75 — Customer Settings Child Flows — NOT STARTED**.
+**Next phase in sequence:** **P76 — Help and Support — Empty Cart — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P74. Do not pre-implement P75 without explicit user direction.
+**Required action:** Stop after P75. Do not pre-implement P76 without explicit user direction.
 
 ---
 
@@ -74,7 +75,8 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 | P72 | **BLOCKED** | `docs/mobile-ui-rebuild/P72_MY_REVIEWS_EMPTY_CART.md` | Not triggered — docs/ledger only |
 | P73 | **BLOCKED** | `docs/mobile-ui-rebuild/P73_MY_REVIEWS_ACTIVE_CART.md` | Not triggered — docs/ledger only |
 | P74 | **DONE at code/CI scope** | `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`; validated mobile head `ae4de7be4e010fe621cf0516313991f5746ed4f4` | `31286578557` / `93176403664` — SUCCESS |
-| P75 onward | **NOT STARTED / not accepted** | — | — |
+| P75 | **PARTIAL** | `docs/mobile-ui-rebuild/P75_CUSTOMER_SETTINGS_CHILD_FLOWS.md`; validated mobile head `f5be75bef913d33492dc872af325f9a51d692f39` | `31287591983` / `93179133618` — SUCCESS |
+| P76 onward | **NOT STARTED / not accepted** | — | — |
 
 ---
 
@@ -141,24 +143,22 @@ Evidence:
 **Guide refs:** 33 and 34.  
 **Phase:** Customer Settings Active/Empty Visuals.
 
-P74 implements one shared Settings route without crossing into P75 child flows:
+P74 implemented one shared Settings route without crossing into P75 child flows:
 
 - typed `CustomerSettings` route in the Profile stack;
 - explicit Settings entry point from Profile;
 - account summary from the approved customer profile query;
 - current saved/browsing location from the established customer-shell mechanism;
-- per-identity lightweight language, notification, and appearance preference persistence using the already-installed AsyncStorage dependency;
+- initial per-identity lightweight language, notification, and appearance preference persistence using the already-installed AsyncStorage dependency;
 - notification bell/unread badge from the existing notification state;
 - empty-cart top action with no cart badge;
 - active-cart top action with count from the canonical cart selector and navigation to the existing `CustomerCart` route;
 - Settings-focused bottom-tab hiding/restoration;
 - Terms & Conditions, Privacy Policy, About Craves, Get Support, and Logout rows;
 - real P24 logout through `completeLogout`;
-- working Save Changes for the P74-owned local preference values.
+- initial P74 Save Changes behavior for P74-owned lightweight values.
 
-### P74 explicit child-flow boundaries
-
-P74 does **not** fabricate or pre-implement P75/P76 behavior. Deeper notification preferences, privacy/security/password-change, legal/content routing, app-wide language/theme application, Share/Referral/Subscription destinations, and Help/Support child flows remain explicit unavailable-child states until their owning phases and exact contracts are authorized.
+P75 subsequently replaced the local-only preference affordances with typed child routes and explicit exact-contract capability gates so app-wide/server-owned settings are not represented by device-local values.
 
 **P74 implementation status:** complete at authorized code/CI scope. The initial CI run failed at Jest due to the AsyncStorage test mock; a test-only fix was applied, and replacement run `31286578557` / job `93176403664` passed all required implementation gates at validated mobile head `ae4de7be4e010fe621cf0516313991f5746ed4f4`.
 
@@ -166,7 +166,47 @@ Evidence: `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`
 
 ---
 
-## 8. Validation State
+## 8. P75 Implemented Boundary
+
+**Phase:** Customer Settings Child Flows.
+
+P75 registers the Settings child-route surface inside the existing customer Profile stack and implements only behavior supported by the exact current contracts:
+
+- typed routes for Notifications Preferences, Privacy & Security, Change Password, Language, Appearance, About, Share, Referral, Support boundary, Membership/Subscription, and Legal;
+- Settings parent rows navigate to real typed children instead of dead chevrons/P74 blocker alerts;
+- Firebase password change re-authenticates the active email/password user, updates the credential, and refreshes the ID token;
+- password form includes current/new/confirm validation, secure entry, loading/disabled state, recoverable failure copy, and success navigation;
+- Privacy & Security uses the existing `completeLogout` coordinator for current-device sign-out;
+- Share uses the native React Native share sheet;
+- established Settings location selection remains real and unchanged;
+- customer bottom tabs stay hidden on focused Settings child flows;
+- focused unit tests cover password validation and capability-state semantics.
+
+### P75 exact blockers
+
+P75 does not fabricate the following absent production capabilities:
+
+- `CUSTOMER_NOTIFICATION_PREFERENCES_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_APP_LANGUAGE_RUNTIME_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_APP_THEME_RUNTIME_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_DEVICE_SESSION_LIST_REVOKE_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_REFERRAL_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_MEMBERSHIP_MOBILE_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_LEGAL_CONTENT_DESTINATION_UNAVAILABLE`
+- `CUSTOMER_SUPPORT_DESTINATION_UNAVAILABLE`
+- `CUSTOMER_RUNTIME_BUILD_METADATA_UNAVAILABLE`
+
+Notification push/email/SMS rows remain segmented but disabled until a real preference contract exists. Language and Appearance remain disabled until shared app-wide runtime layers exist. Legal/support URLs, referral codes, membership pricing/entitlements, other-device sessions, and app build metadata are not guessed or hardcoded.
+
+The Support child is only the P75 boundary; **P76 Help and Support — Empty Cart was not implemented.**
+
+**P75 implementation status:** PARTIAL at exact contract-backed scope. Mobile head `f5be75bef913d33492dc872af325f9a51d692f39` passed workflow run `31287591983`, job `93179133618`.
+
+Evidence: `docs/mobile-ui-rebuild/P75_CUSTOMER_SETTINGS_CHILD_FLOWS.md`.
+
+---
+
+## 9. Validation State
 
 Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
@@ -174,23 +214,24 @@ Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 - Initial P74 run `31286064248` / job `93175010142` failed at Jest after dependency install, TypeScript, and ESLint succeeded.
 - The failure was isolated to the AsyncStorage test-environment mock; production behavior was not changed to bypass the test.
 - P74 validated mobile head `ae4de7be4e010fe621cf0516313991f5746ed4f4` triggered replacement run `31286578557`, job `93176403664` — **SUCCESS**.
-- Dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+- P75 validated mobile head `f5be75bef913d33492dc872af325f9a51d692f39` triggered run `31287591983`, job `93179133618` — **SUCCESS**.
+- For P75, dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 - No Gradle/APK packaging was performed, consistent with implementation-phase policy.
 - Physical Android/reference-image certification remains a later visual-QA gate; no pixel-perfect certification is claimed from source/CI alone.
 
 ---
 
-## 9. Handoff
+## 10. Handoff
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current executed phase: P74 — Customer Settings Active/Empty Visuals — DONE at authorized code/CI scope
-P74 validated mobile head: ae4de7be4e010fe621cf0516313991f5746ed4f4
-P74 evidence: docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md
-P74 CI: run 31286578557 / job 93176403664 — SUCCESS
-P74 implemented: typed Settings route; Profile entry point; account summary; persisted local UI preferences; established saved-location selector; notification badge; active/empty cart header states; real cart navigation; legal/about/support rows; P24 logout; Save Changes; bottom-tab hidden while Settings is focused
-P74 no-fabrication boundary: P75 settings child flows and P76/P77 support flows are not implemented
+Current executed phase: P75 — Customer Settings Child Flows — PARTIAL at exact contract-backed scope
+P75 validated mobile head: f5be75bef913d33492dc872af325f9a51d692f39
+P75 evidence: docs/mobile-ui-rebuild/P75_CUSTOMER_SETTINGS_CHILD_FLOWS.md
+P75 CI: run 31287591983 / job 93179133618 — SUCCESS
+P75 implemented: eleven typed Settings child routes; Settings parent navigation; real Firebase re-authenticated password change; current-device logout via completeLogout; native Share; validation/loading/error/disabled states; capability-gated notification/language/appearance/device-session/referral/membership/legal/support/build-metadata gaps; focused tests
+P75 no-fabrication boundary: absent production contracts/runtime layers remain explicit blockers; Support is only a boundary and P76 was not implemented
 Inherited blockers: retain P69–P73 and all earlier phase blockers not explicitly superseded
-Next phase: P75 — Customer Settings Child Flows — NOT STARTED
+Next phase: P76 — Help and Support — Empty Cart — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

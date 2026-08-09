@@ -25,9 +25,8 @@ import {
 } from '../../../design/tokens';
 import {Icon, type IconName} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
-import {ChefHeader} from '../../chefShell/components/ChefHeader';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
-import {useChefDashboardModel} from '../state/useChefDashboardModel';
+import {ChefHeader} from '../../chefShell/components/ChefHeader';
 import {
   CHEF_DASHBOARD_SALES_RANGES,
   formatChefDashboardOrderStatus,
@@ -35,22 +34,25 @@ import {
   shortChefDashboardOrderReference,
   type ChefDashboardSalesRange,
 } from '../domain/chefDashboardPresentation';
+import {useChefDashboardModel} from '../state/useChefDashboardModel';
+
+type SourceStatus = 'pending' | 'error' | 'success';
 
 interface MetricCardProps {
-  label: string;
-  value: number;
   icon: IconName;
-  sourceStatus: 'pending' | 'error' | 'success';
+  label: string;
+  sourceStatus: SourceStatus;
+  value: number;
 }
 
-function MetricCard({label, value, icon, sourceStatus}: MetricCardProps) {
+function MetricCard({icon, label, sourceStatus, value}: MetricCardProps) {
   return (
     <View style={styles.metricCard}>
       <View style={styles.metricIcon}>
-        <Icon name={icon} size={20} color={colors.flameRed} />
+        <Icon color={colors.flameRed} name={icon} size={20} />
       </View>
       {sourceStatus === 'pending' ? (
-        <SkeletonBlock width={42} height={28} />
+        <SkeletonBlock height={28} width={44} />
       ) : (
         <Text style={styles.metricValue}>
           {sourceStatus === 'success' ? value : '—'}
@@ -62,50 +64,44 @@ function MetricCard({label, value, icon, sourceStatus}: MetricCardProps) {
 }
 
 interface QuickActionProps {
-  title: string;
-  subtitle: string;
   icon: IconName;
   onPress: () => void;
+  subtitle: string;
+  title: string;
 }
 
-function QuickAction({title, subtitle, icon, onPress}: QuickActionProps) {
+function QuickAction({icon, onPress, subtitle, title}: QuickActionProps) {
   return (
     <Pressable
-      accessibilityRole="button"
       accessibilityLabel={`${title}. ${subtitle}`}
+      accessibilityRole="button"
       onPress={onPress}
-      style={({pressed}) => [styles.quickAction, pressed && styles.pressed]}>
-      <View style={styles.quickActionIcon}>
-        <Icon name={icon} size={22} color={colors.flameRed} />
+      style={({pressed}) => [styles.actionRow, pressed && styles.pressed]}>
+      <View style={styles.actionIcon}>
+        <Icon color={colors.flameRed} name={icon} size={22} />
       </View>
-      <View style={styles.quickActionCopy}>
-        <Text style={styles.quickActionTitle}>{title}</Text>
-        <Text style={styles.quickActionSubtitle}>{subtitle}</Text>
+      <View style={styles.flex}>
+        <Text style={styles.actionTitle}>{title}</Text>
+        <Text style={styles.actionSubtitle}>{subtitle}</Text>
       </View>
-      <Icon name="chevron-right" size={17} color={colors.textSecondary} />
+      <Icon color={colors.textSecondary} name="chevron-right" size={18} />
     </Pressable>
   );
 }
 
-function SectionTitle({title}: {title: string}) {
-  return <Text style={styles.sectionTitle}>{title}</Text>;
+interface UnavailableProps {
+  icon: IconName;
+  message: string;
+  title: string;
 }
 
-function ContractUnavailable({
-  icon,
-  title,
-  message,
-}: {
-  icon: IconName;
-  title: string;
-  message: string;
-}) {
+function Unavailable({icon, message, title}: UnavailableProps) {
   return (
-    <View style={styles.unavailableState}>
+    <View style={styles.unavailableRow}>
       <View style={styles.unavailableIcon}>
-        <Icon name={icon} size={22} color={colors.textSecondary} />
+        <Icon color={colors.textSecondary} name={icon} size={21} />
       </View>
-      <View style={styles.unavailableCopy}>
+      <View style={styles.flex}>
         <Text style={styles.unavailableTitle}>{title}</Text>
         <Text style={styles.unavailableMessage}>{message}</Text>
       </View>
@@ -113,62 +109,31 @@ function ContractUnavailable({
   );
 }
 
-function ActiveOrderCard({
-  order,
+function ActiveOrderRow({
   onPress,
+  order,
 }: {
-  order: ChefOperationalOrder;
   onPress: () => void;
+  order: ChefOperationalOrder;
 }) {
   const reference = shortChefDashboardOrderReference(order.id);
   return (
     <Pressable
-      accessibilityRole="button"
       accessibilityLabel={`Open Orders for active order ${reference}`}
+      accessibilityRole="button"
       onPress={onPress}
-      style={({pressed}) => [styles.orderCard, pressed && styles.pressed]}>
+      style={({pressed}) => [styles.orderRow, pressed && styles.pressed]}>
       <View style={styles.orderIcon}>
-        <Icon name="orders" size={20} color={colors.flameRed} />
+        <Icon color={colors.flameRed} name="orders" size={20} />
       </View>
-      <View style={styles.orderCopy}>
+      <View style={styles.flex}>
         <Text style={styles.orderReference}>{reference}</Text>
         <Text style={styles.orderStatus}>
           {formatChefDashboardOrderStatus(order.status)}
         </Text>
       </View>
-      <Icon name="chevron-right" size={18} color={colors.textSecondary} />
+      <Icon color={colors.textSecondary} name="chevron-right" size={18} />
     </Pressable>
-  );
-}
-
-function DashboardSourceError({
-  refreshing,
-  onRetry,
-}: {
-  refreshing: boolean;
-  onRetry: () => void;
-}) {
-  return (
-    <View style={styles.errorBanner}>
-      <Icon name="wifi-off" size={20} color={colors.error} />
-      <View style={styles.errorCopy}>
-        <Text style={styles.errorTitle}>Some live data could not be loaded</Text>
-        <Text style={styles.errorMessage}>
-          Existing dashboard information is kept where available.
-        </Text>
-      </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Retry dashboard refresh"
-        disabled={refreshing}
-        onPress={onRetry}
-        style={({pressed}) => [
-          styles.retryButton,
-          (pressed || refreshing) && styles.pressed,
-        ]}>
-        <Text style={styles.retryText}>{refreshing ? 'Refreshing' : 'Retry'}</Text>
-      </Pressable>
-    </View>
   );
 }
 
@@ -181,39 +146,32 @@ export function ChefDashboardScreen() {
   const [salesRange, setSalesRange] =
     React.useState<ChefDashboardSalesRange>('7D');
 
-  const firstName = React.useMemo(
-    () => displayName.split(/\s+/)[0] || 'Chef',
-    [displayName],
-  );
+  const firstName = displayName.split(/\s+/)[0] || 'Chef';
   const greeting = React.useMemo(
     () => getChefDashboardGreeting(new Date().getHours()),
     [],
   );
-  const hasSourceError = React.useMemo(
-    () => Object.values(sources).some(status => status === 'error'),
-    [sources],
+  const hasSourceError = Object.values(sources).some(
+    sourceStatus => sourceStatus === 'error',
   );
-
-  const runRefresh = React.useCallback(() => {
-    refresh().catch(() => undefined);
-  }, [refresh]);
 
   const navigate = React.useCallback(
     (routeName: ChefTabRouteName) => navigation.navigate(routeName),
     [navigation],
   );
+  const refreshDashboard = React.useCallback(() => {
+    refresh().catch(() => undefined);
+  }, [refresh]);
 
   return (
-    <SafeAreaView
-      edges={['top', 'left', 'right']}
-      style={styles.safeArea}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
       <ChefHeader title="Dashboard" />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
             colors={[colors.flameRed]}
-            onRefresh={runRefresh}
+            onRefresh={refreshDashboard}
             refreshing={isRefreshing}
             tintColor={colors.flameRed}
           />
@@ -223,33 +181,49 @@ export function ChefDashboardScreen() {
           <Text accessibilityRole="header" style={styles.greeting}>
             {greeting}, {firstName}
           </Text>
-          <Text style={styles.greetingSubtitle}>
-            Here is your kitchen at a glance.
-          </Text>
+          <Text style={styles.subtitle}>Here is your kitchen at a glance.</Text>
         </View>
 
         {hasSourceError ? (
-          <DashboardSourceError
-            refreshing={isRefreshing}
-            onRetry={runRefresh}
-          />
+          <View style={styles.errorBanner}>
+            <Icon color={colors.error} name="wifi-off" size={20} />
+            <View style={styles.flex}>
+              <Text style={styles.errorTitle}>Some live data is unavailable</Text>
+              <Text style={styles.errorMessage}>
+                Existing dashboard information is kept where available.
+              </Text>
+            </View>
+            <Pressable
+              accessibilityLabel="Retry dashboard refresh"
+              accessibilityRole="button"
+              disabled={isRefreshing}
+              onPress={refreshDashboard}
+              style={({pressed}) => [
+                styles.retryButton,
+                (pressed || isRefreshing) && styles.pressed,
+              ]}>
+              <Text style={styles.retryText}>
+                {isRefreshing ? 'Refreshing' : 'Retry'}
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
 
         <View style={styles.walletCard}>
-          <View style={styles.walletHeader}>
+          <View style={styles.rowBetween}>
             <View>
               <Text style={styles.walletEyebrow}>Wallet balance</Text>
               <Text style={styles.walletAmount}>—</Text>
             </View>
             <View style={styles.walletIcon}>
-              <Icon name="analytics" size={22} color={colors.white} />
+              <Icon color={colors.white} name="analytics" size={22} />
             </View>
           </View>
           <Text style={styles.walletMessage}>
             Balance and withdrawal eligibility are unavailable from the current payout contract.
           </Text>
           <View style={styles.walletFooter}>
-            <Text style={styles.walletLedgerStatus}>
+            <Text style={styles.walletStatus}>
               {sources.earnings === 'pending'
                 ? 'Refreshing earnings ledger…'
                 : sources.earnings === 'error'
@@ -257,8 +231,8 @@ export function ChefDashboardScreen() {
                   : 'Earnings ledger connected'}
             </Text>
             <Pressable
-              accessibilityRole="button"
               accessibilityLabel="Withdraw unavailable"
+              accessibilityRole="button"
               accessibilityState={{disabled: true}}
               disabled
               style={styles.withdrawButton}>
@@ -268,7 +242,7 @@ export function ChefDashboardScreen() {
         </View>
 
         <View style={styles.section}>
-          <SectionTitle title="Orders overview" />
+          <Text style={styles.sectionTitle}>Orders overview</Text>
           <View style={styles.metricGrid}>
             <MetricCard
               icon="bell"
@@ -298,20 +272,18 @@ export function ChefDashboardScreen() {
         </View>
 
         <View style={styles.section}>
-          <View style={styles.sectionHeadingRow}>
-            <SectionTitle title="Sales overview" />
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitleCompact}>Sales overview</Text>
             <Pressable
-              accessibilityRole="button"
               accessibilityLabel="Open Analytics"
+              accessibilityRole="button"
               onPress={() => navigate('Analytics')}
               style={({pressed}) => pressed && styles.pressed}>
               <Text style={styles.sectionLink}>View analytics</Text>
             </Pressable>
           </View>
           <View style={styles.card}>
-            <View
-              accessibilityRole="tablist"
-              style={styles.rangeSelector}>
+            <View accessibilityRole="tablist" style={styles.rangeSelector}>
               {CHEF_DASHBOARD_SALES_RANGES.map(range => {
                 const selected = salesRange === range.id;
                 return (
@@ -327,8 +299,8 @@ export function ChefDashboardScreen() {
                     ]}>
                     <Text
                       style={[
-                        styles.rangeChipText,
-                        selected && styles.rangeChipTextSelected,
+                        styles.rangeText,
+                        selected && styles.rangeTextSelected,
                       ]}>
                       {range.label}
                     </Text>
@@ -336,24 +308,19 @@ export function ChefDashboardScreen() {
                 );
               })}
             </View>
-            <View style={styles.chartCanvas}>
-              {[0, 1, 2, 3].map(line => (
-                <View key={line} style={styles.chartGridLine} />
-              ))}
-              <View style={styles.chartEmptyOverlay}>
-                <Icon name="analytics" size={26} color={colors.placeholder} />
-                <Text style={styles.chartEmptyTitle}>Sales data unavailable</Text>
-                <Text style={styles.chartEmptyMessage}>
-                  The approved sales time-series contract is not available yet.
-                </Text>
-              </View>
+            <View style={styles.chartState}>
+              <Icon color={colors.placeholder} name="analytics" size={28} />
+              <Text style={styles.chartTitle}>Sales data unavailable</Text>
+              <Text style={styles.chartMessage}>
+                The approved sales time-series contract is not available yet.
+              </Text>
             </View>
           </View>
         </View>
 
         <View style={styles.section}>
-          <SectionTitle title="Quick actions" />
-          <View style={styles.quickActionGrid}>
+          <Text style={styles.sectionTitle}>Quick actions</Text>
+          <View style={styles.actionList}>
             <QuickAction
               icon="orders"
               onPress={() => navigate('Orders')}
@@ -390,35 +357,35 @@ export function ChefDashboardScreen() {
         </View>
 
         <View style={styles.section}>
-          <View style={styles.sectionHeadingRow}>
-            <SectionTitle title="Active orders" />
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitleCompact}>Active orders</Text>
             <Pressable
-              accessibilityRole="button"
               accessibilityLabel="View all orders"
+              accessibilityRole="button"
               onPress={() => navigate('Orders')}
               style={({pressed}) => pressed && styles.pressed}>
               <Text style={styles.sectionLink}>View all</Text>
             </Pressable>
           </View>
           {sources.orders === 'pending' && data.orders.active.length === 0 ? (
-            <View style={styles.orderSkeletons}>
-              <SkeletonBlock height={78} borderRadius={radius.md} />
-              <SkeletonBlock height={78} borderRadius={radius.md} />
+            <View style={styles.skeletonList}>
+              <SkeletonBlock borderRadius={radius.lg} height={78} />
+              <SkeletonBlock borderRadius={radius.lg} height={78} />
             </View>
           ) : sources.orders === 'error' && data.orders.active.length === 0 ? (
             <View style={styles.card}>
-              <ContractUnavailable
+              <Unavailable
                 icon="wifi-off"
                 message="Refresh the dashboard to try loading operational orders again."
                 title="Active orders unavailable"
               />
               <Pressable
-                accessibilityRole="button"
                 accessibilityLabel="Retry active orders"
+                accessibilityRole="button"
                 disabled={isRefreshing}
-                onPress={runRefresh}
+                onPress={refreshDashboard}
                 style={({pressed}) => [
-                  styles.inlineRetryButton,
+                  styles.inlineRetry,
                   (pressed || isRefreshing) && styles.pressed,
                 ]}>
                 <Text style={styles.inlineRetryText}>
@@ -428,16 +395,16 @@ export function ChefDashboardScreen() {
             </View>
           ) : data.orders.active.length === 0 ? (
             <View style={styles.card}>
-              <ContractUnavailable
+              <Unavailable
                 icon="orders"
                 message="New accepted orders will appear here automatically."
                 title="No active orders"
               />
             </View>
           ) : (
-            <View style={styles.orderList}>
+            <View style={styles.actionList}>
               {data.orders.active.slice(0, 3).map(order => (
-                <ActiveOrderCard
+                <ActiveOrderRow
                   key={order.id}
                   onPress={() => navigate('Orders')}
                   order={order}
@@ -448,9 +415,9 @@ export function ChefDashboardScreen() {
         </View>
 
         <View style={styles.section}>
-          <SectionTitle title="Recent reviews" />
+          <Text style={styles.sectionTitle}>Recent reviews</Text>
           <View style={styles.card}>
-            <ContractUnavailable
+            <Unavailable
               icon="star"
               message="Recent reviews will appear when an approved Chef reviews read model is available."
               title="Reviews unavailable"
@@ -460,9 +427,9 @@ export function ChefDashboardScreen() {
 
         <View style={styles.insightBanner}>
           <View style={styles.insightIcon}>
-            <Icon name="analytics" size={22} color={colors.flameRed} />
+            <Icon color={colors.flameRed} name="analytics" size={22} />
           </View>
-          <View style={styles.insightCopy}>
+          <View style={styles.flex}>
             <Text style={styles.insightEyebrow}>Business insight</Text>
             <Text style={styles.insightTitle}>Insights are not available yet</Text>
             <Text style={styles.insightMessage}>
@@ -476,24 +443,21 @@ export function ChefDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.surfaceMuted,
-  },
+  safeArea: {flex: 1, backgroundColor: colors.surfaceMuted},
   content: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
     paddingBottom: spacing.xxxl,
   },
-  greetingBlock: {
-    marginBottom: spacing.lg,
-  },
+  flex: {flex: 1},
+  pressed: {opacity: 0.65},
+  greetingBlock: {marginBottom: spacing.lg},
   greeting: {
     color: colors.espressoBrown,
     fontSize: typography.hero,
     fontWeight: fontWeight.bold,
   },
-  greetingSubtitle: {
+  subtitle: {
     color: colors.textSecondary,
     fontSize: typography.body,
     marginTop: spacing.xxs,
@@ -509,7 +473,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     padding: spacing.sm,
   },
-  errorCopy: {flex: 1},
   errorTitle: {
     color: colors.textPrimary,
     fontSize: typography.small,
@@ -521,8 +484,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxs,
   },
   retryButton: {
-    minHeight: touchTarget.minimum,
     justifyContent: 'center',
+    minHeight: touchTarget.minimum,
     paddingHorizontal: spacing.xs,
   },
   retryText: {
@@ -537,7 +500,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     padding: spacing.lg,
   },
-  walletHeader: {
+  rowBetween: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -570,10 +533,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
-    justifyContent: 'space-between',
     marginTop: spacing.md,
   },
-  walletLedgerStatus: {
+  walletStatus: {
     color: colors.placeholder,
     flex: 1,
     fontSize: typography.tiny,
@@ -592,10 +554,8 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: fontWeight.bold,
   },
-  section: {
-    marginBottom: spacing.xl,
-  },
-  sectionHeadingRow: {
+  section: {marginBottom: spacing.xl},
+  sectionHeader: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -607,18 +567,18 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     marginBottom: spacing.sm,
   },
-  sectionHeadingRowTitle: {marginBottom: 0},
+  sectionTitleCompact: {
+    color: colors.espressoBrown,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
   sectionLink: {
     color: colors.flameRed,
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
     paddingVertical: spacing.xs,
   },
-  metricGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
+  metricGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm},
   metricCard: {
     ...elevation.card,
     backgroundColor: colors.white,
@@ -668,50 +628,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   rangeChipSelected: {backgroundColor: colors.flameRed},
-  rangeChipText: {
+  rangeText: {
     color: colors.textSecondary,
     fontSize: typography.tiny,
     fontWeight: fontWeight.semibold,
   },
-  rangeChipTextSelected: {color: colors.white},
-  chartCanvas: {
+  rangeTextSelected: {color: colors.white},
+  chartState: {
+    alignItems: 'center',
     backgroundColor: colors.surfaceBase,
     borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: 1,
-    gap: 34,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginTop: spacing.md,
     minHeight: 190,
-    overflow: 'hidden',
-    paddingVertical: spacing.lg,
-  },
-  chartGridLine: {
-    backgroundColor: colors.border,
-    height: 1,
-    width: '100%',
-  },
-  chartEmptyOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
-  chartEmptyTitle: {
+  chartTitle: {
     color: colors.textPrimary,
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
     marginTop: spacing.xs,
     textAlign: 'center',
   },
-  chartEmptyMessage: {
+  chartMessage: {
     color: colors.textSecondary,
     fontSize: typography.small,
     marginTop: spacing.xxs,
     textAlign: 'center',
   },
-  quickActionGrid: {gap: spacing.sm},
-  quickAction: {
+  actionList: {gap: spacing.sm},
+  actionRow: {
     alignItems: 'center',
     backgroundColor: colors.white,
     borderColor: colors.border,
@@ -722,7 +670,7 @@ const styles = StyleSheet.create({
     minHeight: 74,
     padding: spacing.sm,
   },
-  quickActionIcon: {
+  actionIcon: {
     alignItems: 'center',
     backgroundColor: colors.surfaceWarm,
     borderRadius: radius.md,
@@ -730,20 +678,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 46,
   },
-  quickActionCopy: {flex: 1},
-  quickActionTitle: {
+  actionTitle: {
     color: colors.textPrimary,
     fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },
-  quickActionSubtitle: {
+  actionSubtitle: {
     color: colors.textSecondary,
     fontSize: typography.tiny,
     marginTop: spacing.xxs,
   },
-  orderSkeletons: {gap: spacing.sm},
-  orderList: {gap: spacing.sm},
-  orderCard: {
+  skeletonList: {gap: spacing.sm},
+  orderRow: {
     ...elevation.card,
     alignItems: 'center',
     backgroundColor: colors.white,
@@ -761,7 +707,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
   },
-  orderCopy: {flex: 1},
   orderReference: {
     color: colors.textPrimary,
     fontSize: typography.body,
@@ -773,11 +718,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     marginTop: spacing.xxs,
   },
-  unavailableState: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
+  unavailableRow: {alignItems: 'center', flexDirection: 'row', gap: spacing.sm},
   unavailableIcon: {
     alignItems: 'center',
     backgroundColor: colors.surfaceMuted,
@@ -786,7 +727,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
   },
-  unavailableCopy: {flex: 1},
   unavailableTitle: {
     color: colors.textPrimary,
     fontSize: typography.body,
@@ -797,8 +737,7 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     marginTop: spacing.xxs,
   },
-  inlineRetryButton: {
-    alignSelf: 'flex-start',
+  inlineRetry: {
     justifyContent: 'center',
     marginTop: spacing.sm,
     minHeight: touchTarget.minimum,
@@ -826,7 +765,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
   },
-  insightCopy: {flex: 1},
   insightEyebrow: {
     color: colors.flameRed,
     fontSize: typography.tiny,
@@ -844,5 +782,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     marginTop: spacing.xxs,
   },
-  pressed: {opacity: 0.65},
 });

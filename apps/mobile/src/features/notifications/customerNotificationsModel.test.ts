@@ -70,7 +70,7 @@ describe('customerNotificationsModel', () => {
     expect(groups.map(group => group.title)).toEqual(['Today', 'Earlier']);
   });
 
-  it('allowlists only ORDER and DELIVERY destinations from validated target metadata', () => {
+  it('allowlists only ORDER and DELIVERY destinations with UUID target metadata', () => {
     expect(resolveCustomerNotificationDestination(notice())).toEqual({
       route: 'CustomerOrderDetail',
       orderId: '22222222-2222-4222-8222-222222222222',
@@ -87,6 +87,9 @@ describe('customerNotificationsModel', () => {
       ),
     ).toBeNull();
     expect(resolveCustomerNotificationDestination(notice({targetId: null}))).toBeNull();
+    expect(
+      resolveCustomerNotificationDestination(notice({targetId: 'not-a-uuid'})),
+    ).toBeNull();
   });
 
   it('applies a successful read exactly once and preserves an existing server read time', () => {

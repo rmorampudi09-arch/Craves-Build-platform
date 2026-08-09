@@ -27,6 +27,7 @@ import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrder
 import {ChefPreparingOrdersScreen} from '../../features/chefOrders/screens/ChefPreparingOrdersScreen';
 import {ChefReadyOrdersScreen} from '../../features/chefOrders/screens/ChefReadyOrdersScreen';
 import {ChefProfileScreen} from '../../features/chefProfile/screens/ChefProfileScreen';
+import {ChefEditProfileDraftProvider} from '../../features/chefProfile/state/ChefEditProfileDraftProvider';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
 import {
   ChefOperationalProvider,
@@ -149,11 +150,13 @@ function ChefOrdersNavigator() {
 
 function ChefProfileNavigator() {
   return (
-    <ProfileStack.Navigator
-      initialRouteName="ChefProfileHome"
-      screenOptions={stackScreenOptions}>
-      <ProfileStack.Screen name="ChefProfileHome" component={ChefProfileScreen} />
-    </ProfileStack.Navigator>
+    <ChefEditProfileDraftProvider>
+      <ProfileStack.Navigator
+        initialRouteName="ChefProfileHome"
+        screenOptions={stackScreenOptions}>
+        <ProfileStack.Screen name="ChefProfileHome" component={ChefProfileScreen} />
+      </ProfileStack.Navigator>
+    </ChefEditProfileDraftProvider>
   );
 }
 

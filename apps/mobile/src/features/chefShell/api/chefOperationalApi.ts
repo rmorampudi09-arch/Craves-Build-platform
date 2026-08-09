@@ -49,9 +49,9 @@ export interface ChefOperationalDeliverySummary {
 export interface ChefOperationalOrder {
   id: string;
   status: ChefOperationalOrderStatus;
-  kitchenName: string | null;
-  items: ChefOperationalOrderItemSummary[];
-  deliverySummary: ChefOperationalDeliverySummary | null;
+  kitchenName?: string | null;
+  items?: ChefOperationalOrderItemSummary[];
+  deliverySummary?: ChefOperationalDeliverySummary | null;
   prepTimeMinutes?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;

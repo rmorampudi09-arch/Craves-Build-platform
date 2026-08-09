@@ -16,6 +16,14 @@ import {
   type InboundRouteContext,
   type InboundRouteDestination,
 } from './inboundRouting';
+import {
+  captureProcessRestorationSnapshot,
+  toRestorationNavigatePayload,
+  type NavigationStateLike,
+  type ProcessRestorationSnapshot,
+  type ProductRole,
+} from './processRestoration';
+import {processRestorationStorage} from './processRestorationStorage';
 import {CustomerRootNavigator} from './CustomerRootNavigator';
 import {ChefRootNavigator} from './ChefRootNavigator';
 import {useAppSelector} from '../store/hooks';
@@ -169,6 +177,11 @@ function inboundContextFromAuth(auth: AuthState): InboundRouteContext {
   };
 }
 
+function productRoleFromAuth(auth: AuthState): ProductRole | null {
+  const context = inboundContextFromAuth(auth);
+  return context.productReady ? context.authorizedRole : null;
+}
+
 function currentRouteMatches(destination: InboundRouteDestination): boolean {
   const currentRoute = navigationRef.getCurrentRoute();
   if (!currentRoute) {
@@ -260,6 +273,11 @@ export function AppNavigator() {
   const auth = useAppSelector(state => state.auth);
   const authRef = React.useRef(auth);
   const pendingInboundRef = React.useRef<InboundRouteCandidate | null>(null);
+  const pendingRestorationRef = React.useRef<ProcessRestorationSnapshot | null>(null);
+  const restorationLoadedRef = React.useRef(false);
+  const restorationSettledRef = React.useRef(false);
+  const initialLinkCheckedRef = React.useRef(false);
+  const initialInboundWinsRef = React.useRef(false);
   authRef.current = auth;
 
   const attemptInboundRoute = React.useCallback((candidate: InboundRouteCandidate) => {
@@ -302,34 +320,142 @@ export function AppNavigator() {
     }
   }, [attemptInboundRoute]);
 
+  const flushPendingRestoration = React.useCallback(() => {
+    if (
+      restorationSettledRef.current ||
+      !restorationLoadedRef.current ||
+      !initialLinkCheckedRef.current ||
+      !navigationRef.isReady()
+    ) {
+      return;
+    }
+
+    const role = productRoleFromAuth(authRef.current);
+    if (!role) return;
+
+    if (initialInboundWinsRef.current) {
+      restorationSettledRef.current = true;
+      return;
+    }
+
+    const snapshot = pendingRestorationRef.current;
+    if (!snapshot) {
+      restorationSettledRef.current = true;
+      return;
+    }
+
+    if (snapshot.role !== role) {
+      pendingRestorationRef.current = null;
+      restorationSettledRef.current = true;
+      processRestorationStorage.clear().catch(() => undefined);
+      return;
+    }
+
+    const payload = toRestorationNavigatePayload(snapshot);
+    pendingRestorationRef.current = null;
+    restorationSettledRef.current = true;
+    if (!payload) {
+      processRestorationStorage.clear().catch(() => undefined);
+      return;
+    }
+
+    navigationRef.dispatch(CommonActions.navigate(payload));
+  }, []);
+
+  const persistCurrentRestoration = React.useCallback(() => {
+    if (!restorationSettledRef.current || !navigationRef.isReady()) return;
+    const role = productRoleFromAuth(authRef.current);
+    if (!role) return;
+
+    const snapshot = captureProcessRestorationSnapshot(
+      navigationRef.getRootState() as unknown as NavigationStateLike,
+      role,
+    );
+    if (snapshot) {
+      processRestorationStorage.write(snapshot).catch(() => undefined);
+    }
+  }, []);
+
+  const handleNavigationReadyOrChange = React.useCallback(() => {
+    flushPendingInboundRoute();
+    flushPendingRestoration();
+    persistCurrentRestoration();
+  }, [flushPendingInboundRoute, flushPendingRestoration, persistCurrentRestoration]);
+
+  React.useEffect(() => {
+    let active = true;
+    processRestorationStorage
+      .read()
+      .then(snapshot => {
+        if (!active) return;
+        pendingRestorationRef.current = snapshot;
+        restorationLoadedRef.current = true;
+        flushPendingRestoration();
+      })
+      .catch(() => {
+        if (!active) return;
+        pendingRestorationRef.current = null;
+        restorationLoadedRef.current = true;
+        flushPendingRestoration();
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [flushPendingRestoration]);
+
   React.useEffect(() => {
     flushPendingInboundRoute();
-  }, [auth.bootstrapStatus, auth.accountResolution, flushPendingInboundRoute]);
+
+    if (auth.bootstrapStatus === 'anonymous') {
+      pendingRestorationRef.current = null;
+      restorationSettledRef.current = true;
+      inboundRouteDedupe.reset();
+      processRestorationStorage.clear().catch(() => undefined);
+      return;
+    }
+
+    flushPendingRestoration();
+  }, [
+    auth.bootstrapStatus,
+    auth.accountResolution,
+    flushPendingInboundRoute,
+    flushPendingRestoration,
+  ]);
 
   React.useEffect(() => {
     let active = true;
 
-    const handleUrl = (url: string) => {
+    const handleUrl = (url: string, initial: boolean) => {
       const candidate = parseInboundUrl(url);
-      if (candidate) {
-        attemptInboundRoute(candidate);
+      if (!candidate) return;
+      if (initial) {
+        initialInboundWinsRef.current = true;
       }
+      attemptInboundRoute(candidate);
     };
 
     Linking.getInitialURL()
       .then(url => {
-        if (active && url) {
-          handleUrl(url);
+        if (!active) return;
+        if (url) {
+          handleUrl(url, true);
         }
+        initialLinkCheckedRef.current = true;
+        flushPendingRestoration();
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!active) return;
+        initialLinkCheckedRef.current = true;
+        flushPendingRestoration();
+      });
 
-    const subscription = Linking.addEventListener('url', event => handleUrl(event.url));
+    const subscription = Linking.addEventListener('url', event => handleUrl(event.url, false));
     return () => {
       active = false;
       subscription.remove();
     };
-  }, [attemptInboundRoute]);
+  }, [attemptInboundRoute, flushPendingRestoration]);
 
   if (status === 'idle' || status === 'restoring') {
     return <SplashScreen />;
@@ -342,8 +468,8 @@ export function AppNavigator() {
   return (
     <NavigationContainer
       ref={navigationRef}
-      onReady={flushPendingInboundRoute}
-      onStateChange={flushPendingInboundRoute}>
+      onReady={handleNavigationReadyOrChange}
+      onStateChange={handleNavigationReadyOrChange}>
       {auth.bootstrapStatus === 'authenticated' ? (
         <AuthenticatedNavigator resolution={auth.accountResolution} />
       ) : (

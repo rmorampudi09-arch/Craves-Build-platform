@@ -5,6 +5,11 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
+import {
+  ChefOperationalProvider,
+  useChefOperationalState,
+} from '../../features/chefShell/state/ChefOperationalProvider';
+import {ChefHeader} from '../../features/chefShell/components/ChefHeader';
 import {Icon} from '../../shared/components/Icon';
 import {
   CHEF_TAB_ACTIVE_COLOR,
@@ -68,10 +73,9 @@ const tabScreenOptions = {
 function ChefShellRouteBoundary({title}: {title: string}) {
   return (
     <SafeAreaView style={styles.routeSafeArea} edges={['top', 'left', 'right']}>
+      <ChefHeader title={title} />
       <View style={styles.routeContent}>
-        <Text accessibilityRole="header" style={styles.routeTitle}>
-          {title}
-        </Text>
+        <Text style={styles.routeTitle}>{title}</Text>
       </View>
     </SafeAreaView>
   );
@@ -97,7 +101,15 @@ function ChefProfileBoundaryScreen() {
   return <ChefShellRouteBoundary title="Profile" />;
 }
 
-function ChefTabsNavigator() {
+function ChefTabsNavigatorContent() {
+  const {counters} = useChefOperationalState();
+  const ordersBadge =
+    counters.pendingAcceptance > 99
+      ? '99+'
+      : counters.pendingAcceptance > 0
+        ? counters.pendingAcceptance
+        : undefined;
+
   return (
     <Tab.Navigator initialRouteName="Dashboard" screenOptions={tabScreenOptions}>
       <Tab.Screen
@@ -113,9 +125,14 @@ function ChefTabsNavigator() {
         name="Orders"
         component={ChefOrdersBoundaryScreen}
         options={{
-          tabBarAccessibilityLabel: `${ordersTab.label} tab`,
+          tabBarAccessibilityLabel:
+            counters.pendingAcceptance > 0
+              ? `${ordersTab.label} tab, ${counters.pendingAcceptance} new orders`
+              : `${ordersTab.label} tab`,
           tabBarLabel: ordersTab.label,
           tabBarIcon: OrdersTabIcon,
+          tabBarBadge: ordersBadge,
+          tabBarBadgeStyle: styles.ordersBadge,
         }}
       />
       <Tab.Screen
@@ -146,6 +163,14 @@ function ChefTabsNavigator() {
         }}
       />
     </Tab.Navigator>
+  );
+}
+
+function ChefTabsNavigator() {
+  return (
+    <ChefOperationalProvider>
+      <ChefTabsNavigatorContent />
+    </ChefOperationalProvider>
   );
 }
 
@@ -218,6 +243,11 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.hero,
     fontWeight: fontWeight.bold,
+  },
+  ordersBadge: {
+    backgroundColor: colors.flameRed,
+    color: colors.white,
+    fontSize: typography.tiny,
   },
   isolationSafeArea: {
     flex: 1,

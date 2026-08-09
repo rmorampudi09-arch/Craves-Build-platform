@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import type {CustomerTabParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
+import {resolveReducedMotionAnimation} from '../../../design/motion';
+import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {
   colors,
   fontWeight,
@@ -44,6 +46,7 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute();
   const dispatch = useAppDispatch();
+  const reduceMotionEnabled = useReducedMotionPreference();
   const {selectedLocation} = useCustomerHeaderState();
   const {locations, status, refresh, selectLocation} = useCustomerLocationOptions();
   const cartAddress = useAppSelector(state => state.cart.dependencies.address);
@@ -66,7 +69,10 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
 
   return (
     <Modal
-      animationType="slide"
+      animationType={resolveReducedMotionAnimation(
+        'slide' as const,
+        reduceMotionEnabled,
+      )}
       onRequestClose={onClose}
       transparent
       visible={visible}>

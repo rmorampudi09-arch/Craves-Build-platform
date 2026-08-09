@@ -33,6 +33,7 @@ import {Icon, type IconName} from '../../../shared/components/Icon';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
 import {ChefHeader} from '../../chefShell/components/ChefHeader';
 import type {ChefKitchenProfile, ChefKitchenStatus} from '../api/chefProfileApi';
+import {useChefEditProfileDraft} from '../state/ChefEditProfileDraftProvider';
 import {switchChefToCustomerRole} from '../state/chefProfileRoleSwitch';
 import {useChefProfileModel} from '../state/useChefProfileModel';
 
@@ -258,6 +259,7 @@ export function ChefProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
   const dispatch = useAppDispatch();
   const model = useChefProfileModel();
+  const editDraft = useChefEditProfileDraft();
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [switchingRole, setSwitchingRole] = React.useState(false);
 
@@ -314,11 +316,16 @@ export function ChefProfileScreen() {
   );
 
   const handleEditProfile = React.useCallback(() => {
-    showBlocker(
-      'Edit profile',
-      'The Chef edit-profile form is a separate approved screen and is not registered in the current mobile route yet.',
-    );
-  }, [showBlocker]);
+    if (!kitchen) {
+      showBlocker(
+        'Edit profile',
+        'Chef kitchen details must finish loading before the profile editor can preserve a safe canonical draft.',
+      );
+      return;
+    }
+    editDraft.begin(kitchen);
+    navigation.navigate('ChefEditProfile');
+  }, [editDraft, kitchen, navigation, showBlocker]);
 
   const performLogout = React.useCallback(async () => {
     if (loggingOut || switchingRole) {
@@ -427,7 +434,7 @@ export function ChefProfileScreen() {
 
           <Pressable
             accessibilityLabel="Edit Chef profile"
-            accessibilityHint="Opens the Chef-specific edit profile flow when available"
+            accessibilityHint="Opens the Chef-specific edit profile flow"
             accessibilityRole="button"
             onPress={handleEditProfile}
             style={({pressed}) => [styles.editButton, pressed && styles.pressed]}>

@@ -33,79 +33,76 @@
 - **P92 — Chef Menu Contract Model:** PARTIAL at full Guide/product-contract scope; the complete currently approved five-route Chef Menu contract is typed, fail-closed parsed, source-tested, and centralized for mobile without inventing missing Guide capabilities. Evidence: `docs/mobile-ui-rebuild/P92_CHEF_MENU_CONTRACT_MODEL.md`. GitHub Actions validation is not claimed because the account's monthly Actions capacity is exhausted.
 - **P93 — Chef Menu:** PARTIAL at full Guide scope; the real Chef Menu screen, client-side loaded-list search/filtering, availability mutation with rollback, Dashboard cache synchronization, and read-only item navigation are implemented at the exact P92 contract boundary. Evidence: `docs/mobile-ui-rebuild/P93_CHEF_MENU_UI.md`.
 - **P94 — Chef Add New Menu Item:** PARTIAL at full Guide scope; the focused create form, exact server-backed Save Draft/Add Item mutations, client validation, duplicate-tap guard, and Chef Menu/Dashboard cache synchronization are implemented at the current P92 contract boundary. Media/category metadata/incomplete-draft gaps remain explicit. Evidence: `docs/mobile-ui-rebuild/P94_CHEF_ADD_NEW_MENU_ITEM.md`.
+- **P95 — Chef Menu Edit/Mutation Hardening:** PARTIAL at full Guide scope; exact current-contract full replacement editing, server-returned cache reconciliation, duplicate-submit guarding, and unsaved-change protection are implemented. Image replacement and structured field-level server binding remain blocked by missing exact contracts/dependencies. Evidence: `docs/mobile-ui-rebuild/P95_CHEF_MENU_EDIT_MUTATION_HARDENING.md`.
 
-**Current executed phase:** **P94 — Chef Add New Menu Item**.
+**Current executed phase:** **P95 — Chef Menu Edit/Mutation Hardening**.
 
-**P94 phase start commit:** `5675a3501a9cfab9368b9c139c21fc39ff7cca5f`  
-**P94 implementation/code end:** `d95c2156cd1aa6ce3bfe96f6d2f7e67370759fc1`
+**P95 phase start commit:** `7d1d61c9d4e453547e446651f91bfc5c9b25206c`  
+**P95 implementation/code end:** `1a1508a8193ff05c2e4cfcf11d46f4a1f12e12d3`
 
-### P94 implemented boundary
+### P95 implemented boundary
 
-- Added the typed focused `ChefAddMenuItem` product-stack route. The form is outside the Chef bottom tabs, matching the Guide's focused-form route behavior.
-- Added a functional `+ Add new item` Menu entry action while leaving the P93 Menu screen implementation itself untouched; returning from the form preserves the mounted P93 tab/search/filter state.
-- Added React Hook Form + Zod validation for the exact current create contract: required item/category/food type/price/package weight/thermobox plus optional description/serves/preparation time/spice and exact availability/status values.
-- `Save as Draft` uses the real create route with `status=DRAFT`; because the backend has no incomplete-draft contract, it still requires all server-required create fields.
-- `Add Item` uses the same real create route with `status=ACTIVE`. No separate publication route/acknowledgement is fabricated.
-- Both submit actions wait for a valid parsed backend response before returning to Menu. Failures remain on the form with safe recoverable error copy.
-- Added in-flight submission protection and disabled submit UI during the mutation so rapid duplicate taps cannot issue parallel creates from this route.
-- On success, the canonical Chef Menu query cache and the existing Chef Dashboard menu cache receive the server-returned item and are then invalidated for authoritative revalidation.
-- Added explicit availability and thermobox controls plus food-type/spice choices mapped only to approved enums.
-- Added a media boundary that shows the exact JPEG/PNG/WebP types but does not expose a fake picker/upload: the app has no approved native picker dependency and the server's runtime max-size/image-count policy is not client-readable.
-- No category/subcategory taxonomy, cooking/packing/shelf-life fields, duplicate-name endpoint, catalog publication acknowledgement, or incomplete draft capability was invented.
-- P95 edit/image-replacement/unsaved-change/mutation-hardening work was not started.
+- Added a typed focused `ChefEditMenuItem` route launched from the existing Chef menu-item detail screen without modifying P93 Menu list/search/filter logic.
+- The editor is prefilled only from the canonical Chef menu list response. If the target item is absent, it fails closed because no chef-owned detail GET exists.
+- Implemented the exact backend `PUT /api/v1/kitchens/me/menu-items/{menuItemId}` as a **full `MenuItemRequest` replacement**, not a guessed partial update.
+- All writable request fields are rebuilt from validated form values. Existing `currency` and backend `status` are explicitly preserved so editing cannot silently change currency or publication state.
+- Availability remains editable because it is an approved `MenuItemRequest` field; customer-live semantics remain `status=ACTIVE && available=true`.
+- Added an in-flight edit submission guard plus disabled save UI so rapid repeated taps cannot issue parallel replacement requests from this route.
+- On a parsed successful server response, both the canonical Chef Menu cache and the Chef Dashboard menu cache replace the matching item with that returned object, then revalidate from the server.
+- Added unsaved-change protection with React Navigation removal prevention; dirty forms require explicit discard confirmation. Native swipe-back is disabled on the edit route to keep the guard deterministic.
+- Safe `AppApiError.message` and sanitized `details[]` are surfaced. The client does not guess which field a detail belongs to because the current error contract has no structured field key/path format.
+- Existing media is shown read-only. P95 does not expose a fake replace/delete/reorder action when the exact backend only exposes upload and the app has no approved picker.
+- Added focused edit-domain test source covering canonical prefill and exact full-replacement mapping while preserving all P94 create-form tests.
+- P96 Analytics work was not started.
 
-### P94 changed code files
+### P95 changed code files
 
 - `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
 - `apps/mobile/src/app/navigation/types.ts`
 - `apps/mobile/src/features/chefMenu/domain/chefMenuForm.ts`
 - `apps/mobile/src/features/chefMenu/domain/chefMenuForm.test.ts`
-- `apps/mobile/src/features/chefMenu/state/useChefAddMenuItemModel.ts`
-- `apps/mobile/src/features/chefMenu/screens/ChefAddMenuItemScreen.tsx`
+- `apps/mobile/src/features/chefMenu/state/useChefEditMenuItemModel.ts`
+- `apps/mobile/src/features/chefMenu/screens/ChefEditMenuItemScreen.tsx`
+- `apps/mobile/src/features/chefMenu/screens/ChefMenuItemDetailScreen.tsx`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P94_CHEF_ADD_NEW_MENU_ITEM.md`
+- `docs/mobile-ui-rebuild/P95_CHEF_MENU_EDIT_MUTATION_HARDENING.md`
 - `build.md`
 
-### P94 focused test source
+### P95 focused test source
 
-`chefMenuForm.test.ts` covers:
+`chefMenuForm.test.ts` now additionally covers:
 
-- fail-closed validation when server-required create fields are missing;
-- exact `SAVE_DRAFT -> DRAFT` request mapping;
-- exact `ADD_ITEM -> ACTIVE` request mapping without invented publication fields;
-- null mapping for optional description/serves/preparation/spice fields;
-- price minimum `0.01`;
-- positive whole-number package/preparation validation.
+- prefill of every writable edit field from an exact `ChefMenuItem` response;
+- exact complete replacement mapping;
+- preservation of existing `currency`;
+- preservation of existing backend `status` while allowing the approved `available` field to change.
 
-### P94 validation / guard state
+### P95 validation / guard state
 
-- P94 implementation is one fast-forward code commit from the latest P93 ledger HEAD and changes exactly six mobile files before this evidence/ledger update.
+- P95 implementation is one fast-forward code/evidence commit from the latest P94 ledger HEAD and changes exactly seven mobile code/test files plus one P95 evidence file before this ledger update.
+- `GitHub.compare_commits` confirms the P95 implementation commit is exactly one commit ahead of P94 and contains only those eight files.
 - No `services/`, `openapi/`, `infra/`, backend/APIM, deployment, pipeline, or package/dependency source changed.
-- The authored P94 TypeScript/TSX source was checked in an isolated scratch parse using `tsc --noResolve`; zero TypeScript parser/syntax diagnostics were emitted. The expected unresolved dependency/Jest ambient diagnostics from that isolated environment are not a project type-check result.
-- Focused Jest source exists, but repository Jest execution is not claimed.
-- GitHub Actions are intentionally not used as a P94 pass/fail signal because the user reported the account Actions limit is exhausted and explicitly authorized continuing without it.
-- Full workspace TypeScript, ESLint, Jest execution, Android bundle/build, emulator/device behavior, keyboard/safe-area behavior, and pixel-perfect comparison are **not recorded as passing or failing for P94**.
-- The embedded Guide Screen 45 image could not be extracted as a separately available image asset through the current file connector, so device/pixel certification is not claimed.
+- Focused Jest source exists, but repository Jest execution is not claimed from the connector environment.
+- GitHub Actions are intentionally not used as a P95 pass/fail signal because the user reported the account Actions limit is exhausted and explicitly authorized continuing without it.
+- Full workspace TypeScript, ESLint, Jest execution, Android bundle/build, emulator/device behavior, unsaved-navigation/device gesture behavior, keyboard/safe-area behavior, and pixel-perfect comparison are **not recorded as passing or failing for P95**.
 
-### P94 retained blockers instead of fabricated behavior
+### P95 retained blockers instead of fabricated behavior
 
-1. No approved mobile image-picker integration is currently present; P94 does not add an unvalidated native dependency while build/device verification is unavailable.
-2. The server media maximum is runtime-configured and there is no client-readable max-size/image-count policy, so the client cannot truthfully enforce the Guide's complete media policy without hard-coding an unstable server value.
-3. No category/subcategory metadata route exists; the exact backend field is free-text `category`.
-4. No separate incomplete-draft request exists; `DRAFT` still requires the core `MenuItemRequest` fields.
-5. No duplicate/name-check route exists.
-6. No Guide cooking-time/packing-time/shelf-life request fields exist in the approved backend contract.
-7. No separate catalog publication acknowledgement exists; customer visibility remains the authoritative backend condition `status=ACTIVE && available=true`.
-8. Edit existing item, image replacement/reorder/delete, unsaved-change protection, and broader mutation hardening belong to P95 and were not pre-implemented.
-9. GitHub Actions/full workspace/device/reference-image validation remain unavailable under the reported/tooling constraints.
+1. Image replacement remains blocked: the exact backend exposes image upload but no replace/delete/reorder/set-primary-after-upload management contract, and the app still has no approved native image picker.
+2. Structured field-level server binding remains blocked: `AppApiError.details` is only a sanitized string array with no defined field key/path contract. P95 displays those details but does not guess field ownership.
+3. Backend idempotency remains unavailable: no exact idempotency key/header semantics exist for Chef Menu mutations. P95 uses only a client in-flight guard and does not claim a server idempotency guarantee.
+4. No chef-owned menu-item detail GET exists; editing therefore depends on the canonical list response already used by P93.
+5. Delete/duplicate item routes remain unavailable.
+6. Category taxonomy, incomplete-draft rules, duplicate-name checks, runtime media limits/image-count policy, cooking/packing/shelf-life fields, and catalog publication acknowledgement remain unavailable at the approved contract boundary.
+7. GitHub Actions/full workspace/device/reference-image validation remain unavailable under the reported/tooling constraints.
 
-**Next phase in sequence:** **P95 — Chef Menu Edit/Mutation Hardening — NOT STARTED**.
+**Next phase in sequence:** **P96 — Chef Analytics Contract Model — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P94. Do not pre-implement P95 without explicit user direction.
+**Required action:** Stop after P95. Do not pre-implement P96 without explicit user direction.
 
 ---
 
@@ -128,10 +125,11 @@ Evidence/ledger:
 | P92 | PARTIAL at full Guide/product-contract scope; exact current five-route menu contract centralized/hardened | `docs/mobile-ui-rebuild/P92_CHEF_MENU_CONTRACT_MODEL.md` |
 | P93 | PARTIAL at full Guide scope; exact current Menu UI/availability/detail boundary implemented | `docs/mobile-ui-rebuild/P93_CHEF_MENU_UI.md` |
 | P94 | PARTIAL at full Guide scope; exact create-form/server mutation boundary implemented | `docs/mobile-ui-rebuild/P94_CHEF_ADD_NEW_MENU_ITEM.md` |
-| P95 onward | NOT STARTED / not accepted | — |
+| P95 | PARTIAL at full Guide scope; exact full-replacement edit/mutation hardening boundary implemented | `docs/mobile-ui-rebuild/P95_CHEF_MENU_EDIT_MUTATION_HARDENING.md` |
+| P96 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P95 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, P92 contract evidence, P93 UI evidence, P94 add-item evidence, and the canonical `features/chefMenu` API/state/UI implementation. Preserve P93 Menu list/search/filter/scroll state and the exact five-route P92 backend contract. Do not add backend/APIM changes, invent category/media policies, or pre-implement later Chef phases without separate authorization.
+Before any P96 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, P92 contract evidence, P93 Menu UI evidence, P94 add-item evidence, P95 edit/mutation evidence, and the canonical `features/chefMenu` implementation. Preserve the exact five-route P92 backend contract and do not convert P95's explicit media/error/idempotency blockers into fabricated behavior. Do not add backend/APIM changes or pre-implement later Chef phases without separate authorization.

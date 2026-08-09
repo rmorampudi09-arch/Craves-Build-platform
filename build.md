@@ -41,80 +41,79 @@
 - **P100 — Chef Edit Profile UI:** PARTIAL at full Guide completion scope; the typed `ChefEditProfile` route, focused reference-aligned form UI, exact P99 field editing/save integration, dirty-back protection, suspended read-only state, loading/retry/error/mutation states, and explicit capability blockers are implemented without fabricating missing Guide contracts. Evidence: `docs/mobile-ui-rebuild/P100_CHEF_EDIT_PROFILE_UI.md`.
 - **P101 — Chef Business Information Contract:** PARTIAL at full Guide/product-contract scope; exact current kitchen/application/proof-document sources are modeled fail-closed for mobile, sensitive storage/reviewer identifiers are excluded from the Business Information model, and missing approved-Chef document-maintenance/service-area/cuisine/payout contracts remain explicit. Evidence: `docs/mobile-ui-rebuild/P101_CHEF_BUSINESS_INFORMATION_CONTRACT.md`.
 - **P102 — Chef Business Information UI/Document Flow:** PARTIAL at full Guide Reference-49 scope; the registered real Business Information screen, verification/document metadata presentation, supported kitchen edit navigation, independent loading/refresh/error states, and explicit fail-closed unsupported document/service-area/cuisine/payout actions are implemented at the exact P101 backend boundary. Evidence: `docs/mobile-ui-rebuild/P102_CHEF_BUSINESS_INFORMATION_UI_DOCUMENT_FLOW.md`.
+- **P103 — Chef Payout Contract and Eligibility:** PARTIAL at full Guide/product-contract scope; the exact Chef earning-ledger response is typed/validated as a non-runnable source boundary, while missing payout summary/balance/series/transactions/bank/eligibility/initiation/detail capabilities remain fail-closed. Evidence: `docs/mobile-ui-rebuild/P103_CHEF_PAYOUT_CONTRACT_ELIGIBILITY.md`.
 
-**Current executed phase:** **P102 — Chef Business Information UI/Document Flow**.
+**Current executed phase:** **P103 — Chef Payout Contract and Eligibility**.
 
-**P102 phase start commit:** `59a2f19a8b097a74408b715d468e5e8cd2732a2c`  
-**P102 implementation/code end:** `4c8ec13d22fe91e4b688536e7118f1a3e512283f`  
-**P102 evidence commit:** `cb910880536fd26586a7113839abac97f44065f5`
+**P103 phase start commit:** `8d03d99bb365b3428c84311666fca1aaaa9dae75`  
+**P103 implementation/code end:** `05b3d1cdcfa9de611bed3b0e51f4f12770714a26`  
+**P103 evidence commit:** `aa6584431c5b70edebd80d135b82864a20fe4a19`
 
-### P102 implemented boundary
+### P103 implemented boundary
 
-- Re-read Guide Reference 49 and implemented only the authorized P102 UI/document-flow phase; no P103 payout-contract work was started.
-- Added typed `ChefBusinessInformation` navigation under the existing Chef Profile stack and made the existing Business information profile row open it.
-- Added private TanStack Query ownership for the P101 Chef application verification source while reusing the existing canonical Chef kitchen query key/source instead of creating duplicate server state.
-- Added a real Chef Business Information screen with the existing Chef header/notification behavior, explicit Profile back control, pull-to-refresh, last-valid-query retention, initial skeleton, independent partial-source loading, source-specific error states, and retry controls.
-- Added a backend-authoritative verification banner for `NOT_SUBMITTED`, `PENDING`, `APPROVED`, and `REJECTED`; application-level rejection reason is shown when present.
-- Added Business overview values derived only from exact current data: application verification state, proof metadata count, and kitchen status. No invented business KPI was introduced.
-- Added Aadhaar/PAN document rows from the P101 safe response model with file name/content type/size/timestamps and expandable detail state.
-- Persisted proof status `UPLOADED` is presented as **On file** only; the UI explicitly does not promote that metadata to document-level verified/valid/rejected/expired state.
-- Added real handlers for Open file, Update, and Upload New Document that fail closed with a clear user reason because the current exact backend has no approved-Chef content-read/document-maintenance contract. The screen does not open a file picker and does not transmit sensitive data through the onboarding-only proof endpoint.
-- Added kitchen/business-address edit actions that reuse the existing P100 full-replacement Chef Edit Profile draft/route.
-- Service area shows only the current kitchen `areaName` as a profile-area label. Service-area management, cuisine/specialty, and payout setup controls have explicit unavailable outcomes instead of fabricated routes or data.
-- Added verification/security guidance and a real Learn more handler; sensitive storage locators/reviewer identifiers/document bytes are not exposed or logged.
-- Hardened partial-source loading so a still-pending verification or kitchen source is not mislabeled as an error, and corrected the Business overview surface to maintain readable contrast with existing design tokens.
-- Added focused pure presentation tests for verification state/rejection reason, safe document metadata formatting, address formatting, and kitchen status labels.
-- No dependency, customer-screen, backend, APIM, OpenAPI, database, infrastructure, or server-source change was made.
+- Re-read Guide Reference 50 and implemented only the authorized P103 contract/eligibility phase; no P104 payout UI/withdraw-flow work was started.
+- Audited the exact Integration Service financial controller, response model, service authorization/limit rules, repository behavior, persisted financial schema, module README, and repository APIM exposure evidence.
+- Added a typed Chef earning-ledger source model for the exact backend `EarningResponse` financial fields/statuses/order sources.
+- Monetary values are normalized as canonical two-decimal strings for safe presentation/reconciliation; mobile does not derive accounting, aggregate earnings, available balance, or withdrawable balance.
+- Added strict response validation for UUIDs, three-letter currency, exact statuses/order sources, timestamps, financial value shape, duplicate IDs, and the server-supported 1–500 limit range.
+- The current backend `GET /api/v1/chef/earnings` is classified as **source-only**. No runnable mobile HTTP wrapper was added because the current branch does not contain an approved APIM operation for that Chef earnings path and the module README records APIM exposure as a later manual step.
+- Added fail-closed Guide-50 capability boundaries for earnings summary, available balance, payout series, payout transactions, bank destination, withdrawal eligibility, withdrawal initiation, and transaction detail.
+- Added an explicit withdrawal-eligibility boundary that remains `canWithdraw: false` until exact Chef-role eligibility and initiation contracts exist.
+- No full bank identifier, routing data, UPI detail, payout-provider credential, settlement-admin endpoint, or invented payout route is represented in the mobile contract.
+- Added focused tests for exact financial parsing, limit bounds, duplicate protection, unsupported status/money rejection, fail-closed capability state, and absence of fabricated payout/bank/withdraw/settlement routes.
+- No navigation, screen, query-cache, dependency, customer-screen, backend, APIM, OpenAPI, database, infrastructure, or server-source change was made.
 
-### P102 exact sources / boundaries used
+### P103 exact sources / boundaries used
 
-- `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, full 183-page authority, Guide Reference 49 / source page 41.
-- `plan.md`, `phases.md`, `agent.md`, `build.md`, P101 evidence, and the current P101 `chefBusinessInformation` contract implementation.
-- Existing exact `GET /api/v1/chef/application` P101 mobile parser/client.
-- Existing exact `GET|PUT /api/v1/kitchens/me` Chef profile client and P99/P100 edit flow.
-- P101's reviewed backend rule that `/api/v1/chef/application/proof-files` is onboarding/KYC proof handling and rejects document changes after `APPROVED`.
+- `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, full 183-page authority, Guide Reference 50 / source page 42.
+- `plan.md`, `phases.md`, `agent.md`, `build.md`, and P102/P96 evidence.
+- `services/integration-service/src/main/java/in/craves/integration/web/ChefFinancialController.java`.
+- `services/integration-service/src/main/java/in/craves/integration/settlement/ChefFinancialModels.java`.
+- `services/integration-service/src/main/java/in/craves/integration/settlement/ChefFinancialService.java`.
+- `services/integration-service/src/main/java/in/craves/integration/settlement/ChefFinancialRepository.java`.
+- `services/integration-service/src/main/resources/db/migration/V105__chef_financial_ledger.sql`.
+- `services/integration-service/modules/chef-financial-ledger/README.md`.
 
-### P102 changed code files
+### P103 changed code files
 
-- `apps/mobile/src/app/navigation/types.ts`
-- `apps/mobile/src/app/navigation/ChefRootNavigator.tsx`
-- `apps/mobile/src/features/chefProfile/screens/ChefProfileScreen.tsx`
-- `apps/mobile/src/features/chefBusinessInformation/state/chefBusinessInformationQuery.ts`
-- `apps/mobile/src/features/chefBusinessInformation/state/useChefBusinessInformationModel.ts`
-- `apps/mobile/src/features/chefBusinessInformation/domain/chefBusinessInformationPresentation.ts`
-- `apps/mobile/src/features/chefBusinessInformation/domain/chefBusinessInformationPresentation.test.ts`
-- `apps/mobile/src/features/chefBusinessInformation/screens/ChefBusinessInformationScreen.tsx`
+- `apps/mobile/src/features/chefPayout/api/chefPayoutApi.ts`
+- `apps/mobile/src/features/chefPayout/api/chefPayoutApi.test.ts`
+- `apps/mobile/src/features/chefPayout/domain/chefPayoutContract.ts`
+- `apps/mobile/src/features/chefPayout/domain/chefPayoutContract.test.ts`
 
 Evidence/ledger:
 
-- `docs/mobile-ui-rebuild/P102_CHEF_BUSINESS_INFORMATION_UI_DOCUMENT_FLOW.md`
+- `docs/mobile-ui-rebuild/P103_CHEF_PAYOUT_CONTRACT_ELIGIBILITY.md`
 - `build.md`
 
-### P102 validation / guard state
+### P103 validation / guard state
 
-- `GitHub.compare_commits` from phase-start HEAD `59a2f19a8b097a74408b715d468e5e8cd2732a2c` to evidence commit `cb910880536fd26586a7113839abac97f44065f5` shows twelve fast-forward phase commits and exactly the eight P102 mobile code/test files plus P102 evidence and ledger files listed above.
-- Navigation compare is narrow: `ChefRootNavigator.tsx` adds the Business Information screen registration and `types.ts` adds the typed route; existing Chef product/tab ownership is unchanged.
-- The Chef Profile diff is limited to making the existing Business information row reachable and replacing its obsolete verification blocker text; unrelated Profile/account behaviors are preserved.
-- Source-level review confirms P102 adds no runtime write/upload endpoint and no new dependency; its real network reads remain the exact P101 application GET and existing kitchen GET.
+- `GitHub.compare_commits` from phase-start HEAD `8d03d99bb365b3428c84311666fca1aaaa9dae75` through code end shows five fast-forward code/test commits and exactly the four new P103 mobile files listed above.
+- Source review confirms the final P103 code contains no runtime HTTP call, mutation, payout arithmetic, navigation/UI work, or new dependency.
+- Repository-wide exact-path search found backend/web references for `/api/v1/chef/earnings` but no approved APIM operation; the financial-ledger README explicitly lists guarded APIM exposure as a later manual step.
 - Focused Jest test source was added, but Jest execution is not claimed from this connector-only run.
-- GitHub Actions are intentionally not claimed as a P102 pass/fail signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
-- Project dependency installation, TypeScript 6.0.3 strict typecheck, ESLint, Jest execution, Android bundle/build, emulator/device behavior, and Reference-49 pixel validation are **not recorded as passing or failing for P102** from this connector-only implementation run.
-- P102 remains **PARTIAL at full Guide scope** because secure approved-Chef file selection/upload/update/progress/retry and per-document expiry/rejection/renewal/resubmission cannot be completed without exact backend product contracts; mobile does not fabricate them.
+- GitHub Actions are intentionally not claimed as a P103 pass/fail signal because the account's monthly Actions capacity is exhausted and the user explicitly authorized continuing without it.
+- Full workspace dependency installation, strict TypeScript, ESLint, Jest execution, production Android bundle/build, emulator/device behavior, and Reference-50 pixel validation are **not recorded as passing or failing for P103** from this connector-only implementation run.
+- P103 remains **PARTIAL at full Guide scope** because the required production payout capabilities do not have exact current Chef/APIM contracts and mobile does not fabricate them.
 
-### P102 retained blockers instead of fabricated Guide capabilities
+### P103 retained blockers instead of fabricated Guide capabilities
 
-1. Current `/api/v1/chef/application/proof-files` is onboarding/KYC proof handling and rejects document changes after `APPROVED`; it is not an approved-Chef Business Information maintenance endpoint.
-2. No Chef-facing document-content read contract exists for this screen, so the app does not construct a blob/storage URL.
-3. No per-document verification/rejection/expiry/renewal/resubmission state or document-level actionable reason exists; persisted status remains only `UPLOADED`.
-4. No approved Chef service-area management contract exists beyond the kitchen profile's current area label/coordinates.
-5. No approved Chef cuisine/specialty taxonomy/read-write contract exists.
-6. No approved Chef payout bank/configuration/setup-status contract exists; P103 is the next contract phase and was not started.
+1. No approved APIM mobile exposure for the existing Chef earnings ledger read is present in the current branch.
+2. No Chef aggregate earnings-summary contract or period semantics.
+3. No authoritative available/withdrawable balance contract.
+4. No payout trend/time-series/date-bucket contract.
+5. No Chef payout/settlement transaction-history or transaction-detail contract.
+6. No Chef bank destination/setup contract or approved masked-bank response model.
+7. No withdrawal eligibility/minimum/verification contract.
+8. No Chef withdrawal initiation endpoint, idempotency contract, confirmation/auth rule, or payout-provider flow.
+9. No Chef-readable settlement batch contract; current settlement operations are finance/admin-only.
+10. The current financial-ledger module explicitly performs no money movement.
 
-**Next phase in sequence:** **P103 — Chef Payout Contract — NOT STARTED**.
+**Next phase in sequence:** **P104 — Chef Payout History UI/Withdraw Flow — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop after P102. Do not pre-implement P103 without explicit user direction.
+**Required action:** Stop after P103. Do not pre-implement P104 without explicit user direction.
 
 ---
 
@@ -145,10 +144,11 @@ Evidence/ledger:
 | P100 | PARTIAL at full Guide scope; exact current Chef Edit Profile UI boundary implemented | `docs/mobile-ui-rebuild/P100_CHEF_EDIT_PROFILE_UI.md` |
 | P101 | PARTIAL at full Guide/product-contract scope; exact current Chef Business Information contract boundary implemented | `docs/mobile-ui-rebuild/P101_CHEF_BUSINESS_INFORMATION_CONTRACT.md` |
 | P102 | PARTIAL at full Guide scope; exact current Chef Business Information UI/document-flow boundary implemented | `docs/mobile-ui-rebuild/P102_CHEF_BUSINESS_INFORMATION_UI_DOCUMENT_FLOW.md` |
-| P103 onward | NOT STARTED / not accepted | — |
+| P103 | PARTIAL at full Guide/product-contract scope; exact Chef financial source + fail-closed payout eligibility boundary implemented | `docs/mobile-ui-rebuild/P103_CHEF_PAYOUT_CONTRACT_ELIGIBILITY.md` |
+| P104 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-Before any P103 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, P102/P101 evidence, and the current Chef Business Information/Profile implementation. Preserve P102's fail-closed Reference-49 boundary: application verification and safe proof metadata remain backend-authoritative; do not invent approved-Chef document maintenance/content read/per-document expiry-rejection-renewal, service-area, cuisine, or payout-setup contracts; do not expose sensitive storage/reviewer identifiers; do not alter backend/APIM without explicit phase authority; and do not advance beyond the single explicitly authorized phase.
+Before any P104 work, read `plan.md`, `phases.md`, `agent.md`, this ledger, the full 183-page implementation guide, P103 evidence, and the current Chef Profile/Analytics/Dashboard implementations. Preserve P103's fail-closed financial boundary: do not derive aggregate earnings or available/withdrawable balance from ledger rows; do not invent bank, payout-series, payout-transaction, eligibility, initiation, transaction-detail, or settlement routes; do not call the backend earnings path from mobile until an approved APIM operation exists; never expose full bank/payment identifiers; do not alter backend/APIM without explicit phase authority; and do not advance beyond the single explicitly authorized phase.

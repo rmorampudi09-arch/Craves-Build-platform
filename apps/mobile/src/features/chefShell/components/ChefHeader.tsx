@@ -58,6 +58,11 @@ export function ChefHeader({title}: Props) {
     [navigation],
   );
 
+  const openPayoutHistory = React.useCallback(() => {
+    setMenuVisible(false);
+    navigation.navigate('Profile', {screen: 'ChefPayoutHistory'});
+  }, [navigation]);
+
   return (
     <>
       <View style={styles.header}>
@@ -125,6 +130,14 @@ export function ChefHeader({title}: Props) {
                 <Icon name="chevron-right" size={18} color={colors.textSecondary} />
               </Pressable>
             ))}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open Payout history"
+              onPress={openPayoutHistory}
+              style={({pressed}) => [styles.menuRow, pressed && styles.pressed]}>
+              <Text style={styles.menuRowText}>Payout history</Text>
+              <Icon name="chevron-right" size={18} color={colors.textSecondary} />
+            </Pressable>
           </View>
         </Pressable>
       </Modal>

@@ -139,10 +139,11 @@ export type ChefOrdersStackParamList = {
   ChefOrdersCompleted: undefined;
 };
 
-/** P102 adds the focused Chef Business Information route while preserving P100 edit profile. */
+/** P104 adds the fail-closed Chef Payout History route while preserving existing profile flows. */
 export type ChefProfileStackParamList = {
   ChefProfileHome: undefined;
   ChefBusinessInformation: undefined;
+  ChefPayoutHistory: undefined;
   ChefEditProfile: undefined;
 };
 

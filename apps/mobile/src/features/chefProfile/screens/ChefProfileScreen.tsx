@@ -93,7 +93,7 @@ const SETTINGS_ROWS: readonly AccountRowModel[] = [
     subtitle: 'Notifications and Chef workspace preferences',
     icon: 'bell',
     blockerMessage:
-      'Chef app preferences have a dedicated screen that is not registered in the current mobile route yet.',
+      'App preferences open the protected Chef preference view; unavailable writes remain fail-closed until approved persistence exists.',
   },
   {
     id: 'security',
@@ -322,6 +322,10 @@ export function ChefProfileScreen() {
       }
       if (row.id === 'subscription') {
         navigation.navigate('ChefSubscriptionPlan');
+        return;
+      }
+      if (row.id === 'preferences') {
+        navigation.navigate('ChefAppPreferences');
         return;
       }
       showBlocker(row.title, row.blockerMessage);

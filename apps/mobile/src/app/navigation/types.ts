@@ -139,12 +139,13 @@ export type ChefOrdersStackParamList = {
   ChefOrdersCompleted: undefined;
 };
 
-/** P106 adds the fail-closed Chef Subscription Plan route while preserving existing profile flows. */
+/** P108 adds the fail-closed Chef App Preferences route while preserving existing profile flows. */
 export type ChefProfileStackParamList = {
   ChefProfileHome: undefined;
   ChefBusinessInformation: undefined;
   ChefPayoutHistory: undefined;
   ChefSubscriptionPlan: undefined;
+  ChefAppPreferences: undefined;
   ChefEditProfile: undefined;
 };
 

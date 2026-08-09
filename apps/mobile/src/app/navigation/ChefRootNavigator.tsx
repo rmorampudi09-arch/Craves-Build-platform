@@ -28,6 +28,7 @@ import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrder
 import {ChefPreparingOrdersScreen} from '../../features/chefOrders/screens/ChefPreparingOrdersScreen';
 import {ChefReadyOrdersScreen} from '../../features/chefOrders/screens/ChefReadyOrdersScreen';
 import {ChefPayoutHistoryScreen} from '../../features/chefPayout/screens/ChefPayoutHistoryScreen';
+import {ChefAppPreferencesScreen} from '../../features/chefPreferences/screens/ChefAppPreferencesScreen';
 import {ChefEditProfileScreen} from '../../features/chefProfile/screens/ChefEditProfileScreen';
 import {ChefProfileScreen} from '../../features/chefProfile/screens/ChefProfileScreen';
 import {ChefEditProfileDraftProvider} from '../../features/chefProfile/state/ChefEditProfileDraftProvider';
@@ -170,6 +171,10 @@ function ChefProfileNavigator() {
         <ProfileStack.Screen
           name="ChefSubscriptionPlan"
           component={ChefSubscriptionPlanScreen}
+        />
+        <ProfileStack.Screen
+          name="ChefAppPreferences"
+          component={ChefAppPreferencesScreen}
         />
         <ProfileStack.Screen
           name="ChefEditProfile"

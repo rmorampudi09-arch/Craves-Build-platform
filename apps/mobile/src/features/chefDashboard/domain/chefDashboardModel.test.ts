@@ -139,6 +139,7 @@ describe('deriveChefDashboardModel', () => {
         pendingAcceptance: 1,
         activeOrders: 2,
         readyForPickup: 1,
+        totalOrders: 4,
       }),
     );
     expect(model.earnings.balances).toEqual([

@@ -57,6 +57,7 @@ export interface ChefDashboardOrderSummary {
   pendingAcceptance: number;
   activeOrders: number;
   readyForPickup: number;
+  totalOrders: number;
   active: ChefOperationalOrder[];
 }
 
@@ -111,6 +112,7 @@ function deriveOrderSummary(
     activeOrders: active.length,
     readyForPickup: orders.filter(order => order.status === 'READY_FOR_PICKUP')
       .length,
+    totalOrders: orders.length,
     active,
   };
 }

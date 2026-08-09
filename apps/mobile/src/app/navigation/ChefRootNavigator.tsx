@@ -4,6 +4,7 @@ import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
+import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
 import {
   ChefOperationalProvider,
@@ -81,10 +82,6 @@ function ChefShellRouteBoundary({title}: {title: string}) {
   );
 }
 
-function ChefDashboardBoundaryScreen() {
-  return <ChefShellRouteBoundary title="Dashboard" />;
-}
-
 function ChefOrdersBoundaryScreen() {
   return <ChefShellRouteBoundary title="Orders" />;
 }
@@ -114,7 +111,7 @@ function ChefTabsNavigatorContent() {
     <Tab.Navigator initialRouteName="Dashboard" screenOptions={tabScreenOptions}>
       <Tab.Screen
         name="Dashboard"
-        component={ChefDashboardBoundaryScreen}
+        component={ChefDashboardScreen}
         options={{
           tabBarAccessibilityLabel: `${dashboardTab.label} tab`,
           tabBarLabel: dashboardTab.label,

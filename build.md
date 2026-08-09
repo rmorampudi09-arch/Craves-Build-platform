@@ -9,7 +9,7 @@
 **Implementation guide:** Full 183-page `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`.  
 **Build policy:** Code-level validation during implementation. **No APK per phase.** Final Android APK/AAB only after all implementation/QA gates in `phases.md` are complete.
 
-Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md` preserves the early ledger; P13 onward uses dedicated phase evidence documents. This living ledger is intentionally compact.
+Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-rebuild/BUILD_LEDGER_THROUGH_P12.md` preserves the early ledger; P13 onward uses dedicated phase evidence documents. This living ledger intentionally keeps current control state and recent phase boundaries compact.
 
 ---
 
@@ -27,23 +27,28 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 - **P64 — Edit Customer Profile Domain/Form: PARTIAL.** Supported form/update behavior is implemented; unsupported profile capabilities remain explicitly blocked.
 - **P65 — Edit Customer Profile Active/Empty Visuals: PARTIAL.** One shared edit route/form and authoritative cart overlay behavior are implemented; full reference/device certification and missing profile capabilities remain.
 - **P66 — My Addresses Active/Empty Visuals: PARTIAL.** Saved-address list/default/delete, Deliver Here, available cart refresh, active View Cart, and zero-item hiding are implemented. Address-aware delivery quote/reprice remains unavailable.
-- **P67 — Add/Edit Address and Location Permission: PARTIAL.** Shared manual editor, existing-address full-PUT edit, pincode validation, duplicate/default rules, unsaved-change protection, and controlled manual fallbacks are implemented and validated. New-address persistence, pincode/geocode lookup, and native current-location permission/geocode remain deferred because approved executable contracts/integration are not present.
-- **P68 — Payment Methods Active/Empty Visuals: PARTIAL.** Shared Payments route, active/empty cart presentation, payment capability groups, canonical active View Cart behavior, and explicit disabled eligibility boundaries are implemented. Saved token-list data, cart/provider payment eligibility, and COD eligibility are not exposed by the approved mobile contract, so stored instruments and selectable primary methods are not fabricated.
-- **P69 — Payment Method Add/Manage Provider Flow: BLOCKED.** The approved mobile runtime has checkout-scoped payment-order create/read/verify only; it has no tokenized customer method setup/list/delete/set-primary contract, no authoritative primary replacement rule, and no installed/wired native Cashfree provider SDK. No credential-entry or fake local mutation flow was added.
-- **P70 — Coupons/Offers — Empty Cart: BLOCKED.** The branch names Coupons only as a logical module; no executable offers/category/bank-offer/terms/eligibility contract exists, and the current cart model explicitly marks coupon discount as server-contract unavailable. No guessed endpoint, fake offer catalogue, invented T&C, or client-computed savings flow was added.
-- **P71 — Coupons/Offers — Active Cart: BLOCKED.** No approved live-cart coupon discovery/eligibility, apply/remove/replace mutation, outcome taxonomy, or authoritative repriced-cart response is available. No guessed coupon mutation, local shadow pricing, or fabricated applied state was added.
-- **P72 — My Reviews — Empty Cart: BLOCKED.** Guide Reference 31 requires customer review list/summary, pending delivered-item eligibility, and review create/edit/delete behavior. The exact branch exposes no executable customer reviews/readiness/list/summary route surface, so no static/fake review UI or guessed contract was added.
-- **P73 — My Reviews — Active Cart and Review Actions: BLOCKED.** Guide Reference 32 adds synchronized active View Cart behavior to the shared Reviews experience, but the branch still has no executable customer review list/readiness/summary or write/edit/delete contract. The reusable cart capability does not authorize fabricated review data/actions, so runtime source remains unchanged.
+- **P67 — Add/Edit Address and Location Permission: PARTIAL.** Shared manual editor, existing-address full-PUT edit, validation/duplicate/default rules, unsaved-change protection, and controlled fallbacks are implemented. New-address persistence, pincode/geocode lookup, and native current-location integration remain unavailable.
+- **P68 — Payment Methods Active/Empty Visuals: PARTIAL.** Shared Payments route and active/empty visuals are implemented. Saved token-list data and authoritative online/COD eligibility remain unavailable.
+- **P69 — Payment Method Add/Manage Provider Flow: BLOCKED.** No tokenized customer-method setup/list/delete/set-primary contract or wired native Cashfree provider SDK is available.
+- **P70 — Coupons/Offers — Empty Cart: BLOCKED.** No executable offers/category/bank-offer/terms/eligibility contract exists.
+- **P71 — Coupons/Offers — Active Cart: BLOCKED.** No approved apply/remove/replace mutation or authoritative repriced-cart response exists.
+- **P72 — My Reviews — Empty Cart: BLOCKED.** No executable customer review list/readiness/summary/write contract exists.
+- **P73 — My Reviews — Active Cart and Review Actions: BLOCKED.** Canonical active-cart capability exists, but required review contracts/actions remain absent.
+- **P74 — Customer Settings Active/Empty Visuals: IMPLEMENTED / VALIDATION IN PROGRESS.** Shared Settings route, account summary, persisted lightweight preferences, established saved-location selection, notification/cart badges, active/empty cart states, legal/about/support rows, P24 logout, Save Changes, and focused hidden bottom-tab treatment are implemented. P75/P76 child flows remain explicit blockers and were not started.
 
-**Current executed phase:** **P73 — My Reviews — Active Cart and Review Actions — BLOCKED** at exact-contract capability scope.
+**Current executed phase:** **P74 — Customer Settings Active/Empty Visuals — implementation complete; final CI gate in progress**.
 
-**P73 evidence checkpoint commit:** `8ea0f1da2efdef57c20206c354358646b47ef4e1`.
+**P74 mobile implementation head:** `35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62`.
 
-**Next phase in sequence:** **P74 — Customer Settings — Empty Cart — NOT STARTED**.
+**P74 CI:** workflow run `31286064248`, job `93175010142` — **IN PROGRESS** at ledger update. TypeScript strict check and ESLint have passed; remaining Jest/bundle/source-guard steps must finish before this ledger may claim CI success.
+
+**P74 evidence:** `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`.
+
+**Next phase in sequence:** **P75 — Customer Settings Child Flows — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED**.
 
-**Required action:** Stop. Do not pre-implement P74. Wait for explicit user direction.
+**Required action:** Stop after P74. Do not pre-implement P75 without explicit user direction.
 
 ---
 
@@ -61,24 +66,15 @@ Historical detail is preserved under `docs/mobile-ui-rebuild/`. `docs/mobile-ui-
 | P64 | **PARTIAL** | Existing P64 form/domain/API/query implementation on branch | `31276696857` / `93151316827` — SUCCESS as part of P65 integrated state |
 | P65 | **PARTIAL** | `docs/mobile-ui-rebuild/P65_EDIT_CUSTOMER_PROFILE_ACTIVE_EMPTY_VISUALS.md` | `31276696857` / `93151316827` — SUCCESS |
 | P66 | **PARTIAL** | `docs/mobile-ui-rebuild/P66_MY_ADDRESSES_ACTIVE_EMPTY_VISUALS.md` | `31277654687` / `93153771794` — SUCCESS |
-| P67 | **PARTIAL** | `docs/mobile-ui-rebuild/P67_ADD_EDIT_ADDRESS_LOCATION_PERMISSION.md`; validated implementation `fe7a263095a138d546c851908cbec166bd30b8b0` | `31279558033` / `93158570541` — SUCCESS |
-| P68 | **PARTIAL** | `docs/mobile-ui-rebuild/P68_PAYMENT_METHODS_ACTIVE_EMPTY_VISUALS.md`; validated implementation `d044bf7bb545875302eb23d5ba5aa00fcbc18574` | `31281213495` / `93162733549` — SUCCESS |
-| P69 | **BLOCKED** | `docs/mobile-ui-rebuild/P69_PAYMENT_METHOD_ADD_MANAGE_PROVIDER_FLOW.md`; exact contract/provider capability audit | Not triggered — documentation/ledger only; P68 mobile source remains unchanged |
-| P70 | **BLOCKED** | `docs/mobile-ui-rebuild/P70_COUPONS_OFFERS_EMPTY_CART.md`; exact coupons/offers contract capability audit | Not triggered — documentation/ledger only; P68 mobile source remains unchanged |
-| P71 | **BLOCKED** | `docs/mobile-ui-rebuild/P71_COUPONS_OFFERS_ACTIVE_CART.md`; exact active-cart coupon mutation/repricing contract audit | Not triggered — documentation/ledger only; P68 mobile source remains unchanged |
-| P72 | **BLOCKED** | `docs/mobile-ui-rebuild/P72_MY_REVIEWS_EMPTY_CART.md`; exact reviews capability audit | Not triggered — documentation/ledger only; P68 mobile source remains unchanged |
-| P73 | **BLOCKED** | `docs/mobile-ui-rebuild/P73_MY_REVIEWS_ACTIVE_CART.md`; exact active-cart Reviews capability/action audit | Not triggered — documentation/ledger only; P68 mobile source remains unchanged |
-| P74 onward | **NOT STARTED / not accepted** | — | — |
-
-P69 was executed against the exact branch contract. The available payment API creates, reads, and verifies checkout-scoped payment orders only. It does not expose customer tokenized-method setup/list/delete/set-primary mutations or a primary replacement policy, and the mobile package does not include a native Cashfree SDK. Per the no-invented-contract rule, P69 is BLOCKED rather than implemented with guessed routes or credential-entry UI.
-
-P70 was executed against the exact branch contract and guide requirement for server-owned offers/eligibility/terms/savings. The branch contains no concrete coupons/offers OpenAPI/APIM/mobile response contract, while the cart screen model explicitly records coupon discount as `SERVER_CONTRACT_UNAVAILABLE`. Per the same no-invented-contract rule, P70 is BLOCKED rather than implemented with a guessed route/schema, fake offer data, or client-computed discount.
-
-P71 was executed against the active-cart coupon mutation and repricing requirements. The branch still exposes no approved discovery/eligibility, apply/remove/replace mutation, authoritative outcome taxonomy, or canonical repriced-cart payload containing coupon discount and synchronized totals. Per P71's explicit server-authoritative pricing rule, the phase is BLOCKED rather than implemented with local discount math, guessed endpoints, or a shadow applied-coupon state.
-
-P72 was executed against the My Reviews empty-cart requirements in Guide Reference 31. The branch has no executable customer review list/summary, pending delivered-item review eligibility, or create/edit/delete review contract surface to consume. Per P72's explicit acceptance rule, the phase is BLOCKED rather than implemented with fake review rows, invented eligibility, hard-coded aggregates, or guessed review endpoints.
-
-P73 was executed against the My Reviews active-cart and review-action requirements in Guide Reference 32. The existing canonical cart capability can supply the active View Cart state, but the branch still has no executable customer review list/readiness/summary or create/edit/delete contract. Because Reference 32 requires all review controls to have real outcomes and explicitly prohibits invented endpoint URLs, P73 is BLOCKED rather than implemented as a static Reviews screen with a working cart pill but fake review behavior.
+| P67 | **PARTIAL** | `docs/mobile-ui-rebuild/P67_ADD_EDIT_ADDRESS_LOCATION_PERMISSION.md` | `31279558033` / `93158570541` — SUCCESS |
+| P68 | **PARTIAL** | `docs/mobile-ui-rebuild/P68_PAYMENT_METHODS_ACTIVE_EMPTY_VISUALS.md` | `31281213495` / `93162733549` — SUCCESS |
+| P69 | **BLOCKED** | `docs/mobile-ui-rebuild/P69_PAYMENT_METHOD_ADD_MANAGE_PROVIDER_FLOW.md` | Not triggered — docs/ledger only |
+| P70 | **BLOCKED** | `docs/mobile-ui-rebuild/P70_COUPONS_OFFERS_EMPTY_CART.md` | Not triggered — docs/ledger only |
+| P71 | **BLOCKED** | `docs/mobile-ui-rebuild/P71_COUPONS_OFFERS_ACTIVE_CART.md` | Not triggered — docs/ledger only |
+| P72 | **BLOCKED** | `docs/mobile-ui-rebuild/P72_MY_REVIEWS_EMPTY_CART.md` | Not triggered — docs/ledger only |
+| P73 | **BLOCKED** | `docs/mobile-ui-rebuild/P73_MY_REVIEWS_ACTIVE_CART.md` | Not triggered — docs/ledger only |
+| P74 | **IMPLEMENTED / CI IN PROGRESS** | `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`; mobile head `35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62` | `31286064248` / `93175010142` — IN PROGRESS |
+| P75 onward | **NOT STARTED / not accepted** | — | — |
 
 ---
 
@@ -90,260 +86,110 @@ Evidence: `docs/mobile-ui-rebuild/P65_EDIT_CUSTOMER_PROFILE_ACTIVE_EMPTY_VISUALS
 
 ---
 
-## 4. P66 Implemented Boundary
+## 4. P66/P67 Address Boundary
 
-**Guide refs:** 25 and 26.
+P66/P67 provide saved-address list/default/delete, Deliver Here, existing-address full-PUT edit, manual editor validation, duplicate/default rules, dirty-dismissal protection, and controlled manual fallbacks.
 
-P66 provides one shared My Addresses destination with:
-- exact saved-address list parsing;
-- existing full-PUT Set default;
-- destructive Delete confirmation and real DELETE;
-- global Deliver Here selection;
-- cart-address dependency update and real cart snapshot refresh where supported;
-- shared active View Cart and zero-item hiding.
+Still unavailable and not fabricated:
 
-### P66 delivery-quote blocker
-
-The repository cart domain records `DELIVERY_QUOTE_CONTRACT_UNAVAILABLE`. No exact approved address-aware delivery quote/reprice endpoint exists to refresh fee, ETA, and serviceability from My Addresses. P66 therefore remains PARTIAL and does not misuse checkout creation as a quote.
-
-Evidence: `docs/mobile-ui-rebuild/P66_MY_ADDRESSES_ACTIVE_EMPTY_VISUALS.md`.
-
----
-
-## 5. P67 Implemented Boundary
-
-**Phase:** Add/Edit Address and Location Permission.
-
-P67 extends the existing My Addresses architecture rather than creating a parallel address store:
-
-- `CustomerAddressesScreen` exposes Add and Edit actions.
-- `CustomerAddressEditorModal` is the single manual editor for Add/Edit states.
-- The editor covers address label, recipient/contact, address lines, landmark, area, pincode, city, state, and default selection.
-- A pure address-editor domain validates required fields and six-digit pincode format.
-- Duplicate detection normalizes street/area/city/state/pincode and ignores the current address during edit.
-- The first address is forced default at form-domain level.
-- Editing the current default cannot unset it and leave the form in an inconsistent default state.
-- Dirty dismissal requires explicit discard confirmation.
-- Existing-address save uses the repository-established full `PUT /api/v1/customer/addresses/{id}` request shape.
-- The address API exposes one shared full-update helper, which is reused by Set Default.
-- Successful edit invalidates both address-management and saved-location query families.
-- Current-location interaction never dead-ends the form: absent native permission/geocode integration is reported as a controlled fallback while manual entry stays active.
-- Pincode lookup absence never fabricates city/state; both remain manually editable.
-- Add performs validation/duplicate/default planning but refuses to fake persistence when the approved create contract is missing.
-
-### P67 deferred blockers
-
+- `DELIVERY_QUOTE_CONTRACT_UNAVAILABLE` — address-aware fee/ETA/serviceability reprice.
 - `CUSTOMER_ADDRESS_CREATE_CONTRACT_UNAVAILABLE` — new-address persistence.
 - `CUSTOMER_ADDRESS_PINCODE_LOOKUP_UNAVAILABLE` — pincode → city/state/geocode lookup.
 - `CUSTOMER_ADDRESS_CURRENT_LOCATION_UNAVAILABLE` — native current-location permission + geocode integration.
-- P66's `DELIVERY_QUOTE_CONTRACT_UNAVAILABLE` remains inherited for fee/ETA/serviceability refresh.
 
-**P67 status: PARTIAL.** Existing-address edit and the client-side form/rule architecture are validated. Full manual Add persistence and live location/pincode behavior are intentionally deferred until the backend/platform contracts are implemented.
-
-Evidence: `docs/mobile-ui-rebuild/P67_ADD_EDIT_ADDRESS_LOCATION_PERMISSION.md`.
+Evidence:
+- `docs/mobile-ui-rebuild/P66_MY_ADDRESSES_ACTIVE_EMPTY_VISUALS.md`
+- `docs/mobile-ui-rebuild/P67_ADD_EDIT_ADDRESS_LOCATION_PERMISSION.md`
 
 ---
 
-## 6. P68 Implemented Boundary
+## 5. P68 Payment Methods Boundary
 
-**Guide refs:** 27 and 28.  
-**Phase:** Payment Methods Active/Empty Visuals.
+P68 implements the shared Payment Methods destination, active/empty cart behavior, capability grouping, safe disabled states, and canonical cart preservation. It does not fabricate stored instruments or eligibility.
 
-P68 implements the shared Payment Methods destination and its cart-state behavior without crossing into P69 provider-management work:
+Still unavailable:
 
-- `CustomerPaymentMethods` is registered as a typed shared route in the customer stacks.
-- Profile → Payments opens the real destination instead of the previous route blocker.
-- Empty-cart and active-cart presentations derive from the canonical cart domain.
-- Active-cart mode reuses `SharedViewCartOverlay`; zero-item mode hides it through the canonical overlay behavior.
-- Cards, UPI, wallets, net banking, and COD capability groups are visible as reference-capability groups.
-- Payment eligibility is not inferred from cart presence, app foreground return, or provider capability alone.
-- Missing eligibility/token data is rendered as disabled, annotated UI rather than a fake selectable method.
-- Cart snapshot loading/error/retry behavior is supported.
-- The screen participates in the existing customer bottom-nav scroll controller.
-- Existing Cashfree order creation/verification remains the only verified provider handoff boundary; success still requires backend verification.
-- P68 payment-session state is cleared on logout.
-
-### P68 deferred blockers
-
-- `CUSTOMER_PAYMENT_METHOD_LIST_CONTRACT_UNAVAILABLE` — no authoritative saved tokenized payment-method list for masked UPI/cards/wallet instruments.
-- `CUSTOMER_PAYMENT_ELIGIBILITY_CONTRACT_UNAVAILABLE` — no authoritative cart/provider eligibility contract for selectable online methods.
-- `CUSTOMER_COD_ELIGIBILITY_CONTRACT_UNAVAILABLE` — no authoritative COD eligibility for current cart/address/order context.
-
-**P68 status: PARTIAL.** Active/empty visuals, capability grouping, route integration, canonical View Cart behavior, and safe blocker states are implemented and validated. Real stored instruments and primary method selection cannot be truthfully enabled until the missing contracts above exist.
+- `CUSTOMER_PAYMENT_METHOD_LIST_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_PAYMENT_ELIGIBILITY_CONTRACT_UNAVAILABLE`
+- `CUSTOMER_COD_ELIGIBILITY_CONTRACT_UNAVAILABLE`
 
 Evidence: `docs/mobile-ui-rebuild/P68_PAYMENT_METHODS_ACTIVE_EMPTY_VISUALS.md`.
 
 ---
 
-## 7. P69 Executed Boundary
+## 6. P69–P73 Contract-Blocked Boundaries
 
-**Phase:** Payment Method Add/Manage Provider Flow.
+P69 through P73 were executed as exact-contract audits. Runtime UI/actions were not fabricated where required production contracts were absent:
 
-`phases.md` requires exact tokenized method setup/manage/delete/set-primary contracts/provider flow. The current branch does not contain that contract or an executable provider SDK boundary.
+- P69: tokenized payment method provider setup/manage/delete/set-primary and native provider SDK are missing.
+- P70: empty-cart offers/eligibility/terms contract is missing.
+- P71: active-cart coupon apply/remove/replace/repricing contract is missing.
+- P72: customer review list/summary/readiness/write contract is missing.
+- P73: review active-cart/action requirements inherit the P72 contract blockers; canonical View Cart alone is insufficient.
 
-Verified P69 boundary:
-
-- `paymentApi.ts` exposes checkout-scoped payment-order create/read/verify only.
-- Those checkout routes are not repurposed as saved-method enrollment or management routes.
-- `paymentHandoffCoordinator.ts` explicitly reports `tokenizedPaymentMethodContractSupported: false` and `nativeCashfreeLaunchSupported: false`.
-- `PAYMENT_METHOD_TOKEN_CONTRACT_UNAVAILABLE` and `CASHFREE_NATIVE_PROVIDER_SDK_UNAVAILABLE` remain authoritative runtime blockers.
-- `apps/mobile/package.json` contains no Cashfree native/React Native provider SDK dependency.
-- No backend/product rule exists for replacing a primary tokenized method before deletion.
-- No raw PAN/CVV/UPI PIN/net-banking credentials are collected, persisted, or logged.
-
-**P69 status: BLOCKED.** There is no truthful production mutation to implement until the tokenized-method contract and provider SDK/integration are supplied. Fabricating local saved methods, guessed REST paths, or app-owned credential fields would violate both the phase contract and the master security boundary.
-
-Evidence: `docs/mobile-ui-rebuild/P69_PAYMENT_METHOD_ADD_MANAGE_PROVIDER_FLOW.md`.
+Evidence:
+- `docs/mobile-ui-rebuild/P69_PAYMENT_METHOD_ADD_MANAGE_PROVIDER_FLOW.md`
+- `docs/mobile-ui-rebuild/P70_COUPONS_OFFERS_EMPTY_CART.md`
+- `docs/mobile-ui-rebuild/P71_COUPONS_OFFERS_ACTIVE_CART.md`
+- `docs/mobile-ui-rebuild/P72_MY_REVIEWS_EMPTY_CART.md`
+- `docs/mobile-ui-rebuild/P73_MY_REVIEWS_ACTIVE_CART.md`
 
 ---
 
-## 8. P70 Executed Boundary
+## 7. P74 Implemented Boundary
 
-**Guide ref:** 29.  
-**Phase:** Coupons/Offers — Empty Cart.
+**Guide refs:** 33 and 34.  
+**Phase:** Customer Settings Active/Empty Visuals.
 
-P70 requires a server-backed empty-cart offers experience: coupon input, offers/categories, T&C/details, and server-authoritative eligibility/savings. The current branch does not contain the exact data contract needed to render or validate those controls truthfully.
+P74 implements one shared Settings route without crossing into P75 child flows:
 
-Verified P70 boundary:
+- typed `CustomerSettings` route in the Profile stack;
+- explicit Settings entry point from Profile;
+- account summary from the approved customer profile query;
+- current saved/browsing location from the established customer-shell mechanism;
+- per-identity lightweight language, notification, and appearance preference persistence using the already-installed AsyncStorage dependency;
+- notification bell/unread badge from the existing notification state;
+- empty-cart top action with no cart badge;
+- active-cart top action with count from the canonical cart selector and navigation to the existing `CustomerCart` route;
+- Settings-focused bottom-tab hiding/restoration;
+- Terms & Conditions, Privacy Policy, About Craves, Get Support, and Logout rows;
+- real P24 logout through `completeLogout`;
+- working Save Changes for the P74-owned local preference values.
 
-- `shared/contracts/openapi-notes.md` names `Coupons` only as a logical module; it defines no concrete route/schema.
-- `openapi/` contains no coupons/offers OpenAPI file.
-- `services/` contains no dedicated coupon/promotion service contract.
-- `infra/apim/` contains no coupons/offers API surface in the inspected branch.
-- the mobile feature tree contains no existing coupons/offers typed API/domain layer to extend.
-- `cartScreenModel.ts` marks `couponDiscount` as `SERVER_CONTRACT_UNAVAILABLE`.
-- `cartTypes.ts` models coupon dependency status only and exposes no authoritative coupon identity, eligibility, terms, category, bank-offer, or savings payload.
+### P74 explicit child-flow boundaries
 
-**P70 status: BLOCKED.** A production `CustomerCouponsOffers` screen would require invented offer records, T&C, eligibility fields, or endpoint schemas, so no static/fake route was registered. The canonical empty-cart View Cart rule remains unchanged, and P71 active-cart mutation behavior is untouched.
+P74 does **not** fabricate or pre-implement P75/P76 behavior. Deeper notification preferences, privacy/security/password-change, legal/content routing, app-wide language/theme application, Share/Referral/Subscription destinations, and Help/Support child flows remain explicit unavailable-child states until their owning phases and exact contracts are authorized.
 
-Evidence: `docs/mobile-ui-rebuild/P70_COUPONS_OFFERS_EMPTY_CART.md`.
+**P74 implementation status:** complete at code level. Final phase validation remains pending until workflow run `31286064248` finishes.
 
----
-
-## 8.1. P71 Executed Boundary
-
-**Guide ref:** 30.  
-**Phase:** Coupons/Offers — Active Cart.
-
-P71 requires coupon/offer apply, applied, replace, remove, unavailable/not-eligible, and failure behavior against the live cart. Every mutation must use an approved backend contract, and the resulting server-recalculated cart/pricing response must immediately remain the source of truth for View Cart and Checkout.
-
-Verified P71 boundary:
-
-- no approved active-cart offer discovery/eligibility route or typed payload is present;
-- no approved apply mutation schema is present;
-- no approved remove mutation schema is present;
-- no approved replace semantics or mutation schema is present;
-- no authoritative applied/unavailable/expired/not-eligible/conflict/retryable outcome taxonomy is present;
-- no canonical coupon mutation response carrying authoritative coupon discount plus repriced View Cart/Checkout totals is present;
-- `cartScreenModel.ts` continues to expose coupon discount as server-contract unavailable rather than client-computed pricing;
-- the exact branch tree contains no existing mobile coupon/offer API/domain implementation to extend.
-
-**P71 status: BLOCKED.** Implementing the reference flow now would require guessed endpoints/request fields, invented eligibility/outcome rules, fabricated applied state, or client-side discount/total math. Those are explicitly prohibited by P71 and the project governance rules, so runtime product code remains unchanged.
-
-Evidence: `docs/mobile-ui-rebuild/P71_COUPONS_OFFERS_ACTIVE_CART.md`.
+Evidence: `docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md`.
 
 ---
 
-## 8.2. P72 Executed Boundary
-
-**Guide ref:** 31.  
-**Phase:** My Reviews — Empty Cart.
-
-P72 requires the shared My Reviews experience in the no-active-cart reference state. Review list/summary, pending-review eligibility, and review mutations are server-owned capabilities; delivered-order eligibility and duplicate-review policy must not be inferred locally.
-
-Verified P72 boundary:
-
-- `apps/api/src/routes/` contains only `admin.ts`, `auth.ts`, `catalog.ts`, and `health.ts` at the audited branch baseline;
-- no approved authenticated customer reviews list/pagination route or typed payload is present;
-- no approved pending-review or delivered-order-item review-readiness capability is present;
-- no approved customer review summary/rating-distribution capability is present;
-- no approved create/edit/delete review mutation contract is present;
-- no approved server edit-window/moderation/duplicate-review outcome model is present;
-- no approved review-media upload contract is present for this customer flow;
-- the current mobile feature tree has no canonical My Reviews API/domain implementation to extend.
-
-**P72 status: BLOCKED.** Implementing Guide Reference 31 now would require fake review rows/summary values, invented pending eligibility, guessed endpoint paths/schemas, or local edit/delete policy. P72 explicitly requires a BLOCKED result instead of fabricated data when the list/edit contract is missing, so runtime product code remains unchanged.
-
-Evidence: `docs/mobile-ui-rebuild/P72_MY_REVIEWS_EMPTY_CART.md`.
-
----
-
-## 8.3. P73 Executed Boundary
-
-**Guide ref:** 32.  
-**Phase:** My Reviews — Active Cart and Review Actions.
-
-P73 requires the same shared Reviews state as P72, plus the active-cart composition and real review interactions. Reference 32 specifically requires a synchronized active View Cart pill, preservation of review drafts/tab state, and real review actions with server-backed outcomes. The review editor is immersive and must hide bottom navigation/cart controls while open.
-
-Verified P73 boundary:
-
-- canonical active View Cart behavior already exists and is reusable; it is not the blocker;
-- `apps/api/src/routes/` still exposes no authenticated customer reviews route;
-- no approved review list/pagination, pending delivered-item readiness, or rating-summary payload is present;
-- no approved write/edit/delete review mutation contract or authoritative outcome taxonomy is present;
-- no approved duplicate-review/edit-window/moderation policy contract is present;
-- no approved review-media upload capability is present for this flow;
-- `apps/mobile/src/features/` still has no canonical Reviews API/domain/feature implementation to extend.
-
-**P73 status: BLOCKED.** A cart-only wrapper around static or fake review content would not satisfy Reference 32 because every visible review control must have a real handler and mutation/navigation outcome. The phase is therefore closed as contract-blocked with no runtime source changes, no fake review rows/actions, and no guessed endpoints.
-
-Evidence: `docs/mobile-ui-rebuild/P73_MY_REVIEWS_ACTIVE_CART.md`.
-
----
-
-## 9. P68 Changed/Accepted Files
-
-P68 implementation ownership includes:
-
-- `apps/mobile/src/features/payment/domain/paymentMethodTypes.ts`
-- `apps/mobile/src/features/payment/state/paymentMethodSlice.ts`
-- `apps/mobile/src/features/payment/screens/CustomerPaymentMethodsScreen.tsx`
-- `apps/mobile/src/features/payment/screens/CustomerPaymentMethodsRouteScreen.tsx`
-- `apps/mobile/src/features/payment/paymentMethods.test.ts`
-- `apps/mobile/src/app/store/store.ts`
-- `apps/mobile/src/app/navigation/types.ts`
-- `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
-- `apps/mobile/src/features/customerProfile/presentation/customerProfileUiModel.ts`
-- `apps/mobile/src/features/customerProfile/screens/CustomerProfileScreen.tsx`
-- `apps/mobile/src/features/customerProfile/customerProfileUiModel.test.ts`
-- `apps/mobile/src/features/auth/state/logoutCoordinator.ts`
-- `docs/mobile-ui-rebuild/P68_PAYMENT_METHODS_ACTIVE_EMPTY_VISUALS.md`
-- `build.md`
-
-No backend, APIM, OpenAPI, database, infrastructure, Android native source, Gradle/APK, or AAB configuration was intentionally changed for P68.
-
----
-
-## 10. Validation State
+## 8. Validation State
 
 Implementation workflow: `.github/workflows/mobile-phase1-ci.yml`.
 
-- Latest mobile-source validation remains P68 GitHub Actions run ID `31281213495`, job ID `93162733549` — **SUCCESS**.
-- Validated P68 implementation head: `d044bf7bb545875302eb23d5ba5aa00fcbc18574`.
-- Dependency install, TypeScript strict check, ESLint zero-warning gate, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed on that unchanged mobile implementation.
-- P69 changes only documentation/ledger because the production flow is contract/provider blocked.
-- P70 changes only documentation/ledger because the server-backed offers/eligibility/terms contract is absent.
-- P71 changes only documentation/ledger because the active-cart coupon mutation/repricing contract is absent.
-- P72 changes only documentation/ledger because the customer reviews list/summary/readiness/mutation contracts are absent.
-- P73 changes only documentation/ledger because the active-cart Reviews phase still lacks the customer review list/readiness/summary/mutation contracts required for real review actions.
-- The workflow path filter runs for `apps/mobile/**` or workflow-file changes, so docs-only P69/P70/P71/P72/P73 checkpoints do not trigger a new mobile CI run.
-- No Gradle/APK packaging was performed, consistent with the implementation-phase policy.
+- Latest previously completed mobile-source validation: P68 run `31281213495`, job `93162733549` — **SUCCESS**.
+- P69/P70/P71/P72/P73 were docs/ledger-only checkpoints and did not trigger the mobile path-filtered workflow.
+- P74 mobile implementation head `35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62` triggered run `31286064248`, job `93175010142`.
+- At this ledger update, dependency install, TypeScript strict check, and ESLint are **SUCCESS**; Jest is **IN PROGRESS**; bundle and backend/APIM/infrastructure source guard are pending.
+- This ledger intentionally does not claim P74 CI success before the run concludes.
+- No Gradle/APK packaging was performed, consistent with implementation-phase policy.
 
 ---
 
-## 11. Handoff
+## 9. Handoff
 
 ```text
 Current branch: mobile-ui-rebuild-from-scratch
-Current executed phase: P73 — My Reviews — Active Cart and Review Actions — BLOCKED
-P73 evidence checkpoint commit: 8ea0f1da2efdef57c20206c354358646b47ef4e1
-P73 evidence: docs/mobile-ui-rebuild/P73_MY_REVIEWS_ACTIVE_CART.md
-P73 reusable capability: canonical active View Cart behavior already exists and is not the blocker
-P73 verified contract boundary: no approved customer review list/summary, pending delivered-item review eligibility, create/edit/delete mutation, edit-window/moderation/duplicate-review, or review-media contract is present
-P73 backend evidence: apps/api/src/routes contains admin.ts, auth.ts, catalog.ts, and health.ts only at the audited baseline
-P73 no-fabrication decision: no fake review rows/summary, invented eligibility, guessed REST path/schema, placeholder editor, no-op review action, or local review mutation policy
-Mobile production source changed by P73: none
-Inherited blockers: retain P72/P71/P70/P69/P68 and all earlier phase blockers not explicitly superseded
-Next phase: P74 — Customer Settings — Empty Cart — NOT STARTED
+Current executed phase: P74 — Customer Settings Active/Empty Visuals — IMPLEMENTED / CI IN PROGRESS
+P74 mobile implementation head: 35f27dfb3aa7c4f65e98a1f23ac7bf76bcca2f62
+P74 evidence: docs/mobile-ui-rebuild/P74_CUSTOMER_SETTINGS_ACTIVE_EMPTY_VISUALS.md
+P74 CI: run 31286064248 / job 93175010142 — in progress at ledger update
+P74 implemented: typed Settings route; Profile entry point; account summary; persisted local UI preferences; established saved-location selector; notification badge; active/empty cart header states; real cart navigation; legal/about/support rows; P24 logout; Save Changes; bottom-tab hidden while Settings is focused
+P74 no-fabrication boundary: P75 settings child flows and P76/P77 support flows are not implemented
+Inherited blockers: retain P69–P73 and all earlier phase blockers not explicitly superseded
+Next phase: P75 — Customer Settings Child Flows — NOT STARTED
 Next phase authorization: NONE AUTHORIZED — waiting for user
 ```

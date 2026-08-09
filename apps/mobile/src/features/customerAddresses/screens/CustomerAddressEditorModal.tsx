@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 import {toAppApiError} from '../../../core/http/apiError';
+import {resolveReducedMotionAnimation} from '../../../design/motion';
+import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {
   borderWidth,
   colors,
@@ -77,6 +79,7 @@ export function CustomerAddressEditorModal({
   const [formError, setFormError] = useState<string | null>(null);
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const updateMutation = useUpdateCustomerAddressMutation();
+  const reduceMotionEnabled = useReducedMotionPreference();
 
   const defaultLocked =
     (mode === 'add' && addresses.length === 0) ||
@@ -166,7 +169,10 @@ export function CustomerAddressEditorModal({
 
   return (
     <Modal
-      animationType="slide"
+      animationType={resolveReducedMotionAnimation(
+        'slide' as const,
+        reduceMotionEnabled,
+      )}
       onRequestClose={requestClose}
       presentationStyle="fullScreen"
       visible>

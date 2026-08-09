@@ -13,6 +13,8 @@ import {
   type NativeStackNavigationProp,
 } from '@react-navigation/native-stack';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {resolveReducedMotionAnimation} from '../../design/motion';
+import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefAnalyticsScreen} from '../../features/chefAnalytics/screens/ChefAnalyticsScreen';
@@ -106,10 +108,19 @@ const tabScreenOptions = {
   },
 } as const;
 
-const stackScreenOptions = {
-  headerShown: false,
-  animation: 'fade' as const,
-};
+function useChefStackScreenOptions() {
+  const reduceMotionEnabled = useReducedMotionPreference();
+  return React.useMemo(
+    () => ({
+      headerShown: false,
+      animation: resolveReducedMotionAnimation(
+        'fade' as const,
+        reduceMotionEnabled,
+      ),
+    }),
+    [reduceMotionEnabled],
+  );
+}
 
 type ChefMenuNavigation = CompositeNavigationProp<
   BottomTabNavigationProp<ChefTabParamList, 'Menu'>,
@@ -135,6 +146,7 @@ function ChefMenuTabScreen() {
 }
 
 function ChefOrdersNavigator() {
+  const stackScreenOptions = useChefStackScreenOptions();
   return (
     <OrdersStack.Navigator
       initialRouteName="ChefOrdersNew"
@@ -154,6 +166,7 @@ function ChefOrdersNavigator() {
 }
 
 function ChefProfileNavigator() {
+  const stackScreenOptions = useChefStackScreenOptions();
   return (
     <ChefEditProfileDraftProvider>
       <ProfileStack.Navigator
@@ -252,6 +265,7 @@ function ChefTabsNavigator() {
 }
 
 function ChefProductNavigator() {
+  const stackScreenOptions = useChefStackScreenOptions();
   return (
     <ChefOperationalProvider>
       <Stack.Navigator initialRouteName="ChefTabs" screenOptions={stackScreenOptions}>

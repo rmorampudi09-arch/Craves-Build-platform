@@ -8,16 +8,23 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NavigationProp} from '@react-navigation/native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
 import type {
   CustomerCartStackParamList,
   CustomerTabParamList,
 } from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
+import {
+  getBottomActionPadding,
+  shouldStackCriticalActions,
+} from '../../../design/responsive';
 import {
   colors,
   elevation,
@@ -244,6 +251,8 @@ function BillSummary({model}: {model: CartScreenModel}) {
 export function CustomerCartScreen() {
   const navigation = useNavigation<NavigationProp<CustomerCartStackParamList>>();
   const dispatch = useAppDispatch();
+  const {fontScale, width} = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const model = useAppSelector(selectCartScreenModel);
   const snapshotStatus = useAppSelector(state => state.cart.snapshotStatus);
   const snapshotErrorCode = useAppSelector(state => state.cart.snapshotErrorCode);
@@ -253,6 +262,13 @@ export function CustomerCartScreen() {
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [interactionError, setInteractionError] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [checkoutBarHeight, setCheckoutBarHeight] = useState(0);
+  const stackCheckoutActions = shouldStackCriticalActions(width, fontScale);
+  const checkoutBottomPadding = getBottomActionPadding(insets.bottom);
+  const checkoutListClearance =
+    checkoutBarHeight > 0
+      ? checkoutBarHeight + spacing.xl
+      : CART_FOOTER_CLEARANCE + insets.bottom;
 
   const sections = useMemo(
     () => groupCartItemsByKitchen(model?.items ?? []),
@@ -347,6 +363,13 @@ export function CustomerCartScreen() {
       getCartCheckoutStatusCopy(model.checkout, model.billSummary.complete),
     );
   }, [model]);
+
+  const handleCheckoutBarLayout = useCallback((event: LayoutChangeEvent) => {
+    const measuredHeight = Math.ceil(event.nativeEvent.layout.height);
+    setCheckoutBarHeight(current =>
+      current === measuredHeight ? current : measuredHeight,
+    );
+  }, []);
 
   const storedRefreshError =
     snapshotStatus === 'ERROR'
@@ -494,6 +517,7 @@ export function CustomerCartScreen() {
       <SectionList<CartScreenItem, CartKitchenSectionModel>
         sections={sections}
         keyExtractor={item => item.lineId}
+        keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
@@ -527,7 +551,7 @@ export function CustomerCartScreen() {
         stickySectionHeadersEnabled={false}
         contentContainerStyle={[
           styles.listContent,
-          model.items.length > 0 && styles.listContentWithCheckout,
+          model.items.length > 0 && {paddingBottom: checkoutListClearance},
         ]}
       />
     );
@@ -546,8 +570,18 @@ export function CustomerCartScreen() {
       <View style={styles.content}>{content}</View>
 
       {model && model.items.length > 0 ? (
-        <View style={styles.checkoutBar}>
-          <View style={styles.checkoutCopy}>
+        <View
+          onLayout={handleCheckoutBarLayout}
+          style={[
+            styles.checkoutBar,
+            {paddingBottom: checkoutBottomPadding},
+            stackCheckoutActions && styles.checkoutBarStacked,
+          ]}>
+          <View
+            style={[
+              styles.checkoutCopy,
+              stackCheckoutActions && styles.checkoutCopyStacked,
+            ]}>
             <Text style={styles.checkoutEyebrow}>Payable total</Text>
             <Text style={styles.checkoutTotal}>
               {model.billSummary.grandTotal.amount
@@ -565,7 +599,10 @@ export function CustomerCartScreen() {
             accessibilityHint={checkoutEnabled ? undefined : checkoutStatus}
             disabled={!checkoutEnabled}
             onPress={handleCheckout}
-            style={styles.checkoutButton}
+            style={[
+              styles.checkoutButton,
+              stackCheckoutActions && styles.checkoutButtonStacked,
+            ]}
           />
         </View>
       ) : null}
@@ -598,9 +635,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: spacing.xxl,
     backgroundColor: colors.surfaceBase,
-  },
-  listContentWithCheckout: {
-    paddingBottom: CART_FOOTER_CLEARANCE,
   },
   titleRow: {
     flexDirection: 'row',
@@ -906,15 +940,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.white,
     ...elevation.card,
   },
+  checkoutBarStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
   checkoutCopy: {
     minWidth: 112,
     flex: 1,
+  },
+  checkoutCopyStacked: {
+    flex: 0,
+    minWidth: 0,
+    width: '100%',
   },
   checkoutEyebrow: {
     color: colors.textSecondary,
@@ -934,5 +977,9 @@ const styles = StyleSheet.create({
   },
   checkoutButton: {
     flex: 1.6,
+  },
+  checkoutButtonStacked: {
+    flex: 0,
+    width: '100%',
   },
 });

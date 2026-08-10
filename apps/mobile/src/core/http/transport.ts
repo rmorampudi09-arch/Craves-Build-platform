@@ -1,5 +1,9 @@
-import axios, {type AxiosInstance} from 'axios';
+import axios, {type AxiosError, type AxiosInstance} from 'axios';
 import {getRuntimeConfig} from '../config/runtimeConfig';
+import {
+  beginNetworkObservation,
+  endNetworkObservation,
+} from '../observability/networkObservability';
 import {createCorrelationId} from './correlation';
 import {toAppApiError} from './apiError';
 import {applyRequestMetadata} from './requestMetadata';
@@ -13,13 +17,30 @@ export function createCoreAxiosClient(
 ): AxiosInstance {
   const client = axios.create({timeout: httpPolicy.defaultTimeoutMs});
 
-  client.interceptors.request.use(config =>
-    applyRequestMetadata(config, {
+  client.interceptors.request.use(config => {
+    const observedConfig = applyRequestMetadata(config, {
       baseUrl: getRuntimeConfig().apiBaseUrl,
       correlationId: createCorrelationId(),
       injectBearer: Boolean(accessTokenProvider),
       accessToken: accessTokenProvider?.(),
-    }),
+    });
+    beginNetworkObservation(observedConfig);
+    return observedConfig;
+  });
+
+  client.interceptors.response.use(
+    response => {
+      endNetworkObservation(response.config, 'success', response.status);
+      return response;
+    },
+    (error: AxiosError<unknown>) => {
+      endNetworkObservation(
+        error.config,
+        error.code === 'ERR_CANCELED' ? 'cancelled' : 'failure',
+        error.response?.status,
+      );
+      return Promise.reject(error);
+    },
   );
 
   return client;

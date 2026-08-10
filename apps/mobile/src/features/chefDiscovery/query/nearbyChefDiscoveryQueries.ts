@@ -13,6 +13,7 @@ import {
 
 const CUSTOMER_ROLE = 'CUSTOMER' as const;
 const NEARBY_CHEF_DISCOVERY_DOMAIN = 'customer-nearby-chef-discovery';
+export const NEARBY_CHEF_DISCOVERY_MAX_RETAINED_PAGES = 10;
 
 export const nearbyChefDiscoveryQueryPrefix = [
   'craves',
@@ -91,6 +92,7 @@ export function useNearbyChefDiscoveryQuery(
     },
     initialPageParam: 0,
     getNextPageParam: getNextNearbyChefDiscoveryPage,
+    maxPages: NEARBY_CHEF_DISCOVERY_MAX_RETAINED_PAGES,
     enabled: queryEnabled,
     staleTime: 5 * 60_000,
   });

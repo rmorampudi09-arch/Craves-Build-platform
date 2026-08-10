@@ -13,6 +13,7 @@ import {
 
 const CUSTOMER_ROLE = 'CUSTOMER' as const;
 const HOME_NEARBY_DISHES_DOMAIN = 'customer-home-nearby-dishes';
+export const HOME_FEED_MAX_RETAINED_PAGES = 10;
 export const customerHomeFeedQueryPrefix = [
   'craves',
   'v1',
@@ -124,6 +125,7 @@ export function useHomeNearbyDishesQuery(
     },
     initialPageParam: 0,
     getNextPageParam: getNextHomeFeedPage,
+    maxPages: HOME_FEED_MAX_RETAINED_PAGES,
     enabled: queryEnabled,
     staleTime: 5 * 60_000,
   });

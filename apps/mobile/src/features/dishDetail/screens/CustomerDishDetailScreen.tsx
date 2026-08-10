@@ -1,6 +1,7 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Image,
   Pressable,
   RefreshControl,
@@ -111,7 +112,7 @@ export function CustomerDishDetailScreen() {
   const [revalidating, setRevalidating] = useState(false);
   const [purchaseMessage, setPurchaseMessage] = useState<string | null>(null);
   const [interactionNotice, setInteractionNotice] = useState<string | null>(null);
-  const galleryRef = useRef<ScrollView>(null);
+  const galleryRef = useRef<FlatList<CustomerDishDetailImage>>(null);
   const galleryWidth = Math.max(1, width);
   const stackPurchaseActions = shouldStackCriticalActions(width, fontScale);
 
@@ -136,8 +137,15 @@ export function CustomerDishDetailScreen() {
     setDescriptionExpanded(false);
     setPurchaseMessage(null);
     setInteractionNotice(null);
-    galleryRef.current?.scrollTo({x: 0, animated: false});
+    galleryRef.current?.scrollToOffset({offset: 0, animated: false});
   }, [route.params.menuItemId]);
+
+  useEffect(() => {
+    const nextImageUrl = dish?.images[galleryIndex + 1]?.url;
+    if (nextImageUrl) {
+      Image.prefetch(nextImageUrl).catch(() => undefined);
+    }
+  }, [dish?.images, galleryIndex]);
 
   const handleGalleryScrollEnd = (
     event: NativeSyntheticEvent<NativeScrollEvent>,
@@ -152,7 +160,10 @@ export function CustomerDishDetailScreen() {
 
   const selectGalleryImage = (index: number) => {
     setGalleryIndex(index);
-    galleryRef.current?.scrollTo({x: index * galleryWidth, animated: true});
+    galleryRef.current?.scrollToOffset({
+      offset: index * galleryWidth,
+      animated: true,
+    });
   };
 
   const handleShare = async () => {
@@ -363,31 +374,43 @@ export function CustomerDishDetailScreen() {
           contentContainerStyle={styles.scrollContent}>
           {dish.images.length > 0 ? (
             <View>
-              <ScrollView
+              <FlatList
                 ref={galleryRef}
+                data={dish.images}
+                getItemLayout={(_, index) => ({
+                  length: galleryWidth,
+                  offset: galleryWidth * index,
+                  index,
+                })}
                 horizontal
-                pagingEnabled
+                initialNumToRender={1}
+                keyExtractor={image => image.id}
+                maxToRenderPerBatch={2}
                 onMomentumScrollEnd={handleGalleryScrollEnd}
-                showsHorizontalScrollIndicator={false}>
-                {dish.images.map((image: CustomerDishDetailImage, index) => (
+                pagingEnabled
+                renderItem={({item: image, index}) => (
                   <Image
-                    key={image.id}
                     accessibilityIgnoresInvertColors
                     accessibilityLabel={`${dish.itemName} image ${index + 1}`}
                     source={{uri: image.url}}
+                    resizeMethod="resize"
                     resizeMode="cover"
                     style={[styles.heroImage, {width: galleryWidth}]}
                   />
-                ))}
-              </ScrollView>
+                )}
+                showsHorizontalScrollIndicator={false}
+                windowSize={3}
+              />
               {dish.images.length > 1 ? (
-                <ScrollView
-                  horizontal
+                <FlatList
                   contentContainerStyle={styles.thumbnailRow}
-                  showsHorizontalScrollIndicator={false}>
-                  {dish.images.map((image, index) => (
+                  data={dish.images}
+                  horizontal
+                  initialNumToRender={6}
+                  keyExtractor={image => image.id}
+                  maxToRenderPerBatch={6}
+                  renderItem={({item: image, index}) => (
                     <Pressable
-                      key={image.id}
                       accessibilityLabel={`Show image ${index + 1}`}
                       accessibilityRole="button"
                       accessibilityState={{selected: galleryIndex === index}}
@@ -399,12 +422,15 @@ export function CustomerDishDetailScreen() {
                       <Image
                         accessibilityIgnoresInvertColors
                         source={{uri: image.url}}
+                        resizeMethod="resize"
                         resizeMode="cover"
                         style={styles.thumbnail}
                       />
                     </Pressable>
-                  ))}
-                </ScrollView>
+                  )}
+                  showsHorizontalScrollIndicator={false}
+                  windowSize={5}
+                />
               ) : null}
             </View>
           ) : (

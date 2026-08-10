@@ -4,6 +4,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   View,
@@ -19,7 +20,6 @@ import type {CustomerProfileStackParamList} from '../../../app/navigation/types'
 import {
   borderWidth,
   colors,
-  elevation,
   fontWeight,
   iconSize,
   radius,
@@ -53,6 +53,11 @@ type NotificationsNavigation = NativeStackNavigationProp<
   CustomerProfileStackParamList,
   'CustomerNotifications'
 >;
+
+type NotificationSection = {
+  title: 'Today' | 'Earlier';
+  data: CustomerNotice[];
+};
 
 function NotificationSkeleton() {
   return (
@@ -134,6 +139,10 @@ export function CustomerNotificationsScreen() {
     [notices, selectedCategory],
   );
   const groups = useMemo(() => groupCustomerNotifications(filtered), [filtered]);
+  const sections = useMemo<NotificationSection[]>(
+    () => groups.map(group => ({title: group.title, data: group.notices})),
+    [groups],
+  );
   const unreadCount = unreadNoticeCount(notices);
 
   const refresh = useCallback(() => {
@@ -207,7 +216,7 @@ export function CustomerNotificationsScreen() {
     [markRead, navigation],
   );
 
-  const body = (() => {
+  const listEmpty = (() => {
     if (notificationsQuery.sessionRequired) {
       return (
         <TerminalState
@@ -239,58 +248,45 @@ export function CustomerNotificationsScreen() {
         />
       );
     }
-
-    return (
-      <>
-        <ScrollView
-          contentContainerStyle={styles.chips}
-          horizontal
-          showsHorizontalScrollIndicator={false}>
-          {CUSTOMER_NOTIFICATION_CATEGORIES.map(category => {
-            const selected = selectedCategory === category.id;
-            return (
-              <Pressable
-                accessibilityLabel={`${category.label}, ${counts[category.id]}`}
-                accessibilityRole="button"
-                accessibilityState={{selected}}
-                key={category.id}
-                onPress={() => setSelectedCategory(category.id)}
-                style={[styles.chip, selected && styles.chipSelected]}>
-                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                  {category.label} {counts[category.id]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        {filtered.length === 0 ? (
-          <View style={styles.emptyCategoryCard}>
-            <Text style={styles.emptyCategoryTitle}>Nothing in this category</Text>
-            <Text style={styles.emptyCategoryCopy}>Try another notification category.</Text>
-          </View>
-        ) : (
-          groups.map(group => (
-            <View key={group.title} style={styles.group}>
-              <Text style={styles.groupTitle}>{group.title}</Text>
-              <View style={styles.groupCard}>
-                {group.notices.map((notice, index) => (
-                  <React.Fragment key={notice.id}>
-                    {index > 0 ? <View style={styles.divider} /> : null}
-                    <NotificationRow notice={notice} onPress={() => openNotice(notice)} />
-                  </React.Fragment>
-                ))}
-              </View>
-            </View>
-          ))
-        )}
-
-        {notices.length === CUSTOMER_NOTIFICATION_LIMIT ? (
-          <Text style={styles.boundaryCopy}>Older notifications may not be shown yet.</Text>
-        ) : null}
-      </>
-    );
+    if (filtered.length === 0) {
+      return (
+        <View style={styles.emptyCategoryCard}>
+          <Text style={styles.emptyCategoryTitle}>Nothing in this category</Text>
+          <Text style={styles.emptyCategoryCopy}>Try another notification category.</Text>
+        </View>
+      );
+    }
+    return null;
   })();
+
+  const categoryChips = notices.length > 0 ? (
+    <ScrollView
+      contentContainerStyle={styles.chips}
+      horizontal
+      showsHorizontalScrollIndicator={false}>
+      {CUSTOMER_NOTIFICATION_CATEGORIES.map(category => {
+        const selected = selectedCategory === category.id;
+        return (
+          <Pressable
+            accessibilityLabel={`${category.label}, ${counts[category.id]}`}
+            accessibilityRole="button"
+            accessibilityState={{selected}}
+            key={category.id}
+            onPress={() => setSelectedCategory(category.id)}
+            style={[styles.chip, selected && styles.chipSelected]}>
+            <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+              {category.label} {counts[category.id]}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  ) : null;
+
+  const showLoadedNotifications =
+    !notificationsQuery.sessionRequired &&
+    !notificationsQuery.isPending &&
+    !notificationsQuery.isError;
 
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-notifications">
@@ -320,8 +316,18 @@ export function CustomerNotificationsScreen() {
         {unreadCount > 0 ? (
           <Text style={styles.markAllReason}>Mark all is temporarily unavailable.</Text>
         ) : null}
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
+        <SectionList
+          contentContainerStyle={styles.listContent}
+          initialNumToRender={12}
+          keyExtractor={notice => notice.id}
+          ListEmptyComponent={listEmpty}
+          ListFooterComponent={
+            showLoadedNotifications && notices.length === CUSTOMER_NOTIFICATION_LIMIT ? (
+              <Text style={styles.boundaryCopy}>Older notifications may not be shown yet.</Text>
+            ) : null
+          }
+          ListHeaderComponent={showLoadedNotifications ? categoryChips : null}
+          maxToRenderPerBatch={10}
           onScroll={bottomNavScroll.onScroll}
           refreshControl={
             notificationsQuery.sessionRequired ? undefined : (
@@ -333,10 +339,30 @@ export function CustomerNotificationsScreen() {
               />
             )
           }
+          renderItem={({item, index, section}) => {
+            const first = index === 0;
+            const last = index === section.data.length - 1;
+            return (
+              <View
+                style={[
+                  styles.noticeCell,
+                  first && styles.noticeCellFirst,
+                  last && styles.noticeCellLast,
+                ]}>
+                {!first ? <View style={styles.divider} /> : null}
+                <NotificationRow notice={item} onPress={() => openNotice(item)} />
+              </View>
+            );
+          }}
+          renderSectionHeader={({section}) => (
+            <Text style={styles.groupTitle}>{section.title}</Text>
+          )}
           scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
-          showsVerticalScrollIndicator={false}>
-          {body}
-        </ScrollView>
+          sections={showLoadedNotifications ? sections : []}
+          showsVerticalScrollIndicator={false}
+          stickySectionHeadersEnabled={false}
+          windowSize={7}
+        />
         <CustomerLocationSelector
           visible={locationSelectorVisible}
           onClose={() => setLocationSelectorVisible(false)}
@@ -371,15 +397,16 @@ const styles = StyleSheet.create({
   },
   markAllDisabledText: {color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.semibold},
   markAllReason: {paddingHorizontal: spacing.md, paddingTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny, backgroundColor: colors.surfaceWarm},
-  scrollContent: {flexGrow: 1, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxl, gap: spacing.md},
-  chips: {gap: spacing.xs, paddingVertical: spacing.xs},
+  listContent: {flexGrow: 1, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxl},
+  chips: {gap: spacing.xs, paddingVertical: spacing.xs, marginBottom: spacing.sm},
   chip: {minHeight: touchTarget.minimum, justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: borderWidth.standard, borderColor: colors.borderStrong, backgroundColor: colors.white},
   chipSelected: {borderColor: colors.flameRed, backgroundColor: colors.flameRed},
   chipText: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.semibold},
   chipTextSelected: {color: colors.white},
-  group: {gap: spacing.xs},
-  groupTitle: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
-  groupCard: {borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white, overflow: 'hidden', ...elevation.card},
+  groupTitle: {marginTop: spacing.sm, marginBottom: spacing.xs, color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
+  noticeCell: {borderLeftWidth: borderWidth.standard, borderRightWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white, overflow: 'hidden'},
+  noticeCellFirst: {borderTopWidth: borderWidth.standard, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg},
+  noticeCellLast: {marginBottom: spacing.sm, borderBottomWidth: borderWidth.standard, borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg},
   noticeRow: {minHeight: 104, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, backgroundColor: colors.white},
   noticeRowUnread: {backgroundColor: colors.surfaceWarm},
   noticeRowPressed: {backgroundColor: colors.surfaceMuted},
@@ -395,7 +422,7 @@ const styles = StyleSheet.create({
   emptyCategoryCard: {minHeight: 180, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
   emptyCategoryTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
   emptyCategoryCopy: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small},
-  boundaryCopy: {textAlign: 'center', color: colors.textSecondary, fontSize: typography.tiny},
+  boundaryCopy: {marginTop: spacing.sm, textAlign: 'center', color: colors.textSecondary, fontSize: typography.tiny},
   skeletonWrap: {gap: spacing.sm},
   skeletonHeader: {height: 52, borderRadius: radius.pill, backgroundColor: colors.surfaceMuted},
   skeletonRow: {height: 104, borderRadius: radius.lg, backgroundColor: colors.white},

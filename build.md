@@ -54,8 +54,9 @@
 - **P113 — Accessibility Audit:** PARTIAL at full device-validation scope; code-level accessibility audit/remediation is implemented for shared interaction primitives and critical Customer/Chef shell surfaces. Evidence: `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md`.
 - **P114 — Keyboard/Safe-Area/Responsive Audit:** PARTIAL at full device-validation scope; source-level IME/safe-area/responsive remediation is implemented for the inspected critical paths, while compact/standard/large device, IME, cutout, gesture-navigation, and enlarged-font runtime validation remain unclaimed. Evidence: `docs/mobile-ui-rebuild/P114_KEYBOARD_SAFE_AREA_RESPONSIVE_AUDIT.md`.
 - **P115 — Reduced Motion and Animation Audit:** PARTIAL at full runtime/device-validation scope; source-level reduced-motion remediation is implemented across shared motion/loading, auth/customer/chef stack transitions, View Cart, and current slide modal surfaces. Evidence: `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md`.
+- **P116 — List/Image/Memory Performance Audit:** DONE at authorized source/audit scope; infinite discovery caches are explicitly bounded, Notifications rendering is virtualized at its existing history boundary, and Dish Details media mounting/decode behavior is hardened without a UI redesign or invented media contract. Evidence: `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md`.
 
-**Current executed phase:** **P115 — Reduced Motion and Animation Audit**.
+**Current executed phase:** **P116 — List/Image/Memory Performance Audit**.
 
 ### P112 authorized backfill completion
 
@@ -181,11 +182,60 @@ Evidence/ledger:
 2. No passing CI, simulator, emulator, or device result is claimed.
 3. P114 remains PARTIAL at its previously recorded device-validation scope; P115 does not reclassify it.
 
-**Next phase in sequence:** **P116 — List/Image/Memory Performance Audit — NOT STARTED**.
+### P116 implemented boundary
+
+**P116 starting branch HEAD:** `5c923d7b3a568bdc7f9d1ec57cbb98a38b8f1507`  
+**P116 implementation/evidence head before final ledger refresh:** `0b7e62b8866024682e6c7acbcec97f75b33f6fac`
+
+- Re-read `plan.md`, `phases.md`, `agent.md`, `build.md`, and the full 183-page implementation guide before implementing only P116.
+- Audited current Customer/Chef list and history ownership, including Customer Home, Discover Home Chefs, Customer Notifications, Customer Orders, Dish Details media, kitchen/menu lists, Chef Completed Orders, and currently blocked/static history surfaces.
+- Customer Home and Discover Home Chefs already used virtualized `FlatList` paging, but their TanStack infinite-query data could retain fetched pages without a ceiling. Both now use explicit 10-page `maxPages` retention boundaries per query key.
+- Customer Notifications keeps its existing newest-100 query boundary but now renders the vertical Today/Earlier history through `SectionList` virtualization rather than mounting all bounded rows through `ScrollView` + nested maps.
+- Dish Details keeps the same approved media composition but replaces eager full-array hero/thumbnail mounting with horizontal `FlatList` windows, resize-before-decode on Android, and native prefetch of the next hero image.
+- No numeric dish-image product limit, CDN URL transform, or new image dependency was invented because the inspected current backend/mobile contracts do not expose one.
+- Customer Orders and Chef Completed Orders were retained because they already use bounded/virtualized history patterns at their current exact contract boundaries.
+- Server-owned collections remain in the query/cache layer; P116 does not copy production histories into global Redux state or persistence.
+- No P117 networking-performance/cancellation changes were started.
+
+### P116 changed files
+
+Production/runtime:
+
+- `apps/mobile/src/features/home/query/homeFeedQueries.ts`
+- `apps/mobile/src/features/chefDiscovery/query/nearbyChefDiscoveryQueries.ts`
+- `apps/mobile/src/features/notifications/screens/CustomerNotificationsScreen.tsx`
+- `apps/mobile/src/features/dishDetail/screens/CustomerDishDetailScreen.tsx`
+
+Focused test source:
+
+- `apps/mobile/src/core/performanceBoundaries.test.ts`
+
+Evidence/ledger:
+
+- `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md`
+- `build.md`
+
+### P116 validation / guard state
+
+- The authoritative branch HEAD was checked immediately before the implementation write and remained `5c923d7b3a568bdc7f9d1ec57cbb98a38b8f1507`.
+- The implementation commit was compared against that starting HEAD and contains only the four intended production files, one focused test file, and the P116 evidence document.
+- Modified Notifications and Dish Details source was re-fetched from the implementation commit to confirm the intended virtualization/media wiring and phase scope.
+- Focused test source records the explicit Home/Discover retained-page ceilings and the pre-existing notification-history cap; execution is not claimed.
+- GitHub Actions were intentionally not invoked because the account Actions capacity is exhausted.
+- Local Jest/typecheck/ESLint/Metro/bundle execution and device profiler/heap/FPS validation are not claimed from this connector-only run.
+
+### P116 retained gaps instead of fabricated verification
+
+1. No passing CI, local test runner, Android device profiler, heap capture, image-decoder trace, or FPS measurement is claimed in this run.
+2. P116 does not fabricate a media-count policy or CDN resizing contract that the current backend does not expose.
+3. Existing contract-blocked product surfaces remain blocked; performance auditing does not convert unavailable data contracts into fake lists.
+4. P115 remains PARTIAL at its previously recorded runtime/device-validation scope; P116 does not reclassify it.
+
+**Next phase in sequence:** **P117 — Networking Performance and Cancellation Audit — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED in this run.**
 
-**Required action:** Stop. Do not pre-implement P116.
+**Required action:** Stop. Do not pre-implement P117.
 
 ---
 
@@ -229,10 +279,11 @@ Evidence/ledger:
 | P113 | PARTIAL at full device-validation scope; code-level accessibility audit/remediation implemented | `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md` |
 | P114 | PARTIAL at full device-validation scope; source-level keyboard/safe-area/responsive remediation implemented | `docs/mobile-ui-rebuild/P114_KEYBOARD_SAFE_AREA_RESPONSIVE_AUDIT.md` |
 | P115 | PARTIAL at full runtime/device-validation scope; source-level reduced-motion audit/remediation implemented | `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md` |
-| P116 onward | NOT STARTED / not accepted | — |
+| P116 | DONE at authorized source/audit scope; bounded list/image/memory remediation implemented | `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md` |
+| P117 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-P115 is the current executed phase and is implemented at source/audit scope. Preserve P112 lifecycle policy, P111 restoration/security boundaries, P113 accessibility semantics, P114 safe-area/responsive guardrails, and the new P115 reduced-motion equivalents. Contract-blocked features remain blocked. P116 — List/Image/Memory Performance Audit — is the next phase in sequence but is not authorized in this run.
+P116 is the current executed phase and is DONE at the authorized source/audit scope. Preserve P112 lifecycle policy, P111 restoration/security boundaries, P113 accessibility semantics, P114 safe-area/responsive guardrails, P115 reduced-motion equivalents, and the new P116 list/image/memory retention boundaries. Contract-blocked features remain blocked. P117 — Networking Performance and Cancellation Audit — is the next phase in sequence but is not authorized in this run.

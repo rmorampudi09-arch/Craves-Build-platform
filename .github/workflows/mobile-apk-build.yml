@@ -48,6 +48,7 @@ jobs:
       # For device testing we intentionally build the release variant so the JavaScript
       # bundle/assets are embedded, while signing it with the repository's debug test key.
       # This remains a TESTING APK; production release signing is still external/secret-backed.
+      # This run also carries the authenticated customer tab-bar hook-boundary crash fix.
       - name: Build standalone Android testing APK
         working-directory: apps/mobile/android
         env:

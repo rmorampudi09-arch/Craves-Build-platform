@@ -1,3 +1,5 @@
+export {};
+
 type CustomerVisualQaTarget = {
   ref: number;
   image: string;

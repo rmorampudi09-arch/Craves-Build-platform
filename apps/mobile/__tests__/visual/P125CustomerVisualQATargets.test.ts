@@ -1,3 +1,5 @@
+export {};
+
 type CustomerVisualQaAvailability =
   | 'implemented'
   | 'partial-capability'

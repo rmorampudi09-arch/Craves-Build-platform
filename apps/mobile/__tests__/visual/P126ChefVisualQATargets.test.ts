@@ -1,3 +1,5 @@
+export {};
+
 type ChefVisualQaAvailability = 'implemented' | 'partial-capability';
 
 type ChefVisualQaTarget = {

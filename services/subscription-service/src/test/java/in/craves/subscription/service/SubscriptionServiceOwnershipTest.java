@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
@@ -28,7 +29,8 @@ class SubscriptionServiceOwnershipTest {
     private static final UUID CUSTOMER_ID = UUID.fromString("33333333-3333-4333-8333-333333333333");
 
     private final SubscriptionRepository repository = mock(SubscriptionRepository.class);
-    private final SubscriptionService service = new SubscriptionService(repository);
+    private final CapacityService capacityService = mock(CapacityService.class);
+    private final SubscriptionService service = new SubscriptionService(repository, capacityService);
 
     @Test
     void chefCannotCreateOrManageMealPlans() {
@@ -89,14 +91,29 @@ class SubscriptionServiceOwnershipTest {
     }
 
     @Test
-    void publicPlanDoesNotExposeChefIdentity() {
+    void publicPlanDoesNotExposeChefIdentityWhenCapacityIsBookable() {
         UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
-        when(repository.findActivePlanById(planId)).thenReturn(Optional.of(plan(CHEF_ID, "ACTIVE")));
+        PlanResponse stored = plan(CHEF_ID, "ACTIVE");
+        when(repository.findActivePlanById(planId)).thenReturn(Optional.of(stored));
+        when(capacityService.isPlanBookable(stored)).thenReturn(true);
 
         Object publicPlan = service.getPlan(planId);
 
         assertThat(publicPlan).hasNoNullFieldsOrPropertiesExcept("description");
         assertThat(publicPlan.toString()).doesNotContain(CHEF_ID.toString());
+    }
+
+    @Test
+    void soldOutPlanIsHiddenFromPublicDetail() {
+        UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
+        PlanResponse stored = plan(CHEF_ID, "ACTIVE");
+        when(repository.findActivePlanById(planId)).thenReturn(Optional.of(stored));
+        when(capacityService.isPlanBookable(stored)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getPlan(planId))
+            .isInstanceOf(ApiException.class)
+            .extracting(error -> ((ApiException) error).getCode())
+            .isEqualTo("PLAN_NOT_BOOKABLE");
     }
 
     @Test

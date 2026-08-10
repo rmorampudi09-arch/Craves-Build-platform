@@ -14,19 +14,19 @@ const artwork: Record<
   }
 > = {
   how: {
-    src: "/landing/reference/how-craves-works-reference.webp",
+    src: "/landing/reference/how-craves-works-reference.png",
     width: 2048,
     height: 1369,
     alt: "How Craves works: discover homemade meals, order, a home chef prepares the meal, and Craves delivers it to your doorstep.",
   },
   why: {
-    src: "/landing/reference/why-craves-reference.webp",
+    src: "/landing/reference/why-craves-reference.png",
     width: 2048,
     height: 1386,
     alt: "Why Craves: trusted home chefs, meals made nearby, freshly prepared food, and the chance to discover something different.",
   },
   "chefs-app": {
-    src: "/landing/reference/home-chefs-app-reference.webp",
+    src: "/landing/reference/home-chefs-app-reference.png",
     width: 2048,
     height: 1372,
     alt: "Meet the home chefs and discover the Craves app for finding and ordering homemade food nearby.",

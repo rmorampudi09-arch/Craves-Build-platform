@@ -1,24 +1,39 @@
 import {resolveRouteChromePolicy} from '../../app/navigation/navigationPolicy';
+import type {RouteChromePolicy} from '../../app/navigation/navigationPolicy';
 import type {CartMoney} from './domain/cartTypes';
 import {formatCartMoney, isViewCartOverlayVisible} from './viewCartOverlayModel';
 
 const subtotal: CartMoney = {amount: '251', currency: 'INR'};
+const standaloneCartPolicy: RouteChromePolicy = {
+  bottomNavigationVisible: false,
+  viewCartEligible: true,
+  immersive: false,
+};
 
 describe('P29 shared View Cart overlay model', () => {
   it('stays hidden when the authoritative cart item count is zero', () => {
     expect(
       isViewCartOverlayVisible(
         {itemCount: 0, subtotal},
+        standaloneCartPolicy,
+      ),
+    ).toBe(false);
+  });
+
+  it('leaves a non-empty customer cart to the visible bottom navigation', () => {
+    expect(
+      isViewCartOverlayVisible(
+        {itemCount: 2, subtotal},
         resolveRouteChromePolicy('Customer'),
       ),
     ).toBe(false);
   });
 
-  it('becomes eligible for a non-empty customer cart', () => {
+  it('can render only when an eligible surface has no bottom navigation', () => {
     expect(
       isViewCartOverlayVisible(
         {itemCount: 2, subtotal},
-        resolveRouteChromePolicy('Customer'),
+        standaloneCartPolicy,
       ),
     ).toBe(true);
   });
@@ -39,7 +54,7 @@ describe('P29 shared View Cart overlay model', () => {
     expect(
       isViewCartOverlayVisible(
         {itemCount: 2, subtotal: null},
-        resolveRouteChromePolicy('Customer'),
+        standaloneCartPolicy,
       ),
     ).toBe(false);
   });

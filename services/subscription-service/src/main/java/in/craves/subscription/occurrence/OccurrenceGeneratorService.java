@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -87,7 +88,7 @@ public class OccurrenceGeneratorService {
                         deferredSlot = true;
                         continue;
                     }
-                    if (repository.createOccurrence(
+                    UUID occurrenceId = repository.createOccurrence(
                         subscription,
                         schedule,
                         subscription.serviceDate(),
@@ -95,7 +96,8 @@ public class OccurrenceGeneratorService {
                         serviceAt,
                         slot.getValue(),
                         skipRequest
-                    )) {
+                    );
+                    if (occurrenceId != null) {
                         if (skipRequest == null) {
                             generated++;
                         } else {

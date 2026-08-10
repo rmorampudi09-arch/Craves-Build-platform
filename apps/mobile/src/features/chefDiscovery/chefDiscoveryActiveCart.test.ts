@@ -10,13 +10,13 @@ const subtotal: CartMoney = {amount: '420', currency: 'INR'};
 const chefsRoutePolicy = resolveRouteChromePolicy('Customer', 'Chefs');
 
 describe('P36 Discover Home Chefs active-cart chrome', () => {
-  it('keeps View Cart eligible on the customer Chefs tab for an authoritative active cart', () => {
+  it('suppresses the detached View Cart overlay because the customer bottom navigation owns the active cart action', () => {
     expect(
       isViewCartOverlayVisible({itemCount: 3, subtotal}, chefsRoutePolicy),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it('reserves content clearance while View Cart is visible', () => {
+  it('resolves legacy content clearance consistently when requested', () => {
     expect(resolveChefDiscoveryContentBottomInset(true)).toBe(
       CHEF_DISCOVERY_VIEW_CART_CONTENT_CLEARANCE,
     );

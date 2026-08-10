@@ -13,13 +13,13 @@ const favoritesRoutePolicy = resolveRouteChromePolicy(
 );
 
 describe('P61 Favorites active-cart chrome', () => {
-  it('shows View Cart for an active cart on Favorites', () => {
+  it('keeps the detached View Cart overlay suppressed while bottom navigation owns the active cart action', () => {
     expect(
       isViewCartOverlayVisible({itemCount: 2, subtotal}, favoritesRoutePolicy),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it('adds and removes the active-cart bottom clearance', () => {
+  it('adds and removes the active-cart bottom clearance deterministically', () => {
     expect(resolveCustomerFavoritesContentBottomInset(true)).toBe(
       CUSTOMER_FAVORITES_VIEW_CART_CONTENT_CLEARANCE,
     );

@@ -79,10 +79,10 @@ describe('P66 My Addresses contract and active/empty visuals', () => {
     ).toBeNull();
   });
 
-  it('shows the shared View Cart overlay only for the active-cart reference', () => {
+  it('keeps the detached View Cart overlay suppressed because cart now lives in bottom navigation', () => {
     expect(
       isViewCartOverlayVisible({itemCount: 2, subtotal}, addressesRoutePolicy),
-    ).toBe(true);
+    ).toBe(false);
     expect(resolveCustomerAddressesContentBottomInset(true)).toBe(
       CUSTOMER_ADDRESSES_VIEW_CART_CONTENT_CLEARANCE,
     );

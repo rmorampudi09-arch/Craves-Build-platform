@@ -13,16 +13,16 @@ const notificationsRoutePolicy = resolveRouteChromePolicy(
 );
 
 describe('P63 Notifications active-cart chrome', () => {
-  it('shows View Cart for an active cart on Notifications', () => {
+  it('keeps the detached View Cart overlay suppressed while bottom navigation owns the active cart action', () => {
     expect(
       isViewCartOverlayVisible(
         {itemCount: 2, subtotal},
         notificationsRoutePolicy,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it('adds and removes active-cart bottom clearance', () => {
+  it('adds and removes active-cart bottom clearance deterministically', () => {
     expect(resolveCustomerNotificationsContentBottomInset(true)).toBe(
       CUSTOMER_NOTIFICATIONS_VIEW_CART_CONTENT_CLEARANCE,
     );

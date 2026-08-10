@@ -10,11 +10,11 @@ const subtotal: CartMoney = {amount: '640', currency: 'INR'};
 const profileRoutePolicy = resolveRouteChromePolicy('Customer', 'Profile');
 
 describe('P59 Customer Profile active-cart chrome', () => {
-  it('shows View Cart for an active cart on Profile', () => {
-    expect(isViewCartOverlayVisible({itemCount: 2, subtotal}, profileRoutePolicy)).toBe(true);
+  it('keeps the detached View Cart overlay suppressed while bottom navigation owns the active cart action', () => {
+    expect(isViewCartOverlayVisible({itemCount: 2, subtotal}, profileRoutePolicy)).toBe(false);
   });
 
-  it('adds and removes the active-cart bottom clearance', () => {
+  it('adds and removes the active-cart bottom clearance deterministically', () => {
     expect(resolveCustomerProfileContentBottomInset(true)).toBe(
       CUSTOMER_PROFILE_VIEW_CART_CONTENT_CLEARANCE,
     );

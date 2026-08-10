@@ -10,8 +10,8 @@ const subtotal: CartMoney = {amount: '640', currency: 'INR'};
 const editRoutePolicy = resolveRouteChromePolicy('Customer', 'CustomerProfileEdit');
 
 describe('P65 Edit Customer Profile active/empty visuals', () => {
-  it('keeps the shared View Cart CTA for reference 23 when cart state is active', () => {
-    expect(isViewCartOverlayVisible({itemCount: 2, subtotal}, editRoutePolicy)).toBe(true);
+  it('suppresses the detached View Cart CTA because active cart is integrated into bottom navigation', () => {
+    expect(isViewCartOverlayVisible({itemCount: 2, subtotal}, editRoutePolicy)).toBe(false);
     expect(resolveCustomerProfileContentBottomInset(true)).toBe(
       CUSTOMER_PROFILE_VIEW_CART_CONTENT_CLEARANCE,
     );

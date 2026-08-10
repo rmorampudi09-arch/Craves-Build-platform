@@ -13,16 +13,16 @@ const supportRoutePolicy = resolveRouteChromePolicy(
 );
 
 describe('P77 Help & Support active-cart chrome', () => {
-  it('shows View Cart for an active cart on Help & Support', () => {
+  it('keeps the detached View Cart overlay suppressed while bottom navigation owns the active cart action', () => {
     expect(
       isViewCartOverlayVisible(
         {itemCount: 2, subtotal},
         supportRoutePolicy,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it('adds and removes active-cart bottom clearance', () => {
+  it('adds and removes active-cart bottom clearance deterministically', () => {
     expect(resolveCustomerSupportContentBottomInset(true)).toBe(
       CUSTOMER_SUPPORT_VIEW_CART_CONTENT_CLEARANCE,
     );

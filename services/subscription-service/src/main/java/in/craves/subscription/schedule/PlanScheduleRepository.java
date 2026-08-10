@@ -6,7 +6,10 @@ import in.craves.subscription.schedule.PlanScheduleModels.ScheduleItemResponse;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -47,7 +50,6 @@ public class PlanScheduleRepository {
         UUID planId,
         String recurrenceType,
         String timezone,
-        java.time.LocalTime serviceTime,
         int generationLeadHours,
         List<ScheduleItemRequest> items,
         UUID actor
@@ -57,6 +59,10 @@ public class PlanScheduleRepository {
             throw new IllegalStateException("Active schedule must be inactivated before replacement");
         }
         int nextVersion = existing.map(value -> value.version() + 1).orElse(1);
+        LocalTime earliestServiceTime = items.stream()
+            .map(ScheduleItemRequest::serviceTime)
+            .min(Comparator.naturalOrder())
+            .orElseThrow(() -> new IllegalArgumentException("At least one schedule item is required"));
         jdbcTemplate.update(
             "INSERT INTO subscription_schema.subscription_plan_schedule " +
                 "(plan_id, recurrence_type, timezone, service_time, generation_lead_hours, status, version, created_by_identity_id, created_at, updated_at, activated_at) " +
@@ -64,7 +70,7 @@ public class PlanScheduleRepository {
                 "ON CONFLICT (plan_id) DO UPDATE SET recurrence_type = EXCLUDED.recurrence_type, timezone = EXCLUDED.timezone, " +
                 "service_time = EXCLUDED.service_time, generation_lead_hours = EXCLUDED.generation_lead_hours, status = 'DRAFT', " +
                 "version = EXCLUDED.version, created_by_identity_id = EXCLUDED.created_by_identity_id, updated_at = now(), activated_at = NULL",
-            planId, recurrenceType, timezone, serviceTime, generationLeadHours, nextVersion, actor
+            planId, recurrenceType, timezone, earliestServiceTime, generationLeadHours, nextVersion, actor
         );
         jdbcTemplate.update(
             "DELETE FROM subscription_schema.subscription_plan_schedule_item WHERE plan_id = ?",
@@ -73,9 +79,17 @@ public class PlanScheduleRepository {
         for (ScheduleItemRequest item : items) {
             jdbcTemplate.update(
                 "INSERT INTO subscription_schema.subscription_plan_schedule_item " +
-                    "(id, plan_id, menu_item_id, quantity, iso_day_of_week, day_of_month, sequence_number, created_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, now())",
-                UUID.randomUUID(), planId, item.menuItemId(), item.quantity(), item.isoDayOfWeek(), item.dayOfMonth(), item.sequenceNumber()
+                    "(id, plan_id, menu_item_id, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number, created_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
+                UUID.randomUUID(),
+                planId,
+                item.menuItemId(),
+                item.quantity(),
+                item.isoDayOfWeek(),
+                item.dayOfMonth(),
+                item.mealSlotCode().trim().toUpperCase(Locale.ROOT),
+                item.serviceTime(),
+                item.sequenceNumber()
             );
         }
         jdbcTemplate.update(
@@ -110,13 +124,15 @@ public class PlanScheduleRepository {
     private List<ScheduleItemResponse> listItems(UUID planId) {
         return jdbcTemplate.query(
             "SELECT * FROM subscription_schema.subscription_plan_schedule_item WHERE plan_id = ? " +
-                "ORDER BY COALESCE(iso_day_of_week, day_of_month), sequence_number, created_at",
+                "ORDER BY COALESCE(iso_day_of_week, day_of_month), service_time, meal_slot_code, sequence_number, created_at",
             (rs, rowNum) -> new ScheduleItemResponse(
                 rs.getObject("id", UUID.class),
                 rs.getObject("menu_item_id", UUID.class),
                 rs.getInt("quantity"),
                 integer(rs, "iso_day_of_week"),
                 integer(rs, "day_of_month"),
+                rs.getString("meal_slot_code"),
+                rs.getObject("service_time", LocalTime.class),
                 rs.getInt("sequence_number")
             ),
             planId
@@ -128,7 +144,7 @@ public class PlanScheduleRepository {
             rs.getObject("plan_id", UUID.class),
             rs.getString("recurrence_type"),
             rs.getString("timezone"),
-            rs.getObject("service_time", java.time.LocalTime.class),
+            rs.getObject("service_time", LocalTime.class),
             rs.getInt("generation_lead_hours"),
             rs.getString("status"),
             rs.getInt("version"),

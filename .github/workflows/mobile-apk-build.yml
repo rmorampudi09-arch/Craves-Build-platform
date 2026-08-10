@@ -1,0 +1,62 @@
+name: CRAVES Mobile APK Build
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/mobile-apk-build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout mobile branch
+        uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: Configure production API runtime
+        working-directory: apps/mobile
+        run: cp .env.example .env
+
+      - name: Build installable Android APK
+        working-directory: apps/mobile/android
+        env:
+          NODE_ENV: production
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Verify APK
+        run: test -s apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: craves-mobile-testing-apk
+          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7

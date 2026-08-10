@@ -94,17 +94,17 @@ const CUSTOMER_VISUAL_QA_TARGETS: readonly CustomerVisualQaTarget[] = [
   {
     ref: 27,
     image: 'image27.jpeg',
-    state: 'Add New Address - Empty Cart Reference State',
+    state: 'Payment Methods - Empty Cart Reference State',
     screenPath:
-      'src/features/customerAddresses/screens/CustomerAddressEditorModal.tsx',
-    chromePolicy: 'focused',
+      'src/features/payment/screens/CustomerPaymentMethodsRouteScreen.tsx',
+    chromePolicy: 'customer-shell',
     availability: 'partial-capability',
     certification: 'pending-device-comparison',
   },
   {
     ref: 28,
     image: 'image28.jpeg',
-    state: 'Payment Methods - Empty Cart Reference State',
+    state: 'Payment Methods - Active Cart Reference State',
     screenPath:
       'src/features/payment/screens/CustomerPaymentMethodsRouteScreen.tsx',
     chromePolicy: 'customer-shell',
@@ -114,26 +114,25 @@ const CUSTOMER_VISUAL_QA_TARGETS: readonly CustomerVisualQaTarget[] = [
   {
     ref: 29,
     image: 'image29.jpeg',
-    state: 'Payment Methods - Active Cart Reference State',
-    screenPath:
-      'src/features/payment/screens/CustomerPaymentMethodsRouteScreen.tsx',
+    state: 'Coupons and Offers - Empty Cart Reference State',
+    screenPath: null,
     chromePolicy: 'customer-shell',
-    availability: 'partial-capability',
+    availability: 'blocked-contract',
     certification: 'pending-device-comparison',
   },
   {
     ref: 30,
     image: 'image30.jpeg',
-    state: 'Add New Card - Empty Cart Reference State',
+    state: 'Coupons and Offers - Active Cart Reference State',
     screenPath: null,
-    chromePolicy: 'focused',
-    availability: 'blocked-provider',
+    chromePolicy: 'customer-shell',
+    availability: 'blocked-contract',
     certification: 'pending-device-comparison',
   },
   {
     ref: 31,
     image: 'image31.jpeg',
-    state: 'My Coupons - Empty Cart Reference State',
+    state: 'My Reviews - Empty Cart Reference State',
     screenPath: null,
     chromePolicy: 'customer-shell',
     availability: 'blocked-contract',
@@ -142,7 +141,7 @@ const CUSTOMER_VISUAL_QA_TARGETS: readonly CustomerVisualQaTarget[] = [
   {
     ref: 32,
     image: 'image32.jpeg',
-    state: 'My Coupons - Active Cart Reference State',
+    state: 'My Reviews - Active Cart Reference State',
     screenPath: null,
     chromePolicy: 'customer-shell',
     availability: 'blocked-contract',
@@ -151,39 +150,39 @@ const CUSTOMER_VISUAL_QA_TARGETS: readonly CustomerVisualQaTarget[] = [
   {
     ref: 33,
     image: 'image33.jpeg',
-    state: 'My Reviews - Empty Cart Reference State',
-    screenPath: null,
-    chromePolicy: 'customer-shell',
-    availability: 'blocked-contract',
+    state: 'Customer Settings - Empty Cart Reference State',
+    screenPath:
+      'src/features/customerSettings/screens/CustomerSettingsRouteScreen.tsx',
+    chromePolicy: 'focused',
+    availability: 'implemented',
     certification: 'pending-device-comparison',
   },
   {
     ref: 34,
     image: 'image34.jpeg',
-    state: 'My Reviews - Active Cart Reference State',
+    state: 'Customer Settings - Active Cart Reference State',
+    screenPath:
+      'src/features/customerSettings/screens/CustomerSettingsRouteScreen.tsx',
+    chromePolicy: 'focused',
+    availability: 'implemented',
+    certification: 'pending-device-comparison',
+  },
+  {
+    ref: 35,
+    image: 'image35.jpeg',
+    state: 'Help and Support - Empty Cart Reference State',
     screenPath: null,
     chromePolicy: 'customer-shell',
     availability: 'blocked-contract',
     certification: 'pending-device-comparison',
   },
   {
-    ref: 35,
-    image: 'image35.jpeg',
-    state: 'Settings - Empty Cart Reference State',
-    screenPath:
-      'src/features/customerSettings/screens/CustomerSettingsRouteScreen.tsx',
-    chromePolicy: 'focused',
-    availability: 'implemented',
-    certification: 'pending-device-comparison',
-  },
-  {
     ref: 36,
     image: 'image36.jpeg',
-    state: 'Settings - Active Cart Reference State',
-    screenPath:
-      'src/features/customerSettings/screens/CustomerSettingsRouteScreen.tsx',
-    chromePolicy: 'focused',
-    availability: 'implemented',
+    state: 'Help and Support - Active Cart Reference State',
+    screenPath: null,
+    chromePolicy: 'customer-shell',
+    availability: 'blocked-contract',
     certification: 'pending-device-comparison',
   },
   {
@@ -227,7 +226,8 @@ const CART_VARIANT_PAIRS = [
   [21, 22],
   [24, 23],
   [25, 26],
-  [28, 29],
+  [27, 28],
+  [29, 30],
   [31, 32],
   [33, 34],
   [35, 36],
@@ -257,8 +257,8 @@ describe('P125 customer visual QA target preflight', () => {
     }
   });
 
-  it('does not invent production modules for contract/provider-blocked references', () => {
-    const blockedRefs = [30, 31, 32, 33, 34];
+  it('does not invent production modules for contract-blocked references', () => {
+    const blockedRefs = [29, 30, 31, 32, 35, 36];
     const blockedTargets = CUSTOMER_VISUAL_QA_TARGETS.filter(target =>
       blockedRefs.includes(target.ref),
     );
@@ -266,7 +266,7 @@ describe('P125 customer visual QA target preflight', () => {
     expect(blockedTargets).toHaveLength(blockedRefs.length);
     expect(blockedTargets.every(target => target.screenPath === null)).toBe(true);
     expect(
-      blockedTargets.every(target => target.availability.startsWith('blocked-')),
+      blockedTargets.every(target => target.availability === 'blocked-contract'),
     ).toBe(true);
   });
 

@@ -12,17 +12,19 @@ import {ScreenHeader} from '../components/ScreenHeader';
 import {
   createPasswordRecoveryRequestGate,
   createPasswordRecoverySubmission,
-  createPasswordResetSentContext,
   getPasswordRecoveryEmailError,
 } from '../domain/passwordRecoveryPolicy';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 import {authService} from '../state/authService';
+import {authTransitionMemory} from '../state/authTransitionMemory';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ForgotPassword'>;
 
 export function ForgotPasswordScreen({navigation, route}: Props) {
   const {role} = useAuthAttemptRole(route.params.role);
-  const [email, setEmail] = useState(route.params.email ?? '');
+  const [email, setEmail] = useState(
+    () => authTransitionMemory.getPasswordRecoveryEmail() ?? '',
+  );
   const [busy, setBusy] = useState(false);
   const [touched, setTouched] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -42,14 +44,18 @@ export function ForgotPasswordScreen({navigation, route}: Props) {
       return;
     }
     if (navigation.canGoBack()) {
+      authTransitionMemory.clearPasswordRecoveryEmail();
       navigation.goBack();
       return;
     }
-    const submission = createPasswordRecoverySubmission(role, email);
-    navigation.replace('EmailSignIn', {
-      role: submission.role,
-      email: valid ? submission.email : undefined,
-    });
+    if (valid) {
+      const submission = createPasswordRecoverySubmission(role, email);
+      authTransitionMemory.setEmailPrefill(submission.email);
+    } else {
+      authTransitionMemory.clearEmailPrefill();
+    }
+    authTransitionMemory.clearPasswordRecoveryEmail();
+    navigation.replace('EmailSignIn', {role});
   };
 
   const submit = async () => {
@@ -74,10 +80,8 @@ export function ForgotPasswordScreen({navigation, route}: Props) {
     }
 
     if (completed) {
-      navigation.replace(
-        'PasswordResetSent',
-        createPasswordResetSentContext(submission.role, submission.email),
-      );
+      authTransitionMemory.setPasswordRecoveryEmail(submission.email);
+      navigation.replace('PasswordResetSent', {role: submission.role});
     }
   };
 

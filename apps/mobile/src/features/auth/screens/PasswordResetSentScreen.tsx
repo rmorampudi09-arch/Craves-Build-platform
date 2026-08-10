@@ -9,6 +9,7 @@ import {AuthShell} from '../components/AuthShell';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {PASSWORD_RECOVERY_NEUTRAL_MESSAGE} from '../domain/passwordRecoveryPolicy';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
+import {authTransitionMemory} from '../state/authTransitionMemory';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PasswordResetSent'>;
 
@@ -16,13 +17,19 @@ export function PasswordResetSentScreen({navigation, route}: Props) {
   const {role} = useAuthAttemptRole(route.params.role);
 
   const returnToLogin = () => {
+    const email = authTransitionMemory.takePasswordRecoveryEmail();
+    if (email) {
+      authTransitionMemory.setEmailPrefill(email);
+    } else {
+      authTransitionMemory.clearEmailPrefill();
+    }
     navigation.reset({
       index: 1,
       routes: [
         {name: 'RoleSelection'},
         {
           name: 'EmailSignIn',
-          params: {role, email: route.params.email},
+          params: {role},
         },
       ],
     });

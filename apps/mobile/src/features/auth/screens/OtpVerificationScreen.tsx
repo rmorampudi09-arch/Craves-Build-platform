@@ -24,12 +24,14 @@ import {
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 import {authService} from '../state/authService';
 import {authActions} from '../state/authSlice';
+import {authTransitionMemory} from '../state/authTransitionMemory';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OtpVerification'>;
 
 export function OtpVerificationScreen({navigation, route}: Props) {
   const dispatch = useAppDispatch();
   const {role} = useAuthAttemptRole(route.params.role);
+  const phone = authTransitionMemory.getPendingPhone();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [clockMs, setClockMs] = useState(() => Date.now());
@@ -45,8 +47,9 @@ export function OtpVerificationScreen({navigation, route}: Props) {
   const resendSeconds = remainingOtpCooldownSeconds(resendAvailableAt, clockMs);
   const rateLimitSeconds = remainingOtpCooldownSeconds(rateLimitUntil, clockMs);
   const rateLimited = rateLimitSeconds > 0;
-  const canVerify = isOtpCodeComplete(code) && !busy && !requiresResend && !rateLimited;
-  const canResend = resendSeconds === 0 && !busy && !rateLimited;
+  const canVerify =
+    Boolean(phone) && isOtpCodeComplete(code) && !busy && !requiresResend && !rateLimited;
+  const canResend = Boolean(phone) && resendSeconds === 0 && !busy && !rateLimited;
 
   useEffect(() => {
     const id = setInterval(() => setClockMs(Date.now()), 1000);
@@ -97,6 +100,7 @@ export function OtpVerificationScreen({navigation, route}: Props) {
     setError(null);
     try {
       const tokens = await authService.confirmOtp(code);
+      authTransitionMemory.clearPendingPhone();
       dispatch(authActions.authenticated(tokens.identity));
     } catch (caught) {
       applyFailureRecovery(caught);
@@ -107,14 +111,14 @@ export function OtpVerificationScreen({navigation, route}: Props) {
   };
 
   const resend = async () => {
-    if (!canResend || !requestGate.current.tryAcquire()) {
+    if (!phone || !canResend || !requestGate.current.tryAcquire()) {
       return;
     }
 
     setBusy(true);
     setError(null);
     try {
-      await authService.beginPhone(role, route.params.phone);
+      await authService.beginPhone(role, phone);
       const now = Date.now();
       setClockMs(now);
       setCode('');
@@ -139,18 +143,24 @@ export function OtpVerificationScreen({navigation, route}: Props) {
     }
   };
 
-  const resendLabel = rateLimited
-    ? `Try again in ${rateLimitSeconds}s`
-    : resendSeconds > 0
-      ? `Resend code in ${resendSeconds}s`
-      : 'Resend verification code';
+  const resendLabel = !phone
+    ? 'Start phone verification again'
+    : rateLimited
+      ? `Try again in ${rateLimitSeconds}s`
+      : resendSeconds > 0
+        ? `Resend code in ${resendSeconds}s`
+        : 'Resend verification code';
 
   return (
     <AuthShell>
       <ScreenHeader title="Verify OTP" onBack={() => navigation.goBack()} />
       <AuthCard>
         <Text style={styles.title}>Enter verification code</Text>
-        <Text style={styles.desc}>We sent a 6-digit code to {route.params.phone}.</Text>
+        <Text style={styles.desc}>
+          {phone
+            ? `We sent a 6-digit code to ${phone}.`
+            : 'Your phone verification session expired. Go back and request a new code.'}
+        </Text>
         <InputField
           value={code}
           onChangeText={updateCode}
@@ -158,10 +168,10 @@ export function OtpVerificationScreen({navigation, route}: Props) {
           keyboardType="number-pad"
           returnKeyType="done"
           textContentType="oneTimeCode"
-          autoFocus
+          autoFocus={Boolean(phone)}
           selectTextOnFocus
           maxLength={OTP_CODE_LENGTH}
-          disabled={busy || requiresResend || rateLimited}
+          disabled={busy || requiresResend || rateLimited || !phone}
           accessibilityLabel="Verification code"
           accessibilityHint="Enter the six digit code sent to your phone"
           error={error ?? undefined}

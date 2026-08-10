@@ -5,21 +5,24 @@ import type {AuthRole, ChefApplicationStatus} from '../../features/auth/domain/t
  * Current registered route parameters. Existing auth/account screens intentionally
  * continue to consume this flat list while product navigators are introduced as
  * typed nested domains without creating a second navigation container.
+ *
+ * Privacy boundary: auth routes carry only non-sensitive flow context. Email,
+ * phone, OTP, password and other credentials remain in component/module memory.
  */
 export type RootStackParamList = {
   Splash: undefined;
   RoleSelection: undefined;
   PhoneSignIn: {role: AuthRole};
-  EmailSignIn: {role: AuthRole; email?: string};
-  OtpVerification: {role: AuthRole; phone: string};
-  ForgotPassword: {role: AuthRole; email?: string};
-  PasswordResetSent: {role: AuthRole; email: string};
+  EmailSignIn: {role: AuthRole};
+  OtpVerification: {role: AuthRole};
+  ForgotPassword: {role: AuthRole};
+  PasswordResetSent: {role: AuthRole};
   AccountRouter: undefined;
   CustomerRegistration: undefined;
   CustomerAccountStatus: undefined;
   ChefRegistration: undefined;
   ChefAccountStatus: {status?: ChefApplicationStatus};
-  StartupError: {message: string};
+  StartupError: undefined;
 };
 
 export type AuthStackParamList = Pick<
@@ -131,7 +134,7 @@ export type CustomerStackRouteName =
   | keyof CustomerOrdersStackParamList
   | keyof CustomerProfileStackParamList;
 
-/** P90 completes the authorized Chef Orders stack through read-only Completed history. */
+/** P90 registers the complete Chef Orders stack through read-only Completed history. */
 export type ChefOrdersStackParamList = {
   ChefOrdersPreparing: undefined;
   ChefOrdersNew: undefined;

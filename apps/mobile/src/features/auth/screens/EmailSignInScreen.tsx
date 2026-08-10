@@ -14,14 +14,15 @@ import {RoleSelector} from '../components/RoleSelector';
 import {SecurityNote} from '../components/SecurityNote';
 import {
   createEmailAuthRoleContext,
-  createEmailPasswordRecoveryContext,
   createEmailRequestGate,
   createEmailSignInSubmission,
   getEmailSignInFieldErrors,
+  getPasswordRecoveryEmail,
 } from '../domain/emailSignInPolicy';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
 import {authService} from '../state/authService';
 import {authActions} from '../state/authSlice';
+import {authTransitionMemory} from '../state/authTransitionMemory';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EmailSignIn'>;
 
@@ -33,7 +34,7 @@ type TouchedFields = {
 export function EmailSignInScreen({navigation, route}: Props) {
   const dispatch = useAppDispatch();
   const {role, selectRole} = useAuthAttemptRole(route.params.role);
-  const [email, setEmail] = useState(route.params.email ?? '');
+  const [email, setEmail] = useState(() => authTransitionMemory.takeEmailPrefill() ?? '');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -90,7 +91,13 @@ export function EmailSignInScreen({navigation, route}: Props) {
     if (busy) {
       return;
     }
-    navigation.navigate('ForgotPassword', createEmailPasswordRecoveryContext(role, email));
+    const recoveryEmail = getPasswordRecoveryEmail(email);
+    if (recoveryEmail) {
+      authTransitionMemory.setPasswordRecoveryEmail(recoveryEmail);
+    } else {
+      authTransitionMemory.clearPasswordRecoveryEmail();
+    }
+    navigation.navigate('ForgotPassword', {role});
   };
 
   const openPhoneSignIn = () => {

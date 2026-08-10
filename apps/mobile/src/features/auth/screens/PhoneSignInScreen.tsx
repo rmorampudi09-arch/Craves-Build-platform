@@ -5,6 +5,7 @@ import type {RootStackParamList} from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
 import {colors, spacing} from '../../../design/tokens';
 import {authService} from '../state/authService';
+import {authTransitionMemory} from '../state/authTransitionMemory';
 import {AuthCard} from '../components/AuthCard';
 import {AuthHero} from '../components/AuthHero';
 import {AuthShell} from '../components/AuthShell';
@@ -42,11 +43,13 @@ export function PhoneSignInScreen({navigation, route}: Props) {
 
     setBusy(true);
     setRequestError(null);
+    authTransitionMemory.clearPendingPhone();
     const submission = createPhoneSignInSubmission(role, phone);
 
     try {
       await authService.beginPhone(submission.role, submission.phone);
-      navigation.navigate('OtpVerification', submission);
+      authTransitionMemory.setPendingPhone(submission.phone);
+      navigation.navigate('OtpVerification', {role: submission.role});
     } catch (error) {
       setRequestError(toAppApiError(error).message);
     } finally {

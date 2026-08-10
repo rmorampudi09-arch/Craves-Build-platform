@@ -9,6 +9,7 @@ import {PrimaryButton} from '../components/PrimaryButton';
 import {RoleSelector} from '../components/RoleSelector';
 import {SecurityNote} from '../components/SecurityNote';
 import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
+import {authTransitionMemory} from '../state/authTransitionMemory';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RoleSelection'>;
 
@@ -16,6 +17,7 @@ export function RoleSelectionScreen({navigation}: Props) {
   const {role, selectRole} = useAuthAttemptRole();
 
   const continueToSignIn = () => {
+    authTransitionMemory.clear();
     navigation.navigate('PhoneSignIn', {role});
   };
 

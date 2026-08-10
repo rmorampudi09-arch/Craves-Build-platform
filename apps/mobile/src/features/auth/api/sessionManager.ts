@@ -1,6 +1,11 @@
 import {toAppApiError} from '../../../core/http/apiError';
 import {publicApiClient} from '../../../core/http/transport';
 import {
+  captureException,
+  startPerformanceTrace,
+  trackSessionEvent,
+} from '../../../core/observability/observability';
+import {
   refreshTokenStore,
   type StoredRefreshSession,
 } from '../../../core/security/refreshTokenStore';
@@ -24,6 +29,7 @@ function isRefreshSessionUsable(session: StoredRefreshSession): boolean {
 }
 
 function notifyInvalidated(reason: SessionInvalidationReason): void {
+  trackSessionEvent('session_invalidated', {reason});
   invalidationListeners.forEach(listener => listener(reason));
 }
 
@@ -62,6 +68,8 @@ async function invalidateSession(
 }
 
 async function rotateRefreshToken(): Promise<AuthTokenResponse | null> {
+  const trace = startPerformanceTrace('session_refresh');
+  trackSessionEvent('session_refresh_started');
   const hadAccessToken = Boolean(tokenMemory.get());
   const refreshSession = await refreshTokenStore.load();
 
@@ -70,12 +78,14 @@ async function rotateRefreshToken(): Promise<AuthTokenResponse | null> {
     if (hadAccessToken) {
       notifyInvalidated('missing_refresh_credential');
     }
+    trace.end('failure', {reason: 'missing_refresh_credential'});
     return null;
   }
 
   if (!isRefreshSessionUsable(refreshSession)) {
     await clearCredentials();
     notifyInvalidated('expired_refresh_credential');
+    trace.end('failure', {reason: 'expired_refresh_credential'});
     return null;
   }
 
@@ -91,9 +101,25 @@ async function rotateRefreshToken(): Promise<AuthTokenResponse | null> {
     const normalized = toAppApiError(error);
     if (isTerminalRefreshFailure(normalized)) {
       await invalidateSession('rejected_refresh_credential');
+      trace.end('failure', {
+        reason: 'rejected_refresh_credential',
+        status: normalized.status ?? null,
+      });
       return null;
     }
 
+    captureException(error, 'session_refresh_failure', {
+      status: normalized.status ?? null,
+      retriable: normalized.retriable,
+    });
+    trackSessionEvent('session_refresh_failed', {
+      status: normalized.status ?? null,
+      retriable: normalized.retriable,
+    });
+    trace.end('failure', {
+      status: normalized.status ?? null,
+      retriable: normalized.retriable,
+    });
     // Keep the persisted refresh credential on transient network/service failures so
     // startup retry or a later silent refresh can recover without forcing sign-in.
     throw normalized;
@@ -105,9 +131,13 @@ async function rotateRefreshToken(): Promise<AuthTokenResponse | null> {
       tokens.refreshTokenExpiresAt,
     );
     tokenMemory.set(tokens.accessToken, tokens.expiresIn);
+    trackSessionEvent('session_refresh_succeeded');
+    trace.end('success');
     return tokens;
   } catch (error) {
     await invalidateSession('refresh_persistence_failed');
+    captureException(error, 'session_refresh_persistence_failure');
+    trace.end('failure', {reason: 'refresh_persistence_failed'});
     throw error;
   }
 }
@@ -118,8 +148,11 @@ export const sessionManager = {
     try {
       await refreshTokenStore.save(tokens.refreshToken, tokens.refreshTokenExpiresAt);
       tokenMemory.set(tokens.accessToken, tokens.expiresIn);
+      trackSessionEvent('session_established');
     } catch (error) {
       await clearCredentialsBestEffort();
+      captureException(error, 'session_establishment_failure');
+      trackSessionEvent('session_establishment_failed');
       throw error;
     }
   },
@@ -142,5 +175,6 @@ export const sessionManager = {
   },
   async clearLocal(): Promise<void> {
     await clearCredentials();
+    trackSessionEvent('session_cleared_local');
   },
 };

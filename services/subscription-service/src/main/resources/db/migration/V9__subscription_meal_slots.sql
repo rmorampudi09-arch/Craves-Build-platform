@@ -19,7 +19,7 @@ ALTER TABLE subscription_schema.subscription_plan_schedule_item
 CREATE INDEX ix_subscription_plan_schedule_item_slot
     ON subscription_schema.subscription_plan_schedule_item (
         plan_id,
-        COALESCE(iso_day_of_week, day_of_month),
+        (COALESCE(iso_day_of_week, day_of_month)),
         meal_slot_code,
         service_time,
         sequence_number

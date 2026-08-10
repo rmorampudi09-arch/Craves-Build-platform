@@ -13,6 +13,12 @@ describe('design token baseline', () => {
     expect(colors.espressoBrown).toBe('#261A15');
   });
 
+  it('keeps the primary app background pure white', () => {
+    expect(colors.white).toBe('#FFFFFF');
+    expect(colors.surfaceBase).toBe('#FFFFFF');
+    expect(colors.surfaceBase).toBe(colors.white);
+  });
+
   it('keeps spacing on the 4 dp rhythm', () => {
     Object.values(spacing).forEach(value => {
       expect(value % 4).toBe(0);

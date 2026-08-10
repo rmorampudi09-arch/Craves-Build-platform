@@ -34,11 +34,8 @@ public class PlanScheduleService {
     }
 
     public PublicPlanScheduleResponse getPublicActive(UUID planId) {
-        PlanOwner plan = repository.findPlanOwner(planId)
+        repository.findPlanOwner(planId)
             .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
-        if (!"ACTIVE".equals(plan.status())) {
-            throw ApiException.notFound("PLAN_NOT_FOUND", "Active subscription plan was not found");
-        }
         PlanScheduleResponse schedule = repository.findActive(planId)
             .orElseThrow(() -> ApiException.notFound("PLAN_SCHEDULE_NOT_FOUND", "Active meal schedule was not found"));
         return new PublicPlanScheduleResponse(

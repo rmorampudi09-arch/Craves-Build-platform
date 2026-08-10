@@ -157,15 +157,18 @@ public class SubscriptionLifecycleService {
                 trim(request.reason())
             );
         } catch (IllegalStateException exception) {
-            return switch (exception.getMessage()) {
-                case "SUBSCRIPTION_NOT_FOUND" -> throw ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found");
-                case "SUBSCRIPTION_NOT_ACTIVE" -> throw ApiException.conflict("SUBSCRIPTION_NOT_ACTIVE", "Subscription is no longer active");
-                case "OCCURRENCE_NOT_SKIPPABLE" -> throw ApiException.conflict(
-                    "OCCURRENCE_NOT_SKIPPABLE",
-                    "The meal has progressed too far to be skipped"
-                );
+            switch (exception.getMessage()) {
+                case "SUBSCRIPTION_NOT_FOUND" ->
+                    throw ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found");
+                case "SUBSCRIPTION_NOT_ACTIVE" ->
+                    throw ApiException.conflict("SUBSCRIPTION_NOT_ACTIVE", "Subscription is no longer active");
+                case "OCCURRENCE_NOT_SKIPPABLE" ->
+                    throw ApiException.conflict(
+                        "OCCURRENCE_NOT_SKIPPABLE",
+                        "The meal has progressed too far to be skipped"
+                    );
                 default -> throw exception;
-            };
+            }
         }
     }
 

@@ -33,6 +33,8 @@ const MAX_ATTRIBUTE_STRING_LENGTH = 160;
 const SAFE_EVENT_NAME = /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/;
 const SENSITIVE_ATTRIBUTE_KEY =
   /(password|passcode|otp|token|authorization|cookie|secret|credential|card|cvv|upi|bank|address|latitude|longitude|document|email|phone|payload|requestBody|responseBody|body)/i;
+const SENSITIVE_STRING_VALUE =
+  /(bearer\s+[A-Za-z0-9._~-]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\+?\d[\d\s().-]{7,}\d|[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,})/i;
 
 let activeSink: ObservabilitySink | null = null;
 
@@ -41,7 +43,11 @@ function sanitizeEventName(name: string): string {
 }
 
 function sanitizeString(value: string): string {
-  return value.replace(/[\r\n\t]+/g, ' ').slice(0, MAX_ATTRIBUTE_STRING_LENGTH);
+  const normalized = value.replace(/[\r\n\t]+/g, ' ');
+  if (SENSITIVE_STRING_VALUE.test(normalized)) {
+    return '[redacted]';
+  }
+  return normalized.slice(0, MAX_ATTRIBUTE_STRING_LENGTH);
 }
 
 export function sanitizeObservabilityAttributes(
@@ -160,7 +166,12 @@ export function captureException(
 export function startPerformanceTrace(
   traceName: string,
   attributes: Readonly<Record<string, unknown>> = {},
-): {end: (outcome: PerformanceTraceOutcome, extra?: Readonly<Record<string, unknown>>) => void} {
+): {
+  end: (
+    outcome: PerformanceTraceOutcome,
+    extra?: Readonly<Record<string, unknown>>,
+  ) => void;
+} {
   const startedAtMs = Date.now();
   let ended = false;
 

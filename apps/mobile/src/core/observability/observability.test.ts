@@ -29,6 +29,20 @@ describe('observability', () => {
     ).toEqual({role: 'CHEF', status: 401, retriable: false});
   });
 
+  it('redacts sensitive-looking values even under a generic key', () => {
+    expect(
+      sanitizeObservabilityAttributes({
+        reason: 'private@example.com',
+        context: 'Bearer abc.def.ghi',
+        destination: '+91 98765 43210',
+      }),
+    ).toEqual({
+      reason: '[redacted]',
+      context: '[redacted]',
+      destination: '[redacted]',
+    });
+  });
+
   it('bounds string attributes and strips control whitespace', () => {
     const value = `a\n\tb${'x'.repeat(300)}`;
     const result = sanitizeObservabilityAttributes({safeValue: value});

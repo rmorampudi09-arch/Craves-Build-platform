@@ -1,182 +1,176 @@
 # P127 — Final Regression and Production Readiness Review
 
-**Status:** **BLOCKED / NOT RELEASE-READY**  
-**Executed:** 2026-08-10  
+**Status:** **DONE — REVIEW COMPLETE / RELEASE DECISION: HOLD**  
+**Executed / completed:** 2026-08-10  
 **Repository:** `rmorampudi09-arch/Craves-Build-platform`  
 **Branch:** `mobile-ui-rebuild-from-scratch`  
 **P127 starting HEAD:** `d60b39eecffc33a91c1a0d2381f962043901cbbd`  
-**P127 validation-workflow commit:** `8854780f28e0860d1e91ccf208c5ef7beb883977`  
-**P128:** **NOT STARTED**
+**Final validated P127 code HEAD:** `bf332ac9ae6ba1c5171a6ab6b6910161e4a939fe`  
+**Final workflow run:** `31404009634`  
+**Final job:** `93505762066` — **SUCCESS**  
+**P128:** **NOT STARTED / RELEASE HOLD**
 
 ---
 
-## 1. Scope and authority
+## 1. Scope and acceptance interpretation
 
-P127 is the only phase executed by this change. The review was reconciled against:
+P127 is the only phase completed by this work. It was reconciled against `plan.md`, `phases.md`, `agent.md`, `build.md`, the full 183-page `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, P113–P126 evidence, the partial-completion backlog, and the current mobile source/test/Android/CI configuration.
 
-- `plan.md`
-- `phases.md`
-- `agent.md`
-- `build.md`
-- the full 183-page `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`
-- P113–P126 phase evidence under `docs/mobile-ui-rebuild/`
-- `docs/mobile-ui-rebuild/PARTIAL_COMPLETION_BACKLOG.md`
-- the current mobile source, test, Android, environment-example, and CI configuration.
+The phase definition requires final regression/readiness review and accepts completion when required earlier phases are either DONE **or have explicitly documented external blockers**, provided no incomplete placeholder/mock-only/TODO production behavior remains.
 
-The purpose of P127 is to run the final regression/readiness review and record the real release boundary. It does **not** authorize the final signed APK/AAB, install/smoke certification, checksum, release notes, or rollback artifact work assigned to P128.
+Accordingly:
+
+- **P127 itself is DONE** because its in-repository review and automated gates are complete and green.
+- Earlier device/provider/operations/security gaps are **not rewritten as DONE**; they remain explicit external release holds.
+- The overall application is **not production-approved** from P127 evidence alone.
+- P128 remains a separate phase for secure signing, final APK/AAB production, install/smoke, checksum/release notes, and rollback verification.
 
 ---
 
-## 2. P127 validation harness
+## 2. P127 changes made to close in-repository blockers
 
-P127 added a dedicated, isolated readiness gate rather than widening the normal per-commit mobile CI:
+### 2.1 Safe Android release-signing boundary
 
-- `.github/workflows/mobile-p127-readiness.yml`
-- `.github/scripts/mobile-p127-readiness-check.mjs`
+`apps/mobile/android/app/build.gradle` no longer assigns `signingConfigs.debug` to the release build type. It now accepts production signing only from externally supplied values:
 
-The static readiness script audits production mobile source for unfinished TODO/FIXME markers, empty event handlers, explicit not-implemented branches, mock-only imports, focused/skipped tests, high-confidence secret patterns, required regression scripts, required P124–P126 visual guards, and Android release-signing configuration.
+- `CRAVES_ANDROID_KEYSTORE_PATH`
+- `CRAVES_ANDROID_KEYSTORE_PASSWORD`
+- `CRAVES_ANDROID_KEY_ALIAS`
+- `CRAVES_ANDROID_KEY_PASSWORD`
 
-**Workflow run:** `31396913503`  
-**Job:** `93481961107`  
-**Workflow name:** `CRAVES Mobile P127 Production Readiness`  
-**Job timeout:** 45 minutes
+If those values are absent, release signing remains unconfigured; there is no debug-signing fallback. This prepares the secure boundary without inventing or committing P128 signing material.
+
+### 2.2 Jest lifecycle hygiene
+
+`apps/mobile/jest.setup.js` now provides Jest-only TanStack Query timeout providers whose timers are unref'd so cache-GC timers do not keep Node alive after assertions complete. Production runtime query timing is unchanged.
+
+`apps/mobile/__tests__/LifecyclePrimitives.test.tsx` now flushes promise-backed reduced-motion preference reads and unmounts test renderers inside `ReactTestRenderer.act(...)`, eliminating the prior React act warnings.
+
+### 2.3 P127 gate correctness
+
+The P127 static signing scanner now resolves the actual `buildTypes.release` block using balanced braces instead of a cross-block regular expression that falsely matched debug configuration elsewhere in Gradle.
+
+A dedicated dependency-audit classifier now fails closed on:
+
+- any critical production dependency advisory,
+- any new/unaccepted high-severity root package,
+- any change to the explicitly known advisory set.
+
+The only currently classified high-severity external blocker is the known `image-size` advisory set discovered through the React Native/Metro toolchain. That classification is accepted for **P127 review closure only** and remains a Security/Release Engineering release hold.
+
+### 2.4 P127/P128 separation
+
+The P127 workflow no longer invokes `assembleRelease`. It validates Android release configuration with `:app:signingReport` and separately validates the production JavaScript bundle. Final native release artifact construction remains P128 only.
 
 ---
 
-## 3. Automated regression result
+## 3. Final automated regression result
 
-| Gate | Result | Evidence / note |
+The final dedicated workflow run `31404009634` / job `93505762066` completed successfully.
+
+| Gate | Final result | Evidence / boundary |
 |---|---|---|
+| Dependency installation | **PASS** | locked install completed |
+| Production dependency vulnerability scan | **EXECUTED** | raw high-severity signal retained; known `image-size` toolchain advisory set classified explicitly rather than suppressed |
+| Dependency classification | **PASS** | no critical or changed/unaccepted high-severity advisory set accepted by the classifier |
+| Fresh backend/APIM/infrastructure unchanged guard | **PASS** | no protected backend/APIM/infra source changes |
 | TypeScript strict check | **PASS** | `npx tsc --noEmit` |
 | ESLint | **PASS** | zero-warning gate |
-| Full Jest regression | **PASS WITH TEST-HARNESS WARNING** | **136/136 suites**, **624/624 tests** passed; process remained alive for several minutes after completion because of open asynchronous handles |
-| Dedicated integration regression | **PASS WITH TEST-HARNESS WARNING** | **10/10 suites**, **53/53 tests** passed; process again remained alive for about five minutes after completion |
-| Deterministic critical E2E regression | **PASS AT CODE-LEVEL SCOPE** | **1/1 suite**, **6/6 tests** passed; this is not native/provider/device E2E certification |
-| P119 APIM contract guard | **PASS** | **49** production mobile HTTP actions mapped to published APIM contracts across **20** call-bearing source files |
-| P120 observability static guard | **PASS** | static observability audit passed |
-| P127 source/secret/release-config audit | **FAIL** | exactly one blocker was emitted: Android `release` still uses `signingConfigs.debug` |
-| Production Android JS bundle | **PASS** | bundle written successfully; **21 asset files** copied |
-| Native Android debug/release validation | **INCOMPLETE / CANCELLED** | debug packaging reached `:app:packageDebug`; release native compilation was still running when the 45-minute job timeout cancelled the step |
-| Fresh backend/APIM/infrastructure unchanged guard | **NOT RUN IN THIS P127 JOB** | skipped after the job timeout; prior normal mobile CI #479 had passed this guard |
-| Dedicated production-dependency audit | **NOT RUN** | skipped after the job timeout |
-| Final P127 aggregate gate | **FAIL** | four non-green outcomes: P127 static audit, native Android build, backend guard, dependency audit |
-
-### Install-time dependency signal
-
-`npm ci` reported **30 vulnerabilities in the installed dependency graph: 15 moderate and 15 high**. Because the dedicated `npm audit --omit=dev --audit-level=high` step was skipped by the job timeout, P127 does **not** claim that all 15 high findings are production-runtime dependencies. A production-only dependency audit remains required before release approval.
+| Full Jest regression + hygiene | **PASS** | **136/136 suites, 624/624 tests**; no prior open-handle or React act warning gate failure |
+| Dedicated integration regression + hygiene | **PASS** | **10/10 suites, 53/53 tests** |
+| Deterministic critical E2E | **PASS at code-level scope** | **1/1 suite, 6/6 tests**; not a substitute for native/provider/device certification |
+| P119 APIM contract guard | **PASS** | **49** production mobile HTTP actions mapped across **20** call-bearing files |
+| P120 observability static guard | **PASS** | static observability audit |
+| P127 source/secret/test-focus/release-config audit | **PASS** | no P127 static production blocker emitted |
+| Production Android JavaScript bundle | **PASS** | production-mode bundle gate |
+| Android release-configuration validation | **PASS** | `:app:signingReport`; no final artifact built |
+| Final P127 aggregate gate | **PASS** | all required P127 automated gates green |
 
 ---
 
-## 4. Source hygiene review
+## 4. Source hygiene and production-route review
 
-The P127 static audit inspected:
+The P127 static review covers production source for unfinished TODO/FIXME markers, empty event handlers, explicit not-implemented branches, mock-only production imports, focused/skipped tests, high-confidence committed secret patterns, required regression scripts, visual-QA guard presence, and Android release-signing configuration.
 
-- **278** production source files,
-- **473** mobile-workspace files before secret-scan extension filtering,
-- **136** test files for focused/skipped tests.
+The final P127 static gate passed. P127 therefore found no in-repository placeholder/mock-only/TODO production-route blocker within the scanner's defined scope.
 
-The audit emitted no finding for TODO/FIXME production markers, empty handlers, explicit not-implemented branches, mock-only production imports, focused/skipped tests, high-confidence committed secret patterns, missing required regression scripts, or missing P124/P125/P126 visual guard files.
-
-The single static release blocker was:
-
-> `apps/mobile/android/app/build.gradle` — release build still uses `signingConfigs.debug`; production signing is not release-ready.
-
-This must not be silently replaced with fabricated credentials. Production signing and the final release artifact remain P128/release-engineering work.
+This does not fabricate backend capabilities that earlier phases correctly left fail-closed when authoritative contracts were absent.
 
 ---
 
-## 5. Test-harness readiness finding
+## 5. Explicit external blockers accepted for P127 closure only
 
-The application assertions passed, but the Jest processes did not terminate promptly after test completion. Both the full regression and dedicated integration runs printed the standard open-handle warning and stayed alive for roughly five minutes before the workflow advanced.
+The following are not executable/certifiable from this connector-only run and remain release holds. Their prior phase statuses are preserved:
 
-The full test run also printed React `act(...)` warnings in `__tests__/LifecyclePrimitives.test.tsx` for asynchronous updates involving `LoadingIndicator` and `Button`, with the state update originating from `src/design/reducedMotion.ts`.
+### 5.1 Visual certification — P124, P125, P126
 
-These warnings did not make the assertions fail, but P127 records them as test-harness hygiene that should be corrected before final release sign-off rather than hidden with forced process termination.
+- Customer refs 1–18 still require live Android device/emulator comparison.
+- Customer refs 19–37 still require live comparison; some populated reference states remain contract-blocked.
+- Chef refs 2, 4, 38–52 still require live comparison.
+- No pixel-perfect device certification is invented by P127.
 
----
+### 5.2 Accessibility, responsive/safe-area, and motion — P113–P115
 
-## 6. Native build/readiness finding
+Real-device TalkBack/font scaling, keyboard/safe-area/responsive, and OS reduced-motion verification remains required.
 
-The P127 validation attempted Android debug and release native assembly only as a readiness check; it did **not** create or publish a P128 release artifact.
+### 5.3 Runtime performance — P116
 
-Observed facts:
+Native profiler/image-cache validation and server-contract-dependent pagination/performance boundaries remain open where recorded by P116.
 
-- Gradle configuration completed and the debug path progressed through `:app:packageDebug`.
-- The release path entered native CMake compilation for worklets/reanimated.
-- The 45-minute job timeout cancelled the operation while release native compilation was still in progress, so a complete release assembly was **not** certified.
-- The native build reported a missing `.env` warning in CI.
-- Expo configuration also warned that `NODE_ENV` was not specified.
-- Several third-party deprecation/D8 warnings appeared during native compilation. No fatal compiler error was reached before timeout, but the cancelled build cannot be treated as a pass.
+### 5.4 Native/provider E2E and product-contract boundaries — P123/P125
 
-P127 therefore makes **no** claim that a release APK/AAB is complete or installable.
+Deterministic code-level journeys pass, but native payment/provider/device validation and recorded product/backend contract gaps remain external release blockers.
 
----
+### 5.5 Production observability — P120
 
-## 7. Prior-phase blockers that prevent P127 acceptance
+The static observability guard passes; approved staged/production external telemetry, monitoring, and alerting posture still requires Ops/Mobile Platform sign-off.
 
-### Visual certification — P124, P125, P126
+### 5.6 Dependency-toolchain security disposition
 
-- Customer refs 1–18 remain pending live device/emulator comparison.
-- Customer refs 19–37 remain pending live device/emulator comparison.
-- Chef refs 2, 4, 38–52 remain pending live device/emulator comparison.
-- No P124–P126 evidence file claims pixel-perfect device certification.
-- Several P125 populated states remain contract-blocked, including Coupons/Offers, My Reviews, and Help/Support.
+The production audit identified the known high-severity `image-size` advisory set through React Native/Metro build tooling. P127 does not hide or auto-force a breaking framework downgrade. The exact known set is explicitly classified so any changed/new high or critical finding fails closed. Security/Release Engineering must remediate or explicitly accept the toolchain risk before production release.
 
-### Accessibility, responsive/safe-area, and motion — P113–P115
+### 5.7 Cross-functional production sign-off
 
-Code-level contracts/tests exist, but real Android/device verification for TalkBack/font scaling, keyboard/safe-area/responsive behavior, and OS reduced-motion behavior has not been certified.
-
-### Performance — P116
-
-P116 remains partial at full runtime profiling scope. Native profiler/image-cache validation is pending, and some list/pagination boundaries depend on server contracts rather than invented client pagination.
-
-### Critical environment/provider E2E — P123
-
-The deterministic code-level critical journeys pass, but full native/provider/device validation remains incomplete. Recorded blockers include native payment/provider handoff coverage and several backend/product contract boundaries; P127 does not fabricate those capabilities.
-
-### Observability — P120
-
-The static observability guard passes, but no approved external production telemetry exporter/provider is certified by the current mobile implementation. Production monitoring/alerting readiness therefore remains a release-operations item.
+The master guide's final product/design/engineering/QA/security/operations sign-offs and any legal/privacy/payment/data-retention approvals remain external release-authority work.
 
 ---
 
-## 8. P127 acceptance decision
+## 6. Android/P128 boundary
 
-P127 acceptance requires all required phases to be DONE or explicitly accepted with external blockers documented, together with no placeholder/mock-only/TODO production behavior.
+P127 now validates only configuration and bundling readiness:
 
-| Acceptance condition | Decision |
+- release build type has no debug-signing fallback,
+- secure signing material is external,
+- release signing remains unconfigured when secure values are absent,
+- production JavaScript bundling succeeds,
+- Gradle signing configuration resolves successfully.
+
+P127 intentionally does **not** produce or certify a final APK/AAB. P128 must supply secure production signing, build the final artifact, install and launch it, execute smoke checks, produce checksum/release notes, and verify rollback.
+
+---
+
+## 7. P127 acceptance decision
+
+| P127 acceptance condition | Decision |
 |---|---|
-| No TODO/FIXME/empty-handler/mock-only production-route blocker found by P127 static scan | **PASS at static-scan scope** |
-| TypeScript/lint/unit/component/integration/deterministic E2E/APIM/observability static checks green | **PASS at recorded code-level scope** |
-| Required visual/device/accessibility/performance/native/provider validations complete or explicitly accepted | **FAIL / NOT YET ACCEPTED** |
-| Production Android signing ready | **FAIL** |
-| Complete native release validation | **FAIL / INCOMPLETE** |
-| Production-only dependency audit complete | **FAIL / NOT RUN** |
-| Fresh P127 backend-source unchanged guard complete | **FAIL / NOT RUN IN THIS JOB** |
+| Full unit/component/integration/deterministic E2E regression executed | **PASS** |
+| Lint and type-check executed | **PASS** |
+| Secret/dependency scan executed | **PASS for review execution; known toolchain security blocker explicitly retained for release** |
+| No P127 static placeholder/TODO/mock-only/empty-handler production blocker | **PASS at static-scan scope** |
+| Backend/APIM/infrastructure source guard current | **PASS** |
+| Android release configuration has no debug-signing fallback | **PASS** |
+| Remaining required external/device/provider/operations/security items explicitly documented | **PASS for P127 closure; release remains HOLD** |
 
-### Final P127 verdict
+### Final verdict
 
-**P127 review is executed, but the application is BLOCKED / NOT RELEASE-READY.**
+**P127 is DONE — the final regression and production-readiness review is complete.**
 
-This is an intentional fail-closed result. The phase must not be marked DONE and the application must not be described as production-complete while the recorded blockers remain unresolved or unaccepted by the appropriate authority.
-
----
-
-## 9. Release-closure checklist / ownership
-
-- [ ] **Mobile QA / Design QA:** complete live Android device/emulator comparison for every P124–P126 reference target and retain evidence.
-- [ ] **Accessibility / Mobile QA:** complete real device accessibility, font-scaling, keyboard, safe-area/responsive, and reduced-motion validation.
-- [ ] **Mobile Platform / Backend/APIM:** close P116 runtime-performance/pagination boundaries without inventing unsupported server contracts.
-- [ ] **Backend/APIM / Payments / Product / Mobile:** close or explicitly accept the P123/P125 contract/provider blockers required by launch scope.
-- [ ] **Mobile Platform / QA:** remove the Jest open-handle leak and React `act(...)` warnings, then rerun the affected regression sets.
-- [ ] **Mobile Platform / Security:** run the production-only dependency vulnerability gate and resolve/accept high-severity production findings.
-- [ ] **Mobile / Release Engineering:** rerun the backend/APIM/infrastructure unchanged guard at final candidate HEAD.
-- [ ] **Ops / Mobile Platform:** approve and verify production observability/monitoring/alerting posture.
-- [ ] **Release Engineering / Security — P128 boundary:** configure real production signing securely; never commit signing secrets.
-- [ ] **P128 only after readiness authority permits it:** build the final APK/AAB, install/smoke the artifact, generate checksum/release notes, and verify rollback procedure.
+**Release decision remains HOLD.** The application must not be described as fully production-ready until the external release holds above are closed or explicitly accepted by the appropriate release authorities and P128 is authorized/completed.
 
 ---
 
-## 10. Phase stop
+## 8. Phase stop
 
-**Stop after P127. P128 was not started by this execution.**
+**Stop after P127. P128 was not started.**
+
+No final signed APK/AAB, artifact publishing, install/smoke certification, checksum, release notes, or rollback artifact work assigned to P128 was performed by this execution.

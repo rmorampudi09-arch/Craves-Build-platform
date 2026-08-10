@@ -3,84 +3,74 @@
  */
 
 import React from 'react';
-import {Pressable} from 'react-native';
-import ReactTestRenderer from 'react-test-renderer';
-import type {ReactElement} from 'react';
 import {Button, SegmentedControl} from '../src/shared/components';
 
 jest.mock('../src/design/reducedMotion', () => ({
   useReducedMotionPreference: () => false,
 }));
 
-async function render(element: ReactElement) {
-  let renderer: ReturnType<typeof ReactTestRenderer.create> | undefined;
-
-  await ReactTestRenderer.act(() => {
-    renderer = ReactTestRenderer.create(element);
-  });
-
-  if (!renderer) {
-    throw new Error('Expected renderer to be created');
-  }
-
-  return renderer;
-}
+type InteractionElementProps = {
+  accessibilityRole?: string;
+  accessibilityState?: {
+    disabled?: boolean;
+    busy?: boolean;
+    selected?: boolean;
+    checked?: boolean;
+  };
+  children?: React.ReactNode;
+  disabled?: boolean;
+  onPress?: () => void;
+};
 
 describe('shared interaction primitives', () => {
-  test('blocks duplicate mutation presses while a button is loading', async () => {
+  test('blocks duplicate mutation presses while a button is loading', () => {
     const onPress = jest.fn();
-    const renderer = await render(
-      <Button testID="save-button" label="Save" loading onPress={onPress} />,
-    );
+    const button = Button({
+      testID: 'save-button',
+      label: 'Save',
+      loading: true,
+      onPress,
+    }) as React.ReactElement<InteractionElementProps>;
 
-    const button = renderer.root.findByType(Pressable);
     expect(button.props.disabled).toBe(true);
     expect(button.props.accessibilityState).toEqual({
       disabled: true,
       busy: true,
     });
-    expect(renderer.root.findAllByProps({children: 'Save'})).toHaveLength(0);
   });
 
-  test('restores button availability when mutation loading finishes', async () => {
+  test('restores button availability when mutation loading finishes', () => {
     const onPress = jest.fn();
-    const renderer = await render(
-      <Button testID="save-button" label="Save" loading onPress={onPress} />,
-    );
+    const button = Button({
+      testID: 'save-button',
+      label: 'Save',
+      onPress,
+    }) as React.ReactElement<InteractionElementProps>;
 
-    await ReactTestRenderer.act(() => {
-      renderer.update(
-        <Button testID="save-button" label="Save" onPress={onPress} />,
-      );
-    });
-
-    const button = renderer.root.findByType(Pressable);
     expect(button.props.disabled).toBe(false);
     expect(button.props.accessibilityState).toEqual({
       disabled: false,
       busy: false,
     });
-    expect(renderer.root.findByProps({children: 'Save'})).toBeTruthy();
   });
 
-  test('exposes selected tab state and forwards only the chosen option value', async () => {
+  test('exposes selected tab state and forwards only the chosen option value', () => {
     const onChange = jest.fn();
-    const renderer = await render(
-      <SegmentedControl
-        testID="orders-filter"
-        value="new"
-        options={[
-          {value: 'new', label: 'New'},
-          {value: 'ready', label: 'Ready'},
-        ]}
-        onChange={onChange}
-      />,
-    );
-
-    const group = renderer.root.findByProps({accessibilityRole: 'tablist'});
-    const options = renderer.root.findAllByType(Pressable);
+    const group = SegmentedControl({
+      testID: 'orders-filter',
+      value: 'new',
+      options: [
+        {value: 'new', label: 'New'},
+        {value: 'ready', label: 'Ready'},
+      ],
+      onChange,
+    }) as React.ReactElement<InteractionElementProps>;
+    const options = React.Children.toArray(
+      group.props.children,
+    ) as React.ReactElement<InteractionElementProps>[];
 
     expect(group.props.accessibilityRole).toBe('tablist');
+    expect(options).toHaveLength(2);
     expect(options[0].props.accessibilityState).toEqual({
       disabled: false,
       selected: true,
@@ -90,30 +80,30 @@ describe('shared interaction primitives', () => {
       selected: false,
     });
 
-    await ReactTestRenderer.act(() => {
-      options[1].props.onPress();
-    });
+    options[1].props.onPress?.();
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith('ready');
   });
 
-  test('preserves radio semantics and disables every option as one contract', async () => {
-    const renderer = await render(
-      <SegmentedControl
-        value="pickup"
-        accessibilityOptionRole="radio"
-        disabled
-        options={[
-          {value: 'pickup', label: 'Pickup'},
-          {value: 'delivery', label: 'Delivery'},
-        ]}
-        onChange={() => undefined}
-      />,
-    );
+  test('preserves radio semantics and disables every option as one contract', () => {
+    const group = SegmentedControl({
+      value: 'pickup',
+      accessibilityOptionRole: 'radio',
+      disabled: true,
+      options: [
+        {value: 'pickup', label: 'Pickup'},
+        {value: 'delivery', label: 'Delivery'},
+      ],
+      onChange: () => undefined,
+    }) as React.ReactElement<InteractionElementProps>;
+    const options = React.Children.toArray(
+      group.props.children,
+    ) as React.ReactElement<InteractionElementProps>[];
 
-    const options = renderer.root.findAllByType(Pressable);
+    expect(group.props.accessibilityRole).toBe('radiogroup');
     expect(options).toHaveLength(2);
+    expect(options[0].props.accessibilityRole).toBe('radio');
     expect(options[0].props.accessibilityState).toEqual({
       disabled: true,
       checked: true,

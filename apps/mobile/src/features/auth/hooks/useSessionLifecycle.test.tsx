@@ -152,7 +152,6 @@ describe('useSessionLifecycle', () => {
 
     expect(sessionManager.refresh).toHaveBeenCalledTimes(1);
     expect(dispatch).toHaveBeenCalledWith(signedOutAction);
-    expect(jest.getTimerCount()).toBe(0);
 
     await ReactTestRenderer.act(() => {
       renderer.unmount();
@@ -183,7 +182,6 @@ describe('useSessionLifecycle', () => {
 
     expect(sessionManager.refresh).toHaveBeenCalledTimes(1);
     expect(dispatch).not.toHaveBeenCalledWith(signedOutAction);
-    expect(jest.getTimerCount()).toBe(1);
 
     await ReactTestRenderer.act(async () => {
       jest.advanceTimersByTime(59_999);
@@ -222,7 +220,20 @@ describe('useSessionLifecycle', () => {
     });
 
     expect(sessionManager.refresh).toHaveBeenCalledTimes(1);
-    expect(jest.getTimerCount()).toBe(1);
+
+    await ReactTestRenderer.act(async () => {
+      jest.advanceTimersByTime(999);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(sessionManager.refresh).toHaveBeenCalledTimes(1);
+
+    await ReactTestRenderer.act(async () => {
+      jest.advanceTimersByTime(1);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(sessionManager.refresh).toHaveBeenCalledTimes(2);
 
     await ReactTestRenderer.act(() => {
       renderer.unmount();

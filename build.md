@@ -22,12 +22,13 @@
 - **P125 — Customer Visual QA Refs 19–37:** PARTIAL / QA PENDING; live device/emulator comparison remains pending and some reference states remain contract-blocked. Evidence: `docs/mobile-ui-rebuild/P125_CUSTOMER_VISUAL_QA_REFS_19_37.md`.
 - **P126 — Chef Visual QA Refs 2, 4, 38–52:** PARTIAL / QA PENDING; deterministic target/source preflight is implemented and CI validated, while live Android device/emulator comparison remains pending. Evidence: `docs/mobile-ui-rebuild/P126_CHEF_VISUAL_QA_REFS_2_4_38_52.md`.
 - **P127 — Final Regression and Production Readiness Review:** **DONE — REVIEW COMPLETE / RELEASE DECISION: HOLD.** All P127 in-repository regression/readiness gates are green at the validated code head; unresolved device/provider/operations/security/release items are explicitly retained as external release holds rather than misreported as complete. Evidence: `docs/mobile-ui-rebuild/P127_FINAL_REGRESSION_PRODUCTION_READINESS_REVIEW.md`.
+- **P128 — Final Android Release Artifact:** **BLOCKED — ENTRY GATE NOT SATISFIED / NO ARTIFACT BUILT.** The user authorized the next phase, but the authoritative P127 release decision remains HOLD and the master-guide production-release prerequisites are not yet satisfied. The release build was therefore not started and no signing material, APK/AAB, checksum, install/smoke claim, or publication was produced.
 
 **Current completed phase:** **P127 — Final Regression and Production Readiness Review**.
 
-**P128 — Final Android Release Artifact:** **NOT STARTED / RELEASE HOLD**.
+**Current authorized phase:** **P128 — Final Android Release Artifact — BLOCKED at release entry gate**.
 
-> P127 being DONE means the review phase itself is complete under its acceptance rule that external blockers may be explicitly documented. It does **not** mean the full application is production-approved. Prior partial/QA-pending phases remain unchanged, and P128 must not start until the recorded release holds are resolved or accepted by the appropriate authority.
+> P127 being DONE means the review phase itself is complete under its acceptance rule that external blockers may be explicitly documented. It does **not** mean the full application is production-approved. Prior partial/QA-pending phases remain unchanged. The P128 attempt may proceed to an actual signed build only after the recorded release holds are resolved or explicitly accepted by the appropriate authority.
 
 ---
 
@@ -85,8 +86,36 @@ The application must **not** be described as fully production-ready while these 
 
 ---
 
-## 4. Phase Stop
+## 4. P128 Authorized Attempt — Blocked Entry Record
 
-**P127 is complete. P128 is NOT STARTED.**
+**Phase:** P128 — Final Android Release Artifact  
+**Status:** **BLOCKED**  
+**Started from commit:** `e270e0011cbac6888901d1f9ce821759b4ee496c`  
+**Completed at commit:** N/A — blocked before release-source or artifact implementation/build work  
+**Guide references:** full 183-page master guide, especially pages 17–19 (Testing and Verification Standards, Production Readiness Checklist, Final Engineering Rules)  
+**Changed files:** `build.md` only (control-ledger status; no application/release source changed)  
+**APIM/contracts used:** none; P128 is packaging/release scope only  
+**Behavior completed:** release entry-gate reconciliation against current P127 status, P128 phase contract, secure-signing boundary, and master-guide production-readiness requirements  
+**Tests/checks:** no new build/test workflow was run because the release entry gate failed before P128 artifact work was allowed; the last accepted automated evidence remains P127 workflow run `31404009634` / job `93505762066` — SUCCESS  
+**Visual QA:** not performed in P128; P124–P126 live Android comparison remains QA PENDING  
+**Artifact/provenance:** no APK/AAB generated; no artifact identifier/checksum exists; accepted release source commit is not yet designated  
+**Signing:** no credential or keystore was added to source; `apps/mobile/android/app/build.gradle` continues to require externally injected `CRAVES_ANDROID_*` release-signing values  
+**Known blockers:**
+1. P124–P126 live visual certification remains incomplete.
+2. P113–P116 real-device accessibility/responsive/reduced-motion/performance closure remains incomplete.
+3. P123/P125 native/provider/device E2E and product/backend contract boundaries remain unresolved.
+4. P120 staged/production telemetry, monitoring, and alerting approval remains incomplete.
+5. Security/Release Engineering has not recorded disposition/acceptance of the current high-severity `image-size` React Native/Metro toolchain advisory set.
+6. Product, design, engineering, QA, security, and operations production sign-off is not recorded.
+7. Secure production signing material / Play App Signing release path is not available to this repository execution and must remain external to source.
 
-No final signed APK/AAB, artifact publishing, install/smoke certification, checksum, release notes, or rollback artifact work assigned to P128 was performed in this execution.
+**Release qualification:** **HOLD — no production artifact may be claimed or published from this attempt.**  
+**Next authorized phase:** **NONE — P128 remains the current blocked phase; resolve/explicitly accept the recorded release holds and re-authorize P128 before a final signed artifact build.**
+
+---
+
+## 5. Phase Stop
+
+**P128 was the only phase considered in this execution and is BLOCKED at its release entry gate.**
+
+No feature/UI change, backend/APIM change, release workflow, signing secret, APK/AAB, artifact publication, install/smoke certification, checksum, or rollback artifact was created. This is intentional fail-closed behavior, not a claim that P128 is complete.

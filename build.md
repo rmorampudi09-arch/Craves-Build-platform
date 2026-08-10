@@ -56,7 +56,7 @@
 - **P115 — Reduced Motion and Animation Audit:** PARTIAL at full runtime/device-validation scope; source-level reduced-motion remediation is implemented across shared motion/loading, auth/customer/chef stack transitions, View Cart, and current slide modal surfaces. Evidence: `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md`.
 - **P116 — List/Image/Memory Performance Audit:** PARTIAL at full acceptance/product-contract scope; safe mobile hardening is implemented, but Chef-owned Menu and Customer/Public Kitchen Menu remain authoritative unpaged arrays under the current backend contracts, so the phase cannot claim that every production list/history is bounded in memory. Evidence: `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md`.
 - **P117 — Networking Performance and Cancellation Audit:** DONE at authorized code/CI audit scope; authenticated/public transport retries are shared, safe-read-only and abort-aware, query retries are limited to explicitly retriable non-cancelled failures, stale-time tiers are explicit, and non-idempotent mutations retain zero automatic retries. Evidence: `docs/mobile-ui-rebuild/P117_NETWORKING_PERFORMANCE_CANCELLATION_AUDIT.md`.
-- **P118 — Security/Privacy/Logging Audit:** DONE at authorized code/audit scope; token/persistence/payment/document/logging boundaries were audited and auth-flow phone/email PII was removed from navigation state into deliberately non-persistent process memory. Source CI is still running and is not claimed complete. Evidence: `docs/mobile-ui-rebuild/P118_SECURITY_PRIVACY_LOGGING_AUDIT.md`.
+- **P118 — Security/Privacy/Logging Audit:** DONE at authorized code/CI audit scope; token/persistence/payment/document/logging boundaries were audited, auth-flow phone/email PII was removed from navigation state into deliberately non-persistent process memory, and source validation passed. Evidence: `docs/mobile-ui-rebuild/P118_SECURITY_PRIVACY_LOGGING_AUDIT.md`.
 
 **Current executed phase:** **P118 — Security/Privacy/Logging Audit**.
 
@@ -341,8 +341,8 @@ Evidence/ledger:
 
 - Starting HEAD `1d94d414a1a12d680c86baec984a9275e48da8c2` was compared with source head `f2677c822b65272c4e7298b30a074887646edf8e`; the delta was confined to the intended auth/navigation privacy boundary and focused tests.
 - Commit `78562aa7791cdd1cea969faf632fbf6fa920edbd` restored one unrelated historical comment wording and did not change P118 behavior.
-- **CRAVES Mobile Implementation CI** run **#449** / ID `31368637811` was triggered for current source head `78562aa7791cdd1cea969faf632fbf6fa920edbd`.
-- At this ledger update, dependency installation, TypeScript strict compilation, and ESLint have passed; Jest remains in progress. A completed CI pass is therefore not claimed yet.
+- **CRAVES Mobile Implementation CI** run **#449** / ID `31368637811` completed successfully for current source head `78562aa7791cdd1cea969faf632fbf6fa920edbd`.
+- Dependency installation, TypeScript strict compilation, ESLint, Jest, Android production JavaScript bundle generation, and the backend/APIM/infrastructure source guard all passed.
 - No backend, APIM, OpenAPI, infrastructure, database, provider SDK, or unrelated product UI contract changed.
 - No production telemetry backend/device forensic capture is claimed; acceptance is a source/dependency/persistence/privacy-boundary audit.
 
@@ -405,11 +405,11 @@ Evidence/ledger:
 | P115 | PARTIAL at full runtime/device-validation scope; source-level reduced-motion audit/remediation implemented | `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md` |
 | P116 | PARTIAL at full acceptance/product-contract scope; safe mobile hardening implemented, unpaged menu contracts remain | `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md` |
 | P117 | DONE at authorized code/CI audit scope; networking retry/cancellation/mutation replay hardening validated | `docs/mobile-ui-rebuild/P117_NETWORKING_PERFORMANCE_CANCELLATION_AUDIT.md` |
-| P118 | DONE at authorized code/audit scope; auth route PII removed and security/privacy/logging boundaries audited; source CI still running | `docs/mobile-ui-rebuild/P118_SECURITY_PRIVACY_LOGGING_AUDIT.md` |
+| P118 | DONE at authorized code/CI audit scope; auth route PII removed and security/privacy/logging boundaries audited/validated | `docs/mobile-ui-rebuild/P118_SECURITY_PRIVACY_LOGGING_AUDIT.md` |
 | P119 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-P118 is the current executed phase and is DONE at authorized code/audit scope. Preserve P111 restoration/security boundaries, P112 lifecycle policy, P113 accessibility semantics, P114 safe-area/responsive guardrails, P115 reduced-motion equivalents, P116 list/image/memory hardening and its explicit unpaged-menu blocker, P117 safe networking/retry/cancellation rules, and the P118 credential/persistence/navigation privacy boundary. Auth-flow PII must not return to navigation state or insecure persistence. Contract-blocked features remain blocked. P119 — APIM Contract-Coverage Audit — is the next phase in sequence but is not authorized in this run.
+P118 is the current executed phase and is DONE at authorized code/CI audit scope. Preserve P111 restoration/security boundaries, P112 lifecycle policy, P113 accessibility semantics, P114 safe-area/responsive guardrails, P115 reduced-motion equivalents, P116 list/image/memory hardening and its explicit unpaged-menu blocker, P117 safe networking/retry/cancellation rules, and the P118 credential/persistence/navigation privacy boundary. Auth-flow PII must not return to navigation state or insecure persistence. Contract-blocked features remain blocked. P119 — APIM Contract-Coverage Audit — is the next phase in sequence but is not authorized in this run.

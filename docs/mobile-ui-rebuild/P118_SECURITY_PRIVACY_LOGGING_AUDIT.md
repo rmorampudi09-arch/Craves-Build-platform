@@ -1,6 +1,6 @@
 # P118 — Security/Privacy/Logging Audit
 
-**Status:** DONE at authorized code/audit scope; CI validation recorded separately below  
+**Status:** DONE at authorized code/CI audit scope  
 **Starting branch HEAD:** `1d94d414a1a12d680c86baec984a9275e48da8c2`  
 **Source implementation head:** `78562aa7791cdd1cea969faf632fbf6fa920edbd`  
 **Branch:** `mobile-ui-rebuild-from-scratch`
@@ -155,8 +155,8 @@ Evidence/ledger:
 
 - Starting HEAD `1d94d414a1a12d680c86baec984a9275e48da8c2` was compared with source head `f2677c822b65272c4e7298b30a074887646edf8e`; the delta was confined to the intended auth/navigation privacy boundary and focused tests.
 - Commit `78562aa7791cdd1cea969faf632fbf6fa920edbd` only restored an unrelated historical P90 comment wording, leaving the P118 privacy behavior unchanged.
-- CRAVES Mobile Implementation CI run #449 / ID `31368637811` was automatically triggered for current source head `78562aa7791cdd1cea969faf632fbf6fa920edbd`.
-- At evidence-write time, dependency installation, TypeScript strict compilation, and ESLint had passed; Jest was still running, so this document does **not** claim a completed CI run yet.
+- **CRAVES Mobile Implementation CI** run **#449** / ID `31368637811` completed successfully for current source head `78562aa7791cdd1cea969faf632fbf6fa920edbd`.
+- Dependency installation, TypeScript strict compilation, ESLint, Jest, Android production JavaScript bundle generation, and the backend/APIM/infrastructure source guard all passed.
 - No backend, APIM, OpenAPI, infrastructure, database, provider SDK, or unrelated product UI contract was changed.
 - No production telemetry backend or device-level forensic capture is claimed; the audit is grounded in the current mobile source/dependency/persistence boundaries.
 

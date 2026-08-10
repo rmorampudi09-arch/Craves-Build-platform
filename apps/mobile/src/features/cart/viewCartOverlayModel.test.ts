@@ -1,5 +1,7 @@
-import {resolveRouteChromePolicy} from '../../app/navigation/navigationPolicy';
-import type {RouteChromePolicy} from '../../app/navigation/navigationPolicy';
+import {
+  resolveRouteChromePolicy,
+  type RouteChromePolicy,
+} from '../../app/navigation/navigationPolicy';
 import type {CartMoney} from './domain/cartTypes';
 import {formatCartMoney, isViewCartOverlayVisible} from './viewCartOverlayModel';
 

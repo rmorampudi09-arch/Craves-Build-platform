@@ -63,6 +63,21 @@ check_api "api/v1/admin/subscriptions" "$ADMIN_SUB_AUTH" \
   get-admin-subscription-history \
   update-admin-subscription-status
 
+CHEF_CAPACITY_AUTH="get-chef-subscription-capacity,put-chef-slot-capacity-rule,put-chef-menu-capacity-rule,put-chef-slot-capacity-override,put-chef-menu-capacity-override"
+check_api "api/v1/chef/subscription-capacity" "$CHEF_CAPACITY_AUTH" \
+  get-chef-subscription-capacity \
+  put-chef-slot-capacity-rule \
+  put-chef-menu-capacity-rule \
+  put-chef-slot-capacity-override \
+  put-chef-menu-capacity-override
+
+ADMIN_CAPACITY_AUTH="get-admin-chef-capacity,set-admin-chef-capacity-freeze,list-admin-capacity-incidents,reconcile-admin-subscription-capacity"
+check_api "api/v1/admin/subscription-capacity" "$ADMIN_CAPACITY_AUTH" \
+  get-admin-chef-capacity \
+  set-admin-chef-capacity-freeze \
+  list-admin-capacity-incidents \
+  reconcile-admin-subscription-capacity
+
 CHEF_REVIEW_AUTH="list-chef-reviews,get-chef-review,approve-chef-review,reject-chef-review,get-chef-proof-content"
 check_api "api/v1/backoffice/chef-reviews" "$CHEF_REVIEW_AUTH" \
   list-chef-reviews \
@@ -71,4 +86,4 @@ check_api "api/v1/backoffice/chef-reviews" "$CHEF_REVIEW_AUTH" \
   reject-chef-review \
   get-chef-proof-content
 
-echo "SUCCESS: Complete subscription and backoffice APIM status is valid."
+echo "SUCCESS: Complete subscription, capacity, and backoffice APIM status is valid."

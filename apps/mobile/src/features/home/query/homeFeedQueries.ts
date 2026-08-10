@@ -4,6 +4,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
+import {queryStaleTimes} from '../../../app/query/queryPolicy';
 import {useAppSelector} from '../../../app/store/hooks';
 import type {CustomerBrowsingLocation} from '../../customerShell/state/customerShellSlice';
 import {
@@ -104,7 +105,7 @@ export function useHomeNearbyDishesQuery(
   const queryKey =
     identityId && location
       ? createHomeNearbyDishesQueryKey(identityId, location, options)
-      : [...customerHomeFeedQueryPrefix, 'disabled'] as const;
+      : ([...customerHomeFeedQueryPrefix, 'disabled'] as const);
 
   const query = useInfiniteQuery({
     queryKey,
@@ -127,7 +128,7 @@ export function useHomeNearbyDishesQuery(
     getNextPageParam: getNextHomeFeedPage,
     maxPages: HOME_FEED_MAX_RETAINED_PAGES,
     enabled: queryEnabled,
-    staleTime: 5 * 60_000,
+    staleTime: queryStaleTimes.discoveryMs,
   });
 
   return {

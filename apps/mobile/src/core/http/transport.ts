@@ -4,6 +4,7 @@ import {createCorrelationId} from './correlation';
 import {toAppApiError} from './apiError';
 import {applyRequestMetadata} from './requestMetadata';
 import {httpPolicy} from './requestPolicy';
+import {installSafeReadRetryInterceptor} from './requestRetry';
 
 type AccessTokenProvider = () => string | null;
 
@@ -25,6 +26,8 @@ export function createCoreAxiosClient(
 }
 
 export const publicApiClient = createCoreAxiosClient();
+
+installSafeReadRetryInterceptor(publicApiClient);
 
 publicApiClient.interceptors.response.use(
   response => response,

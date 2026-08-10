@@ -4,6 +4,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
+import {queryStaleTimes} from '../../../app/query/queryPolicy';
 import {useAppSelector} from '../../../app/store/hooks';
 import type {CustomerBrowsingLocation} from '../../customerShell/state/customerShellSlice';
 import {
@@ -71,7 +72,7 @@ export function useNearbyChefDiscoveryQuery(
   const queryKey =
     identityId && location
       ? createNearbyChefDiscoveryQueryKey(identityId, location, options)
-      : [...nearbyChefDiscoveryQueryPrefix, 'disabled'] as const;
+      : ([...nearbyChefDiscoveryQueryPrefix, 'disabled'] as const);
 
   const query = useInfiniteQuery({
     queryKey,
@@ -94,7 +95,7 @@ export function useNearbyChefDiscoveryQuery(
     getNextPageParam: getNextNearbyChefDiscoveryPage,
     maxPages: NEARBY_CHEF_DISCOVERY_MAX_RETAINED_PAGES,
     enabled: queryEnabled,
-    staleTime: 5 * 60_000,
+    staleTime: queryStaleTimes.discoveryMs,
   });
 
   return {

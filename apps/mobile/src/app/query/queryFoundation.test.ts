@@ -1,3 +1,4 @@
+import {AppApiError} from '../../core/http/apiError';
 import {clearPrivateQueryCache} from './queryCache';
 import {createAppQueryClient} from './queryClient';
 import {
@@ -6,20 +7,68 @@ import {
   isPrivateQueryKey,
   matchesPrivateQueryScope,
 } from './queryKeys';
-import {clampPageSize, queryPolicy} from './queryPolicy';
+import {
+  clampPageSize,
+  getQueryRetryDelayMs,
+  queryPolicy,
+  queryStaleTimes,
+  shouldRetryQuery,
+} from './queryPolicy';
 
 describe('query/store provider and cache rules', () => {
   it('centralizes bounded default query behavior', () => {
     const client = createAppQueryClient();
     const defaults = client.getDefaultOptions();
 
-    expect(defaults.queries?.retry).toBe(queryPolicy.readRetryCount);
+    expect(defaults.queries?.retry).toBe(shouldRetryQuery);
+    expect(defaults.queries?.retryDelay).toBe(getQueryRetryDelayMs);
     expect(defaults.queries?.staleTime).toBe(queryPolicy.staleTimeMs);
     expect(defaults.queries?.gcTime).toBe(queryPolicy.gcTimeMs);
     expect(defaults.queries?.refetchOnReconnect).toBe(true);
     expect(defaults.mutations?.retry).toBe(queryPolicy.mutationRetryCount);
 
     client.clear();
+  });
+
+  it('retries only explicitly transient reads and never cancellation', () => {
+    const transient = new AppApiError(
+      'NETWORK_ERROR',
+      'Temporary network failure.',
+      undefined,
+      undefined,
+      true,
+      false,
+    );
+    const terminal = new AppApiError(
+      'HTTP_404',
+      'Not found.',
+      404,
+      undefined,
+      false,
+      false,
+    );
+    const cancelled = new AppApiError(
+      'REQUEST_CANCELLED',
+      'Request cancelled.',
+      undefined,
+      undefined,
+      false,
+      true,
+    );
+
+    expect(shouldRetryQuery(0, transient)).toBe(true);
+    expect(shouldRetryQuery(queryPolicy.readRetryCount, transient)).toBe(false);
+    expect(shouldRetryQuery(0, terminal)).toBe(false);
+    expect(shouldRetryQuery(0, cancelled)).toBe(false);
+    expect(getQueryRetryDelayMs(0)).toBe(queryPolicy.readRetryBaseDelayMs);
+    expect(getQueryRetryDelayMs(100)).toBe(queryPolicy.readRetryMaxDelayMs);
+    expect(queryPolicy.mutationRetryCount).toBe(0);
+  });
+
+  it('publishes explicit default and discovery stale-time tiers', () => {
+    expect(queryStaleTimes.defaultMs).toBe(30_000);
+    expect(queryStaleTimes.discoveryMs).toBe(5 * 60_000);
+    expect(queryStaleTimes.discoveryMs).toBeGreaterThan(queryStaleTimes.defaultMs);
   });
 
   it('creates stable contextual public query keys', () => {

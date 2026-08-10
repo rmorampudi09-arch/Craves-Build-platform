@@ -1,4 +1,8 @@
-import {AxiosError, AxiosHeaders, type InternalAxiosRequestConfig} from 'axios';
+import axios, {
+  AxiosError,
+  AxiosHeaders,
+  type InternalAxiosRequestConfig,
+} from 'axios';
 import {AppApiError, toAppApiError} from './apiError';
 import {applyRequestMetadata} from './requestMetadata';
 import {
@@ -6,6 +10,10 @@ import {
   httpPolicy,
   shouldRetryRequest,
 } from './requestPolicy';
+import {
+  installSafeReadRetryInterceptor,
+  waitForRetry,
+} from './requestRetry';
 import {
   clearInFlightRequestDedupe,
   runDedupedRequest,
@@ -66,6 +74,52 @@ describe('typed HTTP client foundation', () => {
     ).toBe(false);
     expect(getRetryDelayMs(0)).toBe(httpPolicy.retryBaseDelayMs);
     expect(getRetryDelayMs(50)).toBe(httpPolicy.retryMaxDelayMs);
+  });
+
+  it('uses the shared retry interceptor for reads without replaying mutations', async () => {
+    const safeReadClient = axios.create();
+    installSafeReadRetryInterceptor(safeReadClient);
+    let safeReadAttempts = 0;
+    safeReadClient.defaults.adapter = async config => {
+      safeReadAttempts += 1;
+      if (safeReadAttempts === 1) {
+        throw new AxiosError('network', 'ERR_NETWORK', config);
+      }
+      return {
+        data: {ok: true},
+        status: 200,
+        statusText: 'OK',
+        headers: new AxiosHeaders(),
+        config,
+      };
+    };
+
+    await expect(safeReadClient.get('/health')).resolves.toMatchObject({
+      data: {ok: true},
+    });
+    expect(safeReadAttempts).toBe(2);
+
+    const mutationClient = axios.create();
+    installSafeReadRetryInterceptor(mutationClient);
+    let mutationAttempts = 0;
+    mutationClient.defaults.adapter = async config => {
+      mutationAttempts += 1;
+      throw new AxiosError('network', 'ERR_NETWORK', config);
+    };
+
+    await expect(mutationClient.post('/orders', {})).rejects.toBeInstanceOf(
+      AxiosError,
+    );
+    expect(mutationAttempts).toBe(1);
+  });
+
+  it('cancels retry backoff before another request can be replayed', async () => {
+    const controller = new AbortController();
+    const pending = waitForRetry(5_000, controller.signal);
+
+    controller.abort();
+
+    await expect(pending).resolves.toBe(false);
   });
 
   it('normalizes cancellation without making it retriable', () => {

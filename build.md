@@ -57,8 +57,10 @@
 - **P116 — List/Image/Memory Performance Audit:** PARTIAL at full acceptance/product-contract scope; safe mobile hardening is implemented, but Chef-owned Menu and Customer/Public Kitchen Menu remain authoritative unpaged arrays under the current backend contracts, so the phase cannot claim that every production list/history is bounded in memory. Evidence: `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md`.
 - **P117 — Networking Performance and Cancellation Audit:** DONE at authorized code/CI audit scope; authenticated/public transport retries are shared, safe-read-only and abort-aware, query retries are limited to explicitly retriable non-cancelled failures, stale-time tiers are explicit, and non-idempotent mutations retain zero automatic retries. Evidence: `docs/mobile-ui-rebuild/P117_NETWORKING_PERFORMANCE_CANCELLATION_AUDIT.md`.
 - **P118 — Security/Privacy/Logging Audit:** DONE at authorized code/CI audit scope; token/persistence/payment/document/logging boundaries were audited, auth-flow phone/email PII was removed from navigation state into deliberately non-persistent process memory, and source validation passed. Evidence: `docs/mobile-ui-rebuild/P118_SECURITY_PRIVACY_LOGGING_AUDIT.md`.
+- **P119 — APIM Contract-Coverage Audit:** DONE at authorized code/audit scope; production mobile HTTP actions are inventoried behind a deterministic APIM coverage gate and the unapproved Chef earnings route was quarantined. Evidence: `docs/mobile-ui-rebuild/P119_APIM_CONTRACT_COVERAGE_AUDIT.md`. Local/Actions execution remains unclaimed in its evidence.
+- **P120 — Analytics/Observability Audit:** PARTIAL at full production/staged-observability scope; privacy-safe screen/action/session/network/performance/crash boundaries and guards are implemented, while an approved production exporter/provider and staged runtime verification remain unavailable. Evidence: `docs/mobile-ui-rebuild/P120_ANALYTICS_OBSERVABILITY_AUDIT.md`.
 
-**Current executed phase:** **P118 — Security/Privacy/Logging Audit**.
+**Current executed phase:** **P120 — Analytics/Observability Audit**.
 
 ### P112 authorized backfill completion
 
@@ -361,6 +363,39 @@ Evidence/ledger:
 
 **Required action:** Stop. Do not pre-implement P119.
 
+### P119 implemented boundary
+
+**P119 starting branch HEAD:** `24211308454854e32a962b65fdc6f8704f6886a9`  
+**P119 evidence head:** `373787fc1ecc29877f405aa5cd9c35b04511dad2`
+
+- Published the current production mobile action inventory in `api/apim-api/contracts/mobile-production.v1.json` and added `npm run check:p119` for deterministic method/path/auth/model/validator coverage.
+- Audited production HTTP call sites against the centralized APIM transport boundary.
+- Quarantined the unapproved `GET /api/v1/chef/earnings` production call instead of inventing APIM coverage or fake earnings data.
+- P119 evidence records 49 current production mobile HTTP actions and the exact validation/contract ownership boundary.
+- Runtime/CI execution is not claimed in the P119 evidence because it was a connector-only run and Actions capacity was recorded as exhausted.
+
+### P120 implemented boundary
+
+**P120 starting branch HEAD:** `373787fc1ecc29877f405aa5cd9c35b04511dad2`  
+**P120 implementation head before evidence:** `635799d812b1bf88bff2a272975ea88add2fed08`  
+**P120 evidence head:** `91c2108ea288f358bfa5dc7fdf074c536bb2fb2b`
+
+- Added one provider-neutral observability abstraction instead of introducing a duplicate analytics/logging stack or guessing a production telemetry vendor.
+- Central privacy filtering drops sensitive keys/nested values, redacts sensitive-looking generic strings, bounds strings, omits raw exception messages/stacks, and isolates sink failures from product behavior.
+- React Navigation route changes now emit route-name-only screen observations with coarse role and no route params/resource IDs. Raw inbound URLs are never emitted.
+- Protected `httpClient` writes emit sanitized mutation action boundaries. Central Axios transport observes public/authenticated request attempts with sanitized route, existing `X-Correlation-ID`, outcome/status, and duration.
+- Auth/session lifecycle emits controlled refresh/establishment/invalidation events and refresh timing without credentials or raw error messages.
+- Uncaught React Native JavaScript errors enter the privacy-safe exception boundary before delegation to the existing global handler.
+- Added focused observability/network-redaction tests and deterministic `npm run check:p120` source guard.
+- Full P120 remains PARTIAL because the inspected dependency/native boundary has no approved analytics/crash/performance exporter configured; staged provider delivery/device verification therefore cannot be claimed.
+- No backend, APIM, OpenAPI, infrastructure, database, new provider dependency, or product API contract changed.
+
+**Next phase in sequence:** **P121 — Unit/Component Test Completion — NOT STARTED**.
+
+**Next phase authorization:** **NONE AUTHORIZED in this run.**
+
+**Required action:** Stop. Do not pre-implement P121.
+
 ---
 
 ## 2. Recent Evidence Index
@@ -406,10 +441,12 @@ Evidence/ledger:
 | P116 | PARTIAL at full acceptance/product-contract scope; safe mobile hardening implemented, unpaged menu contracts remain | `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md` |
 | P117 | DONE at authorized code/CI audit scope; networking retry/cancellation/mutation replay hardening validated | `docs/mobile-ui-rebuild/P117_NETWORKING_PERFORMANCE_CANCELLATION_AUDIT.md` |
 | P118 | DONE at authorized code/CI audit scope; auth route PII removed and security/privacy/logging boundaries audited/validated | `docs/mobile-ui-rebuild/P118_SECURITY_PRIVACY_LOGGING_AUDIT.md` |
-| P119 onward | NOT STARTED / not accepted | — |
+| P119 | DONE at authorized code/audit scope; APIM action inventory/coverage gate and Chef earnings quarantine recorded | `docs/mobile-ui-rebuild/P119_APIM_CONTRACT_COVERAGE_AUDIT.md` |
+| P120 | PARTIAL at full production/staged-observability scope; privacy-safe source boundary/instrumentation implemented, approved exporter/runtime verification blocked | `docs/mobile-ui-rebuild/P120_ANALYTICS_OBSERVABILITY_AUDIT.md` |
+| P121 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-P118 is the current executed phase and is DONE at authorized code/CI audit scope. Preserve P111 restoration/security boundaries, P112 lifecycle policy, P113 accessibility semantics, P114 safe-area/responsive guardrails, P115 reduced-motion equivalents, P116 list/image/memory hardening and its explicit unpaged-menu blocker, P117 safe networking/retry/cancellation rules, and the P118 credential/persistence/navigation privacy boundary. Auth-flow PII must not return to navigation state or insecure persistence. Contract-blocked features remain blocked. P119 — APIM Contract-Coverage Audit — is the next phase in sequence but is not authorized in this run.
+P120 is the current executed phase and is PARTIAL at full production/staged-observability scope. Preserve the existing restoration/security/lifecycle/accessibility/responsive/reduced-motion/performance/networking/privacy/APIM boundaries, and preserve P120's central privacy filtering: no raw credentials, OTPs, payment data, document content, private addresses, raw route params, raw URLs, request/response payloads, or raw exception messages/stacks may enter telemetry. The provider-neutral sink remains intentionally unconfigured until an approved production observability provider/native configuration is supplied. Contract-blocked features remain blocked. **P121 — Unit/Component Test Completion is the next phase in sequence but is not authorized in this run.**

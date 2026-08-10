@@ -10,7 +10,12 @@ export function isViewCartOverlayVisible(
   model: ViewCartOverlayModel,
   routePolicy: RouteChromePolicy,
 ): boolean {
-  return routePolicy.viewCartEligible && model.itemCount > 0 && model.subtotal !== null;
+  return (
+    routePolicy.viewCartEligible &&
+    !routePolicy.bottomNavigationVisible &&
+    model.itemCount > 0 &&
+    model.subtotal !== null
+  );
 }
 
 export function formatCartMoney(money: CartMoney): string {

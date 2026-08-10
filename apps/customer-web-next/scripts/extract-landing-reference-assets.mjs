@@ -10,22 +10,22 @@ const targetDirectory = resolve(appRoot, "public/landing/reference");
 const assets = [
   {
     name: "hero-reference",
-    partCount: 5,
+    partCount: 4,
     sha256: "eebda2569b9caeabcb8957a7ee10528873c6d910cd8968d004173b7130a0c366",
   },
   {
     name: "how-craves-works-reference",
-    partCount: 3,
+    partCount: 2,
     sha256: "714c7ddc7d596fb0c0d5243cc691a2817c0cdb4f26b02a24655e39baa8be3c7f",
   },
   {
     name: "why-craves-reference",
-    partCount: 3,
+    partCount: 2,
     sha256: "f91516c17b3c91861629bd17b627635a13850e97152acca59b16dac18b499b93",
   },
   {
     name: "home-chefs-app-reference",
-    partCount: 5,
+    partCount: 3,
     sha256: "f0f8536e2298a19e8495b044dda3ac9a668cb36ce13678947f7473365e4cf0d2",
   },
 ];

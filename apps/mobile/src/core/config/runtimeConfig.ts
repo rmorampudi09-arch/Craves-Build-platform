@@ -103,14 +103,16 @@ function resolveApiBaseUrl(
   // route. Accept and normalize the previously supplied full API base to avoid
   // producing /api/v1/api/v1/... requests after Firebase OTP verification.
   if (normalizedPath === API_VERSION_PREFIX) {
-    parsed.pathname = '/';
-  } else if (normalizedPath) {
+    return `${parsed.protocol}//${parsed.host}`;
+  }
+
+  if (normalizedPath) {
     throw new RuntimeConfigurationError(
       'CRAVES_API_BASE_URL must be the gateway origin only; mobile API paths already include /api/v1.',
     );
   }
 
-  return parsed.toString().replace(/\/+$/, '');
+  return candidate;
 }
 
 export function getRuntimeConfig(): RuntimeConfig {

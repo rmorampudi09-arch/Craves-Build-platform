@@ -1,62 +1,63 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const sourceDirectory = resolve(appRoot, "scripts/assets/landing-reference");
 const targetDirectory = resolve(appRoot, "public/landing/reference");
 
 const assets = [
   {
-    name: "hero-reference",
-    partCount: 4,
-    sha256: "eebda2569b9caeabcb8957a7ee10528873c6d910cd8968d004173b7130a0c366",
+    name: "hero-reference.png",
+    url: "https://at.adobe.com/cpTbOwX86crCwT4Q",
+    sha256: "51d8f9f7e8fa852fcf0db35f1b52a6b8303e0ea869fb890855cb35156fa68655",
   },
   {
-    name: "how-craves-works-reference",
-    partCount: 2,
-    sha256: "714c7ddc7d596fb0c0d5243cc691a2817c0cdb4f26b02a24655e39baa8be3c7f",
+    name: "how-craves-works-reference.png",
+    url: "https://at.adobe.com/6s0dh3ynQNlJkrtA",
+    sha256: "3e149fda7da24782a129bacdad7d652aae07358e90fd15182ccdf9730aff4796",
   },
   {
-    name: "why-craves-reference",
-    partCount: 2,
-    sha256: "f91516c17b3c91861629bd17b627635a13850e97152acca59b16dac18b499b93",
+    name: "why-craves-reference.png",
+    url: "https://at.adobe.com/rCojZEfKoldCU6Pe",
+    sha256: "94592a5ac7a5ed5d4466e8ab6104bae0a062f6fb870eafb786ee36692d56f400",
   },
   {
-    name: "home-chefs-app-reference",
-    partCount: 3,
-    sha256: "f0f8536e2298a19e8495b044dda3ac9a668cb36ce13678947f7473365e4cf0d2",
+    name: "home-chefs-app-reference.png",
+    url: "https://at.adobe.com/LNOfkF4c92uElg8Y",
+    sha256: "b3331ae6d53b85ba5face0383b82e25420527e208fcedee36c04a12eb19aa9bd",
   },
 ];
 
 await mkdir(targetDirectory, { recursive: true });
 
 for (const asset of assets) {
-  const encodedParts = [];
-  for (let index = 0; index < asset.partCount; index += 1) {
-    const suffix = String(index).padStart(2, "0");
-    const partPath = resolve(
-      sourceDirectory,
-      `${asset.name}.webp.base64.${suffix}`,
+  const response = await fetch(asset.url, {
+    redirect: "follow",
+    headers: {
+      "User-Agent": "Craves-Customer-Web-Build/1.0",
+      Accept: "image/png,image/*;q=0.9,*/*;q=0.1",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Unable to fetch landing reference ${asset.name}: HTTP ${response.status}`,
     );
-    encodedParts.push((await readFile(partPath, "utf8")).trim());
   }
 
-  const image = Buffer.from(encodedParts.join(""), "base64");
+  const image = Buffer.from(await response.arrayBuffer());
+  const signature = image.subarray(0, 8).toString("hex");
+  if (signature !== "89504e470d0a1a0a") {
+    throw new Error(`Landing reference ${asset.name} is not the approved PNG`);
+  }
+
   const actualSha256 = createHash("sha256").update(image).digest("hex");
   if (actualSha256 !== asset.sha256) {
     throw new Error(
-      `Landing reference asset ${asset.name} has unexpected hash ${actualSha256}`,
+      `Landing reference ${asset.name} has unexpected hash ${actualSha256}`,
     );
   }
 
-  const riff = image.subarray(0, 4).toString("ascii");
-  const webp = image.subarray(8, 12).toString("ascii");
-  if (riff !== "RIFF" || webp !== "WEBP") {
-    throw new Error(`Landing reference asset ${asset.name} is not WebP`);
-  }
-
-  await writeFile(resolve(targetDirectory, `${asset.name}.webp`), image);
-  console.log(`Prepared landing reference asset: ${asset.name}.webp`);
+  await writeFile(resolve(targetDirectory, asset.name), image);
+  console.log(`Prepared approved landing reference: ${asset.name}`);
 }

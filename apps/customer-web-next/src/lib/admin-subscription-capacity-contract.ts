@@ -10,7 +10,7 @@ export type CapacityIncident = {
   isoDayOfWeek: number | null;
   mealSlotCode: string;
   menuItemId: string | null;
-  incidentType: "RECURRING_DEFICIT" | "DATE_DEFICIT" | "ITEM_DEFICIT" | "PROJECTION_FAILURE";
+  incidentType: "RECURRING_DEFICIT" | "DATE_DEFICIT" | "ITEM_DEFICIT" | "PROJECTION_FAILURE" | "PAID_CAPACITY_CONFLICT";
   severity: "P1" | "P2" | "P3" | "P4";
   status: "OPEN" | "RESOLVED";
   reservedUnits: number;
@@ -31,7 +31,7 @@ export type CapacityIncidentPage = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SLOT = /^[A-Z0-9][A-Z0-9_-]{0,39}$/;
-const TYPES = new Set(["RECURRING_DEFICIT", "DATE_DEFICIT", "ITEM_DEFICIT", "PROJECTION_FAILURE"]);
+const TYPES = new Set(["RECURRING_DEFICIT", "DATE_DEFICIT", "ITEM_DEFICIT", "PROJECTION_FAILURE", "PAID_CAPACITY_CONFLICT"]);
 const SEVERITIES = new Set(["P1", "P2", "P3", "P4"]);
 const STATUSES = new Set(["OPEN", "RESOLVED"]);
 

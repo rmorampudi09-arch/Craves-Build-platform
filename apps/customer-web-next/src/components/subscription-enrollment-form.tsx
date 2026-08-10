@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CustomerAddress } from "@/lib/address-contract";
 import type { PublicSubscriptionPlan } from "@/lib/subscription-contract";
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `subscription:${crypto.randomUUID()}`;
+  }
+  return `subscription:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+}
 
 export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
   const [plan, setPlan] = useState<PublicSubscriptionPlan | null>(null);
@@ -12,6 +19,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("Loading plan and saved addresses…");
   const [busy, setBusy] = useState(false);
+  const idempotencyKey = useRef("");
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   useEffect(() => {
@@ -39,14 +47,26 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!plan || !addressId || !startDate) return;
+    if (!idempotencyKey.current) idempotencyKey.current = newIdempotencyKey();
     setBusy(true); setMessage("");
     try {
-      const response = await fetch("/api/subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ planId: plan.id, startDate, deliveryAddressId: addressId, notes: notes || null }) });
+      const response = await fetch("/api/subscriptions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey.current,
+        },
+        body: JSON.stringify({ planId: plan.id, startDate, deliveryAddressId: addressId, notes: notes || null })
+      });
       if (response.status === 401) throw new Error("Your session expired. Sign in again.");
-      if (!response.ok) throw new Error("Subscription could not be created. Check the start date and plan status.");
+      if (response.status === 409) throw new Error("This enrollment request conflicts with an earlier submission. Refresh before trying again.");
+      if (!response.ok) throw new Error("Subscription could not be created. Check the start date, address and plan status.");
       window.location.assign("/subscriptions");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Subscription could not be created."); }
-    finally { setBusy(false); }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Subscription could not be created.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!plan) return <section className="rounded-[28px] bg-[#FFF8EC] p-6 text-slate-950"><p role="status">{message}</p></section>;

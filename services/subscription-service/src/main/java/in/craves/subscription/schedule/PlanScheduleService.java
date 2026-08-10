@@ -3,6 +3,8 @@ package in.craves.subscription.schedule;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.schedule.PlanScheduleModels.ActivateScheduleRequest;
 import in.craves.subscription.schedule.PlanScheduleModels.PlanScheduleResponse;
+import in.craves.subscription.schedule.PlanScheduleModels.PublicPlanScheduleResponse;
+import in.craves.subscription.schedule.PlanScheduleModels.PublicScheduleItemResponse;
 import in.craves.subscription.schedule.PlanScheduleModels.PutScheduleRequest;
 import in.craves.subscription.schedule.PlanScheduleModels.ScheduleItemRequest;
 import in.craves.subscription.schedule.PlanScheduleRepository.PlanOwner;
@@ -26,6 +28,26 @@ public class PlanScheduleService {
     public PlanScheduleService(PlanScheduleRepository repository, PlanCatalogClient catalogClient) {
         this.repository = repository;
         this.catalogClient = catalogClient;
+    }
+
+    public PublicPlanScheduleResponse getPublicActive(UUID planId) {
+        PlanOwner plan = repository.findPlanOwner(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
+        if (!"ACTIVE".equals(plan.status())) {
+            throw ApiException.notFound("PLAN_NOT_FOUND", "Active subscription plan was not found");
+        }
+        PlanScheduleResponse schedule = repository.find(planId)
+            .filter(value -> "ACTIVE".equals(value.status()))
+            .orElseThrow(() -> ApiException.notFound("PLAN_SCHEDULE_NOT_FOUND", "Active meal schedule was not found"));
+        return new PublicPlanScheduleResponse(
+            schedule.planId(),
+            schedule.recurrenceType(),
+            schedule.timezone(),
+            schedule.serviceTime(),
+            schedule.items().stream().map(item -> new PublicScheduleItemResponse(
+                item.menuItemId(), item.quantity(), item.isoDayOfWeek(), item.dayOfMonth(), item.sequenceNumber()
+            )).toList()
+        );
     }
 
     public PlanScheduleResponse get(UUID planId, CurrentUser user) {
@@ -86,6 +108,9 @@ public class PlanScheduleService {
     }
 
     private void validateItems(String recurrence, List<ScheduleItemRequest> items, UUID chefIdentityId) {
+        if (chefIdentityId == null) {
+            throw ApiException.conflict("PLAN_CHEF_REQUIRED", "An approved chef must be assigned before a schedule can be managed");
+        }
         Set<String> uniqueness = new HashSet<>();
         for (ScheduleItemRequest item : items) {
             if ("WEEKLY".equals(recurrence)) {

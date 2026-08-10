@@ -33,6 +33,7 @@ public final class SubscriptionLifecycleModels {
     public record CustomerOccurrenceResponse(
         UUID id,
         LocalDate serviceDate,
+        String mealSlotCode,
         Instant serviceAt,
         String status,
         List<OccurrenceItemResponse> items

@@ -49,10 +49,21 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_hold_subscription_skip_insert_until_all_slots_exist
+    ON subscription_schema.subscription_skip_request;
+DROP TRIGGER IF EXISTS trg_hold_subscription_skip_update_until_all_slots_exist
+    ON subscription_schema.subscription_skip_request;
 DROP TRIGGER IF EXISTS trg_hold_subscription_skip_until_all_slots_exist
     ON subscription_schema.subscription_skip_request;
 
-CREATE TRIGGER trg_hold_subscription_skip_until_all_slots_exist
+CREATE TRIGGER trg_hold_subscription_skip_insert_until_all_slots_exist
+BEFORE INSERT
+ON subscription_schema.subscription_skip_request
+FOR EACH ROW
+WHEN (NEW.status = 'APPLIED')
+EXECUTE FUNCTION subscription_schema.fn_hold_skip_until_all_slots_exist();
+
+CREATE TRIGGER trg_hold_subscription_skip_update_until_all_slots_exist
 BEFORE UPDATE OF status, applied_at
 ON subscription_schema.subscription_skip_request
 FOR EACH ROW

@@ -80,7 +80,7 @@ public class OccurrenceRepository {
     public Optional<SkipRequest> findRequestedSkip(UUID subscriptionId, LocalDate serviceDate) {
         return jdbcTemplate.query(
             "SELECT id, actor_identity_id, reason FROM subscription_schema.subscription_skip_request " +
-                "WHERE subscription_id = ? AND service_date = ? AND status = 'REQUESTED'",
+                "WHERE subscription_id = ? AND service_date = ? AND status IN ('REQUESTED','APPLIED')",
             (rs, rowNum) -> new SkipRequest(
                 rs.getObject("id", UUID.class),
                 rs.getObject("actor_identity_id", UUID.class),
@@ -92,7 +92,7 @@ public class OccurrenceRepository {
     }
 
     @Transactional
-    public boolean createOccurrence(
+    public UUID createOccurrence(
         ClaimedSubscription subscription,
         ActiveSchedule schedule,
         LocalDate serviceDate,
@@ -121,7 +121,7 @@ public class OccurrenceRepository {
             initialStatus
         );
         if (inserted != 1) {
-            return false;
+            return null;
         }
         for (ScheduleItem item : matchingItems) {
             jdbcTemplate.update(
@@ -154,7 +154,7 @@ public class OccurrenceRepository {
                 skipRequest.id()
             );
         }
-        return true;
+        return occurrenceId;
     }
 
     public void releaseAndAdvance(ClaimedSubscription subscription, LocalDate nextServiceDate) {

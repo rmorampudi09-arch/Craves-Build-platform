@@ -63,4 +63,22 @@ public final class PlanScheduleModels {
         Instant activatedAt
     ) {
     }
+
+    public record PublicScheduleItemResponse(
+        UUID menuItemId,
+        int quantity,
+        Integer isoDayOfWeek,
+        Integer dayOfMonth,
+        int sequenceNumber
+    ) {
+    }
+
+    public record PublicPlanScheduleResponse(
+        UUID planId,
+        String recurrenceType,
+        String timezone,
+        LocalTime serviceTime,
+        List<PublicScheduleItemResponse> items
+    ) {
+    }
 }

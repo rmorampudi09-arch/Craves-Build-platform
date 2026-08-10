@@ -3,6 +3,7 @@ package in.craves.subscription.occurrence;
 import in.craves.subscription.occurrence.OccurrenceRepository.ActiveSchedule;
 import in.craves.subscription.occurrence.OccurrenceRepository.ClaimedSubscription;
 import in.craves.subscription.occurrence.OccurrenceRepository.ScheduleItem;
+import in.craves.subscription.occurrence.OccurrenceRepository.SkipRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -42,6 +43,7 @@ public class OccurrenceGeneratorService {
     public GenerationSummary generateDue() {
         int claimed = 0;
         int generated = 0;
+        int skipped = 0;
         int advancedWithoutOccurrence = 0;
         int deferred = 0;
         int failed = 0;
@@ -76,10 +78,23 @@ public class OccurrenceGeneratorService {
                     || subscription.deliveryAddressId() == null) {
                     throw new IllegalStateException("Active subscription is missing required identity or delivery address");
                 }
+                SkipRequest skipRequest = repository.findRequestedSkip(
+                    subscription.subscriptionId(), subscription.serviceDate()
+                ).orElse(null);
                 if (repository.createOccurrence(
-                    subscription, schedule, subscription.serviceDate(), serviceAt, matching, next
+                    subscription,
+                    schedule,
+                    subscription.serviceDate(),
+                    serviceAt,
+                    matching,
+                    next,
+                    skipRequest
                 )) {
-                    generated++;
+                    if (skipRequest == null) {
+                        generated++;
+                    } else {
+                        skipped++;
+                    }
                 }
             } catch (RuntimeException exception) {
                 failed++;
@@ -90,7 +105,7 @@ public class OccurrenceGeneratorService {
                 );
             }
         }
-        return new GenerationSummary(claimed, generated, advancedWithoutOccurrence, deferred, failed);
+        return new GenerationSummary(claimed, generated, skipped, advancedWithoutOccurrence, deferred, failed);
     }
 
     static List<ScheduleItem> matchingItems(ActiveSchedule schedule, LocalDate date) {
@@ -122,6 +137,7 @@ public class OccurrenceGeneratorService {
     public record GenerationSummary(
         int claimed,
         int generated,
+        int skipped,
         int advancedWithoutOccurrence,
         int deferred,
         int failed

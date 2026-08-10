@@ -134,7 +134,7 @@ export type CustomerStackRouteName =
   | keyof CustomerOrdersStackParamList
   | keyof CustomerProfileStackParamList;
 
-/** P90 registers the complete Chef Orders stack through read-only Completed history. */
+/** P90 completes the authorized Chef Orders stack through read-only Completed history. */
 export type ChefOrdersStackParamList = {
   ChefOrdersPreparing: undefined;
   ChefOrdersNew: undefined;

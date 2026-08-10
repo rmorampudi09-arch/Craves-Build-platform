@@ -9,6 +9,7 @@
     "start": "react-native start",
     "test": "jest",
     "test:integration": "jest --runInBand --runTestsByPath __tests__/integration/P122CrossFeatureFlows.test.ts src/app/navigation/inboundRouting.test.ts src/app/navigation/processRestoration.test.ts src/features/auth/api/sessionManager.test.ts src/features/chefProfile/state/chefProfileRoleSwitch.test.ts src/features/cart/cartMutations.test.ts src/features/customerShell/customerCrossScreenReconciliation.test.ts src/features/notifications/customerNotificationsModel.test.ts src/features/chefOrders/domain/chefOrderDecision.test.ts src/features/chefOrders/domain/chefOrderEventReconciliation.test.ts",
+    "test:e2e": "jest --runInBand --runTestsByPath __tests__/e2e/P123CriticalE2EJourneys.test.ts",
     "check:p119": "node scripts/p119-apim-contract-coverage-check.mjs",
     "check:p120": "node scripts/p120-observability-audit-check.mjs"
   },
@@ -21,7 +22,6 @@
     "@react-native/new-app-screen": "0.85.3",
     "@react-navigation/bottom-tabs": "^7.18.15",
     "@react-navigation/native": "^7.3.15",
-    "@react-navigation/native-stack": "^7.18.7",
     "@reduxjs/toolkit": "^2.12.0",
     "@shopify/flash-list": "2.0.2",
     "@tanstack/react-query": "^5.101.4",

@@ -450,3 +450,37 @@ Evidence/ledger:
 ## 3. Handoff
 
 P120 is the current executed phase and is PARTIAL at full production/staged-observability scope. Preserve the existing restoration/security/lifecycle/accessibility/responsive/reduced-motion/performance/networking/privacy/APIM boundaries, and preserve P120's central privacy filtering: no raw credentials, OTPs, payment data, document content, private addresses, raw route params, raw URLs, request/response payloads, or raw exception messages/stacks may enter telemetry. The provider-neutral sink remains intentionally unconfigured until an approved production observability provider/native configuration is supplied. Contract-blocked features remain blocked. **P121 — Unit/Component Test Completion is the next phase in sequence but is not authorized in this run.**
+
+---
+
+## 4. P121 Authorized Completion Update
+
+**P121 starting branch HEAD:** `4095f3dce1dc79718c8601769170f14d7a74c99d`  
+**P121 initial implementation head:** `0c0b26f79af6a21a1e41be033d2995790dd5fac1`  
+**P121 corrected/validated implementation head:** `4a25b31e3df0d29730af853e49f5c7526d1df1b3`  
+**P121 evidence head:** `af72a6f187732c973434f917488f833da0ed1709`
+
+- P121 was explicitly authorized after P120. Re-read `plan.md`, `phases.md`, `agent.md`, `build.md`, and `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, then kept the work strictly inside unit/component-test scope.
+- Added `apps/mobile/__tests__/SharedInteractionPrimitives.test.tsx` for shared Button loading/disabled/busy mutation guarding plus SegmentedControl selected/checked/disabled semantics and typed selection behavior.
+- Added `apps/mobile/src/features/auth/hooks/useSessionLifecycle.test.tsx` for invalidation/AppState/timer cleanup, null-session sign-out, bounded retriable refresh behavior, background cancellation, and stale foreground refresh/rescheduling.
+- Existing focused API/error/validation/domain tests were retained rather than duplicated.
+- CI run #469 exposed only assumptions in the newly added test harness: React Native Pressable renderer flattening and overly exact global Jest timer-count checks. No runtime production defect was identified; the correction commit changed only the two new P121 test files.
+- **CRAVES Mobile Implementation CI** run **#470** / ID `31376209595` completed successfully for corrected implementation commit `4a25b31e3df0d29730af853e49f5c7526d1df1b3`.
+- Validation passed: dependency install, TypeScript strict check, ESLint with zero warnings, **131 Jest suites / 592 tests**, production Android JavaScript bundle generation, and the backend/APIM/infrastructure source guard.
+- Jest reports the repository's existing post-run open-handle warning after all 592 tests pass; P121 does not hide that warning or expand into unrelated cleanup work.
+- No production/runtime source, dependency, backend, APIM, OpenAPI, infrastructure, navigation, persistence, or product contract changed.
+
+**P121 changed files:**
+
+- `apps/mobile/__tests__/SharedInteractionPrimitives.test.tsx`
+- `apps/mobile/src/features/auth/hooks/useSessionLifecycle.test.tsx`
+- `docs/mobile-ui-rebuild/P121_UNIT_COMPONENT_TEST_COMPLETION.md`
+- `build.md`
+
+**P121 status:** **DONE at authorized unit/component-test + CI scope.**
+
+**Next phase in sequence:** **P122 — Integration Test Completion — NOT STARTED**.
+
+**Next phase authorization:** **NONE.**
+
+**Required action:** Stop. Do not pre-implement P122.

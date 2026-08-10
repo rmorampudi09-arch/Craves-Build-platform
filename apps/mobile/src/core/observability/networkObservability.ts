@@ -1,9 +1,16 @@
-import type {InternalAxiosRequestConfig} from 'axios';
 import {
   startPerformanceTrace,
   trackNetworkEvent,
   type PerformanceTraceOutcome,
 } from './observability';
+
+interface ObservableRequestConfig {
+  method?: string;
+  url?: string;
+  headers: {
+    get(name: string): unknown;
+  };
+}
 
 interface ActiveObservation {
   correlationId: string;
@@ -34,12 +41,12 @@ export function sanitizeNetworkRoute(url?: string): string {
     .slice(0, 160);
 }
 
-function correlationIdFrom(config: InternalAxiosRequestConfig): string {
+function correlationIdFrom(config: ObservableRequestConfig): string {
   const value = config.headers.get('X-Correlation-ID');
   return typeof value === 'string' && value.length <= 128 ? value : 'unavailable';
 }
 
-export function beginNetworkObservation(config: InternalAxiosRequestConfig): void {
+export function beginNetworkObservation(config: ObservableRequestConfig): void {
   const method = (config.method ?? 'UNKNOWN').toUpperCase();
   const route = sanitizeNetworkRoute(config.url);
   const correlationId = correlationIdFrom(config);
@@ -50,7 +57,7 @@ export function beginNetworkObservation(config: InternalAxiosRequestConfig): voi
 }
 
 export function endNetworkObservation(
-  config: InternalAxiosRequestConfig | undefined,
+  config: ObservableRequestConfig | undefined,
   outcome: PerformanceTraceOutcome,
   status?: number,
 ): void {

@@ -118,7 +118,20 @@ export function parseAdminScheduleInput(value: unknown): AdminScheduleInput | nu
   if ((recurrenceType !== "WEEKLY" && recurrenceType !== "MONTHLY") || !timezone || !Number.isInteger(raw.generationLeadHours) || Number(raw.generationLeadHours) < 1 || Number(raw.generationLeadHours) > 168 || !Array.isArray(raw.items) || raw.items.length < 1 || raw.items.length > 100) return null;
   const items = raw.items.map(item => parseScheduleItem(item, recurrenceType, false));
   if (items.some(item => item === null)) return null;
-  return { recurrenceType, timezone, generationLeadHours: Number(raw.generationLeadHours), items: (items as AdminSubscriptionScheduleItem[]).map(({ id: _id, ...item }) => item) };
+  return {
+    recurrenceType,
+    timezone,
+    generationLeadHours: Number(raw.generationLeadHours),
+    items: (items as AdminSubscriptionScheduleItem[]).map(item => ({
+      menuItemId: item.menuItemId,
+      quantity: item.quantity,
+      isoDayOfWeek: item.isoDayOfWeek,
+      dayOfMonth: item.dayOfMonth,
+      mealSlotCode: item.mealSlotCode,
+      serviceTime: item.serviceTime,
+      sequenceNumber: item.sequenceNumber,
+    })),
+  };
 }
 
 export function parseAdminPolicy(value: unknown): AdminSubscriptionPolicy | null {

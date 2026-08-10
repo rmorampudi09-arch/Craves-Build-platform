@@ -77,6 +77,20 @@ public class OccurrenceRepository {
         ).stream().findFirst();
     }
 
+    public Optional<SkipRequest> findRequestedSkip(UUID subscriptionId, LocalDate serviceDate) {
+        return jdbcTemplate.query(
+            "SELECT id, actor_identity_id, reason FROM subscription_schema.subscription_skip_request " +
+                "WHERE subscription_id = ? AND service_date = ? AND status = 'REQUESTED'",
+            (rs, rowNum) -> new SkipRequest(
+                rs.getObject("id", UUID.class),
+                rs.getObject("actor_identity_id", UUID.class),
+                rs.getString("reason")
+            ),
+            subscriptionId,
+            serviceDate
+        ).stream().findFirst();
+    }
+
     @Transactional
     public boolean createOccurrence(
         ClaimedSubscription subscription,
@@ -84,13 +98,15 @@ public class OccurrenceRepository {
         LocalDate serviceDate,
         Instant serviceAt,
         List<ScheduleItem> matchingItems,
-        LocalDate nextServiceDate
+        LocalDate nextServiceDate,
+        SkipRequest skipRequest
     ) {
         UUID occurrenceId = UUID.randomUUID();
+        String initialStatus = skipRequest == null ? "BILLING_PENDING" : "SKIPPED";
         int inserted = jdbcTemplate.update(
             "INSERT INTO subscription_schema.subscription_occurrence " +
                 "(id, subscription_id, plan_id, customer_identity_id, chef_identity_id, delivery_address_id, service_date, service_at, schedule_version, status, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'BILLING_PENDING', now(), now()) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now()) " +
                 "ON CONFLICT (subscription_id, service_date) DO NOTHING",
             occurrenceId,
             subscription.subscriptionId(),
@@ -100,7 +116,8 @@ public class OccurrenceRepository {
             subscription.deliveryAddressId(),
             serviceDate,
             serviceAt,
-            schedule.version()
+            schedule.version(),
+            initialStatus
         );
         if (inserted == 1) {
             for (ScheduleItem item : matchingItems) {
@@ -110,12 +127,29 @@ public class OccurrenceRepository {
                     UUID.randomUUID(), occurrenceId, item.menuItemId(), item.quantity(), item.sequenceNumber()
                 );
             }
-            jdbcTemplate.update(
-                "INSERT INTO subscription_schema.subscription_occurrence_history " +
-                    "(id, occurrence_id, old_status, new_status, reason, created_at) " +
-                    "VALUES (?, ?, NULL, 'BILLING_PENDING', 'Occurrence generated from active plan schedule', now())",
-                UUID.randomUUID(), occurrenceId
-            );
+            if (skipRequest == null) {
+                jdbcTemplate.update(
+                    "INSERT INTO subscription_schema.subscription_occurrence_history " +
+                        "(id, occurrence_id, old_status, new_status, reason, source, created_at) " +
+                        "VALUES (?, ?, NULL, 'BILLING_PENDING', 'Occurrence generated from active plan schedule', 'SCHEDULER', now())",
+                    UUID.randomUUID(), occurrenceId
+                );
+            } else {
+                jdbcTemplate.update(
+                    "INSERT INTO subscription_schema.subscription_occurrence_history " +
+                        "(id, occurrence_id, old_status, new_status, reason, actor_identity_id, source, created_at) " +
+                        "VALUES (?, ?, NULL, 'SKIPPED', ?, ?, 'CUSTOMER_SKIP', now())",
+                    UUID.randomUUID(), occurrenceId,
+                    skipRequest.reason() == null ? "Customer skip request applied during occurrence generation" : skipRequest.reason(),
+                    skipRequest.actorIdentityId()
+                );
+                jdbcTemplate.update(
+                    "UPDATE subscription_schema.subscription_skip_request SET status = 'APPLIED', occurrence_id = ?, " +
+                        "applied_at = now(), updated_at = now() WHERE id = ? AND status = 'REQUESTED'",
+                    occurrenceId,
+                    skipRequest.id()
+                );
+            }
         }
         releaseAndAdvance(subscription, nextServiceDate);
         return inserted == 1;
@@ -192,5 +226,8 @@ public class OccurrenceRepository {
         Integer dayOfMonth,
         int sequenceNumber
     ) {
+    }
+
+    public record SkipRequest(UUID id, UUID actorIdentityId, String reason) {
     }
 }

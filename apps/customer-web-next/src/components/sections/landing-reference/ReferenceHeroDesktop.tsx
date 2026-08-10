@@ -26,7 +26,7 @@ export function ReferenceHeroDesktop({
     >
       <div className={styles.referenceHeroFrame}>
         <Image
-          src="/landing/reference/hero-reference.webp"
+          src="/landing/reference/hero-reference.png"
           width={2048}
           height={1368}
           alt="Craves landing page showing homemade food ordering and a Craves delivery rider."

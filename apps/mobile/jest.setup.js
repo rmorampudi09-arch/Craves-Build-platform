@@ -1,6 +1,27 @@
 /* eslint-env jest */
 import 'react-native-gesture-handler/jestSetup';
 
+const {timeoutManager} = require('@tanstack/react-query');
+
+// TanStack Query intentionally keeps cache-GC timers alive in production.
+// During Jest runs those long-lived timers must not keep Node alive after the
+// assertions have completed. Unref only the test-process timers; application
+// runtime timing and cache policy remain unchanged.
+timeoutManager.setTimeoutProvider({
+  setTimeout: (callback, delay) => {
+    const handle = setTimeout(callback, delay);
+    handle?.unref?.();
+    return handle;
+  },
+  clearTimeout: handle => clearTimeout(handle),
+  setInterval: (callback, delay) => {
+    const handle = setInterval(callback, delay);
+    handle?.unref?.();
+    return handle;
+  },
+  clearInterval: handle => clearInterval(handle),
+});
+
 jest.mock('react-native-config', () => ({
   __esModule: true,
   default: {

@@ -14,19 +14,34 @@ import {
   resolveContentLifecyclePrimaryState,
 } from '../src/shared/components';
 
+const mountedRenderers: Array<ReturnType<typeof ReactTestRenderer.create>> = [];
+
 async function render(element: ReactElement) {
   let renderer: ReturnType<typeof ReactTestRenderer.create> | undefined;
 
-  await ReactTestRenderer.act(() => {
+  await ReactTestRenderer.act(async () => {
     renderer = ReactTestRenderer.create(element);
+    // Flush promise-backed accessibility preference reads that update shared
+    // Button/LoadingIndicator state after mount.
+    await Promise.resolve();
   });
 
   if (!renderer) {
     throw new Error('Expected renderer to be created');
   }
 
+  mountedRenderers.push(renderer);
   return renderer;
 }
+
+afterEach(async () => {
+  await ReactTestRenderer.act(async () => {
+    for (const renderer of mountedRenderers.splice(0)) {
+      renderer.unmount();
+    }
+    await Promise.resolve();
+  });
+});
 
 describe('shared lifecycle primitives', () => {
   test('keeps prior valid content visible during background refresh', async () => {

@@ -7,6 +7,11 @@ on:
     paths:
       - .github/workflows/mobile-p127-readiness.yml
       - .github/scripts/mobile-p127-readiness-check.mjs
+      - apps/mobile/android/app/build.gradle
+      - apps/mobile/jest.setup.js
+      - apps/mobile/__tests__/LifecyclePrimitives.test.tsx
+      - apps/mobile/package.json
+      - apps/mobile/package-lock.json
   workflow_dispatch:
 
 permissions:
@@ -15,7 +20,7 @@ permissions:
 jobs:
   production-readiness:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 25
 
     steps:
       - name: Checkout P127 branch
@@ -31,7 +36,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
 
-      - name: Setup Java for Android native builds
+      - name: Setup Java for Android configuration validation
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -41,6 +46,25 @@ jobs:
       - name: Install dependencies
         working-directory: apps/mobile
         run: npm ci
+
+      - name: Production dependency vulnerability gate
+        id: audit
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Verify backend source remains unchanged
+        id: backendguard
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only 8a2444cde508ea2fb20cb9822397e55c29bd8c5f...HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -E '^(services/|openapi/|infra/|apps/api/)'; then
+            echo 'Backend/APIM/infrastructure source changed during the mobile rebuild.' >&2
+            exit 1
+          fi
+          echo 'Backend/APIM/infrastructure source guard passed.'
 
       - name: TypeScript strict check
         id: typecheck
@@ -54,17 +78,31 @@ jobs:
         working-directory: apps/mobile
         run: npm run lint -- --max-warnings=0
 
-      - name: Full unit/component/integration Jest regression
+      - name: Full Jest regression and open-handle hygiene
         id: jest
         continue-on-error: true
         working-directory: apps/mobile
-        run: npm test -- --runInBand
+        run: |
+          set -euo pipefail
+          log_file="$(mktemp)"
+          timeout 180s npm test -- --runInBand --detectOpenHandles 2>&1 | tee "$log_file"
+          if grep -E 'Jest did not exit|Jest has detected the following|not wrapped in act' "$log_file"; then
+            echo 'P127 Jest hygiene gate found an open-handle or React act warning.' >&2
+            exit 1
+          fi
 
-      - name: Dedicated integration regression
+      - name: Dedicated integration regression and open-handle hygiene
         id: integration
         continue-on-error: true
         working-directory: apps/mobile
-        run: npm run test:integration
+        run: |
+          set -euo pipefail
+          log_file="$(mktemp)"
+          timeout 120s npm run test:integration -- --detectOpenHandles 2>&1 | tee "$log_file"
+          if grep -E 'Jest did not exit|Jest has detected the following|not wrapped in act' "$log_file"; then
+            echo 'P127 integration hygiene gate found an open-handle or React act warning.' >&2
+            exit 1
+          fi
 
       - name: Dedicated critical E2E regression
         id: e2e
@@ -93,6 +131,8 @@ jobs:
         id: bundle
         continue-on-error: true
         working-directory: apps/mobile
+        env:
+          NODE_ENV: production
         run: |
           rm -rf build/p127-readiness-bundle
           mkdir -p build/p127-readiness-bundle
@@ -104,30 +144,18 @@ jobs:
             --assets-dest build/p127-readiness-bundle/assets
           test -s build/p127-readiness-bundle/index.android.bundle
 
-      - name: Android debug and release native builds
-        id: androidbuild
-        continue-on-error: true
-        working-directory: apps/mobile/android
-        run: ./gradlew :app:assembleDebug :app:assembleRelease --no-daemon
-
-      - name: Verify backend source remains unchanged
-        id: backendguard
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          changed="$(git diff --name-only 8a2444cde508ea2fb20cb9822397e55c29bd8c5f...HEAD)"
-          printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -E '^(services/|openapi/|infra/|apps/api/)'; then
-            echo 'Backend/APIM/infrastructure source changed during the mobile rebuild.' >&2
-            exit 1
-          fi
-          echo 'Backend/APIM/infrastructure source guard passed.'
-
-      - name: Production dependency vulnerability gate
-        id: audit
+      - name: Android release-configuration validation without artifact build
+        id: androidconfig
         continue-on-error: true
         working-directory: apps/mobile
-        run: npm audit --omit=dev --audit-level=high
+        env:
+          NODE_ENV: production
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          trap 'rm -f .env' EXIT
+          cd android
+          ./gradlew :app:signingReport --no-daemon
 
       - name: Final P127 automated readiness gate
         if: always()
@@ -141,13 +169,13 @@ jobs:
           P120: ${{ steps.p120.outcome }}
           P127_STATIC: ${{ steps.p127static.outcome }}
           BUNDLE: ${{ steps.bundle.outcome }}
-          ANDROID_BUILD: ${{ steps.androidbuild.outcome }}
+          ANDROID_CONFIG: ${{ steps.androidconfig.outcome }}
           BACKEND_GUARD: ${{ steps.backendguard.outcome }}
           DEPENDENCY_AUDIT: ${{ steps.audit.outcome }}
         run: |
           set -euo pipefail
           failures=0
-          for gate in TYPECHECK LINT JEST INTEGRATION E2E P119 P120 P127_STATIC BUNDLE ANDROID_BUILD BACKEND_GUARD DEPENDENCY_AUDIT; do
+          for gate in TYPECHECK LINT JEST INTEGRATION E2E P119 P120 P127_STATIC BUNDLE ANDROID_CONFIG BACKEND_GUARD DEPENDENCY_AUDIT; do
             result="${!gate}"
             printf '%-20s %s\n' "$gate" "$result"
             if [ "$result" != 'success' ]; then

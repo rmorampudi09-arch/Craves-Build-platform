@@ -155,9 +155,26 @@ for (const scriptName of ['test', 'test:integration', 'test:e2e', 'check:p119', 
 
 const androidBuildGradlePath = path.join(mobileRoot, 'android', 'app', 'build.gradle');
 const androidBuildGradle = fs.readFileSync(androidBuildGradlePath, 'utf8');
-if (/release\s*\{[\s\S]{0,1200}?signingConfig\s+signingConfigs\.debug/.test(androidBuildGradle)) {
+if (/release\s*\{[\s\S]{0,1600}?signingConfig\s+signingConfigs\.debug/.test(androidBuildGradle)) {
   findings.push(
-    'apps/mobile/android/app/build.gradle — release build still uses signingConfigs.debug; production signing is not release-ready',
+    'apps/mobile/android/app/build.gradle — release build must never fall back to signingConfigs.debug',
+  );
+}
+for (const requiredSigningInput of [
+  'CRAVES_ANDROID_KEYSTORE_PATH',
+  'CRAVES_ANDROID_KEYSTORE_PASSWORD',
+  'CRAVES_ANDROID_KEY_ALIAS',
+  'CRAVES_ANDROID_KEY_PASSWORD',
+]) {
+  if (!androidBuildGradle.includes(requiredSigningInput)) {
+    findings.push(
+      `apps/mobile/android/app/build.gradle — secure external release-signing input missing: ${requiredSigningInput}`,
+    );
+  }
+}
+if (!androidBuildGradle.includes('hasReleaseSigningConfig')) {
+  findings.push(
+    'apps/mobile/android/app/build.gradle — fail-closed conditional release-signing guard is missing',
   );
 }
 
@@ -177,7 +194,7 @@ console.log(`P127 secret scan inspected ${allMobileFiles.length} mobile-workspac
 console.log(`P127 test-focus scan inspected ${testFiles.length} test files.`);
 
 if (findings.length > 0) {
-  console.error(`P127 static readiness audit found ${findings.length} release blocker(s):`);
+  console.error(`P127 static readiness audit found ${findings.length} blocker(s):`);
   for (const finding of findings) {
     console.error(`- ${finding}`);
   }

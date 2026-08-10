@@ -54,7 +54,7 @@
 - **P113 — Accessibility Audit:** PARTIAL at full device-validation scope; code-level accessibility audit/remediation is implemented for shared interaction primitives and critical Customer/Chef shell surfaces. Evidence: `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md`.
 - **P114 — Keyboard/Safe-Area/Responsive Audit:** PARTIAL at full device-validation scope; source-level IME/safe-area/responsive remediation is implemented for the inspected critical paths, while compact/standard/large device, IME, cutout, gesture-navigation, and enlarged-font runtime validation remain unclaimed. Evidence: `docs/mobile-ui-rebuild/P114_KEYBOARD_SAFE_AREA_RESPONSIVE_AUDIT.md`.
 - **P115 — Reduced Motion and Animation Audit:** PARTIAL at full runtime/device-validation scope; source-level reduced-motion remediation is implemented across shared motion/loading, auth/customer/chef stack transitions, View Cart, and current slide modal surfaces. Evidence: `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md`.
-- **P116 — List/Image/Memory Performance Audit:** DONE at authorized source/audit scope; infinite discovery caches are explicitly bounded, Notifications rendering is virtualized at its existing history boundary, and Dish Details media mounting/decode behavior is hardened without a UI redesign or invented media contract. Evidence: `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md`.
+- **P116 — List/Image/Memory Performance Audit:** PARTIAL at full acceptance/product-contract scope; safe mobile hardening is implemented, but Chef-owned Menu and Customer/Public Kitchen Menu remain authoritative unpaged arrays under the current backend contracts, so the phase cannot claim that every production list/history is bounded in memory. Evidence: `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md`.
 
 **Current executed phase:** **P116 — List/Image/Memory Performance Audit**.
 
@@ -194,6 +194,8 @@ Evidence/ledger:
 - Dish Details keeps the same approved media composition but replaces eager full-array hero/thumbnail mounting with horizontal `FlatList` windows, resize-before-decode on Android, and native prefetch of the next hero image.
 - No numeric dish-image product limit, CDN URL transform, or new image dependency was invented because the inspected current backend/mobile contracts do not expose one.
 - Customer Orders and Chef Completed Orders were retained because they already use bounded/virtualized history patterns at their current exact contract boundaries.
+- Final acceptance review confirmed two remaining contract-level unbounded collections: `GET /api/v1/kitchens/me/menu-items` returns the complete Chef-owned `ChefMenuItem[]` with no page/limit/cursor contract, and `GET /api/v1/catalog/kitchens/{kitchenId}/menu-items` returns the complete public kitchen menu array with no page/limit/cursor contract.
+- Screen virtualization cannot bound those authoritative arrays already returned by the backend. Client-side truncation would hide real menu items, while adding server pagination is backend/APIM/contract work outside this P116 authorization. This is why P116 is PARTIAL rather than falsely marked DONE.
 - Server-owned collections remain in the query/cache layer; P116 does not copy production histories into global Redux state or persistence.
 - No P117 networking-performance/cancellation changes were started.
 
@@ -220,16 +222,19 @@ Evidence/ledger:
 - The authoritative branch HEAD was checked immediately before the implementation write and remained `5c923d7b3a568bdc7f9d1ec57cbb98a38b8f1507`.
 - The implementation commit was compared against that starting HEAD and contains only the four intended production files, one focused test file, and the P116 evidence document.
 - Modified Notifications and Dish Details source was re-fetched from the implementation commit to confirm the intended virtualization/media wiring and phase scope.
+- Chef Menu P92 evidence/API and Customer/Public Kitchen API were rechecked during final acceptance classification, confirming the missing server pagination boundary rather than assuming the screens' virtualization made those arrays bounded.
 - Focused test source records the explicit Home/Discover retained-page ceilings and the pre-existing notification-history cap; execution is not claimed.
 - GitHub Actions were intentionally not invoked because the account Actions capacity is exhausted.
 - Local Jest/typecheck/ESLint/Metro/bundle execution and device profiler/heap/FPS validation are not claimed from this connector-only run.
 
 ### P116 retained gaps instead of fabricated verification
 
-1. No passing CI, local test runner, Android device profiler, heap capture, image-decoder trace, or FPS measurement is claimed in this run.
-2. P116 does not fabricate a media-count policy or CDN resizing contract that the current backend does not expose.
-3. Existing contract-blocked product surfaces remain blocked; performance auditing does not convert unavailable data contracts into fake lists.
-4. P115 remains PARTIAL at its previously recorded runtime/device-validation scope; P116 does not reclassify it.
+1. The phase-wide acceptance statement “No unbounded production list/history retained in memory” remains unsatisfied because the current Chef-owned Menu and Customer/Public Kitchen Menu contracts return whole authoritative arrays without pagination.
+2. P116 does not truncate those arrays locally because doing so would hide valid product data; a correct completion requires an approved paged backend/APIM contract outside this phase's authorized boundary.
+3. No passing CI, local test runner, Android device profiler, heap capture, image-decoder trace, or FPS measurement is claimed in this run.
+4. P116 does not fabricate a media-count policy or CDN resizing contract that the current backend does not expose.
+5. Existing contract-blocked product surfaces remain blocked; performance auditing does not convert unavailable data contracts into fake lists.
+6. P115 remains PARTIAL at its previously recorded runtime/device-validation scope; P116 does not reclassify it.
 
 **Next phase in sequence:** **P117 — Networking Performance and Cancellation Audit — NOT STARTED**.
 
@@ -279,11 +284,11 @@ Evidence/ledger:
 | P113 | PARTIAL at full device-validation scope; code-level accessibility audit/remediation implemented | `docs/mobile-ui-rebuild/P113_ACCESSIBILITY_AUDIT.md` |
 | P114 | PARTIAL at full device-validation scope; source-level keyboard/safe-area/responsive remediation implemented | `docs/mobile-ui-rebuild/P114_KEYBOARD_SAFE_AREA_RESPONSIVE_AUDIT.md` |
 | P115 | PARTIAL at full runtime/device-validation scope; source-level reduced-motion audit/remediation implemented | `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md` |
-| P116 | DONE at authorized source/audit scope; bounded list/image/memory remediation implemented | `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md` |
+| P116 | PARTIAL at full acceptance/product-contract scope; safe mobile hardening implemented, unpaged menu contracts remain | `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md` |
 | P117 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-P116 is the current executed phase and is DONE at the authorized source/audit scope. Preserve P112 lifecycle policy, P111 restoration/security boundaries, P113 accessibility semantics, P114 safe-area/responsive guardrails, P115 reduced-motion equivalents, and the new P116 list/image/memory retention boundaries. Contract-blocked features remain blocked. P117 — Networking Performance and Cancellation Audit — is the next phase in sequence but is not authorized in this run.
+P116 is the current executed phase and is PARTIAL at full acceptance/product-contract scope. Preserve P112 lifecycle policy, P111 restoration/security boundaries, P113 accessibility semantics, P114 safe-area/responsive guardrails, P115 reduced-motion equivalents, and the new P116 list/image/memory hardening. The remaining P116 blocker is the current unpaged Chef-owned Menu and Customer/Public Kitchen Menu contracts; do not hide that blocker with client-side truncation. Contract-blocked features remain blocked. P117 — Networking Performance and Cancellation Audit — is the next phase in sequence but is not authorized in this run.

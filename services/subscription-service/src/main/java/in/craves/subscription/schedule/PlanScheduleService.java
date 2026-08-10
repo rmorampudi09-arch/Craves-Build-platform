@@ -39,8 +39,7 @@ public class PlanScheduleService {
         if (!"ACTIVE".equals(plan.status())) {
             throw ApiException.notFound("PLAN_NOT_FOUND", "Active subscription plan was not found");
         }
-        PlanScheduleResponse schedule = repository.find(planId)
-            .filter(value -> "ACTIVE".equals(value.status()))
+        PlanScheduleResponse schedule = repository.findActive(planId)
             .orElseThrow(() -> ApiException.notFound("PLAN_SCHEDULE_NOT_FOUND", "Active meal schedule was not found"));
         return new PublicPlanScheduleResponse(
             schedule.planId(),
@@ -91,14 +90,15 @@ public class PlanScheduleService {
                 user.identityId()
             );
         } catch (IllegalStateException exception) {
-            throw ApiException.conflict("PLAN_SCHEDULE_ACTIVE", exception.getMessage());
+            throw ApiException.conflict("PLAN_SCHEDULE_CONFLICT", exception.getMessage());
         }
     }
 
     public PlanScheduleResponse activate(UUID planId, ActivateScheduleRequest request, CurrentUser user) {
         PlanOwner plan = requireAdminManagedPlan(planId, user);
         PlanScheduleResponse schedule = repository.find(plan.planId())
-            .orElseThrow(() -> ApiException.notFound("PLAN_SCHEDULE_NOT_FOUND", "Plan schedule was not found"));
+            .filter(value -> "DRAFT".equals(value.status()))
+            .orElseThrow(() -> ApiException.conflict("PLAN_SCHEDULE_NOT_DRAFT", "Only a draft schedule can be activated"));
         if (schedule.items().isEmpty()) {
             throw ApiException.conflict("PLAN_SCHEDULE_EMPTY", "Plan schedule must contain at least one meal item");
         }

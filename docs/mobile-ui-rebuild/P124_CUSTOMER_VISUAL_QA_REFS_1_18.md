@@ -54,8 +54,9 @@ The authoritative visual source remains `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0
 Commit history for the preflight:
 
 - initial guard: `53527c88c003172bfba0cef6f8b70b7cd6935132`;
-- CI run `31383219128` correctly rejected that first version at TypeScript strict check because the mobile TypeScript environment does not expose Node `fs/path/__dirname` types;
-- corrected mobile-environment-safe guard: `0527a5a382dfb8b820b5168320c6449a030cfb39`.
+- CI run **#474 / ID `31383219128`** correctly rejected that first version at TypeScript strict check because the mobile TypeScript environment does not expose Node `fs/path/__dirname` types;
+- corrected mobile-environment-safe guard: `0527a5a382dfb8b820b5168320c6449a030cfb39`;
+- corrected guard validated successfully by **CRAVES Mobile Implementation CI #475 / ID `31383374630`**: dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
 
 The failed initial CI attempt is retained here as evidence rather than hidden; the corrected guard removes the Node-only dependency instead of widening the production TypeScript environment for a QA test.
 
@@ -82,7 +83,7 @@ Consequences:
 
 - No reference-backed visual mismatch was established, so no speculative product UI redesign/fix was made.
 - No screen is marked pixel-perfect or visually passed from code inspection alone.
-- The reference matrix and deterministic preflight are complete and committed.
+- The reference matrix and deterministic preflight are complete, committed, and CI validated.
 - The actual device/emulator screenshot comparison remains an external QA dependency.
 - **P124 status: PARTIAL / QA PENDING** until the required screenshots are captured, compared, and any deviations are fixed or explicitly approved.
 - **P125: NOT STARTED.**

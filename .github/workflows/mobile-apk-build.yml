@@ -14,7 +14,7 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout mobile branch
@@ -44,19 +44,35 @@ jobs:
         working-directory: apps/mobile
         run: cp .env.example .env
 
-      - name: Build installable Android APK
+      # A React Native debug variant expects Metro and does not package the JS bundle.
+      # For device testing we intentionally build the release variant so the JavaScript
+      # bundle/assets are embedded, while signing it with the repository's debug test key.
+      # This remains a TESTING APK; production release signing is still external/secret-backed.
+      - name: Build standalone Android testing APK
         working-directory: apps/mobile/android
         env:
           NODE_ENV: production
-        run: ./gradlew :app:assembleDebug --no-daemon
+          CRAVES_ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/apps/mobile/android/app/debug.keystore
+          CRAVES_ANDROID_KEYSTORE_PASSWORD: android
+          CRAVES_ANDROID_KEY_ALIAS: androiddebugkey
+          CRAVES_ANDROID_KEY_PASSWORD: android
+        run: ./gradlew :app:assembleRelease --no-daemon
 
-      - name: Verify APK
-        run: test -s apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify standalone APK and embedded JavaScript bundle
+        run: |
+          APK="apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          unzip -l "$APK" | grep -E 'assets/index\.android\.bundle$'
 
-      - name: Upload APK
+      - name: Verify APK signature
+        run: |
+          APK="apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --verbose "$APK"
+
+      - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
-          name: craves-mobile-testing-apk
-          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          name: craves-mobile-standalone-testing-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7

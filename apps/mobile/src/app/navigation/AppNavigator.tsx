@@ -27,6 +27,7 @@ import {processRestorationStorage} from './processRestorationStorage';
 import {CustomerRootNavigator} from './CustomerRootNavigator';
 import {ChefRootNavigator} from './ChefRootNavigator';
 import {useAppSelector} from '../store/hooks';
+import {trackAction, trackScreen} from '../../core/observability/observability';
 import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {useBootstrap} from '../../features/auth/hooks/useBootstrap';
@@ -306,6 +307,7 @@ export function AppNavigator() {
   const restorationSettledRef = React.useRef(false);
   const initialLinkCheckedRef = React.useRef(false);
   const initialInboundWinsRef = React.useRef(false);
+  const lastObservedRouteRef = React.useRef<string | null>(null);
   authRef.current = auth;
 
   const attemptInboundRoute = React.useCallback((candidate: InboundRouteCandidate) => {
@@ -414,6 +416,14 @@ export function AppNavigator() {
     flushPendingInboundRoute();
     flushPendingRestoration();
     persistCurrentRestoration();
+
+    if (!navigationRef.isReady()) return;
+    const routeName = navigationRef.getCurrentRoute()?.name;
+    if (!routeName || lastObservedRouteRef.current === routeName) return;
+    lastObservedRouteRef.current = routeName;
+    trackScreen(routeName, {
+      role: productRoleFromAuth(authRef.current) ?? 'AUTH',
+    });
   }, [flushPendingInboundRoute, flushPendingRestoration, persistCurrentRestoration]);
 
   React.useEffect(() => {
@@ -462,6 +472,7 @@ export function AppNavigator() {
 
     const handleUrl = (url: string, initial: boolean) => {
       const candidate = parseInboundUrl(url);
+      trackAction('inbound_link_received', {initial, recognized: Boolean(candidate)});
       if (!candidate) return;
       if (initial) {
         initialInboundWinsRef.current = true;

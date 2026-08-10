@@ -7,10 +7,14 @@ import in.craves.subscription.occurrence.OccurrenceRepository.SkipRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -58,15 +62,6 @@ public class OccurrenceGeneratorService {
                 ActiveSchedule schedule = repository.findActiveSchedule(subscription.planId())
                     .orElseThrow(() -> new IllegalStateException("Active plan schedule disappeared during generation"));
                 ZoneId zone = ZoneId.of(schedule.timezone());
-                Instant serviceAt = ZonedDateTime.of(
-                    subscription.serviceDate(), schedule.serviceTime(), zone
-                ).toInstant();
-                Instant generationOpensAt = serviceAt.minusSeconds(schedule.generationLeadHours() * 3600L);
-                if (clock.instant().isBefore(generationOpensAt)) {
-                    repository.releaseAndAdvance(subscription, subscription.serviceDate());
-                    deferred++;
-                    continue;
-                }
                 List<ScheduleItem> matching = matchingItems(schedule, subscription.serviceDate());
                 LocalDate next = nextMatchingDate(schedule, subscription.serviceDate());
                 if (matching.isEmpty()) {
@@ -78,23 +73,41 @@ public class OccurrenceGeneratorService {
                     || subscription.deliveryAddressId() == null) {
                     throw new IllegalStateException("Active subscription is missing required identity or delivery address");
                 }
+
                 SkipRequest skipRequest = repository.findRequestedSkip(
                     subscription.subscriptionId(), subscription.serviceDate()
                 ).orElse(null);
-                if (repository.createOccurrence(
-                    subscription,
-                    schedule,
-                    subscription.serviceDate(),
-                    serviceAt,
-                    matching,
-                    next,
-                    skipRequest
-                )) {
-                    if (skipRequest == null) {
-                        generated++;
-                    } else {
-                        skipped++;
+                boolean deferredSlot = false;
+                for (Map.Entry<SlotKey, List<ScheduleItem>> slot : groupBySlot(matching).entrySet()) {
+                    Instant serviceAt = ZonedDateTime.of(
+                        subscription.serviceDate(), slot.getKey().serviceTime(), zone
+                    ).toInstant();
+                    Instant generationOpensAt = serviceAt.minusSeconds(schedule.generationLeadHours() * 3600L);
+                    if (clock.instant().isBefore(generationOpensAt)) {
+                        deferredSlot = true;
+                        continue;
                     }
+                    if (repository.createOccurrence(
+                        subscription,
+                        schedule,
+                        subscription.serviceDate(),
+                        slot.getKey().mealSlotCode(),
+                        serviceAt,
+                        slot.getValue(),
+                        skipRequest
+                    )) {
+                        if (skipRequest == null) {
+                            generated++;
+                        } else {
+                            skipped++;
+                        }
+                    }
+                }
+                if (deferredSlot) {
+                    repository.releaseAndAdvance(subscription, subscription.serviceDate());
+                    deferred++;
+                } else {
+                    repository.releaseAndAdvance(subscription, next);
                 }
             } catch (RuntimeException exception) {
                 failed++;
@@ -111,8 +124,20 @@ public class OccurrenceGeneratorService {
     static List<ScheduleItem> matchingItems(ActiveSchedule schedule, LocalDate date) {
         return schedule.items().stream()
             .filter(item -> matches(schedule.recurrenceType(), item, date))
-            .sorted(Comparator.comparingInt(ScheduleItem::sequenceNumber))
+            .sorted(Comparator
+                .comparing(ScheduleItem::serviceTime)
+                .thenComparing(ScheduleItem::mealSlotCode)
+                .thenComparingInt(ScheduleItem::sequenceNumber))
             .toList();
+    }
+
+    static Map<SlotKey, List<ScheduleItem>> groupBySlot(List<ScheduleItem> items) {
+        Map<SlotKey, List<ScheduleItem>> grouped = new LinkedHashMap<>();
+        for (ScheduleItem item : items) {
+            SlotKey key = new SlotKey(item.mealSlotCode(), item.serviceTime());
+            grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(item);
+        }
+        return grouped;
     }
 
     static LocalDate nextMatchingDate(ActiveSchedule schedule, LocalDate after) {
@@ -132,6 +157,9 @@ public class OccurrenceGeneratorService {
                 && item.isoDayOfWeek() == date.getDayOfWeek().getValue();
         }
         return item.dayOfMonth() != null && item.dayOfMonth() == date.getDayOfMonth();
+    }
+
+    record SlotKey(String mealSlotCode, LocalTime serviceTime) {
     }
 
     public record GenerationSummary(

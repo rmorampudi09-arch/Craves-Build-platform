@@ -28,11 +28,17 @@ CREATE TABLE subscription_schema.subscription_plan_schedule_draft_item (
     ),
     CONSTRAINT ck_subscription_schedule_draft_slot CHECK (
         meal_slot_code ~ '^[A-Z0-9][A-Z0-9_-]{0,39}$'
-    ),
-    CONSTRAINT ux_subscription_schedule_draft_item UNIQUE (
-        plan_id, menu_item_id, COALESCE(iso_day_of_week, 0), COALESCE(day_of_month, 0), meal_slot_code
     )
 );
+
+CREATE UNIQUE INDEX ux_subscription_schedule_draft_item
+    ON subscription_schema.subscription_plan_schedule_draft_item (
+        plan_id,
+        menu_item_id,
+        (COALESCE(iso_day_of_week, 0)),
+        (COALESCE(day_of_month, 0)),
+        meal_slot_code
+    );
 
 CREATE INDEX ix_subscription_schedule_draft_item_order
     ON subscription_schema.subscription_plan_schedule_draft_item (

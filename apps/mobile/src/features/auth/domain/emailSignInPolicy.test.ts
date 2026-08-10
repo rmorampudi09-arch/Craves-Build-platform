@@ -1,6 +1,5 @@
 import {
   createEmailAuthRoleContext,
-  createEmailPasswordRecoveryContext,
   createEmailRequestGate,
   createEmailSignInSubmission,
   getEmailSignInFieldErrors,
@@ -25,7 +24,7 @@ describe('emailSignInPolicy', () => {
     expect(normalizeEmail(' Test@Example.COM ')).toBe('test@example.com');
   });
 
-  it('preserves the Chef role through email submission and auth-route fallbacks', () => {
+  it('preserves the Chef role without placing email in auth-route context', () => {
     const submission = createEmailSignInSubmission(
       'CHEF',
       '  Chef.Owner@Example.COM  ',
@@ -38,12 +37,6 @@ describe('emailSignInPolicy', () => {
       password: ' Chef Password 123 ',
     });
     expect(createEmailAuthRoleContext('CHEF')).toEqual({role: 'CHEF'});
-    expect(
-      createEmailPasswordRecoveryContext('CHEF', ' Chef.Owner@Example.COM '),
-    ).toEqual({role: 'CHEF', email: 'chef.owner@example.com'});
-    expect(createEmailPasswordRecoveryContext('CHEF', 'invalid-email')).toEqual({
-      role: 'CHEF',
-    });
   });
 
   it('keeps email and password validation errors field-specific', () => {

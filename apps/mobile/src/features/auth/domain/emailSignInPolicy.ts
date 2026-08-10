@@ -16,10 +16,6 @@ export interface EmailAuthRoleContext {
   role: AuthRole;
 }
 
-export interface EmailPasswordRecoveryContext extends EmailAuthRoleContext {
-  email?: string;
-}
-
 export interface EmailRequestGate {
   tryAcquire: () => boolean;
   release: () => void;
@@ -78,14 +74,6 @@ export function getPasswordRecoveryEmail(email: string): string | undefined {
 
 export function createEmailAuthRoleContext(role: AuthRole): EmailAuthRoleContext {
   return {role};
-}
-
-export function createEmailPasswordRecoveryContext(
-  role: AuthRole,
-  email: string,
-): EmailPasswordRecoveryContext {
-  const recoveryEmail = getPasswordRecoveryEmail(email);
-  return recoveryEmail ? {role, email: recoveryEmail} : {role};
 }
 
 export function createEmailRequestGate(): EmailRequestGate {

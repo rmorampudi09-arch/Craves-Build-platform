@@ -10,8 +10,6 @@ export interface PasswordRecoverySubmission {
   email: string;
 }
 
-export interface PasswordResetSentContext extends PasswordRecoverySubmission {}
-
 export function getPasswordRecoveryEmailError(email: string): string | undefined {
   return emailSchema.safeParse(normalizeEmail(email)).success
     ? undefined
@@ -26,13 +24,6 @@ export function createPasswordRecoverySubmission(
     role,
     email: normalizeEmail(email),
   };
-}
-
-export function createPasswordResetSentContext(
-  role: AuthRole,
-  email: string,
-): PasswordResetSentContext {
-  return createPasswordRecoverySubmission(role, email);
 }
 
 export function createPasswordRecoveryRequestGate() {

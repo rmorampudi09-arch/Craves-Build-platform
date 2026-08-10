@@ -2,7 +2,6 @@ import {
   PASSWORD_RECOVERY_NEUTRAL_MESSAGE,
   createPasswordRecoveryRequestGate,
   createPasswordRecoverySubmission,
-  createPasswordResetSentContext,
   getPasswordRecoveryEmailError,
 } from './passwordRecoveryPolicy';
 
@@ -11,10 +10,6 @@ describe('passwordRecoveryPolicy', () => {
     expect(createPasswordRecoverySubmission('CHEF', '  Chef.Owner@Example.COM  ')).toEqual({
       role: 'CHEF',
       email: 'chef.owner@example.com',
-    });
-    expect(createPasswordResetSentContext('CUSTOMER', ' User@Example.COM ')).toEqual({
-      role: 'CUSTOMER',
-      email: 'user@example.com',
     });
   });
 

@@ -1,4 +1,6 @@
 import type {AxiosRequestConfig} from 'axios';
+import {trackAction} from '../observability/observability';
+import {sanitizeNetworkRoute} from '../observability/networkObservability';
 import {apiClient} from './apiClient';
 import {runDedupedRequest} from './requestDedupe';
 
@@ -34,13 +36,22 @@ async function write<TResponse>(
   data: unknown,
   options: WriteRequestOptions = {},
 ): Promise<TResponse> {
-  const response = await apiClient.request<TResponse>({
-    ...options,
-    method,
-    url,
-    data,
-  });
-  return response.data;
+  const route = sanitizeNetworkRoute(url);
+  trackAction('backend_mutation_started', {method, route});
+
+  try {
+    const response = await apiClient.request<TResponse>({
+      ...options,
+      method,
+      url,
+      data,
+    });
+    trackAction('backend_mutation_succeeded', {method, route});
+    return response.data;
+  } catch (error) {
+    trackAction('backend_mutation_failed', {method, route});
+    throw error;
+  }
 }
 
 export const httpClient = {

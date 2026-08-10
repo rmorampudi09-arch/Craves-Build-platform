@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
@@ -23,16 +24,17 @@ public class DeliveryServiceBusPublisher {
     private final ObjectMapper objectMapper;
 
     public DeliveryServiceBusPublisher(
-        @Qualifier("deliveryCommandSender") ServiceBusSenderClient commandSender,
-        @Qualifier("deliveryDomainEventSender") ServiceBusSenderClient domainEventSender,
+        @Qualifier("deliveryCommandSender") ObjectProvider<ServiceBusSenderClient> commandSenderProvider,
+        @Qualifier("deliveryDomainEventSender") ObjectProvider<ServiceBusSenderClient> domainEventSenderProvider,
         ObjectMapper objectMapper
     ) {
-        this.commandSender = commandSender;
-        this.domainEventSender = domainEventSender;
+        this.commandSender = commandSenderProvider.getIfAvailable();
+        this.domainEventSender = domainEventSenderProvider.getIfAvailable();
         this.objectMapper = objectMapper;
     }
 
     public ScheduledMessage schedule(DeliveryCommandMessage command) {
+        ServiceBusSenderClient sender = requireCommandSender();
         String messageId = "delivery-command:" + command.chefSubOrderId();
         ServiceBusMessage message = new ServiceBusMessage(writeJson(command))
             .setMessageId(messageId)
@@ -41,7 +43,7 @@ public class DeliveryServiceBusPublisher {
             .setContentType("application/json");
         message.getApplicationProperties().put("event_type", DeliveryCommandModels.DELIVERY_COMMAND);
         message.getApplicationProperties().put("chef_sub_order_id", command.chefSubOrderId().toString());
-        Long sequenceNumber = commandSender.scheduleMessage(
+        Long sequenceNumber = sender.scheduleMessage(
             message,
             command.dispatchAt().atOffset(ZoneOffset.UTC)
         );
@@ -49,7 +51,7 @@ public class DeliveryServiceBusPublisher {
     }
 
     public void cancelScheduled(long sequenceNumber) {
-        commandSender.cancelScheduledMessage(sequenceNumber);
+        requireCommandSender().cancelScheduledMessage(sequenceNumber);
     }
 
     public void publishDomainEvent(UUID outboxId,
@@ -65,7 +67,25 @@ public class DeliveryServiceBusPublisher {
         }
         message.getApplicationProperties().put("event_type", eventType);
         message.getApplicationProperties().put("eventType", eventType);
-        domainEventSender.sendMessage(message);
+        requireDomainEventSender().sendMessage(message);
+    }
+
+    private ServiceBusSenderClient requireCommandSender() {
+        if (commandSender == null) {
+            throw new IllegalStateException(
+                "Delivery command Service Bus sender is not enabled"
+            );
+        }
+        return commandSender;
+    }
+
+    private ServiceBusSenderClient requireDomainEventSender() {
+        if (domainEventSender == null) {
+            throw new IllegalStateException(
+                "Delivery domain-event Service Bus sender is not enabled"
+            );
+        }
+        return domainEventSender;
     }
 
     private String writeJson(Object value) {

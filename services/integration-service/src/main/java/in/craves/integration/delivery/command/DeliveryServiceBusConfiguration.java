@@ -6,6 +6,7 @@ import com.azure.messaging.servicebus.ServiceBusClientBuilder;
 import com.azure.messaging.servicebus.ServiceBusSenderClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
@@ -24,6 +25,11 @@ public class DeliveryServiceBusConfiguration {
 
     @Bean(destroyMethod = "close")
     @Qualifier("deliveryCommandSender")
+    @ConditionalOnProperty(
+        prefix = "craves.delivery-command",
+        name = "enabled",
+        havingValue = "true"
+    )
     ServiceBusSenderClient deliveryCommandSender(DeliveryServiceBusClientFactory factory,
                                                    DeliveryCommandProperties properties) {
         return factory.newBuilder()
@@ -34,6 +40,11 @@ public class DeliveryServiceBusConfiguration {
 
     @Bean(destroyMethod = "close")
     @Qualifier("deliveryDomainEventSender")
+    @ConditionalOnProperty(
+        prefix = "craves.delivery-command",
+        name = "status-publisher-enabled",
+        havingValue = "true"
+    )
     ServiceBusSenderClient deliveryDomainEventSender(DeliveryServiceBusClientFactory factory,
                                                        DeliveryCommandProperties properties) {
         return factory.newBuilder()

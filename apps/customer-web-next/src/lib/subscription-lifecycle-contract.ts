@@ -15,6 +15,7 @@ export type SubscriptionPlanPolicy = {
 export type SubscriptionOccurrence = {
   id: string;
   serviceDate: string;
+  mealSlotCode: string;
   serviceAt: string;
   status: "BILLING_PENDING" | "PAYMENT_PENDING" | "READY_FOR_ORDER" | "ORDER_REQUESTED" | "ORDER_CREATED" | "SKIPPED" | "CANCELLED" | "FAILED";
   items: Array<{ menuItemId: string; quantity: number; sequenceNumber: number }>;
@@ -34,6 +35,7 @@ export type SubscriptionSkipRequest = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const SLOT = /^[A-Z0-9][A-Z0-9_-]{0,39}$/;
 const OCCURRENCE_STATUSES = new Set([
   "BILLING_PENDING", "PAYMENT_PENDING", "READY_FOR_ORDER", "ORDER_REQUESTED", "ORDER_CREATED", "SKIPPED", "CANCELLED", "FAILED",
 ]);
@@ -88,6 +90,7 @@ export function parseSubscriptionOccurrence(value: unknown): SubscriptionOccurre
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
   if (typeof raw.id !== "string" || !UUID.test(raw.id) || typeof raw.serviceDate !== "string" || !DATE.test(raw.serviceDate)) return null;
+  if (typeof raw.mealSlotCode !== "string" || !SLOT.test(raw.mealSlotCode)) return null;
   const serviceAt = instant(raw.serviceAt);
   if (!serviceAt || typeof raw.status !== "string" || !OCCURRENCE_STATUSES.has(raw.status) || !Array.isArray(raw.items) || raw.items.length > 100) return null;
   const items = raw.items.map(item => {
@@ -97,7 +100,7 @@ export function parseSubscriptionOccurrence(value: unknown): SubscriptionOccurre
     return { menuItemId: entry.menuItemId, quantity: Number(entry.quantity), sequenceNumber: Number(entry.sequenceNumber) };
   });
   if (items.some(item => item === null)) return null;
-  return { id: raw.id, serviceDate: raw.serviceDate, serviceAt, status: raw.status as SubscriptionOccurrence["status"], items: items as SubscriptionOccurrence["items"] };
+  return { id: raw.id, serviceDate: raw.serviceDate, mealSlotCode: raw.mealSlotCode, serviceAt, status: raw.status as SubscriptionOccurrence["status"], items: items as SubscriptionOccurrence["items"] };
 }
 
 export function parseSubscriptionOccurrences(value: unknown): SubscriptionOccurrence[] | null {

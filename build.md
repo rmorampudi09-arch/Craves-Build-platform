@@ -554,3 +554,37 @@ P120 is the current executed phase and is PARTIAL at full production/staged-obse
 **Next phase authorization:** **NONE.**
 
 **Required action:** Stop. Do not pre-implement P124.
+
+---
+
+## 7. P124 Authorized Visual QA Update
+
+**P124 starting branch HEAD:** `515a440c627e0e9014bfb3147dc8a6228ac9e8b6`  
+**P124 initial QA-guard head:** `53527c88c003172bfba0cef6f8b70b7cd6935132`  
+**P124 corrected/validated QA-guard head:** `0527a5a382dfb8b820b5168320c6449a030cfb39`  
+**P124 evidence head before ledger refresh:** `261712e250a4e99dcc54f6e729747fe8d8bd55eb`
+
+- P124 was explicitly authorized after P123. Re-read `plan.md`, `phases.md`, `agent.md`, `build.md`, the full 183-page implementation guide/reference index, and the current customer screen source tree before making P124-only QA/evidence changes.
+- Confirmed the exact P124 scope from `phases.md`: device/emulator comparison for refs **1, 3, 5–18**, including customer auth states, with acceptance comparison of safe-area, hierarchy, typography, colors, spacing, radii, icons, crops, vertical rhythm, and overlays.
+- Mapped all 16 required references to the current real customer implementation modules and recorded the capture matrix in `docs/mobile-ui-rebuild/P124_CUSTOMER_VISUAL_QA_REFS_1_18.md`.
+- Added `apps/mobile/__tests__/visual/P124CustomerVisualQATargets.test.ts` as a deterministic preflight guard for the exact ref set, current implementation mapping, shared empty/active-cart pair ownership, auth chrome policy, required comparison dimensions, and explicit `pending-device-comparison` status.
+- The first guard version used Node `fs/path/__dirname` in the mobile TypeScript test environment. **CRAVES Mobile Implementation CI #474 / ID `31383219128`** correctly failed at TypeScript strict check. The correction removed that QA-only Node dependency rather than widening the production/mobile TypeScript environment.
+- **CRAVES Mobile Implementation CI #475 / ID `31383374630`** completed successfully for corrected guard commit `0527a5a382dfb8b820b5168320c6449a030cfb39`: dependency install, TypeScript strict check, ESLint, Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
+- No product/runtime UI source was modified because this connector execution cannot establish a reference-backed visual mismatch without actual side-by-side device/emulator screenshot evidence. Speculative redesign/fixes would violate the visual-authority rule.
+- The GitHub/File-Library connector can inspect source and the parsed 52-reference guide index, but it does not provide an Android emulator/device capture surface or usable bitmap extraction for the embedded reference images. Therefore the required P124 screenshot comparison has not been performed and no screen is falsely labeled pixel-perfect/visually passed.
+- The exact capture protocol, all 16 pending rows, and the completion gate are recorded in the P124 evidence document. P124 moves to DONE only after each row has real device/emulator comparison evidence and every observed deviation is fixed/recaptured or explicitly approved.
+- No backend, APIM, OpenAPI, infrastructure, navigation contract, auth/session contract, product API contract, dependency, production UI source, P125 reference work, or Chef visual-certification work changed.
+
+**P124 changed files:**
+
+- `apps/mobile/__tests__/visual/P124CustomerVisualQATargets.test.ts`
+- `docs/mobile-ui-rebuild/P124_CUSTOMER_VISUAL_QA_REFS_1_18.md`
+- `build.md`
+
+**P124 status:** **PARTIAL / QA PENDING at full phase acceptance; reference matrix/preflight is implemented and CI validated, but required device/emulator screenshot comparison remains unperformed.**
+
+**Next phase in sequence:** **P125 — Customer Visual QA Refs 19–37 — NOT STARTED**.
+
+**Next phase authorization:** **NONE.**
+
+**Required action:** Stop. Do not pre-implement P125.

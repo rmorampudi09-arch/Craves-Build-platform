@@ -42,16 +42,22 @@ The authoritative visual source remains `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0
 
 ## Deterministic P124 preflight added
 
-`apps/mobile/__tests__/visual/P124CustomerVisualQATargets.test.ts` now guards the executable QA matrix before any visual pass can be claimed. It verifies:
+`apps/mobile/__tests__/visual/P124CustomerVisualQATargets.test.ts` now guards the QA matrix before any visual pass can be claimed. Repository inspection established that the mapped modules above are the current customer implementations, and the guard:
 
-1. the P124 set is exactly refs `1, 3, 5–18`;
-2. every reference maps to an existing customer screen module;
-3. refs `5/6`, `7/8`, `9/10`, and `11/12` remain state variants of the same implementation instead of duplicate static screens;
-4. customer auth refs `1` and `3` remain classified as authenticated-chrome-hidden states;
-5. every target explicitly remains `pending-device-comparison` so deterministic coverage cannot be mistaken for a pixel/visual pass;
-6. the comparison dimensions are locked to the P124 acceptance list from `phases.md`.
+1. locks the P124 set to exactly refs `1, 3, 5–18`;
+2. locks each reference to the reviewed current customer implementation module path;
+3. keeps refs `5/6`, `7/8`, `9/10`, and `11/12` as state variants of the same implementation instead of duplicate static screens;
+4. keeps customer auth refs `1` and `3` classified as authenticated-chrome-hidden states;
+5. keeps every target explicitly `pending-device-comparison` so deterministic coverage cannot be mistaken for a pixel/visual pass;
+6. locks the comparison dimensions to the P124 acceptance list from `phases.md`.
 
-Preflight implementation commit: `53527c88c003172bfba0cef6f8b70b7cd6935132`.
+Commit history for the preflight:
+
+- initial guard: `53527c88c003172bfba0cef6f8b70b7cd6935132`;
+- CI run `31383219128` correctly rejected that first version at TypeScript strict check because the mobile TypeScript environment does not expose Node `fs/path/__dirname` types;
+- corrected mobile-environment-safe guard: `0527a5a382dfb8b820b5168320c6449a030cfb39`.
+
+The failed initial CI attempt is retained here as evidence rather than hidden; the corrected guard removes the Node-only dependency instead of widening the production TypeScript environment for a QA test.
 
 ## Device/emulator comparison protocol
 

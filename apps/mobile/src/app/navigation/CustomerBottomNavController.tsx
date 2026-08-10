@@ -10,6 +10,10 @@ import React, {
 import {
   Animated,
   Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -19,17 +23,36 @@ import {
   type BottomTabBarProps,
 } from '@react-navigation/bottom-tabs';
 import {
+  CommonActions,
   getFocusedRouteNameFromRoute,
   useFocusEffect,
 } from '@react-navigation/native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useAppSelector} from '../store/hooks';
 import {resolveMotion} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
+import {
+  colors,
+  elevation,
+  fontWeight,
+  radius,
+  spacing,
+  touchTarget,
+  typography,
+} from '../../design/tokens';
+import {
+  selectCartFoodSubtotal,
+  selectCartItemCount,
+} from '../../features/cart/state/cartSelectors';
+import {formatCartMoney} from '../../features/cart/viewCartOverlayModel';
+import {Icon} from '../../shared/components/Icon';
 import {
   createCustomerBottomNavScrollState,
   reduceCustomerBottomNavScroll,
   revealCustomerBottomNav,
 } from './customerBottomNavScroll';
 import {resolveRouteChromePolicy} from './navigationPolicy';
+import type {RegisteredRouteName} from './types';
 
 interface CustomerBottomNavVisibilityContextValue {
   readonly animationProgress: Animated.Value;
@@ -141,31 +164,47 @@ export function CustomerBottomTabBar(props: BottomTabBarProps) {
 function CustomerBottomTabBarContent(props: BottomTabBarProps) {
   const {animationProgress, isVisible} =
     useCustomerBottomNavVisibilityContext();
+  const insets = useSafeAreaInsets();
+  const itemCount = useAppSelector(selectCartItemCount);
+  const subtotal = useAppSelector(selectCartFoodSubtotal);
   const [barHeight, setBarHeight] = useState(0);
   const activeTabRoute = props.state.routes[props.state.index];
   const focusedChildRouteName = getFocusedRouteNameFromRoute(activeTabRoute);
-  const focusedRoutePolicy =
-    focusedChildRouteName === 'CustomerFilterSort' ||
-    focusedChildRouteName === 'CustomerDishDetail' ||
-    focusedChildRouteName === 'CustomerKitchenProfile' ||
-    focusedChildRouteName === 'CustomerKitchenDishes'
-      ? resolveRouteChromePolicy('Customer', focusedChildRouteName)
-      : resolveRouteChromePolicy('Customer');
+  const focusedRoutePolicy = resolveRouteChromePolicy(
+    'Customer',
+    (focusedChildRouteName ?? activeTabRoute.name) as RegisteredRouteName,
+  );
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setBarHeight(Math.ceil(event.nativeEvent.layout.height));
   }, []);
 
+  const handleOpenCart = useCallback(() => {
+    props.navigation.dispatch(
+      CommonActions.navigate({
+        name: activeTabRoute.name,
+        params: {screen: 'CustomerCart'},
+      }),
+    );
+  }, [activeTabRoute.name, props.navigation]);
+
   if (!focusedRoutePolicy.bottomNavigationVisible) {
     return null;
   }
 
-  const hiddenDistance = Math.max(barHeight, 96);
+  const cartVisible =
+    focusedRoutePolicy.viewCartEligible && itemCount > 0 && subtotal !== null;
+  const bottomOffset = Math.max(insets.bottom, spacing.md);
+  const hiddenDistance = Math.max(
+    barHeight + bottomOffset + spacing.xl,
+    touchTarget.comfortable * 2,
+  );
   const translateY = animationProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [hiddenDistance, 0],
     extrapolate: 'clamp',
   });
+  const totalLabel = subtotal ? formatCartMoney(subtotal) : '';
 
   return (
     <Animated.View
@@ -173,14 +212,102 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
       pointerEvents={isVisible ? 'auto' : 'none'}
       accessibilityElementsHidden={!isVisible}
       importantForAccessibility={isVisible ? 'auto' : 'no-hide-descendants'}
-      style={{
-        opacity: animationProgress,
-        transform: [{translateY}],
-      }}>
-      <BottomTabBar {...props} />
+      style={[
+        styles.positioner,
+        {
+          bottom: bottomOffset,
+          transform: [{translateY}],
+        },
+      ]}>
+      <View style={styles.shell}>
+        <View style={styles.tabsArea}>
+          <BottomTabBar
+            {...props}
+            insets={{...props.insets, bottom: 0}}
+          />
+        </View>
+
+        {cartVisible ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View Cart, ${itemCount} ${
+              itemCount === 1 ? 'item' : 'items'
+            }, ${totalLabel}`}
+            onPress={handleOpenCart}
+            style={({pressed}) => [
+              styles.cartAction,
+              pressed && styles.cartActionPressed,
+            ]}>
+            <Icon name="cart" color={colors.white} size={20} />
+            <View style={styles.cartCopy}>
+              <Text numberOfLines={1} style={styles.cartTitle}>
+                Cart · {itemCount}
+              </Text>
+              <Text numberOfLines={1} style={styles.cartTotal}>
+                {totalLabel}
+              </Text>
+            </View>
+          </Pressable>
+        ) : null}
+      </View>
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  positioner: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    zIndex: 50,
+    borderRadius: radius.xl,
+    ...elevation.card,
+  },
+  shell: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+  },
+  tabsArea: {
+    flex: 1,
+    minWidth: 0,
+  },
+  cartAction: {
+    width: spacing.xxxl * 3,
+    minHeight: touchTarget.comfortable,
+    flexShrink: 0,
+    alignSelf: 'center',
+    marginLeft: spacing.xxs,
+    marginRight: spacing.xs,
+    marginVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.flameRedAccessible,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  cartActionPressed: {
+    opacity: 0.9,
+  },
+  cartCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  cartTitle: {
+    color: colors.white,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  cartTotal: {
+    marginTop: spacing.xxs,
+    color: colors.white,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.semibold,
+  },
+});
 
 export interface CustomerBottomNavScrollBinding {
   readonly onScroll: (

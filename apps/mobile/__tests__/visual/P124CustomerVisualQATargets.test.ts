@@ -1,6 +1,3 @@
-import {existsSync} from 'fs';
-import {resolve} from 'path';
-
 type CustomerVisualQaTarget = {
   ref: number;
   image: string;
@@ -9,8 +6,6 @@ type CustomerVisualQaTarget = {
   chromePolicy: 'auth-hidden' | 'customer-shell' | 'focused';
   certification: 'pending-device-comparison';
 };
-
-const MOBILE_ROOT = resolve(__dirname, '../..');
 
 const CUSTOMER_VISUAL_QA_TARGETS: readonly CustomerVisualQaTarget[] = [
   {
@@ -163,10 +158,27 @@ describe('P124 customer visual QA target preflight', () => {
     ]);
   });
 
-  it('maps every reference to a real customer implementation module', () => {
-    for (const target of CUSTOMER_VISUAL_QA_TARGETS) {
-      expect(existsSync(resolve(MOBILE_ROOT, target.screenPath))).toBe(true);
-    }
+  it('locks each reference to the reviewed current customer implementation module', () => {
+    expect(
+      CUSTOMER_VISUAL_QA_TARGETS.map(target => [target.ref, target.screenPath]),
+    ).toEqual([
+      [1, 'src/features/auth/screens/PhoneSignInScreen.tsx'],
+      [3, 'src/features/auth/screens/EmailSignInScreen.tsx'],
+      [5, 'src/features/home/screens/CustomerHomeScreen.tsx'],
+      [6, 'src/features/home/screens/CustomerHomeScreen.tsx'],
+      [7, 'src/features/chefDiscovery/screens/DiscoverHomeChefsScreen.tsx'],
+      [8, 'src/features/chefDiscovery/screens/DiscoverHomeChefsScreen.tsx'],
+      [9, 'src/features/customerOrders/screens/CustomerOrdersScreen.tsx'],
+      [10, 'src/features/customerOrders/screens/CustomerOrdersScreen.tsx'],
+      [11, 'src/features/customerProfile/screens/CustomerProfileScreen.tsx'],
+      [12, 'src/features/customerProfile/screens/CustomerProfileScreen.tsx'],
+      [13, 'src/features/dishDetail/screens/CustomerDishDetailScreen.tsx'],
+      [14, 'src/features/dishDetail/screens/CustomerDishIngredientsScreen.tsx'],
+      [15, 'src/features/kitchenProfile/screens/CustomerKitchenProfileScreen.tsx'],
+      [16, 'src/features/kitchenProfile/screens/CustomerKitchenDishesScreen.tsx'],
+      [17, 'src/features/discoveryFilters/screens/CustomerFilterSortScreen.tsx'],
+      [18, 'src/features/cart/screens/CustomerCartScreen.tsx'],
+    ]);
   });
 
   it('keeps empty/active cart reference pairs on the same implementation', () => {

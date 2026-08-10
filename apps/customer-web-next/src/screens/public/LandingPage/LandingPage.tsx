@@ -9,6 +9,8 @@ import { CommunityImpactSection } from "@/components/sections/CommunityImpactSec
 import { FooterSection } from "@/components/sections/FooterSection";
 import { HeroSection } from "@/components/sections/HeroSection";
 import { HowItWorksSection } from "@/components/sections/HowItWorksSection";
+import { ReferenceArtworkSection } from "@/components/sections/landing-reference/ReferenceArtworkSection";
+import { ReferenceHeroDesktop } from "@/components/sections/landing-reference/ReferenceHeroDesktop";
 import { WhatMakesSpecialSection } from "@/components/sections/WhatMakesSpecialSection";
 import { WhyCravesSection } from "@/components/sections/WhyCravesSection";
 import {
@@ -69,7 +71,9 @@ function LandingPage() {
       <main className="flex min-h-screen items-center justify-center bg-white px-4">
         <div className="text-center" role="status" aria-live="polite">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#E6E8EA] border-t-[#F62E18]" />
-          <p className="mt-4 text-sm font-medium text-[#6E7378]">Opening Craves…</p>
+          <p className="mt-4 text-sm font-medium text-[#6E7378]">
+            Opening Craves…
+          </p>
         </div>
       </main>
     );
@@ -78,31 +82,53 @@ function LandingPage() {
   return (
     <div className={`${styles.page} min-h-screen bg-white text-ink`}>
       <main>
-        <HeroSection
-          locationLabel={locationLabel}
-          onOpenLocation={() => setLocOpen(true)}
+        <ReferenceHeroDesktop
           onOpenAuth={openAuth}
           onBecomeChef={() => openAuth("register", "chef")}
         />
 
-        <WhatMakesSpecialSection />
-
-        <div id="how-it-works" className="scroll-mt-20">
-          <HowItWorksSection />
-        </div>
-
-        <div id="why-craves" className="scroll-mt-20">
-          <WhyCravesSection />
-        </div>
-
-        <div id="become-a-chef" className="scroll-mt-20">
-          <BecomeChefCtaSection
+        <div className="lg:hidden">
+          <HeroSection
+            locationLabel={locationLabel}
+            onOpenLocation={() => setLocOpen(true)}
+            onOpenAuth={openAuth}
             onBecomeChef={() => openAuth("register", "chef")}
           />
         </div>
 
-        <CommunityImpactSection />
-        <AppDownloadSection />
+        <div className="lg:hidden">
+          <WhatMakesSpecialSection />
+        </div>
+
+        <div id="how-it-works" className="scroll-mt-20">
+          <ReferenceArtworkSection variant="how" priority />
+          <div className="lg:hidden">
+            <HowItWorksSection />
+          </div>
+        </div>
+
+        <div id="why-craves" className="scroll-mt-20">
+          <ReferenceArtworkSection variant="why" />
+          <div className="lg:hidden">
+            <WhyCravesSection />
+          </div>
+        </div>
+
+        <div id="become-a-chef" className="relative scroll-mt-20">
+          <span
+            id="craves-app"
+            className="pointer-events-none absolute left-0 top-0 h-px w-px"
+            aria-hidden="true"
+          />
+          <ReferenceArtworkSection variant="chefs-app" />
+          <div className="lg:hidden">
+            <BecomeChefCtaSection
+              onBecomeChef={() => openAuth("register", "chef")}
+            />
+            <CommunityImpactSection />
+            <AppDownloadSection />
+          </div>
+        </div>
       </main>
 
       <FooterSection />

@@ -517,3 +517,40 @@ P120 is the current executed phase and is PARTIAL at full production/staged-obse
 **Next phase authorization:** **NONE.**
 
 **Required action:** Stop. Do not pre-implement P123.
+
+---
+
+## 6. P123 Authorized Completion Update
+
+**P123 starting branch HEAD:** `5384d0a462efe12001e22a3377560e260b001ab2`  
+**P123 initial implementation head:** `87aedabf3a10c3c69b337aad82b3be8a5d02e061`  
+**P123 corrected/validated implementation head:** `fd654db1cee7f8f2ca226fa980757cda5b893ad7`  
+**P123 evidence head:** `2e0dbbc61a204cff79525f4667ac1e855a70534b`
+
+- P123 was explicitly authorized after P122. Re-read `plan.md`, `phases.md`, `agent.md`, `build.md`, `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, and the current auth/cart/checkout/payment/order/Chef contract boundaries before making P123 test/tooling/evidence changes only.
+- P122 was already **DONE**, not partial, at the start of this phase; P123 therefore began from the validated P122 integration gate.
+- Added `apps/mobile/__tests__/e2e/P123CriticalE2EJourneys.test.ts` as a deterministic critical-journey regression layer over the existing production coordinators/contracts rather than creating alternate runtime stores, APIs, navigation contracts, or mock-only product behavior.
+- The suite covers authenticated Customer restoration, authoritative dish/cart state into checkout/payment handoff and backend-owned paid reconciliation, fail-closed Customer order/review gaps, Chef accept through Preparing → Ready for Pickup → Delivered with stale-regression rejection, supported Chef menu Add Item request construction, and explicit payment/payout/subscription blockers.
+- Added `npm run test:e2e` as the focused P123 selector.
+- The first P123 CI attempt, run #472 / ID `31381310784`, exposed a P123 package-edit regression: the initial `package.json` edit accidentally omitted the pre-existing `@react-navigation/native-stack` dependency. The correction restored that exact dependency; no product/runtime behavior was changed.
+- **CRAVES Mobile Implementation CI** run **#473** / ID `31381639215` completed successfully for corrected implementation commit `fd654db1cee7f8f2ca226fa980757cda5b893ad7`.
+- Validation passed: expected 1176-package install, TypeScript strict check, ESLint with zero warnings, **133 Jest suites / 604 tests**, `PASS __tests__/e2e/P123CriticalE2EJourneys.test.ts`, production Android JavaScript bundle generation, and the backend/APIM/infrastructure source guard.
+- The repository's previously recorded Jest post-run open-handle delay remains after all 604 tests pass; existing non-failing React `act(...)` lifecycle-test console warnings also remain. P123 does not hide either condition or expand into unrelated cleanup.
+- Full native/device E2E acceptance remains unavailable because the mobile workspace has no Detox/Appium/native E2E harness. P123 therefore does not claim real-device OTP entry, system permission dialogs, process-kill behavior, native Cashfree UI, or OS-level provider callbacks.
+- Existing exact-contract blockers remain explicit instead of simulated: checkout server idempotency, Cashfree native launch/callback, customer reviews, unsupported customer order mutations, Chef payout withdrawal capabilities, and Chef platform-subscription mutations.
+- No production/runtime source, backend, APIM, OpenAPI, infrastructure, navigation, auth/session, persistence, payment-provider, product-API, UI, or visual-reference implementation changed in P123.
+
+**P123 changed files:**
+
+- `apps/mobile/__tests__/e2e/P123CriticalE2EJourneys.test.ts`
+- `apps/mobile/package.json`
+- `docs/mobile-ui-rebuild/P123_CRITICAL_E2E_JOURNEYS.md`
+- `build.md`
+
+**P123 status:** **PARTIAL at full environment/device E2E scope; deterministic supportable critical-journey coverage is implemented and CI validated.**
+
+**Next phase in sequence:** **P124 — Customer Visual QA Refs 1–18 — NOT STARTED**.
+
+**Next phase authorization:** **NONE.**
+
+**Required action:** Stop. Do not pre-implement P124.

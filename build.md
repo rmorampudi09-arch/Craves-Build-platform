@@ -56,8 +56,9 @@
 - **P115 — Reduced Motion and Animation Audit:** PARTIAL at full runtime/device-validation scope; source-level reduced-motion remediation is implemented across shared motion/loading, auth/customer/chef stack transitions, View Cart, and current slide modal surfaces. Evidence: `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md`.
 - **P116 — List/Image/Memory Performance Audit:** PARTIAL at full acceptance/product-contract scope; safe mobile hardening is implemented, but Chef-owned Menu and Customer/Public Kitchen Menu remain authoritative unpaged arrays under the current backend contracts, so the phase cannot claim that every production list/history is bounded in memory. Evidence: `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md`.
 - **P117 — Networking Performance and Cancellation Audit:** DONE at authorized code/CI audit scope; authenticated/public transport retries are shared, safe-read-only and abort-aware, query retries are limited to explicitly retriable non-cancelled failures, stale-time tiers are explicit, and non-idempotent mutations retain zero automatic retries. Evidence: `docs/mobile-ui-rebuild/P117_NETWORKING_PERFORMANCE_CANCELLATION_AUDIT.md`.
+- **P118 — Security/Privacy/Logging Audit:** DONE at authorized code/audit scope; token/persistence/payment/document/logging boundaries were audited and auth-flow phone/email PII was removed from navigation state into deliberately non-persistent process memory. Source CI is still running and is not claimed complete. Evidence: `docs/mobile-ui-rebuild/P118_SECURITY_PRIVACY_LOGGING_AUDIT.md`.
 
-**Current executed phase:** **P117 — Networking Performance and Cancellation Audit**.
+**Current executed phase:** **P118 — Security/Privacy/Logging Audit**.
 
 ### P112 authorized backfill completion
 
@@ -292,11 +293,73 @@ Evidence/ledger:
 4. P116 remains PARTIAL because of its unpaged Chef/Public Kitchen menu contracts; P117 does not reclassify or hide that blocker.
 5. Existing contract-blocked product capabilities remain blocked; no idempotency-key, offline write queue, mutation replay protocol, or backend retry contract was invented.
 
-**Next phase in sequence:** **P118 — Security/Privacy/Logging Audit — NOT STARTED**.
+### P118 implemented boundary
+
+**P118 starting branch HEAD:** `1d94d414a1a12d680c86baec984a9275e48da8c2`  
+**P118 source implementation head:** `78562aa7791cdd1cea969faf632fbf6fa920edbd`
+
+- Re-read `plan.md`, `phases.md`, `agent.md`, `build.md`, the full 183-page implementation guide, and current credential, persistence, navigation, auth, HTTP, payment, and document/privacy ownership before implementing only P118.
+- Confirmed the existing credential boundary is already correct: access tokens stay in `tokenMemory.ts`, refresh credentials stay in `expo-secure-store`, and Redux has no persistence layer.
+- Confirmed AsyncStorage process restoration is restricted to the versioned allowlist of non-sensitive role/tab/nested route identity and resource IDs; private drafts, auth credentials, payment handoff data, phone numbers, and email addresses are not persisted there.
+- Found and fixed one real P118 defect: phone/email PII was carried through typed auth route params for OTP and password recovery.
+- Auth routes now carry only the non-sensitive role. Phone/password-recovery prefill context moves through new storage-free `authTransitionMemory.ts`; new auth attempts clear it, OTP success clears the phone, and one-time email handoff avoids navigation serialization.
+- If process death removes the ephemeral OTP phone context, verification fails closed and requires a new phone verification rather than persisting or reconstructing private data.
+- Removed obsolete email-bearing route-context helpers so future typed callers cannot casually recreate the old navigation privacy defect.
+- Product route params remain resource-ID based rather than carrying private/large entities.
+- Inspected current mobile dependencies and auth/session/HTTP foundations: no active mobile analytics/crash SDK sink or credential/PII logging path was found, and P118 adds no logging.
+- Payment selection remains identifier-only; raw payment credentials are explicitly disallowed and server-issued Cashfree handoff/session material remains ephemeral rather than persisted/routed.
+- Existing Chef Business Information/document boundaries continue excluding sensitive storage/reviewer identifiers and unsupported document-maintenance capabilities remain fail closed.
+- P119 APIM contract-coverage work was not started.
+
+### P118 changed files
+
+Production/runtime:
+
+- `apps/mobile/src/app/navigation/types.ts`
+- `apps/mobile/src/features/auth/domain/emailSignInPolicy.ts`
+- `apps/mobile/src/features/auth/domain/passwordRecoveryPolicy.ts`
+- `apps/mobile/src/features/auth/screens/RoleSelectionScreen.tsx`
+- `apps/mobile/src/features/auth/screens/PhoneSignInScreen.tsx`
+- `apps/mobile/src/features/auth/screens/OtpVerificationScreen.tsx`
+- `apps/mobile/src/features/auth/screens/EmailSignInScreen.tsx`
+- `apps/mobile/src/features/auth/screens/ForgotPasswordScreen.tsx`
+- `apps/mobile/src/features/auth/screens/PasswordResetSentScreen.tsx`
+- `apps/mobile/src/features/auth/state/authTransitionMemory.ts`
+
+Focused tests:
+
+- `apps/mobile/src/features/auth/state/authTransitionMemory.test.ts`
+- `apps/mobile/src/features/auth/domain/emailSignInPolicy.test.ts`
+- `apps/mobile/src/features/auth/domain/passwordRecoveryPolicy.test.ts`
+
+Evidence/ledger:
+
+- `docs/mobile-ui-rebuild/P118_SECURITY_PRIVACY_LOGGING_AUDIT.md`
+- `build.md`
+
+### P118 validation / guard state
+
+- Starting HEAD `1d94d414a1a12d680c86baec984a9275e48da8c2` was compared with source head `f2677c822b65272c4e7298b30a074887646edf8e`; the delta was confined to the intended auth/navigation privacy boundary and focused tests.
+- Commit `78562aa7791cdd1cea969faf632fbf6fa920edbd` restored one unrelated historical comment wording and did not change P118 behavior.
+- **CRAVES Mobile Implementation CI** run **#449** / ID `31368637811` was triggered for current source head `78562aa7791cdd1cea969faf632fbf6fa920edbd`.
+- At this ledger update, dependency installation, TypeScript strict compilation, and ESLint have passed; Jest remains in progress. A completed CI pass is therefore not claimed yet.
+- No backend, APIM, OpenAPI, infrastructure, database, provider SDK, or unrelated product UI contract changed.
+- No production telemetry backend/device forensic capture is claimed; acceptance is a source/dependency/persistence/privacy-boundary audit.
+
+### P118 acceptance / retained boundaries
+
+1. **PASS — credentials and insecure persistence:** access token remains memory-only, refresh credential remains in approved secure storage, Redux is not persisted, and restoration persistence is non-sensitive/allowlisted.
+2. **PASS — route privacy after remediation:** email and phone PII are absent from auth route params; OTP/password remain local transient state; product routes carry resource IDs rather than private entities.
+3. **PASS — current logging/telemetry boundary:** no sensitive auth/session/HTTP logging path or installed mobile analytics/crash sink was found in the inspected source/dependencies; P118 adds no telemetry.
+4. **PASS — current payment/document boundary:** no raw payment credential persistence/routing is introduced; provider handoff state stays ephemeral; sensitive Chef document/private identifiers remain excluded from mobile route/insecure-storage ownership.
+5. Existing contract-blocked payment/document/product capabilities remain blocked; P118 does not fabricate missing provider/document/backend behavior.
+6. P116 remains PARTIAL at its existing unpaged-menu product-contract boundary; P118 does not reclassify it.
+
+**Next phase in sequence:** **P119 — APIM Contract-Coverage Audit — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED in this run.**
 
-**Required action:** Stop. Do not pre-implement P118.
+**Required action:** Stop. Do not pre-implement P119.
 
 ---
 
@@ -342,10 +405,11 @@ Evidence/ledger:
 | P115 | PARTIAL at full runtime/device-validation scope; source-level reduced-motion audit/remediation implemented | `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md` |
 | P116 | PARTIAL at full acceptance/product-contract scope; safe mobile hardening implemented, unpaged menu contracts remain | `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md` |
 | P117 | DONE at authorized code/CI audit scope; networking retry/cancellation/mutation replay hardening validated | `docs/mobile-ui-rebuild/P117_NETWORKING_PERFORMANCE_CANCELLATION_AUDIT.md` |
-| P118 onward | NOT STARTED / not accepted | — |
+| P118 | DONE at authorized code/audit scope; auth route PII removed and security/privacy/logging boundaries audited; source CI still running | `docs/mobile-ui-rebuild/P118_SECURITY_PRIVACY_LOGGING_AUDIT.md` |
+| P119 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-P117 is the current executed phase and is DONE at authorized code/CI audit scope. Preserve P111 restoration/security boundaries, P112 lifecycle policy, P113 accessibility semantics, P114 safe-area/responsive guardrails, P115 reduced-motion equivalents, P116 list/image/memory hardening and its explicit unpaged-menu blocker, and the P117 safe networking/retry/cancellation rules. Generic transient retry must remain safe-read-only; mutations must not gain blind automatic replay. Contract-blocked features remain blocked. P118 — Security/Privacy/Logging Audit — is the next phase in sequence but is not authorized in this run.
+P118 is the current executed phase and is DONE at authorized code/audit scope. Preserve P111 restoration/security boundaries, P112 lifecycle policy, P113 accessibility semantics, P114 safe-area/responsive guardrails, P115 reduced-motion equivalents, P116 list/image/memory hardening and its explicit unpaged-menu blocker, P117 safe networking/retry/cancellation rules, and the P118 credential/persistence/navigation privacy boundary. Auth-flow PII must not return to navigation state or insecure persistence. Contract-blocked features remain blocked. P119 — APIM Contract-Coverage Audit — is the next phase in sequence but is not authorized in this run.

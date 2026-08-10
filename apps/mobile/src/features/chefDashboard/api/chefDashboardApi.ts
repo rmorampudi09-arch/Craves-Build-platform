@@ -1,4 +1,3 @@
-import {httpClient} from '../../../core/http/httpClient';
 import {
   chefMenuApi,
   parseChefMenuItem,
@@ -47,6 +46,23 @@ export type ChefDashboardFoodType = ChefMenuFoodType;
 export type ChefDashboardSpiceLevel = ChefMenuSpiceLevel;
 export type ChefDashboardMenuImage = ChefMenuItemImage;
 export type ChefDashboardMenuItem = ChefMenuItem;
+
+export const CHEF_DASHBOARD_EARNINGS_CONTRACT_GAP = {
+  availability: 'unavailable',
+  code: 'BACKEND_CONTRACT_UNAVAILABLE',
+  route: '/api/v1/chef/earnings',
+  reason:
+    'Chef earnings has a backend route but no approved APIM mobile operation on this branch. P119 blocks the network call until an APIM contract is published.',
+} as const;
+
+export class ChefDashboardContractUnavailableError extends Error {
+  readonly code = CHEF_DASHBOARD_EARNINGS_CONTRACT_GAP.code;
+
+  constructor() {
+    super(CHEF_DASHBOARD_EARNINGS_CONTRACT_GAP.reason);
+    this.name = 'ChefDashboardContractUnavailableError';
+  }
+}
 
 const EARNING_STATUSES = new Set<ChefEarningStatus>([
   'DRAFT',
@@ -186,17 +202,8 @@ export const parseChefDashboardMenuItem = parseChefMenuItem;
 export const parseChefDashboardMenuItems = parseChefMenuItems;
 
 export const chefDashboardApi = {
-  async listEarnings(signal?: AbortSignal): Promise<ChefDashboardEarning[]> {
-    const response = await httpClient.get<unknown>('/api/v1/chef/earnings', {
-      params: {limit: 200},
-      signal,
-      dedupeKey: 'chef-dashboard:earnings:200',
-    });
-    const parsed = parseChefDashboardEarnings(response);
-    if (!parsed) {
-      throw new Error('Chef earnings returned an unsupported response.');
-    }
-    return parsed;
+  async listEarnings(_signal?: AbortSignal): Promise<ChefDashboardEarning[]> {
+    throw new ChefDashboardContractUnavailableError();
   },
 
   listMenuItems(signal?: AbortSignal): Promise<ChefDashboardMenuItem[]> {

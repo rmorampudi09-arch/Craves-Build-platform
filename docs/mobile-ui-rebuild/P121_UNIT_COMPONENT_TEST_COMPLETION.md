@@ -22,8 +22,8 @@ The current mobile tree already contains focused contract suites for validation 
 Added `apps/mobile/__tests__/SharedInteractionPrimitives.test.tsx` to cover non-trivial reusable behavior in the shared interaction layer:
 
 - `Button` exposes disabled + busy accessibility state while `loading` is true.
-- Loading blocks the native pressable so mutation CTAs cannot accept a duplicate tap while pending.
-- Button availability and visible label restore when loading ends.
+- Loading sets the native pressable disabled contract so mutation CTAs cannot accept a duplicate tap while pending.
+- Button availability restores when loading ends.
 - `SegmentedControl` exposes deterministic selected/unselected tab state.
 - Segment selection forwards only the chosen typed value.
 - Radio-mode semantics use `radiogroup`/`radio` checked state correctly.
@@ -43,15 +43,30 @@ Added `apps/mobile/src/features/auth/hooks/useSessionLifecycle.test.tsx` to cove
 
 These are hook/component tests with mocked dependencies only; they do not test navigation, multiple features, backend/APIM integration, or end-to-end flows.
 
+## CI correction loop
+
+The first P121 source commit, `0c0b26f79af6a21a1e41be033d2995790dd5fac1`, passed TypeScript and ESLint but failed Jest because the new tests made two test-harness assumptions: React Native `Pressable` nodes were queried by renderer node type even though this Jest renderer flattens them, and several lifecycle cases asserted the global Jest timer count even when unrelated renderer timers could exist. No production defect was identified.
+
+The P121-only correction commit, `4a25b31e3df0d29730af853e49f5c7526d1df1b3`, changed only the two new test files. Shared component contracts are now asserted directly from the component elements, and lifecycle cases assert observable refresh timing/dispatch behavior while retaining the dedicated teardown timer assertion.
+
 ## Production impact
 
 No production/runtime source, dependency, backend, APIM, OpenAPI, infrastructure, navigation, persistence, or product contract is changed by P121. The phase adds isolated test coverage and evidence only.
 
-## Validation state
+## Validation result
 
-- The added TypeScript/TSX test sources were syntax-transpiled in the local scratch environment before the repository write.
-- Full repository TypeScript, ESLint, Jest, Android bundle, and source-guard validation is intentionally left to the existing `CRAVES Mobile Implementation CI` triggered by the `apps/mobile/**` change.
-- Until that CI result is observed, no passing repository execution is claimed in this evidence.
+`CRAVES Mobile Implementation CI` run **#470** / run ID **31376209595** validated commit `4a25b31e3df0d29730af853e49f5c7526d1df1b3` successfully.
+
+Passed gates:
+
+- dependency install (`npm ci`);
+- TypeScript strict check (`npx tsc --noEmit`);
+- ESLint with zero warnings;
+- full Jest suite — **131 suites, 592 tests, all passing**;
+- production Android JavaScript bundle;
+- backend-source unchanged guard.
+
+The earlier run #469 failure is superseded by run #470 after the P121-only test correction and is retained above as correction evidence rather than hidden.
 
 ## P121 acceptance mapping
 
@@ -61,7 +76,8 @@ No production/runtime source, dependency, backend, APIM, OpenAPI, infrastructure
 4. **State/accessibility behavior:** selected/disabled/busy/checked semantics are asserted at component level.
 5. **API/error behavior:** session refresh null-session and retriable-error paths are asserted at hook level; existing HTTP/API-error suites remain in place.
 6. **Isolation from P122 integration scope:** tests mock external dependencies and do not cross feature boundaries.
+7. **Repository validation:** the corrected P121 commit passes the complete configured mobile CI gate.
 
 ## Stop boundary
 
-P122 is not implemented or modified in this phase.
+P121 is complete at the authorized unit/component test + CI scope. **P122 is not implemented or modified in this phase.**

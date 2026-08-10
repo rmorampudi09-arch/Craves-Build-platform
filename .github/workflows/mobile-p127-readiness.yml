@@ -1,0 +1,161 @@
+name: CRAVES Mobile P127 Production Readiness
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/mobile-p127-readiness.yml
+      - .github/scripts/mobile-p127-readiness-check.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout P127 branch
+        uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Setup Java for Android native builds
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: TypeScript strict check
+        id: typecheck
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        id: lint
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: npm run lint -- --max-warnings=0
+
+      - name: Full unit/component/integration Jest regression
+        id: jest
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: npm test -- --runInBand
+
+      - name: Dedicated integration regression
+        id: integration
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: npm run test:integration
+
+      - name: Dedicated critical E2E regression
+        id: e2e
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: npm run test:e2e
+
+      - name: P119 APIM contract static guard
+        id: p119
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: npm run check:p119
+
+      - name: P120 observability static guard
+        id: p120
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: npm run check:p120
+
+      - name: P127 source hygiene, secret, and release-config audit
+        id: p127static
+        continue-on-error: true
+        run: node .github/scripts/mobile-p127-readiness-check.mjs
+
+      - name: Production Android JavaScript bundle
+        id: bundle
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: |
+          rm -rf build/p127-readiness-bundle
+          mkdir -p build/p127-readiness-bundle
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output build/p127-readiness-bundle/index.android.bundle \
+            --assets-dest build/p127-readiness-bundle/assets
+          test -s build/p127-readiness-bundle/index.android.bundle
+
+      - name: Android debug and release native builds
+        id: androidbuild
+        continue-on-error: true
+        working-directory: apps/mobile/android
+        run: ./gradlew :app:assembleDebug :app:assembleRelease --no-daemon
+
+      - name: Verify backend source remains unchanged
+        id: backendguard
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only 8a2444cde508ea2fb20cb9822397e55c29bd8c5f...HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -E '^(services/|openapi/|infra/|apps/api/)'; then
+            echo 'Backend/APIM/infrastructure source changed during the mobile rebuild.' >&2
+            exit 1
+          fi
+          echo 'Backend/APIM/infrastructure source guard passed.'
+
+      - name: Production dependency vulnerability gate
+        id: audit
+        continue-on-error: true
+        working-directory: apps/mobile
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Final P127 automated readiness gate
+        if: always()
+        env:
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          JEST: ${{ steps.jest.outcome }}
+          INTEGRATION: ${{ steps.integration.outcome }}
+          E2E: ${{ steps.e2e.outcome }}
+          P119: ${{ steps.p119.outcome }}
+          P120: ${{ steps.p120.outcome }}
+          P127_STATIC: ${{ steps.p127static.outcome }}
+          BUNDLE: ${{ steps.bundle.outcome }}
+          ANDROID_BUILD: ${{ steps.androidbuild.outcome }}
+          BACKEND_GUARD: ${{ steps.backendguard.outcome }}
+          DEPENDENCY_AUDIT: ${{ steps.audit.outcome }}
+        run: |
+          set -euo pipefail
+          failures=0
+          for gate in TYPECHECK LINT JEST INTEGRATION E2E P119 P120 P127_STATIC BUNDLE ANDROID_BUILD BACKEND_GUARD DEPENDENCY_AUDIT; do
+            result="${!gate}"
+            printf '%-20s %s\n' "$gate" "$result"
+            if [ "$result" != 'success' ]; then
+              failures=$((failures + 1))
+            fi
+          done
+          if [ "$failures" -ne 0 ]; then
+            echo "P127 automated readiness gate failed: $failures check(s) are not green." >&2
+            exit 1
+          fi
+          echo 'P127 automated readiness gate passed.'

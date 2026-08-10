@@ -55,8 +55,9 @@
 - **P114 — Keyboard/Safe-Area/Responsive Audit:** PARTIAL at full device-validation scope; source-level IME/safe-area/responsive remediation is implemented for the inspected critical paths, while compact/standard/large device, IME, cutout, gesture-navigation, and enlarged-font runtime validation remain unclaimed. Evidence: `docs/mobile-ui-rebuild/P114_KEYBOARD_SAFE_AREA_RESPONSIVE_AUDIT.md`.
 - **P115 — Reduced Motion and Animation Audit:** PARTIAL at full runtime/device-validation scope; source-level reduced-motion remediation is implemented across shared motion/loading, auth/customer/chef stack transitions, View Cart, and current slide modal surfaces. Evidence: `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md`.
 - **P116 — List/Image/Memory Performance Audit:** PARTIAL at full acceptance/product-contract scope; safe mobile hardening is implemented, but Chef-owned Menu and Customer/Public Kitchen Menu remain authoritative unpaged arrays under the current backend contracts, so the phase cannot claim that every production list/history is bounded in memory. Evidence: `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md`.
+- **P117 — Networking Performance and Cancellation Audit:** DONE at authorized code/CI audit scope; authenticated/public transport retries are shared, safe-read-only and abort-aware, query retries are limited to explicitly retriable non-cancelled failures, stale-time tiers are explicit, and non-idempotent mutations retain zero automatic retries. Evidence: `docs/mobile-ui-rebuild/P117_NETWORKING_PERFORMANCE_CANCELLATION_AUDIT.md`.
 
-**Current executed phase:** **P116 — List/Image/Memory Performance Audit**.
+**Current executed phase:** **P117 — Networking Performance and Cancellation Audit**.
 
 ### P112 authorized backfill completion
 
@@ -223,24 +224,79 @@ Evidence/ledger:
 - The implementation commit was compared against that starting HEAD and contains only the four intended production files, one focused test file, and the P116 evidence document.
 - Modified Notifications and Dish Details source was re-fetched from the implementation commit to confirm the intended virtualization/media wiring and phase scope.
 - Chef Menu P92 evidence/API and Customer/Public Kitchen API were rechecked during final acceptance classification, confirming the missing server pagination boundary rather than assuming the screens' virtualization made those arrays bounded.
-- Focused test source records the explicit Home/Discover retained-page ceilings and the pre-existing notification-history cap; execution is not claimed.
-- GitHub Actions were intentionally not invoked because the account Actions capacity is exhausted.
-- Local Jest/typecheck/ESLint/Metro/bundle execution and device profiler/heap/FPS validation are not claimed from this connector-only run.
+- Focused test source records the explicit Home/Discover retained-page ceilings and the pre-existing notification-history cap.
+- GitHub Actions later validated the P116 implementation commit successfully in run #445 / ID `31358612222`; see the dedicated P116 evidence for the complete validation record.
+- No device profiler/heap/FPS validation is claimed.
 
 ### P116 retained gaps instead of fabricated verification
 
 1. The phase-wide acceptance statement “No unbounded production list/history retained in memory” remains unsatisfied because the current Chef-owned Menu and Customer/Public Kitchen Menu contracts return whole authoritative arrays without pagination.
 2. P116 does not truncate those arrays locally because doing so would hide valid product data; a correct completion requires an approved paged backend/APIM contract outside this phase's authorized boundary.
-3. No passing CI, local test runner, Android device profiler, heap capture, image-decoder trace, or FPS measurement is claimed in this run.
-4. P116 does not fabricate a media-count policy or CDN resizing contract that the current backend does not expose.
-5. Existing contract-blocked product surfaces remain blocked; performance auditing does not convert unavailable data contracts into fake lists.
-6. P115 remains PARTIAL at its previously recorded runtime/device-validation scope; P116 does not reclassify it.
+3. P116 does not fabricate a media-count policy or CDN resizing contract that the current backend does not expose.
+4. Existing contract-blocked product surfaces remain blocked; performance auditing does not convert unavailable data contracts into fake lists.
+5. P115 remains PARTIAL at its previously recorded runtime/device-validation scope; P116 does not reclassify it.
 
-**Next phase in sequence:** **P117 — Networking Performance and Cancellation Audit — NOT STARTED**.
+### P117 implemented boundary
+
+**P117 starting branch HEAD:** `861babfc0368fe63f5d498c80970f96f66979d3c`  
+**P117 implementation head:** `6295d7b5697a0cfa2902750f9fcc52de00f68871`
+
+- Re-read `plan.md`, `phases.md`, `agent.md`, `build.md`, the full 183-page implementation guide, P116 evidence, and the current HTTP/query/discovery/session networking ownership before implementing only P117.
+- Preserved existing valid dedupe ownership: TanStack same-key query coalescing, explicit `runDedupedRequest(...)`, and the auth refresh `refreshPromise`. No global mutation dedupe was invented.
+- Extracted the authenticated client's existing safe-read transient retry behavior into shared `requestRetry.ts` and installed it on both authenticated and public Axios clients, eliminating the previous public/auth transport inconsistency.
+- Retry backoff is now abort-aware: cancellation during the delay clears the timer and prevents replay. The 401 auth-recovery path also refuses to replay a request whose signal was aborted during refresh.
+- Kept the transport policy safe-read-only: generic transient retry is limited to `GET`/`HEAD`/`OPTIONS`; non-idempotent `POST`/`PUT`/`PATCH`/`DELETE` requests are not blindly replayed.
+- Replaced TanStack's blind numeric query retry with a retriable-only predicate. Cancelled and terminal errors do not get a query-level replay; transient retriable reads remain bounded to one query retry with capped backoff.
+- Published explicit query stale-time tiers: 30 seconds by default and 5 minutes for discovery/feed surfaces. Home Feed and Nearby Chef Discovery now consume the shared discovery tier instead of duplicate literals.
+- Retained the existing discovery debounce at 250 ms. Scope-aware debounce, search-change/clear cancellation, and pagination blocking while debouncing were already compliant, so no second debounce layer was added.
+- Mutations keep `retry: 0`. The existing one-time `_cravesAuthRetried` 401 recovery remains an explicit guarded authentication recovery path, not a generic transient mutation retry.
+- Stable contextual query keys plus consumed cancellation signals continue to isolate obsolete request state from newer identity/role/location/filter/paging state.
+- P118 security/privacy/logging work was not started.
+
+### P117 changed files
+
+Production/runtime:
+
+- `apps/mobile/src/core/http/requestRetry.ts`
+- `apps/mobile/src/core/http/apiClient.ts`
+- `apps/mobile/src/core/http/transport.ts`
+- `apps/mobile/src/app/query/queryPolicy.ts`
+- `apps/mobile/src/app/query/queryClient.ts`
+- `apps/mobile/src/features/home/query/homeFeedQueries.ts`
+- `apps/mobile/src/features/chefDiscovery/query/nearbyChefDiscoveryQueries.ts`
+
+Focused tests:
+
+- `apps/mobile/src/core/http/httpFoundation.test.ts`
+- `apps/mobile/src/app/query/queryFoundation.test.ts`
+
+Evidence/ledger:
+
+- `docs/mobile-ui-rebuild/P117_NETWORKING_PERFORMANCE_CANCELLATION_AUDIT.md`
+- `build.md`
+
+### P117 validation / guard state
+
+- The implementation commit was compared directly with the P117 starting HEAD and changes only the nine intended `apps/mobile/**` source/test files.
+- **CRAVES Mobile Implementation CI** run **#446** / ID `31365988783` completed successfully for implementation commit `6295d7b5697a0cfa2902750f9fcc52de00f68871`.
+- `npm ci`, TypeScript strict compilation, ESLint, Jest, Android production JavaScript bundle generation, and the backend/APIM/infrastructure source guard all passed.
+- Focused tests cover safe-read retry, non-idempotent mutation no-replay, cancellation during retry backoff, retriable-only query retries, terminal/cancelled no-retry behavior, zero mutation retries, and explicit stale-time tiers.
+- No backend, APIM, OpenAPI, infrastructure, route contract, navigation, auth ownership, or product UI source changed.
+- No real-device packet-loss simulation, network throttling profile, proxy trace, or production latency benchmark is claimed by this code-level audit.
+
+### P117 acceptance / retained boundaries
+
+1. **PASS — stale response cannot overwrite new query state:** stable contextual keys, consumed abort signals, explicit cancellation and abort-aware retry prevent obsolete work from being resurrected into newer query state.
+2. **PASS — non-idempotent mutations are not blindly retried:** generic transport retry is safe-read-only and TanStack mutations remain at zero automatic retries.
+3. The existing one-time 401 replay remains guarded by `_cravesAuthRetried` and is cancellation-aware; it is retained as authentication recovery rather than generalized retry semantics.
+4. P116 remains PARTIAL because of its unpaged Chef/Public Kitchen menu contracts; P117 does not reclassify or hide that blocker.
+5. Existing contract-blocked product capabilities remain blocked; no idempotency-key, offline write queue, mutation replay protocol, or backend retry contract was invented.
+
+**Next phase in sequence:** **P118 — Security/Privacy/Logging Audit — NOT STARTED**.
 
 **Next phase authorization:** **NONE AUTHORIZED in this run.**
 
-**Required action:** Stop. Do not pre-implement P117.
+**Required action:** Stop. Do not pre-implement P118.
 
 ---
 
@@ -285,10 +341,11 @@ Evidence/ledger:
 | P114 | PARTIAL at full device-validation scope; source-level keyboard/safe-area/responsive remediation implemented | `docs/mobile-ui-rebuild/P114_KEYBOARD_SAFE_AREA_RESPONSIVE_AUDIT.md` |
 | P115 | PARTIAL at full runtime/device-validation scope; source-level reduced-motion audit/remediation implemented | `docs/mobile-ui-rebuild/P115_REDUCED_MOTION_ANIMATION_AUDIT.md` |
 | P116 | PARTIAL at full acceptance/product-contract scope; safe mobile hardening implemented, unpaged menu contracts remain | `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md` |
-| P117 onward | NOT STARTED / not accepted | — |
+| P117 | DONE at authorized code/CI audit scope; networking retry/cancellation/mutation replay hardening validated | `docs/mobile-ui-rebuild/P117_NETWORKING_PERFORMANCE_CANCELLATION_AUDIT.md` |
+| P118 onward | NOT STARTED / not accepted | — |
 
 ---
 
 ## 3. Handoff
 
-P116 is the current executed phase and is PARTIAL at full acceptance/product-contract scope. Preserve P112 lifecycle policy, P111 restoration/security boundaries, P113 accessibility semantics, P114 safe-area/responsive guardrails, P115 reduced-motion equivalents, and the new P116 list/image/memory hardening. The remaining P116 blocker is the current unpaged Chef-owned Menu and Customer/Public Kitchen Menu contracts; do not hide that blocker with client-side truncation. Contract-blocked features remain blocked. P117 — Networking Performance and Cancellation Audit — is the next phase in sequence but is not authorized in this run.
+P117 is the current executed phase and is DONE at authorized code/CI audit scope. Preserve P111 restoration/security boundaries, P112 lifecycle policy, P113 accessibility semantics, P114 safe-area/responsive guardrails, P115 reduced-motion equivalents, P116 list/image/memory hardening and its explicit unpaged-menu blocker, and the P117 safe networking/retry/cancellation rules. Generic transient retry must remain safe-read-only; mutations must not gain blind automatic replay. Contract-blocked features remain blocked. P118 — Security/Privacy/Logging Audit — is the next phase in sequence but is not authorized in this run.

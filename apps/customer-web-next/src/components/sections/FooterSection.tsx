@@ -7,7 +7,7 @@ const mutedItemClass = "text-sm leading-6 text-[#C7C9CC]";
 
 export function FooterSection() {
   return (
-    <footer className="relative overflow-hidden bg-[#111111] text-white">
+    <footer id="contact" className="relative overflow-hidden bg-[#111111] text-white">
       <svg
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-20 w-full md:h-24"
@@ -75,7 +75,7 @@ export function FooterSection() {
               Delicious food at your fingertips.
             </p>
             <a
-              href="#download-app"
+              href="#craves-app"
               className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition-colors hover:border-white/50"
             >
               App Store • Google Play

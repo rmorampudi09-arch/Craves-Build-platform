@@ -49,7 +49,7 @@ steps:
 
   - bash: |
       set -euo pipefail
-      bash -n scripts/release/integration-delivery-status-publisher-enable-v2.sh
+      bash -n scripts/release/integration-delivery-status-publisher-enable-v3.sh
       echo 'Publisher activation helper shell syntax: PASS'
     displayName: Validate publisher activation helper syntax
 
@@ -61,7 +61,7 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-        bash scripts/release/integration-delivery-status-publisher-enable-v2.sh \
+        bash scripts/release/integration-delivery-status-publisher-enable-v3.sh \
           '${{ parameters.resourceGroupName }}' \
           '${{ parameters.integrationContainerAppName }}' \
           '${{ parameters.orderContainerAppName }}' \

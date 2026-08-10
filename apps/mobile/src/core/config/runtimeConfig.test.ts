@@ -1,5 +1,6 @@
 import Config from 'react-native-config';
 import {
+  CRAVES_PRODUCTION_API_ORIGIN,
   getRuntimeConfig,
   RuntimeConfigurationError,
 } from './runtimeConfig';
@@ -29,12 +30,51 @@ describe('getRuntimeConfig', () => {
     });
   });
 
-  it('fails clearly when the required API base URL is missing', () => {
+  it('fails clearly when the required development API base URL is missing', () => {
     mutableConfig.CRAVES_ENVIRONMENT = 'development';
     mutableConfig.CRAVES_API_BASE_URL = '   ';
 
     expect(() => getRuntimeConfig()).toThrow(RuntimeConfigurationError);
     expect(() => getRuntimeConfig()).toThrow('CRAVES_API_BASE_URL');
+  });
+
+  it('uses the production APIM origin when a production base URL is missing', () => {
+    mutableConfig.CRAVES_ENVIRONMENT = 'production';
+    mutableConfig.CRAVES_API_BASE_URL = '   ';
+
+    expect(getRuntimeConfig()).toEqual({
+      apiBaseUrl: CRAVES_PRODUCTION_API_ORIGIN,
+      environment: 'production',
+    });
+  });
+
+  it('replaces the legacy placeholder with the production APIM origin', () => {
+    mutableConfig.CRAVES_ENVIRONMENT = 'production';
+    mutableConfig.CRAVES_API_BASE_URL = 'https://api.example.invalid';
+
+    expect(getRuntimeConfig()).toEqual({
+      apiBaseUrl: CRAVES_PRODUCTION_API_ORIGIN,
+      environment: 'production',
+    });
+  });
+
+  it('normalizes a configured /api/v1 base back to the APIM origin', () => {
+    mutableConfig.CRAVES_ENVIRONMENT = 'production';
+    mutableConfig.CRAVES_API_BASE_URL = `${CRAVES_PRODUCTION_API_ORIGIN}/api/v1/`;
+
+    expect(getRuntimeConfig()).toEqual({
+      apiBaseUrl: CRAVES_PRODUCTION_API_ORIGIN,
+      environment: 'production',
+    });
+  });
+
+  it('rejects arbitrary base URL paths because client routes already include /api/v1', () => {
+    mutableConfig.CRAVES_ENVIRONMENT = 'production';
+    mutableConfig.CRAVES_API_BASE_URL = `${CRAVES_PRODUCTION_API_ORIGIN}/gateway`;
+
+    expect(() => getRuntimeConfig()).toThrow(
+      'CRAVES_API_BASE_URL must be the gateway origin only',
+    );
   });
 
   it('rejects an unsupported environment name', () => {

@@ -484,3 +484,36 @@ P120 is the current executed phase and is PARTIAL at full production/staged-obse
 **Next phase authorization:** **NONE.**
 
 **Required action:** Stop. Do not pre-implement P122.
+
+---
+
+## 5. P122 Authorized Completion Update
+
+**P122 starting branch HEAD:** `e8b8a0def1b35cfb911e2e04e6897fb7e654e8d4`  
+**P122 validated implementation head:** `b4693bffcb074ea065937b5b286daf77c07db61a`  
+**P122 evidence head:** `6f9e465a41da45f43175847d1886a0a819510ac9`
+
+- P122 was explicitly authorized after P121. Re-read `plan.md`, `phases.md`, `agent.md`, `build.md`, `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`, and the existing integration-grade feature tests before making test-only/tooling-only changes.
+- Added `apps/mobile/__tests__/integration/P122CrossFeatureFlows.test.ts` to compose the required cross-feature seams instead of duplicating isolated unit coverage.
+- The new suite proves authenticated process restoration/navigation, Chef-to-Customer role isolation and stale-role deferral, server cart restoration plus authoritative mutation reconciliation, Customer location invalidation across Home and nearby Chef discovery, allowlisted notification-to-order routing, and Chef order-status progression with stale-regression rejection.
+- Added `npm run test:integration` as a stable focused selector for the P122 suite plus the existing navigation/restoration/session/role/cart/location/notification/Chef-order integration-grade specs.
+- **CRAVES Mobile Implementation CI** run **#471** / ID `31378804041` completed successfully for implementation commit `b4693bffcb074ea065937b5b286daf77c07db61a`.
+- Validation passed: dependency install, TypeScript strict check, ESLint with zero warnings, **132 Jest suites / 598 tests**, `PASS __tests__/integration/P122CrossFeatureFlows.test.ts`, production Android JavaScript bundle generation, and the backend/APIM/infrastructure source guard.
+- The repository's previously recorded Jest post-run open-handle warning remains after all tests pass; P122 does not hide it or expand into unrelated cleanup. Existing lifecycle-test React `act(...)` console warnings also remain non-failing and outside this phase's integration boundary.
+- The exact `npm run test:integration` command was not added as a separate CI step; all of its constituent suites, including the dedicated P122 suite, ran and passed under the authoritative full Jest CI gate.
+- No production/runtime source, dependency, backend, APIM, OpenAPI, infrastructure, navigation contract, auth/session contract, persistence contract, or product API contract changed.
+
+**P122 changed files:**
+
+- `apps/mobile/__tests__/integration/P122CrossFeatureFlows.test.ts`
+- `apps/mobile/package.json`
+- `docs/mobile-ui-rebuild/P122_INTEGRATION_TEST_COMPLETION.md`
+- `build.md`
+
+**P122 status:** **DONE at authorized integration-test + CI scope.**
+
+**Next phase in sequence:** **P123 — Mobile E2E Regression Completion — NOT STARTED**.
+
+**Next phase authorization:** **NONE.**
+
+**Required action:** Stop. Do not pre-implement P123.

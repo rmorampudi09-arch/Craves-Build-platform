@@ -1,6 +1,6 @@
 # P116 — List/Image/Memory Performance Audit
 
-**Status:** PARTIAL at full acceptance/product-contract scope; authorized mobile hardening implemented  
+**Status:** PARTIAL at full acceptance/product-contract scope; authorized mobile hardening implemented and CI validated  
 **Starting branch HEAD:** `5c923d7b3a568bdc7f9d1ec57cbb98a38b8f1507`  
 **Branch:** `mobile-ui-rebuild-from-scratch`
 
@@ -86,13 +86,34 @@ Evidence/ledger:
 - `docs/mobile-ui-rebuild/P116_LIST_IMAGE_MEMORY_PERFORMANCE_AUDIT.md`
 - `build.md`
 
+## GitHub Actions validation
+
+The P116 implementation commit `0b7e62b8866024682e6c7acbcec97f75b33f6fac` automatically triggered **CRAVES Mobile Implementation CI**, run **#445** / run ID **31358612222**. The run completed successfully.
+
+Successful validation steps:
+
+- dependency installation with `npm ci`;
+- TypeScript strict compilation with `npx tsc --noEmit`;
+- ESLint with zero warnings allowed by the lint command;
+- Jest: **126/126 test suites passed, 569/569 tests passed**, including `src/core/performanceBoundaries.test.ts`;
+- Android production JavaScript bundle generation completed and produced the bundle/assets;
+- backend/APIM/infrastructure source guard passed.
+
+The later commits after the implementation commit only update P116 evidence/ledger classification; they do not modify `apps/mobile/**`, so the successful CI run validates the current P116 mobile source changes.
+
+Non-failing CI observations retained for future cleanup rather than hidden:
+
+- Jest emitted React test `act(...)` console warnings from reduced-motion subscriptions and reported that an asynchronous handle remained open after tests completed; the complete Jest suite still exited successfully.
+- `npm ci` reported 30 dependency audit findings (15 moderate, 15 high). The current workflow does not run `npm audit` as a fail gate, so these are dependency-security debt and are not represented as a passing security audit.
+- GitHub emitted a warning that `actions/checkout@v4` and `actions/setup-node@v4` target the deprecated Node 20 actions runtime and are currently being forced onto Node 24 by the hosted runner. The application test/runtime Node configured by the workflow remains Node `22.13.0`.
+
 ## Validation and guard state
 
 - The authoritative branch HEAD was rechecked before the phase write.
 - Source ownership, existing paging limits, list primitives, media rendering, backend catalog media behavior, and the exact Chef/Public Kitchen menu list contracts were inspected before final classification.
 - Focused source coverage asserts the explicit Home/Discover page-retention ceilings and the existing notification-history cap.
-- GitHub Actions are not invoked because the account Actions capacity is exhausted.
-- No local Jest/typecheck/ESLint/Metro/bundle pass is claimed from this connector-only run.
+- GitHub Actions mobile CI passed for the P116 implementation commit: run #445 / ID `31358612222`.
+- No separate local Jest/typecheck/ESLint/Metro execution is claimed from the connector environment because the successful GitHub Actions run is the executable validation source for this phase.
 - No device profiler, heap capture, image-decoder trace, or 60-FPS runtime result is claimed.
 
 ## Scope guard

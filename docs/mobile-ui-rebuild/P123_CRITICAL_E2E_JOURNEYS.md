@@ -2,13 +2,15 @@
 
 ## Status
 
-PARTIAL at full environment/device E2E scope. The deterministic mobile critical-journey regression layer is implemented for every P123 capability that is truthfully supportable by the current branch. Environment- and contract-dependent gaps remain explicit and are not converted into fake success paths.
+PARTIAL at full environment/device E2E scope. The deterministic mobile critical-journey regression layer is implemented and CI-validated for every P123 capability that is truthfully supportable by the current branch. Environment- and contract-dependent gaps remain explicit and are not converted into fake success paths.
 
 ## Starting point
 
 - Branch: `mobile-ui-rebuild-from-scratch`
 - Starting HEAD: `5384d0a462efe12001e22a3377560e260b001ab2`
-- P122 is already DONE at integration-test/CI scope.
+- Initial P123 implementation head: `87aedabf3a10c3c69b337aad82b3be8a5d02e061`
+- Corrected and validated P123 implementation head: `fd654db1cee7f8f2ca226fa980757cda5b893ad7`
+- P122 was already DONE at integration-test/CI scope before P123 started.
 - P124 visual certification is not part of this phase and was not started.
 
 ## Guide / phase scope
@@ -82,11 +84,23 @@ The current Chef platform-subscription contract is blocked. Existing customer me
 
 None. P123 is a test/evidence phase. No backend, APIM, OpenAPI, infrastructure, navigation, auth/session, persistence, payment provider, product API, UI or visual-reference implementation was changed.
 
-## Validation policy
+## Validation
 
-The authoritative implementation CI remains the required final code-level validation gate: dependency install, TypeScript strict check, ESLint, full Jest, production Android JavaScript bundle generation, and backend/APIM/infrastructure guard. The dedicated P123 suite must also pass under the full Jest gate.
+The first P123 CI attempt, run #472 / ID `31381310784`, failed during TypeScript because the initial package edit accidentally omitted the pre-existing `@react-navigation/native-stack` dependency from `apps/mobile/package.json`. The failure was deterministic (`npm ci` installed 1175 packages instead of the previous 1176) and was caused by the P123 package edit rather than a pre-existing source defect. P123 corrected only that package regression by restoring the exact existing dependency; no runtime feature code was changed.
 
-If CI cannot start because of repository/account runner capacity, that condition must remain recorded as an external validation blocker; it must not be represented as a passing run.
+**CRAVES Mobile Implementation CI** run **#473** / ID `31381639215` completed successfully for corrected implementation commit `fd654db1cee7f8f2ca226fa980757cda5b893ad7`.
+
+Validation passed:
+
+- `npm ci` installed the expected 1176 packages,
+- TypeScript strict check,
+- ESLint with zero warnings,
+- full Jest: **133 suites / 604 tests passed**,
+- `PASS __tests__/e2e/P123CriticalE2EJourneys.test.ts`,
+- production Android JavaScript bundle generation,
+- backend/APIM/infrastructure source guard.
+
+The repository's previously recorded Jest post-run open-handle delay remains after all 604 tests pass, and existing non-failing React `act(...)` console warnings remain in lifecycle tests. P123 does not hide either condition or expand into unrelated cleanup.
 
 ## Phase boundary
 

@@ -29,15 +29,15 @@ public class PlanScheduleService {
     }
 
     public PlanScheduleResponse get(UUID planId, CurrentUser user) {
-        PlanOwner plan = requireOwnedPlan(planId, user);
+        PlanOwner plan = requireAdminManagedPlan(planId, user);
         return repository.find(plan.planId())
             .orElseThrow(() -> ApiException.notFound("PLAN_SCHEDULE_NOT_FOUND", "Plan schedule was not found"));
     }
 
     public PlanScheduleResponse put(UUID planId, PutScheduleRequest request, CurrentUser user) {
-        PlanOwner plan = requireOwnedPlan(planId, user);
+        PlanOwner plan = requireAdminManagedPlan(planId, user);
         if (plan.chefIdentityId() == null) {
-            throw ApiException.conflict("PLAN_CHEF_REQUIRED", "A plan chef is required before a schedule can be defined");
+            throw ApiException.conflict("PLAN_CHEF_REQUIRED", "An approved chef must be assigned before a schedule can be defined");
         }
         String recurrence = request.recurrenceType().trim().toUpperCase(Locale.ROOT);
         if (!RECURRENCES.contains(recurrence)) {
@@ -62,7 +62,7 @@ public class PlanScheduleService {
     }
 
     public PlanScheduleResponse activate(UUID planId, ActivateScheduleRequest request, CurrentUser user) {
-        PlanOwner plan = requireOwnedPlan(planId, user);
+        PlanOwner plan = requireAdminManagedPlan(planId, user);
         PlanScheduleResponse schedule = repository.find(plan.planId())
             .orElseThrow(() -> ApiException.notFound("PLAN_SCHEDULE_NOT_FOUND", "Plan schedule was not found"));
         if (schedule.items().isEmpty()) {
@@ -79,14 +79,10 @@ public class PlanScheduleService {
         }
     }
 
-    private PlanOwner requireOwnedPlan(UUID planId, CurrentUser user) {
-        requireRole(user, "PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN", "CHEF");
-        PlanOwner plan = repository.findPlanOwner(planId)
+    private PlanOwner requireAdminManagedPlan(UUID planId, CurrentUser user) {
+        requireAdmin(user);
+        return repository.findPlanOwner(planId)
             .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
-        if (!isSubscriptionAdmin(user) && !user.identityId().equals(plan.chefIdentityId())) {
-            throw ApiException.forbidden("PLAN_ACCESS_DENIED", "Chef cannot manage another chef's plan schedule");
-        }
-        return plan;
     }
 
     private void validateItems(String recurrence, List<ScheduleItemRequest> items, UUID chefIdentityId) {
@@ -121,18 +117,9 @@ public class PlanScheduleService {
         }
     }
 
-    private static boolean isSubscriptionAdmin(CurrentUser user) {
-        return user != null && user.hasAnyRole("PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN");
-    }
-
-    private static void requireRole(CurrentUser user, String... roles) {
-        if (user != null) {
-            for (String role : roles) {
-                if (user.hasRole(role)) {
-                    return;
-                }
-            }
+    private static void requireAdmin(CurrentUser user) {
+        if (user == null || !user.hasAnyRole("PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN")) {
+            throw ApiException.forbidden("ROLE_NOT_ALLOWED", "Subscription administration role is required");
         }
-        throw ApiException.forbidden("ROLE_NOT_ALLOWED", "User does not have the required role");
     }
 }

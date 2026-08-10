@@ -2,7 +2,7 @@
 
 **Branch:** `mobile-ui-rebuild-from-scratch`  
 **Starting HEAD:** `373787fc1ecc29877f405aa5cd9c35b04511dad2`  
-**Implementation head before evidence:** `635799d812b1bf88bff2a272975ea88add2fed08`  
+**Final source head:** `ca090d2197627c8ab10eab56d2aaee8f5b6b5776`  
 **Scope:** P120 only. P121 was not started.
 
 ## Status
@@ -35,9 +35,7 @@ Added `apps/mobile/src/core/observability/observability.ts` as the single mobile
 - exception capture;
 - provider installation through `setObservabilitySink(...)`.
 
-The default state is deliberately no-op. Provider failures are isolated and can never break product behavior.
-
-No duplicate analytics stack and no hard-coded telemetry endpoint was introduced.
+The default state is deliberately no-op. Provider failures are isolated and can never break product behavior. No duplicate analytics stack and no hard-coded telemetry endpoint was introduced.
 
 ## Privacy filtering
 
@@ -56,7 +54,7 @@ Focused tests cover key filtering, generic-value redaction, bounded strings, sin
 
 ## Screen views and action events
 
-`AppNavigator` now observes the active React Navigation route centrally on ready/state changes. Only the route name and coarse product role (`CUSTOMER`, `CHEF`, or `AUTH`) are emitted; route params/resource IDs are not exported.
+`AppNavigator` observes the active React Navigation route centrally on ready/state changes. Only the route name and coarse product role (`CUSTOMER`, `CHEF`, or `AUTH`) are emitted; route params/resource IDs are not exported.
 
 Inbound-link observation records only whether a link was initial and recognized. The raw URL is never emitted.
 
@@ -81,9 +79,15 @@ Network route sanitization removes query strings/fragments and replaces numeric,
 
 Existing P117 retry/cancellation ownership is unchanged. Retries remain governed by the existing safe-read/auth recovery policy; P120 only observes each actual transport attempt.
 
+### P119 cross-phase guard preservation
+
+The final sanity pass found that P119 intentionally forbids any Axios import outside `core/http`, including type-only imports. The first P120 network-observer version used an Axios config type outside that directory. Before phase handoff, P120 removed that import and replaced it with a minimal structural request-config interface while keeping the same behavior. Final source head `ca090d2197627c8ab10eab56d2aaee8f5b6b5776` therefore preserves the P119 centralized Axios boundary rather than weakening the prior guard.
+
+No new `httpClient`/`publicApiClient` action, direct backend host, gateway credential literal, or quarantined Chef earnings route was introduced by P120.
+
 ## Auth/session observability
 
-`sessionManager` now reports coarse privacy-safe events for:
+`sessionManager` reports coarse privacy-safe events for:
 
 - refresh start;
 - refresh success;
@@ -137,17 +141,35 @@ Performed through authoritative repository inspection:
 - re-read the current P120 definition and control docs;
 - confirmed no existing mobile analytics/crash/performance provider dependency before adding the provider-neutral abstraction;
 - re-read modified source after writes;
-- compared branch changes from P120 starting HEAD and confirmed the implementation delta is confined to mobile observability/navigation/http/session/test/guard files;
-- manually reconciled the deterministic `check:p120` markers with the current source.
+- compared branch changes from P120 starting HEAD and confirmed the implementation delta is confined to mobile observability/navigation/http/session/test/guard/evidence/ledger files;
+- manually reconciled the deterministic `check:p120` markers with the current source;
+- reconciled the final source against the P119 Axios-import/transport guard and removed the one type-only cross-boundary import before handoff.
+
+### CI state at evidence refresh
+
+GitHub Actions automatically started **CRAVES Mobile Implementation CI run #468 / ID `31373594216`** for final source head `ca090d2197627c8ab10eab56d2aaee8f5b6b5776`.
+
+At this evidence refresh:
+
+- checkout/setup: PASS;
+- dependency installation: PASS;
+- TypeScript strict check: PASS;
+- ESLint: PASS;
+- Jest: still running;
+- production Android JavaScript bundle: not yet claimed;
+- backend/APIM/infrastructure source guard: not yet claimed;
+- overall workflow: still in progress.
+
+Therefore this evidence does **not** label the complete workflow as passing.
 
 Not claimed:
 
+- local `npm run check:p119` execution;
 - local `npm run check:p120` execution;
-- local Jest/TypeScript/ESLint/bundle execution;
-- a passing GitHub Actions run;
+- complete run #468 success unless a later ledger/evidence refresh records it;
 - device/emulator/provider runtime verification.
 
-The connector-only environment does not provide a local repository checkout, and the project has an existing Actions-capacity constraint. P120 does not mislabel unexecuted validation as passing.
+The connector-only environment does not provide a local repository checkout. P120 records only validation actually observed from repository/CI state.
 
 ## Changed files
 
@@ -172,7 +194,7 @@ Focused tests/guards:
 Evidence/ledger:
 
 - `docs/mobile-ui-rebuild/P120_ANALYTICS_OBSERVABILITY_AUDIT.md`
-- `build.md` (ledger refresh follows this evidence commit)
+- `build.md`
 
 ## Phase boundary
 

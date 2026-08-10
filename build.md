@@ -7,77 +7,93 @@
 **Mobile workspace:** `apps/mobile`  
 **Backend/APIM guard baseline:** `8a2444cde508ea2fb20cb9822397e55c29bd8c5f`  
 **Implementation guide:** full 183-page `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`  
-**Build policy:** code-level validation during phases; no APK per phase.
+**Build policy:** code-level validation during phases; no final APK/AAB until P128.
 
 ---
 
 ## 1. Current Control State
 
-- **P00–P119:** retain the exact DONE/PARTIAL/BLOCKED/QA-PENDING states recorded in their dedicated evidence and in the archived pre-P126 ledger. This compact refresh does not reinterpret historical phase status.
+- **P00–P119:** retain the exact DONE/PARTIAL/BLOCKED/QA-PENDING states recorded in their dedicated evidence and the archived pre-P126 ledger. This compact ledger does not reinterpret historical phase status.
 - **P120 — Analytics/Observability Audit:** PARTIAL at full production/staged-observability scope. Evidence: `docs/mobile-ui-rebuild/P120_ANALYTICS_OBSERVABILITY_AUDIT.md`.
 - **P121 — Unit/Component Test Completion:** DONE at authorized unit/component-test + CI scope. Evidence: `docs/mobile-ui-rebuild/P121_UNIT_COMPONENT_TEST_COMPLETION.md`.
 - **P122 — Integration Test Completion:** DONE at authorized integration-test + CI scope. Evidence: `docs/mobile-ui-rebuild/P122_INTEGRATION_TEST_COMPLETION.md`.
-- **P123 — Mobile E2E Regression Completion:** PARTIAL at full environment/device E2E scope; deterministic supported critical-journey coverage is implemented and CI validated. Evidence: `docs/mobile-ui-rebuild/P123_CRITICAL_E2E_JOURNEYS.md`.
-- **P124 — Customer Visual QA Refs 1–18:** PARTIAL / QA PENDING; deterministic reference/source preflight is implemented and CI validated, while live device/emulator comparison remains pending. Evidence: `docs/mobile-ui-rebuild/P124_CUSTOMER_VISUAL_QA_REFS_1_18.md`.
-- **P125 — Customer Visual QA Refs 19–37:** PARTIAL / QA PENDING; deterministic reference/source preflight/evidence is implemented, while live device/emulator comparison remains pending. Evidence: `docs/mobile-ui-rebuild/P125_CUSTOMER_VISUAL_QA_REFS_19_37.md`.
-- **P126 — Chef Visual QA Refs 2, 4, 38–52:** PARTIAL / QA PENDING; deterministic Chef reference/source preflight is implemented and CI validated, while required live Android device/emulator comparison remains pending. Evidence: `docs/mobile-ui-rebuild/P126_CHEF_VISUAL_QA_REFS_2_4_38_52.md`.
+- **P123 — Mobile E2E Regression Completion:** PARTIAL at full environment/device E2E scope; deterministic supported critical-journey coverage is implemented and code-level validated. Evidence: `docs/mobile-ui-rebuild/P123_CRITICAL_E2E_JOURNEYS.md`.
+- **P124 — Customer Visual QA Refs 1–18:** PARTIAL / QA PENDING; live device/emulator comparison remains pending. Evidence: `docs/mobile-ui-rebuild/P124_CUSTOMER_VISUAL_QA_REFS_1_18.md`.
+- **P125 — Customer Visual QA Refs 19–37:** PARTIAL / QA PENDING; live device/emulator comparison remains pending and some reference states remain contract-blocked. Evidence: `docs/mobile-ui-rebuild/P125_CUSTOMER_VISUAL_QA_REFS_19_37.md`.
+- **P126 — Chef Visual QA Refs 2, 4, 38–52:** PARTIAL / QA PENDING; deterministic Chef reference/source preflight is implemented and CI validated, while live Android device/emulator comparison remains pending. Evidence: `docs/mobile-ui-rebuild/P126_CHEF_VISUAL_QA_REFS_2_4_38_52.md`.
+- **P127 — Final Regression and Production Readiness Review:** **EXECUTED / BLOCKED / NOT RELEASE-READY**. Evidence: `docs/mobile-ui-rebuild/P127_FINAL_REGRESSION_PRODUCTION_READINESS_REVIEW.md`.
 
-**Current executed phase:** **P126 — Chef Visual QA Refs 2, 4, 38–52**.
+**Current executed phase:** **P127 — Final Regression and Production Readiness Review**.
 
-**Next phase:** **P127 — NOT STARTED / NOT AUTHORIZED in this execution.**
-
----
-
-## 2. P126 Authorized Visual QA Update
-
-**P126 starting branch HEAD:** `611487c4cae68c0f9f92cb76fe74e796186285c0`  
-**P126 initial QA-guard head:** `8c313422ccb0031bf9802222387a8f0be3dc6cc7`  
-**P126 initial evidence head:** `e30e2a3f142dc42551e5913c897764f4d8624274`  
-**P126 ledger-refresh head:** `9338870bdb6cc984b5770f5036e554e55e8b4aab`  
-**P126 corrected/validated QA head:** `0cae3a5823246ac8240c54db12336eb50301a432`
-
-- P126 was explicitly authorized after the user identified P125 as partially completed and requested only the next phase.
-- Re-read/reconciled `plan.md`, `phases.md`, `agent.md`, `build.md`, the full-guide traceability already recorded in the repository, the current branch HEAD, and the production Chef feature tree before P126 changes.
-- Confirmed exact P126 scope from `phases.md`: guide refs **2, 4, 38–52**.
-- Locked refs 2 and 4 to the existing shared role-aware auth screens with explicit `CHEF` context; no duplicate Chef auth UI/transport stack was created.
-- Locked refs 38–52 to existing Chef Dashboard, Orders, Menu, Analytics, Profile, Business Information, Payout, Subscription, and Preferences modules.
-- Added `apps/mobile/__tests__/visual/P126ChefVisualQATargets.test.ts` as deterministic preflight for exact ref coverage, role/screen mapping, Chef operational boundary, customer-cart chrome exclusion, implementation availability, required comparison dimensions, and explicit `pending-device-comparison` status.
-- Recorded the complete 17-row capture matrix and completion gate in `docs/mobile-ui-rebuild/P126_CHEF_VISUAL_QA_REFS_2_4_38_52.md`.
-- No production/runtime Chef or Customer UI source was changed because this connector execution cannot establish an actual reference-backed mismatch without side-by-side device/emulator screenshot evidence. Speculative redesign would violate the visual-authority rule.
-- Customer View Cart/customer-shell/cart-overlay chrome remains excluded from the P126 Chef target contract; the required live run must still visually verify that isolation on refs 38–52.
-- Existing partial/fail-closed product-contract boundaries remain explicit; P126 does not fabricate data/actions to imitate populated reference screenshots.
-
-### P126 CI validation
-
-- **CI #478 / run ID `31393047864`** failed at TypeScript strict check and exposed a test-only global-scope collision between the P124/P125 visual-QA files when the P126 guard was added.
-- The correction added only `export {};` to the P124, P125, and P126 visual-QA test files, isolating each file as a TypeScript module. It did not change any reference mapping, assertion intent, runtime source, or earlier phase status.
-- Corrected/validated commit: `0cae3a5823246ac8240c54db12336eb50301a432`.
-- **CRAVES Mobile Implementation CI #479 / ID `31393909447` — SUCCESS.** Dependency install, TypeScript strict check, ESLint, full Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard all passed.
-
-### P126 changed files
-
-- `apps/mobile/__tests__/visual/P126ChefVisualQATargets.test.ts`
-- `apps/mobile/__tests__/visual/P124CustomerVisualQATargets.test.ts` — module-scope correction only
-- `apps/mobile/__tests__/visual/P125CustomerVisualQATargets.test.ts` — module-scope correction only
-- `docs/mobile-ui-rebuild/P126_CHEF_VISUAL_QA_REFS_2_4_38_52.md`
-- `build.md`
-- `docs/mobile-ui-rebuild/archive/BUILD_LEDGER_PRE_P126_2026-08-10.md` — exact preservation copy of the prior expanded build ledger before compaction
-
-### P126 validation boundary
-
-- Static/source reference mapping and guard construction: **completed and CI validated**.
-- Live Android device/emulator screenshots and side-by-side master-guide comparison for all 17 refs: **pending**.
-- Pixel-perfect/visual PASS certification: **not claimed**.
-- P126 therefore remains **PARTIAL / QA PENDING**, not DONE.
-
-### P126 completion gate
-
-P126 remains **PARTIAL / QA PENDING** until every one of refs 2, 4, and 38–52 has real device/emulator comparison evidence and each confirmed visual deviation is fixed and recaptured or explicitly accepted. The deterministic guard remains `pending-device-comparison` until that gate is satisfied.
+**P128 — Final Android Release Artifact:** **NOT STARTED**.
 
 ---
 
-## 3. Phase Stop
+## 2. P126 Preserved Boundary
 
-**P127 is NOT STARTED.**
+P126 remains **PARTIAL / QA PENDING**. Its deterministic visual target guard and exact refs 2, 4, 38–52 mapping are preserved, but no live Android device/emulator screenshots were captured and no pixel-perfect PASS was claimed.
 
-No regression/readiness work assigned to P127 is authorized or performed by this execution. Stop at P126.
+The last normal mobile CI evidence before P127 was **CRAVES Mobile Implementation CI #479 / run ID `31393909447` — SUCCESS**, covering dependency install, TypeScript, ESLint, full Jest, production Android JavaScript bundle, and backend/APIM/infrastructure source guard.
+
+---
+
+## 3. P127 Authorized Review
+
+**P127 starting branch HEAD:** `d60b39eecffc33a91c1a0d2381f962043901cbbd`  
+**P127 validation-workflow commit:** `8854780f28e0860d1e91ccf208c5ef7beb883977`  
+**P127 workflow run:** `31396913503`  
+**P127 job:** `93481961107`
+
+P127 added:
+
+- `.github/workflows/mobile-p127-readiness.yml`
+- `.github/scripts/mobile-p127-readiness-check.mjs`
+- `docs/mobile-ui-rebuild/P127_FINAL_REGRESSION_PRODUCTION_READINESS_REVIEW.md`
+
+### P127 green code-level gates
+
+- TypeScript strict check — PASS.
+- ESLint — PASS.
+- Full Jest — **136/136 suites, 624/624 tests PASS**.
+- Dedicated integration — **10/10 suites, 53/53 tests PASS**.
+- Deterministic critical E2E — **1/1 suite, 6/6 tests PASS**.
+- P119 APIM contract guard — PASS; **49** production mobile HTTP actions mapped across **20** call-bearing files.
+- P120 observability static guard — PASS.
+- Production Android JavaScript bundle — PASS; 21 asset files copied.
+- P127 static scan found no TODO/FIXME production markers, empty event handlers, mock-only production imports, focused/skipped tests, high-confidence committed secret patterns, or missing P124–P126 visual guards.
+
+### P127 blockers / non-green gates
+
+1. **Production Android signing is not ready.** `apps/mobile/android/app/build.gradle` still configures `release` with `signingConfigs.debug`; the P127 static gate intentionally failed closed on this condition.
+2. **Native release validation is incomplete.** The combined debug/release Gradle validation exceeded the 45-minute job timeout. Debug packaging reached `:app:packageDebug`; release native compilation was cancelled before complete release assembly.
+3. **Fresh P127 backend unchanged guard was skipped** after the overall job timeout. The prior normal CI #479 guard is green, but P127 does not substitute that prior result for a fresh final-candidate check.
+4. **Dedicated production-only dependency audit was skipped** after timeout. `npm ci` reported 30 vulnerabilities in the installed graph (15 moderate, 15 high), but the production-only subset was not established by this run.
+5. **Jest test-harness hygiene remains open.** Full Jest and the integration run both passed assertions but stayed alive for several minutes because of open async handles; the full run also emitted React `act(...)` warnings around reduced-motion state updates.
+6. **P124–P126 live visual certification remains pending**, so all required reference-image obligations are not yet signed off.
+7. **P113–P116 device/accessibility/responsive/motion/performance certification remains incomplete at the scopes recorded in those evidence files.**
+8. **P123 full native/provider E2E remains partial**, and P125 includes contract-blocked product states.
+9. **P120 external production telemetry/monitoring provider readiness is not certified.**
+
+The final P127 aggregate gate therefore failed and the application is **NOT RELEASE-READY**.
+
+---
+
+## 4. P127 Acceptance Decision
+
+- No production TODO/FIXME/empty-handler/mock-only blocker found by the P127 static scan: **PASS at static scope**.
+- Core code-level regression gates: **PASS at recorded scope**.
+- All required prior phases DONE or explicitly accepted external blockers: **NO**.
+- Device/visual/accessibility/performance/native/provider certification complete: **NO**.
+- Production signing ready: **NO**.
+- Production-only dependency audit complete: **NO**.
+- Complete native release validation: **NO**.
+
+**P127 status: BLOCKED / NOT RELEASE-READY.** Do not describe the rebuild as production-complete while these blockers remain open or unaccepted.
+
+---
+
+## 5. Phase Stop
+
+**P128 is NOT STARTED.**
+
+No final signed APK/AAB, artifact publishing, install/smoke certification, checksum, release notes, or rollback artifact work assigned to P128 was performed by this execution. Stop at P127.

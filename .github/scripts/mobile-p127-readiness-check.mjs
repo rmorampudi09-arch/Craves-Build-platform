@@ -71,6 +71,33 @@ function recordMatches(findings, filePath, text, label, regex) {
   }
 }
 
+function extractNamedBlock(text, name, startIndex = 0) {
+  const nameIndex = text.indexOf(name, startIndex);
+  if (nameIndex < 0) {
+    return null;
+  }
+
+  const braceIndex = text.indexOf('{', nameIndex + name.length);
+  if (braceIndex < 0) {
+    return null;
+  }
+
+  let depth = 0;
+  for (let index = braceIndex; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '{') {
+      depth += 1;
+    } else if (character === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(braceIndex + 1, index);
+      }
+    }
+  }
+
+  return null;
+}
+
 const findings = [];
 const allMobileFiles = walk(mobileRoot);
 const productionSourceFiles = walk(sourceRoot).filter(filePath => {
@@ -155,11 +182,19 @@ for (const scriptName of ['test', 'test:integration', 'test:e2e', 'check:p119', 
 
 const androidBuildGradlePath = path.join(mobileRoot, 'android', 'app', 'build.gradle');
 const androidBuildGradle = fs.readFileSync(androidBuildGradlePath, 'utf8');
-if (/release\s*\{[\s\S]{0,1600}?signingConfig\s+signingConfigs\.debug/.test(androidBuildGradle)) {
+const buildTypesBlock = extractNamedBlock(androidBuildGradle, 'buildTypes');
+const releaseBuildTypeBlock = buildTypesBlock
+  ? extractNamedBlock(buildTypesBlock, 'release')
+  : null;
+
+if (!buildTypesBlock || !releaseBuildTypeBlock) {
+  findings.push('apps/mobile/android/app/build.gradle — Android release buildType could not be resolved');
+} else if (/\bsigningConfig\s+signingConfigs\.debug\b/.test(releaseBuildTypeBlock)) {
   findings.push(
     'apps/mobile/android/app/build.gradle — release build must never fall back to signingConfigs.debug',
   );
 }
+
 for (const requiredSigningInput of [
   'CRAVES_ANDROID_KEYSTORE_PATH',
   'CRAVES_ANDROID_KEYSTORE_PASSWORD',

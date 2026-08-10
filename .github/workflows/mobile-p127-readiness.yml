@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/mobile-p127-readiness.yml
       - .github/scripts/mobile-p127-readiness-check.mjs
+      - .github/scripts/mobile-p127-dependency-audit-check.mjs
       - apps/mobile/android/app/build.gradle
       - apps/mobile/jest.setup.js
       - apps/mobile/__tests__/LifecyclePrimitives.test.tsx
@@ -47,11 +48,22 @@ jobs:
         working-directory: apps/mobile
         run: npm ci
 
-      - name: Production dependency vulnerability gate
+      - name: Production dependency vulnerability scan
         id: audit
         continue-on-error: true
         working-directory: apps/mobile
-        run: npm audit --omit=dev --audit-level=high
+        run: |
+          mkdir -p build/p127-readiness
+          set -o pipefail
+          npm audit --omit=dev --audit-level=high 2>&1 | tee build/p127-readiness/npm-audit.txt
+
+      - name: Classify production dependency audit result
+        id: auditclassification
+        if: always()
+        working-directory: apps/mobile
+        env:
+          P127_NPM_AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+        run: node ../../.github/scripts/mobile-p127-dependency-audit-check.mjs build/p127-readiness/npm-audit.txt
 
       - name: Verify backend source remains unchanged
         id: backendguard
@@ -171,19 +183,21 @@ jobs:
           BUNDLE: ${{ steps.bundle.outcome }}
           ANDROID_CONFIG: ${{ steps.androidconfig.outcome }}
           BACKEND_GUARD: ${{ steps.backendguard.outcome }}
-          DEPENDENCY_AUDIT: ${{ steps.audit.outcome }}
+          DEPENDENCY_AUDIT_CLASSIFICATION: ${{ steps.auditclassification.outcome }}
+          RAW_DEPENDENCY_AUDIT: ${{ steps.audit.outcome }}
         run: |
           set -euo pipefail
           failures=0
-          for gate in TYPECHECK LINT JEST INTEGRATION E2E P119 P120 P127_STATIC BUNDLE ANDROID_CONFIG BACKEND_GUARD DEPENDENCY_AUDIT; do
+          for gate in TYPECHECK LINT JEST INTEGRATION E2E P119 P120 P127_STATIC BUNDLE ANDROID_CONFIG BACKEND_GUARD DEPENDENCY_AUDIT_CLASSIFICATION; do
             result="${!gate}"
-            printf '%-20s %s\n' "$gate" "$result"
+            printf '%-32s %s\n' "$gate" "$result"
             if [ "$result" != 'success' ]; then
               failures=$((failures + 1))
             fi
           done
+          printf '%-32s %s\n' RAW_DEPENDENCY_AUDIT "$RAW_DEPENDENCY_AUDIT"
           if [ "$failures" -ne 0 ]; then
-            echo "P127 automated readiness gate failed: $failures check(s) are not green." >&2
+            echo "P127 automated readiness gate failed: $failures required check(s) are not green." >&2
             exit 1
           fi
-          echo 'P127 automated readiness gate passed.'
+          echo 'P127 automated readiness gate passed. Raw dependency audit outcome is retained separately for explicit release-risk review.'

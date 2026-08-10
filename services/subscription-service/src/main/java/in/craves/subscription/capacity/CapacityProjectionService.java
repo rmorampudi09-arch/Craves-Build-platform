@@ -3,7 +3,6 @@ package in.craves.subscription.capacity;
 import in.craves.subscription.capacity.CapacityRepository.DateOverrideRow;
 import in.craves.subscription.capacity.CapacityRepository.EntitlementRow;
 import in.craves.subscription.capacity.CapacityRepository.MenuDateOverrideRow;
-import in.craves.subscription.capacity.CapacityRepository.MenuRuleRow;
 import in.craves.subscription.capacity.CapacityRepository.SlotRuleRow;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -93,7 +92,6 @@ public class CapacityProjectionService {
             if (from.isBefore(today)) {
                 from = today;
             }
-            int beforeIncidents = incidents;
             for (LocalDate date = from; !date.isAfter(targetThrough); date = date.plusDays(1)) {
                 List<EntitlementRow> matching = entitlements.stream().filter(value -> matches(value, date)).toList();
                 if (matching.isEmpty()) {
@@ -115,11 +113,6 @@ public class CapacityProjectionService {
                 projectedDates++;
             }
             projectedSubscriptions++;
-            if (incidents == beforeIncidents) {
-                repository.resolveIncident(
-                    candidate.chefIdentityId(), null, null, "PROJECTION", null, "PROJECTION_FAILURE"
-                );
-            }
         }
         return new ProjectionSummary(candidates.size(), projectedSubscriptions, projectedDates, incidents);
     }
@@ -169,6 +162,7 @@ public class CapacityProjectionService {
                 );
             }
 
+            repository.resolveIncident(chefIdentityId, date, null, slot, null, "PROJECTION_FAILURE");
             int reserved = repository.currentDateSlotUnits(chefIdentityId, date, slot);
             repository.upsertBucket(
                 chefIdentityId, date, slot, effective.totalCapacityUnits(), effective.subscriptionCapacityUnits(),

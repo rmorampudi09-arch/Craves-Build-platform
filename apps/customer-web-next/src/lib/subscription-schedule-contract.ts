@@ -4,6 +4,7 @@ export type PublicSubscriptionSchedule = {
   timezone: string;
   items: Array<{
     menuItemId: string;
+    itemName?: string | null;
     quantity: number;
     isoDayOfWeek: number | null;
     dayOfMonth: number | null;
@@ -32,6 +33,8 @@ export function parsePublicSubscriptionSchedule(value: unknown): PublicSubscript
     if (!Number.isInteger(entry.sequenceNumber) || Number(entry.sequenceNumber) < 1 || Number(entry.sequenceNumber) > 100) return null;
     if (typeof entry.mealSlotCode !== "string" || !SLOT.test(entry.mealSlotCode)) return null;
     if (typeof entry.serviceTime !== "string" || !TIME.test(entry.serviceTime)) return null;
+    const itemName = entry.itemName == null ? null : typeof entry.itemName === "string" && entry.itemName.trim().length <= 200 ? entry.itemName.trim() : undefined;
+    if (itemName === undefined) return null;
     const isoDayOfWeek = entry.isoDayOfWeek == null ? null : Number(entry.isoDayOfWeek);
     const dayOfMonth = entry.dayOfMonth == null ? null : Number(entry.dayOfMonth);
     if (raw.recurrenceType === "WEEKLY") {
@@ -41,6 +44,7 @@ export function parsePublicSubscriptionSchedule(value: unknown): PublicSubscript
     }
     return {
       menuItemId: entry.menuItemId,
+      itemName,
       quantity: Number(entry.quantity),
       isoDayOfWeek,
       dayOfMonth,

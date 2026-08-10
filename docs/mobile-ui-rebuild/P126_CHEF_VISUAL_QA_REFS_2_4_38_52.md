@@ -5,8 +5,10 @@
 - **Branch:** `mobile-ui-rebuild-from-scratch`
 - **Authorized phase:** P126 only
 - **Starting branch HEAD:** `611487c4cae68c0f9f92cb76fe74e796186285c0`
-- **Deterministic guard commit:** `8c313422ccb0031bf9802222387a8f0be3dc6cc7`
-- **Status:** **PARTIAL / QA PENDING** — deterministic reference/source preflight is implemented; required live Android device/emulator reference comparison remains pending.
+- **Initial deterministic guard commit:** `8c313422ccb0031bf9802222387a8f0be3dc6cc7`
+- **Validated QA/test commit:** `0cae3a5823246ac8240c54db12336eb50301a432`
+- **CI:** CRAVES Mobile Implementation CI **#479**, run ID `31393909447` — **SUCCESS**
+- **Status:** **PARTIAL / QA PENDING** — deterministic reference/source preflight is implemented and CI validated; required live Android device/emulator reference comparison remains pending.
 - **Guide authority:** full 183-page `CRAVES_MASTER_IMPLEMENTATION_GUIDE_v1.0`.
 - **Phase scope:** guide refs **2, 4, 38–52** only. P127 is not started by this phase.
 
@@ -44,38 +46,42 @@ The two auth references intentionally reuse the shared role-aware auth screens; 
 
 ## Deterministic P126 guard
 
-Added:
-
-- `apps/mobile/__tests__/visual/P126ChefVisualQATargets.test.ts`
-
-The guard locks the following before any live visual certification can be claimed:
+Added `apps/mobile/__tests__/visual/P126ChefVisualQATargets.test.ts`. The guard locks:
 
 1. exact P126 reference coverage and order: `2, 4, 38–52`;
 2. Chef role context for both shared authentication references;
-3. all operational refs 38–52 remain bound to existing Chef feature modules;
-4. no P126 target opts into customer-shell/View-Cart/cart-overlay chrome;
-5. implementation availability remains explicit rather than fabricating screens for missing backend capability;
-6. every target remains `pending-device-comparison` until actual reference comparison is performed;
-7. the required visual comparison dimensions remain locked.
+3. all operational refs 38–52 to existing Chef feature modules;
+4. exclusion of customer-shell/View-Cart/cart-overlay chrome from the Chef target matrix;
+5. explicit implementation availability rather than fabricated screens/data;
+6. `pending-device-comparison` for every target until actual reference comparison is performed;
+7. safe-area, hierarchy, typography, colors, spacing, radii, icons, crops, vertical rhythm, and overlays as required comparison dimensions.
 
-This is a deterministic preflight/evidence guard. It is not a screenshot test and is deliberately unable to turn a target into a visual pass by itself.
+This is a deterministic preflight/evidence guard, not a screenshot test, and cannot turn a target into a visual pass by itself.
+
+## CI correction and validation
+
+The initial P126 guard push triggered **CI #478 / run ID `31393047864`**, which failed at the TypeScript strict step. The failure exposed a branch-level test-scope issue: the P124 and P125 visual-QA test files were script-scoped and declared identical top-level test-only identifiers (`CustomerVisualQaTarget`, `CUSTOMER_VISUAL_QA_TARGETS`, and `REQUIRED_COMPARISON_DIMENSIONS`). Adding the P126 guard caused TypeScript to compile the visual-QA files together and surface those collisions.
+
+The correction was deliberately minimal and QA-only: `export {};` was added to P124, P125, and P126 visual-QA test files so each is treated as its own module. No test intent, reference mapping, phase status, production code, runtime behavior, or visual certification changed.
+
+Corrected commit: `0cae3a5823246ac8240c54db12336eb50301a432`.
+
+**CRAVES Mobile Implementation CI #479 / ID `31393909447` completed successfully** for that commit. Passed stages:
+
+- dependency installation;
+- TypeScript strict check;
+- ESLint;
+- full Jest suite, including the P126 visual-QA preflight;
+- production Android JavaScript bundle generation;
+- backend/APIM/infrastructure source-change guard.
+
+The successful code/CI gate does **not** substitute for the device/reference visual gate.
 
 ## Required live comparison dimensions
 
-Each of the 17 P126 reference states must still be rendered on the supported Android device/emulator matrix and compared directly with the corresponding master-guide image for:
+Each of the 17 P126 reference states must still be rendered on the supported Android device/emulator matrix and compared directly with the corresponding master-guide image for safe areas, hierarchy, typography, colors, spacing, radii, icons, image/illustration crops, vertical rhythm, overlays/sticky actions, keyboard behavior where applicable, and supported loading/empty/error/disabled states.
 
-- safe-area placement and system-bar clearance;
-- hierarchy and section ordering;
-- typography scale, weight, line-height, wrapping, and truncation;
-- Flame Red/Espresso Brown and warm-surface color fidelity;
-- horizontal/vertical spacing and alignment;
-- radii, borders, shadows/elevation, and separators;
-- icon family, sizing, stroke weight, position, and state treatment;
-- image/illustration crop, aspect ratio, and focal position;
-- vertical rhythm across populated, loading, empty, unavailable, error, and disabled states that are actually supported by each implementation;
-- overlays, sticky actions, keyboard interaction, and safe-area clearance where applicable.
-
-For refs 2 and 4, the live capture must explicitly select the **Chef** role. For refs 38–52, the capture must run inside the authenticated Chef route boundary. Customer bottom navigation and the customer View Cart overlay must remain absent throughout the Chef operational captures.
+For refs 2 and 4, the live capture must explicitly select the **Chef** role. For refs 38–52, the capture must run inside the authenticated Chef route boundary. Customer bottom navigation and the customer View Cart overlay must remain absent throughout Chef operational captures.
 
 ## Live capture ledger
 
@@ -99,29 +105,24 @@ The following rows are intentionally not marked PASS until real device/emulator 
 - [ ] Ref 51 — `image51.jpeg` — Chef Subscription Plan
 - [ ] Ref 52 — `image52.jpeg` — Chef App Preferences
 
-For every row, completion requires: capture -> side-by-side reference comparison -> record every observed deviation -> fix only confirmed mismatches within the existing product/contract boundary -> recapture -> mark PASS. Contract-blocked data/actions must stay fail-closed; visual QA must never invent backend capability just to resemble a populated reference.
+For every row, completion requires: capture -> side-by-side reference comparison -> record deviations -> fix only confirmed mismatches within the existing product/contract boundary -> recapture -> mark PASS. Contract-blocked data/actions must stay fail-closed; visual QA must never invent backend capability just to resemble a populated reference.
 
-## Chef/customer chrome isolation
+## Changed-file boundary
 
-P126 preserves the role-isolation contract:
+P126 introduced or updated only QA/evidence/control files:
 
-- shared auth refs 2 and 4 use focused auth chrome and carry `CHEF` role context;
-- Chef operational refs 38–52 bind only to Chef feature screens;
-- customer bottom tabs are not part of the P126 operational target matrix;
-- customer View Cart/cart-overlay chrome is forbidden on Chef operational screens;
-- no customer-cart product source was modified in P126.
+- `apps/mobile/__tests__/visual/P126ChefVisualQATargets.test.ts`
+- `apps/mobile/__tests__/visual/P124CustomerVisualQATargets.test.ts` — module-scope compile correction only
+- `apps/mobile/__tests__/visual/P125CustomerVisualQATargets.test.ts` — module-scope compile correction only
+- `docs/mobile-ui-rebuild/P126_CHEF_VISUAL_QA_REFS_2_4_38_52.md`
+- `build.md`
+- `docs/mobile-ui-rebuild/archive/BUILD_LEDGER_PRE_P126_2026-08-10.md` — exact preservation copy of the pre-P126 expanded ledger
 
-The live device run must still verify this behavior visually; the deterministic guard prevents the QA matrix itself from normalizing customer chrome into Chef acceptance.
-
-## Validation boundary
-
-Repository/source traceability and static guard construction are complete at the P126 connector-accessible boundary. Full local TypeScript/Jest/ESLint/Android bundle execution and physical/emulator screenshot comparison are not claimed from this environment unless a CI run independently completes after the commits.
-
-No backend, APIM, OpenAPI, infrastructure, Android-native, Gradle, auth/session contract, product API contract, customer runtime UI, Chef runtime UI, or dependency source was changed by P126. The phase intentionally adds only QA/evidence control artifacts plus the required implementation-ledger update.
+No backend, APIM, OpenAPI, infrastructure, Android-native, Gradle, auth/session contract, product API contract, customer runtime UI, Chef runtime UI, or dependency source was changed by P126.
 
 ## P126 completion gate
 
-P126 may move from **PARTIAL / QA PENDING** to **DONE** only after all 17 reference rows have real device/emulator evidence and every confirmed deviation is either corrected and recaptured or explicitly accepted. Until then, the deterministic guard must continue to report every target as `pending-device-comparison`.
+P126 may move from **PARTIAL / QA PENDING** to **DONE** only after all 17 reference rows have real device/emulator evidence and every confirmed deviation is either corrected and recaptured or explicitly accepted. Until then, the deterministic guard remains `pending-device-comparison`.
 
 ## Phase stop
 

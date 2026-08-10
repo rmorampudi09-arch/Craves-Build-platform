@@ -1,5 +1,6 @@
 package in.craves.subscription.lifecycle;
 
+import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.AdminSubscriptionPage;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.CustomerOccurrenceResponse;
@@ -26,6 +27,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class SubscriptionLifecycleService {
@@ -36,28 +38,33 @@ public class SubscriptionLifecycleService {
     private final SubscriptionLifecycleRepository lifecycleRepository;
     private final SubscriptionPolicyRepository policyRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final CapacityService capacityService;
     private final Clock clock;
 
     public SubscriptionLifecycleService(
         SubscriptionLifecycleRepository lifecycleRepository,
         SubscriptionPolicyRepository policyRepository,
-        SubscriptionRepository subscriptionRepository
+        SubscriptionRepository subscriptionRepository,
+        CapacityService capacityService
     ) {
-        this(lifecycleRepository, policyRepository, subscriptionRepository, Clock.systemUTC());
+        this(lifecycleRepository, policyRepository, subscriptionRepository, capacityService, Clock.systemUTC());
     }
 
     SubscriptionLifecycleService(
         SubscriptionLifecycleRepository lifecycleRepository,
         SubscriptionPolicyRepository policyRepository,
         SubscriptionRepository subscriptionRepository,
+        CapacityService capacityService,
         Clock clock
     ) {
         this.lifecycleRepository = lifecycleRepository;
         this.policyRepository = policyRepository;
         this.subscriptionRepository = subscriptionRepository;
+        this.capacityService = capacityService;
         this.clock = clock;
     }
 
+    @Transactional
     public CustomerSubscriptionResponse pause(UUID subscriptionId, String reason, CurrentUser user) {
         requireCustomer(user);
         OwnedSubscription subscription = owned(subscriptionId, user);
@@ -69,12 +76,17 @@ public class SubscriptionLifecycleService {
             throw ApiException.forbidden("SUBSCRIPTION_PAUSE_DISABLED", "Pause is disabled by the active admin policy");
         }
         enforceNextServiceCutoff(subscription, policy.pauseCutoffMinutes(), "SUBSCRIPTION_PAUSE_CUTOFF");
+        SubscriptionResponse full = requireSubscription(subscriptionId);
         if (!lifecycleRepository.pause(subscriptionId, user.identityId(), trim(reason))) {
             throw ApiException.conflict("SUBSCRIPTION_STATE_CHANGED", "Subscription state changed before pause could be applied");
         }
+        capacityService.releaseForPauseOrTerminal(
+            full, LocalDate.now(clock), "Customer paused the subscription"
+        );
         return current(subscriptionId);
     }
 
+    @Transactional
     public CustomerSubscriptionResponse cancel(UUID subscriptionId, String reason, CurrentUser user) {
         requireCustomer(user);
         OwnedSubscription subscription = owned(subscriptionId, user);
@@ -88,12 +100,17 @@ public class SubscriptionLifecycleService {
         if ("ACTIVE".equals(subscription.status())) {
             enforceNextServiceCutoff(subscription, policy.cancelCutoffMinutes(), "SUBSCRIPTION_CANCEL_CUTOFF");
         }
+        SubscriptionResponse full = requireSubscription(subscriptionId);
         if (!lifecycleRepository.cancel(subscriptionId, user.identityId(), trim(reason))) {
             throw ApiException.conflict("SUBSCRIPTION_STATE_CHANGED", "Subscription state changed before cancellation could be applied");
         }
+        capacityService.releaseForPauseOrTerminal(
+            full, LocalDate.now(clock), "Customer cancelled the subscription"
+        );
         return current(subscriptionId);
     }
 
+    @Transactional
     public CustomerSubscriptionResponse resume(
         UUID subscriptionId,
         ResumeSubscriptionRequest request,
@@ -114,6 +131,8 @@ public class SubscriptionLifecycleService {
         ScheduleClock schedule = activeSchedule(subscription.planId());
         Instant resumeAt = serviceAt(request.resumeDate(), schedule);
         enforceCutoff(resumeAt, policy.resumeLeadMinutes(), "SUBSCRIPTION_RESUME_LEAD");
+        SubscriptionResponse full = requireSubscription(subscriptionId);
+        capacityService.reacquireForResume(full, request.resumeDate());
         if (!lifecycleRepository.resume(
             subscriptionId,
             user.identityId(),
@@ -125,6 +144,7 @@ public class SubscriptionLifecycleService {
         return current(subscriptionId);
     }
 
+    @Transactional
     public SkipRequestResponse skip(
         UUID subscriptionId,
         SkipSubscriptionDateRequest request,
@@ -150,12 +170,14 @@ public class SubscriptionLifecycleService {
             .orElseGet(() -> serviceAt(request.serviceDate(), schedule));
         enforceCutoff(serviceAt, policy.skipCutoffMinutes(), "SUBSCRIPTION_SKIP_CUTOFF");
         try {
-            return lifecycleRepository.requestSkip(
+            SkipRequestResponse response = lifecycleRepository.requestSkip(
                 subscriptionId,
                 user.identityId(),
                 request.serviceDate(),
                 trim(request.reason())
             );
+            capacityService.releaseForSkip(requireSubscription(subscriptionId), request.serviceDate());
+            return response;
         } catch (IllegalStateException exception) {
             switch (exception.getMessage()) {
                 case "SUBSCRIPTION_NOT_FOUND" ->
@@ -219,6 +241,11 @@ public class SubscriptionLifecycleService {
             .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
     }
 
+    private SubscriptionResponse requireSubscription(UUID subscriptionId) {
+        return subscriptionRepository.findSubscriptionById(subscriptionId)
+            .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
+    }
+
     private SubscriptionPolicyResponse activePolicy(UUID planId) {
         return policyRepository.findActive(planId)
             .orElseThrow(() -> ApiException.conflict(
@@ -267,8 +294,7 @@ public class SubscriptionLifecycleService {
     }
 
     private CustomerSubscriptionResponse current(UUID subscriptionId) {
-        SubscriptionResponse value = subscriptionRepository.findSubscriptionById(subscriptionId)
-            .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
+        SubscriptionResponse value = requireSubscription(subscriptionId);
         return new CustomerSubscriptionResponse(
             value.id(), value.planId(), value.status(), value.startDate(), value.endDate(),
             value.nextServiceDate(), value.deliveryAddressId(), value.notes(), value.createdAt(), value.updatedAt()

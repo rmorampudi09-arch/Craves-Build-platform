@@ -2,6 +2,9 @@ package in.craves.subscription.payment;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.repository.SubscriptionRepository;
+import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -22,10 +25,19 @@ public class SubscriptionPaymentStatusService {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final CapacityService capacityService;
+    private final SubscriptionRepository subscriptionRepository;
 
-    public SubscriptionPaymentStatusService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    public SubscriptionPaymentStatusService(
+        JdbcTemplate jdbcTemplate,
+        ObjectMapper objectMapper,
+        CapacityService capacityService,
+        SubscriptionRepository subscriptionRepository
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.capacityService = capacityService;
+        this.subscriptionRepository = subscriptionRepository;
     }
 
     @Transactional
@@ -89,11 +101,22 @@ public class SubscriptionPaymentStatusService {
             );
         }
 
+        SubscriptionResponse subscription = subscriptionRepository.findSubscriptionById(subscriptionId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Subscription was not found"));
+
         if ("PAID".equals(status)) {
+            // Capacity is committed before the subscription can become ACTIVE. Any capacity failure rolls back
+            // this entire inbox transaction so Service Bus can retry instead of creating an overbooked subscription.
+            capacityService.commitForActivation(subscription);
             activateSubscription(subscriptionId);
             moveOccurrences(subscriptionId, invoice.cycleStart(), invoice.cycleEnd(), "READY_FOR_ORDER", "Billing cycle paid");
         } else if ("FAILED".equals(status) || "CANCELLED".equals(status)) {
             markPaymentFailed(subscriptionId, providerStatus);
+            capacityService.releaseForPauseOrTerminal(
+                subscription,
+                LocalDate.now(),
+                "Subscription payment was not completed: " + safe(providerStatus)
+            );
             moveOccurrences(subscriptionId, invoice.cycleStart(), invoice.cycleEnd(), "PAYMENT_PENDING", "Billing payment not completed");
         }
 

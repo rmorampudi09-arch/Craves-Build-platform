@@ -32,11 +32,13 @@ A later phase may legitimately satisfy an earlier phase's open item. When that h
 |---|---|---|
 | P31 — Home Feed Data Contract and Query Model | **PARTIAL** | Exact nearby discovery/location/pagination/cache subset is complete, but full Home/category/cuisine/recommendation contracts are not authoritative yet. |
 | P32 — Customer Home — Empty Cart | **PARTIAL** | Supported Home UI and real nearby/Add/lifecycle behavior are complete, but some acceptance actions depend on missing backend contracts or later product routes/phases. |
+| P127 — Final Regression and Production Readiness Review | **BLOCKED / NOT RELEASE-READY** | Code-level regression is broadly green, but visual/device certification, release signing, production-only dependency audit, complete native release validation, fresh final-candidate backend guard, and prior-phase external/device blockers remain open. |
 
 Current authoritative evidence remains:
 
 - `docs/mobile-ui-rebuild/P31_HOME_FEED_DATA_CONTRACT_AND_QUERY_MODEL.md`
 - `docs/mobile-ui-rebuild/P32_CUSTOMER_HOME_EMPTY_CART.md`
+- `docs/mobile-ui-rebuild/P127_FINAL_REGRESSION_PRODUCTION_READINESS_REVIEW.md`
 - `build.md`
 
 ---
@@ -231,3 +233,22 @@ Before the rebuild is called **full-fledged / fully implemented / production-rea
 - [ ] Only then proceed to final APK/AAB/signing/release readiness gates.
 
 **Important:** advancing to a later phase does not erase a prior partial. A prior partial is closed only by explicit evidence recorded here and in the build ledger.
+
+---
+
+# 7. P127 Consolidated Production-Readiness Blockers — 2026-08-10
+
+P127 executed the final regression/readiness review but remains **BLOCKED / NOT RELEASE-READY**. The detailed evidence is `docs/mobile-ui-rebuild/P127_FINAL_REGRESSION_PRODUCTION_READINESS_REVIEW.md`.
+
+- [ ] **P127-R1 — Live visual certification:** complete device/emulator comparison for P124 refs 1–18, P125 refs 19–37, and P126 refs 2, 4, 38–52; fix/recapture confirmed deviations or obtain explicit acceptance. **Owner:** Mobile QA / Design QA.
+- [ ] **P127-R2 — Native accessibility/responsive/motion validation:** complete real-device TalkBack/font-scaling, keyboard/safe-area/responsive, and OS reduced-motion checks recorded as pending in P113–P115. **Owner:** Mobile QA / Accessibility.
+- [ ] **P127-R3 — Runtime performance closure:** complete P116 native profiler/image-cache validation and close server-contract-dependent list/pagination gaps without inventing client-only behavior. **Owner:** Mobile Platform + Backend/APIM.
+- [ ] **P127-R4 — Native/provider E2E and contract boundaries:** close or explicitly accept P123/P125 launch blockers, including payment/provider handoff and the recorded customer/Chef product-contract gaps. **Owner:** Backend/APIM + Payments + Product + Mobile.
+- [ ] **P127-R5 — Production observability:** approve and verify the production telemetry/monitoring/alerting posture; P120's static guard alone is not external production monitoring certification. **Owner:** Ops / Mobile Platform.
+- [ ] **P127-R6 — Production signing:** replace Android `release` debug signing with securely supplied production signing only in the authorized release process; never commit signing secrets. **Owner:** Release Engineering / Security. **Later phase:** P128.
+- [ ] **P127-R7 — Dependency-security gate:** run `npm audit --omit=dev --audit-level=high` at the final candidate and resolve or explicitly accept high-severity production findings. P127's install graph reported 15 moderate and 15 high findings, but the production-only audit was skipped after timeout. **Owner:** Mobile Platform / Security.
+- [ ] **P127-R8 — Test-harness hygiene:** remove the Jest open-handle leak and React `act(...)` warnings, then rerun the affected full/integration regressions. **Owner:** Mobile Platform / QA.
+- [ ] **P127-R9 — Fresh backend-source guard:** rerun the backend/APIM/infrastructure unchanged guard at the final candidate HEAD. Prior normal CI #479 passed, but P127's fresh guard was skipped after timeout. **Owner:** Mobile / Release Engineering.
+- [ ] **P127-R10 — Native release validation:** complete release-native compilation and artifact validation only when P128 is authorized. P127 reached debug packaging but timed out during release CMake compilation and therefore certified no release artifact. **Owner:** Mobile Platform / Release Engineering. **Later phase:** P128.
+
+**P128 boundary:** no final signed APK/AAB, artifact publication, install/smoke certification, checksum, release notes, or rollback artifact may be considered complete from P127 evidence.

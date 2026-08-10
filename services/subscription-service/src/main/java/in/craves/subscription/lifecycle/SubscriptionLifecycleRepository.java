@@ -59,6 +59,21 @@ public class SubscriptionLifecycleRepository {
         ).stream().findFirst();
     }
 
+    public boolean isScheduledServiceDate(UUID planId, LocalDate serviceDate) {
+        Integer count = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM subscription_schema.subscription_plan_schedule s " +
+                "JOIN subscription_schema.subscription_plan_schedule_item i ON i.plan_id = s.plan_id " +
+                "WHERE s.plan_id = ? AND s.status = 'ACTIVE' AND " +
+                "((s.recurrence_type = 'WEEKLY' AND i.iso_day_of_week = ?) " +
+                "OR (s.recurrence_type = 'MONTHLY' AND i.day_of_month = ?))",
+            Integer.class,
+            planId,
+            serviceDate.getDayOfWeek().getValue(),
+            serviceDate.getDayOfMonth()
+        );
+        return count != null && count > 0;
+    }
+
     public Optional<Instant> findOccurrenceServiceAt(UUID subscriptionId, LocalDate serviceDate) {
         return jdbcTemplate.query(
             "SELECT service_at FROM subscription_schema.subscription_occurrence " +
@@ -251,8 +266,10 @@ public class SubscriptionLifecycleRepository {
         String sql = "SELECT id, customer_identity_id, plan_id, chef_identity_id, status, start_date, end_date, " +
             "next_service_date, delivery_address_id, created_at, updated_at " +
             "FROM subscription_schema.customer_subscription " +
-            "WHERE (? IS NULL OR status = ?) AND (? IS NULL OR plan_id = ?) " +
-            "AND (? IS NULL OR created_at < ? OR (created_at = ? AND (? IS NULL OR id < ?))) " +
+            "WHERE (CAST(? AS VARCHAR) IS NULL OR status = ?) " +
+            "AND (CAST(? AS UUID) IS NULL OR plan_id = ?) " +
+            "AND (CAST(? AS TIMESTAMPTZ) IS NULL OR created_at < ? " +
+            "OR (created_at = ? AND (CAST(? AS UUID) IS NULL OR id < ?))) " +
             "ORDER BY created_at DESC, id DESC LIMIT ?";
         List<AdminSubscriptionSummary> rows = jdbcTemplate.query(
             sql,

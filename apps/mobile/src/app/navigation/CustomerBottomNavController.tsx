@@ -130,8 +130,15 @@ export function CustomerBottomNavVisibilityProvider({
   );
 }
 
-/** Stable module-level tab-bar renderer required by React Navigation/ESLint. */
+/**
+ * React Navigation invokes the `tabBar` renderer as a callback. Keep that
+ * callback hook-free and render a real component boundary before using hooks.
+ */
 export function CustomerBottomTabBar(props: BottomTabBarProps) {
+  return <CustomerBottomTabBarContent {...props} />;
+}
+
+function CustomerBottomTabBarContent(props: BottomTabBarProps) {
   const {animationProgress, isVisible} =
     useCustomerBottomNavVisibilityContext();
   const [barHeight, setBarHeight] = useState(0);

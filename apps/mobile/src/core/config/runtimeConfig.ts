@@ -7,6 +7,12 @@ export interface RuntimeConfig {
   environment: RuntimeEnvironment;
 }
 
+export const CRAVES_PRODUCTION_API_ORIGIN =
+  'https://apim-craves-prodlow-l3ing6.azure-api.net';
+
+const API_VERSION_PREFIX = '/api/v1';
+const LEGACY_PLACEHOLDER_API_BASE_URL = 'https://api.example.invalid';
+
 export class RuntimeConfigurationError extends Error {
   readonly code = 'MOBILE_RUNTIME_CONFIG_INVALID';
 
@@ -24,23 +30,39 @@ function resolveEnvironment(value: string | undefined): RuntimeEnvironment {
   }
 
   if (
-    normalized === 'development' ||
-    normalized === 'staging' ||
-    normalized === 'production'
+    normalized !== 'development' &&
+    normalized !== 'staging' &&
+    normalized !== 'production'
   ) {
-    return normalized;
+    throw new RuntimeConfigurationError(
+      'CRAVES_ENVIRONMENT must be development, staging, or production.',
+    );
   }
 
-  throw new RuntimeConfigurationError(
-    'CRAVES_ENVIRONMENT must be development, staging, or production.',
-  );
+  // A non-debug Android binary must never inherit a stale local-development
+  // environment from a copied .env file. Staging remains an explicit opt-in.
+  if (!__DEV__ && normalized === 'development') {
+    return 'production';
+  }
+
+  return normalized;
 }
 
 function resolveApiBaseUrl(
   value: string | undefined,
   environment: RuntimeEnvironment,
 ): string {
-  const candidate = value?.trim().replace(/\/+$/, '');
+  let candidate = value?.trim().replace(/\/+$/, '');
+
+  // Production has one public mobile gateway. Keep a safe fallback so a
+  // release build cannot become unusable merely because an ignored .env file
+  // was absent, or because the old checked-in placeholder was copied locally.
+  if (
+    environment === 'production' &&
+    (!candidate || candidate === LEGACY_PLACEHOLDER_API_BASE_URL)
+  ) {
+    candidate = CRAVES_PRODUCTION_API_ORIGIN;
+  }
 
   if (!candidate) {
     throw new RuntimeConfigurationError(
@@ -75,7 +97,20 @@ function resolveApiBaseUrl(
     );
   }
 
-  return candidate;
+  const normalizedPath = parsed.pathname.replace(/\/+$/, '');
+
+  // Every production client action already carries its published /api/v1
+  // route. Accept and normalize the previously supplied full API base to avoid
+  // producing /api/v1/api/v1/... requests after Firebase OTP verification.
+  if (normalizedPath === API_VERSION_PREFIX) {
+    parsed.pathname = '/';
+  } else if (normalizedPath) {
+    throw new RuntimeConfigurationError(
+      'CRAVES_API_BASE_URL must be the gateway origin only; mobile API paths already include /api/v1.',
+    );
+  }
+
+  return parsed.toString().replace(/\/+$/, '');
 }
 
 export function getRuntimeConfig(): RuntimeConfig {

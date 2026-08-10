@@ -6,8 +6,11 @@ import com.azure.messaging.servicebus.ServiceBusProcessorClient;
 import com.azure.messaging.servicebus.ServiceBusReceivedMessageContext;
 import com.azure.messaging.servicebus.models.DeadLetterOptions;
 import com.azure.messaging.servicebus.models.ServiceBusReceiveMode;
+import in.craves.subscription.capacity.CapacityFailureReporter;
+import in.craves.subscription.exception.ApiException;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,14 +25,17 @@ public class SubscriptionPaymentStatusProcessor {
 
     private final SubscriptionPaymentStatusProperties properties;
     private final SubscriptionPaymentStatusService service;
+    private final CapacityFailureReporter capacityFailureReporter;
     private final ServiceBusProcessorClient processor;
 
     public SubscriptionPaymentStatusProcessor(
         SubscriptionPaymentStatusProperties properties,
-        SubscriptionPaymentStatusService service
+        SubscriptionPaymentStatusService service,
+        CapacityFailureReporter capacityFailureReporter
     ) {
         this.properties = properties;
         this.service = service;
+        this.capacityFailureReporter = capacityFailureReporter;
         ServiceBusClientBuilder builder = new ServiceBusClientBuilder();
         if (StringUtils.hasText(properties.getConnectionString())) {
             builder.connectionString(properties.getConnectionString());
@@ -74,12 +80,45 @@ public class SubscriptionPaymentStatusProcessor {
             );
         } catch (ResponseStatusException exception) {
             deadLetter(context, "INVALID_SUBSCRIPTION_PAYMENT_STATUS", exception);
+        } catch (ApiException exception) {
+            reportCapacityConflictIfPossible(context, exception);
+            retryOrDeadLetter(context, "SUBSCRIPTION_PAYMENT_CAPACITY_CONFLICT", exception);
         } catch (Exception exception) {
-            if (context.getMessage().getDeliveryCount() >= properties.getMaxDeliveryAttempts()) {
-                deadLetter(context, "SUBSCRIPTION_PAYMENT_STATUS_FAILED", exception);
-            } else {
-                context.abandon();
-            }
+            retryOrDeadLetter(context, "SUBSCRIPTION_PAYMENT_STATUS_FAILED", exception);
+        }
+    }
+
+    private void reportCapacityConflictIfPossible(
+        ServiceBusReceivedMessageContext context,
+        ApiException exception
+    ) {
+        try {
+            UUID subscriptionId = SubscriptionPaymentStatusEventIdentity.subscriptionId(
+                context.getMessage().getBody().toString()
+            );
+            capacityFailureReporter.reportPaidCapacityConflict(
+                subscriptionId,
+                exception.getCode(),
+                exception.getMessage()
+            );
+        } catch (RuntimeException reportingError) {
+            LOGGER.error(
+                "Could not persist paid capacity conflict incident messageId={}",
+                context.getMessage().getMessageId(),
+                reportingError
+            );
+        }
+    }
+
+    private void retryOrDeadLetter(
+        ServiceBusReceivedMessageContext context,
+        String deadLetterReason,
+        Throwable error
+    ) {
+        if (context.getMessage().getDeliveryCount() >= properties.getMaxDeliveryAttempts()) {
+            deadLetter(context, deadLetterReason, error);
+        } else {
+            context.abandon();
         }
     }
 

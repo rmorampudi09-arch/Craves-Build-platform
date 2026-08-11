@@ -31,6 +31,17 @@ steps:
         exit 1
       fi
       python3 - <<'PY'
+      from pathlib import Path
+      import re
+      runtime_scripts = (
+          Path('scripts/release/subscription-sandbox-runtime-preflight.sh'),
+          Path('scripts/release/subscription-sandbox-runtime-activate.sh'),
+          Path('scripts/release/subscription-sandbox-runtime-status.sh'),
+      )
+      for path in runtime_scripts:
+          text = path.read_text()
+          if re.search(r'(?m)^\s*local\b[^\n]*\bPATH\s*=', text):
+              raise SystemExit(f'{path}: must not declare a local PATH variable; it breaks executable lookup inside Bash functions')
       import xml.etree.ElementTree as ET
       for path in (
           'infra/apim/subscription-payments/authenticated-policy.xml',

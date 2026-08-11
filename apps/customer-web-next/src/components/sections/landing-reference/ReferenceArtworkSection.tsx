@@ -293,6 +293,10 @@ function ChefsAndApp({ onBecomeChef }: { onBecomeChef?: () => void }) {
               aria-hidden="true"
               className="pointer-events-none absolute left-0 top-0 z-[3] h-[6.5%] w-[47%] bg-white"
             />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-[46.5%] top-0 z-[3] h-[6.5%] w-[18.5%] bg-white"
+            />
           </div>
         </div>
       </div>

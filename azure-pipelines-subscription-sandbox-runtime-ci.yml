@@ -23,6 +23,13 @@ steps:
       bash -n scripts/apim/configure-subscription-payments-apim.sh
       bash -n scripts/apim/status-subscription-payments-apim.sh
       bash -n scripts/apim/rollback-subscription-payments-apim.sh
+      if grep -n 'mktemp' \
+        scripts/release/subscription-sandbox-runtime-preflight.sh \
+        scripts/release/subscription-sandbox-runtime-activate.sh \
+        scripts/release/subscription-sandbox-runtime-status.sh; then
+        echo 'ERROR: Runtime health probes must not depend on mktemp in AzureCLI task execution.' >&2
+        exit 1
+      fi
       python3 - <<'PY'
       import xml.etree.ElementTree as ET
       for path in (

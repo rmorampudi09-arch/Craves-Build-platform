@@ -11,13 +11,34 @@ SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 fail() { echo "ERROR: $*" >&2; exit 1; }
 for tool in az jq curl; do command -v "$tool" >/dev/null || fail "$tool is required"; done
 
+probe_integration_health() {
+  local path body code
+  for path in /actuator/health/liveness /actuator/health/readiness; do
+    body=$(mktemp)
+    code=$(curl \
+      --silent \
+      --show-error \
+      --connect-timeout 10 \
+      --max-time 30 \
+      --output "$body" \
+      --write-out '%{http_code}' \
+      "https://${FQDN}${path}" || true)
+    if [[ "$code" != "200" ]] || ! jq -e '.status == "UP"' "$body" >/dev/null 2>&1; then
+      rm -f "$body"
+      fail "Integration Service ${path} is not UP (HTTP ${code:-curl-error})"
+    fi
+    rm -f "$body"
+    echo "PASS: Integration Service ${path} -> UP"
+  done
+}
+
 APP_JSON=$(az containerapp show -g "$RG" -n "$INTEGRATION_APP" -o json)
 FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
 LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
 READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
 RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
 [[ -n "$FQDN" && "$LATEST" == "$READY" && "$RUNNING" == "Running" ]] || fail "Integration Service is not ready"
-curl -sS --fail --max-time 30 "https://$FQDN/actuator/health" >/dev/null
+probe_integration_health
 SUBSCRIPTION_PAYMENT_BACKEND="https://${FQDN}/api/v1/subscription-payments"
 PAYMENT_BACKEND="https://${FQDN}/api/v1/payments"
 

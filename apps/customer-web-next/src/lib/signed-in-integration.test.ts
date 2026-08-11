@@ -100,7 +100,7 @@ test("every home-chef call to action opens the live chef registration flow", () 
 
   assert.match(
     landing,
-    /onBecomeChef=\{\(\) => openAuth\("register", "chef"\)\}/,
+    /onBecomeChef=\{\(\) => openAuth\("register", "chef", true\)\}/,
   );
   assert.match(hero, /onClick=\{onBecomeChef\}/);
   assert.match(

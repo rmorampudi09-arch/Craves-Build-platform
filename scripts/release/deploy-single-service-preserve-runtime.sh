@@ -118,18 +118,26 @@ verify_active_secret_refs_are_key_vault_backed() {
 wait_for_image() {
   local expected_image=$1
   local forbidden_revision=${2:-}
-  local attempt json latest ready running health latest_image
+  local attempt state latest ready running health latest_image
 
   for attempt in $(seq 1 "$READY_ATTEMPTS"); do
-    json=$(az containerapp show \
+    state=$(az containerapp show \
       --resource-group "$RESOURCE_GROUP" \
       --name "$APP_NAME" \
-      --output json \
+      --query '[properties.latestRevisionName, properties.latestReadyRevisionName, properties.runningStatus]' \
+      --output tsv \
       --only-show-errors 2>/dev/null || true)
 
-    latest=$(jq -r '.properties.latestRevisionName // ""' <<<"${json:-{}}")
-    ready=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"${json:-{}}")
-    running=$(jq -r '.properties.runningStatus // ""' <<<"${json:-{}}")
+    latest=''
+    ready=''
+    running=''
+    if [[ -n "$state" ]]; then
+      IFS=$'\t' read -r latest ready running <<<"$state"
+      [[ "$latest" != 'None' ]] || latest=''
+      [[ "$ready" != 'None' ]] || ready=''
+      [[ "$running" != 'None' ]] || running=''
+    fi
+
     health=''
     latest_image=''
 

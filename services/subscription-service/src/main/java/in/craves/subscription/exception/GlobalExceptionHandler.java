@@ -9,6 +9,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -34,6 +35,22 @@ public class GlobalExceptionHandler {
             "Request validation failed",
             request.getRequestURI(),
             details
+        ));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    ResponseEntity<ApiError> handleResponseStatus(ResponseStatusException ex, HttpServletRequest request) {
+        HttpStatus resolved = HttpStatus.resolve(ex.getStatusCode().value());
+        String code = resolved == null ? "HTTP_" + ex.getStatusCode().value() : resolved.name();
+        String message = ex.getReason() == null || ex.getReason().isBlank()
+            ? "Request failed"
+            : ex.getReason();
+        return ResponseEntity.status(ex.getStatusCode()).body(new ApiError(
+            Instant.now(),
+            code,
+            message,
+            request.getRequestURI(),
+            List.of()
         ));
     }
 

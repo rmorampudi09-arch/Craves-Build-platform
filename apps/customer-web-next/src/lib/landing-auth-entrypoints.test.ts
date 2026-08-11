@@ -44,10 +44,11 @@ test("auth copy is customer and chef focused rather than implementation focused"
   assert.doesNotMatch(authModal, /OTP sent securely through Firebase/);
 });
 
-test("landing auth modal keeps the approved glass backdrop", () => {
+test("landing auth modal keeps the glass backdrop with a pure white internal surface", () => {
   assert.match(landing, /data-auth-context=\{authAccountMode\}/);
   assert.match(landing, /backdrop-blur-xl/);
   assert.match(landing, /backdrop-blur-2xl/);
-  assert.match(landing, /bg-white\/80/);
+  assert.match(landing, /\[&_\[role=dialog\]\]:bg-white/);
+  assert.doesNotMatch(landing, /\[&_\[role=dialog\]\]:bg-white\/80/);
   assert.doesNotMatch(landing, /\[&_\[role=dialog\]_fieldset\]:hidden/);
 });

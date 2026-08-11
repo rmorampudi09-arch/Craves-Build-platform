@@ -22,6 +22,10 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/subscriptions/plans", "/api/v1/subscriptions/plans/**").permitAll()
+                .requestMatchers(
+                    HttpMethod.POST,
+                    "/internal/v1/subscription-occurrences/*/order-created"
+                ).permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class);

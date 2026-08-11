@@ -19,7 +19,7 @@ app_json() {
 }
 
 healthy_app() {
-  local APP="$1" LABEL="$2" JSON LATEST READY RUNNING HEALTH FQDN
+  local APP="$1" LABEL="$2" JSON LATEST READY RUNNING HEALTH FQDN path body code
   JSON=$(app_json "$APP")
   LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON")
   READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON")
@@ -29,8 +29,25 @@ healthy_app() {
     || fail "$LABEL is not ready: latest=$LATEST ready=$READY running=$RUNNING"
   HEALTH=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query properties.healthState -o tsv 2>/dev/null || true)
   [[ "$HEALTH" == "Healthy" ]] || fail "$LABEL latest revision is not Healthy: $HEALTH"
-  curl -sS --fail --max-time 30 "https://${FQDN}/actuator/health" >/dev/null \
-    || fail "$LABEL actuator health check failed"
+
+  for path in /actuator/health/liveness /actuator/health/readiness; do
+    body=$(mktemp)
+    code=$(curl \
+      --silent \
+      --show-error \
+      --connect-timeout 10 \
+      --max-time 30 \
+      --output "$body" \
+      --write-out '%{http_code}' \
+      "https://${FQDN}${path}" || true)
+    if [[ "$code" != "200" ]] || ! jq -e '.status == "UP"' "$body" >/dev/null 2>&1; then
+      rm -f "$body"
+      fail "$LABEL ${path} is not UP (HTTP ${code:-curl-error})"
+    fi
+    rm -f "$body"
+    echo "PASS: $LABEL ${path} -> UP"
+  done
+
   echo "PASS: $LABEL healthy revision=$LATEST"
 }
 

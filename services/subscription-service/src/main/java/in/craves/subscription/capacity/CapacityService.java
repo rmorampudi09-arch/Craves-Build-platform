@@ -605,7 +605,7 @@ public class CapacityService {
                 repository.openOrUpdateIncident(
                     chefIdentityId, date, null, item.mealSlotCode(), item.menuItemId(), "ITEM_DEFICIT", "P2", reserved,
                     effective.get().closed() ? 0 : effective.get().maxSubscriptionUnits(),
-                    "Existing subscription commitments exceed this menu item's current capacity; existing subscribers remain protected"
+                    "Existing subscription commitments exceed this menu item's current capacity; existing customers remain protected"
                 );
             } else {
                 repository.resolveIncident(chefIdentityId, date, null, item.mealSlotCode(), item.menuItemId(), "ITEM_DEFICIT");

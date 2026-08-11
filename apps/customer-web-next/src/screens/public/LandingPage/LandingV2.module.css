@@ -656,7 +656,7 @@
 }
 
 .referenceChefsIntro > div:first-child > p:last-of-type,
-.referenceAppCopy > p {
+.referenceAppCopy > p:last-of-type {
   max-width: 31rem;
   margin: 1.35rem 0 0;
   color: #39393c;

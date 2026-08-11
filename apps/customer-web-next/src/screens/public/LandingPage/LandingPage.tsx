@@ -83,7 +83,7 @@ function LandingPage() {
         />
 
         <div id="how-it-works" className="scroll-mt-20">
-          <ReferenceArtworkSection variant="how" priority />
+          <ReferenceArtworkSection variant="how" />
         </div>
 
         <div id="why-craves" className="scroll-mt-20">

@@ -236,6 +236,7 @@ wait_for_image() {
     if [[ "$provisioning" == 'Failed' \
       || "$running" == 'Failed' \
       || "$running" == 'Degraded' \
+      || "$running" == 'ActivationFailed' \
       || "$health" == 'Unhealthy' ]]; then
       show_revision_diagnostics "$latest"
       show_revision_logs_if_available "$latest"

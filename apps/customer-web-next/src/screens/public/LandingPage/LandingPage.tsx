@@ -106,7 +106,7 @@ function LandingPage() {
 
       <div
         data-auth-context={authAccountMode}
-        className="[&>div]:bg-black/25 [&>div]:backdrop-blur-xl [&>div]:backdrop-saturate-150 [&_[role=dialog]]:border-white/70 [&_[role=dialog]]:bg-white/80 [&_[role=dialog]]:shadow-[0_28px_90px_rgba(17,17,17,0.24)] [&_[role=dialog]]:backdrop-blur-2xl [&_[role=dialog]]:backdrop-saturate-150"
+        className="[&>div]:bg-black/25 [&>div]:backdrop-blur-xl [&>div]:backdrop-saturate-150 [&_[role=dialog]]:border-white/70 [&_[role=dialog]]:bg-white [&_[role=dialog]]:shadow-[0_28px_90px_rgba(17,17,17,0.24)] [&_[role=dialog]]:backdrop-blur-2xl [&_[role=dialog]]:backdrop-saturate-150"
       >
         <AuthModal
           open={authOpen}

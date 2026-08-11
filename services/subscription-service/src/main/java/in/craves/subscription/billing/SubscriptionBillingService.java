@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,6 +23,7 @@ public class SubscriptionBillingService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    @Autowired
     public SubscriptionBillingService(
         SubscriptionBillingProperties properties,
         SubscriptionBillingRepository repository,

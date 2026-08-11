@@ -33,6 +33,14 @@ test("general auth clearly identifies and switches between customer and home che
   assert.match(authModal, /Cook and grow with Craves/);
   assert.match(authModal, /switchAccountMode\("customer"\)/);
   assert.match(authModal, /switchAccountMode\("chef"\)/);
+  assert.match(authModal, /aria-pressed=\{accountMode === "customer"\}/);
+  assert.match(authModal, /aria-pressed=\{accountMode === "chef"\}/);
+});
+
+test("selected auth role stays highlighted in the Craves logo red", () => {
+  assert.match(landing, /\[&_\[aria-pressed=true\]\]:!bg-\[#F62E18\]/);
+  assert.match(landing, /\[&_\[aria-pressed=true\]\]:!border-\[#F62E18\]/);
+  assert.match(landing, /\[&_\[aria-pressed=true\]\]:!text-white/);
 });
 
 test("auth copy is customer and chef focused rather than implementation focused", () => {

@@ -98,7 +98,7 @@ export function ReferenceHeroDesktop({
               event.preventDefault();
               onOpenAuth("login");
             }}
-            className={`${styles.secondaryCta} inline-flex min-h-11 items-center justify-center px-4 text-sm font-extrabold no-underline`}
+            className={`${styles.secondaryCta} hidden min-h-11 items-center justify-center px-4 text-sm font-extrabold no-underline lg:inline-flex`}
           >
             Sign up / Sign in
           </a>

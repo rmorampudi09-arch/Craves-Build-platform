@@ -45,8 +45,10 @@ app_fqdn() { app_json "$1" | jq -r '.properties.configuration.ingress.fqdn // ""
 
 probe_up() {
   local FQDN="$1" LABEL="$2" PATH="$3" ATTEMPT BODY CODE STATUS
+  local SAFE_PATH="${PATH//\//_}"
+  BODY="/tmp/craves-runtime-health-${BASHPID}-${SAFE_PATH}.json"
   for ((ATTEMPT=1; ATTEMPT<=HEALTH_ATTEMPTS; ATTEMPT++)); do
-    BODY=$(mktemp)
+    : >"$BODY"
     CODE=$(curl \
       --silent \
       --show-error \
@@ -62,11 +64,11 @@ probe_up() {
       return 0
     fi
     echo "WAIT: $LABEL ${PATH} attempt=$ATTEMPT/$HEALTH_ATTEMPTS HTTP=${CODE:-curl-error} status=${STATUS:-unavailable}" >&2
-    rm -f "$BODY"
     if (( ATTEMPT < HEALTH_ATTEMPTS )); then
       sleep "$HEALTH_SLEEP_SECONDS"
     fi
   done
+  rm -f "$BODY"
   fail "$LABEL ${PATH} did not return HTTP 200 with status UP after $HEALTH_ATTEMPTS attempts"
 }
 

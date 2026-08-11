@@ -56,7 +56,7 @@ public final class ApiDtos {
     public record CreateSubscriptionRequest(
         @NotNull UUID planId,
         @NotNull LocalDate startDate,
-        UUID deliveryAddressId,
+        @NotNull UUID deliveryAddressId,
         @Size(max = 2000) String notes
     ) {
     }

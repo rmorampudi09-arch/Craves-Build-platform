@@ -77,21 +77,37 @@ public class OccurrenceRepository {
         ).stream().findFirst();
     }
 
+    public Optional<SkipRequest> findRequestedSkip(UUID subscriptionId, LocalDate serviceDate) {
+        return jdbcTemplate.query(
+            "SELECT id, actor_identity_id, reason FROM subscription_schema.subscription_skip_request " +
+                "WHERE subscription_id = ? AND service_date = ? AND status IN ('REQUESTED','APPLIED')",
+            (rs, rowNum) -> new SkipRequest(
+                rs.getObject("id", UUID.class),
+                rs.getObject("actor_identity_id", UUID.class),
+                rs.getString("reason")
+            ),
+            subscriptionId,
+            serviceDate
+        ).stream().findFirst();
+    }
+
     @Transactional
-    public boolean createOccurrence(
+    public UUID createOccurrence(
         ClaimedSubscription subscription,
         ActiveSchedule schedule,
         LocalDate serviceDate,
+        String mealSlotCode,
         Instant serviceAt,
         List<ScheduleItem> matchingItems,
-        LocalDate nextServiceDate
+        SkipRequest skipRequest
     ) {
         UUID occurrenceId = UUID.randomUUID();
+        String initialStatus = skipRequest == null ? "BILLING_PENDING" : "SKIPPED";
         int inserted = jdbcTemplate.update(
             "INSERT INTO subscription_schema.subscription_occurrence " +
-                "(id, subscription_id, plan_id, customer_identity_id, chef_identity_id, delivery_address_id, service_date, service_at, schedule_version, status, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'BILLING_PENDING', now(), now()) " +
-                "ON CONFLICT (subscription_id, service_date) DO NOTHING",
+                "(id, subscription_id, plan_id, customer_identity_id, chef_identity_id, delivery_address_id, service_date, meal_slot_code, service_at, schedule_version, status, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now()) " +
+                "ON CONFLICT (subscription_id, service_date, meal_slot_code) DO NOTHING",
             occurrenceId,
             subscription.subscriptionId(),
             subscription.planId(),
@@ -99,26 +115,46 @@ public class OccurrenceRepository {
             subscription.chefIdentityId(),
             subscription.deliveryAddressId(),
             serviceDate,
+            mealSlotCode,
             serviceAt,
-            schedule.version()
+            schedule.version(),
+            initialStatus
         );
-        if (inserted == 1) {
-            for (ScheduleItem item : matchingItems) {
-                jdbcTemplate.update(
-                    "INSERT INTO subscription_schema.subscription_occurrence_item " +
-                        "(id, occurrence_id, menu_item_id, quantity, sequence_number, created_at) VALUES (?, ?, ?, ?, ?, now())",
-                    UUID.randomUUID(), occurrenceId, item.menuItemId(), item.quantity(), item.sequenceNumber()
-                );
-            }
+        if (inserted != 1) {
+            return null;
+        }
+        for (ScheduleItem item : matchingItems) {
             jdbcTemplate.update(
-                "INSERT INTO subscription_schema.subscription_occurrence_history " +
-                    "(id, occurrence_id, old_status, new_status, reason, created_at) " +
-                    "VALUES (?, ?, NULL, 'BILLING_PENDING', 'Occurrence generated from active plan schedule', now())",
-                UUID.randomUUID(), occurrenceId
+                "INSERT INTO subscription_schema.subscription_occurrence_item " +
+                    "(id, occurrence_id, menu_item_id, quantity, sequence_number, created_at) VALUES (?, ?, ?, ?, ?, now())",
+                UUID.randomUUID(), occurrenceId, item.menuItemId(), item.quantity(), item.sequenceNumber()
             );
         }
-        releaseAndAdvance(subscription, nextServiceDate);
-        return inserted == 1;
+        if (skipRequest == null) {
+            jdbcTemplate.update(
+                "INSERT INTO subscription_schema.subscription_occurrence_history " +
+                    "(id, occurrence_id, old_status, new_status, reason, source, created_at) " +
+                    "VALUES (?, ?, NULL, 'BILLING_PENDING', 'Occurrence generated from active plan schedule', 'SCHEDULER', now())",
+                UUID.randomUUID(), occurrenceId
+            );
+        } else {
+            jdbcTemplate.update(
+                "INSERT INTO subscription_schema.subscription_occurrence_history " +
+                    "(id, occurrence_id, old_status, new_status, reason, actor_identity_id, source, created_at) " +
+                    "VALUES (?, ?, NULL, 'SKIPPED', ?, ?, 'CUSTOMER_SKIP', now())",
+                UUID.randomUUID(), occurrenceId,
+                skipRequest.reason() == null ? "Customer skip request applied during occurrence generation" : skipRequest.reason(),
+                skipRequest.actorIdentityId()
+            );
+            jdbcTemplate.update(
+                "UPDATE subscription_schema.subscription_skip_request SET status = 'APPLIED', " +
+                    "occurrence_id = COALESCE(occurrence_id, ?), applied_at = COALESCE(applied_at, now()), updated_at = now() " +
+                    "WHERE id = ? AND status IN ('REQUESTED', 'APPLIED')",
+                occurrenceId,
+                skipRequest.id()
+            );
+        }
+        return occurrenceId;
     }
 
     public void releaseAndAdvance(ClaimedSubscription subscription, LocalDate nextServiceDate) {
@@ -144,14 +180,16 @@ public class OccurrenceRepository {
 
     private List<ScheduleItem> findScheduleItems(UUID planId) {
         return jdbcTemplate.query(
-            "SELECT menu_item_id, quantity, iso_day_of_week, day_of_month, sequence_number " +
+            "SELECT menu_item_id, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number " +
                 "FROM subscription_schema.subscription_plan_schedule_item WHERE plan_id = ? " +
-                "ORDER BY COALESCE(iso_day_of_week, day_of_month), sequence_number",
+                "ORDER BY COALESCE(iso_day_of_week, day_of_month), service_time, meal_slot_code, sequence_number",
             (rs, rowNum) -> new ScheduleItem(
                 rs.getObject("menu_item_id", UUID.class),
                 rs.getInt("quantity"),
                 nullableInteger(rs, "iso_day_of_week"),
                 nullableInteger(rs, "day_of_month"),
+                rs.getString("meal_slot_code"),
+                rs.getObject("service_time", LocalTime.class),
                 rs.getInt("sequence_number")
             ),
             planId
@@ -190,7 +228,12 @@ public class OccurrenceRepository {
         int quantity,
         Integer isoDayOfWeek,
         Integer dayOfMonth,
+        String mealSlotCode,
+        LocalTime serviceTime,
         int sequenceNumber
     ) {
+    }
+
+    public record SkipRequest(UUID id, UUID actorIdentityId, String reason) {
     }
 }

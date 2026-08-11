@@ -33,9 +33,55 @@ delete_operations() {
   done
 }
 
-delete_operations "api/v1/subscriptions" list-subscription-plans get-subscription-plan create-customer-subscription list-customer-subscriptions get-customer-subscription pause-customer-subscription cancel-customer-subscription
-delete_operations "api/v1/admin/subscription-plans" list-admin-subscription-plans create-admin-subscription-plan update-admin-subscription-plan-status
-delete_operations "api/v1/admin/subscriptions" update-admin-subscription-status
-delete_operations "api/v1/backoffice/chef-reviews" list-chef-reviews get-chef-review approve-chef-review reject-chef-review get-chef-proof-content
+delete_operations "api/v1/subscriptions" \
+  list-subscription-plans \
+  get-subscription-plan \
+  get-subscription-plan-schedule \
+  get-subscription-plan-policy \
+  create-customer-subscription \
+  list-customer-subscriptions \
+  get-customer-subscription \
+  list-subscription-occurrences \
+  pause-customer-subscription \
+  resume-customer-subscription \
+  cancel-customer-subscription \
+  skip-subscription-meal
 
-echo "SUCCESS: Named subscription/backoffice operations removed. API containers were retained."
+delete_operations "api/v1/admin/subscription-plans" \
+  list-admin-subscription-plans \
+  create-admin-subscription-plan \
+  update-admin-subscription-plan-status \
+  get-admin-plan-schedule \
+  put-admin-plan-schedule \
+  activate-admin-plan-schedule \
+  get-admin-plan-policy \
+  put-admin-plan-policy \
+  activate-admin-plan-policy \
+  get-admin-plan-readiness
+
+delete_operations "api/v1/admin/subscriptions" \
+  list-admin-subscriptions \
+  get-admin-subscription-history \
+  update-admin-subscription-status
+
+delete_operations "api/v1/chef/subscription-capacity" \
+  get-chef-subscription-capacity \
+  put-chef-slot-capacity-rule \
+  put-chef-menu-capacity-rule \
+  put-chef-slot-capacity-override \
+  put-chef-menu-capacity-override
+
+delete_operations "api/v1/admin/subscription-capacity" \
+  get-admin-chef-capacity \
+  set-admin-chef-capacity-freeze \
+  list-admin-capacity-incidents \
+  reconcile-admin-subscription-capacity
+
+delete_operations "api/v1/backoffice/chef-reviews" \
+  list-chef-reviews \
+  get-chef-review \
+  approve-chef-review \
+  reject-chef-review \
+  get-chef-proof-content
+
+echo "SUCCESS: Named subscription/capacity/backoffice operations removed. API containers were retained."

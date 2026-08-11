@@ -3,15 +3,20 @@ package in.craves.subscription.schedule;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.schedule.PlanScheduleModels.ActivateScheduleRequest;
 import in.craves.subscription.schedule.PlanScheduleModels.PlanScheduleResponse;
+import in.craves.subscription.schedule.PlanScheduleModels.PublicPlanScheduleResponse;
+import in.craves.subscription.schedule.PlanScheduleModels.PublicScheduleItemResponse;
 import in.craves.subscription.schedule.PlanScheduleModels.PutScheduleRequest;
 import in.craves.subscription.schedule.PlanScheduleModels.ScheduleItemRequest;
 import in.craves.subscription.schedule.PlanScheduleRepository.PlanOwner;
 import in.craves.subscription.security.CurrentUser;
 import java.time.DateTimeException;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -28,16 +33,37 @@ public class PlanScheduleService {
         this.catalogClient = catalogClient;
     }
 
+    public PublicPlanScheduleResponse getPublicActive(UUID planId) {
+        repository.findPlanOwner(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
+        PlanScheduleResponse schedule = repository.findActive(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_SCHEDULE_NOT_FOUND", "Active meal schedule was not found"));
+        return new PublicPlanScheduleResponse(
+            schedule.planId(),
+            schedule.recurrenceType(),
+            schedule.timezone(),
+            schedule.items().stream().map(item -> new PublicScheduleItemResponse(
+                item.menuItemId(),
+                item.quantity(),
+                item.isoDayOfWeek(),
+                item.dayOfMonth(),
+                item.mealSlotCode(),
+                item.serviceTime(),
+                item.sequenceNumber()
+            )).toList()
+        );
+    }
+
     public PlanScheduleResponse get(UUID planId, CurrentUser user) {
-        PlanOwner plan = requireOwnedPlan(planId, user);
+        PlanOwner plan = requireAdminManagedPlan(planId, user);
         return repository.find(plan.planId())
             .orElseThrow(() -> ApiException.notFound("PLAN_SCHEDULE_NOT_FOUND", "Plan schedule was not found"));
     }
 
     public PlanScheduleResponse put(UUID planId, PutScheduleRequest request, CurrentUser user) {
-        PlanOwner plan = requireOwnedPlan(planId, user);
+        PlanOwner plan = requireAdminManagedPlan(planId, user);
         if (plan.chefIdentityId() == null) {
-            throw ApiException.conflict("PLAN_CHEF_REQUIRED", "A plan chef is required before a schedule can be defined");
+            throw ApiException.conflict("PLAN_CHEF_REQUIRED", "An approved chef must be assigned before a schedule can be defined");
         }
         String recurrence = request.recurrenceType().trim().toUpperCase(Locale.ROOT);
         if (!RECURRENCES.contains(recurrence)) {
@@ -53,24 +79,35 @@ public class PlanScheduleService {
         validateItems(recurrence, request.items(), plan.chefIdentityId());
         try {
             return repository.replaceDraft(
-                planId, recurrence, request.timezone().trim(), request.serviceTime(),
-                request.generationLeadHours(), List.copyOf(request.items()), user.identityId()
+                planId,
+                recurrence,
+                request.timezone().trim(),
+                request.generationLeadHours(),
+                List.copyOf(request.items()),
+                user.identityId()
             );
         } catch (IllegalStateException exception) {
-            throw ApiException.conflict("PLAN_SCHEDULE_ACTIVE", exception.getMessage());
+            throw ApiException.conflict("PLAN_SCHEDULE_CONFLICT", exception.getMessage());
         }
     }
 
     public PlanScheduleResponse activate(UUID planId, ActivateScheduleRequest request, CurrentUser user) {
-        PlanOwner plan = requireOwnedPlan(planId, user);
+        PlanOwner plan = requireAdminManagedPlan(planId, user);
         PlanScheduleResponse schedule = repository.find(plan.planId())
-            .orElseThrow(() -> ApiException.notFound("PLAN_SCHEDULE_NOT_FOUND", "Plan schedule was not found"));
+            .filter(value -> "DRAFT".equals(value.status()))
+            .orElseThrow(() -> ApiException.conflict("PLAN_SCHEDULE_NOT_DRAFT", "Only a draft schedule can be activated"));
         if (schedule.items().isEmpty()) {
             throw ApiException.conflict("PLAN_SCHEDULE_EMPTY", "Plan schedule must contain at least one meal item");
         }
         validateItems(schedule.recurrenceType(), schedule.items().stream()
             .map(item -> new ScheduleItemRequest(
-                item.menuItemId(), item.quantity(), item.isoDayOfWeek(), item.dayOfMonth(), item.sequenceNumber()
+                item.menuItemId(),
+                item.quantity(),
+                item.isoDayOfWeek(),
+                item.dayOfMonth(),
+                item.mealSlotCode(),
+                item.serviceTime(),
+                item.sequenceNumber()
             )).toList(), plan.chefIdentityId());
         try {
             return repository.activate(planId, user.identityId(), request.reason().trim());
@@ -79,18 +116,18 @@ public class PlanScheduleService {
         }
     }
 
-    private PlanOwner requireOwnedPlan(UUID planId, CurrentUser user) {
-        requireRole(user, "PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN", "CHEF");
-        PlanOwner plan = repository.findPlanOwner(planId)
+    private PlanOwner requireAdminManagedPlan(UUID planId, CurrentUser user) {
+        requireAdmin(user);
+        return repository.findPlanOwner(planId)
             .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
-        if (!isSubscriptionAdmin(user) && !user.identityId().equals(plan.chefIdentityId())) {
-            throw ApiException.forbidden("PLAN_ACCESS_DENIED", "Chef cannot manage another chef's plan schedule");
-        }
-        return plan;
     }
 
     private void validateItems(String recurrence, List<ScheduleItemRequest> items, UUID chefIdentityId) {
+        if (chefIdentityId == null) {
+            throw ApiException.conflict("PLAN_CHEF_REQUIRED", "An approved chef must be assigned before a schedule can be managed");
+        }
         Set<String> uniqueness = new HashSet<>();
+        Map<String, LocalTime> slotTimes = new HashMap<>();
         for (ScheduleItemRequest item : items) {
             if ("WEEKLY".equals(recurrence)) {
                 if (item.isoDayOfWeek() == null || item.dayOfMonth() != null) {
@@ -105,9 +142,19 @@ public class PlanScheduleService {
                     "Monthly items require dayOfMonth and must not set isoDayOfWeek"
                 );
             }
-            String key = item.menuItemId() + ":" + item.isoDayOfWeek() + ":" + item.dayOfMonth();
-            if (!uniqueness.add(key)) {
-                throw ApiException.badRequest("DUPLICATE_SCHEDULE_ITEM", "Duplicate menu item and service day");
+            String slot = item.mealSlotCode().trim().toUpperCase(Locale.ROOT);
+            String day = item.isoDayOfWeek() != null ? "W:" + item.isoDayOfWeek() : "M:" + item.dayOfMonth();
+            String itemKey = day + ":" + slot + ":" + item.menuItemId();
+            if (!uniqueness.add(itemKey)) {
+                throw ApiException.badRequest("DUPLICATE_SCHEDULE_ITEM", "Duplicate menu item inside the same service day and meal slot");
+            }
+            String slotKey = day + ":" + slot;
+            LocalTime priorTime = slotTimes.putIfAbsent(slotKey, item.serviceTime());
+            if (priorTime != null && !priorTime.equals(item.serviceTime())) {
+                throw ApiException.badRequest(
+                    "INCONSISTENT_MEAL_SLOT_TIME",
+                    "All items in the same service day and meal slot must use the same serviceTime"
+                );
             }
             catalogClient.requireSellableOwnedItem(item.menuItemId(), chefIdentityId);
         }
@@ -121,18 +168,9 @@ public class PlanScheduleService {
         }
     }
 
-    private static boolean isSubscriptionAdmin(CurrentUser user) {
-        return user != null && user.hasAnyRole("PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN");
-    }
-
-    private static void requireRole(CurrentUser user, String... roles) {
-        if (user != null) {
-            for (String role : roles) {
-                if (user.hasRole(role)) {
-                    return;
-                }
-            }
+    private static void requireAdmin(CurrentUser user) {
+        if (user == null || !user.hasAnyRole("PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN")) {
+            throw ApiException.forbidden("ROLE_NOT_ALLOWED", "Subscription administration role is required");
         }
-        throw ApiException.forbidden("ROLE_NOT_ALLOWED", "User does not have the required role");
     }
 }

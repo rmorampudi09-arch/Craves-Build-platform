@@ -6,7 +6,10 @@ import in.craves.subscription.schedule.PlanScheduleModels.ScheduleItemResponse;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -34,10 +37,16 @@ public class PlanScheduleRepository {
         ).stream().findFirst();
     }
 
+    /** Returns the administrator's draft when present; otherwise the currently active/inactive schedule. */
     public Optional<PlanScheduleResponse> find(UUID planId) {
+        Optional<PlanScheduleResponse> draft = findDraft(planId);
+        return draft.isPresent() ? draft : findCurrent(planId);
+    }
+
+    public Optional<PlanScheduleResponse> findActive(UUID planId) {
         return jdbcTemplate.query(
-            "SELECT * FROM subscription_schema.subscription_plan_schedule WHERE plan_id = ?",
-            (rs, rowNum) -> map(rs, listItems(planId)),
+            "SELECT * FROM subscription_schema.subscription_plan_schedule WHERE plan_id = ? AND status = 'ACTIVE'",
+            (rs, rowNum) -> mapCurrent(rs, listCurrentItems(planId)),
             planId
         ).stream().findFirst();
     }
@@ -47,95 +56,145 @@ public class PlanScheduleRepository {
         UUID planId,
         String recurrenceType,
         String timezone,
-        java.time.LocalTime serviceTime,
         int generationLeadHours,
         List<ScheduleItemRequest> items,
         UUID actor
     ) {
-        Optional<PlanScheduleResponse> existing = find(planId);
-        if (existing.isPresent() && "ACTIVE".equals(existing.get().status())) {
-            throw new IllegalStateException("Active schedule must be inactivated before replacement");
-        }
-        int nextVersion = existing.map(value -> value.version() + 1).orElse(1);
+        int nextVersion = findDraft(planId)
+            .map(PlanScheduleResponse::version)
+            .orElseGet(() -> findCurrent(planId).map(value -> value.version() + 1).orElse(1));
+        LocalTime earliestServiceTime = items.stream()
+            .map(ScheduleItemRequest::serviceTime)
+            .min(Comparator.naturalOrder())
+            .orElseThrow(() -> new IllegalArgumentException("At least one schedule item is required"));
+
         jdbcTemplate.update(
-            "INSERT INTO subscription_schema.subscription_plan_schedule " +
-                "(plan_id, recurrence_type, timezone, service_time, generation_lead_hours, status, version, created_by_identity_id, created_at, updated_at, activated_at) " +
-                "VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, ?, now(), now(), NULL) " +
+            "INSERT INTO subscription_schema.subscription_plan_schedule_draft " +
+                "(plan_id, recurrence_type, timezone, service_time, generation_lead_hours, version, created_by_identity_id, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, now(), now()) " +
                 "ON CONFLICT (plan_id) DO UPDATE SET recurrence_type = EXCLUDED.recurrence_type, timezone = EXCLUDED.timezone, " +
-                "service_time = EXCLUDED.service_time, generation_lead_hours = EXCLUDED.generation_lead_hours, status = 'DRAFT', " +
-                "version = EXCLUDED.version, created_by_identity_id = EXCLUDED.created_by_identity_id, updated_at = now(), activated_at = NULL",
-            planId, recurrenceType, timezone, serviceTime, generationLeadHours, nextVersion, actor
+                "service_time = EXCLUDED.service_time, generation_lead_hours = EXCLUDED.generation_lead_hours, " +
+                "created_by_identity_id = EXCLUDED.created_by_identity_id, updated_at = now()",
+            planId, recurrenceType, timezone, earliestServiceTime, generationLeadHours, nextVersion, actor
         );
         jdbcTemplate.update(
-            "DELETE FROM subscription_schema.subscription_plan_schedule_item WHERE plan_id = ?",
+            "DELETE FROM subscription_schema.subscription_plan_schedule_draft_item WHERE plan_id = ?",
             planId
         );
         for (ScheduleItemRequest item : items) {
             jdbcTemplate.update(
-                "INSERT INTO subscription_schema.subscription_plan_schedule_item " +
-                    "(id, plan_id, menu_item_id, quantity, iso_day_of_week, day_of_month, sequence_number, created_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, now())",
-                UUID.randomUUID(), planId, item.menuItemId(), item.quantity(), item.isoDayOfWeek(), item.dayOfMonth(), item.sequenceNumber()
+                "INSERT INTO subscription_schema.subscription_plan_schedule_draft_item " +
+                    "(id, plan_id, menu_item_id, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number, created_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
+                UUID.randomUUID(),
+                planId,
+                item.menuItemId(),
+                item.quantity(),
+                item.isoDayOfWeek(),
+                item.dayOfMonth(),
+                item.mealSlotCode().trim().toUpperCase(Locale.ROOT),
+                item.serviceTime(),
+                item.sequenceNumber()
             );
         }
         jdbcTemplate.update(
             "INSERT INTO subscription_schema.subscription_plan_schedule_audit " +
                 "(id, plan_id, actor_identity_id, action, schedule_version, reason, created_at) " +
-                "VALUES (?, ?, ?, 'REPLACE_DRAFT', ?, 'Schedule draft replaced', now())",
+                "VALUES (?, ?, ?, 'PUT_DRAFT', ?, 'Schedule draft saved; current active schedule preserved', now())",
             UUID.randomUUID(), planId, actor, nextVersion
         );
-        return find(planId).orElseThrow();
+        return findDraft(planId).orElseThrow();
     }
 
     @Transactional
     public PlanScheduleResponse activate(UUID planId, UUID actor, String reason) {
-        PlanScheduleResponse schedule = find(planId).orElseThrow();
-        int updated = jdbcTemplate.update(
-            "UPDATE subscription_schema.subscription_plan_schedule SET status = 'ACTIVE', activated_at = now(), updated_at = now() " +
-                "WHERE plan_id = ? AND status = 'DRAFT'",
+        PlanScheduleResponse draft = findDraft(planId)
+            .orElseThrow(() -> new IllegalStateException("Only a draft schedule can be activated"));
+
+        jdbcTemplate.update(
+            "INSERT INTO subscription_schema.subscription_plan_schedule " +
+                "(plan_id, recurrence_type, timezone, service_time, generation_lead_hours, status, version, created_by_identity_id, created_at, updated_at, activated_at) " +
+                "SELECT plan_id, recurrence_type, timezone, service_time, generation_lead_hours, 'ACTIVE', version, created_by_identity_id, created_at, now(), now() " +
+                "FROM subscription_schema.subscription_plan_schedule_draft WHERE plan_id = ? " +
+                "ON CONFLICT (plan_id) DO UPDATE SET recurrence_type = EXCLUDED.recurrence_type, timezone = EXCLUDED.timezone, " +
+                "service_time = EXCLUDED.service_time, generation_lead_hours = EXCLUDED.generation_lead_hours, status = 'ACTIVE', " +
+                "version = EXCLUDED.version, created_by_identity_id = EXCLUDED.created_by_identity_id, updated_at = now(), activated_at = now()",
             planId
         );
-        if (updated != 1) {
-            throw new IllegalStateException("Only a draft schedule can be activated");
-        }
+        jdbcTemplate.update("DELETE FROM subscription_schema.subscription_plan_schedule_item WHERE plan_id = ?", planId);
+        jdbcTemplate.update(
+            "INSERT INTO subscription_schema.subscription_plan_schedule_item " +
+                "(id, plan_id, menu_item_id, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number, created_at) " +
+                "SELECT id, plan_id, menu_item_id, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number, created_at " +
+                "FROM subscription_schema.subscription_plan_schedule_draft_item WHERE plan_id = ?",
+            planId
+        );
+        jdbcTemplate.update("DELETE FROM subscription_schema.subscription_plan_schedule_draft WHERE plan_id = ?", planId);
         jdbcTemplate.update(
             "INSERT INTO subscription_schema.subscription_plan_schedule_audit " +
-                "(id, plan_id, actor_identity_id, action, schedule_version, reason, created_at) " +
-                "VALUES (?, ?, ?, 'ACTIVATE', ?, ?, now())",
-            UUID.randomUUID(), planId, actor, schedule.version(), reason
+                "(id, plan_id, actor_identity_id, action, schedule_version, reason, created_at) VALUES (?, ?, ?, 'ACTIVATE', ?, ?, now())",
+            UUID.randomUUID(), planId, actor, draft.version(), reason
         );
-        return find(planId).orElseThrow();
+        return findActive(planId).orElseThrow();
     }
 
-    private List<ScheduleItemResponse> listItems(UUID planId) {
+    private Optional<PlanScheduleResponse> findDraft(UUID planId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM subscription_schema.subscription_plan_schedule_draft WHERE plan_id = ?",
+            (rs, rowNum) -> mapDraft(rs, listDraftItems(planId)), planId
+        ).stream().findFirst();
+    }
+
+    private Optional<PlanScheduleResponse> findCurrent(UUID planId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM subscription_schema.subscription_plan_schedule WHERE plan_id = ?",
+            (rs, rowNum) -> mapCurrent(rs, listCurrentItems(planId)), planId
+        ).stream().findFirst();
+    }
+
+    private List<ScheduleItemResponse> listCurrentItems(UUID planId) {
         return jdbcTemplate.query(
             "SELECT * FROM subscription_schema.subscription_plan_schedule_item WHERE plan_id = ? " +
-                "ORDER BY COALESCE(iso_day_of_week, day_of_month), sequence_number, created_at",
-            (rs, rowNum) -> new ScheduleItemResponse(
-                rs.getObject("id", UUID.class),
-                rs.getObject("menu_item_id", UUID.class),
-                rs.getInt("quantity"),
-                integer(rs, "iso_day_of_week"),
-                integer(rs, "day_of_month"),
-                rs.getInt("sequence_number")
-            ),
-            planId
+                "ORDER BY COALESCE(iso_day_of_week, day_of_month), service_time, meal_slot_code, sequence_number, created_at",
+            this::mapItem, planId
         );
     }
 
-    private PlanScheduleResponse map(ResultSet rs, List<ScheduleItemResponse> items) throws SQLException {
+    private List<ScheduleItemResponse> listDraftItems(UUID planId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM subscription_schema.subscription_plan_schedule_draft_item WHERE plan_id = ? " +
+                "ORDER BY COALESCE(iso_day_of_week, day_of_month), service_time, meal_slot_code, sequence_number, created_at",
+            this::mapItem, planId
+        );
+    }
+
+    private ScheduleItemResponse mapItem(ResultSet rs, int rowNum) throws SQLException {
+        return new ScheduleItemResponse(
+            rs.getObject("id", UUID.class),
+            rs.getObject("menu_item_id", UUID.class),
+            rs.getInt("quantity"),
+            integer(rs, "iso_day_of_week"),
+            integer(rs, "day_of_month"),
+            rs.getString("meal_slot_code"),
+            rs.getObject("service_time", LocalTime.class),
+            rs.getInt("sequence_number")
+        );
+    }
+
+    private PlanScheduleResponse mapCurrent(ResultSet rs, List<ScheduleItemResponse> items) throws SQLException {
         return new PlanScheduleResponse(
-            rs.getObject("plan_id", UUID.class),
-            rs.getString("recurrence_type"),
-            rs.getString("timezone"),
-            rs.getObject("service_time", java.time.LocalTime.class),
-            rs.getInt("generation_lead_hours"),
-            rs.getString("status"),
-            rs.getInt("version"),
-            items,
-            rs.getObject("created_at", Instant.class),
-            rs.getObject("updated_at", Instant.class),
+            rs.getObject("plan_id", UUID.class), rs.getString("recurrence_type"), rs.getString("timezone"),
+            rs.getObject("service_time", LocalTime.class), rs.getInt("generation_lead_hours"), rs.getString("status"),
+            rs.getInt("version"), items, rs.getObject("created_at", Instant.class), rs.getObject("updated_at", Instant.class),
             rs.getObject("activated_at", Instant.class)
+        );
+    }
+
+    private PlanScheduleResponse mapDraft(ResultSet rs, List<ScheduleItemResponse> items) throws SQLException {
+        return new PlanScheduleResponse(
+            rs.getObject("plan_id", UUID.class), rs.getString("recurrence_type"), rs.getString("timezone"),
+            rs.getObject("service_time", LocalTime.class), rs.getInt("generation_lead_hours"), "DRAFT",
+            rs.getInt("version"), items, rs.getObject("created_at", Instant.class), rs.getObject("updated_at", Instant.class), null
         );
     }
 
@@ -144,6 +203,5 @@ public class PlanScheduleRepository {
         return rs.wasNull() ? null : value;
     }
 
-    public record PlanOwner(UUID planId, UUID chefIdentityId, String status, String billingPeriod) {
-    }
+    public record PlanOwner(UUID planId, UUID chefIdentityId, String status, String billingPeriod) {}
 }

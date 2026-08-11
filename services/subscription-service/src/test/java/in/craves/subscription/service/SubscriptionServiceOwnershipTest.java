@@ -1,12 +1,15 @@
 package in.craves.subscription.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
 import in.craves.subscription.web.ApiDtos.CreatePlanRequest;
@@ -26,10 +29,11 @@ class SubscriptionServiceOwnershipTest {
     private static final UUID CUSTOMER_ID = UUID.fromString("33333333-3333-4333-8333-333333333333");
 
     private final SubscriptionRepository repository = mock(SubscriptionRepository.class);
-    private final SubscriptionService service = new SubscriptionService(repository);
+    private final CapacityService capacityService = mock(CapacityService.class);
+    private final SubscriptionService service = new SubscriptionService(repository, capacityService);
 
     @Test
-    void chefCannotCreatePlanForAnotherChef() {
+    void chefCannotCreateOrManageMealPlans() {
         CurrentUser chef = new CurrentUser(CHEF_ID, "firebase-chef", "+919999999999", List.of("CHEF"));
         CreatePlanRequest request = new CreatePlanRequest(
             "WEEKLY-01",
@@ -40,10 +44,38 @@ class SubscriptionServiceOwnershipTest {
             new BigDecimal("1200.00"),
             "INR"
         );
+
+        assertThatThrownBy(() -> service.createPlan(request, chef))
+            .isInstanceOf(ApiException.class)
+            .extracting(error -> ((ApiException) error).getCode())
+            .isEqualTo("ROLE_NOT_ALLOWED");
+        assertThatThrownBy(() -> service.listAllPlans(chef))
+            .isInstanceOf(ApiException.class)
+            .extracting(error -> ((ApiException) error).getCode())
+            .isEqualTo("ROLE_NOT_ALLOWED");
+    }
+
+    @Test
+    void subscriptionAdminAssignsApprovedChefReferenceToPlan() {
+        CurrentUser admin = new CurrentUser(
+            UUID.fromString("77777777-7777-4777-8777-777777777777"),
+            "firebase-admin",
+            "+919000000000",
+            List.of("SUBSCRIPTION_ADMIN")
+        );
+        CreatePlanRequest request = new CreatePlanRequest(
+            "WEEKLY-01",
+            CHEF_ID,
+            "Weekly meals",
+            "Chef plan",
+            "WEEKLY",
+            new BigDecimal("1200.00"),
+            "INR"
+        );
         PlanResponse created = plan(CHEF_ID, "DRAFT");
         when(repository.createPlan(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(created);
 
-        PlanResponse response = service.createPlan(request, chef);
+        PlanResponse response = service.createPlan(request, admin);
 
         assertThat(response.chefIdentityId()).isEqualTo(CHEF_ID);
         verify(repository).createPlan(
@@ -54,30 +86,34 @@ class SubscriptionServiceOwnershipTest {
             eq("WEEKLY"),
             eq(new BigDecimal("1200.00")),
             eq("INR"),
-            eq(CHEF_ID)
+            eq(admin.identityId())
         );
     }
 
     @Test
-    void chefListsOnlyOwnedPlans() {
-        CurrentUser chef = new CurrentUser(CHEF_ID, "firebase-chef", "+919999999999", List.of("CHEF"));
-        when(repository.listPlansForChef(CHEF_ID)).thenReturn(List.of(plan(CHEF_ID, "DRAFT")));
-
-        List<PlanResponse> plans = service.listAllPlans(chef);
-
-        assertThat(plans).hasSize(1);
-        verify(repository).listPlansForChef(CHEF_ID);
-    }
-
-    @Test
-    void publicPlanDoesNotExposeChefIdentity() {
+    void publicPlanDoesNotExposeChefIdentityWhenCapacityIsBookable() {
         UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
-        when(repository.findActivePlanById(planId)).thenReturn(Optional.of(plan(CHEF_ID, "ACTIVE")));
+        PlanResponse stored = plan(CHEF_ID, "ACTIVE");
+        when(repository.findActivePlanById(planId)).thenReturn(Optional.of(stored));
+        when(capacityService.isPlanBookable(stored)).thenReturn(true);
 
         Object publicPlan = service.getPlan(planId);
 
         assertThat(publicPlan).hasNoNullFieldsOrPropertiesExcept("description");
         assertThat(publicPlan.toString()).doesNotContain(CHEF_ID.toString());
+    }
+
+    @Test
+    void soldOutPlanIsHiddenFromPublicDetail() {
+        UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
+        PlanResponse stored = plan(CHEF_ID, "ACTIVE");
+        when(repository.findActivePlanById(planId)).thenReturn(Optional.of(stored));
+        when(capacityService.isPlanBookable(stored)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getPlan(planId))
+            .isInstanceOf(ApiException.class)
+            .extracting(error -> ((ApiException) error).getCode())
+            .isEqualTo("PLAN_NOT_BOOKABLE");
     }
 
     @Test

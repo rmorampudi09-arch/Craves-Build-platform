@@ -3,13 +3,19 @@ package in.craves.subscription.occurrence;
 import in.craves.subscription.occurrence.OccurrenceRepository.ActiveSchedule;
 import in.craves.subscription.occurrence.OccurrenceRepository.ClaimedSubscription;
 import in.craves.subscription.occurrence.OccurrenceRepository.ScheduleItem;
+import in.craves.subscription.occurrence.OccurrenceRepository.SkipRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -42,6 +48,7 @@ public class OccurrenceGeneratorService {
     public GenerationSummary generateDue() {
         int claimed = 0;
         int generated = 0;
+        int skipped = 0;
         int advancedWithoutOccurrence = 0;
         int deferred = 0;
         int failed = 0;
@@ -56,15 +63,6 @@ public class OccurrenceGeneratorService {
                 ActiveSchedule schedule = repository.findActiveSchedule(subscription.planId())
                     .orElseThrow(() -> new IllegalStateException("Active plan schedule disappeared during generation"));
                 ZoneId zone = ZoneId.of(schedule.timezone());
-                Instant serviceAt = ZonedDateTime.of(
-                    subscription.serviceDate(), schedule.serviceTime(), zone
-                ).toInstant();
-                Instant generationOpensAt = serviceAt.minusSeconds(schedule.generationLeadHours() * 3600L);
-                if (clock.instant().isBefore(generationOpensAt)) {
-                    repository.releaseAndAdvance(subscription, subscription.serviceDate());
-                    deferred++;
-                    continue;
-                }
                 List<ScheduleItem> matching = matchingItems(schedule, subscription.serviceDate());
                 LocalDate next = nextMatchingDate(schedule, subscription.serviceDate());
                 if (matching.isEmpty()) {
@@ -76,10 +74,42 @@ public class OccurrenceGeneratorService {
                     || subscription.deliveryAddressId() == null) {
                     throw new IllegalStateException("Active subscription is missing required identity or delivery address");
                 }
-                if (repository.createOccurrence(
-                    subscription, schedule, subscription.serviceDate(), serviceAt, matching, next
-                )) {
-                    generated++;
+
+                SkipRequest skipRequest = repository.findRequestedSkip(
+                    subscription.subscriptionId(), subscription.serviceDate()
+                ).orElse(null);
+                boolean deferredSlot = false;
+                for (Map.Entry<SlotKey, List<ScheduleItem>> slot : groupBySlot(matching).entrySet()) {
+                    Instant serviceAt = ZonedDateTime.of(
+                        subscription.serviceDate(), slot.getKey().serviceTime(), zone
+                    ).toInstant();
+                    Instant generationOpensAt = serviceAt.minusSeconds(schedule.generationLeadHours() * 3600L);
+                    if (clock.instant().isBefore(generationOpensAt)) {
+                        deferredSlot = true;
+                        continue;
+                    }
+                    UUID occurrenceId = repository.createOccurrence(
+                        subscription,
+                        schedule,
+                        subscription.serviceDate(),
+                        slot.getKey().mealSlotCode(),
+                        serviceAt,
+                        slot.getValue(),
+                        skipRequest
+                    );
+                    if (occurrenceId != null) {
+                        if (skipRequest == null) {
+                            generated++;
+                        } else {
+                            skipped++;
+                        }
+                    }
+                }
+                if (deferredSlot) {
+                    repository.releaseAndAdvance(subscription, subscription.serviceDate());
+                    deferred++;
+                } else {
+                    repository.releaseAndAdvance(subscription, next);
                 }
             } catch (RuntimeException exception) {
                 failed++;
@@ -90,14 +120,26 @@ public class OccurrenceGeneratorService {
                 );
             }
         }
-        return new GenerationSummary(claimed, generated, advancedWithoutOccurrence, deferred, failed);
+        return new GenerationSummary(claimed, generated, skipped, advancedWithoutOccurrence, deferred, failed);
     }
 
     static List<ScheduleItem> matchingItems(ActiveSchedule schedule, LocalDate date) {
         return schedule.items().stream()
             .filter(item -> matches(schedule.recurrenceType(), item, date))
-            .sorted(Comparator.comparingInt(ScheduleItem::sequenceNumber))
+            .sorted(Comparator
+                .comparing(ScheduleItem::serviceTime)
+                .thenComparing(ScheduleItem::mealSlotCode)
+                .thenComparingInt(ScheduleItem::sequenceNumber))
             .toList();
+    }
+
+    static Map<SlotKey, List<ScheduleItem>> groupBySlot(List<ScheduleItem> items) {
+        Map<SlotKey, List<ScheduleItem>> grouped = new LinkedHashMap<>();
+        for (ScheduleItem item : items) {
+            SlotKey key = new SlotKey(item.mealSlotCode(), item.serviceTime());
+            grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(item);
+        }
+        return grouped;
     }
 
     static LocalDate nextMatchingDate(ActiveSchedule schedule, LocalDate after) {
@@ -119,9 +161,13 @@ public class OccurrenceGeneratorService {
         return item.dayOfMonth() != null && item.dayOfMonth() == date.getDayOfMonth();
     }
 
+    record SlotKey(String mealSlotCode, LocalTime serviceTime) {
+    }
+
     public record GenerationSummary(
         int claimed,
         int generated,
+        int skipped,
         int advancedWithoutOccurrence,
         int deferred,
         int failed

@@ -1,5 +1,6 @@
 package in.craves.subscription.service;
 
+import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
@@ -15,26 +16,30 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 @Service
 public class SubscriptionService {
     private static final Set<String> BILLING_PERIODS = Set.of("WEEKLY", "MONTHLY");
     private static final Set<String> PLAN_STATUSES = Set.of("DRAFT", "ACTIVE", "INACTIVE");
-    private static final Set<String> CUSTOMER_STATUS_CHANGES = Set.of("PAUSED", "CANCELLED");
     private static final Set<String> ADMIN_STATUS_CHANGES = Set.of(
         "PENDING_PAYMENT", "ACTIVE", "PAUSED", "PAYMENT_FAILED", "EXPIRED", "CANCELLED"
     );
+    private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("^[A-Za-z0-9._:-]{8,128}$");
 
     private final SubscriptionRepository repository;
+    private final CapacityService capacityService;
 
-    public SubscriptionService(SubscriptionRepository repository) {
+    public SubscriptionService(SubscriptionRepository repository, CapacityService capacityService) {
         this.repository = repository;
+        this.capacityService = capacityService;
     }
 
     public PlanResponse createPlan(CreatePlanRequest request, CurrentUser user) {
-        requireRole(user, "PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN", "CHEF");
+        requireSubscriptionAdmin(user);
         String billingPeriod = normalize(request.billingPeriod(), "billingPeriod");
         if (!BILLING_PERIODS.contains(billingPeriod)) {
             throw ApiException.badRequest("INVALID_BILLING_PERIOD", "billingPeriod must be WEEKLY or MONTHLY");
@@ -45,52 +50,94 @@ public class SubscriptionService {
         }
         String currency = StringUtils.hasText(request.currency())
             ? request.currency().toUpperCase(Locale.ROOT) : "INR";
-        UUID chefIdentityId = isSubscriptionAdmin(user) ? request.chefIdentityId() : user.identityId();
         return repository.createPlan(
-            request.planCode().trim(), chefIdentityId, request.name().trim(), request.description(),
+            request.planCode().trim(), request.chefIdentityId(), request.name().trim(), request.description(),
             billingPeriod, amount, currency, user.identityId()
         );
     }
 
     public List<PublicPlanResponse> listActivePlans() {
-        return repository.listPlans(true).stream().map(SubscriptionService::toPublicPlan).toList();
+        return repository.listPlans(true).stream()
+            .filter(capacityService::isPlanBookable)
+            .map(SubscriptionService::toPublicPlan)
+            .toList();
     }
 
     public List<PlanResponse> listAllPlans(CurrentUser user) {
-        requireRole(user, "PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN", "CHEF");
-        return isSubscriptionAdmin(user) ? repository.listPlans(false) : repository.listPlansForChef(user.identityId());
+        requireSubscriptionAdmin(user);
+        return repository.listPlans(false);
     }
 
     public PublicPlanResponse getPlan(UUID planId) {
-        return repository.findActivePlanById(planId)
-            .map(SubscriptionService::toPublicPlan)
+        PlanResponse plan = repository.findActivePlanById(planId)
             .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Active subscription plan was not found"));
+        if (!capacityService.isPlanBookable(plan)) {
+            throw ApiException.notFound("PLAN_NOT_BOOKABLE", "Subscription plan is not currently accepting new enrollments");
+        }
+        return toPublicPlan(plan);
     }
 
     public PlanResponse updatePlanStatus(UUID planId, String status, CurrentUser user) {
-        requireRole(user, "PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN", "CHEF");
+        requireSubscriptionAdmin(user);
         String normalized = normalize(status, "status");
         if (!PLAN_STATUSES.contains(normalized)) {
             throw ApiException.badRequest("INVALID_PLAN_STATUS", "status must be DRAFT, ACTIVE, or INACTIVE");
         }
-        if (isSubscriptionAdmin(user)) {
-            return repository.updatePlanStatus(planId, normalized, user.identityId());
+        PlanResponse plan = repository.findPlanById(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
+        if ("ACTIVE".equals(normalized) && !capacityService.isPlanBookable(new PlanResponse(
+            plan.id(), plan.planCode(), plan.chefIdentityId(), plan.name(), plan.description(), plan.billingPeriod(),
+            plan.amount(), plan.currency(), "ACTIVE", plan.createdAt(), plan.updatedAt()
+        ))) {
+            throw ApiException.conflict(
+                "PLAN_CAPACITY_NOT_READY",
+                "Plan activation requires chef capacity for every required meal slot"
+            );
         }
-        return repository.updatePlanStatusForChef(planId, user.identityId(), normalized, user.identityId());
+        return repository.updatePlanStatus(planId, normalized, user.identityId());
     }
 
-    public CustomerSubscriptionResponse createSubscription(CreateSubscriptionRequest request, CurrentUser user) {
+    @Transactional
+    public CustomerSubscriptionResponse createSubscription(
+        CreateSubscriptionRequest request,
+        String idempotencyKey,
+        CurrentUser user
+    ) {
         requireRole(user, "CUSTOMER");
+        String normalizedKey = normalizeIdempotencyKey(idempotencyKey);
+
+        SubscriptionResponse existing = repository.findSubscriptionByEnrollmentKey(user.identityId(), normalizedKey)
+            .orElse(null);
+        if (existing != null) {
+            ensureSameEnrollment(existing, request);
+            if ("PENDING_PAYMENT".equals(existing.status())) {
+                capacityService.acquireEnrollmentHold(existing);
+            }
+            return toCustomerSubscription(existing);
+        }
+
         PlanResponse plan = repository.findActivePlanById(request.planId())
-            .orElseThrow(() -> ApiException.conflict("PLAN_NOT_ACTIVE", "Subscription plan is not active"));
+            .orElseThrow(() -> ApiException.conflict("PLAN_NOT_ACTIVE", "Subscription plan is not active or not fully configured"));
+        if (!capacityService.isPlanBookable(plan)) {
+            throw ApiException.conflict("SUBSCRIPTION_CAPACITY_UNAVAILABLE", "Subscription capacity is no longer available");
+        }
         if (request.startDate().isBefore(LocalDate.now())) {
             throw ApiException.badRequest("INVALID_START_DATE", "startDate cannot be in the past");
         }
-        return toCustomerSubscription(
-            repository.createSubscription(
-                user.identityId(), plan, request.startDate(), request.deliveryAddressId(), request.notes()
-            )
+        if (request.deliveryAddressId() == null) {
+            throw ApiException.badRequest("DELIVERY_ADDRESS_REQUIRED", "deliveryAddressId is required for meal subscriptions");
+        }
+        SubscriptionResponse stored = repository.createSubscription(
+            user.identityId(),
+            plan,
+            request.startDate(),
+            request.deliveryAddressId(),
+            request.notes(),
+            normalizedKey
         );
+        ensureSameEnrollment(stored, request);
+        capacityService.acquireEnrollmentHold(stored);
+        return toCustomerSubscription(stored);
     }
 
     public List<CustomerSubscriptionResponse> listMine(CurrentUser user) {
@@ -104,34 +151,39 @@ public class SubscriptionService {
         return toCustomerSubscription(getOwnedSubscription(subscriptionId, user));
     }
 
-    public CustomerSubscriptionResponse changeCustomerStatus(
-        UUID subscriptionId, String newStatus, String reason, CurrentUser user
-    ) {
-        requireRole(user, "CUSTOMER");
-        SubscriptionResponse subscription = getOwnedSubscription(subscriptionId, user);
-        String normalized = normalize(newStatus, "status");
-        if (!CUSTOMER_STATUS_CHANGES.contains(normalized)) {
-            throw ApiException.forbidden(
-                "SUBSCRIPTION_STATUS_CHANGE_DENIED",
-                "Customer can only pause or cancel subscription in MVP foundation"
-            );
-        }
-        return toCustomerSubscription(
-            repository.updateSubscriptionStatus(subscription.id(), normalized, reason, user.identityId())
-        );
-    }
-
+    @Transactional
     public SubscriptionResponse adminChangeStatus(
         UUID subscriptionId, String newStatus, String reason, CurrentUser user
     ) {
-        requireRole(user, "PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN");
+        requireSubscriptionAdmin(user);
+        if (!StringUtils.hasText(reason)) {
+            throw ApiException.badRequest("ADMIN_REASON_REQUIRED", "An operational reason is required for admin status changes");
+        }
         SubscriptionResponse subscription = repository.findSubscriptionById(subscriptionId)
             .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
         String normalized = normalize(newStatus, "status");
         if (!ADMIN_STATUS_CHANGES.contains(normalized)) {
             throw ApiException.badRequest("INVALID_SUBSCRIPTION_STATUS", "Invalid subscription status");
         }
-        return repository.updateSubscriptionStatus(subscription.id(), normalized, reason, user.identityId());
+        if (subscription.status().equals(normalized)) {
+            return subscription;
+        }
+
+        if ("ACTIVE".equals(normalized)) {
+            if ("PAUSED".equals(subscription.status())) {
+                LocalDate resumeDate = subscription.nextServiceDate() == null
+                    ? LocalDate.now()
+                    : subscription.nextServiceDate().isBefore(LocalDate.now()) ? LocalDate.now() : subscription.nextServiceDate();
+                capacityService.reacquireForResume(subscription, resumeDate);
+            } else {
+                capacityService.commitForActivation(subscription);
+            }
+        } else if ("PAUSED".equals(normalized)) {
+            capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(), "Administrator paused subscription: " + reason.trim());
+        } else if (Set.of("PAYMENT_FAILED", "EXPIRED", "CANCELLED").contains(normalized)) {
+            capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(), "Administrator moved subscription to " + normalized + ": " + reason.trim());
+        }
+        return repository.updateSubscriptionStatus(subscription.id(), normalized, reason.trim(), user.identityId());
     }
 
     private SubscriptionResponse getOwnedSubscription(UUID subscriptionId, CurrentUser user) {
@@ -142,6 +194,32 @@ public class SubscriptionService {
             throw ApiException.forbidden("SUBSCRIPTION_ACCESS_DENIED", "You cannot access this subscription");
         }
         return subscription;
+    }
+
+    private static void ensureSameEnrollment(SubscriptionResponse existing, CreateSubscriptionRequest request) {
+        boolean same = existing.planId().equals(request.planId())
+            && existing.startDate().equals(request.startDate())
+            && java.util.Objects.equals(existing.deliveryAddressId(), request.deliveryAddressId());
+        if (!same) {
+            throw ApiException.conflict(
+                "SUBSCRIPTION_IDEMPOTENCY_CONFLICT",
+                "The idempotency key is already associated with a different enrollment request"
+            );
+        }
+    }
+
+    private static String normalizeIdempotencyKey(String value) {
+        if (!StringUtils.hasText(value)) {
+            throw ApiException.badRequest("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key header is required");
+        }
+        String normalized = value.trim();
+        if (!IDEMPOTENCY_KEY.matcher(normalized).matches()) {
+            throw ApiException.badRequest(
+                "INVALID_IDEMPOTENCY_KEY",
+                "Idempotency-Key must be 8-128 URL-safe characters"
+            );
+        }
+        return normalized;
     }
 
     private static PublicPlanResponse toPublicPlan(PlanResponse plan) {
@@ -170,6 +248,10 @@ public class SubscriptionService {
 
     private static boolean isSubscriptionAdmin(CurrentUser user) {
         return user != null && user.hasAnyRole("PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN");
+    }
+
+    private static void requireSubscriptionAdmin(CurrentUser user) {
+        requireRole(user, "PLATFORM_ADMIN", "SUBSCRIPTION_ADMIN");
     }
 
     private static void requireRole(CurrentUser user, String... allowedRoles) {

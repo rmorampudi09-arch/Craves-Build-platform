@@ -15,23 +15,39 @@ class PlanScheduleRequestValidationTest {
     void rejectsEmptyScheduleItems() {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             PutScheduleRequest request = new PutScheduleRequest(
-                "WEEKLY", "Asia/Kolkata", LocalTime.NOON, 24, List.of()
+                "WEEKLY", "Asia/Kolkata", 24, List.of()
             );
             assertThat(factory.getValidator().validate(request)).isNotEmpty();
         }
     }
 
     @Test
-    void acceptsBoundedWeeklyItemShape() {
+    void acceptsBoundedWeeklyMealSlotShape() {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             PutScheduleRequest request = new PutScheduleRequest(
                 "WEEKLY",
                 "Asia/Kolkata",
-                LocalTime.of(12, 30),
                 24,
-                List.of(new ScheduleItemRequest(UUID.randomUUID(), 1, 1, null, 1))
+                List.of(new ScheduleItemRequest(
+                    UUID.randomUUID(), 1, 1, null, "LUNCH", LocalTime.of(12, 30), 1
+                ))
             );
             assertThat(factory.getValidator().validate(request)).isEmpty();
+        }
+    }
+
+    @Test
+    void rejectsUnsafeMealSlotCode() {
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            PutScheduleRequest request = new PutScheduleRequest(
+                "MONTHLY",
+                "Asia/Kolkata",
+                48,
+                List.of(new ScheduleItemRequest(
+                    UUID.randomUUID(), 1, null, 15, "Lunch slot!", LocalTime.of(12, 30), 1
+                ))
+            );
+            assertThat(factory.getValidator().validate(request)).isNotEmpty();
         }
     }
 }

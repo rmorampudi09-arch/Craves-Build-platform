@@ -69,7 +69,7 @@ put_operation() {
   local MGMT BODY RENDERED POLICY_BODY
   MGMT="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis/${API_ID}"
   BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
-  jq -n --arg display "$DISPLAY" --arg method "$METHOD" --arg template "$TEMPLATE" --argjson params "$PARAMS" '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:$params,responses:[{statusCode:200,description:"Craves response"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"Access denied"},{statusCode:404,description:"Not found"},{statusCode:409,description:"State conflict"}]}}' >"$BODY"
+  jq -n --arg display "$DISPLAY" --arg method "$METHOD" --arg template "$TEMPLATE" --argjson params "$PARAMS" '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:$params,responses:[{statusCode:200,description:"Craves response"},{statusCode:204,description:"Completed"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"Access denied"},{statusCode:404,description:"Not found"},{statusCode:409,description:"State conflict"}]}}' >"$BODY"
   az rest --method put --url "${MGMT}/operations/${ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
   sed "s|__BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
   jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
@@ -92,6 +92,7 @@ verify_operation() {
 
 UUID_PARAM='[{"name":"subscriptionId","type":"string","required":true}]'
 PLAN_PARAM='[{"name":"planId","type":"string","required":true}]'
+CHEF_PARAM='[{"name":"chefIdentityId","type":"string","required":true}]'
 APP_PARAM='[{"name":"applicationId","type":"string","required":true}]'
 APP_DOC_PARAMS='[{"name":"applicationId","type":"string","required":true},{"name":"documentId","type":"string","required":true}]'
 ADMIN_STATUS_PARAMS='[{"name":"subscriptionId","type":"string","required":true},{"name":"status","type":"string","required":true}]'
@@ -99,21 +100,48 @@ ADMIN_STATUS_PARAMS='[{"name":"subscriptionId","type":"string","required":true},
 SUB_API=$(ensure_api "api/v1/subscriptions" "craves-subscriptions-v1" "Craves Subscriptions API" "${SUB_BASE}/api/v1/subscriptions")
 ADMIN_PLAN_API=$(ensure_api "api/v1/admin/subscription-plans" "craves-admin-subscription-plans-v1" "Craves Admin Subscription Plans API" "${SUB_BASE}/api/v1/admin/subscription-plans")
 ADMIN_SUB_API=$(ensure_api "api/v1/admin/subscriptions" "craves-admin-subscriptions-v1" "Craves Admin Subscriptions API" "${SUB_BASE}/api/v1/admin/subscriptions")
+CHEF_CAPACITY_API=$(ensure_api "api/v1/chef/subscription-capacity" "craves-chef-subscription-capacity-v1" "Craves Chef Subscription Capacity API" "${SUB_BASE}/api/v1/chef/subscription-capacity")
+ADMIN_CAPACITY_API=$(ensure_api "api/v1/admin/subscription-capacity" "craves-admin-subscription-capacity-v1" "Craves Admin Subscription Capacity API" "${SUB_BASE}/api/v1/admin/subscription-capacity")
 CHEF_REVIEW_API=$(ensure_api "api/v1/backoffice/chef-reviews" "craves-backoffice-chef-reviews-v1" "Craves Backoffice Chef Reviews API" "${USER_BASE}/api/v1/backoffice/chef-reviews")
 
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$PUBLIC_POLICY" "list-subscription-plans" "GET" "/plans" "List active subscription plans" '[]'
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$PUBLIC_POLICY" "get-subscription-plan" "GET" "/plans/{planId}" "Get active subscription plan" "$PLAN_PARAM"
+put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$PUBLIC_POLICY" "get-subscription-plan-schedule" "GET" "/plans/{planId}/schedule" "Get active meal schedule" "$PLAN_PARAM"
+put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$PUBLIC_POLICY" "get-subscription-plan-policy" "GET" "/plans/{planId}/policy" "Get active subscription policy" "$PLAN_PARAM"
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "create-customer-subscription" "POST" "/" "Create customer subscription" '[]'
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "list-customer-subscriptions" "GET" "/" "List customer subscriptions" '[]'
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "get-customer-subscription" "GET" "/{subscriptionId}" "Get customer subscription" "$UUID_PARAM"
+put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "list-subscription-occurrences" "GET" "/{subscriptionId}/occurrences" "List scheduled meals" "$UUID_PARAM"
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "pause-customer-subscription" "PATCH" "/{subscriptionId}/pause" "Pause customer subscription" "$UUID_PARAM"
+put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "resume-customer-subscription" "PATCH" "/{subscriptionId}/resume" "Resume customer subscription" "$UUID_PARAM"
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "cancel-customer-subscription" "PATCH" "/{subscriptionId}/cancel" "Cancel customer subscription" "$UUID_PARAM"
+put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "skip-subscription-meal" "POST" "/{subscriptionId}/skips" "Skip scheduled meal" "$UUID_PARAM"
 
 put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "list-admin-subscription-plans" "GET" "/" "List admin subscription plans" '[]'
 put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "create-admin-subscription-plan" "POST" "/" "Create admin subscription plan" '[]'
 put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "update-admin-subscription-plan-status" "PATCH" "/{planId}/status" "Update admin subscription plan status" "$PLAN_PARAM"
+put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "get-admin-plan-schedule" "GET" "/{planId}/schedule" "Get plan schedule" "$PLAN_PARAM"
+put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "put-admin-plan-schedule" "PUT" "/{planId}/schedule" "Save plan schedule draft" "$PLAN_PARAM"
+put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "activate-admin-plan-schedule" "POST" "/{planId}/schedule/activate" "Activate plan schedule" "$PLAN_PARAM"
+put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "get-admin-plan-policy" "GET" "/{planId}/policy" "Get plan policy" "$PLAN_PARAM"
+put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "put-admin-plan-policy" "PUT" "/{planId}/policy" "Save plan policy draft" "$PLAN_PARAM"
+put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "activate-admin-plan-policy" "POST" "/{planId}/policy/activate" "Activate plan policy" "$PLAN_PARAM"
+put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "get-admin-plan-readiness" "GET" "/{planId}/readiness" "Get plan activation readiness" "$PLAN_PARAM"
 
+put_operation "$ADMIN_SUB_API" "${SUB_BASE}/api/v1/admin/subscriptions" "$AUTH_POLICY" "list-admin-subscriptions" "GET" "/" "List subscriptions with keyset pagination" '[]'
+put_operation "$ADMIN_SUB_API" "${SUB_BASE}/api/v1/admin/subscriptions" "$AUTH_POLICY" "get-admin-subscription-history" "GET" "/{subscriptionId}/history" "Get subscription status history" "$UUID_PARAM"
 put_operation "$ADMIN_SUB_API" "${SUB_BASE}/api/v1/admin/subscriptions" "$AUTH_POLICY" "update-admin-subscription-status" "PATCH" "/{subscriptionId}/status/{status}" "Update admin subscription status" "$ADMIN_STATUS_PARAMS"
+
+put_operation "$CHEF_CAPACITY_API" "${SUB_BASE}/api/v1/chef/subscription-capacity" "$AUTH_POLICY" "get-chef-subscription-capacity" "GET" "/" "Get chef subscription capacity" '[]'
+put_operation "$CHEF_CAPACITY_API" "${SUB_BASE}/api/v1/chef/subscription-capacity" "$AUTH_POLICY" "put-chef-slot-capacity-rule" "PUT" "/rules/slots" "Save chef slot capacity rule" '[]'
+put_operation "$CHEF_CAPACITY_API" "${SUB_BASE}/api/v1/chef/subscription-capacity" "$AUTH_POLICY" "put-chef-menu-capacity-rule" "PUT" "/rules/menu-items" "Save chef menu item capacity rule" '[]'
+put_operation "$CHEF_CAPACITY_API" "${SUB_BASE}/api/v1/chef/subscription-capacity" "$AUTH_POLICY" "put-chef-slot-capacity-override" "PUT" "/overrides/slots" "Save chef date slot capacity override" '[]'
+put_operation "$CHEF_CAPACITY_API" "${SUB_BASE}/api/v1/chef/subscription-capacity" "$AUTH_POLICY" "put-chef-menu-capacity-override" "PUT" "/overrides/menu-items" "Save chef menu item date capacity override" '[]'
+
+put_operation "$ADMIN_CAPACITY_API" "${SUB_BASE}/api/v1/admin/subscription-capacity" "$AUTH_POLICY" "get-admin-chef-capacity" "GET" "/chefs/{chefIdentityId}" "Get chef subscription capacity" "$CHEF_PARAM"
+put_operation "$ADMIN_CAPACITY_API" "${SUB_BASE}/api/v1/admin/subscription-capacity" "$AUTH_POLICY" "set-admin-chef-capacity-freeze" "PATCH" "/chefs/{chefIdentityId}/freeze" "Freeze or unfreeze new subscription sales" "$CHEF_PARAM"
+put_operation "$ADMIN_CAPACITY_API" "${SUB_BASE}/api/v1/admin/subscription-capacity" "$AUTH_POLICY" "list-admin-capacity-incidents" "GET" "/incidents" "List subscription capacity incidents" '[]'
+put_operation "$ADMIN_CAPACITY_API" "${SUB_BASE}/api/v1/admin/subscription-capacity" "$AUTH_POLICY" "reconcile-admin-subscription-capacity" "POST" "/subscriptions/{subscriptionId}/reconcile" "Reconcile subscription capacity" "$UUID_PARAM"
 
 put_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "$AUTH_POLICY" "list-chef-reviews" "GET" "/" "List chef reviews" '[]'
 put_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "$AUTH_POLICY" "get-chef-review" "GET" "/{applicationId}" "Get chef review" "$APP_PARAM"
@@ -121,11 +149,12 @@ put_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "
 put_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "$AUTH_POLICY" "reject-chef-review" "POST" "/{applicationId}/reject" "Reject chef review" "$APP_PARAM"
 put_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "$AUTH_POLICY" "get-chef-proof-content" "GET" "/{applicationId}/documents/{documentId}/content" "Get chef proof content" "$APP_DOC_PARAMS"
 
-verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "list-subscription-plans" false
-verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "get-subscription-plan" false
-for ID in create-customer-subscription list-customer-subscriptions get-customer-subscription pause-customer-subscription cancel-customer-subscription; do verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$ID" true; done
-for ID in list-admin-subscription-plans create-admin-subscription-plan update-admin-subscription-plan-status; do verify_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$ID" true; done
-verify_operation "$ADMIN_SUB_API" "${SUB_BASE}/api/v1/admin/subscriptions" "update-admin-subscription-status" true
+for ID in list-subscription-plans get-subscription-plan get-subscription-plan-schedule get-subscription-plan-policy; do verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$ID" false; done
+for ID in create-customer-subscription list-customer-subscriptions get-customer-subscription list-subscription-occurrences pause-customer-subscription resume-customer-subscription cancel-customer-subscription skip-subscription-meal; do verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$ID" true; done
+for ID in list-admin-subscription-plans create-admin-subscription-plan update-admin-subscription-plan-status get-admin-plan-schedule put-admin-plan-schedule activate-admin-plan-schedule get-admin-plan-policy put-admin-plan-policy activate-admin-plan-policy get-admin-plan-readiness; do verify_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$ID" true; done
+for ID in list-admin-subscriptions get-admin-subscription-history update-admin-subscription-status; do verify_operation "$ADMIN_SUB_API" "${SUB_BASE}/api/v1/admin/subscriptions" "$ID" true; done
+for ID in get-chef-subscription-capacity put-chef-slot-capacity-rule put-chef-menu-capacity-rule put-chef-slot-capacity-override put-chef-menu-capacity-override; do verify_operation "$CHEF_CAPACITY_API" "${SUB_BASE}/api/v1/chef/subscription-capacity" "$ID" true; done
+for ID in get-admin-chef-capacity set-admin-chef-capacity-freeze list-admin-capacity-incidents reconcile-admin-subscription-capacity; do verify_operation "$ADMIN_CAPACITY_API" "${SUB_BASE}/api/v1/admin/subscription-capacity" "$ID" true; done
 for ID in list-chef-reviews get-chef-review approve-chef-review reject-chef-review get-chef-proof-content; do verify_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "$ID" true; done
 
-echo "SUCCESS: Subscription and backoffice APIM operations configured and verified."
+echo "SUCCESS: Subscription, capacity, and backoffice APIM operations configured and verified."

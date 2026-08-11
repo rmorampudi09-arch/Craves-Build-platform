@@ -92,6 +92,17 @@ export function ReferenceHeroDesktop({
             ))}
           </nav>
 
+          <a
+            href="#sign-in"
+            onClick={(event) => {
+              event.preventDefault();
+              onOpenAuth("login");
+            }}
+            className={`${styles.secondaryCta} inline-flex min-h-11 items-center justify-center px-4 text-sm font-extrabold no-underline`}
+          >
+            Sign up / Sign in
+          </a>
+
           <a href="#craves-app" className={styles.referenceGetAppButton}>
             <span>Get the App</span>
             <span className={styles.referenceGetAppDivider} aria-hidden="true" />
@@ -131,6 +142,16 @@ export function ReferenceHeroDesktop({
                 {link.label}
               </a>
             ))}
+            <a
+              href="#sign-in"
+              onClick={(event) => {
+                event.preventDefault();
+                setMenuOpen(false);
+                onOpenAuth("login");
+              }}
+            >
+              Sign up / Sign in
+            </a>
             <a href="#craves-app" onClick={() => setMenuOpen(false)}>
               Get the App
             </a>

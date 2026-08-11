@@ -1,0 +1,45 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+  - bash: |
+      set -euo pipefail
+      bash -n scripts/apim/configure-subscription-payments-apim.sh
+      bash -n scripts/apim/status-subscription-payments-apim.sh
+      bash -n scripts/apim/rollback-subscription-payments-apim.sh
+      python3 - <<'PY'
+      import xml.etree.ElementTree as ET
+      for path in (
+          'infra/apim/subscription-payments/authenticated-policy.xml',
+          'infra/apim/subscription-payments/cashfree-webhook-policy.xml',
+      ):
+          ET.parse(path)
+          print(f'Valid XML: {path}')
+      PY
+    displayName: Validate subscription payment APIM assets
+
+  - bash: |
+      set -euo pipefail
+      grep -q 'CONFIRM_APIM_WRITE' scripts/apim/configure-subscription-payments-apim.sh
+      grep -q 'CONFIRM_APIM_ROLLBACK' scripts/apim/rollback-subscription-payments-apim.sh
+      grep -q 'ADOPT:' scripts/apim/configure-subscription-payments-apim.sh
+      grep -q 'Authorization' infra/apim/subscription-payments/authenticated-policy.xml
+      if grep -q 'A Bearer access token is required' infra/apim/subscription-payments/cashfree-webhook-policy.xml; then
+        echo 'ERROR: Cashfree webhook policy unexpectedly requires Bearer authentication.' >&2
+        exit 1
+      fi
+      if grep -q '<set-body' infra/apim/subscription-payments/cashfree-webhook-policy.xml; then
+        echo 'ERROR: Cashfree webhook policy must not transform the signed raw request body.' >&2
+        exit 1
+      fi
+      if grep -REn '(client-secret|accesskey=|connectionString|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._-]{20,})' \
+        infra/apim/subscription-payments scripts/apim/*subscription-payments*; then
+        echo 'ERROR: Potential credential material found in subscription payment APIM assets.' >&2
+        exit 1
+      fi
+      echo 'Subscription payment APIM fail-closed gates passed.'
+    displayName: Verify subscription payment APIM safety gates

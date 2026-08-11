@@ -279,15 +279,21 @@ function ChefsAndApp({ onBecomeChef }: { onBecomeChef?: () => void }) {
             </div>
           </div>
 
-          <ReferenceImageCrop
-            src="/landing/reference/home-chefs-app-reference.png"
-            sourceWidth={2048}
-            sourceHeight={1372}
-            crop={{ x: 880, y: 855, width: 1010, height: 510 }}
-            alt="Craves mobile app screens for discovering meals and exploring home chefs."
-            sizes="(min-width: 1024px) 55vw, 100vw"
-            className={styles.referenceAppArtwork}
-          />
+          <div className="relative overflow-hidden bg-white">
+            <ReferenceImageCrop
+              src="/landing/reference/home-chefs-app-reference.png"
+              sourceWidth={2048}
+              sourceHeight={1372}
+              crop={{ x: 880, y: 855, width: 1010, height: 510 }}
+              alt="Craves mobile app screens for discovering meals and exploring home chefs."
+              sizes="(min-width: 1024px) 55vw, 100vw"
+              className={styles.referenceAppArtwork}
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-0 top-0 z-[3] h-[6.5%] w-[47%] bg-white"
+            />
+          </div>
         </div>
       </div>
     </section>

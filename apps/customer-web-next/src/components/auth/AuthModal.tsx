@@ -72,14 +72,13 @@ export function AuthModal({
     setFirstName("");
     setLastName("");
     setEmail("");
-    setAccountMode(initialAccountMode);
     setOtp("");
     setOtpSent(false);
     setBusy(false);
     setResendIn(0);
     setError(null);
     setInfo(null);
-  }, [clearVerifier, initialAccountMode]);
+  }, [clearVerifier]);
 
   const handleClose = useCallback(() => {
     reset();

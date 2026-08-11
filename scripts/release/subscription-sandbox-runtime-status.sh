@@ -28,8 +28,8 @@ for tool in az jq curl bash; do command -v "$tool" >/dev/null || fail "$tool is 
 app_json() { az containerapp show -g "$RG" -n "$1" -o json; }
 
 probe_up() {
-  local FQDN="$1" LABEL="$2" PATH="$3" ATTEMPT BODY CODE STATUS
-  local SAFE_PATH="${PATH//\//_}"
+  local FQDN="$1" LABEL="$2" HEALTH_PATH="$3" ATTEMPT BODY CODE STATUS
+  local SAFE_PATH="${HEALTH_PATH//\//_}"
   BODY="/tmp/craves-runtime-health-${BASHPID}-${SAFE_PATH}.json"
   for ((ATTEMPT=1; ATTEMPT<=HEALTH_ATTEMPTS; ATTEMPT++)); do
     : >"$BODY"
@@ -40,20 +40,20 @@ probe_up() {
       --max-time "$HEALTH_MAX_TIME_SECONDS" \
       --output "$BODY" \
       --write-out '%{http_code}' \
-      "https://${FQDN}${PATH}" || true)
+      "https://${FQDN}${HEALTH_PATH}" || true)
     STATUS=$(jq -r '.status // empty' "$BODY" 2>/dev/null || true)
     if [[ "$CODE" == "200" && "$STATUS" == "UP" ]]; then
       rm -f "$BODY"
-      echo "PASS: $LABEL ${PATH} -> UP attempt=$ATTEMPT/$HEALTH_ATTEMPTS"
+      echo "PASS: $LABEL ${HEALTH_PATH} -> UP attempt=$ATTEMPT/$HEALTH_ATTEMPTS"
       return 0
     fi
-    echo "WAIT: $LABEL ${PATH} attempt=$ATTEMPT/$HEALTH_ATTEMPTS HTTP=${CODE:-curl-error} status=${STATUS:-unavailable}" >&2
+    echo "WAIT: $LABEL ${HEALTH_PATH} attempt=$ATTEMPT/$HEALTH_ATTEMPTS HTTP=${CODE:-curl-error} status=${STATUS:-unavailable}" >&2
     if (( ATTEMPT < HEALTH_ATTEMPTS )); then
       sleep "$HEALTH_SLEEP_SECONDS"
     fi
   done
   rm -f "$BODY"
-  fail "$LABEL ${PATH} did not return HTTP 200 with status UP after $HEALTH_ATTEMPTS attempts"
+  fail "$LABEL ${HEALTH_PATH} did not return HTTP 200 with status UP after $HEALTH_ATTEMPTS attempts"
 }
 
 healthy_app() {

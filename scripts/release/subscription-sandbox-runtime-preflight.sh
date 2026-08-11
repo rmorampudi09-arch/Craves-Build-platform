@@ -119,6 +119,13 @@ require_secret_ref "$INT_APP" PAYMENT_PROVIDER_CLIENT_KEY "Integration Service"
 require_secret_ref "$SUB_APP" CRAVES_INTERNAL_SERVICE_SECRET "Subscription Service"
 require_secret_ref "$ORDER_APP" CRAVES_INTERNAL_SERVICE_SECRET "Order Service"
 
+ORDER_LEAD_HOURS=$(get_env_value "$SUB_APP" CRAVES_SUBSCRIPTION_ORDER_LEAD_HOURS)
+[[ "$ORDER_LEAD_HOURS" =~ ^[0-9]+$ ]] \
+  || fail "Subscription Service requires an approved CRAVES_SUBSCRIPTION_ORDER_LEAD_HOURS value before the recurring-order worker can be enabled"
+(( ORDER_LEAD_HOURS >= 0 && ORDER_LEAD_HOURS <= 168 )) \
+  || fail "CRAVES_SUBSCRIPTION_ORDER_LEAD_HOURS must be between 0 and 168"
+echo "PASS: approved recurring-order dispatch lead is configured: ${ORDER_LEAD_HOURS} hour(s)"
+
 SUB_SECRET_REF=$(get_env_secret_ref "$SUB_APP" CRAVES_INTERNAL_SERVICE_SECRET)
 ORDER_SECRET_REF=$(get_env_secret_ref "$ORDER_APP" CRAVES_INTERNAL_SERVICE_SECRET)
 SUB_KV_URL=$(secret_keyvault_url "$SUB_APP" "$SUB_SECRET_REF")

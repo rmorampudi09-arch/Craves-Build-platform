@@ -6,7 +6,7 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("approved landing reference uses the canonical Craves logo", () => {
+test("semantic landing hero keeps the canonical Craves logo and approved rider artwork", () => {
   const hero = source(
     "../components/sections/landing-reference/ReferenceHeroDesktop.tsx",
   );
@@ -16,14 +16,24 @@ test("approved landing reference uses the canonical Craves logo", () => {
     /import \{ CravesLogo \} from "@\/components\/brand\/CravesLogo"/,
   );
   assert.match(hero, /<CravesLogo/);
-  assert.match(hero, /src="\/landing\/reference\/hero-reference\.png"/);
+  assert.match(hero, /ReferenceImageCrop/);
+  assert.match(hero, /\/landing\/reference\/hero-reference\.png/);
+  assert.match(hero, /The Taste of Home/);
+  assert.match(hero, /Order Homemade Food/);
+  assert.match(hero, /onOpenLocation/);
+  assert.doesNotMatch(hero, /referenceHotspot/);
 });
 
-test("approved landing reference uses the three supplied desktop sections", () => {
+test("reference sections use native copy with the three approved source images", () => {
   const artwork = source(
     "../components/sections/landing-reference/ReferenceArtworkSection.tsx",
   );
 
+  assert.match(artwork, /ReferenceImageCrop/);
+  assert.match(artwork, /From their kitchen to/);
+  assert.match(artwork, /Food the way it/);
+  assert.match(artwork, /Real kitchens/);
+  assert.match(artwork, /Homemade food/);
   assert.match(
     artwork,
     /\/landing\/reference\/how-craves-works-reference\.png/,
@@ -35,14 +45,31 @@ test("approved landing reference uses the three supplied desktop sections", () =
   );
 });
 
-test("approved landing reference keeps the existing responsive landing below desktop", () => {
+test("landing uses one responsive semantic implementation instead of screenshot desktop plus mobile fallback", () => {
   const landing = source("../screens/public/LandingPage/LandingPage.tsx");
 
   assert.match(landing, /<ReferenceHeroDesktop/);
   assert.match(landing, /<ReferenceArtworkSection variant="how"/);
   assert.match(landing, /<ReferenceArtworkSection variant="why"/);
-  assert.match(landing, /<ReferenceArtworkSection variant="chefs-app"/);
-  assert.match(landing, /className="lg:hidden"/);
+  assert.match(landing, /variant="chefs-app"/);
+  assert.doesNotMatch(landing, /className="lg:hidden"/);
+  assert.doesNotMatch(landing, /<HeroSection/);
+  assert.doesNotMatch(landing, /<HowItWorksSection/);
+});
+
+test("approved artwork renderer clips source pixels without generating or editing assets", () => {
+  const crop = source(
+    "../components/sections/landing-reference/ReferenceImageCrop.tsx",
+  );
+  const css = source("../screens/public/LandingPage/LandingV2.module.css");
+
+  assert.match(crop, /styles\.referenceCrop/);
+  assert.match(crop, /sourceWidth \/ crop\.width/);
+  assert.match(crop, /crop\.x \/ crop\.width/);
+  assert.match(crop, /crop\.y \/ crop\.height/);
+  assert.match(css, /\.referenceCrop\s*\{[^}]*overflow:\s*hidden/s);
+  assert.doesNotMatch(crop, /canvas/i);
+  assert.doesNotMatch(crop, /filter:/i);
 });
 
 test("approved landing reference is vendored and verified without a network dependency", () => {

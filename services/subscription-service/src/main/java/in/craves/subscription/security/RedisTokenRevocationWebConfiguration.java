@@ -8,6 +8,7 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
@@ -19,29 +20,28 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
+@ConditionalOnProperty(prefix = "craves.token-revocation", name = "enabled", havingValue = "true")
 public class RedisTokenRevocationWebConfiguration implements WebMvcConfigurer {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
-    private final boolean enabled;
     private final boolean failClosed;
     private final String keyPrefix;
 
     public RedisTokenRevocationWebConfiguration(
-        StringRedisTemplate redisTemplate, ObjectMapper objectMapper,
-        @Value("${CRAVES_TOKEN_REVOCATION_ENABLED:false}") boolean enabled,
+        StringRedisTemplate redisTemplate,
+        ObjectMapper objectMapper,
         @Value("${CRAVES_TOKEN_REVOCATION_FAIL_CLOSED:true}") boolean failClosed,
         @Value("${CRAVES_TOKEN_REVOCATION_KEY_PREFIX:craves:auth:revocation}") String keyPrefix
     ) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
-        this.enabled = enabled;
         this.failClosed = failClosed;
         this.keyPrefix = keyPrefix;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        if (enabled) registry.addInterceptor(new RevocationInterceptor()).addPathPatterns("/api/**");
+        registry.addInterceptor(new RevocationInterceptor()).addPathPatterns("/api/**");
     }
 
     private final class RevocationInterceptor implements HandlerInterceptor {

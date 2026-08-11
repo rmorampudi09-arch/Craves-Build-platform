@@ -12,8 +12,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(OccurrenceOrderInternalController.class)
@@ -41,6 +43,10 @@ class OccurrenceOrderInternalSecurityTest {
                 .header("X-Craves-Internal-Secret", "wrong-internal-secret")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"orderId\":\"" + orderId + "\"}"))
-            .andExpect(status().isUnauthorized());
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+            .andExpect(jsonPath("$.message").value("Invalid internal service credential"));
+
+        verifyNoInteractions(repository);
     }
 }

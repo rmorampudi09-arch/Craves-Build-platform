@@ -72,6 +72,12 @@ steps:
         [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
 
+        # Subscription startup can legitimately take longer on first rollout because Flyway may
+        # apply the full service migration chain before readiness is reported. Keep explicit
+        # failed/unhealthy states fail-fast, but allow up to six minutes for a target revision
+        # that remains in Azure's non-failure Activating state.
+        READY_ATTEMPTS=72 \
+        READY_SLEEP_SECONDS=5 \
         bash scripts/release/deploy-single-service-preserve-runtime.sh \
           "$RG" \
           "$APP" \

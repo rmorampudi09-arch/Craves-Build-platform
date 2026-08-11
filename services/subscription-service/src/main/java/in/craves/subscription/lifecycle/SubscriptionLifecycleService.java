@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,7 @@ public class SubscriptionLifecycleService {
     private final CapacityService capacityService;
     private final Clock clock;
 
+    @Autowired
     public SubscriptionLifecycleService(
         SubscriptionLifecycleRepository lifecycleRepository,
         SubscriptionPolicyRepository policyRepository,

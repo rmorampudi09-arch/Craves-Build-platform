@@ -9,17 +9,50 @@ ORDER_APP="${ORDER_APP:-ca-craves-order-service-prodlow}"
 SB_NS="${SERVICE_BUS_NAMESPACE:-sb-craves-prodlow-l3ing6}"
 SB_TOPIC="${SERVICE_BUS_TOPIC:-craves-domain-events}"
 APIM_HOST="${APIM_HOST:-apim-craves-prodlow-l3ing6.azure-api.net}"
+HEALTH_ATTEMPTS="${CRAVES_RUNTIME_HEALTH_ATTEMPTS:-6}"
+HEALTH_SLEEP_SECONDS="${CRAVES_RUNTIME_HEALTH_SLEEP_SECONDS:-10}"
+HEALTH_MAX_TIME_SECONDS="${CRAVES_RUNTIME_HEALTH_MAX_TIME_SECONDS:-30}"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 warn() { echo "WARNING: $*" >&2; }
 for tool in az jq curl; do command -v "$tool" >/dev/null || fail "$tool is required"; done
+[[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || fail "CRAVES_RUNTIME_HEALTH_ATTEMPTS must be a positive integer"
+[[ "$HEALTH_SLEEP_SECONDS" =~ ^[0-9]+$ ]] || fail "CRAVES_RUNTIME_HEALTH_SLEEP_SECONDS must be a non-negative integer"
+[[ "$HEALTH_MAX_TIME_SECONDS" =~ ^[1-9][0-9]*$ ]] || fail "CRAVES_RUNTIME_HEALTH_MAX_TIME_SECONDS must be a positive integer"
 
 app_json() {
   az containerapp show -g "$RG" -n "$1" -o json
 }
 
+probe_up() {
+  local FQDN="$1" LABEL="$2" PATH="$3" ATTEMPT BODY CODE STATUS
+  for ((ATTEMPT=1; ATTEMPT<=HEALTH_ATTEMPTS; ATTEMPT++)); do
+    BODY=$(mktemp)
+    CODE=$(curl \
+      --silent \
+      --show-error \
+      --connect-timeout 10 \
+      --max-time "$HEALTH_MAX_TIME_SECONDS" \
+      --output "$BODY" \
+      --write-out '%{http_code}' \
+      "https://${FQDN}${PATH}" || true)
+    STATUS=$(jq -r '.status // empty' "$BODY" 2>/dev/null || true)
+    if [[ "$CODE" == "200" && "$STATUS" == "UP" ]]; then
+      rm -f "$BODY"
+      echo "PASS: $LABEL ${PATH} -> UP attempt=$ATTEMPT/$HEALTH_ATTEMPTS"
+      return 0
+    fi
+    echo "WAIT: $LABEL ${PATH} attempt=$ATTEMPT/$HEALTH_ATTEMPTS HTTP=${CODE:-curl-error} status=${STATUS:-unavailable}" >&2
+    rm -f "$BODY"
+    if (( ATTEMPT < HEALTH_ATTEMPTS )); then
+      sleep "$HEALTH_SLEEP_SECONDS"
+    fi
+  done
+  fail "$LABEL ${PATH} did not return HTTP 200 with status UP after $HEALTH_ATTEMPTS attempts"
+}
+
 healthy_app() {
-  local APP="$1" LABEL="$2" JSON LATEST READY RUNNING HEALTH FQDN path body code
+  local APP="$1" LABEL="$2" JSON LATEST READY RUNNING HEALTH FQDN
   JSON=$(app_json "$APP")
   LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON")
   READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON")
@@ -30,24 +63,8 @@ healthy_app() {
   HEALTH=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" --query properties.healthState -o tsv 2>/dev/null || true)
   [[ "$HEALTH" == "Healthy" ]] || fail "$LABEL latest revision is not Healthy: $HEALTH"
 
-  for path in /actuator/health/liveness /actuator/health/readiness; do
-    body=$(mktemp)
-    code=$(curl \
-      --silent \
-      --show-error \
-      --connect-timeout 10 \
-      --max-time 30 \
-      --output "$body" \
-      --write-out '%{http_code}' \
-      "https://${FQDN}${path}" || true)
-    if [[ "$code" != "200" ]] || ! jq -e '.status == "UP"' "$body" >/dev/null 2>&1; then
-      rm -f "$body"
-      fail "$LABEL ${path} is not UP (HTTP ${code:-curl-error})"
-    fi
-    rm -f "$body"
-    echo "PASS: $LABEL ${path} -> UP"
-  done
-
+  probe_up "$FQDN" "$LABEL" "/actuator/health/liveness"
+  probe_up "$FQDN" "$LABEL" "/actuator/health/readiness"
   echo "PASS: $LABEL healthy revision=$LATEST"
 }
 

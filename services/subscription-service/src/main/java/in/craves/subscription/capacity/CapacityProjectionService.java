@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ public class CapacityProjectionService {
     private final CapacityProperties properties;
     private final Clock clock;
 
+    @Autowired
     public CapacityProjectionService(
         JdbcTemplate jdbcTemplate,
         CapacityRepository repository,

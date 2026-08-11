@@ -9,8 +9,9 @@ SERVICE_KEY=${4:-service}
 
 SMOKE_ATTEMPTS=${SMOKE_ATTEMPTS:-18}
 SMOKE_SLEEP_SECONDS=${SMOKE_SLEEP_SECONDS:-10}
-READY_ATTEMPTS=${READY_ATTEMPTS:-60}
-READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-10}
+READY_ATTEMPTS=${READY_ATTEMPTS:-36}
+READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-5}
+STATUS_READ_FAILURE_LIMIT=${STATUS_READ_FAILURE_LIMIT:-6}
 
 fail() {
   echo "ERROR: $*" >&2
@@ -115,30 +116,64 @@ verify_active_secret_refs_are_key_vault_backed() {
   echo "Active Key Vault-backed secret references verified: $count"
 }
 
+show_revision_diagnostics() {
+  local revision=$1
+  [[ -n "$revision" ]] || return 0
+
+  echo "Revision diagnostics for $revision:" >&2
+  az containerapp revision show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$APP_NAME" \
+    --revision "$revision" \
+    --query '{name:name,active:properties.active,trafficWeight:properties.trafficWeight,provisioningState:properties.provisioningState,runningState:properties.runningState,healthState:properties.healthState,provisioningError:properties.provisioningError,image:properties.template.containers[0].image}' \
+    --output jsonc \
+    --only-show-errors >&2 || true
+
+  az containerapp logs show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$APP_NAME" \
+    --revision "$revision" \
+    --type console \
+    --tail 200 \
+    --format text \
+    --only-show-errors >&2 || true
+}
+
 wait_for_image() {
   local expected_image=$1
   local forbidden_revision=${2:-}
-  local attempt state latest ready running health latest_image
+  local attempt json latest ready app_running provisioning running health active traffic latest_image
+  local invalid_reads=0
+  local last_signature=''
+  local signature
 
   for attempt in $(seq 1 "$READY_ATTEMPTS"); do
-    state=$(az containerapp show \
+    json=$(az containerapp show \
       --resource-group "$RESOURCE_GROUP" \
       --name "$APP_NAME" \
-      --query '[properties.latestRevisionName, properties.latestReadyRevisionName, properties.runningStatus]' \
-      --output tsv \
+      --output json \
       --only-show-errors 2>/dev/null || true)
 
-    latest=''
-    ready=''
-    running=''
-    if [[ -n "$state" ]]; then
-      IFS=$'\t' read -r latest ready running <<<"$state"
-      [[ "$latest" != 'None' ]] || latest=''
-      [[ "$ready" != 'None' ]] || ready=''
-      [[ "$running" != 'None' ]] || running=''
+    if [[ -z "$json" ]] || ! jq -e . >/dev/null 2>&1 <<<"$json"; then
+      invalid_reads=$((invalid_reads + 1))
+      echo "Attempt $attempt/$READY_ATTEMPTS: Container App control-plane JSON unavailable/invalid ($invalid_reads/$STATUS_READ_FAILURE_LIMIT)." >&2
+      if (( invalid_reads >= STATUS_READ_FAILURE_LIMIT )); then
+        return 20
+      fi
+      sleep "$READY_SLEEP_SECONDS"
+      continue
     fi
 
+    invalid_reads=0
+    latest=$(jq -r '.properties.latestRevisionName // ""' <<<"$json")
+    ready=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$json")
+    app_running=$(jq -r '.properties.runningStatus // ""' <<<"$json")
+
+    provisioning=''
+    running=''
     health=''
+    active=''
+    traffic=''
     latest_image=''
 
     if [[ -n "$latest" ]]; then
@@ -149,7 +184,20 @@ wait_for_image() {
         --query 'properties.template.containers[0].image' \
         --output tsv \
         --only-show-errors 2>/dev/null || true)
-
+      provisioning=$(az containerapp revision show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$APP_NAME" \
+        --revision "$latest" \
+        --query properties.provisioningState \
+        --output tsv \
+        --only-show-errors 2>/dev/null || true)
+      running=$(az containerapp revision show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$APP_NAME" \
+        --revision "$latest" \
+        --query properties.runningState \
+        --output tsv \
+        --only-show-errors 2>/dev/null || true)
       health=$(az containerapp revision show \
         --resource-group "$RESOURCE_GROUP" \
         --name "$APP_NAME" \
@@ -157,38 +205,53 @@ wait_for_image() {
         --query properties.healthState \
         --output tsv \
         --only-show-errors 2>/dev/null || true)
+      active=$(az containerapp revision show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$APP_NAME" \
+        --revision "$latest" \
+        --query properties.active \
+        --output tsv \
+        --only-show-errors 2>/dev/null || true)
+      traffic=$(az containerapp revision show \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$APP_NAME" \
+        --revision "$latest" \
+        --query properties.trafficWeight \
+        --output tsv \
+        --only-show-errors 2>/dev/null || true)
     fi
 
-    echo "Attempt $attempt/$READY_ATTEMPTS latest=$latest ready=$ready running=$running health=$health image=$latest_image" >&2
+    active=${active,,}
+    signature="$latest|$ready|$app_running|$provisioning|$running|$health|$active|$traffic|$latest_image"
+    if [[ "$signature" != "$last_signature" ]] || (( attempt == 1 || attempt % 6 == 0 )); then
+      echo "Attempt $attempt/$READY_ATTEMPTS latest=$latest ready=${ready:-none} appRunning=${app_running:-none} provisioning=${provisioning:-none} revisionRunning=${running:-none} health=${health:-none} active=${active:-none} traffic=${traffic:-none} image=$latest_image" >&2
+      last_signature=$signature
+    fi
 
     if [[ "$latest_image" == "$expected_image" \
       && -n "$latest" \
-      && "$latest" == "$ready" \
+      && "$provisioning" == 'Provisioned' \
       && "$running" == 'Running' \
       && "$health" == 'Healthy' \
+      && "$active" == 'true' \
       && ( -z "$forbidden_revision" || "$latest" != "$forbidden_revision" ) ]]; then
       printf '%s\n' "$latest"
       return 0
     fi
 
-    if [[ "$running" == 'Failed' || "$health" == 'Unhealthy' ]]; then
-      if [[ -n "$latest" ]]; then
-        az containerapp logs show \
-          --resource-group "$RESOURCE_GROUP" \
-          --name "$APP_NAME" \
-          --revision "$latest" \
-          --type console \
-          --tail 200 \
-          --format text \
-          --only-show-errors >&2 || true
-      fi
-      return 1
+    if [[ "$provisioning" == 'Failed' \
+      || "$running" == 'Failed' \
+      || "$running" == 'Degraded' \
+      || "$health" == 'Unhealthy' ]]; then
+      show_revision_diagnostics "$latest"
+      return 10
     fi
 
     sleep "$READY_SLEEP_SECONDS"
   done
 
-  return 1
+  show_revision_diagnostics "$latest"
+  return 20
 }
 
 smoke_health() {
@@ -241,12 +304,21 @@ BEFORE=$(az containerapp show \
   --output json \
   --only-show-errors) || fail "Container App not found: $APP_NAME"
 
-PREVIOUS_REVISION=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$BEFORE")
-PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")
+jq -e . >/dev/null 2>&1 <<<"$BEFORE" || fail 'Container App pre-deployment state was not valid JSON.'
 
-[[ -n "$PREVIOUS_REVISION" ]] || fail 'Previous ready revision was not resolved.'
-[[ -n "$PREVIOUS_IMAGE" ]] || fail 'Previous image was not resolved.'
-[[ "$PREVIOUS_IMAGE" != "$TARGET_IMAGE" ]] || fail 'Target image is already deployed; use a new immutable tag.'
+PREVIOUS_REVISION=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$BEFORE")
+[[ -n "$PREVIOUS_REVISION" ]] || fail 'Previous ready revision was not resolved. No deployment was attempted.'
+
+PREVIOUS_IMAGE=$(az containerapp revision show \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$APP_NAME" \
+  --revision "$PREVIOUS_REVISION" \
+  --query 'properties.template.containers[0].image' \
+  --output tsv \
+  --only-show-errors)
+
+[[ -n "$PREVIOUS_IMAGE" ]] || fail 'Previous ready revision image was not resolved. No deployment was attempted.'
+[[ "$PREVIOUS_IMAGE" != "$TARGET_IMAGE" ]] || fail 'Target image is already the current ready image; use a new immutable tag.'
 
 SECRET_META_BEFORE=$(secret_metadata_json)
 verify_active_secret_refs_are_key_vault_backed "$BEFORE" "$SECRET_META_BEFORE"
@@ -263,7 +335,7 @@ CRAVES SINGLE-SERVICE RUNTIME-PRESERVING DEPLOYMENT
 Service:                    $SERVICE_KEY
 Container App:              $APP_NAME
 Previous ready revision:    $PREVIOUS_REVISION
-Previous image:             $PREVIOUS_IMAGE
+Previous ready image:       $PREVIOUS_IMAGE
 Target image:               $TARGET_IMAGE
 Runtime template hash:      $TEMPLATE_HASH_BEFORE
 Configuration hash:         $CONFIG_HASH_BEFORE
@@ -271,15 +343,19 @@ Identity hash:              $IDENTITY_HASH_BEFORE
 Secret metadata hash:       $SECRET_HASH_BEFORE
 Credential values read:     NO
 Credential values changed:  NO
+Readiness timeout:          $((READY_ATTEMPTS * READY_SLEEP_SECONDS)) seconds
 ============================================================
 EOF
+
+NEW_REVISION=''
 
 rollback() {
   local reason=$1
   local rollback_revision
+  local wait_rc
 
   echo "ROLLBACK: $reason" >&2
-  echo "Restoring image only: $PREVIOUS_IMAGE" >&2
+  echo "Restoring image from previous READY revision: $PREVIOUS_IMAGE" >&2
 
   az containerapp update \
     --resource-group "$RESOURCE_GROUP" \
@@ -288,7 +364,12 @@ rollback() {
     --no-wait \
     --only-show-errors >/dev/null || fail 'Rollback image update failed.'
 
-  rollback_revision=$(wait_for_image "$PREVIOUS_IMAGE" '') || fail 'Rollback revision did not become healthy.'
+  if rollback_revision=$(wait_for_image "$PREVIOUS_IMAGE" "$NEW_REVISION"); then
+    :
+  else
+    wait_rc=$?
+    fail "Rollback image update was submitted but could not be confirmed healthy (wait result $wait_rc). Manual Container App verification is required."
+  fi
 
   [[ "$(runtime_template_hash "$rollback_revision")" == "$TEMPLATE_HASH_BEFORE" ]] || \
     fail 'Rollback runtime template differs from the pre-deployment state.'
@@ -312,8 +393,15 @@ az containerapp update \
   --no-wait \
   --only-show-errors >/dev/null || fail 'Image update failed before a new revision was created.'
 
-NEW_REVISION=$(wait_for_image "$TARGET_IMAGE" "$PREVIOUS_REVISION") || \
-  rollback 'New revision did not become healthy.'
+if NEW_REVISION=$(wait_for_image "$TARGET_IMAGE" "$PREVIOUS_REVISION"); then
+  :
+else
+  wait_rc=$?
+  if [[ "$wait_rc" -eq 10 ]]; then
+    rollback 'New revision explicitly reported a failed/unhealthy state.'
+  fi
+  fail "Deployment verification was inconclusive after $((READY_ATTEMPTS * READY_SLEEP_SECONDS)) seconds. Automatic rollback was suppressed because Azure did not report an explicit unhealthy state. Inspect the latest revision before retrying."
+fi
 
 [[ "$(runtime_template_hash "$NEW_REVISION")" == "$TEMPLATE_HASH_BEFORE" ]] || \
   rollback 'Runtime template changed unexpectedly.'
@@ -329,6 +417,8 @@ AFTER=$(az containerapp show \
   --name "$APP_NAME" \
   --output json \
   --only-show-errors)
+jq -e . >/dev/null 2>&1 <<<"$AFTER" || rollback 'Container App post-deployment state was not valid JSON.'
+
 SECRET_META_AFTER=$(secret_metadata_json)
 verify_active_secret_refs_are_key_vault_backed "$AFTER" "$SECRET_META_AFTER"
 

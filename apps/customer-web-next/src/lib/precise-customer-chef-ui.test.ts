@@ -66,6 +66,22 @@ test("landing hero uses semantic HTML, canonical logo, approved rider artwork an
   assert.doesNotMatch(referenceHero, /referenceHotspot/);
 });
 
+test("landing precision fixes remove baked rider text, align steps and normalize chef navigation hover", () => {
+  assert.match(referenceHero, /href="#become-a-chef"/);
+  assert.doesNotMatch(referenceHero, /className=\{styles\.referenceNavButton\}/);
+  assert.match(referenceHero, /top-\[84\.4%\]/);
+  assert.match(referenceHero, /h-\[5\.2%\]/);
+  assert.match(referenceHero, /w-\[7\.4%\]/);
+  assert.match(referenceHero, /!min-h-0/);
+
+  assert.match(
+    referenceArtwork,
+    /lg:h-\[clamp\(14rem,22vw,21rem\)\]/,
+  );
+  assert.match(referenceArtwork, /items-end justify-center/);
+  assert.match(referenceArtwork, /referenceHowArtwork\} !m-0/);
+});
+
 test("public landing keeps the approved semantic reference experience and wired flows", () => {
   assert.match(landing, /min-h-screen bg-white text-ink/);
   assert.match(landing, /items-center justify-center bg-white px-4/);

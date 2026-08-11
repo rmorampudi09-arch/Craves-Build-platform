@@ -75,13 +75,16 @@ export function ReferenceHeroDesktop({
                 {link.label}
               </a>
             ))}
-            <button
-              type="button"
-              onClick={onBecomeChef}
-              className={styles.referenceNavButton}
+            <a
+              href="#become-a-chef"
+              onClick={(event) => {
+                event.preventDefault();
+                onBecomeChef();
+              }}
+              className={styles.referenceNavLink}
             >
               For Chefs
-            </button>
+            </a>
             {navLinks.slice(2).map((link) => (
               <a key={link.href} href={link.href} className={styles.referenceNavLink}>
                 {link.label}
@@ -113,15 +116,16 @@ export function ReferenceHeroDesktop({
                 {link.label}
               </a>
             ))}
-            <button
-              type="button"
-              onClick={() => {
+            <a
+              href="#become-a-chef"
+              onClick={(event) => {
+                event.preventDefault();
                 setMenuOpen(false);
                 onBecomeChef();
               }}
             >
               For Chefs
-            </button>
+            </a>
             {navLinks.slice(2).map((link) => (
               <a key={link.href} href={link.href} onClick={() => setMenuOpen(false)}>
                 {link.label}
@@ -180,16 +184,22 @@ export function ReferenceHeroDesktop({
         </div>
 
         <div className={styles.referenceHeroArtworkWrap}>
-          <ReferenceImageCrop
-            src="/landing/reference/hero-reference.png"
-            sourceWidth={2048}
-            sourceHeight={1368}
-            crop={{ x: 760, y: 150, width: 1180, height: 880 }}
-            alt="Craves delivery rider carrying homemade food through a neighbourhood."
-            priority
-            sizes="(min-width: 1024px) 60vw, 100vw"
-            className={styles.referenceHeroArtwork}
-          />
+          <div className="relative w-full overflow-hidden rounded-[1.5rem] bg-white">
+            <ReferenceImageCrop
+              src="/landing/reference/hero-reference.png"
+              sourceWidth={2048}
+              sourceHeight={1368}
+              crop={{ x: 760, y: 150, width: 1180, height: 880 }}
+              alt="Craves delivery rider carrying homemade food through a neighbourhood."
+              priority
+              sizes="(min-width: 1024px) 60vw, 100vw"
+              className={`${styles.referenceHeroArtwork} !min-h-0 !rounded-none`}
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-0 top-[84.4%] z-[3] h-[5.2%] w-[7.4%] bg-white"
+            />
+          </div>
         </div>
       </div>
 

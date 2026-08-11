@@ -113,16 +113,18 @@ function HowItWorks({ priority }: { priority: boolean }) {
             return (
               <article key={step.number} className={styles.referenceHowCard}>
                 <div className={styles.referenceStepNumber}>{step.number}</div>
-                <ReferenceImageCrop
-                  src="/landing/reference/how-craves-works-reference.png"
-                  sourceWidth={2048}
-                  sourceHeight={1369}
-                  crop={step.crop}
-                  alt={step.alt}
-                  priority={priority && index < 2}
-                  sizes="(min-width: 1024px) 24vw, (min-width: 640px) 48vw, 92vw"
-                  className={styles.referenceHowArtwork}
-                />
+                <div className="mb-[0.8rem] mt-[0.55rem] flex items-end justify-center lg:h-[clamp(14rem,22vw,21rem)]">
+                  <ReferenceImageCrop
+                    src="/landing/reference/how-craves-works-reference.png"
+                    sourceWidth={2048}
+                    sourceHeight={1369}
+                    crop={step.crop}
+                    alt={step.alt}
+                    priority={priority && index < 2}
+                    sizes="(min-width: 1024px) 24vw, (min-width: 640px) 48vw, 92vw"
+                    className={`${styles.referenceHowArtwork} !m-0`}
+                  />
+                </div>
                 <div className={styles.referenceStepIcon}>
                   <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
                 </div>

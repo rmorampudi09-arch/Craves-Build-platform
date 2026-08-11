@@ -35,13 +35,18 @@ test("canonical component, browser icons and build output use the uploaded versi
   const logo = source("../components/brand/CravesLogo.tsx");
   const rootLayout = source("../app/layout.tsx");
   const packageJson = source("../../package.json");
+  const packageConfig = JSON.parse(packageJson) as {
+    scripts?: Record<string, string>;
+  };
+  const prebuild = packageConfig.scripts?.prebuild ?? "";
   const extractor = source("../../scripts/extract-brand-logo.mjs");
   const compatibilitySvg = source("../../public/brand/craves-logo.svg");
 
   assert.match(logo, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));
   assert.match(logo, /unoptimized/);
   assert.match(rootLayout, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));
-  assert.match(packageJson, /"prebuild": "node scripts\/extract-brand-logo\.mjs"/);
+  assert.match(prebuild, /^node scripts\/extract-brand-logo\.mjs(?: &&|$)/);
+  assert.match(prebuild, /node scripts\/extract-landing-reference-assets\.mjs/);
   assert.match(extractor, /craves-logo-20260805\.base64\.00/);
   assert.match(extractor, /craves-logo-20260805\.base64\.04/);
   assert.match(extractor, /afb6751bb1291f5cba13f3223140cc42229cb00696e025f617766527d6c7fd07/);

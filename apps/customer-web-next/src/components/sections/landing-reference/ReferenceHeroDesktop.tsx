@@ -19,6 +19,7 @@ interface ReferenceHeroDesktopProps {
   locationLabel: string;
   onOpenLocation: () => void;
   onOpenAuth: (mode: "login" | "register") => void;
+  onOrderFood: () => void;
   onBecomeChef: () => void;
 }
 
@@ -56,6 +57,7 @@ export function ReferenceHeroDesktop({
   locationLabel,
   onOpenLocation,
   onOpenAuth,
+  onOrderFood,
   onBecomeChef,
 }: ReferenceHeroDesktopProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -180,7 +182,7 @@ export function ReferenceHeroDesktop({
           <div className={styles.referenceHeroActions}>
             <button
               type="button"
-              onClick={() => onOpenAuth("login")}
+              onClick={onOrderFood}
               className={styles.referencePrimaryButton}
             >
               <span>Order Homemade Food</span>

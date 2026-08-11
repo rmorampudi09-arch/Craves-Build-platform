@@ -26,6 +26,7 @@ function LandingPage() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authAccountMode, setAuthAccountMode] =
     useState<AccountMode>("customer");
+  const [authAccountLocked, setAuthAccountLocked] = useState(false);
   const [locOpen, setLocOpen] = useState(false);
   const [address, setAddress] = useState<CravesAddress | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -49,9 +50,11 @@ function LandingPage() {
   const openAuth = (
     mode: "login" | "register",
     accountMode: AccountMode = "customer",
+    lockAccountMode = false,
   ) => {
     setAuthMode(mode);
     setAuthAccountMode(accountMode);
+    setAuthAccountLocked(lockAccountMode);
     setAuthOpen(true);
   };
 
@@ -78,8 +81,9 @@ function LandingPage() {
         <ReferenceHeroDesktop
           locationLabel={locationLabel}
           onOpenLocation={() => setLocOpen(true)}
-          onOpenAuth={(mode) => openAuth(mode, "customer")}
-          onBecomeChef={() => openAuth("register", "chef")}
+          onOpenAuth={(mode) => openAuth(mode, "customer", false)}
+          onOrderFood={() => openAuth("login", "customer", true)}
+          onBecomeChef={() => openAuth("register", "chef", true)}
         />
 
         <div id="how-it-works" className="scroll-mt-20">
@@ -93,7 +97,7 @@ function LandingPage() {
         <div id="become-a-chef" className="scroll-mt-20">
           <ReferenceArtworkSection
             variant="chefs-app"
-            onBecomeChef={() => openAuth("register", "chef")}
+            onBecomeChef={() => openAuth("register", "chef", true)}
           />
         </div>
       </main>
@@ -102,12 +106,13 @@ function LandingPage() {
 
       <div
         data-auth-context={authAccountMode}
-        className="[&>div]:bg-black/25 [&>div]:backdrop-blur-xl [&>div]:backdrop-saturate-150 [&_[role=dialog]]:border-white/70 [&_[role=dialog]]:bg-white/80 [&_[role=dialog]]:shadow-[0_28px_90px_rgba(17,17,17,0.24)] [&_[role=dialog]]:backdrop-blur-2xl [&_[role=dialog]]:backdrop-saturate-150 [&_[role=dialog]_fieldset]:hidden"
+        className="[&>div]:bg-black/25 [&>div]:backdrop-blur-xl [&>div]:backdrop-saturate-150 [&_[role=dialog]]:border-white/70 [&_[role=dialog]]:bg-white/80 [&_[role=dialog]]:shadow-[0_28px_90px_rgba(17,17,17,0.24)] [&_[role=dialog]]:backdrop-blur-2xl [&_[role=dialog]]:backdrop-saturate-150"
       >
         <AuthModal
           open={authOpen}
           mode={authMode}
           initialAccountMode={authAccountMode}
+          lockAccountMode={authAccountLocked}
           onClose={() => setAuthOpen(false)}
           onSwitchMode={setAuthMode}
           onAuthenticated={(authenticatedUser, accountMode) => {

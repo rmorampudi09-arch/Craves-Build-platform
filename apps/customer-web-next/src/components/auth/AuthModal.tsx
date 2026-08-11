@@ -26,6 +26,7 @@ interface AuthModalProps {
   open: boolean;
   mode: Mode;
   initialAccountMode?: AccountMode;
+  lockAccountMode?: boolean;
   onClose: () => void;
   onSwitchMode: (mode: Mode) => void;
   onAuthenticated?: (user: CravesUser, accountMode: AccountMode) => void;
@@ -38,6 +39,7 @@ export function AuthModal({
   open,
   mode,
   initialAccountMode = "customer",
+  lockAccountMode = false,
   onClose,
   onSwitchMode,
   onAuthenticated,
@@ -70,14 +72,13 @@ export function AuthModal({
     setFirstName("");
     setLastName("");
     setEmail("");
-    setAccountMode(initialAccountMode);
     setOtp("");
     setOtpSent(false);
     setBusy(false);
     setResendIn(0);
     setError(null);
     setInfo(null);
-  }, [clearVerifier, initialAccountMode]);
+  }, [clearVerifier]);
 
   const handleClose = useCallback(() => {
     reset();
@@ -110,6 +111,32 @@ export function AuthModal({
 
   if (!open) return null;
 
+  const isChef = accountMode === "chef";
+  const roleName = isChef ? "Home Chef" : "Customer";
+  const modalEyebrow =
+    mode === "login"
+      ? isChef
+        ? "Welcome back, Chef"
+        : "Welcome back"
+      : isChef
+        ? "Your cooking journey starts here"
+        : "Good food starts here";
+  const modalTitle =
+    mode === "login"
+      ? isChef
+        ? "Home Chef sign in"
+        : "Customer sign in"
+      : isChef
+        ? "Join Craves as a Home Chef"
+        : "Create your customer account";
+  const motivationalCopy = isChef
+    ? mode === "login"
+      ? "Welcome back. Sign in to continue your Craves journey and stay connected to the people who value real homemade food."
+      : "Turn your passion for cooking into opportunity. Join Craves and bring the food you love making to more tables."
+    : mode === "login"
+      ? "Your next homemade favourite is waiting. Sign in to discover trusted home chefs and enjoy food that feels like home."
+      : "Join Craves to discover fresh homemade food from trusted home chefs near you, made with care and delivered to your door.";
+
   async function recaptcha(mode: RecaptchaMode): Promise<RecaptchaVerifier> {
     clearVerifier();
     const { auth } = getFirebaseBrowserClient();
@@ -121,11 +148,11 @@ export function AuthModal({
         size: visible ? "normal" : "invisible",
         callback: () => {
           if (visible)
-            setInfo("Security check completed. You can request the OTP.");
+            setInfo("You’re all set. Request your verification code when you’re ready.");
         },
         "expired-callback": () => {
           if (visible)
-            setInfo("The security check expired. Complete it again.");
+            setInfo("Your verification check expired. Please complete it again.");
         },
       },
     );
@@ -172,8 +199,10 @@ export function AuthModal({
       setResendIn(RESEND_DELAY_SECONDS);
       setInfo(
         isResend
-          ? "A new OTP was sent. Enter the latest six-digit code."
-          : "OTP sent securely through Firebase.",
+          ? `A new verification code is on its way. Enter the latest six-digit code to continue as a ${roleName}.`
+          : isChef
+            ? "Your verification code is on its way. One quick step, then you can continue your Home Chef journey with Craves."
+            : "Your verification code is on its way. One quick step, then you can get back to discovering homemade food you’ll love.",
       );
     } catch (caught) {
       clearVerifier();
@@ -183,8 +212,8 @@ export function AuthModal({
           : "";
       setError(
         code.includes("too-many-requests")
-          ? "Too many OTP attempts. Please try again later."
-          : "OTP could not be sent. Complete the security check and try again.",
+          ? "Too many verification attempts. Please try again later."
+          : "We couldn’t send the verification code. Complete the security check and try again.",
       );
     } finally {
       setBusy(false);
@@ -205,7 +234,7 @@ export function AuthModal({
     event.preventDefault();
     setError(null);
     if (!confirmation.current || !/^\d{6}$/.test(otp))
-      return setError("Enter the six-digit OTP.");
+      return setError("Enter the six-digit verification code.");
     setBusy(true);
     try {
       const credential = await confirmation.current.confirm(otp);
@@ -262,7 +291,7 @@ export function AuthModal({
       setError(
         caught instanceof Error
           ? caught.message
-          : "The OTP could not be verified.",
+          : "The verification code could not be confirmed.",
       );
     } finally {
       setBusy(false);
@@ -274,6 +303,16 @@ export function AuthModal({
     onSwitchMode(next);
   };
 
+  const switchAccountMode = (next: AccountMode) => {
+    if (next === accountMode || otpSent || busy) return;
+    clearVerifier();
+    confirmation.current = null;
+    setAccountMode(next);
+    setOtp("");
+    setError(null);
+    setInfo(null);
+  };
+
   const useAnotherNumber = () => {
     clearVerifier();
     confirmation.current = null;
@@ -281,7 +320,7 @@ export function AuthModal({
     setOtpSent(false);
     setResendIn(0);
     setError(null);
-    setInfo("Request a new OTP.");
+    setInfo("Enter your number and request a new verification code.");
   };
 
   return (
@@ -301,14 +340,12 @@ export function AuthModal({
           <div className="flex items-center gap-3">
             <CravesLogo size="sm" />
             <div>
-              <p className="craves-overline">
-                {mode === "login" ? "Welcome back" : "Create your account"}
-              </p>
+              <p className="craves-overline">{modalEyebrow}</p>
               <h2
                 id={`${fieldPrefix}-title`}
                 className="font-display text-xl font-semibold text-ink"
               >
-                {mode === "login" ? "Sign in to Craves" : "Join Craves"}
+                {modalTitle}
               </h2>
             </div>
           </div>
@@ -325,47 +362,71 @@ export function AuthModal({
 
         <div className="px-6 py-6">
           <p className="text-sm leading-6 text-muted-foreground">
-            Your phone is verified with Firebase. Craves keeps the application
-            session in secure HTTP-only cookies.
+            {motivationalCopy}
           </p>
 
-          <fieldset className="mt-6" disabled={otpSent || busy}>
-            <legend className="craves-overline text-ink">
-              {mode === "register" ? "Register as" : "Continue as"}
-            </legend>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                aria-pressed={accountMode === "customer"}
-                onClick={() => setAccountMode("customer")}
-                className={`flex min-h-12 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-semibold transition-colors ${
-                  accountMode === "customer"
-                    ? "border-primary bg-secondary text-ink"
-                    : "border-border bg-white text-muted-foreground hover:border-primary"
-                }`}
-              >
-                <UserRound className="h-5 w-5" aria-hidden="true" /> Customer
-              </button>
-              <button
-                type="button"
-                aria-pressed={accountMode === "chef"}
-                onClick={() => setAccountMode("chef")}
-                className={`flex min-h-12 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-semibold transition-colors ${
-                  accountMode === "chef"
-                    ? "border-primary bg-secondary text-ink"
-                    : "border-border bg-white text-muted-foreground hover:border-primary"
-                }`}
-              >
-                <ChefHat className="h-5 w-5" aria-hidden="true" /> Home Chef
-              </button>
+          {lockAccountMode ? (
+            <div className="mt-6 flex items-center gap-3 rounded-xl border border-primary/15 bg-secondary/70 px-4 py-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-primary shadow-sm">
+                {isChef ? (
+                  <ChefHat className="h-5 w-5" aria-hidden="true" />
+                ) : (
+                  <UserRound className="h-5 w-5" aria-hidden="true" />
+                )}
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                  You’re continuing as
+                </p>
+                <p className="font-display text-lg font-semibold text-ink">{roleName}</p>
+              </div>
             </div>
-            {accountMode === "chef" && (
-              <p className="mt-3 rounded-lg bg-secondary p-3 text-xs leading-5 text-muted-foreground">
-                After OTP verification, new chefs continue to the application
-                form. Chef tools unlock only after admin approval.
+          ) : (
+            <fieldset className="mt-6" disabled={otpSent || busy}>
+              <legend className="craves-overline text-ink">Choose your Craves role</legend>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Pick the experience you want now. You can switch before requesting your verification code.
               </p>
-            )}
-          </fieldset>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  aria-pressed={accountMode === "customer"}
+                  onClick={() => switchAccountMode("customer")}
+                  className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-3 py-3 text-center transition-all ${
+                    accountMode === "customer"
+                      ? "border-primary bg-secondary text-ink shadow-sm"
+                      : "border-border bg-white/80 text-muted-foreground hover:border-primary hover:bg-white"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-bold">
+                    <UserRound className="h-5 w-5" aria-hidden="true" /> Customer
+                  </span>
+                  <span className="text-[11px] font-medium">Order homemade food</span>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={accountMode === "chef"}
+                  onClick={() => switchAccountMode("chef")}
+                  className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-3 py-3 text-center transition-all ${
+                    accountMode === "chef"
+                      ? "border-primary bg-secondary text-ink shadow-sm"
+                      : "border-border bg-white/80 text-muted-foreground hover:border-primary hover:bg-white"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-bold">
+                    <ChefHat className="h-5 w-5" aria-hidden="true" /> Home Chef
+                  </span>
+                  <span className="text-[11px] font-medium">Cook and grow with Craves</span>
+                </button>
+              </div>
+            </fieldset>
+          )}
+
+          {isChef && (
+            <p className="mt-3 rounded-lg bg-secondary/70 p-3 text-xs leading-5 text-muted-foreground">
+              Cook from home, grow with Craves. New chefs complete a short application after verification, and chef tools open after approval.
+            </p>
+          )}
 
           <form
             onSubmit={otpSent ? handleVerify : handleGenerateOtp}
@@ -474,7 +535,7 @@ export function AuthModal({
                 htmlFor={`${fieldPrefix}-otp`}
                 className="block text-sm font-semibold text-ink"
               >
-                Six-digit OTP
+                Six-digit verification code
                 <input
                   id={`${fieldPrefix}-otp`}
                   type="text"
@@ -519,9 +580,9 @@ export function AuthModal({
                 ? "Please wait…"
                 : otpSent
                   ? mode === "login"
-                    ? "Sign in"
-                    : "Verify and create account"
-                  : "Send OTP"}
+                    ? `Sign in as ${roleName}`
+                    : `Verify and join as ${roleName}`
+                  : "Send verification code"}
             </button>
 
             {otpSent && (
@@ -533,8 +594,8 @@ export function AuthModal({
                   className="min-h-11 w-full rounded-lg border border-[#F62E18] bg-white px-4 text-sm font-semibold text-black"
                 >
                   {resendIn > 0
-                    ? `Resend OTP in ${resendIn}s`
-                    : "Resend OTP"}
+                    ? `Resend code in ${resendIn}s`
+                    : "Resend verification code"}
                 </button>
                 <button
                   type="button"
@@ -551,18 +612,18 @@ export function AuthModal({
           <p className="mt-6 text-center text-sm text-muted-foreground">
             {mode === "login" ? (
               <>
-                New to Craves?{" "}
+                {isChef ? "New to Craves as a Home Chef? " : "New to Craves? "}
                 <button
                   type="button"
                   onClick={() => switchTo("register")}
                   className="font-semibold text-contrast-red underline-offset-4 hover:underline"
                 >
-                  Create an account
+                  {isChef ? "Start your chef journey" : "Create a customer account"}
                 </button>
               </>
             ) : (
               <>
-                Already registered?{" "}
+                {isChef ? "Already registered as a Home Chef? " : "Already have a customer account? "}
                 <button
                   type="button"
                   onClick={() => switchTo("login")}

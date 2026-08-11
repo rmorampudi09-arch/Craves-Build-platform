@@ -39,6 +39,19 @@ steps:
     displayName: Maven build and tests
 
   - task: AzureCLI@2
+    displayName: Verify Subscription PostgreSQL prerequisites
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        bash scripts/release/check-subscription-postgres-prerequisites.sh \
+          '${{ parameters.resourceGroupName }}' \
+          craves_business_db \
+          pgcrypto
+
+  - task: AzureCLI@2
     displayName: Build and push immutable Subscription image
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)

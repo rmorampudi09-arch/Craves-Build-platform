@@ -93,7 +93,10 @@ public class CapacityProjectionService {
                 from = today;
             }
             for (LocalDate date = from; !date.isAfter(targetThrough); date = date.plusDays(1)) {
-                List<EntitlementRow> matching = entitlements.stream().filter(value -> matches(value, date)).toList();
+                LocalDate projectionDate = date;
+                List<EntitlementRow> matching = entitlements.stream()
+                    .filter(value -> matches(value, projectionDate))
+                    .toList();
                 if (matching.isEmpty()) {
                     continue;
                 }

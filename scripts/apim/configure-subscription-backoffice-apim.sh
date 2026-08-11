@@ -51,7 +51,7 @@ ensure_api() {
   mapfile -t IDS < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='${PATH_VALUE}'].name" -o tsv)
   (( ${#IDS[@]} <= 1 )) || fail "Multiple APIM APIs own ${PATH_VALUE}"
   if (( ${#IDS[@]} == 0 )); then
-    az apim api create -g "$RG" --service-name "$APIM" --api-id "$NEW_ID" --display-name "$DISPLAY" --path "$PATH_VALUE" --service-url "$SERVICE_URL" --protocols https --subscription-required false -o none
+    az apim api create -g "$RG" --service-name "$APIM" --api-id "$NEW_ID" --display-name "$DISPLAY" --path "$PATH_VALUE" --service-url "$SERVICE_URL" --protocols https --subscription-required false -o none --only-show-errors
     API_ID="$NEW_ID"
   else
     API_ID="${IDS[0]}"
@@ -64,29 +64,76 @@ ensure_api() {
   printf '%s' "$API_ID"
 }
 
+declare -A EFFECTIVE_OPERATION_IDS=()
+
 put_operation() {
   local API_ID="$1" BACKEND="$2" POLICY_TEMPLATE="$3" ID="$4" METHOD="$5" TEMPLATE="$6" DISPLAY="$7" PARAMS="$8"
-  local MGMT BODY RENDERED POLICY_BODY
+  local MGMT BODY RENDERED POLICY_BODY OPS_JSON TARGET_JSON EFFECTIVE_ID
+  local -a MATCH_IDS
   MGMT="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis/${API_ID}"
+
+  OPS_JSON=$(az apim api operation list \
+    -g "$RG" \
+    --service-name "$APIM" \
+    --api-id "$API_ID" \
+    -o json \
+    --only-show-errors)
+
+  mapfile -t MATCH_IDS < <(
+    jq -r \
+      --arg method "$METHOD" \
+      --arg template "$TEMPLATE" \
+      '.[] | select((.method | ascii_upcase) == ($method | ascii_upcase) and .urlTemplate == $template) | .name' \
+      <<<"$OPS_JSON"
+  )
+
+  (( ${#MATCH_IDS[@]} <= 1 )) || fail "Multiple operations already own ${METHOD} ${TEMPLATE} in API ${API_ID}"
+
+  EFFECTIVE_ID="$ID"
+  if (( ${#MATCH_IDS[@]} == 1 )); then
+    EFFECTIVE_ID="${MATCH_IDS[0]}"
+    if [[ "$EFFECTIVE_ID" != "$ID" ]]; then
+      echo "ADOPT: ${METHOD} ${TEMPLATE} already exists as operation ${EFFECTIVE_ID}; preserving that management ID and applying the Craves policy."
+    fi
+  else
+    TARGET_JSON=$(az apim api operation show \
+      -g "$RG" \
+      --service-name "$APIM" \
+      --api-id "$API_ID" \
+      --operation-id "$ID" \
+      -o json \
+      --only-show-errors 2>/dev/null || true)
+
+    if [[ -n "$TARGET_JSON" ]] && jq -e . >/dev/null 2>&1 <<<"$TARGET_JSON"; then
+      local TARGET_METHOD TARGET_TEMPLATE
+      TARGET_METHOD=$(jq -r '.method // ""' <<<"$TARGET_JSON")
+      TARGET_TEMPLATE=$(jq -r '.urlTemplate // ""' <<<"$TARGET_JSON")
+      fail "Canonical operation ID ${ID} already owns ${TARGET_METHOD} ${TARGET_TEMPLATE}; refusing to rewrite it as ${METHOD} ${TEMPLATE}"
+    fi
+  fi
+
+  EFFECTIVE_OPERATION_IDS["${API_ID}|${ID}"]="$EFFECTIVE_ID"
+
   BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
   jq -n --arg display "$DISPLAY" --arg method "$METHOD" --arg template "$TEMPLATE" --argjson params "$PARAMS" '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:$params,responses:[{statusCode:200,description:"Craves response"},{statusCode:204,description:"Completed"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"Access denied"},{statusCode:404,description:"Not found"},{statusCode:409,description:"State conflict"}]}}' >"$BODY"
-  az rest --method put --url "${MGMT}/operations/${ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
+  az rest --method put --url "${MGMT}/operations/${EFFECTIVE_ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
   sed "s|__BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
   jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
-  az rest --method put --url "${MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none
+  az rest --method put --url "${MGMT}/operations/${EFFECTIVE_ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none
   rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
 }
 
 verify_operation() {
-  local API_ID="$1" BACKEND="$2" ID="$3" AUTH_REQUIRED="$4" MGMT POLICY
+  local API_ID="$1" BACKEND="$2" ID="$3" AUTH_REQUIRED="$4" MGMT POLICY EFFECTIVE_ID
+  EFFECTIVE_ID="${EFFECTIVE_OPERATION_IDS["${API_ID}|${ID}"]:-$ID}"
   MGMT="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis/${API_ID}"
-  az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none
-  POLICY=$(az rest --method get --url "${MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
-  [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"no-store"* && "$POLICY" == *"nosniff"* ]] || fail "Operation $ID policy verification failed"
+  az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$EFFECTIVE_ID" -o none --only-show-errors
+  POLICY=$(az rest --method get --url "${MGMT}/operations/${EFFECTIVE_ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
+  [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"no-store"* && "$POLICY" == *"nosniff"* ]] || fail "Operation $EFFECTIVE_ID policy verification failed"
   if [[ "$AUTH_REQUIRED" == "true" ]]; then
-    [[ "$POLICY" == *"Authorization"* && "$POLICY" == *"Bearer"* ]] || fail "Operation $ID is missing the Bearer guard"
+    [[ "$POLICY" == *"Authorization"* && "$POLICY" == *"Bearer"* ]] || fail "Operation $EFFECTIVE_ID is missing the Bearer guard"
   else
-    [[ "$POLICY" != *"A Bearer access token is required"* ]] || fail "Public operation $ID unexpectedly requires a Bearer token"
+    [[ "$POLICY" != *"A Bearer access token is required"* ]] || fail "Public operation $EFFECTIVE_ID unexpectedly requires a Bearer token"
   fi
 }
 

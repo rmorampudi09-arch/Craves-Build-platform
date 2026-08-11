@@ -115,7 +115,7 @@ export function AdminSubscriptionCapacityOperator() {
     </section>
 
     <section className="rounded-[28px] border border-[#e8e1ee] bg-white p-6">
-      <div className="flex items-center gap-2"><Wrench className="text-[#6930ca]" size={19} /><h2 className="text-xl font-bold">Audited subscription reconciliation</h2></div><p className="mt-1 text-sm text-[#71677d]">For Operations/Subscription Admin use after an incident or data repair. Reconciliation restores/releases reservation records to match subscription state; it never raises the chef's configured capacity.</p>
+      <div className="flex items-center gap-2"><Wrench className="text-[#6930ca]" size={19} /><h2 className="text-xl font-bold">Audited subscription reconciliation</h2></div><p className="mt-1 text-sm text-[#71677d]">For Operations/Subscription Admin use after an incident or data repair. Reconciliation restores/releases reservation records to match subscription state; it never raises the chef&apos;s configured capacity.</p>
       <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_1.5fr_auto]"><input value={subscriptionId} onChange={event => setSubscriptionId(event.target.value)} placeholder="Subscription UUID" className="min-h-12 rounded-xl border border-[#ddd3e5] px-4" /><input value={reconcileReason} maxLength={1000} onChange={event => setReconcileReason(event.target.value)} placeholder="Required reconciliation reason / incident reference" className="min-h-12 rounded-xl border border-[#ddd3e5] px-4" /><button disabled={busy} onClick={() => void reconcile()} className="rounded-xl bg-[#6930ca] px-5 font-bold text-white disabled:opacity-50">Reconcile</button></div>
     </section>
   </div>;

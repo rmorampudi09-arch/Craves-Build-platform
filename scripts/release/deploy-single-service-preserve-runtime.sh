@@ -7,11 +7,11 @@ APP_NAME=${2:?container app name required}
 TARGET_IMAGE=${3:?target image required}
 SERVICE_KEY=${4:-service}
 
-SMOKE_ATTEMPTS=${SMOKE_ATTEMPTS:-18}
-SMOKE_SLEEP_SECONDS=${SMOKE_SLEEP_SECONDS:-10}
-READY_ATTEMPTS=${READY_ATTEMPTS:-36}
+SMOKE_ATTEMPTS=${SMOKE_ATTEMPTS:-6}
+SMOKE_SLEEP_SECONDS=${SMOKE_SLEEP_SECONDS:-5}
+READY_ATTEMPTS=${READY_ATTEMPTS:-24}
 READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-5}
-STATUS_READ_FAILURE_LIMIT=${STATUS_READ_FAILURE_LIMIT:-6}
+STATUS_READ_FAILURE_LIMIT=${STATUS_READ_FAILURE_LIMIT:-4}
 
 fail() {
   echo "ERROR: $*" >&2
@@ -128,33 +128,43 @@ show_revision_diagnostics() {
     --query '{name:name,active:properties.active,trafficWeight:properties.trafficWeight,provisioningState:properties.provisioningState,runningState:properties.runningState,healthState:properties.healthState,provisioningError:properties.provisioningError,image:properties.template.containers[0].image}' \
     --output jsonc \
     --only-show-errors >&2 || true
+}
 
-  az containerapp logs show \
+show_revision_logs_if_available() {
+  local revision=$1
+  local logs
+  [[ -n "$revision" ]] || return 0
+
+  if logs=$(az containerapp logs show \
     --resource-group "$RESOURCE_GROUP" \
     --name "$APP_NAME" \
     --revision "$revision" \
     --type console \
     --tail 200 \
     --format text \
-    --only-show-errors >&2 || true
+    --only-show-errors 2>/dev/null); then
+    [[ -z "$logs" ]] || printf '%s\n' "$logs" >&2
+  else
+    echo "Replica console logs are unavailable for $revision; revision metadata remains the source of truth for this failure." >&2
+  fi
 }
 
 wait_for_image() {
   local expected_image=$1
   local forbidden_revision=${2:-}
-  local attempt json latest ready app_running provisioning running health active traffic latest_image
+  local attempt app_json revision_json latest ready app_running provisioning running health active traffic latest_image
   local invalid_reads=0
   local last_signature=''
   local signature
 
   for attempt in $(seq 1 "$READY_ATTEMPTS"); do
-    json=$(az containerapp show \
+    app_json=$(az containerapp show \
       --resource-group "$RESOURCE_GROUP" \
       --name "$APP_NAME" \
       --output json \
       --only-show-errors 2>/dev/null || true)
 
-    if [[ -z "$json" ]] || ! jq -e . >/dev/null 2>&1 <<<"$json"; then
+    if [[ -z "$app_json" ]] || ! jq -e . >/dev/null 2>&1 <<<"$app_json"; then
       invalid_reads=$((invalid_reads + 1))
       echo "Attempt $attempt/$READY_ATTEMPTS: Container App control-plane JSON unavailable/invalid ($invalid_reads/$STATUS_READ_FAILURE_LIMIT)." >&2
       if (( invalid_reads >= STATUS_READ_FAILURE_LIMIT )); then
@@ -164,10 +174,9 @@ wait_for_image() {
       continue
     fi
 
-    invalid_reads=0
-    latest=$(jq -r '.properties.latestRevisionName // ""' <<<"$json")
-    ready=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$json")
-    app_running=$(jq -r '.properties.runningStatus // ""' <<<"$json")
+    latest=$(jq -r '.properties.latestRevisionName // ""' <<<"$app_json")
+    ready=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$app_json")
+    app_running=$(jq -r '.properties.runningStatus // ""' <<<"$app_json")
 
     provisioning=''
     running=''
@@ -175,63 +184,48 @@ wait_for_image() {
     active=''
     traffic=''
     latest_image=''
+    revision_json=''
 
     if [[ -n "$latest" ]]; then
-      latest_image=$(az containerapp revision show \
+      revision_json=$(az containerapp revision show \
         --resource-group "$RESOURCE_GROUP" \
         --name "$APP_NAME" \
         --revision "$latest" \
-        --query 'properties.template.containers[0].image' \
-        --output tsv \
-        --only-show-errors 2>/dev/null || true)
-      provisioning=$(az containerapp revision show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$APP_NAME" \
-        --revision "$latest" \
-        --query properties.provisioningState \
-        --output tsv \
-        --only-show-errors 2>/dev/null || true)
-      running=$(az containerapp revision show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$APP_NAME" \
-        --revision "$latest" \
-        --query properties.runningState \
-        --output tsv \
-        --only-show-errors 2>/dev/null || true)
-      health=$(az containerapp revision show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$APP_NAME" \
-        --revision "$latest" \
-        --query properties.healthState \
-        --output tsv \
-        --only-show-errors 2>/dev/null || true)
-      active=$(az containerapp revision show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$APP_NAME" \
-        --revision "$latest" \
-        --query properties.active \
-        --output tsv \
-        --only-show-errors 2>/dev/null || true)
-      traffic=$(az containerapp revision show \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$APP_NAME" \
-        --revision "$latest" \
-        --query properties.trafficWeight \
-        --output tsv \
+        --output json \
         --only-show-errors 2>/dev/null || true)
     fi
 
+    if [[ -z "$latest" || -z "$revision_json" ]] || ! jq -e . >/dev/null 2>&1 <<<"${revision_json:-null}"; then
+      invalid_reads=$((invalid_reads + 1))
+      echo "Attempt $attempt/$READY_ATTEMPTS: latest revision snapshot unavailable/invalid ($invalid_reads/$STATUS_READ_FAILURE_LIMIT). latest=${latest:-none}" >&2
+      if (( invalid_reads >= STATUS_READ_FAILURE_LIMIT )); then
+        return 20
+      fi
+      sleep "$READY_SLEEP_SECONDS"
+      continue
+    fi
+
+    invalid_reads=0
+    latest_image=$(jq -r '.properties.template.containers[0].image // ""' <<<"$revision_json")
+    provisioning=$(jq -r '.properties.provisioningState // ""' <<<"$revision_json")
+    running=$(jq -r '.properties.runningState // ""' <<<"$revision_json")
+    health=$(jq -r '.properties.healthState // ""' <<<"$revision_json")
+    active=$(jq -r '.properties.active // false' <<<"$revision_json")
+    traffic=$(jq -r '.properties.trafficWeight // 0' <<<"$revision_json")
     active=${active,,}
+
     signature="$latest|$ready|$app_running|$provisioning|$running|$health|$active|$traffic|$latest_image"
     if [[ "$signature" != "$last_signature" ]] || (( attempt == 1 || attempt % 6 == 0 )); then
       echo "Attempt $attempt/$READY_ATTEMPTS latest=$latest ready=${ready:-none} appRunning=${app_running:-none} provisioning=${provisioning:-none} revisionRunning=${running:-none} health=${health:-none} active=${active:-none} traffic=${traffic:-none} image=$latest_image" >&2
       last_signature=$signature
     fi
 
+    # runningState is diagnostic-only. A healthy active revision can legitimately be scaled to zero
+    # (and Azure may transiently omit aggregate running-state fields). The HTTP smoke test below
+    # is the application-level proof that the Spring Boot process can scale up and answer requests.
     if [[ "$latest_image" == "$expected_image" \
       && -n "$latest" \
       && "$provisioning" == 'Provisioned' \
-      && "$running" =~ ^(Running|RunningAtMax|ScaledToZero|ScaleToZero)$ \
       && "$health" == 'Healthy' \
       && "$active" == 'true' \
       && ( -z "$forbidden_revision" || "$latest" != "$forbidden_revision" ) ]]; then
@@ -244,12 +238,15 @@ wait_for_image() {
       || "$running" == 'Degraded' \
       || "$health" == 'Unhealthy' ]]; then
       show_revision_diagnostics "$latest"
+      show_revision_logs_if_available "$latest"
       return 10
     fi
 
     sleep "$READY_SLEEP_SECONDS"
   done
 
+  # Inconclusive telemetry is not an application failure and must not attempt replica logs,
+  # because a healthy scale-to-zero revision intentionally has no replica to query.
   show_revision_diagnostics "$latest"
   return 20
 }
@@ -277,7 +274,7 @@ smoke_health() {
         --silent \
         --show-error \
         --connect-timeout 10 \
-        --max-time 30 \
+        --max-time 20 \
         --output "$body" \
         --write-out '%{http_code}' \
         "https://$fqdn$path" || true)

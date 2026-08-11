@@ -10,80 +10,126 @@ SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 fail() { echo "ERROR: $*" >&2; exit 1; }
 for tool in az jq; do command -v "$tool" >/dev/null || fail "$tool is required"; done
 
-check_api() {
-  local PATH_VALUE="$1" EXPECT_AUTH="$2"; shift 2
+resolve_api() {
+  local PATH_VALUE="$1"
   local -a IDS
-  mapfile -t IDS < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='${PATH_VALUE}'].name" -o tsv)
+  mapfile -t IDS < <(az apim api list \
+    -g "$RG" \
+    --service-name "$APIM" \
+    --query "[?path=='${PATH_VALUE}'].name" \
+    -o tsv \
+    --only-show-errors)
+
   (( ${#IDS[@]} == 1 )) || fail "Expected exactly one API for ${PATH_VALUE}"
-  local API_ID="${IDS[0]}" MGMT ID POLICY
-  MGMT="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis/${API_ID}"
-  for ID in "$@"; do
-    az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none
-    POLICY=$(az rest --method get --url "${MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
-    [[ "$POLICY" == *"no-store"* && "$POLICY" == *"nosniff"* && "$POLICY" == *"set-backend-service base-url="* ]] || fail "Policy verification failed for ${ID}"
-    case ",${EXPECT_AUTH}," in
-      *,"${ID}",*) [[ "$POLICY" == *"Authorization"* && "$POLICY" == *"Bearer"* ]] || fail "Bearer guard missing for ${ID}" ;;
-      *) [[ "$POLICY" != *"A Bearer access token is required"* ]] || fail "Public operation ${ID} unexpectedly requires Bearer" ;;
-    esac
-  done
-  echo "OK: ${PATH_VALUE} -> ${API_ID}"
+
+  local API_ID="${IDS[0]}"
+  local SUB_REQUIRED
+  SUB_REQUIRED=$(az apim api show \
+    -g "$RG" \
+    --service-name "$APIM" \
+    --api-id "$API_ID" \
+    --query subscriptionRequired \
+    -o tsv \
+    --only-show-errors)
+
+  [[ "${SUB_REQUIRED,,}" == "false" ]] || fail "API ${API_ID} unexpectedly requires a subscription key"
+  printf '%s' "$API_ID"
 }
 
-SUB_AUTH="create-customer-subscription,list-customer-subscriptions,get-customer-subscription,list-subscription-occurrences,pause-customer-subscription,resume-customer-subscription,cancel-customer-subscription,skip-subscription-meal"
-check_api "api/v1/subscriptions" "$SUB_AUTH" \
-  list-subscription-plans \
-  get-subscription-plan \
-  get-subscription-plan-schedule \
-  get-subscription-plan-policy \
-  create-customer-subscription \
-  list-customer-subscriptions \
-  get-customer-subscription \
-  list-subscription-occurrences \
-  pause-customer-subscription \
-  resume-customer-subscription \
-  cancel-customer-subscription \
-  skip-subscription-meal
+check_operation() {
+  local API_ID="$1" METHOD="$2" TEMPLATE="$3" AUTH_REQUIRED="$4"
+  local OPS_JSON MGMT POLICY OP_ID
+  local -a MATCH_IDS
 
-ADMIN_PLAN_AUTH="list-admin-subscription-plans,create-admin-subscription-plan,update-admin-subscription-plan-status,get-admin-plan-schedule,put-admin-plan-schedule,activate-admin-plan-schedule,get-admin-plan-policy,put-admin-plan-policy,activate-admin-plan-policy,get-admin-plan-readiness"
-check_api "api/v1/admin/subscription-plans" "$ADMIN_PLAN_AUTH" \
-  list-admin-subscription-plans \
-  create-admin-subscription-plan \
-  update-admin-subscription-plan-status \
-  get-admin-plan-schedule \
-  put-admin-plan-schedule \
-  activate-admin-plan-schedule \
-  get-admin-plan-policy \
-  put-admin-plan-policy \
-  activate-admin-plan-policy \
-  get-admin-plan-readiness
+  OPS_JSON=$(az apim api operation list \
+    -g "$RG" \
+    --service-name "$APIM" \
+    --api-id "$API_ID" \
+    -o json \
+    --only-show-errors)
 
-ADMIN_SUB_AUTH="list-admin-subscriptions,get-admin-subscription-history,update-admin-subscription-status"
-check_api "api/v1/admin/subscriptions" "$ADMIN_SUB_AUTH" \
-  list-admin-subscriptions \
-  get-admin-subscription-history \
-  update-admin-subscription-status
+  mapfile -t MATCH_IDS < <(
+    jq -r \
+      --arg method "$METHOD" \
+      --arg template "$TEMPLATE" \
+      '.[] | select((.method | ascii_upcase) == ($method | ascii_upcase) and .urlTemplate == $template) | .name' \
+      <<<"$OPS_JSON"
+  )
 
-CHEF_CAPACITY_AUTH="get-chef-subscription-capacity,put-chef-slot-capacity-rule,put-chef-menu-capacity-rule,put-chef-slot-capacity-override,put-chef-menu-capacity-override"
-check_api "api/v1/chef/subscription-capacity" "$CHEF_CAPACITY_AUTH" \
-  get-chef-subscription-capacity \
-  put-chef-slot-capacity-rule \
-  put-chef-menu-capacity-rule \
-  put-chef-slot-capacity-override \
-  put-chef-menu-capacity-override
+  (( ${#MATCH_IDS[@]} == 1 )) || fail "Expected exactly one ${METHOD} ${TEMPLATE} operation in API ${API_ID}; found ${#MATCH_IDS[@]}"
 
-ADMIN_CAPACITY_AUTH="get-admin-chef-capacity,set-admin-chef-capacity-freeze,list-admin-capacity-incidents,reconcile-admin-subscription-capacity"
-check_api "api/v1/admin/subscription-capacity" "$ADMIN_CAPACITY_AUTH" \
-  get-admin-chef-capacity \
-  set-admin-chef-capacity-freeze \
-  list-admin-capacity-incidents \
-  reconcile-admin-subscription-capacity
+  OP_ID="${MATCH_IDS[0]}"
+  MGMT="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis/${API_ID}"
+  POLICY=$(az rest \
+    --method get \
+    --url "${MGMT}/operations/${OP_ID}/policies/policy?api-version=${API_VERSION}" \
+    --query properties.value \
+    -o tsv)
 
-CHEF_REVIEW_AUTH="list-chef-reviews,get-chef-review,approve-chef-review,reject-chef-review,get-chef-proof-content"
-check_api "api/v1/backoffice/chef-reviews" "$CHEF_REVIEW_AUTH" \
-  list-chef-reviews \
-  get-chef-review \
-  approve-chef-review \
-  reject-chef-review \
-  get-chef-proof-content
+  [[ "$POLICY" == *"no-store"* && "$POLICY" == *"nosniff"* && "$POLICY" == *"set-backend-service base-url="* ]] || \
+    fail "Policy verification failed for ${METHOD} ${TEMPLATE} (${OP_ID})"
+
+  if [[ "$AUTH_REQUIRED" == "true" ]]; then
+    [[ "$POLICY" == *"Authorization"* && "$POLICY" == *"Bearer"* ]] || \
+      fail "Bearer guard missing for ${METHOD} ${TEMPLATE} (${OP_ID})"
+  else
+    [[ "$POLICY" != *"A Bearer access token is required"* ]] || \
+      fail "Public operation ${METHOD} ${TEMPLATE} unexpectedly requires Bearer authentication"
+  fi
+
+  echo "OK: ${METHOD} ${TEMPLATE} -> ${OP_ID}"
+}
+
+SUB_API=$(resolve_api "api/v1/subscriptions")
+ADMIN_PLAN_API=$(resolve_api "api/v1/admin/subscription-plans")
+ADMIN_SUB_API=$(resolve_api "api/v1/admin/subscriptions")
+CHEF_CAPACITY_API=$(resolve_api "api/v1/chef/subscription-capacity")
+ADMIN_CAPACITY_API=$(resolve_api "api/v1/admin/subscription-capacity")
+CHEF_REVIEW_API=$(resolve_api "api/v1/backoffice/chef-reviews")
+
+check_operation "$SUB_API" GET "/plans" false
+check_operation "$SUB_API" GET "/plans/{planId}" false
+check_operation "$SUB_API" GET "/plans/{planId}/schedule" false
+check_operation "$SUB_API" GET "/plans/{planId}/policy" false
+check_operation "$SUB_API" POST "/" true
+check_operation "$SUB_API" GET "/" true
+check_operation "$SUB_API" GET "/{subscriptionId}" true
+check_operation "$SUB_API" GET "/{subscriptionId}/occurrences" true
+check_operation "$SUB_API" PATCH "/{subscriptionId}/pause" true
+check_operation "$SUB_API" PATCH "/{subscriptionId}/resume" true
+check_operation "$SUB_API" PATCH "/{subscriptionId}/cancel" true
+check_operation "$SUB_API" POST "/{subscriptionId}/skips" true
+
+check_operation "$ADMIN_PLAN_API" GET "/" true
+check_operation "$ADMIN_PLAN_API" POST "/" true
+check_operation "$ADMIN_PLAN_API" PATCH "/{planId}/status" true
+check_operation "$ADMIN_PLAN_API" GET "/{planId}/schedule" true
+check_operation "$ADMIN_PLAN_API" PUT "/{planId}/schedule" true
+check_operation "$ADMIN_PLAN_API" POST "/{planId}/schedule/activate" true
+check_operation "$ADMIN_PLAN_API" GET "/{planId}/policy" true
+check_operation "$ADMIN_PLAN_API" PUT "/{planId}/policy" true
+check_operation "$ADMIN_PLAN_API" POST "/{planId}/policy/activate" true
+check_operation "$ADMIN_PLAN_API" GET "/{planId}/readiness" true
+
+check_operation "$ADMIN_SUB_API" GET "/" true
+check_operation "$ADMIN_SUB_API" GET "/{subscriptionId}/history" true
+check_operation "$ADMIN_SUB_API" PATCH "/{subscriptionId}/status/{status}" true
+
+check_operation "$CHEF_CAPACITY_API" GET "/" true
+check_operation "$CHEF_CAPACITY_API" PUT "/rules/slots" true
+check_operation "$CHEF_CAPACITY_API" PUT "/rules/menu-items" true
+check_operation "$CHEF_CAPACITY_API" PUT "/overrides/slots" true
+check_operation "$CHEF_CAPACITY_API" PUT "/overrides/menu-items" true
+
+check_operation "$ADMIN_CAPACITY_API" GET "/chefs/{chefIdentityId}" true
+check_operation "$ADMIN_CAPACITY_API" PATCH "/chefs/{chefIdentityId}/freeze" true
+check_operation "$ADMIN_CAPACITY_API" GET "/incidents" true
+check_operation "$ADMIN_CAPACITY_API" POST "/subscriptions/{subscriptionId}/reconcile" true
+
+check_operation "$CHEF_REVIEW_API" GET "/" true
+check_operation "$CHEF_REVIEW_API" GET "/{applicationId}" true
+check_operation "$CHEF_REVIEW_API" POST "/{applicationId}/approve" true
+check_operation "$CHEF_REVIEW_API" POST "/{applicationId}/reject" true
+check_operation "$CHEF_REVIEW_API" GET "/{applicationId}/documents/{documentId}/content" true
 
 echo "SUCCESS: Complete subscription, capacity, and backoffice APIM status is valid."

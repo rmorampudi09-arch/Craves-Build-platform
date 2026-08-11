@@ -61,11 +61,13 @@ test("approved artwork renderer clips source pixels without generating or editin
   const crop = source(
     "../components/sections/landing-reference/ReferenceImageCrop.tsx",
   );
+  const css = source("../screens/public/LandingPage/LandingV2.module.css");
 
-  assert.match(crop, /overflow/);
+  assert.match(crop, /styles\.referenceCrop/);
   assert.match(crop, /sourceWidth \/ crop\.width/);
   assert.match(crop, /crop\.x \/ crop\.width/);
   assert.match(crop, /crop\.y \/ crop\.height/);
+  assert.match(css, /\.referenceCrop\s*\{[^}]*overflow:\s*hidden/s);
   assert.doesNotMatch(crop, /canvas/i);
   assert.doesNotMatch(crop, /filter:/i);
 });

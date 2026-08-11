@@ -143,7 +143,7 @@ export function ReferenceHeroDesktop({
           </div>
 
           <h1 className={styles.referenceHeroTitle}>
-            The Taste of Home,
+            The Taste of Home,<br />
             <span>Now Closer.</span>
           </h1>
 

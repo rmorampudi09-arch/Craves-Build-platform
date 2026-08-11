@@ -252,6 +252,45 @@ wait_for_image() {
   return 20
 }
 
+verify_previous_ready_revision_intact() {
+  local app_json revision_json mode current_ready previous_image previous_health previous_active
+
+  app_json=$(az containerapp show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$APP_NAME" \
+    --output json \
+    --only-show-errors 2>/dev/null || true)
+
+  [[ -n "$app_json" ]] && jq -e . >/dev/null 2>&1 <<<"$app_json" || return 1
+
+  mode=$(jq -r '.properties.configuration.activeRevisionsMode // ""' <<<"$app_json")
+  current_ready=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$app_json")
+
+  [[ "$mode" == 'Single' ]] || return 1
+  [[ "$current_ready" == "$PREVIOUS_REVISION" ]] || return 1
+
+  revision_json=$(az containerapp revision show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$APP_NAME" \
+    --revision "$PREVIOUS_REVISION" \
+    --output json \
+    --only-show-errors 2>/dev/null || true)
+
+  [[ -n "$revision_json" ]] && jq -e . >/dev/null 2>&1 <<<"$revision_json" || return 1
+
+  previous_image=$(jq -r '.properties.template.containers[0].image // ""' <<<"$revision_json")
+  previous_health=$(jq -r '.properties.healthState // ""' <<<"$revision_json")
+  previous_active=$(jq -r '.properties.active // false' <<<"$revision_json")
+  previous_active=${previous_active,,}
+
+  [[ "$previous_image" == "$PREVIOUS_IMAGE" ]] || return 1
+  [[ "$previous_health" == 'Healthy' ]] || return 1
+  [[ "$previous_active" == 'true' ]] || return 1
+
+  echo "Single revision mode preserved previous ready revision $PREVIOUS_REVISION on $PREVIOUS_IMAGE; no rollback image update is required." >&2
+  return 0
+}
+
 smoke_health() {
   local app_json=$1
   local external fqdn path attempt body code
@@ -396,7 +435,10 @@ if NEW_REVISION=$(wait_for_image "$TARGET_IMAGE" "$PREVIOUS_REVISION"); then
 else
   wait_rc=$?
   if [[ "$wait_rc" -eq 10 ]]; then
-    rollback 'New revision explicitly reported a failed/unhealthy state.'
+    if verify_previous_ready_revision_intact; then
+      fail 'New revision explicitly failed before readiness. The previous ready revision remains healthy in Single revision mode; no redundant rollback revision was created.'
+    fi
+    rollback 'New revision explicitly reported a failed/unhealthy state and the previous ready revision could not be proven intact.'
   fi
   fail "Deployment verification was inconclusive after $((READY_ATTEMPTS * READY_SLEEP_SECONDS)) seconds. Automatic rollback was suppressed because Azure did not report an explicit unhealthy state. Inspect the latest revision before retrying."
 fi

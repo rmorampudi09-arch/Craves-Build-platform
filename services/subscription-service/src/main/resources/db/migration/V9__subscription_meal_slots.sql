@@ -45,7 +45,7 @@ ALTER TABLE subscription_schema.subscription_occurrence
     ADD CONSTRAINT ux_subscription_occurrence_slot
         UNIQUE (subscription_id, service_date, meal_slot_code);
 
-DROP INDEX ix_subscription_occurrence_subscription_service;
+DROP INDEX IF EXISTS subscription_schema.ix_subscription_occurrence_subscription_service;
 
 CREATE INDEX ix_subscription_occurrence_subscription_service
     ON subscription_schema.subscription_occurrence (

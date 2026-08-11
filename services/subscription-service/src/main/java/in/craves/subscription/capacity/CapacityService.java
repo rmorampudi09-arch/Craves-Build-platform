@@ -43,6 +43,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +57,7 @@ public class CapacityService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    @Autowired
     public CapacityService(
         CapacityRepository repository,
         PlanScheduleRepository scheduleRepository,
@@ -603,7 +605,7 @@ public class CapacityService {
                 repository.openOrUpdateIncident(
                     chefIdentityId, date, null, item.mealSlotCode(), item.menuItemId(), "ITEM_DEFICIT", "P2", reserved,
                     effective.get().closed() ? 0 : effective.get().maxSubscriptionUnits(),
-                    "Existing subscription commitments exceed this menu item's current capacity; existing customers remain protected"
+                    "Existing subscription commitments exceed this menu item's current capacity; existing subscribers remain protected"
                 );
             } else {
                 repository.resolveIncident(chefIdentityId, date, null, item.mealSlotCode(), item.menuItemId(), "ITEM_DEFICIT");

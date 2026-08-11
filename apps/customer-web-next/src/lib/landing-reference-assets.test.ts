@@ -45,8 +45,17 @@ test("approved landing reference keeps the existing responsive landing below des
   assert.match(landing, /className="lg:hidden"/);
 });
 
-test("approved landing reference pins the four supplied PNG hashes", () => {
+test("approved landing reference is vendored and verified without a network dependency", () => {
   const script = source("../../scripts/extract-landing-reference-assets.mjs");
+
+  assert.match(script, /readFile/);
+  assert.doesNotMatch(script, /https?:\/\//);
+  assert.doesNotMatch(script, /\bfetch\s*\(/);
+
+  assert.match(script, /hero-reference\.png/);
+  assert.match(script, /how-craves-works-reference\.png/);
+  assert.match(script, /why-craves-reference\.png/);
+  assert.match(script, /home-chefs-app-reference\.png/);
 
   assert.match(
     script,

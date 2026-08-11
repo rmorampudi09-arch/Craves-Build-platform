@@ -29,6 +29,8 @@ craves:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
+  token-revocation:
+    enabled: ${CRAVES_TOKEN_REVOCATION_ENABLED:false}
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}
   subscription:

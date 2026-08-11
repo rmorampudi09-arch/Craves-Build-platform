@@ -101,8 +101,10 @@ public class OccurrenceRepository {
         List<ScheduleItem> matchingItems,
         SkipRequest skipRequest
     ) {
+        lockActiveSubscription(subscription.subscriptionId());
+        boolean paidCycle = skipRequest == null && hasPaidInvoiceCovering(subscription.subscriptionId(), serviceDate);
         UUID occurrenceId = UUID.randomUUID();
-        String initialStatus = skipRequest == null ? "BILLING_PENDING" : "SKIPPED";
+        String initialStatus = skipRequest != null ? "SKIPPED" : paidCycle ? "READY_FOR_ORDER" : "BILLING_PENDING";
         int inserted = jdbcTemplate.update(
             "INSERT INTO subscription_schema.subscription_occurrence " +
                 "(id, subscription_id, plan_id, customer_identity_id, chef_identity_id, delivery_address_id, service_date, meal_slot_code, service_at, schedule_version, status, created_at, updated_at) " +
@@ -131,11 +133,14 @@ public class OccurrenceRepository {
             );
         }
         if (skipRequest == null) {
+            String reason = paidCycle
+                ? "Occurrence generated inside an already-paid billing cycle"
+                : "Occurrence generated and awaiting billing-cycle payment";
             jdbcTemplate.update(
                 "INSERT INTO subscription_schema.subscription_occurrence_history " +
                     "(id, occurrence_id, old_status, new_status, reason, source, created_at) " +
-                    "VALUES (?, ?, NULL, 'BILLING_PENDING', 'Occurrence generated from active plan schedule', 'SCHEDULER', now())",
-                UUID.randomUUID(), occurrenceId
+                    "VALUES (?, ?, NULL, ?, ?, 'SCHEDULER', now())",
+                UUID.randomUUID(), occurrenceId, initialStatus, reason
             );
         } else {
             jdbcTemplate.update(
@@ -155,6 +160,31 @@ public class OccurrenceRepository {
             );
         }
         return occurrenceId;
+    }
+
+    boolean hasPaidInvoiceCovering(UUID subscriptionId, LocalDate serviceDate) {
+        Boolean paid = jdbcTemplate.queryForObject(
+            "SELECT EXISTS (" +
+                "SELECT 1 FROM subscription_schema.subscription_invoice " +
+                "WHERE subscription_id = ? AND status = 'PAID' AND cycle_start <= ? AND cycle_end > ?" +
+                ")",
+            Boolean.class,
+            subscriptionId,
+            serviceDate,
+            serviceDate
+        );
+        return Boolean.TRUE.equals(paid);
+    }
+
+    private void lockActiveSubscription(UUID subscriptionId) {
+        String status = jdbcTemplate.queryForObject(
+            "SELECT status FROM subscription_schema.customer_subscription WHERE id = ? FOR UPDATE",
+            String.class,
+            subscriptionId
+        );
+        if (!"ACTIVE".equals(status)) {
+            throw new IllegalStateException("Subscription is no longer ACTIVE during occurrence generation");
+        }
     }
 
     public void releaseAndAdvance(ClaimedSubscription subscription, LocalDate nextServiceDate) {

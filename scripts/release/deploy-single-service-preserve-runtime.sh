@@ -231,7 +231,7 @@ wait_for_image() {
     if [[ "$latest_image" == "$expected_image" \
       && -n "$latest" \
       && "$provisioning" == 'Provisioned' \
-      && "$running" == 'Running' \
+      && "$running" =~ ^(Running|RunningAtMax|ScaledToZero|ScaleToZero)$ \
       && "$health" == 'Healthy' \
       && "$active" == 'true' \
       && ( -z "$forbidden_revision" || "$latest" != "$forbidden_revision" ) ]]; then

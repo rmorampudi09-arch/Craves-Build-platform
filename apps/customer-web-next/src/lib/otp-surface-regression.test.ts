@@ -15,12 +15,15 @@ test("customer and chef OTP flows hide visible captcha and enforce one border", 
 
   for (const contents of [modal, standalone]) {
     assert.match(contents, /RESEND_DELAY_SECONDS = 30/);
-    assert.match(contents, /Resend OTP/);
     assert.match(contents, /type RecaptchaMode = "visible" \| "invisible"/);
     assert.match(contents, /craves-recaptcha-resend/);
     assert.match(contents, /size: visible \? "normal" : "invisible"/);
     assert.match(contents, /craves-otp-field/);
   }
+
+  assert.match(modal, /Resend verification code/);
+  assert.doesNotMatch(modal, /Resend OTP/);
+  assert.match(standalone, /Resend OTP/);
 
   assert.match(modal, /!otpSent && \(/);
   assert.match(standalone, /!otpStage && \(/);

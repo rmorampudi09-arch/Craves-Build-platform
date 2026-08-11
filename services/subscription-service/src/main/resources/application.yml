@@ -31,6 +31,12 @@ craves:
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}
   subscription:
+    capacity:
+      hold-minutes: ${CRAVES_SUBSCRIPTION_CAPACITY_HOLD_MINUTES:15}
+      projection-horizon-days: ${CRAVES_SUBSCRIPTION_CAPACITY_PROJECTION_HORIZON_DAYS:180}
+      projection-scheduler-enabled: ${CRAVES_SUBSCRIPTION_CAPACITY_PROJECTION_ENABLED:false}
+      projection-batch-size: ${CRAVES_SUBSCRIPTION_CAPACITY_PROJECTION_BATCH_SIZE:50}
+      projection-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_CAPACITY_PROJECTION_FIXED_DELAY_MS:60000}
     occurrence-generator:
       enabled: ${CRAVES_SUBSCRIPTION_OCCURRENCE_GENERATOR_ENABLED:false}
       batch-size: ${CRAVES_SUBSCRIPTION_OCCURRENCE_BATCH_SIZE:50}

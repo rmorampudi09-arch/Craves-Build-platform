@@ -1,5 +1,6 @@
 package in.craves.subscription.service;
 
+import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
@@ -17,6 +18,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -29,9 +31,11 @@ public class SubscriptionService {
     private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("^[A-Za-z0-9._:-]{8,128}$");
 
     private final SubscriptionRepository repository;
+    private final CapacityService capacityService;
 
-    public SubscriptionService(SubscriptionRepository repository) {
+    public SubscriptionService(SubscriptionRepository repository, CapacityService capacityService) {
         this.repository = repository;
+        this.capacityService = capacityService;
     }
 
     public PlanResponse createPlan(CreatePlanRequest request, CurrentUser user) {
@@ -53,7 +57,10 @@ public class SubscriptionService {
     }
 
     public List<PublicPlanResponse> listActivePlans() {
-        return repository.listPlans(true).stream().map(SubscriptionService::toPublicPlan).toList();
+        return repository.listPlans(true).stream()
+            .filter(capacityService::isPlanBookable)
+            .map(SubscriptionService::toPublicPlan)
+            .toList();
     }
 
     public List<PlanResponse> listAllPlans(CurrentUser user) {
@@ -62,9 +69,12 @@ public class SubscriptionService {
     }
 
     public PublicPlanResponse getPlan(UUID planId) {
-        return repository.findActivePlanById(planId)
-            .map(SubscriptionService::toPublicPlan)
+        PlanResponse plan = repository.findActivePlanById(planId)
             .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Active subscription plan was not found"));
+        if (!capacityService.isPlanBookable(plan)) {
+            throw ApiException.notFound("PLAN_NOT_BOOKABLE", "Subscription plan is not currently accepting new enrollments");
+        }
+        return toPublicPlan(plan);
     }
 
     public PlanResponse updatePlanStatus(UUID planId, String status, CurrentUser user) {
@@ -73,9 +83,21 @@ public class SubscriptionService {
         if (!PLAN_STATUSES.contains(normalized)) {
             throw ApiException.badRequest("INVALID_PLAN_STATUS", "status must be DRAFT, ACTIVE, or INACTIVE");
         }
+        PlanResponse plan = repository.findPlanById(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
+        if ("ACTIVE".equals(normalized) && !capacityService.isPlanBookable(new PlanResponse(
+            plan.id(), plan.planCode(), plan.chefIdentityId(), plan.name(), plan.description(), plan.billingPeriod(),
+            plan.amount(), plan.currency(), "ACTIVE", plan.createdAt(), plan.updatedAt()
+        ))) {
+            throw ApiException.conflict(
+                "PLAN_CAPACITY_NOT_READY",
+                "Plan activation requires chef capacity for every required meal slot"
+            );
+        }
         return repository.updatePlanStatus(planId, normalized, user.identityId());
     }
 
+    @Transactional
     public CustomerSubscriptionResponse createSubscription(
         CreateSubscriptionRequest request,
         String idempotencyKey,
@@ -88,11 +110,17 @@ public class SubscriptionService {
             .orElse(null);
         if (existing != null) {
             ensureSameEnrollment(existing, request);
+            if ("PENDING_PAYMENT".equals(existing.status())) {
+                capacityService.acquireEnrollmentHold(existing);
+            }
             return toCustomerSubscription(existing);
         }
 
         PlanResponse plan = repository.findActivePlanById(request.planId())
             .orElseThrow(() -> ApiException.conflict("PLAN_NOT_ACTIVE", "Subscription plan is not active or not fully configured"));
+        if (!capacityService.isPlanBookable(plan)) {
+            throw ApiException.conflict("SUBSCRIPTION_CAPACITY_UNAVAILABLE", "Subscription capacity is no longer available");
+        }
         if (request.startDate().isBefore(LocalDate.now())) {
             throw ApiException.badRequest("INVALID_START_DATE", "startDate cannot be in the past");
         }
@@ -108,6 +136,7 @@ public class SubscriptionService {
             normalizedKey
         );
         ensureSameEnrollment(stored, request);
+        capacityService.acquireEnrollmentHold(stored);
         return toCustomerSubscription(stored);
     }
 
@@ -122,6 +151,7 @@ public class SubscriptionService {
         return toCustomerSubscription(getOwnedSubscription(subscriptionId, user));
     }
 
+    @Transactional
     public SubscriptionResponse adminChangeStatus(
         UUID subscriptionId, String newStatus, String reason, CurrentUser user
     ) {
@@ -134,6 +164,24 @@ public class SubscriptionService {
         String normalized = normalize(newStatus, "status");
         if (!ADMIN_STATUS_CHANGES.contains(normalized)) {
             throw ApiException.badRequest("INVALID_SUBSCRIPTION_STATUS", "Invalid subscription status");
+        }
+        if (subscription.status().equals(normalized)) {
+            return subscription;
+        }
+
+        if ("ACTIVE".equals(normalized)) {
+            if ("PAUSED".equals(subscription.status())) {
+                LocalDate resumeDate = subscription.nextServiceDate() == null
+                    ? LocalDate.now()
+                    : subscription.nextServiceDate().isBefore(LocalDate.now()) ? LocalDate.now() : subscription.nextServiceDate();
+                capacityService.reacquireForResume(subscription, resumeDate);
+            } else {
+                capacityService.commitForActivation(subscription);
+            }
+        } else if ("PAUSED".equals(normalized)) {
+            capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(), "Administrator paused subscription: " + reason.trim());
+        } else if (Set.of("PAYMENT_FAILED", "EXPIRED", "CANCELLED").contains(normalized)) {
+            capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(), "Administrator moved subscription to " + normalized + ": " + reason.trim());
         }
         return repository.updateSubscriptionStatus(subscription.id(), normalized, reason.trim(), user.identityId());
     }

@@ -64,6 +64,19 @@ delete_operations "api/v1/admin/subscriptions" \
   get-admin-subscription-history \
   update-admin-subscription-status
 
+delete_operations "api/v1/chef/subscription-capacity" \
+  get-chef-subscription-capacity \
+  put-chef-slot-capacity-rule \
+  put-chef-menu-capacity-rule \
+  put-chef-slot-capacity-override \
+  put-chef-menu-capacity-override
+
+delete_operations "api/v1/admin/subscription-capacity" \
+  get-admin-chef-capacity \
+  set-admin-chef-capacity-freeze \
+  list-admin-capacity-incidents \
+  reconcile-admin-subscription-capacity
+
 delete_operations "api/v1/backoffice/chef-reviews" \
   list-chef-reviews \
   get-chef-review \
@@ -71,4 +84,4 @@ delete_operations "api/v1/backoffice/chef-reviews" \
   reject-chef-review \
   get-chef-proof-content
 
-echo "SUCCESS: Named subscription/backoffice operations removed. API containers were retained."
+echo "SUCCESS: Named subscription/capacity/backoffice operations removed. API containers were retained."

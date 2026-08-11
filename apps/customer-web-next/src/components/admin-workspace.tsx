@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import {
-  BellRing, ChefHat, CircleUserRound, ClipboardList, LayoutDashboard,
+  BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, LayoutDashboard,
   Menu, ReceiptText, SearchCheck, ShieldCheck, X
 } from "lucide-react";
 import type { AdminIdentity } from "@/lib/admin-contract";
@@ -15,6 +15,7 @@ const navigation = [
   { href: "/admin/chef-reviews", label: "Chef reviews", icon: ChefHat },
   { href: "/admin/subscription-plans", label: "Plans", icon: ReceiptText },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: ClipboardList },
+  { href: "/admin/subscription-capacity", label: "Capacity", icon: Gauge },
   { href: "/admin/operations", label: "Investigations", icon: SearchCheck },
   { href: "/admin/accounts", label: "Account security", icon: ShieldCheck },
   { href: "/admin/notifications", label: "Notification recovery", icon: BellRing }

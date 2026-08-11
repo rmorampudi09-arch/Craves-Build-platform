@@ -22,9 +22,9 @@ interface ReferenceImageCropProps {
 /**
  * Displays an untouched region of an approved reference PNG.
  *
- * The original image file is never edited. The container simply clips the
- * source image at render time so native HTML can own the surrounding text and
- * controls while the approved illustration pixels remain unchanged.
+ * The original image file is never edited or re-encoded. The container only
+ * clips the source image at render time so native HTML can own the surrounding
+ * text and controls while the approved illustration pixels remain unchanged.
  */
 export function ReferenceImageCrop({
   src,
@@ -58,6 +58,7 @@ export function ReferenceImageCrop({
         alt=""
         priority={priority}
         sizes={sizes}
+        unoptimized
         className={styles.referenceCropImage}
         style={imageStyle}
         draggable={false}

@@ -33,7 +33,6 @@ import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -41,6 +40,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -192,7 +192,6 @@ public class CapacityService {
         }
     }
 
-    /** Called in the same DB transaction as creation of the PENDING_PAYMENT subscription. */
     @Transactional
     public void acquireEnrollmentHold(SubscriptionResponse subscription) {
         Objects.requireNonNull(subscription, "subscription");
@@ -487,7 +486,8 @@ public class CapacityService {
         LocalDate through = today.plusDays(properties.getProjectionHorizonDays());
         if (from.isAfter(through)) return;
         for (LocalDate date = from; !date.isAfter(through); date = date.plusDays(1)) {
-            List<EntitlementRow> matching = entitlements.stream().filter(value -> matches(value, date)).toList();
+            LocalDate projectionDate = date;
+            List<EntitlementRow> matching = entitlements.stream().filter(value -> matches(value, projectionDate)).toList();
             if (matching.isEmpty()) continue;
             for (EntitlementRow entitlement : matching) {
                 repository.upsertAllocation(
@@ -679,7 +679,10 @@ public class CapacityService {
         LocalDate through = LocalDate.now(clock).plusDays(properties.getProjectionHorizonDays());
         LocalDate from = fromDate.isBefore(LocalDate.now(clock)) ? LocalDate.now(clock) : fromDate;
         for (LocalDate date = from; !date.isAfter(through); date = date.plusDays(1)) {
-            if (entitlements.stream().anyMatch(value -> matches(value, date))) refreshBucketsForDate(chef, date);
+            LocalDate bucketDate = date;
+            if (entitlements.stream().anyMatch(value -> matches(value, bucketDate))) {
+                refreshBucketsForDate(chef, date);
+            }
         }
     }
 

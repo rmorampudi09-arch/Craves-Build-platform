@@ -70,19 +70,130 @@ steps:
     displayName: Verify sandbox-only safety gates
 
   - bash: |
-      set -euo pipefail
+      set -uo pipefail
       cd services/subscription-service
+      set +e
       mvn -B -ntp clean verify
+      rc=$?
+      set -e
+      if [ "$rc" -ne 0 ]; then
+        echo '============================================================'
+        echo 'SUBSCRIPTION SERVICE SUREFIRE FAILURE REPORTS'
+        echo '============================================================'
+        if compgen -G 'target/surefire-reports/*.txt' > /dev/null; then
+          for report in target/surefire-reports/*.txt; do
+            if grep -Eq 'Failures: [1-9]|Errors: [1-9]|<<< FAILURE|<<< ERROR' "$report"; then
+              echo "-------------------- $report --------------------"
+              cat "$report"
+            fi
+          done
+        else
+          echo 'No Surefire .txt reports were produced.'
+        fi
+        echo '============================================================'
+        echo 'SUREFIRE XML FAILURE/ERROR SUMMARY'
+        echo '============================================================'
+        if compgen -G 'target/surefire-reports/TEST-*.xml' > /dev/null; then
+          python3 - <<'PY'
+      from pathlib import Path
+      import xml.etree.ElementTree as ET
+      for path in sorted(Path('target/surefire-reports').glob('TEST-*.xml')):
+          try:
+              root = ET.parse(path).getroot()
+          except Exception as exc:
+              print(f'{path}: unable to parse: {exc}')
+              continue
+          failures = int(root.attrib.get('failures', '0'))
+          errors = int(root.attrib.get('errors', '0'))
+          if failures or errors:
+              print(f'{path}: tests={root.attrib.get("tests")} failures={failures} errors={errors}')
+              for case in root.findall('.//testcase'):
+                  problem = case.find('failure') or case.find('error')
+                  if problem is not None:
+                      print(f'  {case.attrib.get("classname")}.{case.attrib.get("name")}')
+                      print((problem.text or problem.attrib.get('message', '')).strip())
+      PY
+        fi
+        exit "$rc"
+      fi
     displayName: Verify Subscription Service
 
-  - bash: |
-      set -euo pipefail
-      cd services/integration-service
-      mvn -B -ntp clean verify
-    displayName: Verify Integration Service
+  - task: PublishTestResults@2
+    displayName: Publish Subscription Service test results
+    condition: always()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: 'services/subscription-service/target/surefire-reports/TEST-*.xml'
+      testRunTitle: 'Subscription Service - sandbox runtime CI'
+      failTaskOnFailedTests: false
+      failTaskOnMissingResultsFile: false
 
   - bash: |
-      set -euo pipefail
-      cd services/order-service
+      set -uo pipefail
+      cd services/integration-service
+      set +e
       mvn -B -ntp clean verify
+      rc=$?
+      set -e
+      if [ "$rc" -ne 0 ]; then
+        echo '============================================================'
+        echo 'INTEGRATION SERVICE SUREFIRE FAILURE REPORTS'
+        echo '============================================================'
+        if compgen -G 'target/surefire-reports/*.txt' > /dev/null; then
+          for report in target/surefire-reports/*.txt; do
+            if grep -Eq 'Failures: [1-9]|Errors: [1-9]|<<< FAILURE|<<< ERROR' "$report"; then
+              echo "-------------------- $report --------------------"
+              cat "$report"
+            fi
+          done
+        else
+          echo 'No Surefire .txt reports were produced.'
+        fi
+        exit "$rc"
+      fi
+    displayName: Verify Integration Service
+
+  - task: PublishTestResults@2
+    displayName: Publish Integration Service test results
+    condition: always()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: 'services/integration-service/target/surefire-reports/TEST-*.xml'
+      testRunTitle: 'Integration Service - sandbox runtime CI'
+      failTaskOnFailedTests: false
+      failTaskOnMissingResultsFile: false
+
+  - bash: |
+      set -uo pipefail
+      cd services/order-service
+      set +e
+      mvn -B -ntp clean verify
+      rc=$?
+      set -e
+      if [ "$rc" -ne 0 ]; then
+        echo '============================================================'
+        echo 'ORDER SERVICE SUREFIRE FAILURE REPORTS'
+        echo '============================================================'
+        if compgen -G 'target/surefire-reports/*.txt' > /dev/null; then
+          for report in target/surefire-reports/*.txt; do
+            if grep -Eq 'Failures: [1-9]|Errors: [1-9]|<<< FAILURE|<<< ERROR' "$report"; then
+              echo "-------------------- $report --------------------"
+              cat "$report"
+            fi
+          done
+        else
+          echo 'No Surefire .txt reports were produced.'
+        fi
+        exit "$rc"
+      fi
     displayName: Verify Order Service
+
+  - task: PublishTestResults@2
+    displayName: Publish Order Service test results
+    condition: always()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: 'services/order-service/target/surefire-reports/TEST-*.xml'
+      testRunTitle: 'Order Service - sandbox runtime CI'
+      failTaskOnFailedTests: false
+      failTaskOnMissingResultsFile: false

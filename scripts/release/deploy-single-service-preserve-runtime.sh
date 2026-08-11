@@ -220,11 +220,18 @@ wait_for_image() {
       last_signature=$signature
     fi
 
+    # `az containerapp update --no-wait` can return before latestRevisionName/latest image advance.
+    # Never classify an older failed revision as the outcome of this deployment. Readiness and
+    # explicit failure are authoritative only after the exact immutable target image is visible.
+    if [[ "$latest_image" != "$expected_image" ]]; then
+      sleep "$READY_SLEEP_SECONDS"
+      continue
+    fi
+
     # runningState is diagnostic-only. A healthy active revision can legitimately be scaled to zero
     # (and Azure may transiently omit aggregate running-state fields). The HTTP smoke test below
     # is the application-level proof that the Spring Boot process can scale up and answer requests.
-    if [[ "$latest_image" == "$expected_image" \
-      && -n "$latest" \
+    if [[ -n "$latest" \
       && "$provisioning" == 'Provisioned' \
       && "$health" == 'Healthy' \
       && "$active" == 'true' \
@@ -233,11 +240,13 @@ wait_for_image() {
       return 0
     fi
 
-    if [[ "$provisioning" == 'Failed' \
-      || "$running" == 'Failed' \
-      || "$running" == 'Degraded' \
-      || "$running" == 'ActivationFailed' \
-      || "$health" == 'Unhealthy' ]]; then
+    if [[ -n "$latest" \
+      && ( -z "$forbidden_revision" || "$latest" != "$forbidden_revision" ) \
+      && ( "$provisioning" == 'Failed' \
+        || "$running" == 'Failed' \
+        || "$running" == 'Degraded' \
+        || "$running" == 'ActivationFailed' \
+        || "$health" == 'Unhealthy' ) ]]; then
       show_revision_diagnostics "$latest"
       show_revision_logs_if_available "$latest"
       return 10

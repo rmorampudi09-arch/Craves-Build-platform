@@ -94,7 +94,7 @@ test("public landing keeps the approved semantic reference experience and wired 
 
   assert.match(referenceCrop, /unoptimized/);
   assert.match(referenceCrop, /approved reference PNG/);
-  assert.match(referenceCrop, /overflow/);
+  assert.match(referenceCrop, /style=\{imageStyle\}/);
 
   assert.match(footer, /<CravesLogo size="lg" \/>/);
   assert.match(footer, /bg-\[#111111\] text-white/);

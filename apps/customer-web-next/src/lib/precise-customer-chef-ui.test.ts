@@ -7,9 +7,16 @@ function source(relativePath: string): string {
 }
 
 const theme = source("../craves-theme.css");
-const hero = source("../components/sections/HeroSection.tsx");
 const footer = source("../components/sections/FooterSection.tsx");
-const howItWorks = source("../components/sections/HowItWorksSection.tsx");
+const referenceHero = source(
+  "../components/sections/landing-reference/ReferenceHeroDesktop.tsx",
+);
+const referenceArtwork = source(
+  "../components/sections/landing-reference/ReferenceArtworkSection.tsx",
+);
+const referenceCrop = source(
+  "../components/sections/landing-reference/ReferenceImageCrop.tsx",
+);
 const landing = source("../screens/public/LandingPage/LandingPage.tsx");
 const welcome = source("../components/home/WelcomeBanner.tsx");
 const checkout = source("../screens/Checkout/Checkout.tsx");
@@ -44,33 +51,53 @@ test("buttons use white surfaces without logo-colored borders and keep the reque
   assert.match(theme, /font-weight:\s*700\s*!important/);
 });
 
-test("landing hero uses the approved clean no-photo design with logo-red ghost word", () => {
-  assert.match(hero, /bg-white text-\[#111111\]/);
-  assert.match(hero, /Good food\./);
-  assert.match(hero, /Real impact\./);
-  assert.match(hero, /text-\[#F62E18\]\/\[0\.04\]/);
-  assert.match(hero, /<CravesLogo size="md" priority \/>/);
-  assert.match(hero, /Made with love/);
-  assert.match(hero, /From chef to door/);
-  assert.match(hero, /Home cooked happiness/);
-  assert.doesNotMatch(
-    hero,
-    /craves-chef-hero-reference\.jpg|<img|backgroundImage:/,
-  );
+test("landing hero uses semantic HTML, canonical logo, approved rider artwork and wired controls", () => {
+  assert.match(referenceHero, /import \{ CravesLogo \}/);
+  assert.match(referenceHero, /<CravesLogo size="lg" priority \/>/);
+  assert.match(referenceHero, /The Taste of Home,/);
+  assert.match(referenceHero, /Now Closer\./);
+  assert.match(referenceHero, /Order Homemade Food/);
+  assert.match(referenceHero, /Watch How It Works/);
+  assert.match(referenceHero, /onOpenAuth\("login"\)/);
+  assert.match(referenceHero, /onOpenLocation/);
+  assert.match(referenceHero, /onBecomeChef/);
+  assert.match(referenceHero, /src="\/landing\/reference\/hero-reference\.png"/);
+  assert.match(referenceHero, /<ReferenceImageCrop/);
+  assert.doesNotMatch(referenceHero, /referenceHotspot/);
 });
 
-test("public landing stays white and photo-free while preserving canonical logo and wired flows", () => {
+test("public landing keeps the approved semantic reference experience and wired flows", () => {
   assert.match(landing, /min-h-screen bg-white text-ink/);
   assert.match(landing, /items-center justify-center bg-white px-4/);
-  assert.match(howItWorks, /bg-white pb-28 pt-20/);
-  assert.doesNotMatch(howItWorks, /<img/);
-  assert.match(footer, /<CravesLogo size="lg" \/>/);
-  assert.match(footer, /bg-\[#111111\] text-white/);
-  assert.doesNotMatch(footer, /craves-footer-reference\.jpg|<img/);
+  assert.match(landing, /<ReferenceHeroDesktop/);
+  assert.match(landing, /<ReferenceArtworkSection variant="how"/);
+  assert.match(landing, /<ReferenceArtworkSection variant="why"/);
+  assert.match(landing, /variant="chefs-app"/);
   assert.match(landing, /<AuthModal/);
   assert.match(landing, /<LocationModal/);
-  assert.match(landing, /<CommunityImpactSection \/>/);
-  assert.match(landing, /<AppDownloadSection \/>/);
+  assert.doesNotMatch(landing, /<CommunityImpactSection/);
+  assert.doesNotMatch(landing, /<AppDownloadSection/);
+
+  assert.match(referenceArtwork, /From their kitchen to/);
+  assert.match(referenceArtwork, /your table\./);
+  assert.match(referenceArtwork, /Food the way it/);
+  assert.match(referenceArtwork, /should be\./);
+  assert.match(referenceArtwork, /Every order supports/);
+  assert.match(referenceArtwork, /real people/);
+  assert.match(referenceArtwork, /Real kitchens\./);
+  assert.match(referenceArtwork, /Real people\./);
+  assert.match(referenceArtwork, /Real passion\./);
+  assert.match(referenceArtwork, /Homemade food,/);
+  assert.match(referenceArtwork, /in your pocket\./);
+  assert.match(referenceArtwork, /Become a Home Chef/);
+  assert.match(referenceArtwork, /id="craves-app"/);
+
+  assert.match(referenceCrop, /unoptimized/);
+  assert.match(referenceCrop, /approved reference PNG/);
+  assert.match(referenceCrop, /overflow/);
+
+  assert.match(footer, /<CravesLogo size="lg" \/>/);
+  assert.match(footer, /bg-\[#111111\] text-white/);
   assert.doesNotMatch(landing, /min-h-screen bg-cream text-ink/);
 });
 

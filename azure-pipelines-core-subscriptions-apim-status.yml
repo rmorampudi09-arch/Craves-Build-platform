@@ -1,0 +1,34 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: apimName
+    type: string
+    default: apim-craves-prodlow-l3ing6
+  - name: subscriptionContainerAppName
+    type: string
+    default: ca-craves-subscription-service-p
+  - name: apimHost
+    type: string
+    default: apim-craves-prodlow-l3ing6.azure-api.net
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+  - task: AzureCLI@2
+    displayName: Verify core Subscription APIM routes
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: scriptPath
+      scriptPath: scripts/apim/status-core-subscriptions-apim.sh
+    env:
+      RG: ${{ parameters.resourceGroupName }}
+      APIM: ${{ parameters.apimName }}
+      SUB_APP: ${{ parameters.subscriptionContainerAppName }}
+      APIM_HOST: ${{ parameters.apimHost }}

@@ -72,6 +72,14 @@ public class SubscriptionPaymentService {
         }
     }
 
+    public SubscriptionPaymentResponse getLatestOwned(String authorization, UUID subscriptionId) {
+        requireAuthorization(authorization);
+        validateSubscriptionOwnership(authorization, subscriptionId);
+        PaymentIntent intent = repository.findLatestBySubscription(subscriptionId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Subscription payment invoice is not ready"));
+        return repository.response(intent);
+    }
+
     public SubscriptionPaymentResponse getOwned(String authorization, UUID invoiceId) {
         PaymentIntent intent = owned(authorization, invoiceId);
         return repository.response(intent);
@@ -83,7 +91,13 @@ public class SubscriptionPaymentService {
         CreateSubscriptionPaymentOrderRequest request
     ) {
         PaymentIntent intent = owned(authorization, invoiceId);
-        if ("PAID".equals(intent.status()) || "PAYMENT_PENDING".equals(intent.status())) {
+        if (
+            "PAID".equals(intent.status())
+                || "PAYMENT_PENDING".equals(intent.status())
+                || ("FAILED".equals(intent.status())
+                    && StringUtils.hasText(intent.cashfreeOrderId())
+                    && StringUtils.hasText(intent.paymentSessionId()))
+        ) {
             return repository.response(intent);
         }
         if (!provider.paymentExecutionAllowed()) {
@@ -113,6 +127,7 @@ public class SubscriptionPaymentService {
             .header("x-client-id", provider.clientId())
             .header("x-client-" + "secret", provider.clientKey())
             .header("x-api-version", provider.apiVersion())
+            .header("x-idempotency-key", invoiceId.toString())
             .body(body)
             .retrieve()
             .body(JsonNode.class);
@@ -181,12 +196,17 @@ public class SubscriptionPaymentService {
         requireAuthorization(authorization);
         PaymentIntent intent = repository.findByInvoice(invoiceId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Subscription payment was not found"));
+        validateSubscriptionOwnership(authorization, intent.subscriptionId());
+        return intent;
+    }
+
+    private void validateSubscriptionOwnership(String authorization, UUID subscriptionId) {
         if (subscriptionClient == null) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Subscription ownership validation is unavailable");
         }
         try {
             subscriptionClient.get()
-                .uri("/api/v1/subscriptions/{subscriptionId}", intent.subscriptionId())
+                .uri("/api/v1/subscriptions/{subscriptionId}", subscriptionId)
                 .header(HttpHeaders.AUTHORIZATION, authorization)
                 .retrieve()
                 .toBodilessEntity();
@@ -199,7 +219,6 @@ public class SubscriptionPaymentService {
             }
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Subscription ownership validation failed");
         }
-        return intent;
     }
 
     private static void validate(EventEnvelope<PaymentRequestedData> event) {

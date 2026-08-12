@@ -23,11 +23,12 @@ Subscription invoice outbox
 ## APIs
 
 ```text
+GET  /api/v1/subscription-payments/subscriptions/{subscriptionId}
 GET  /api/v1/subscription-payments/invoices/{invoiceId}
 POST /api/v1/subscription-payments/invoices/{invoiceId}/orders
 ```
 
-Both require a Craves bearer token. Ownership is revalidated against Subscription Service. Browser/mobile clients never receive provider credentials.
+All three require a Craves bearer token. Ownership is revalidated against Subscription Service. The subscription-scoped lookup validates ownership before invoice existence is disclosed and returns the latest payment intent for that owned subscription; while the asynchronous invoice has not arrived yet, it returns `404`. Browser/mobile clients never receive provider credentials.
 
 ## Safety defaults
 

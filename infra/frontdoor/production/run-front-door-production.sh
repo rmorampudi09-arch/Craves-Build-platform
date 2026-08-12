@@ -63,4 +63,16 @@ if [[ "$ACTION" == "deploy" ]]; then
   fi
 fi
 
-exec bash infra/frontdoor/production/deploy-front-door.sh
+# Front Door rule-set and rule resource names are stricter than several other
+# Front Door child resources: they must start with a letter and be alphanumeric.
+# The original implementation used hyphenated names. Patch a temporary copy so
+# existing pipeline behavior remains unchanged while using Azure-valid names.
+MAIN_SCRIPT="infra/frontdoor/production/deploy-front-door.sh"
+TMP_SCRIPT="$(mktemp)"
+trap 'rm -f "$TMP_SCRIPT"' EXIT
+sed \
+  -e 's/RULESET="craves-security-headers"/RULESET="cravessecurityheaders"/' \
+  -e 's/--rule-name security-headers/--rule-name securityheaders/g' \
+  "$MAIN_SCRIPT" > "$TMP_SCRIPT"
+
+bash "$TMP_SCRIPT"

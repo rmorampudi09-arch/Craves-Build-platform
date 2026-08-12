@@ -139,7 +139,7 @@ export function ChefKitchenForm() {
           setForm((current) => ({
             ...current,
             addressLine1: detected.houseNumber || detected.formattedAddress,
-            addressLine2: detected.houseNumber ? detected.street || "" : current.addressLine2,
+            addressLine2: detected.street || current.addressLine2,
             areaName: detected.area || detected.city || current.areaName,
             city: detected.city || current.city,
             state: detected.state || current.state,

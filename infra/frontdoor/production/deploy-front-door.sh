@@ -268,8 +268,28 @@ prepare_domains(){
     sleep 15
   done
   [[ "$secret_state" == Succeeded ]] || fail "Front Door secret provisioning did not complete"
-  az afd custom-domain show -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$APEX_RES" >/dev/null 2>&1 || az afd custom-domain create -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$APEX_RES" --host-name craves.in --minimum-tls-version TLS12 --certificate-type CustomerCertificate --secret "$AFD_SECRET" --only-show-errors >/dev/null
-  az afd custom-domain show -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$WWW_RES" >/dev/null 2>&1 || az afd custom-domain create -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$WWW_RES" --host-name www.craves.in --minimum-tls-version TLS12 --certificate-type CustomerCertificate --secret "$AFD_SECRET" --only-show-errors >/dev/null
+  # Submit both independent domain writes without serially occupying the
+  # pipeline agent for each Azure long-running operation, then bound the
+  # combined wait and surface a precise failure state.
+  local apex_state www_state
+  if ! az afd custom-domain show -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$APEX_RES" >/dev/null 2>&1; then
+    az afd custom-domain create -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$APEX_RES" --host-name craves.in --minimum-tls-version TLS12 --certificate-type CustomerCertificate --secret "$AFD_SECRET" --no-wait --only-show-errors >/dev/null
+  fi
+  if ! az afd custom-domain show -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$WWW_RES" >/dev/null 2>&1; then
+    az afd custom-domain create -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$WWW_RES" --host-name www.craves.in --minimum-tls-version TLS12 --certificate-type CustomerCertificate --secret "$AFD_SECRET" --no-wait --only-show-errors >/dev/null
+  fi
+
+  apex_state=''
+  www_state=''
+  for _ in $(seq 1 120); do
+    apex_state="$(az afd custom-domain show -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$APEX_RES" --query provisioningState -o tsv 2>/dev/null || true)"
+    www_state="$(az afd custom-domain show -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$WWW_RES" --query provisioningState -o tsv 2>/dev/null || true)"
+    [[ "$apex_state" == Failed ]] && fail "Apex Front Door custom-domain provisioning failed"
+    [[ "$www_state" == Failed ]] && fail "WWW Front Door custom-domain provisioning failed"
+    [[ "$apex_state" == Succeeded && "$www_state" == Succeeded ]] && break
+    sleep 15
+  done
+  [[ "$apex_state" == Succeeded && "$www_state" == Succeeded ]] || fail "Front Door custom-domain provisioning did not complete; apex=$apex_state www=$www_state"
 }
 
 write_dns(){

@@ -29,6 +29,14 @@ public class SubscriptionPaymentController {
         this.apiProperties = apiProperties;
     }
 
+    @GetMapping("/subscriptions/{subscriptionId}")
+    public SubscriptionPaymentResponse getLatestBySubscription(
+        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+        @PathVariable UUID subscriptionId
+    ) {
+        return service.getLatestOwnedBySubscription(authorization, subscriptionId);
+    }
+
     @GetMapping("/invoices/{invoiceId}")
     public SubscriptionPaymentResponse get(
         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,

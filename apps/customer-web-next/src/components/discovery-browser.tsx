@@ -56,7 +56,7 @@ export function DiscoveryBrowser() {
     }
   }
 
-  function useLocation() {
+  function detectLocation() {
     if (!navigator.geolocation) {
       setMessage("This browser does not provide location access.");
       return;
@@ -90,7 +90,7 @@ export function DiscoveryBrowser() {
 
   async function refreshDiscovery(nextMode = mode) {
     if (latitude === null || longitude === null) {
-      useLocation();
+      detectLocation();
       return;
     }
     await discoverAt(latitude, longitude, nextMode);
@@ -144,7 +144,7 @@ export function DiscoveryBrowser() {
         <div className="mt-5 flex flex-wrap gap-3">
           <button
             type="button"
-            onClick={useLocation}
+            onClick={detectLocation}
             disabled={locating || busy}
             className="rounded-full bg-[#6930CA] px-6 py-3 text-sm font-bold text-white disabled:opacity-50"
           >

@@ -36,6 +36,8 @@ APP_ROUTE="craves-web-route"
 STATIC_ROUTE="craves-static-route"
 RULESET="cravessecurityheaders"
 RULE_NAME="securityheaders"
+STATIC_RULESET="cravesstaticidentity"
+STATIC_RULE_NAME="forceidentityencoding"
 WAF="craveswaf$SUFFIX"
 SECURITY_POLICY="craves-web-security"
 AFD_SECRET="craves-web-tls"
@@ -145,15 +147,46 @@ ensure_headers(){
     --only-show-errors >/dev/null
 }
 
-remove_gzip_fallback(){
-  # The temporary gzip-only bypass did not cover every real browser
-  # Accept-Encoding combination. Remove it now that Front Door-generated
-  # compression is disabled for the static route.
-  local rule_uri
-  rule_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/ruleSets/${RULESET}/rules/gzipfallback?api-version=2025-04-15"
-  if az rest --method get --uri "$rule_uri" --only-show-errors >/dev/null 2>&1; then
-    az rest --method delete --uri "$rule_uri" --only-show-errors >/dev/null
+ensure_static_identity_encoding(){
+  # The customer-web origin stalls when a browser advertises gzip for immutable
+  # Next.js assets. Normalize only the static-route origin request to identity;
+  # Front Door still caches the response globally and dynamic traffic is
+  # untouched.
+  az afd rule-set show -g "$RG" --profile-name "$PROFILE" --rule-set-name "$STATIC_RULESET" >/dev/null 2>&1 || az afd rule-set create -g "$RG" --profile-name "$PROFILE" --rule-set-name "$STATIC_RULESET" --only-show-errors >/dev/null
+
+  local rule_uri rule_body old_rule_uri
+  rule_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/ruleSets/${STATIC_RULESET}/rules/${STATIC_RULE_NAME}?api-version=2025-04-15"
+  rule_body="$(jq -nc '{
+    properties: {
+      order: 1,
+      conditions: [],
+      actions: [
+        {
+          name: "ModifyRequestHeader",
+          parameters: {
+            headerAction: "Overwrite",
+            headerName: "Accept-Encoding",
+            typeName: "DeliveryRuleHeaderActionParameters",
+            value: "identity"
+          }
+        }
+      ],
+      matchProcessingBehavior: "Continue"
+    }
+  }')"
+  az rest --method put --uri "$rule_uri" --headers Content-Type=application/json --body "$rule_body" --only-show-errors >/dev/null
+
+  old_rule_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/ruleSets/${RULESET}/rules/gzipfallback?api-version=2025-04-15"
+  if az rest --method get --uri "$old_rule_uri" --only-show-errors >/dev/null 2>&1; then
+    az rest --method delete --uri "$old_rule_uri" --only-show-errors >/dev/null
   fi
+}
+
+purge_static_assets(){
+  local purge_uri purge_body
+  purge_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/afdEndpoints/${ENDPOINT}/purge?api-version=2025-04-15"
+  purge_body="$(jq -nc '{contentPaths:["/_next/static/*"]}')"
+  az rest --method post --uri "$purge_uri" --headers Content-Type=application/json --body "$purge_body" --only-show-errors >/dev/null
 }
 
 ensure_edge(){
@@ -165,11 +198,13 @@ ensure_edge(){
     az afd origin create -g "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" --origin-name "$ORIGIN" --host-name "$ORIGIN_FQDN" --origin-host-header "$ORIGIN_FQDN" --priority 1 --weight 1000 --enabled-state Enabled --http-port 80 --https-port 443 --enforce-certificate-name-check true --only-show-errors >/dev/null
   fi
   ensure_headers
-  remove_gzip_fallback
-  local ogid rsid rs cache
+  ensure_static_identity_encoding
+  local ogid rsid static_rsid rs static_rs cache
   ogid="$(az afd origin-group show -g "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" --query id -o tsv)"
   rsid="$(az afd rule-set show -g "$RG" --profile-name "$PROFILE" --rule-set-name "$RULESET" --query id -o tsv)"
+  static_rsid="$(az afd rule-set show -g "$RG" --profile-name "$PROFILE" --rule-set-name "$STATIC_RULESET" --query id -o tsv)"
   rs="[{id:${rsid}}]"
+  static_rs="[{id:${rsid}},{id:${static_rsid}}]"
   if az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" >/dev/null 2>&1; then
     az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" --origin-group "$ogid" --patterns-to-match '/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$rs" --enabled-state Enabled --only-show-errors >/dev/null
   else
@@ -181,9 +216,9 @@ ensure_edge(){
   # from stalling on JavaScript/CSS bundles.
   cache='{compression-settings:{content-types-to-compress:[text/css,text/javascript,application/javascript,application/json,image/svg+xml,font/woff2,font/woff],is-compression-enabled:false},query-string-caching-behavior:IgnoreQueryString}'
   if az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" >/dev/null 2>&1; then
-    az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
+    az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$static_rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
   else
-    az afd route create -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
+    az afd route create -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$static_rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
   fi
 }
 
@@ -410,6 +445,12 @@ validate_edge(){
     (.compressionSettings.isCompressionEnabled == false)
   ' <<<"$static_cache" >/dev/null || fail "Static route caching must remain enabled with Front Door compression disabled: $static_cache"
 
+  local static_rule_uri
+  static_rule_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/ruleSets/${STATIC_RULESET}/rules/${STATIC_RULE_NAME}?api-version=2025-04-15"
+  az rest --method get --uri "$static_rule_uri" --only-show-errors |
+    jq -e '.properties.actions[] | select(.name == "ModifyRequestHeader" and .parameters.headerName == "Accept-Encoding" and .parameters.headerAction == "Overwrite" and .parameters.value == "identity")' >/dev/null ||
+    fail "Static route must normalize Accept-Encoding to identity"
+
   local host code headers
   host="$(endpoint_host)"; headers="$OUT/frontdoor-home-headers.txt"; code=''
   for _ in $(seq 1 80); do code="$(curl -sS -D "$headers" -o /dev/null -w '%{http_code}' --max-time 30 "https://$host/" || true)"; [[ "$code" =~ ^(200|301|302|307|308)$ ]] && break; sleep 15; done
@@ -431,7 +472,7 @@ write_status(){
 }
 
 case "$ACTION" in
-  deploy) ensure_profile; ensure_edge; ensure_waf; ensure_diagnostics; validate_edge ;;
+  deploy) ensure_profile; ensure_edge; ensure_waf; ensure_diagnostics; validate_edge; purge_static_assets ;;
   validate) validate_edge ;;
   prepareDomains) profile_exists || fail "Deploy first"; prepare_domains; write_dns ;;
   associateDomains) profile_exists || fail "Deploy first"; associate_domains; write_dns; validate_edge ;;

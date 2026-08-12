@@ -36,11 +36,18 @@ test("authentication asks for customer or chef mode", () => {
   assert.match(contents, /onAuthenticated\?\.\(user, accountMode\)/);
 });
 
-test("signed-in home loads backend address, cart, and discovery without fixed coordinates", () => {
+test("signed-in home loads backend address, cart, and nearby kitchens before menu items", () => {
   const contents = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
   assert.match(contents, /loadSelectedAddress\(\)/);
   assert.match(contents, /loadCart\(\)/);
   assert.match(
+    contents,
+    /discoverKitchens\(activeAddress\.lat, activeAddress\.lng, 5_000\)/,
+  );
+  assert.match(contents, /loadKitchenMenu\(kitchen\.id\)/);
+  assert.match(contents, /<KitchensGrid/);
+  assert.match(contents, /selectedKitchen \?/);
+  assert.doesNotMatch(
     contents,
     /discoverDishes\(activeAddress\.lat, activeAddress\.lng, 5_000\)/,
   );
@@ -130,7 +137,6 @@ test("pending chef applications remain editable exactly as the backend permits",
 test("chef dashboard reuses the working Craves session for applicants and chefs", () => {
   const dashboard = source("../components/chef-mode-dashboard.tsx");
   const phoneAuth = source("../components/phone-auth-form.tsx");
-
   assert.match(dashboard, /loadSession\(\)/);
   assert.match(dashboard, /state === "applicant"/);
   assert.match(dashboard, /Open chef application/);

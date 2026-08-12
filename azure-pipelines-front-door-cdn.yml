@@ -32,9 +32,9 @@ parameters:
     type: string
     default: DO_NOT_ASSOCIATE_DOMAINS
   - name: logAnalyticsWorkspaceName
-    displayName: Optional existing Log Analytics workspace name; blank auto-detects one workspace in the RG
+    displayName: Existing Log Analytics workspace name, or AUTO_DETECT
     type: string
-    default: ''
+    default: AUTO_DETECT
 
 pool:
   vmImage: ubuntu-latest
@@ -55,7 +55,7 @@ steps:
       azureSubscription: Craves-Dev-Service-Connection
       scriptType: bash
       scriptLocation: scriptPath
-      scriptPath: infra/frontdoor/production/deploy-front-door.sh
+      scriptPath: infra/frontdoor/production/run-front-door-production.sh
     env:
       ACTION: ${{ parameters.action }}
       RESOURCE_GROUP: $(resourceGroup)

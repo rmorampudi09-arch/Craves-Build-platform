@@ -184,14 +184,35 @@ ensure_waf(){
   if ! jq -e '.[]? | select((.ruleSetType//.type)=="Microsoft_BotManagerRuleSet")' <<<"$sets" >/dev/null; then
     az network front-door waf-policy managed-rules add -g "$RG" --policy-name "$WAF" --type Microsoft_BotManagerRuleSet --version 1.1 --only-show-errors >/dev/null
   fi
-  local ep wafid
+  local ep wafid security_policy_uri security_policy_body
   ep="$(az afd endpoint show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --query id -o tsv)"
   wafid="$(az network front-door waf-policy show -g "$RG" -n "$WAF" --query id -o tsv)"
-  if az afd security-policy show -g "$RG" --profile-name "$PROFILE" --security-policy-name "$SECURITY_POLICY" >/dev/null 2>&1; then
-    az afd security-policy update -g "$RG" --profile-name "$PROFILE" --security-policy-name "$SECURITY_POLICY" --domains "$ep" --waf-policy "$wafid" --only-show-errors >/dev/null
-  else
-    az afd security-policy create -g "$RG" --profile-name "$PROFILE" --security-policy-name "$SECURITY_POLICY" --domains "$ep" --waf-policy "$wafid" --only-show-errors >/dev/null
-  fi
+
+  # Azure CLI 2.88.0 removed the previous --domains and --waf-policy
+  # parameters from the security-policy create/update commands. The documented
+  # 2025-04-15 PUT is idempotent and works for both initial creation and
+  # subsequent association updates.
+  security_policy_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/securityPolicies/${SECURITY_POLICY}?api-version=2025-04-15"
+  security_policy_body="$(jq -nc --arg waf "$wafid" --arg domain "$ep" '{
+    properties: {
+      parameters: {
+        type: "WebApplicationFirewall",
+        wafPolicy: {id: $waf},
+        associations: [
+          {
+            domains: [{id: $domain}],
+            patternsToMatch: ["/*"]
+          }
+        ]
+      }
+    }
+  }')"
+  az rest \
+    --method put \
+    --uri "$security_policy_uri" \
+    --headers Content-Type=application/json \
+    --body "$security_policy_body" \
+    --only-show-errors >/dev/null
 }
 
 ensure_diagnostics(){
@@ -240,7 +261,7 @@ DNS
 
 associate_domains(){
   [[ "$CONFIRM_ASSOCIATE" == ASSOCIATE_CRAVES_DOMAINS ]] || fail "Use confirmAssociate=ASSOCIATE_CRAVES_DOMAINS"
-  local aj wj as ws aid wid cd ep wafid
+  local aj wj as ws aid wid cd ep wafid security_policy_uri security_policy_body
   aj="$(az afd custom-domain show -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$APEX_RES" -o json)"
   wj="$(az afd custom-domain show -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$WWW_RES" -o json)"
   as="$(jq -r '.domainValidationState // .properties.domainValidationState // empty' <<<"$aj")"; ws="$(jq -r '.domainValidationState // .properties.domainValidationState // empty' <<<"$wj")"
@@ -248,8 +269,34 @@ associate_domains(){
   aid="$(jq -r .id <<<"$aj")"; wid="$(jq -r .id <<<"$wj")"; cd="[{id:${aid}},{id:${wid}}]"
   az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" --formatted-custom-domains "$cd" --link-to-default-domain Enabled --only-show-errors >/dev/null
   az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --formatted-custom-domains "$cd" --link-to-default-domain Enabled --only-show-errors >/dev/null
-  ep="$(az afd endpoint show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --query id -o tsv)"; wafid="$(az network front-door waf-policy show -g "$RG" -n "$WAF" --query id -o tsv)"
-  az afd security-policy update -g "$RG" --profile-name "$PROFILE" --security-policy-name "$SECURITY_POLICY" --domains "$ep" "$aid" "$wid" --waf-policy "$wafid" --only-show-errors >/dev/null
+  ep="$(az afd endpoint show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --query id -o tsv)"
+  wafid="$(az network front-door waf-policy show -g "$RG" -n "$WAF" --query id -o tsv)"
+  security_policy_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/securityPolicies/${SECURITY_POLICY}?api-version=2025-04-15"
+  security_policy_body="$(jq -nc \
+    --arg waf "$wafid" \
+    --arg endpoint "$ep" \
+    --arg apex "$aid" \
+    --arg www "$wid" \
+    '{
+      properties: {
+        parameters: {
+          type: "WebApplicationFirewall",
+          wafPolicy: {id: $waf},
+          associations: [
+            {
+              domains: [{id: $endpoint}, {id: $apex}, {id: $www}],
+              patternsToMatch: ["/*"]
+            }
+          ]
+        }
+      }
+    }')"
+  az rest \
+    --method put \
+    --uri "$security_policy_uri" \
+    --headers Content-Type=application/json \
+    --body "$security_policy_body" \
+    --only-show-errors >/dev/null
 }
 
 validate_edge(){

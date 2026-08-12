@@ -159,9 +159,9 @@ public class CustomerProfileService {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
             "INSERT INTO customer_address (id, identity_id, address_label, recipient_name, contact_phone_number, " +
-                "address_line1, address_line2, landmark, area_name, city, state, postal_code, latitude, longitude, " +
+                "address_line1, address_line2, landmark, area_name, district_name, city, state, postal_code, latitude, longitude, " +
                 "is_default, is_active, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, now(), now())",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, now(), now())",
             id,
             user.identityId(),
             labelOrDefault(request.addressLabel()).name(),
@@ -171,6 +171,7 @@ public class CustomerProfileService {
             blankToNull(request.addressLine2()),
             blankToNull(request.landmark()),
             request.areaName().trim(),
+            request.districtName().trim(),
             request.city().trim(),
             request.state().trim(),
             request.postalCode().trim(),
@@ -191,7 +192,7 @@ public class CustomerProfileService {
         }
         jdbcTemplate.update(
             "UPDATE customer_address SET address_label = ?, recipient_name = ?, contact_phone_number = ?, " +
-                "address_line1 = ?, address_line2 = ?, landmark = ?, area_name = ?, city = ?, state = ?, " +
+                "address_line1 = ?, address_line2 = ?, landmark = ?, area_name = ?, district_name = ?, city = ?, state = ?, " +
                 "postal_code = ?, latitude = ?, longitude = ?, is_default = ?, updated_at = now() " +
                 "WHERE id = ? AND identity_id = ? AND is_active = true",
             labelOrDefault(request.addressLabel()).name(),
@@ -201,6 +202,7 @@ public class CustomerProfileService {
             blankToNull(request.addressLine2()),
             blankToNull(request.landmark()),
             request.areaName().trim(),
+            request.districtName().trim(),
             request.city().trim(),
             request.state().trim(),
             request.postalCode().trim(),
@@ -315,6 +317,7 @@ public class CustomerProfileService {
             rs.getString("address_line2"),
             rs.getString("landmark"),
             rs.getString("area_name"),
+            rs.getString("district_name"),
             rs.getString("city"),
             rs.getString("state"),
             rs.getString("postal_code"),
@@ -336,6 +339,9 @@ public class CustomerProfileService {
         }
         if (!StringUtils.hasText(request.areaName())) {
             throw ApiException.badRequest("AREA_NAME_REQUIRED", "Area name is required");
+        }
+        if (!StringUtils.hasText(request.districtName())) {
+            throw ApiException.badRequest("DISTRICT_NAME_REQUIRED", "District is required");
         }
         if (!StringUtils.hasText(request.postalCode())) {
             throw ApiException.badRequest("POSTAL_CODE_REQUIRED", "Postal code is required");

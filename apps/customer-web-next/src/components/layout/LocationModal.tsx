@@ -9,6 +9,11 @@ interface LocationModalProps {
   onSaved?: (addr: CravesAddress) => void;
 }
 
+type Notice = {
+  tone: "success" | "error";
+  text: string;
+} | null;
+
 export function LocationModal({ open, onClose, onSaved }: LocationModalProps) {
   const [form, setForm] = useState<CravesAddress>({
     hno: "",
@@ -19,7 +24,7 @@ export function LocationModal({ open, onClose, onSaved }: LocationModalProps) {
     pincode: "",
   });
   const [locating, setLocating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
 
   if (!open) return null;
 
@@ -27,9 +32,10 @@ export function LocationModal({ open, onClose, onSaved }: LocationModalProps) {
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const useLiveLocation = () => {
-    setError(null);
+    setNotice(null);
     if (!("geolocation" in navigator)) {
-      return setError("Geolocation is not supported by this browser.");
+      setNotice({ tone: "error", text: "Geolocation is not supported by this browser." });
+      return;
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
@@ -50,25 +56,30 @@ export function LocationModal({ open, onClose, onSaved }: LocationModalProps) {
             lng: longitude,
           };
           setForm(next);
-          setError(
-            detected.preciseHouseNumber
+          setNotice({
+            tone: "success",
+            text: detected.preciseHouseNumber
               ? "Address detected. Review the house/building details and confirm."
               : "Location detected. Please confirm or correct the flat/house/building before continuing.",
-          );
+          });
         } catch (locationError) {
           setForm((current) => ({ ...current, lat: latitude, lng: longitude }));
-          setError(
-            locationError instanceof Error
+          setNotice({
+            tone: "error",
+            text: locationError instanceof Error
               ? locationError.message
               : "Could not identify the written address for this location.",
-          );
+          });
         } finally {
           setLocating(false);
         }
       },
       (geoError) => {
         setLocating(false);
-        setError(geoError.message || "Could not access your location.");
+        setNotice({
+          tone: "error",
+          text: geoError.message || "Could not access your location.",
+        });
       },
       { enableHighAccuracy: true, timeout: 12_000, maximumAge: 30_000 },
     );
@@ -85,7 +96,11 @@ export function LocationModal({ open, onClose, onSaved }: LocationModalProps) {
       || form.lat == null
       || form.lng == null
     ) {
-      return setError("Use current location and confirm the complete delivery address.");
+      setNotice({
+        tone: "error",
+        text: "Use current location and confirm the complete delivery address.",
+      });
+      return;
     }
     saveAddress(form);
     onSaved?.(form);
@@ -138,9 +153,16 @@ export function LocationModal({ open, onClose, onSaved }: LocationModalProps) {
             <Field label="District" value={form.district} onChange={set("district")} required />
             <Field label="Pincode" value={form.pincode ?? ""} onChange={set("pincode")} inputMode="numeric" maxLength={6} required />
           </div>
-          {error && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
-              {error}
+          {notice && (
+            <p
+              role="status"
+              className={
+                notice.tone === "success"
+                  ? "rounded-md bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800"
+                  : "rounded-md bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive"
+              }
+            >
+              {notice.text}
             </p>
           )}
           <button type="submit" className="btn-primary w-full justify-center rounded-lg py-3 text-base">

@@ -65,7 +65,7 @@ public final class ApiDtos {
         String addressLine2,
         String landmark,
         @NotBlank String areaName,
-        @NotBlank String districtName,
+        String districtName,
         @NotBlank String city,
         @NotBlank String state,
         @NotBlank String postalCode,

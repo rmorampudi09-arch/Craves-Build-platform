@@ -77,6 +77,15 @@ function LandingPage() {
 
   return (
     <div className={`${styles.page} min-h-screen bg-white text-ink`}>
+      <style>{`
+        #top > div,
+        #how-it-works,
+        #why-craves,
+        #become-a-chef {
+          margin-inline: 0.7cm;
+        }
+      `}</style>
+
       <main>
         <ReferenceHeroDesktop
           locationLabel={locationLabel}

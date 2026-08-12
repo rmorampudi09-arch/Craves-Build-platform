@@ -145,7 +145,7 @@ stages:
                 exit 1
               fi
               if grep -REn '(x-client-secret|PAYMENT_PROVIDER_CLIENT_KEY|CRAVES_CASHFREE.*SECRET)' \
-                apps/customer-web-next/src/app/subscription-payments \
+                apps/customer-web-next/src/app/api/subscription-payments \
                 apps/customer-web-next/src/components/subscription-cashfree-payment.tsx; then
                 echo 'ERROR: Payment-provider secret material or secret names must not cross into the customer browser/BFF implementation.' >&2
                 exit 1

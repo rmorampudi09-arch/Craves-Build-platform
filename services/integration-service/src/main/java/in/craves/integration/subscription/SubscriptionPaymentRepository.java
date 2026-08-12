@@ -60,6 +60,15 @@ public class SubscriptionPaymentRepository {
         ).stream().findFirst();
     }
 
+    public Optional<PaymentIntent> findLatestBySubscription(UUID subscriptionId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM payment_schema.subscription_payment_intent " +
+                "WHERE subscription_id = ? ORDER BY cycle_start DESC, created_at DESC LIMIT 1",
+            this::mapIntent,
+            subscriptionId
+        ).stream().findFirst();
+    }
+
     public Optional<PaymentIntent> findByCashfreeOrder(String cashfreeOrderId) {
         return jdbcTemplate.query(
             "SELECT * FROM payment_schema.subscription_payment_intent WHERE cashfree_order_id = ?",

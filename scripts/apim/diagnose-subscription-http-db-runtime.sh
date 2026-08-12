@@ -115,12 +115,11 @@ for SERVER in "${PG_SERVERS[@]}"; do
 
   FIREWALL="$(az postgres flexible-server firewall-rule list \
     --resource-group "$RG" \
-    --name "$SERVER" \
+    --server-name "$SERVER" \
     -o json \
     --only-show-errors 2>/dev/null || echo '[]')"
   echo "PostgreSQL firewall rules: $(jq 'length' <<<"$FIREWALL")"
   jq -r '.[] | "  rule=" + (.name // "") + " start=" + (.startIpAddress // "") + " end=" + (.endIpAddress // "")' <<<"$FIREWALL"
-
 done
 
 if [[ "$MATCHED" -eq 0 ]]; then
@@ -152,14 +151,18 @@ if [[ -n "$REVISION" ]]; then
 fi
 
 echo 'Recent Subscription Service console evidence (filtered; secret values are not queried):'
-LOGS="$(az containerapp logs show \
-  --resource-group "$RG" \
-  --name "$SUB_APP" \
-  ${REVISION:+--revision "$REVISION"} \
-  --type console \
-  --tail 220 \
-  --format text \
-  --only-show-errors 2>/dev/null || true)"
+LOG_ARGS=(
+  --resource-group "$RG"
+  --name "$SUB_APP"
+  --type console
+  --tail 220
+  --format text
+  --only-show-errors
+)
+if [[ -n "$REVISION" ]]; then
+  LOG_ARGS+=(--revision "$REVISION")
+fi
+LOGS="$(az containerapp logs show "${LOG_ARGS[@]}" 2>/dev/null || true)"
 if [[ -n "$LOGS" ]]; then
   printf '%s\n' "$LOGS" \
     | grep -Ei 'Hikari|PostgreSQL|PSQL|JDBC|Flyway|connection|timeout|SQLException|DataSource|ERROR|WARN|Exception' \

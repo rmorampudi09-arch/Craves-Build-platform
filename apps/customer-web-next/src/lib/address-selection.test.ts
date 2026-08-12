@@ -13,6 +13,7 @@ function address(id: string, active: boolean, isDefault: boolean): CustomerAddre
     addressLine2: null,
     landmark: null,
     areaName: "Madhapur",
+    districtName: "Hyderabad",
     city: "Hyderabad",
     state: "Telangana",
     postalCode: "500081",

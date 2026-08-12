@@ -6,11 +6,18 @@ ACTION="${ACTION:-discover}"
 RG="${RESOURCE_GROUP:-rg-craves-prodlow-centralindia}"
 PROFILE="${FRONT_DOOR_PROFILE:-afd-craves-prodlow}"
 CONFIRM_PREMIUM="${CONFIRM_PREMIUM:-DO_NOT_PROVISION_PREMIUM}"
+LAW_NAME="${LOG_ANALYTICS_WORKSPACE_NAME:-AUTO_DETECT}"
 
 fail(){ echo "ERROR: $*" >&2; exit 1; }
 info(){ echo "INFO: $*"; }
 
 az account show >/dev/null
+
+# Azure DevOps can require a non-empty runtime string. AUTO_DETECT means the
+# main deployment script should use its existing single-workspace auto-detect logic.
+if [[ "$LAW_NAME" == "AUTO_DETECT" ]]; then
+  export LOG_ANALYTICS_WORKSPACE_NAME=""
+fi
 
 # Azure Front Door Standard -> Premium uses a dedicated REST upgrade operation.
 # The REST contract requires wafMappingList. For a profile with no existing

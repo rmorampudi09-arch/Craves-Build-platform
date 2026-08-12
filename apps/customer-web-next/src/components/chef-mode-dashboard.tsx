@@ -290,8 +290,8 @@ export function ChefModeDashboard() {
       label: "Kitchen",
       title: snapshot.kitchen?.status ?? "Not created",
       description: kitchenMapped
-        ? "Coordinates ready for discovery"
-        : "Map coordinates require attention",
+        ? "Kitchen location ready for nearby discovery"
+        : "Kitchen location requires confirmation",
       icon: Store,
     },
     {
@@ -319,7 +319,7 @@ export function ChefModeDashboard() {
       href: "/chef/operations",
       label: "Operations",
       title: "Readiness and compliance",
-      description: "Approval, mapping, availability and supported proof status",
+      description: "Approval, mapped location, availability and supported proof status",
       icon: ShieldCheck,
     },
   ] as const;

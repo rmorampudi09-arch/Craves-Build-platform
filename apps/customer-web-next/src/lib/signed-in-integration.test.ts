@@ -112,7 +112,7 @@ test("every home-chef call to action opens the live chef registration flow", () 
   assert.match(kitchen, /application\.status !== "APPROVED"/);
   assert.match(
     kitchen,
-    /Active kitchens without coordinates cannot appear in discovery/,
+    /Use current location before activating this kitchen/,
   );
 });
 

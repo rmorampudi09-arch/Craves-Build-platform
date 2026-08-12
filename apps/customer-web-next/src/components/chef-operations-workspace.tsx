@@ -151,13 +151,13 @@ export function ChefOperationsWorkspace() {
     requiredDocumentTypes.has("AADHAAR_CARD") &&
     requiredDocumentTypes.has("PAN_CARD");
   const kitchenActive = kitchen?.status === "ACTIVE";
-  const hasCoordinates =
+  const locationMapped =
     typeof kitchen?.latitude === "number" &&
     typeof kitchen.longitude === "number";
   const discoverable =
     applicationApproved &&
     kitchenActive &&
-    hasCoordinates &&
+    locationMapped &&
     metrics.availableItems > 0;
 
   if (state === "loading") {
@@ -214,7 +214,7 @@ export function ChefOperationsWorkspace() {
                   : "Complete the required operational states"}
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                Discovery requires an approved chef application, an ACTIVE kitchen with coordinates and at least one ACTIVE and available menu item. The backend remains authoritative for every request.
+                Discovery requires an approved chef application, an ACTIVE kitchen with a confirmed mapped location and at least one ACTIVE and available menu item. The backend remains authoritative for every request.
               </p>
             </div>
           </div>
@@ -317,21 +317,19 @@ export function ChefOperationsWorkspace() {
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary">
               <MapPinned className="h-5 w-5" aria-hidden="true" />
             </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(hasCoordinates)}`}>
-              {hasCoordinates ? "MAPPED" : "MISSING"}
+            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(locationMapped)}`}>
+              {locationMapped ? "MAPPED" : "MISSING"}
             </span>
           </div>
           <h3 className="mt-4 font-display text-lg font-bold text-ink">
-            Discovery coordinates
+            Kitchen location
           </h3>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Active kitchens require valid latitude and longitude so PostGIS discovery can calculate distance from the customer address.
+            Craves keeps the precise kitchen map point securely in the background so nearby discovery and delivery pickup can work without exposing technical location values to chefs.
           </p>
-          {hasCoordinates && kitchen && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              {kitchen.latitude?.toFixed(5)}, {kitchen.longitude?.toFixed(5)}
-            </p>
-          )}
+          <Link href="/chef/kitchen" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-contrast-red">
+            {locationMapped ? "Review kitchen address" : "Confirm kitchen location"}
+          </Link>
         </article>
 
         <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)]">

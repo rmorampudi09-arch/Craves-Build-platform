@@ -17,6 +17,19 @@ class CustomerAddressRequestValidationTest {
         assertThat(validator.validate(request(
             "Customer Name",
             "Madhapur",
+            "Hyderabad",
+            "500081",
+            new BigDecimal("17.4483"),
+            new BigDecimal("78.3915")
+        ))).isEmpty();
+    }
+
+    @Test
+    void temporarilyAcceptsMissingDistrictForRollingDeploymentCompatibility() {
+        assertThat(validator.validate(request(
+            "Customer Name",
+            "Madhapur",
+            null,
             "500081",
             new BigDecimal("17.4483"),
             new BigDecimal("78.3915")
@@ -28,6 +41,7 @@ class CustomerAddressRequestValidationTest {
         assertThat(validator.validate(request(
             null,
             "Madhapur",
+            "Hyderabad",
             "500081",
             new BigDecimal("17.4483"),
             new BigDecimal("78.3915")
@@ -41,6 +55,7 @@ class CustomerAddressRequestValidationTest {
         assertThat(validator.validate(request(
             "Customer Name",
             null,
+            "Hyderabad",
             "500081",
             new BigDecimal("17.4483"),
             new BigDecimal("78.3915")
@@ -54,6 +69,7 @@ class CustomerAddressRequestValidationTest {
         assertThat(validator.validate(request(
             "Customer Name",
             "Madhapur",
+            "Hyderabad",
             null,
             new BigDecimal("17.4483"),
             new BigDecimal("78.3915")
@@ -67,6 +83,7 @@ class CustomerAddressRequestValidationTest {
         assertThat(validator.validate(request(
             "Customer Name",
             "Madhapur",
+            "Hyderabad",
             "500081",
             null,
             new BigDecimal("78.3915")
@@ -80,6 +97,7 @@ class CustomerAddressRequestValidationTest {
         assertThat(validator.validate(request(
             "Customer Name",
             "Madhapur",
+            "Hyderabad",
             "500081",
             new BigDecimal("17.4483"),
             new BigDecimal("181")
@@ -91,6 +109,7 @@ class CustomerAddressRequestValidationTest {
     private static CustomerAddressRequest request(
         String recipientName,
         String areaName,
+        String districtName,
         String postalCode,
         BigDecimal latitude,
         BigDecimal longitude
@@ -103,6 +122,7 @@ class CustomerAddressRequestValidationTest {
             "Road No. 1",
             "Near Metro",
             areaName,
+            districtName,
             "Hyderabad",
             "Telangana",
             postalCode,

@@ -65,10 +65,7 @@ function notify() {
   for (const listener of listeners) listener();
 }
 
-function withCustomerProfile(
-  current: CravesUser,
-  profile: CustomerProfile,
-): CravesUser {
+function withCustomerProfile(current: CravesUser, profile: CustomerProfile): CravesUser {
   const username = `${profile.firstName} ${profile.lastName}`.trim();
   return {
     ...current,
@@ -82,12 +79,8 @@ function withCustomerProfile(
   };
 }
 
-async function hydrateCustomerProfile(
-  current: CravesUser,
-): Promise<CravesUser> {
-  const isCustomer = current.roles.some(
-    (role) => role.toUpperCase() === "CUSTOMER",
-  );
+async function hydrateCustomerProfile(current: CravesUser): Promise<CravesUser> {
+  const isCustomer = current.roles.some((role) => role.toUpperCase() === "CUSTOMER");
   if (!isCustomer) return current;
 
   const response = await fetch("/api/customer/profile", {
@@ -96,9 +89,7 @@ async function hydrateCustomerProfile(
   }).catch(() => null);
   if (!response?.ok) return current;
 
-  const profile = parseCustomerProfile(
-    await response.json().catch(() => null),
-  );
+  const profile = parseCustomerProfile(await response.json().catch(() => null));
   if (!profile) return current;
 
   session = withCustomerProfile(current, profile);
@@ -112,9 +103,7 @@ export function setSessionIdentity(identity: CravesIdentity): CravesUser {
   return session;
 }
 
-export function setSessionProfile(
-  profile: CustomerProfile,
-): CravesUser | null {
+export function setSessionProfile(profile: CustomerProfile): CravesUser | null {
   if (!session) return null;
   session = withCustomerProfile(session, profile);
   notify();
@@ -126,11 +115,7 @@ export function getSession(): CravesUser | null {
 }
 
 export async function loadSession(): Promise<CravesUser | null> {
-  const lookup = async () =>
-    fetch("/api/auth/me", {
-      cache: "no-store",
-      credentials: "same-origin",
-    });
+  const lookup = async () => fetch("/api/auth/me", { cache: "no-store", credentials: "same-origin" });
   let response = await lookup();
   if (response.status === 401) {
     const refreshed = await fetch("/api/auth/refresh", {
@@ -144,20 +129,12 @@ export async function loadSession(): Promise<CravesUser | null> {
     notify();
     return null;
   }
-  const identity = (await response
-    .json()
-    .catch(() => null)) as CravesIdentity | null;
+  const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
   if (!identity?.id) return null;
   const current = setSessionIdentity(identity);
   return hydrateCustomerProfile(current);
 }
 
-/**
- * Rotates the HTTP-only Craves session so newly granted roles are embedded in
- * the access token used by downstream Catalog and Order services. Auth /me
- * reads current roles from the database, but those services authorize the JWT
- * claims, so approval is not complete in the browser until this succeeds.
- */
 export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
   if (roleSynchronization) return roleSynchronization;
   roleSynchronization = (async () => {
@@ -166,9 +143,7 @@ export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
       credentials: "same-origin",
     }).catch(() => null);
     if (!response?.ok) return null;
-    const body = (await response.json().catch(() => null)) as {
-      identity?: CravesIdentity;
-    } | null;
+    const body = (await response.json().catch(() => null)) as { identity?: CravesIdentity } | null;
     if (!body?.identity?.id) return null;
     const current = setSessionIdentity(body.identity);
     return hydrateCustomerProfile(current);
@@ -180,10 +155,7 @@ export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
 
 export async function clearSession(): Promise<void> {
   try {
-    await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "same-origin",
-    });
+    await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
   } finally {
     session = null;
     selectedLocation = null;
@@ -212,7 +184,7 @@ function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
     street: address.addressLine2 ?? address.landmark ?? undefined,
     city: address.city,
     mandal: address.areaName,
-    district: address.state,
+    district: address.districtName ?? address.city,
     pincode: address.postalCode,
     lat: address.latitude,
     lng: address.longitude,
@@ -224,13 +196,9 @@ export async function loadSelectedAddress(): Promise<CravesAddress | null> {
     cache: "no-store",
     credentials: "same-origin",
   });
-  if (!response.ok)
-    throw new Error("Saved delivery addresses could not be loaded.");
-  const addresses = (await response.json().catch(() => null)) as
-    | CustomerAddress[]
-    | null;
-  if (!Array.isArray(addresses))
-    throw new Error("Saved delivery addresses returned an invalid response.");
+  if (!response.ok) throw new Error("Saved delivery addresses could not be loaded.");
+  const addresses = (await response.json().catch(() => null)) as CustomerAddress[] | null;
+  if (!Array.isArray(addresses)) throw new Error("Saved delivery addresses returned an invalid response.");
   const selected = selectActiveDeliveryAddress(addresses);
   selectedLocation = selected ? fromCustomerAddress(selected) : null;
   return selectedLocation;

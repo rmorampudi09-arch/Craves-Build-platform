@@ -19,16 +19,17 @@ function record(value: unknown): Record<string, unknown> | null {
 function safeUpstreamMessage(body: unknown): string | null {
   const raw = record(body);
   const message = raw?.message;
-  return typeof message === "string" && message.trim().length > 0 && message.length <= 240
-    ? message.trim()
-    : null;
+  if (typeof message !== "string") return null;
+  const trimmed = message.trim();
+  if (!trimmed || trimmed.length > 240) return null;
+  return /\b(latitude|longitude|coordinates?)\b/i.test(trimmed) ? null : trimmed;
 }
 
 function failure(status: number, body: unknown = null, correlationId: string | null = null) {
   const message = status === 401
     ? "Please sign in again."
     : status === 400
-      ? safeUpstreamMessage(body) ?? "Enter a complete valid address and map coordinates."
+      ? safeUpstreamMessage(body) ?? "Confirm the complete delivery address and current location."
       : status === 404
         ? "Address was not found."
         : status === 502

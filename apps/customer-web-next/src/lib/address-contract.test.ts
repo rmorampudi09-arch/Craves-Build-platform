@@ -16,6 +16,7 @@ const input = {
   addressLine2: "Road 2",
   landmark: "Near Park",
   areaName: "Kukatpally",
+  districtName: "Hyderabad",
   city: "Hyderabad",
   state: "Telangana",
   postalCode: "500072",
@@ -33,6 +34,7 @@ const metadata = {
 
 test("validates customer-owned address input", () => {
   assert.deepEqual(parseAddressInput(input), input);
+  assert.equal(parseAddressInput({ ...input, districtName: "" }), null);
   assert.equal(parseAddressInput({ ...input, latitude: 100 }), null);
   assert.equal(parseAddressInput({ ...input, contactPhoneNumber: "123" }), null);
   assert.equal(parseAddressInput({ ...input, latitude: "" }), null);
@@ -46,6 +48,7 @@ test("parses current address response without exposing identity id", () => {
   });
   assert.ok(parsed);
   assert.equal("identityId" in parsed, false);
+  assert.equal(parsed.districtName, "Hyderabad");
   assert.equal(isDeliveryReadyAddress(parsed), true);
 });
 
@@ -55,6 +58,7 @@ test("keeps pre-location-migration addresses visible but not checkout eligible",
     ...input,
     recipientName: null,
     areaName: null,
+    districtName: null,
     postalCode: null,
     latitude: null,
     longitude: null,
@@ -63,9 +67,21 @@ test("keeps pre-location-migration addresses visible but not checkout eligible",
   assert.ok(parsed);
   assert.equal(parsed.recipientName, null);
   assert.equal(parsed.areaName, null);
+  assert.equal(parsed.districtName, null);
   assert.equal(parsed.latitude, null);
   assert.equal(parsed.active, false);
   assert.equal(isDeliveryReadyAddress(parsed), false);
+});
+
+test("accepts legacy saved addresses without district until edited", () => {
+  const parsed = parseCustomerAddress({
+    ...metadata,
+    ...input,
+    districtName: null,
+  });
+  assert.ok(parsed);
+  assert.equal(parsed.districtName, null);
+  assert.equal(isDeliveryReadyAddress(parsed), true);
 });
 
 test("rejects a legacy address with only one coordinate", () => {

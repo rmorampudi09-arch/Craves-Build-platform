@@ -9,6 +9,7 @@ export type CustomerAddress = {
   addressLine2: string | null;
   landmark: string | null;
   areaName: string | null;
+  districtName: string | null;
   city: string;
   state: string;
   postalCode: string | null;
@@ -37,6 +38,7 @@ export type CustomerAddressInput = {
   addressLine2: string | null;
   landmark: string | null;
   areaName: string;
+  districtName: string;
   city: string;
   state: string;
   postalCode: string;
@@ -127,6 +129,7 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
   const contactPhoneNumber = text(raw.contactPhoneNumber, 16);
   const addressLine1 = text(raw.addressLine1, 250);
   const areaName = text(raw.areaName, 120);
+  const districtName = text(raw.districtName, 120);
   const city = text(raw.city, 120);
   const state = text(raw.state, 120);
   const postalCode = text(raw.postalCode, 20);
@@ -141,6 +144,7 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
     || !PHONE.test(contactPhoneNumber)
     || !addressLine1
     || !areaName
+    || !districtName
     || !city
     || !state
     || !postalCode
@@ -159,6 +163,7 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
     addressLine2: optionalText(raw.addressLine2, 250),
     landmark: optionalText(raw.landmark, 160),
     areaName,
+    districtName,
     city,
     state,
     postalCode,
@@ -170,9 +175,8 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
 
 /**
  * Parse both current address responses and rows created before the location
- * migration. V1 allowed recipient name, postal code and coordinates to be null;
- * V3 later added nullable area_name. Those historical rows must remain visible
- * so the customer can complete them, but they are not eligible for checkout.
+ * migrations. Historical rows remain visible so the customer can complete
+ * them, but missing delivery-critical fields still prevent checkout.
  */
 export function parseCustomerAddress(value: unknown): CustomerAddress | null {
   const raw = responseObject(value);
@@ -186,6 +190,7 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
   const addressLine2 = optionalText(raw.addressLine2, 250);
   const landmark = optionalText(raw.landmark, 160);
   const areaName = optionalText(raw.areaName, 120);
+  const districtName = optionalText(raw.districtName, 120);
   const city = text(raw.city, 120);
   const state = text(raw.state, 120);
   const postalCode = optionalText(raw.postalCode, 20);
@@ -232,14 +237,13 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
     addressLine2,
     landmark,
     areaName,
+    districtName,
     city,
     state,
     postalCode,
     latitude,
     longitude,
     isDefault: raw.isDefault,
-    // Older rows remain visible in address management, but exposing them as
-    // active would let checkout screens select an incomplete delivery address.
     active: raw.active && deliveryReady,
     createdAt,
     updatedAt,

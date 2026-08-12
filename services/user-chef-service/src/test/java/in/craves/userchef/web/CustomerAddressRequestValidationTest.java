@@ -25,6 +25,18 @@ class CustomerAddressRequestValidationTest {
     }
 
     @Test
+    void temporarilyAcceptsMissingDistrictForRollingDeploymentCompatibility() {
+        assertThat(validator.validate(request(
+            "Customer Name",
+            "Madhapur",
+            null,
+            "500081",
+            new BigDecimal("17.4483"),
+            new BigDecimal("78.3915")
+        ))).isEmpty();
+    }
+
+    @Test
     void rejectsMissingRecipientName() {
         assertThat(validator.validate(request(
             null,
@@ -50,20 +62,6 @@ class CustomerAddressRequestValidationTest {
         )))
             .extracting(violation -> violation.getPropertyPath().toString())
             .contains("areaName");
-    }
-
-    @Test
-    void rejectsMissingDistrictName() {
-        assertThat(validator.validate(request(
-            "Customer Name",
-            "Madhapur",
-            null,
-            "500081",
-            new BigDecimal("17.4483"),
-            new BigDecimal("78.3915")
-        )))
-            .extracting(violation -> violation.getPropertyPath().toString())
-            .contains("districtName");
     }
 
     @Test

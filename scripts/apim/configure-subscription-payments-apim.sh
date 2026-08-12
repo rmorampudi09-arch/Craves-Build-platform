@@ -165,6 +165,9 @@ PAYMENT_API=$(ensure_api \
   "$PAYMENT_BACKEND")
 
 INVOICE_PARAM='[{"name":"invoiceId","type":"string","required":true}]'
+SUBSCRIPTION_PARAM='[{"name":"subscriptionId","type":"string","required":true}]'
+put_operation "$SUB_PAYMENT_API" "$SUBSCRIPTION_PAYMENT_BACKEND" "$AUTH_POLICY" "__SUBSCRIPTION_PAYMENT_BACKEND_URL__" \
+  "get-subscription-payment-by-subscription" "GET" "/subscriptions/{subscriptionId}" "Get latest owned subscription payment" "$SUBSCRIPTION_PARAM" true
 put_operation "$SUB_PAYMENT_API" "$SUBSCRIPTION_PAYMENT_BACKEND" "$AUTH_POLICY" "__SUBSCRIPTION_PAYMENT_BACKEND_URL__" \
   "get-subscription-payment-invoice" "GET" "/invoices/{invoiceId}" "Get owned subscription payment invoice" "$INVOICE_PARAM" true
 put_operation "$SUB_PAYMENT_API" "$SUBSCRIPTION_PAYMENT_BACKEND" "$AUTH_POLICY" "__SUBSCRIPTION_PAYMENT_BACKEND_URL__" \

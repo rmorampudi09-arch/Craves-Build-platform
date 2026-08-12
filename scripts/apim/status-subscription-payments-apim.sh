@@ -85,6 +85,7 @@ verify_route() {
 SUB_PAYMENT_API=$(api_id_for_path "api/v1/subscription-payments")
 PAYMENT_API=$(api_id_for_path "api/v1/payments")
 
+verify_route "$SUB_PAYMENT_API" "$SUBSCRIPTION_PAYMENT_BACKEND" GET "/subscriptions/{subscriptionId}" true
 verify_route "$SUB_PAYMENT_API" "$SUBSCRIPTION_PAYMENT_BACKEND" GET "/invoices/{invoiceId}" true
 verify_route "$SUB_PAYMENT_API" "$SUBSCRIPTION_PAYMENT_BACKEND" POST "/invoices/{invoiceId}/orders" true
 verify_route "$PAYMENT_API" "$PAYMENT_BACKEND" POST "/webhooks/cashfree" false

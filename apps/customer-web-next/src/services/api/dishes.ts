@@ -165,6 +165,35 @@ export async function discoverDishes(
   return [];
 }
 
+export async function loadKitchenMenu(kitchenId: string): Promise<Dish[]> {
+  const response = await fetch(
+    `/api/catalog/kitchens/${encodeURIComponent(kitchenId)}/menu-items`,
+    {
+      cache: "no-store",
+      credentials: "same-origin",
+    },
+  );
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof body.message === "string"
+        ? body.message
+        : "This kitchen's menu is temporarily unavailable.";
+    throw new Error(message);
+  }
+
+  if (!Array.isArray(body) || body.length > 500 || !body.every(isPublicDetail)) {
+    throw new Error("Craves returned an invalid kitchen menu response.");
+  }
+
+  discoveredDishes = body.map(mapDetail);
+  return [...discoveredDishes];
+}
+
 export async function loadDish(id: string): Promise<Dish> {
   const cached = getDish(id);
   if (cached) return cached;

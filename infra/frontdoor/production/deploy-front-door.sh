@@ -163,7 +163,11 @@ ensure_edge(){
   else
     az afd route create -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" --origin-group "$ogid" --patterns-to-match '/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$rs" --enabled-state Enabled --only-show-errors >/dev/null
   fi
-  cache='{compression-settings:{content-types-to-compress:[text/css,text/javascript,application/javascript,application/json,image/svg+xml,font/woff2,font/woff],is-compression-enabled:true},query-string-caching-behavior:IgnoreQueryString}'
+  # Front Door's edge-generated gzip representation timed out for Next.js
+  # static assets while Brotli, identity, and the origin's own gzip response
+  # were healthy. Keep CDN caching enabled, but let the origin negotiate gzip
+  # so all Accept-Encoding fallbacks remain available.
+  cache='{compression-settings:{content-types-to-compress:[text/css,text/javascript,application/javascript,application/json,image/svg+xml,font/woff2,font/woff],is-compression-enabled:false},query-string-caching-behavior:IgnoreQueryString}'
   if az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" >/dev/null 2>&1; then
     az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
   else
@@ -376,7 +380,7 @@ validate_edge(){
   jq -e '
     (type == "object") and
     (.queryStringCachingBehavior == "IgnoreQueryString") and
-    (.compressionSettings.isCompressionEnabled == true)
+    (.compressionSettings.isCompressionEnabled == false)
   ' <<<"$static_cache" >/dev/null || fail "Static route cache/compression is not configured as expected: $static_cache"
   local host code headers
   host="$(endpoint_host)"; headers="$OUT/frontdoor-home-headers.txt"; code=''

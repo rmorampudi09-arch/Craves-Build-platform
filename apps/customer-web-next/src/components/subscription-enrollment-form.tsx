@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CustomerAddress } from "@/lib/address-contract";
+import { parseCustomerSubscription } from "@/lib/subscription-contract";
 import type { PublicSubscriptionPlan } from "@/lib/subscription-contract";
 
 function newIdempotencyKey(): string {
@@ -58,10 +59,13 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
         },
         body: JSON.stringify({ planId: plan.id, startDate, deliveryAddressId: addressId, notes: notes || null })
       });
+      const body = await response.json().catch(() => null);
       if (response.status === 401) throw new Error("Your session expired. Sign in again.");
       if (response.status === 409) throw new Error("This enrollment request conflicts with an earlier submission. Refresh before trying again.");
       if (!response.ok) throw new Error("Subscription could not be created. Check the start date, address and plan status.");
-      window.location.assign("/subscriptions");
+      const subscription = parseCustomerSubscription(body);
+      if (!subscription) throw new Error("Craves returned an invalid subscription response.");
+      window.location.assign(`/subscriptions/${encodeURIComponent(subscription.id)}/payment`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Subscription could not be created.");
     } finally {
@@ -75,7 +79,8 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
     <label className="mt-6 block text-sm font-bold">Saved delivery address<select value={addressId} onChange={event => setAddressId(event.target.value)} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4" required><option value="">Select address</option>{addresses.map(address => <option key={address.id} value={address.id}>{address.addressLabel}: {address.addressLine1}, {address.areaName}</option>)}</select></label>
     <label className="mt-5 block text-sm font-bold">Start date<input type="date" min={today} value={startDate} onChange={event => setStartDate(event.target.value)} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4" required /></label>
     <label className="mt-5 block text-sm font-bold">Notes<textarea maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)} className="mt-2 min-h-24 w-full rounded-2xl bg-white p-4" /></label>
-    <button disabled={busy || addresses.length === 0} className="mt-6 min-h-12 w-full rounded-2xl bg-[#6930CA] px-5 font-bold text-white disabled:opacity-50">{busy ? "Creating…" : "Create subscription"}</button>
+    <button disabled={busy || addresses.length === 0} className="mt-6 min-h-12 w-full rounded-2xl bg-[#6930CA] px-5 font-bold text-white disabled:opacity-50">{busy ? "Creating…" : "Create subscription & continue to payment"}</button>
+    <p className="mt-3 text-xs text-slate-500">Payment is completed separately in Cashfree sandbox after the Subscription Service creates the backend-owned invoice.</p>
     {message && <p className="mt-4 text-sm text-slate-600" role="status">{message}</p>}
   </form>;
 }

@@ -128,7 +128,7 @@ export function CustomerAddresses() {
         setForm((previous) => ({
           ...previous,
           addressLine1: detected.houseNumber || detected.formattedAddress,
-          addressLine2: detected.houseNumber ? detected.street : null,
+          addressLine2: detected.street || previous.addressLine2,
           areaName: detected.area || detected.city || previous.areaName,
           districtName: detected.district || detected.city || previous.districtName,
           city: detected.city || previous.city,

@@ -483,7 +483,7 @@ validate_edge(){
         .properties.actions[]?;
         (.name == "RouteConfigurationOverride") and
         (.parameters.typeName == "DeliveryRuleRouteConfigurationOverrideActionParameters") and
-        ((.parameters | has("cacheConfiguration")) | not)
+        ((.parameters.cacheConfiguration // null) == null)
       )
     )
   ' <<<"$gzip_rule" >/dev/null || fail "Gzip-only cache-bypass rule is not configured as expected: $gzip_rule"

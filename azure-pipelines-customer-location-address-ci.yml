@@ -61,6 +61,8 @@ steps:
         apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
         apps/customer-web-next/src/components/chef-application-workspace.tsx
         apps/customer-web-next/src/components/chef-kitchen-form.tsx
+        apps/customer-web-next/src/components/chef-mode-dashboard.tsx
+        apps/customer-web-next/src/components/chef-operations-workspace.tsx
         apps/customer-web-next/src/components/discovery-browser.tsx
       )
 
@@ -69,7 +71,15 @@ steps:
         exit 1
       fi
 
+      if grep -nE '\{[^}]*\.(latitude|longitude)\?*\.toFixed|\{[^}]*\.(latitude|longitude)[^}]*\},[[:space:]]*\{[^}]*\.(latitude|longitude)' \
+        apps/customer-web-next/src/components/chef-mode-dashboard.tsx \
+        apps/customer-web-next/src/components/chef-operations-workspace.tsx; then
+        echo 'ERROR: Raw kitchen coordinates were reintroduced into chef-visible JSX.' >&2
+        exit 1
+      fi
+
       grep -q 'resolveLiveBrowsingLocation' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
+      grep -q 'liveWithoutAddress' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
       grep -q 'parseLocationRecommendation' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
       grep -q 'reverseGeocodeCurrentLocation' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
       grep -q 'disable-local-auth true' scripts/release/customer-location-azure-maps-provision.sh

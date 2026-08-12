@@ -36,6 +36,7 @@ APP_ROUTE="craves-web-route"
 STATIC_ROUTE="craves-static-route"
 RULESET="cravessecurityheaders"
 RULE_NAME="securityheaders"
+GZIP_FALLBACK_RULE="gzipfallback"
 WAF="craveswaf$SUFFIX"
 SECURITY_POLICY="craves-web-security"
 AFD_SECRET="craves-web-tls"
@@ -145,6 +146,61 @@ ensure_headers(){
     --only-show-errors >/dev/null
 }
 
+ensure_gzip_fallback(){
+  # A cached Next.js static response stalls when a gzip-only request reaches
+  # this Front Door route, while the same request succeeds when caching is
+  # bypassed. Keep Brotli/CDN delivery for modern clients and bypass only the
+  # gzip-without-Brotli fallback. Omitting cacheConfiguration from a
+  # RouteConfigurationOverride is Azure's documented way to disable caching
+  # for matching requests.
+  local rule_uri rule_body
+  rule_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/ruleSets/${RULESET}/rules/${GZIP_FALLBACK_RULE}?api-version=2025-04-15"
+  rule_body="$(jq -nc '{
+    properties: {
+      order: 2,
+      conditions: [
+        {
+          name: "RequestHeader",
+          parameters: {
+            selector: "Accept-Encoding",
+            operator: "Contains",
+            negateCondition: false,
+            matchValues: ["gzip"],
+            transforms: ["Lowercase"],
+            typeName: "DeliveryRuleRequestHeaderConditionParameters"
+          }
+        },
+        {
+          name: "RequestHeader",
+          parameters: {
+            selector: "Accept-Encoding",
+            operator: "Contains",
+            negateCondition: true,
+            matchValues: ["br"],
+            transforms: ["Lowercase"],
+            typeName: "DeliveryRuleRequestHeaderConditionParameters"
+          }
+        }
+      ],
+      actions: [
+        {
+          name: "RouteConfigurationOverride",
+          parameters: {
+            typeName: "DeliveryRuleRouteConfigurationOverrideActionParameters"
+          }
+        }
+      ],
+      matchProcessingBehavior: "Stop"
+    }
+  }')"
+  az rest \
+    --method put \
+    --uri "$rule_uri" \
+    --headers Content-Type=application/json \
+    --body "$rule_body" \
+    --only-show-errors >/dev/null
+}
+
 ensure_edge(){
   az afd endpoint show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" >/dev/null 2>&1 || az afd endpoint create -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --enabled-state Enabled --only-show-errors >/dev/null
   az afd origin-group show -g "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" >/dev/null 2>&1 || az afd origin-group create -g "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" --probe-request-type HEAD --probe-protocol Https --probe-path / --probe-interval-in-seconds 120 --sample-size 4 --successful-samples-required 3 --additional-latency-in-milliseconds 50 --only-show-errors >/dev/null
@@ -154,6 +210,7 @@ ensure_edge(){
     az afd origin create -g "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" --origin-name "$ORIGIN" --host-name "$ORIGIN_FQDN" --origin-host-header "$ORIGIN_FQDN" --priority 1 --weight 1000 --enabled-state Enabled --http-port 80 --https-port 443 --enforce-certificate-name-check true --only-show-errors >/dev/null
   fi
   ensure_headers
+  ensure_gzip_fallback
   local ogid rsid rs cache
   ogid="$(az afd origin-group show -g "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" --query id -o tsv)"
   rsid="$(az afd rule-set show -g "$RG" --profile-name "$PROFILE" --rule-set-name "$RULESET" --query id -o tsv)"
@@ -163,11 +220,10 @@ ensure_edge(){
   else
     az afd route create -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" --origin-group "$ogid" --patterns-to-match '/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$rs" --enabled-state Enabled --only-show-errors >/dev/null
   fi
-  # Front Door's edge-generated gzip representation timed out for Next.js
-  # static assets while Brotli, identity, and the origin's own gzip response
-  # were healthy. Keep CDN caching enabled, but let the origin negotiate gzip
-  # so all Accept-Encoding fallbacks remain available.
-  cache='{compression-settings:{content-types-to-compress:[text/css,text/javascript,application/javascript,application/json,image/svg+xml,font/woff2,font/woff],is-compression-enabled:false},query-string-caching-behavior:IgnoreQueryString}'
+  # Keep edge compression and caching for Brotli-capable clients. The
+  # gzip-only fallback rule bypasses this cache and lets the verified origin
+  # gzip response pass through without affecting modern browser performance.
+  cache='{compression-settings:{content-types-to-compress:[text/css,text/javascript,application/javascript,application/json,image/svg+xml,font/woff2,font/woff],is-compression-enabled:true},query-string-caching-behavior:IgnoreQueryString}'
   if az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" >/dev/null 2>&1; then
     az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
   else
@@ -371,9 +427,11 @@ associate_domains(){
 validate_edge(){
   profile_exists || fail "Front Door not deployed"
   [[ "$(az afd profile show -g "$RG" --profile-name "$PROFILE" --query sku.name -o tsv)" == Premium_AzureFrontDoor ]] || fail "Front Door is not Premium"
-  local app_cache static_cache
+  local app_cache static_cache gzip_rule gzip_rule_uri
   app_cache="$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" --query cacheConfiguration -o json)"
   static_cache="$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --query cacheConfiguration -o json)"
+  gzip_rule_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/ruleSets/${RULESET}/rules/${GZIP_FALLBACK_RULE}?api-version=2025-04-15"
+  gzip_rule="$(az rest --method get --uri "$gzip_rule_uri" --only-show-errors)"
   # Azure CLI 2.88.0 emits an empty string (instead of JSON null) when the
   # route has no cache configuration. Normalize it before semantic validation.
   [[ -n "$app_cache" ]] || app_cache='null'
@@ -395,8 +453,40 @@ validate_edge(){
   jq -e '
     (type == "object") and
     (.queryStringCachingBehavior == "IgnoreQueryString") and
-    (.compressionSettings.isCompressionEnabled == false)
+    (.compressionSettings.isCompressionEnabled == true)
   ' <<<"$static_cache" >/dev/null || fail "Static route cache/compression is not configured as expected: $static_cache"
+
+  jq -e '
+    (.properties.order == 2) and
+    (
+      any(
+        .properties.conditions[]?;
+        (.name == "RequestHeader") and
+        (.parameters.selector == "Accept-Encoding") and
+        (.parameters.operator == "Contains") and
+        ((.parameters.negateCondition // false) == false) and
+        (.parameters.matchValues | index("gzip") != null)
+      )
+    ) and
+    (
+      any(
+        .properties.conditions[]?;
+        (.name == "RequestHeader") and
+        (.parameters.selector == "Accept-Encoding") and
+        (.parameters.operator == "Contains") and
+        ((.parameters.negateCondition // false) == true) and
+        (.parameters.matchValues | index("br") != null)
+      )
+    ) and
+    (
+      any(
+        .properties.actions[]?;
+        (.name == "RouteConfigurationOverride") and
+        (.parameters.typeName == "DeliveryRuleRouteConfigurationOverrideActionParameters") and
+        ((.parameters | has("cacheConfiguration")) | not)
+      )
+    )
+  ' <<<"$gzip_rule" >/dev/null || fail "Gzip-only cache-bypass rule is not configured as expected: $gzip_rule"
   local host code headers
   host="$(endpoint_host)"; headers="$OUT/frontdoor-home-headers.txt"; code=''
   for _ in $(seq 1 80); do code="$(curl -sS -D "$headers" -o /dev/null -w '%{http_code}' --max-time 30 "https://$host/" || true)"; [[ "$code" =~ ^(200|301|302|307|308)$ ]] && break; sleep 15; done

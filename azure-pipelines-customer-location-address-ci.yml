@@ -55,13 +55,15 @@ steps:
 
       TARGETS=(
         apps/customer-web-next/src/components/customer-addresses.tsx
+        apps/customer-web-next/src/screens/Profile/Addresses.tsx
         apps/customer-web-next/src/components/checkout/CheckoutAddressDialog.tsx
         apps/customer-web-next/src/components/layout/LocationModal.tsx
+        apps/customer-web-next/src/components/chef-application-workspace.tsx
         apps/customer-web-next/src/components/chef-kitchen-form.tsx
         apps/customer-web-next/src/components/discovery-browser.tsx
       )
 
-      if grep -nE 'aria-label="(Latitude|Longitude)"|>Latitude<|>Longitude<' "${TARGETS[@]}"; then
+      if grep -nE 'aria-label="(Latitude|Longitude)"|>Latitude<|>Longitude<|"Latitude"[[:space:]]*,|"Longitude"[[:space:]]*,' "${TARGETS[@]}"; then
         echo 'ERROR: A customer/chef-facing coordinate input label was reintroduced.' >&2
         exit 1
       fi
@@ -69,4 +71,5 @@ steps:
       grep -q 'disable-local-auth true' scripts/release/customer-location-azure-maps-provision.sh
       grep -q 'Azure Maps Data Reader' scripts/release/customer-location-azure-maps-provision.sh
       grep -q 'confirmBillableAzureMapsProvision' azure-pipelines-customer-location-azure-maps.yml
+      grep -q 'POST /api/location/reverse-geocode' apps/customer-web-next/src/services/location/README.md
     displayName: Verify location security and billing guards

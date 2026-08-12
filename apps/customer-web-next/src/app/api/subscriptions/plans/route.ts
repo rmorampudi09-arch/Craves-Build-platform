@@ -3,6 +3,8 @@ import { parsePublicSubscriptionPlans } from "@/lib/subscription-contract";
 
 export const dynamic = "force-dynamic";
 
+const SUBSCRIPTION_UPSTREAM_TIMEOUT_MS = 30_000;
+
 function apiBaseUrl(): string {
   const value = process.env.CRAVES_API_BASE_URL?.trim();
   if (!value?.startsWith("https://")) throw new Error("CRAVES_API_BASE_URL must use HTTPS");
@@ -11,7 +13,7 @@ function apiBaseUrl(): string {
 
 export async function GET() {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const timeout = setTimeout(() => controller.abort(), SUBSCRIPTION_UPSTREAM_TIMEOUT_MS);
   try {
     const upstream = await fetch(`${apiBaseUrl()}/subscriptions/plans`, {
       headers: { Accept: "application/json" },

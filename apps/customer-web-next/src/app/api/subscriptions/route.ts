@@ -6,6 +6,7 @@ import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
 export const dynamic = "force-dynamic";
 
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{8,128}$/;
+const SUBSCRIPTION_UPSTREAM_TIMEOUT_MS = 30_000;
 
 function errorResponse(status: number) {
   if (status === 401) return NextResponse.json({ code: "SESSION_EXPIRED" }, { status });
@@ -16,7 +17,7 @@ function errorResponse(status: number) {
 
 export async function GET(request: NextRequest) {
   try {
-    const upstream = await authenticatedApiFetch(request, "/subscriptions");
+    const upstream = await authenticatedApiFetch(request, "/subscriptions", {}, SUBSCRIPTION_UPSTREAM_TIMEOUT_MS);
     const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return errorResponse(upstream.status);
     const subscriptions = parseCustomerSubscriptions(body);
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
         "Idempotency-Key": idempotencyKey,
       },
       body: JSON.stringify(input),
-    });
+    }, SUBSCRIPTION_UPSTREAM_TIMEOUT_MS);
     const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return errorResponse(upstream.status);
     const subscription = parseCustomerSubscription(body);

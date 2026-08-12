@@ -11,6 +11,9 @@ parameters:
   - name: subscriptionContainerAppName
     type: string
     default: ca-craves-subscription-service-p
+  - name: customerWebContainerAppName
+    type: string
+    default: ca-craves-web-prodlow
   - name: apimHost
     type: string
     default: apim-craves-prodlow-l3ing6.azure-api.net
@@ -21,7 +24,7 @@ pool:
 steps:
   - checkout: self
   - task: AzureCLI@2
-    displayName: Verify core Subscription APIM routes
+    displayName: Verify core Subscription APIM routes and transport
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -31,4 +34,5 @@ steps:
       RG: ${{ parameters.resourceGroupName }}
       APIM: ${{ parameters.apimName }}
       SUB_APP: ${{ parameters.subscriptionContainerAppName }}
+      WEB_APP: ${{ parameters.customerWebContainerAppName }}
       APIM_HOST: ${{ parameters.apimHost }}

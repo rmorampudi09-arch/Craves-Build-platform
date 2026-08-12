@@ -37,6 +37,19 @@ steps:
       SUB_APP: ${{ parameters.subscriptionContainerAppName }}
 
   - task: AzureCLI@2
+    displayName: Diagnose Subscription HTTP and database runtime
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: scriptPath
+      scriptPath: scripts/apim/diagnose-subscription-http-db-runtime.sh
+    env:
+      RG: ${{ parameters.resourceGroupName }}
+      APIM: ${{ parameters.apimName }}
+      SUB_APP: ${{ parameters.subscriptionContainerAppName }}
+      DATABASE_NAME: craves_business_db
+
+  - task: AzureCLI@2
     displayName: Verify core Subscription APIM routes and transport
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)

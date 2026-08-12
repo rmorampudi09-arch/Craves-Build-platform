@@ -305,6 +305,9 @@ validate_edge(){
   local app_cache static_cache
   app_cache="$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" --query cacheConfiguration -o json)"
   static_cache="$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --query cacheConfiguration -o json)"
+  # Azure CLI 2.88.0 emits an empty string (instead of JSON null) when the
+  # route has no cache configuration. Normalize it before semantic validation.
+  [[ -n "$app_cache" ]] || app_cache='null'
   info "App route cache configuration: $app_cache"
   info "Static route cache configuration: $static_cache"
 

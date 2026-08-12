@@ -28,7 +28,7 @@ function failure(status: number, body: unknown = null, correlationId: string | n
   const message = status === 401
     ? "Please sign in again."
     : status === 400
-      ? safeUpstreamMessage(body) ?? "Enter a complete valid address and map coordinates."
+      ? safeUpstreamMessage(body) ?? "Confirm the complete delivery address and current location."
       : status === 404
         ? "Address was not found."
         : status === 502

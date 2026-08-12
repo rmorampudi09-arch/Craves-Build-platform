@@ -1,21 +1,26 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, MapPin, Utensils } from "lucide-react";
 
 import { BrowseHeader } from "@/components/home/BrowseHeader";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
 import { CategoryFilterChips } from "@/components/home/CategoryFilterChips";
 import { DishesGrid } from "@/components/home/DishesGrid";
+import { KitchensGrid } from "@/components/home/KitchensGrid";
 import { FloatingCartBar } from "@/components/home/FloatingCartBar";
 import {
   ALL_DISHES_CATEGORY,
   type DishCategory,
 } from "@/constants/dishCategories";
 import {
-  discoverDishes,
-  getDiscoveryRadiusMeters,
+  loadKitchenMenu,
   type Dish,
 } from "@/services/api/dishes";
+import { discoverKitchens } from "@/services/api/kitchens";
 import { formatDiscoveryRadius } from "@/lib/catalog-discovery-policy";
+import {
+  type NearbyKitchen,
+} from "@/lib/discovery-contract";
 import {
   parseLocationRecommendation,
   type CustomerAddress,
@@ -40,7 +45,7 @@ export const routeMeta = {
       { title: "Discover Homemade Food – Craves" },
       {
         name: "description",
-        content: "Discover live dishes from active Craves home kitchens near your delivery address.",
+        content: "Discover nearby Craves home kitchens and open a kitchen to browse its live menu.",
       },
       { name: "robots", content: "noindex" },
     ],
@@ -155,46 +160,88 @@ function BrowseFoodsPage() {
   const [category, setCategory] = useState<DishCategory>(ALL_DISHES_CATEGORY);
   const [searchTerm, setSearchTerm] = useState("");
   const [cartItemCount, setCartItemCount] = useState(0);
+  const [kitchens, setKitchens] = useState<NearbyKitchen[]>([]);
+  const [selectedKitchen, setSelectedKitchen] = useState<NearbyKitchen | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [discoveryState, setDiscoveryState] = useState<DiscoveryState>("loading");
   const [catalogMessage, setCatalogMessage] = useState("Detecting your current delivery location…");
   const [radiusLabel, setRadiusLabel] = useState<string | null>(null);
 
   const refreshDiscovery = useCallback(async (activeAddress: CravesAddress | null) => {
+    setSelectedKitchen(null);
+    setDishes([]);
+    setCategory(ALL_DISHES_CATEGORY);
+    setSearchTerm("");
+
     if (
       typeof activeAddress?.lat !== "number" ||
       typeof activeAddress.lng !== "number"
     ) {
-      setDishes([]);
+      setKitchens([]);
       setRadiusLabel(null);
       setDiscoveryState("address-required");
       setCatalogMessage(
-        "Choose or save a delivery location so Craves can show nearby home food.",
+        "Choose or save a delivery location so Craves can show nearby home kitchens.",
       );
       return;
     }
 
     setDiscoveryState("loading");
-    setCatalogMessage("Loading nearby active kitchens and dishes…");
+    setCatalogMessage("Loading nearby active home kitchens…");
     try {
-      const nearby = await discoverDishes(activeAddress.lat, activeAddress.lng, 5_000);
-      const usedRadius = getDiscoveryRadiusMeters();
-      setDishes(nearby);
-      setRadiusLabel(formatDiscoveryRadius(usedRadius));
+      const result = await discoverKitchens(activeAddress.lat, activeAddress.lng, 5_000);
+      setKitchens(result.kitchens);
+      setRadiusLabel(formatDiscoveryRadius(result.radiusMeters));
       setDiscoveryState("ready");
       setCatalogMessage(
-        nearby.length === 0
-          ? `No active kitchens with sellable dishes were returned within ${formatDiscoveryRadius(usedRadius)} of this location.`
-          : `Showing the live catalog within ${formatDiscoveryRadius(usedRadius)} of your active location.`,
+        result.kitchens.length === 0
+          ? `No active home kitchens were returned within ${formatDiscoveryRadius(result.radiusMeters)} of this location.`
+          : `Choose one of the nearby home kitchens within ${formatDiscoveryRadius(result.radiusMeters)} to view its menu.`,
       );
     } catch (error) {
-      setDishes([]);
+      setKitchens([]);
       setRadiusLabel(null);
       setDiscoveryState("error");
       setCatalogMessage(
         error instanceof Error
           ? error.message
-          : "Nearby dishes are temporarily unavailable. No development catalog has been substituted.",
+          : "Nearby kitchens are temporarily unavailable.",
+      );
+    }
+  }, []);
+
+  const openKitchen = useCallback(async (kitchen: NearbyKitchen) => {
+    const kitchenName = kitchen.displayName || kitchen.kitchenName;
+    setSelectedKitchen(kitchen);
+    setDishes([]);
+    setCategory(ALL_DISHES_CATEGORY);
+    setSearchTerm("");
+    setDiscoveryState("loading");
+    setCatalogMessage(`Loading ${kitchenName}'s live menu…`);
+
+    try {
+      const menu = await loadKitchenMenu(kitchen.id);
+      const locatedMenu = menu.map((dish) => ({
+        ...dish,
+        distanceMeters: kitchen.distanceMeters,
+        areaName: dish.areaName ?? kitchen.areaName ?? undefined,
+        city: dish.city ?? kitchen.city,
+        state: dish.state ?? kitchen.state,
+      }));
+      setDishes(locatedMenu);
+      setDiscoveryState("ready");
+      setCatalogMessage(
+        locatedMenu.length === 0
+          ? `${kitchenName} does not have any active dishes right now.`
+          : `Showing ${kitchenName}'s live menu.`,
+      );
+    } catch (error) {
+      setDishes([]);
+      setDiscoveryState("error");
+      setCatalogMessage(
+        error instanceof Error
+          ? error.message
+          : "This kitchen's menu is temporarily unavailable.",
       );
     }
   }, []);
@@ -227,6 +274,8 @@ function BrowseFoodsPage() {
       } catch (error) {
         if (!active) return;
         setAddress(null);
+        setKitchens([]);
+        setSelectedKitchen(null);
         setDishes([]);
         setDiscoveryState("error");
         setCatalogMessage(
@@ -262,6 +311,21 @@ function BrowseFoodsPage() {
     if (!categories.includes(category)) setCategory(ALL_DISHES_CATEGORY);
   }, [categories, category]);
 
+  const filteredKitchens = useMemo(() => {
+    const term = searchTerm.trim().toLocaleLowerCase("en-IN");
+    if (!term) return kitchens;
+    return kitchens.filter((kitchen) =>
+      [
+        kitchen.displayName,
+        kitchen.kitchenName,
+        kitchen.description,
+        kitchen.areaName,
+        kitchen.city,
+        kitchen.state,
+      ].some((value) => value?.toLocaleLowerCase("en-IN").includes(term)),
+    );
+  }, [searchTerm, kitchens]);
+
   const filteredDishes = useMemo(() => {
     const term = searchTerm.trim().toLocaleLowerCase("en-IN");
     return dishes.filter((dish) => {
@@ -285,6 +349,10 @@ function BrowseFoodsPage() {
   const locationLabel = address
     ? [address.mandal, address.city].filter(Boolean).join(", ")
     : "Set delivery location";
+
+  const visibleDishCount = selectedKitchen
+    ? dishes.length
+    : kitchens.reduce((total, kitchen) => total + kitchen.activeMenuItemCount, 0);
 
   if (!user) {
     return (
@@ -311,24 +379,80 @@ function BrowseFoodsPage() {
       <main>
         <WelcomeBanner
           firstName={user.firstName || user.username.split(" ")[0] || "there"}
-          dishCount={dishes.length}
+          dishCount={visibleDishCount}
           radiusLabel={radiusLabel}
           hasAddress={Boolean(address?.lat != null && address?.lng != null)}
         />
-        <CategoryFilterChips
-          categories={categories}
-          selected={category}
-          onSelect={setCategory}
-        />
-        <DishesGrid
-          dishes={filteredDishes}
-          selectedCategory={category}
-          searchTerm={searchTerm}
-          state={discoveryState}
-          message={catalogMessage}
-          onRetry={() => void refreshDiscovery(address)}
-          onManageAddress={() => navigate({ to: "/addresses" })}
-        />
+
+        {selectedKitchen ? (
+          <>
+            <section className="mx-auto max-w-7xl px-4 pt-6 md:px-6" aria-label="Selected kitchen">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedKitchen(null);
+                  setDishes([]);
+                  setCategory(ALL_DISHES_CATEGORY);
+                  setSearchTerm("");
+                  setDiscoveryState("ready");
+                  setCatalogMessage(
+                    radiusLabel
+                      ? `Choose one of the nearby home kitchens within ${radiusLabel} to view its menu.`
+                      : "Choose a nearby home kitchen to view its menu.",
+                  );
+                }}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-primary px-4 text-sm font-semibold text-contrast-red hover:bg-secondary"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Nearby kitchens
+              </button>
+
+              <div className="mt-4 rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:flex md:items-center md:justify-between md:gap-6">
+                <div>
+                  <p className="craves-overline text-primary">Selected home kitchen</p>
+                  <h2 className="mt-1 font-display text-2xl font-bold tracking-[-0.035em] text-ink">
+                    {selectedKitchen.displayName || selectedKitchen.kitchenName}
+                  </h2>
+                  <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
+                    {[selectedKitchen.areaName, selectedKitchen.city]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </p>
+                </div>
+                <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-2 text-sm font-semibold text-ink md:mt-0">
+                  <Utensils className="h-4 w-4 text-primary" aria-hidden="true" />
+                  {selectedKitchen.activeMenuItemCount} active {selectedKitchen.activeMenuItemCount === 1 ? "dish" : "dishes"}
+                </div>
+              </div>
+            </section>
+
+            <CategoryFilterChips
+              categories={categories}
+              selected={category}
+              onSelect={setCategory}
+            />
+            <DishesGrid
+              dishes={filteredDishes}
+              selectedCategory={category}
+              searchTerm={searchTerm}
+              state={discoveryState}
+              message={catalogMessage}
+              onRetry={() => void openKitchen(selectedKitchen)}
+              onManageAddress={() => navigate({ to: "/addresses" })}
+            />
+          </>
+        ) : (
+          <KitchensGrid
+            kitchens={filteredKitchens}
+            searchTerm={searchTerm}
+            state={discoveryState}
+            message={catalogMessage}
+            onSelectKitchen={(kitchen) => void openKitchen(kitchen)}
+            onRetry={() => void refreshDiscovery(address)}
+            onManageAddress={() => navigate({ to: "/addresses" })}
+          />
+        )}
       </main>
       <FloatingCartBar
         itemCount={cartItemCount}

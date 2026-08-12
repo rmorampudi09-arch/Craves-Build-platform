@@ -19,9 +19,10 @@ function record(value: unknown): Record<string, unknown> | null {
 function safeUpstreamMessage(body: unknown): string | null {
   const raw = record(body);
   const message = raw?.message;
-  return typeof message === "string" && message.trim().length > 0 && message.length <= 240
-    ? message.trim()
-    : null;
+  if (typeof message !== "string") return null;
+  const trimmed = message.trim();
+  if (!trimmed || trimmed.length > 240) return null;
+  return /\b(latitude|longitude|coordinates?)\b/i.test(trimmed) ? null : trimmed;
 }
 
 function failure(status: number, body: unknown = null, correlationId: string | null = null) {

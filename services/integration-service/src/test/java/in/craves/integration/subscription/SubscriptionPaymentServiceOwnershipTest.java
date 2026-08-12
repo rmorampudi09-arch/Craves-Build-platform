@@ -15,6 +15,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.PaymentProviderProperties;
+import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
 import in.craves.integration.subscription.SubscriptionPaymentRepository.PaymentIntent;
 import java.math.BigDecimal;
@@ -126,43 +127,8 @@ class SubscriptionPaymentServiceOwnershipTest {
     void latestPaymentReturnsOwnedLatestIntent() {
         UUID intentId = UUID.fromString("22222222-2222-4222-8222-222222222222");
         UUID invoiceId = UUID.fromString("33333333-3333-4333-8333-333333333333");
-        UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
-        UUID customerId = UUID.fromString("55555555-5555-4555-8555-555555555555");
-        PaymentIntent intent = new PaymentIntent(
-            intentId,
-            invoiceId,
-            SUBSCRIPTION_ID,
-            planId,
-            customerId,
-            null,
-            LocalDate.of(2026, 8, 12),
-            LocalDate.of(2026, 9, 12),
-            new BigDecimal("1499.00"),
-            "INR",
-            "PAYMENT_REQUESTED",
-            null,
-            null,
-            null,
-            null,
-            Instant.parse("2026-08-12T06:30:00Z"),
-            Instant.parse("2026-08-12T06:30:00Z"),
-            null
-        );
-        SubscriptionPaymentResponse response = new SubscriptionPaymentResponse(
-            intentId,
-            invoiceId,
-            SUBSCRIPTION_ID,
-            LocalDate.of(2026, 8, 12),
-            LocalDate.of(2026, 9, 12),
-            new BigDecimal("1499.00"),
-            "INR",
-            "PAYMENT_REQUESTED",
-            null,
-            null,
-            Instant.parse("2026-08-12T06:30:00Z"),
-            Instant.parse("2026-08-12T06:30:00Z"),
-            null
-        );
+        PaymentIntent intent = paymentIntent(intentId, invoiceId, "PAYMENT_REQUESTED", null, null);
+        SubscriptionPaymentResponse response = paymentResponse(intentId, invoiceId, "PAYMENT_REQUESTED", null);
 
         server.expect(requestTo("https://subscription.test/api/v1/subscriptions/" + SUBSCRIPTION_ID))
             .andExpect(method(HttpMethod.GET))
@@ -175,5 +141,97 @@ class SubscriptionPaymentServiceOwnershipTest {
 
         assertSame(response, actual);
         server.verify();
+    }
+
+    @Test
+    void failedPaymentReusesExistingCashfreeSessionForCustomerRetry() {
+        UUID intentId = UUID.fromString("66666666-6666-4666-8666-666666666666");
+        UUID invoiceId = UUID.fromString("77777777-7777-4777-8777-777777777777");
+        PaymentIntent intent = paymentIntent(
+            intentId,
+            invoiceId,
+            "FAILED",
+            "CRVSUB_77777777777747778777777777777777",
+            "session_retry_existing_order"
+        );
+        SubscriptionPaymentResponse response = paymentResponse(
+            intentId,
+            invoiceId,
+            "FAILED",
+            "session_retry_existing_order"
+        );
+
+        server.expect(requestTo("https://subscription.test/api/v1/subscriptions/" + SUBSCRIPTION_ID))
+            .andExpect(method(HttpMethod.GET))
+            .andExpect(header("Authorization", AUTHORIZATION))
+            .andRespond(withSuccess());
+        when(repository.findByInvoice(invoiceId)).thenReturn(Optional.of(intent));
+        when(repository.response(intent)).thenReturn(response);
+
+        SubscriptionPaymentResponse actual = service.createProviderOrder(
+            AUTHORIZATION,
+            invoiceId,
+            new CreateSubscriptionPaymentOrderRequest(
+                "Craves Customer",
+                "9876543210",
+                "customer@example.com",
+                "https://craves.in/subscriptions/" + SUBSCRIPTION_ID + "/payment"
+            )
+        );
+
+        assertSame(response, actual);
+        server.verify();
+    }
+
+    private static PaymentIntent paymentIntent(
+        UUID intentId,
+        UUID invoiceId,
+        String status,
+        String cashfreeOrderId,
+        String paymentSessionId
+    ) {
+        return new PaymentIntent(
+            intentId,
+            invoiceId,
+            SUBSCRIPTION_ID,
+            UUID.fromString("44444444-4444-4444-8444-444444444444"),
+            UUID.fromString("55555555-5555-4555-8555-555555555555"),
+            null,
+            LocalDate.of(2026, 8, 12),
+            LocalDate.of(2026, 9, 12),
+            new BigDecimal("1499.00"),
+            "INR",
+            status,
+            cashfreeOrderId,
+            null,
+            paymentSessionId,
+            status.equals("FAILED") ? "FAILED" : null,
+            Instant.parse("2026-08-12T06:30:00Z"),
+            Instant.parse("2026-08-12T06:30:00Z"),
+            null
+        );
+    }
+
+    private static SubscriptionPaymentResponse paymentResponse(
+        UUID intentId,
+        UUID invoiceId,
+        String status,
+        String paymentSessionId
+    ) {
+        return new SubscriptionPaymentResponse(
+            intentId,
+            invoiceId,
+            SUBSCRIPTION_ID,
+            LocalDate.of(2026, 8, 12),
+            LocalDate.of(2026, 9, 12),
+            new BigDecimal("1499.00"),
+            "INR",
+            status,
+            paymentSessionId,
+            status.equals("FAILED") ? "FAILED" : null,
+            Instant.parse("2026-08-12T06:30:00Z"),
+            Instant.parse("2026-08-12T06:30:00Z"),
+            null
+        );
     }
 }

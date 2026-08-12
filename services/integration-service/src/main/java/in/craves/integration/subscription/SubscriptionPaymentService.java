@@ -91,7 +91,13 @@ public class SubscriptionPaymentService {
         CreateSubscriptionPaymentOrderRequest request
     ) {
         PaymentIntent intent = owned(authorization, invoiceId);
-        if ("PAID".equals(intent.status()) || "PAYMENT_PENDING".equals(intent.status())) {
+        if (
+            "PAID".equals(intent.status())
+                || "PAYMENT_PENDING".equals(intent.status())
+                || ("FAILED".equals(intent.status())
+                    && StringUtils.hasText(intent.cashfreeOrderId())
+                    && StringUtils.hasText(intent.paymentSessionId()))
+        ) {
             return repository.response(intent);
         }
         if (!provider.paymentExecutionAllowed()) {
@@ -121,6 +127,7 @@ public class SubscriptionPaymentService {
             .header("x-client-id", provider.clientId())
             .header("x-client-" + "secret", provider.clientKey())
             .header("x-api-version", provider.apiVersion())
+            .header("x-idempotency-key", invoiceId.toString())
             .body(body)
             .retrieve()
             .body(JsonNode.class);

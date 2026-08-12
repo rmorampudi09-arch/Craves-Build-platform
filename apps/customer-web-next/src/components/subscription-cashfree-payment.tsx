@@ -114,7 +114,7 @@ export function SubscriptionCashfreePayment({ subscriptionId }: { subscriptionId
         setMessage("Payment confirmed. Your meal subscription is active.");
         return current;
       }
-      if (current.status === "PAYMENT_FAILED" || current.status === "CANCELLED" || current.status === "EXPIRED") {
+      if (current.status === "CANCELLED" || current.status === "EXPIRED") {
         return current;
       }
       await sleep(ACTIVATION_WAIT_MS);
@@ -194,16 +194,17 @@ export function SubscriptionCashfreePayment({ subscriptionId }: { subscriptionId
   }
 
   async function pollPaymentAfterCheckout(): Promise<SubscriptionPayment | null> {
+    let latest: SubscriptionPayment | null = null;
     for (let attempt = 0; attempt < PAYMENT_ATTEMPTS; attempt += 1) {
       const current = await loadPayment(subscriptionId);
       if (current) {
+        latest = current;
         setPayment(current);
         if (current.status === "PAID") return current;
-        if (current.status === "FAILED") return current;
       }
       await sleep(PAYMENT_WAIT_MS);
     }
-    return null;
+    return latest;
   }
 
   async function openCashfreeSandbox() {

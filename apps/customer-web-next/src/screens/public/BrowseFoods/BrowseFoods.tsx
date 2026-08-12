@@ -123,10 +123,10 @@ async function resolveLiveBrowsingLocation(
       label: "CURRENT LOCATION",
       hno: detected.houseNumber || detected.formattedAddress,
       street: detected.street ?? undefined,
-      city: detected.city || fallback?.city || "",
-      mandal: detected.area || detected.city || fallback?.mandal || "Current location",
-      district: detected.district || detected.city || fallback?.district || "",
-      pincode: detected.postalCode ?? fallback?.pincode,
+      city: detected.city || "",
+      mandal: detected.area || detected.city || "Current location",
+      district: detected.district || detected.city || "",
+      pincode: detected.postalCode ?? undefined,
       lat: latitude,
       lng: longitude,
     };
@@ -136,10 +136,10 @@ async function resolveLiveBrowsingLocation(
     const liveWithoutAddress: CravesAddress = {
       label: "CURRENT LOCATION",
       hno: "Current location",
-      city: fallback?.city || "",
+      city: "",
       mandal: "Current location",
-      district: fallback?.district || "",
-      pincode: fallback?.pincode,
+      district: "",
+      pincode: undefined,
       lat: latitude,
       lng: longitude,
     };

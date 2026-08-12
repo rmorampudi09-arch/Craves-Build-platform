@@ -104,6 +104,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     textAlign: 'center',
   },
+  // Selection intentionally changes only the label color; the food image stays unchanged.
   labelSelected: {
     color: colors.flameRed,
   },

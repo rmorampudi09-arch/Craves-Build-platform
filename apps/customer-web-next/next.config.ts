@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // Azure Front Door serves and caches immutable build assets. Disable the
+  // standalone Next.js server's gzip path because gzip responses can stall
+  // before sending headers, leaving cold devices on the loading shell.
+  compress: false,
   images: {
     disableStaticImages: true,
     remotePatterns: [{ protocol: "https", hostname: "**" }],

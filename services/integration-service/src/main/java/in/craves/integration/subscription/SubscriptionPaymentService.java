@@ -77,6 +77,13 @@ public class SubscriptionPaymentService {
         return repository.response(intent);
     }
 
+    public SubscriptionPaymentResponse getLatestOwnedBySubscription(String authorization, UUID subscriptionId) {
+        assertOwnedSubscription(authorization, subscriptionId);
+        PaymentIntent intent = repository.findLatestBySubscription(subscriptionId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Subscription payment was not found"));
+        return repository.response(intent);
+    }
+
     public SubscriptionPaymentResponse createProviderOrder(
         String authorization,
         UUID invoiceId,
@@ -181,12 +188,18 @@ public class SubscriptionPaymentService {
         requireAuthorization(authorization);
         PaymentIntent intent = repository.findByInvoice(invoiceId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Subscription payment was not found"));
+        assertOwnedSubscription(authorization, intent.subscriptionId());
+        return intent;
+    }
+
+    private void assertOwnedSubscription(String authorization, UUID subscriptionId) {
+        requireAuthorization(authorization);
         if (subscriptionClient == null) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Subscription ownership validation is unavailable");
         }
         try {
             subscriptionClient.get()
-                .uri("/api/v1/subscriptions/{subscriptionId}", intent.subscriptionId())
+                .uri("/api/v1/subscriptions/{subscriptionId}", subscriptionId)
                 .header(HttpHeaders.AUTHORIZATION, authorization)
                 .retrieve()
                 .toBodilessEntity();
@@ -199,7 +212,6 @@ public class SubscriptionPaymentService {
             }
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Subscription ownership validation failed");
         }
-        return intent;
     }
 
     private static void validate(EventEnvelope<PaymentRequestedData> event) {

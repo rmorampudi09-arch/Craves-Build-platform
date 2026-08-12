@@ -5,7 +5,6 @@ import {
   Image,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -28,7 +27,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
-import {Chip} from '../../../shared/components/Chip';
+import {HomeCategoryRail} from '../components/HomeCategoryRail';
 import {
   OfflineNotice,
   RecoverableErrorBanner,
@@ -533,25 +532,10 @@ export function CustomerHomeScreen() {
         </Pressable>
       </View>
       {categories.length > 0 ? (
-        <ScrollView
-          horizontal
-          contentContainerStyle={styles.categoryRow}
-          keyboardShouldPersistTaps="handled"
-          showsHorizontalScrollIndicator={false}>
-          <Chip
-            label="All"
-            selected={selectedCategory === null}
-            onPress={() => setSelectedCategory(null)}
-          />
-          {categories.map(category => (
-            <Chip
-              key={category}
-              label={category}
-              selected={selectedCategory === category}
-              onPress={() => setSelectedCategory(category)}
-            />
-          ))}
-        </ScrollView>
+        <HomeCategoryRail
+          selectedCategory={selectedCategory}
+          onSelect={setSelectedCategory}
+        />
       ) : null}
       <View style={styles.sectionHeadingRow}>
         <View>

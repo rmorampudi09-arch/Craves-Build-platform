@@ -30,6 +30,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {ChefMenuCategorySelector} from '../components/ChefMenuCategorySelector';
 import {
   CHEF_MENU_FOOD_TYPES,
   CHEF_MENU_SPICE_LEVELS,
@@ -279,13 +280,13 @@ function ChefEditMenuItemForm({
               control={control}
               name="category"
               render={({field}) => (
-                <FormField
-                  autoCapitalize="words"
+                <ChefMenuCategorySelector
+                  disabled={submitting}
                   error={errors.category?.message}
-                  helper="The current server exposes category as free text; no category metadata route is available."
-                  label="Category"
-                  onBlur={field.onBlur}
-                  onChangeText={field.onChange}
+                  onChange={category => {
+                    field.onChange(category);
+                    field.onBlur();
+                  }}
                   value={field.value}
                 />
               )}

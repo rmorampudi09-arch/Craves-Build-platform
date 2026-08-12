@@ -27,6 +27,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {ChefMenuCategorySelector} from '../components/ChefMenuCategorySelector';
 import {
   CHEF_MENU_FOOD_TYPES,
   CHEF_MENU_IMAGE_CONTENT_TYPES,
@@ -259,14 +260,13 @@ export function ChefAddMenuItemScreen({navigation}: Props) {
               control={control}
               name="category"
               render={({field}) => (
-                <FormField
-                  autoCapitalize="words"
+                <ChefMenuCategorySelector
+                  disabled={submitting}
                   error={errors.category?.message}
-                  helper="Category options are not provided by the current server, so enter the category name."
-                  label="Category"
-                  onBlur={field.onBlur}
-                  onChangeText={field.onChange}
-                  placeholder="e.g. Starters"
+                  onChange={category => {
+                    field.onChange(category);
+                    field.onBlur();
+                  }}
                   value={field.value}
                 />
               )}

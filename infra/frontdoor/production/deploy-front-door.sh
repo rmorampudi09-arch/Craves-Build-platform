@@ -188,23 +188,38 @@ ensure_waf(){
   if ! jq -e '.[]? | select((.ruleSetType//.type)=="Microsoft_BotManagerRuleSet")' <<<"$sets" >/dev/null; then
     az network front-door waf-policy managed-rules add -g "$RG" --policy-name "$WAF" --type Microsoft_BotManagerRuleSet --version 1.1 --only-show-errors >/dev/null
   fi
-  local ep wafid security_policy_uri security_policy_body
+  local ep wafid domains security_policy_uri security_policy_body
   ep="$(az afd endpoint show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --query id -o tsv)"
   wafid="$(az network front-door waf-policy show -g "$RG" -n "$WAF" --query id -o tsv)"
+  # Re-running the deploy action after custom-domain cutover must not remove
+  # those domains from the WAF security policy. Include every successfully
+  # provisioned custom domain together with the default endpoint.
+  domains="$(
+    az afd custom-domain list -g "$RG" --profile-name "$PROFILE" -o json |
+      jq -c --arg endpoint "$ep" '
+        [{id: $endpoint}] +
+        [
+          .[] |
+          select((.provisioningState // .properties.provisioningState // "") == "Succeeded") |
+          {id: .id}
+        ] |
+        unique_by(.id)
+      '
+  )"
 
   # Azure CLI 2.88.0 removed the previous --domains and --waf-policy
   # parameters from the security-policy create/update commands. The documented
   # 2025-04-15 PUT is idempotent and works for both initial creation and
   # subsequent association updates.
   security_policy_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/securityPolicies/${SECURITY_POLICY}?api-version=2025-04-15"
-  security_policy_body="$(jq -nc --arg waf "$wafid" --arg domain "$ep" '{
+  security_policy_body="$(jq -nc --arg waf "$wafid" --argjson domains "$domains" '{
     properties: {
       parameters: {
         type: "WebApplicationFirewall",
         wafPolicy: {id: $waf},
         associations: [
           {
-            domains: [{id: $domain}],
+            domains: $domains,
             patternsToMatch: ["/*"]
           }
         ]

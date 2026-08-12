@@ -76,7 +76,15 @@ export function LocationModal({ open, onClose, onSaved }: LocationModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.hno || !form.city || !form.mandal || !form.district || !form.pincode || !form.lat || !form.lng) {
+    if (
+      !form.hno
+      || !form.city
+      || !form.mandal
+      || !form.district
+      || !form.pincode
+      || form.lat == null
+      || form.lng == null
+    ) {
       return setError("Use current location and confirm the complete delivery address.");
     }
     saveAddress(form);

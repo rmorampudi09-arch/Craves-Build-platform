@@ -46,7 +46,7 @@ test("maps Azure Maps reverse geocoding into Craves address fields", () => {
 
 test("keeps a useful address when Azure Maps cannot resolve a house number", () => {
   const sparse = structuredClone(response);
-  delete sparse.features[0].properties.address.streetNumber;
+  assert.equal(Reflect.deleteProperty(sparse.features[0].properties.address, "streetNumber"), true);
   const parsed = parseReverseGeocodedAddress(sparse);
   assert.ok(parsed);
   assert.equal(parsed.houseNumber, null);

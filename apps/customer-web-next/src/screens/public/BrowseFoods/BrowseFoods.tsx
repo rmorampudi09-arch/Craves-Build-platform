@@ -17,15 +17,22 @@ import {
 } from "@/services/api/dishes";
 import { formatDiscoveryRadius } from "@/lib/catalog-discovery-policy";
 import {
+  parseLocationRecommendation,
+  type CustomerAddress,
+} from "@/lib/address-contract";
+import {
   clearSession,
   loadSelectedAddress,
   loadSession,
+  saveAddress,
   type CravesAddress,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
+import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 import { cartCount, loadCart, subscribeCart } from "@/services/api/cravesCart";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
+const SAVED_ADDRESS_MATCH_RADIUS_METERS = 100;
 
 export const routeMeta = {
   head: () => ({
@@ -40,6 +47,84 @@ export const routeMeta = {
   }),
 };
 
+function savedAddressToBrowsingLocation(address: CustomerAddress): CravesAddress | null {
+  if (address.latitude == null || address.longitude == null || !address.areaName) return null;
+  return {
+    id: address.id,
+    label: address.addressLabel,
+    hno: address.addressLine1,
+    street: address.addressLine2 ?? address.landmark ?? undefined,
+    city: address.city,
+    mandal: address.areaName,
+    district: address.districtName ?? address.city,
+    pincode: address.postalCode ?? undefined,
+    lat: address.latitude,
+    lng: address.longitude,
+  };
+}
+
+function readCurrentPosition(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      reject(new Error("Location access is unavailable."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 12_000,
+      maximumAge: 30_000,
+    });
+  });
+}
+
+async function resolveLiveBrowsingLocation(
+  fallback: CravesAddress | null,
+): Promise<CravesAddress | null> {
+  try {
+    const position = await readCurrentPosition();
+    const latitude = Number(position.coords.latitude.toFixed(7));
+    const longitude = Number(position.coords.longitude.toFixed(7));
+    const query = new URLSearchParams({
+      latitude: String(latitude),
+      longitude: String(longitude),
+      matchRadiusMeters: String(SAVED_ADDRESS_MATCH_RADIUS_METERS),
+    });
+    const recommendationResponse = await fetch(
+      `/api/customer/addresses/recommendation?${query}`,
+      { cache: "no-store", credentials: "same-origin" },
+    );
+    if (recommendationResponse.ok) {
+      const recommendation = parseLocationRecommendation(
+        await recommendationResponse.json().catch(() => null),
+      );
+      if (recommendation?.selectedSavedAddress) {
+        const matched = savedAddressToBrowsingLocation(recommendation.selectedSavedAddress);
+        if (matched) {
+          saveAddress(matched);
+          return matched;
+        }
+      }
+    }
+
+    const detected = await reverseGeocodeCurrentLocation(latitude, longitude);
+    const live: CravesAddress = {
+      label: "CURRENT LOCATION",
+      hno: detected.houseNumber || detected.formattedAddress,
+      street: detected.street ?? undefined,
+      city: detected.city || fallback?.city || "",
+      mandal: detected.area || detected.city || fallback?.mandal || "Current location",
+      district: detected.district || detected.city || fallback?.district || "",
+      pincode: detected.postalCode ?? fallback?.pincode,
+      lat: latitude,
+      lng: longitude,
+    };
+    saveAddress(live);
+    return live;
+  } catch {
+    return fallback;
+  }
+}
+
 function BrowseFoodsPage() {
   const navigate = useNavigate();
   const [user, setUser] = useState<CravesUser | null>(null);
@@ -49,7 +134,7 @@ function BrowseFoodsPage() {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [discoveryState, setDiscoveryState] = useState<DiscoveryState>("loading");
-  const [catalogMessage, setCatalogMessage] = useState("Loading your saved delivery location…");
+  const [catalogMessage, setCatalogMessage] = useState("Detecting your current delivery location…");
   const [radiusLabel, setRadiusLabel] = useState<string | null>(null);
 
   const refreshDiscovery = useCallback(async (activeAddress: CravesAddress | null) => {
@@ -61,7 +146,7 @@ function BrowseFoodsPage() {
       setRadiusLabel(null);
       setDiscoveryState("address-required");
       setCatalogMessage(
-        "Save a delivery address with map coordinates. Craves uses those coordinates to request nearby active kitchens and menu items.",
+        "Choose or save a delivery location so Craves can show nearby home food.",
       );
       return;
     }
@@ -76,8 +161,8 @@ function BrowseFoodsPage() {
       setDiscoveryState("ready");
       setCatalogMessage(
         nearby.length === 0
-          ? `No active kitchens with sellable dishes were returned within ${formatDiscoveryRadius(usedRadius)} of this address.`
-          : `Showing the live catalog within ${formatDiscoveryRadius(usedRadius)}.`,
+          ? `No active kitchens with sellable dishes were returned within ${formatDiscoveryRadius(usedRadius)} of this location.`
+          : `Showing the live catalog within ${formatDiscoveryRadius(usedRadius)} of your active location.`,
       );
     } catch (error) {
       setDishes([]);
@@ -104,10 +189,18 @@ function BrowseFoodsPage() {
       setUser(current);
 
       try {
-        const activeAddress = await loadSelectedAddress();
+        const savedFallback = await loadSelectedAddress();
         if (!active) return;
-        setAddress(activeAddress);
-        await refreshDiscovery(activeAddress);
+        setAddress(savedFallback);
+        setCatalogMessage(
+          savedFallback
+            ? "Checking whether you are still near your saved address…"
+            : "Detecting your current delivery location…",
+        );
+        const activeLocation = await resolveLiveBrowsingLocation(savedFallback);
+        if (!active) return;
+        setAddress(activeLocation);
+        await refreshDiscovery(activeLocation);
       } catch (error) {
         if (!active) return;
         setAddress(null);
@@ -116,7 +209,7 @@ function BrowseFoodsPage() {
         setCatalogMessage(
           error instanceof Error
             ? error.message
-            : "Your saved delivery addresses could not be loaded.",
+            : "Your delivery location could not be loaded.",
         );
       }
 
@@ -167,8 +260,8 @@ function BrowseFoodsPage() {
   };
 
   const locationLabel = address
-    ? [address.hno, address.mandal, address.city].filter(Boolean).join(", ")
-    : "Set delivery address";
+    ? [address.mandal, address.city].filter(Boolean).join(", ")
+    : "Set delivery location";
 
   if (!user) {
     return (

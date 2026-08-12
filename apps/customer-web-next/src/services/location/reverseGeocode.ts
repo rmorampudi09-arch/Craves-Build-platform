@@ -1,7 +1,32 @@
-import {
-  parseReverseGeocodedAddress,
-  type ReverseGeocodedAddress,
-} from "@/lib/location-contract";
+import type { ReverseGeocodedAddress } from "@/lib/location-contract";
+
+function optionalText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function parseSanitizedAddress(value: unknown): ReverseGeocodedAddress | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const formattedAddress = optionalText(raw.formattedAddress);
+  if (!formattedAddress || typeof raw.preciseHouseNumber !== "boolean") return null;
+  const confidence = optionalText(raw.confidence);
+  return {
+    formattedAddress,
+    houseNumber: optionalText(raw.houseNumber),
+    street: optionalText(raw.street),
+    area: optionalText(raw.area),
+    city: optionalText(raw.city),
+    district: optionalText(raw.district),
+    state: optionalText(raw.state),
+    postalCode: optionalText(raw.postalCode),
+    country: optionalText(raw.country),
+    confidence:
+      confidence === "High" || confidence === "Medium" || confidence === "Low"
+        ? confidence
+        : null,
+    preciseHouseNumber: raw.preciseHouseNumber,
+  };
+}
 
 export async function reverseGeocodeCurrentLocation(
   latitude: number,
@@ -22,20 +47,7 @@ export async function reverseGeocodeCurrentLocation(
         : "Craves could not identify this address right now.";
     throw new Error(message);
   }
-  const parsed = parseReverseGeocodedAddress({
-    features: [{ properties: { address: body, confidence: body?.confidence } }],
-  });
-  if (parsed) return parsed;
-
-  // The BFF intentionally returns the already-sanitized address contract rather
-  // than the Azure Maps provider payload. Validate that shape before use.
-  if (
-    body
-    && typeof body === "object"
-    && typeof body.formattedAddress === "string"
-    && typeof body.preciseHouseNumber === "boolean"
-  ) {
-    return body as ReverseGeocodedAddress;
-  }
-  throw new Error("Craves returned an invalid location response.");
+  const parsed = parseSanitizedAddress(body);
+  if (!parsed) throw new Error("Craves returned an invalid location response.");
+  return parsed;
 }

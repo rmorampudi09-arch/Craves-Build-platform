@@ -34,7 +34,8 @@ ORIGIN_GROUP="craves-web-origin-group"
 ORIGIN="craves-web-origin"
 APP_ROUTE="craves-web-route"
 STATIC_ROUTE="craves-static-route"
-RULESET="craves-security-headers"
+RULESET="cravessecurityheaders"
+RULE_NAME="securityheaders"
 WAF="craveswaf$SUFFIX"
 SECURITY_POLICY="craves-web-security"
 AFD_SECRET="craves-web-tls"
@@ -74,12 +75,74 @@ ensure_profile(){
 
 ensure_headers(){
   az afd rule-set show -g "$RG" --profile-name "$PROFILE" --rule-set-name "$RULESET" >/dev/null 2>&1 || az afd rule-set create -g "$RG" --profile-name "$PROFILE" --rule-set-name "$RULESET" --only-show-errors >/dev/null
-  local actions='[{name:ModifyResponseHeader,parameters:{headerAction:Overwrite,headerName:Strict-Transport-Security,typeName:DeliveryRuleHeaderActionParameters,value:"max-age=31536000; includeSubDomains"}},{name:ModifyResponseHeader,parameters:{headerAction:Overwrite,headerName:X-Content-Type-Options,typeName:DeliveryRuleHeaderActionParameters,value:nosniff}},{name:ModifyResponseHeader,parameters:{headerAction:Overwrite,headerName:Referrer-Policy,typeName:DeliveryRuleHeaderActionParameters,value:"strict-origin-when-cross-origin"}},{name:ModifyResponseHeader,parameters:{headerAction:Overwrite,headerName:X-Frame-Options,typeName:DeliveryRuleHeaderActionParameters,value:SAMEORIGIN}},{name:ModifyResponseHeader,parameters:{headerAction:Overwrite,headerName:Permissions-Policy,typeName:DeliveryRuleHeaderActionParameters,value:"camera=(), microphone=(), geolocation=(self)"}}]'
-  if az afd rule show -g "$RG" --profile-name "$PROFILE" --rule-set-name "$RULESET" --rule-name security-headers >/dev/null 2>&1; then
-    az afd rule update -g "$RG" --profile-name "$PROFILE" --rule-set-name "$RULESET" --rule-name security-headers --order 1 --match-processing-behavior Continue --actions "$actions" --only-show-errors >/dev/null
-  else
-    az afd rule create -g "$RG" --profile-name "$PROFILE" --rule-set-name "$RULESET" --rule-name security-headers --order 1 --match-processing-behavior Continue --actions "$actions" --only-show-errors >/dev/null
-  fi
+
+  # Azure CLI 2.88.0 moved Front Door rule actions to a new structured
+  # argument parser. Complex header values containing spaces, commas, and
+  # semicolons are not handled reliably by that shorthand parser. Use the
+  # documented 2025-04-15 ARM rule PUT so the payload is valid JSON and the
+  # operation remains idempotent for both create and update.
+  local rule_uri rule_body
+  rule_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/ruleSets/${RULESET}/rules/${RULE_NAME}?api-version=2025-04-15"
+  rule_body="$(jq -nc '{
+    properties: {
+      order: 1,
+      conditions: [],
+      actions: [
+        {
+          name: "ModifyResponseHeader",
+          parameters: {
+            headerAction: "Overwrite",
+            headerName: "Strict-Transport-Security",
+            typeName: "DeliveryRuleHeaderActionParameters",
+            value: "max-age=31536000; includeSubDomains"
+          }
+        },
+        {
+          name: "ModifyResponseHeader",
+          parameters: {
+            headerAction: "Overwrite",
+            headerName: "X-Content-Type-Options",
+            typeName: "DeliveryRuleHeaderActionParameters",
+            value: "nosniff"
+          }
+        },
+        {
+          name: "ModifyResponseHeader",
+          parameters: {
+            headerAction: "Overwrite",
+            headerName: "Referrer-Policy",
+            typeName: "DeliveryRuleHeaderActionParameters",
+            value: "strict-origin-when-cross-origin"
+          }
+        },
+        {
+          name: "ModifyResponseHeader",
+          parameters: {
+            headerAction: "Overwrite",
+            headerName: "X-Frame-Options",
+            typeName: "DeliveryRuleHeaderActionParameters",
+            value: "SAMEORIGIN"
+          }
+        },
+        {
+          name: "ModifyResponseHeader",
+          parameters: {
+            headerAction: "Overwrite",
+            headerName: "Permissions-Policy",
+            typeName: "DeliveryRuleHeaderActionParameters",
+            value: "camera=(), microphone=(), geolocation=(self)"
+          }
+        }
+      ],
+      matchProcessingBehavior: "Continue"
+    }
+  }')"
+  az rest \
+    --method put \
+    --uri "$rule_uri" \
+    --headers Content-Type=application/json \
+    --body "$rule_body" \
+    --only-show-errors >/dev/null
 }
 
 ensure_edge(){

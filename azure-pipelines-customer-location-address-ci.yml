@@ -52,6 +52,7 @@ steps:
   - script: |
       set -euo pipefail
       bash -n scripts/release/customer-location-azure-maps-provision.sh
+      bash -n scripts/release/customer-location-runtime-smoke.sh
 
       TARGETS=(
         apps/customer-web-next/src/components/customer-addresses.tsx
@@ -82,8 +83,10 @@ steps:
       grep -q 'liveWithoutAddress' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
       grep -q 'parseLocationRecommendation' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
       grep -q 'reverseGeocodeCurrentLocation' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
+      grep -q 'RATE_LIMIT_REQUESTS = 30' apps/customer-web-next/src/app/api/location/reverse-geocode/route.ts
       grep -q 'disable-local-auth true' scripts/release/customer-location-azure-maps-provision.sh
       grep -q 'Azure Maps Data Reader' scripts/release/customer-location-azure-maps-provision.sh
       grep -q 'confirmBillableAzureMapsProvision' azure-pipelines-customer-location-azure-maps.yml
+      grep -q 'customer-location-runtime-smoke.sh' azure-pipelines-customer-location-runtime-smoke.yml
       grep -q 'POST /api/location/reverse-geocode' apps/customer-web-next/src/services/location/README.md
     displayName: Verify location security and billing guards

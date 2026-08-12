@@ -6,6 +6,7 @@ set -euo pipefail
 : "${CRAVES_RESOURCE_GROUP:=rg-craves-prodlow-centralindia}"
 : "${CRAVES_CUSTOMER_WEB_APP:=ca-craves-web-prodlow}"
 : "${CRAVES_AZURE_MAPS_ACCOUNT:=maps-craves-prodlow-l3ing6}"
+: "${CRAVES_AZURE_MAPS_LOCATION:=global}"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -31,6 +32,9 @@ RG_LOCATION="$(az group show \
   -o tsv \
   --only-show-errors)" || fail "Resource group $CRAVES_RESOURCE_GROUP was not found"
 [[ -n "$RG_LOCATION" ]] || fail "Resource group location could not be resolved"
+
+MAPS_LOCATION="$CRAVES_AZURE_MAPS_LOCATION"
+[[ -n "$MAPS_LOCATION" ]] || fail "Azure Maps account location could not be resolved"
 
 APP_JSON="$(az containerapp show \
   --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
@@ -85,12 +89,12 @@ if az maps account show \
     --disable-local-auth true \
     --only-show-errors >/dev/null
 else
-  echo "Creating BILLABLE Azure Maps Gen2/G2 account: $CRAVES_AZURE_MAPS_ACCOUNT in $RG_LOCATION"
+  echo "Creating BILLABLE Azure Maps Gen2/G2 account: $CRAVES_AZURE_MAPS_ACCOUNT in $MAPS_LOCATION"
   az maps account create \
     --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
     --resource-group "$CRAVES_RESOURCE_GROUP" \
     --account-name "$CRAVES_AZURE_MAPS_ACCOUNT" \
-    --location "$RG_LOCATION" \
+    --location "$MAPS_LOCATION" \
     --sku G2 \
     --kind Gen2 \
     --disable-local-auth true \
@@ -185,7 +189,7 @@ LOCAL_AUTH_DISABLED="$(az maps account show \
 cat <<EOF
 Azure Maps location foundation is configured.
 Maps account: $CRAVES_AZURE_MAPS_ACCOUNT
-Maps region: $RG_LOCATION
+Maps region: $MAPS_LOCATION
 Maps kind/SKU: Gen2/G2
 Shared-key auth: disabled
 Customer web managed identity: $WEB_PRINCIPAL_ID

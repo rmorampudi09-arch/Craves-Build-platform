@@ -302,8 +302,29 @@ associate_domains(){
 validate_edge(){
   profile_exists || fail "Front Door not deployed"
   [[ "$(az afd profile show -g "$RG" --profile-name "$PROFILE" --query sku.name -o tsv)" == Premium_AzureFrontDoor ]] || fail "Front Door is not Premium"
-  [[ "$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" --query cacheConfiguration -o json)" == null ]] || fail "App route must not be cached"
-  [[ "$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --query cacheConfiguration -o json)" != null ]] || fail "Static route cache is missing"
+  local app_cache static_cache
+  app_cache="$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" --query cacheConfiguration -o json)"
+  static_cache="$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --query cacheConfiguration -o json)"
+  info "App route cache configuration: $app_cache"
+  info "Static route cache configuration: $static_cache"
+
+  # Azure CLI 2.88.0 can serialize a disabled cache configuration as either
+  # null or an object whose effective settings are empty/disabled. Validate
+  # the effective behavior so a dynamic route is never accepted as cached.
+  jq -e '
+    . == null or
+    (
+      (type == "object") and
+      ((.queryStringCachingBehavior // null) == null) and
+      ((.compressionSettings.isCompressionEnabled // false) == false)
+    )
+  ' <<<"$app_cache" >/dev/null || fail "App route must not be cached: $app_cache"
+
+  jq -e '
+    (type == "object") and
+    (.queryStringCachingBehavior == "IgnoreQueryString") and
+    (.compressionSettings.isCompressionEnabled == true)
+  ' <<<"$static_cache" >/dev/null || fail "Static route cache/compression is not configured as expected: $static_cache"
   local host code headers
   host="$(endpoint_host)"; headers="$OUT/frontdoor-home-headers.txt"; code=''
   for _ in $(seq 1 80); do code="$(curl -sS -D "$headers" -o /dev/null -w '%{http_code}' --max-time 30 "https://$host/" || true)"; [[ "$code" =~ ^(200|301|302|307|308)$ ]] && break; sleep 15; done

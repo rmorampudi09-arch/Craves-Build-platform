@@ -8,12 +8,33 @@ parameters:
     default: discover
     values:
       - discover
-      - validate
       - deploy
-  - name: confirmDeploy
-    displayName: Type DEPLOY_CDN when action is deploy
+      - validate
+      - prepareDomains
+      - associateDomains
+  - name: confirmPremium
+    displayName: Type PROVISION_PREMIUM_AFD for billable Premium create/upgrade
     type: string
-    default: DO_NOT_DEPLOY
+    default: DO_NOT_PROVISION_PREMIUM
+  - name: wafMode
+    displayName: WAF mode
+    type: string
+    default: Detection
+    values:
+      - Detection
+      - Prevention
+  - name: confirmDomains
+    displayName: Type PREPARE_CRAVES_DOMAINS for Key Vault/custom-domain preparation
+    type: string
+    default: DO_NOT_PREPARE_DOMAINS
+  - name: confirmAssociate
+    displayName: Type ASSOCIATE_CRAVES_DOMAINS after both Front Door domains are Approved
+    type: string
+    default: DO_NOT_ASSOCIATE_DOMAINS
+  - name: logAnalyticsWorkspaceName
+    displayName: Optional existing Log Analytics workspace name; blank auto-detects one workspace in the RG
+    type: string
+    default: ''
 
 pool:
   vmImage: ubuntu-latest
@@ -22,201 +43,36 @@ variables:
   resourceGroup: rg-craves-prodlow-centralindia
   webContainerApp: ca-craves-web-prodlow
   frontDoorProfile: afd-craves-prodlow
-  originGroup: craves-web-origin-group
-  originName: craves-web-origin
-  appRoute: craves-web-route
-  staticRoute: craves-static-route
+  keyVaultName: kvcravesprodlowl3ing6
+  certificateSecretName: craves-web-tls
 
 steps:
   - checkout: self
 
   - task: AzureCLI@2
-    displayName: Discover or deploy Craves Azure Front Door CDN
+    displayName: Craves production Azure Front Door / CDN
     inputs:
       azureSubscription: Craves-Dev-Service-Connection
       scriptType: bash
-      scriptLocation: inlineScript
-      inlineScript: |
-        set -euo pipefail
-        set +x
-
-        ACTION='${{ parameters.action }}'
-        CONFIRM='${{ parameters.confirmDeploy }}'
-        RG='$(resourceGroup)'
-        WEB_APP='$(webContainerApp)'
-        PROFILE='$(frontDoorProfile)'
-        ORIGIN_GROUP='$(originGroup)'
-        ORIGIN_NAME='$(originName)'
-        APP_ROUTE='$(appRoute)'
-        STATIC_ROUTE='$(staticRoute)'
-        SAFE='$(Build.ArtifactStagingDirectory)/craves-cdn-status'
-        REPORT="$SAFE/craves-cdn-report.md"
-        SNAPSHOT="$SAFE/craves-cdn-status.json"
-
-        fail() { echo "ERROR: $*" >&2; exit 1; }
-        command -v jq >/dev/null || fail 'jq is required on the pipeline agent'
-        mkdir -p "$SAFE"
-
-        SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-        SUBSCRIPTION_NAME=$(az account show --query name -o tsv)
-        UNIQUE_SUFFIX=$(printf '%s' "$SUBSCRIPTION_ID" | tr -d '-' | tr '[:upper:]' '[:lower:]' | cut -c1-8)
-        ENDPOINT="craves-prodlow-$UNIQUE_SUFFIX"
-
-        ORIGIN_FQDN=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.configuration.ingress.fqdn' -o tsv)
-        EXTERNAL_INGRESS=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.configuration.ingress.external' -o tsv)
-        TARGET_PORT=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.configuration.ingress.targetPort' -o tsv)
-        RUNNING_STATUS=$(az containerapp show           --resource-group "$RG"           --name "$WEB_APP"           --query 'properties.runningStatus' -o tsv)
-
-        [[ -n "$ORIGIN_FQDN" ]] || fail "Container App $WEB_APP has no ingress FQDN"
-        [[ "$EXTERNAL_INGRESS" == "true" || "$EXTERNAL_INGRESS" == "True" ]]           || fail "Container App $WEB_APP does not have external ingress"
-
-        az extension add --name cdn --upgrade --yes --only-show-errors >/dev/null
-
-        if [[ "$ACTION" == 'deploy' ]]; then
-          [[ "$CONFIRM" == 'DEPLOY_CDN' ]]             || fail 'Deployment requires confirmDeploy=DEPLOY_CDN'
-
-          if ! az afd profile show --resource-group "$RG" --profile-name "$PROFILE" >/dev/null 2>&1; then
-            az afd profile create               --resource-group "$RG"               --profile-name "$PROFILE"               --sku Standard_AzureFrontDoor               --only-show-errors >/dev/null
-          fi
-
-          if ! az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" >/dev/null 2>&1; then
-            az afd endpoint create               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --enabled-state Enabled               --only-show-errors >/dev/null
-          else
-            az afd endpoint update               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --enabled-state Enabled               --only-show-errors >/dev/null
-          fi
-
-          if ! az afd origin-group show --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" >/dev/null 2>&1; then
-            az afd origin-group create               --resource-group "$RG"               --profile-name "$PROFILE"               --origin-group-name "$ORIGIN_GROUP"               --probe-request-type GET               --probe-protocol Https               --probe-path /               --probe-interval-in-seconds 120               --sample-size 4               --successful-samples-required 3               --additional-latency-in-milliseconds 50               --only-show-errors >/dev/null
-          fi
-
-          if ! az afd origin show --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" --origin-name "$ORIGIN_NAME" >/dev/null 2>&1; then
-            az afd origin create               --resource-group "$RG"               --profile-name "$PROFILE"               --origin-group-name "$ORIGIN_GROUP"               --origin-name "$ORIGIN_NAME"               --host-name "$ORIGIN_FQDN"               --origin-host-header "$ORIGIN_FQDN"               --priority 1               --weight 1000               --enabled-state Enabled               --http-port 80               --https-port 443               --enforce-certificate-name-check true               --only-show-errors >/dev/null
-          else
-            az afd origin update               --resource-group "$RG"               --profile-name "$PROFILE"               --origin-group-name "$ORIGIN_GROUP"               --origin-name "$ORIGIN_NAME"               --host-name "$ORIGIN_FQDN"               --origin-host-header "$ORIGIN_FQDN"               --priority 1               --weight 1000               --enabled-state Enabled               --http-port 80               --https-port 443               --enforce-certificate-name-check true               --only-show-errors >/dev/null
-          fi
-
-          ORIGIN_GROUP_ID=$(az afd origin-group show             --resource-group "$RG"             --profile-name "$PROFILE"             --origin-group-name "$ORIGIN_GROUP"             --query id -o tsv)
-
-          if ! az afd route show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" >/dev/null 2>&1; then
-            az afd route create               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$APP_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --enabled-state Enabled               --only-show-errors >/dev/null
-          else
-            az afd route update               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$APP_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --enabled-state Enabled               --only-show-errors >/dev/null
-          fi
-
-          CACHE_CONFIGURATION='{compression-settings:{content-types-to-compress:[text/css,text/javascript,application/javascript,application/json,image/svg+xml,font/woff2],is-compression-enabled:true},query-string-caching-behavior:IgnoreQueryString}'
-          if ! az afd route show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" >/dev/null 2>&1; then
-            az afd route create               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$STATIC_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/_next/static/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --cache-configuration "$CACHE_CONFIGURATION"               --enabled-state Enabled               --only-show-errors >/dev/null
-          else
-            az afd route update               --resource-group "$RG"               --profile-name "$PROFILE"               --endpoint-name "$ENDPOINT"               --route-name "$STATIC_ROUTE"               --origin-group "$ORIGIN_GROUP_ID"               --patterns-to-match '/_next/static/*'               --supported-protocols Http Https               --forwarding-protocol HttpsOnly               --https-redirect Enabled               --link-to-default-domain Enabled               --cache-configuration "$CACHE_CONFIGURATION"               --enabled-state Enabled               --only-show-errors >/dev/null
-          fi
-        fi
-
-        PROFILE_EXISTS=false
-        ENDPOINT_HOST=''
-        PROFILE_SKU=''
-        PROFILE_STATE='NotDeployed'
-        ENDPOINT_STATE='NotDeployed'
-        ROUTES='[]'
-        ORIGINS='[]'
-        CUSTOM_DOMAINS='[]'
-
-        if az afd profile show --resource-group "$RG" --profile-name "$PROFILE" >/dev/null 2>&1; then
-          PROFILE_EXISTS=true
-          PROFILE_SKU=$(az afd profile show --resource-group "$RG" --profile-name "$PROFILE" --query 'sku.name' -o tsv)
-          PROFILE_STATE=$(az afd profile show --resource-group "$RG" --profile-name "$PROFILE" --query 'provisioningState' -o tsv)
-          if az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" >/dev/null 2>&1; then
-            ENDPOINT_HOST=$(az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --query 'hostName' -o tsv)
-            ENDPOINT_STATE=$(az afd endpoint show --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --query 'provisioningState' -o tsv)
-            ROUTES=$(az afd route list --resource-group "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT"               --query '[].{name:name,state:provisioningState,enabledState:enabledState,patterns:patternsToMatch,forwardingProtocol:forwardingProtocol,httpsRedirect:httpsRedirect,cacheEnabled:cacheConfiguration!=null}' -o json)
-          fi
-          if az afd origin-group show --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP" >/dev/null 2>&1; then
-            ORIGINS=$(az afd origin list --resource-group "$RG" --profile-name "$PROFILE" --origin-group-name "$ORIGIN_GROUP"               --query '[].{name:name,hostName:hostName,originHostHeader:originHostHeader,state:provisioningState,enabledState:enabledState}' -o json)
-          fi
-          CUSTOM_DOMAINS=$(az afd custom-domain list --resource-group "$RG" --profile-name "$PROFILE"             --query '[].{name:name,hostName:hostName,domainValidationState:domainValidationState,certificateType:tlsSettings.certificateType,deploymentStatus:deploymentStatus,provisioningState:provisioningState}' -o json)
-        fi
-
-        DNS_ZONES=$(az network dns zone list           --query '[].{name:name,resourceGroup:resourceGroup,recordCount:numberOfRecordSets}' -o json 2>/dev/null || printf '[]')
-        ALL_FRONT_DOOR_PROFILES=$(az resource list --resource-type Microsoft.Cdn/profiles           --query '[].{name:name,resourceGroup:resourceGroup,location:location,kind:kind,sku:sku.name}' -o json)
-
-        jq -n           --arg action "$ACTION"           --arg subscriptionName "$SUBSCRIPTION_NAME"           --arg subscriptionId "$SUBSCRIPTION_ID"           --arg resourceGroup "$RG"           --arg webContainerApp "$WEB_APP"           --arg originFqdn "$ORIGIN_FQDN"           --arg runningStatus "$RUNNING_STATUS"           --arg targetPort "$TARGET_PORT"           --argjson externalIngress "$EXTERNAL_INGRESS"           --arg profile "$PROFILE"           --arg profileSku "$PROFILE_SKU"           --arg profileState "$PROFILE_STATE"           --argjson profileExists "$PROFILE_EXISTS"           --arg endpoint "$ENDPOINT"           --arg endpointHost "$ENDPOINT_HOST"           --arg endpointState "$ENDPOINT_STATE"           --argjson routes "$ROUTES"           --argjson origins "$ORIGINS"           --argjson customDomains "$CUSTOM_DOMAINS"           --argjson dnsZones "$DNS_ZONES"           --argjson allFrontDoorProfiles "$ALL_FRONT_DOOR_PROFILES"           '{
-            schemaVersion: 1,
-            action: $action,
-            subscription: {name: $subscriptionName, id: $subscriptionId},
-            resourceGroup: $resourceGroup,
-            origin: {
-              containerApp: $webContainerApp,
-              fqdn: $originFqdn,
-              externalIngress: $externalIngress,
-              targetPort: ($targetPort | tonumber),
-              runningStatus: $runningStatus
-            },
-            frontDoor: {
-              exists: $profileExists,
-              profile: $profile,
-              sku: $profileSku,
-              provisioningState: $profileState,
-              endpoint: $endpoint,
-              endpointHost: $endpointHost,
-              endpointProvisioningState: $endpointState,
-              routes: $routes,
-              origins: $origins,
-              customDomains: $customDomains
-            },
-            azureDnsZones: $dnsZones,
-            allFrontDoorProfiles: $allFrontDoorProfiles
-          }' >"$SNAPSHOT"
-
-        {
-          echo '# Craves Azure Front Door / CDN status'
-          echo
-          echo "- Action: $ACTION"
-          echo "- Production origin: https://$ORIGIN_FQDN"
-          echo "- Origin status: $RUNNING_STATUS; external ingress: $EXTERNAL_INGRESS; target port: $TARGET_PORT"
-          echo "- Front Door profile: $PROFILE; deployed: $PROFILE_EXISTS; state: $PROFILE_STATE; SKU: $PROFILE_SKU"
-          echo "- Front Door endpoint: $ENDPOINT; host: $ENDPOINT_HOST; state: $ENDPOINT_STATE"
-          echo
-          echo '## Routes'
-          echo
-          echo "$ROUTES" | jq -r 'if length == 0 then "- None" else .[] | "- \(.name): state=\(.state), enabled=\(.enabledState), patterns=\(.patterns|join(",")), cache=\(.cacheEnabled)" end'
-          echo
-          echo '## Custom domains'
-          echo
-          echo "$CUSTOM_DOMAINS" | jq -r 'if length == 0 then "- None" else .[] | "- \(.hostName): validation=\(.domainValidationState), certificate=\(.certificateType), deployment=\(.deploymentStatus)" end'
-          echo
-          echo '## Azure DNS zones'
-          echo
-          echo "$DNS_ZONES" | jq -r 'if length == 0 then "- None found in this subscription" else .[] | "- \(.name) (resource group: \(.resourceGroup), records: \(.recordCount))" end'
-        } >"$REPORT"
-
-        echo '--- CDN STATUS REPORT ---'
-        cat "$REPORT"
-        echo '--- END CDN STATUS REPORT ---'
-
-        if [[ "$ACTION" == 'deploy' || "$ACTION" == 'validate' ]]; then
-          [[ "$PROFILE_EXISTS" == 'true' ]] || fail 'Front Door profile was not deployed'
-          [[ "$PROFILE_STATE" == 'Succeeded' ]] || fail "Front Door profile state is $PROFILE_STATE"
-          [[ "$ENDPOINT_STATE" == 'Succeeded' ]] || fail "Front Door endpoint state is $ENDPOINT_STATE"
-          [[ "$(echo "$ROUTES" | jq 'length')" -ge 2 ]] || fail 'Expected app and static routes were not deployed'
-
-          echo "Waiting for edge endpoint: https://$ENDPOINT_HOST"
-          HTTP_STATUS=''
-          for attempt in $(seq 1 120); do
-            HTTP_STATUS=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 "https://$ENDPOINT_HOST/" || true)
-            if [[ "$HTTP_STATUS" =~ ^(200|301|302|307|308)$ ]]; then
-              break
-            fi
-            echo "Endpoint not ready yet (attempt $attempt/120, HTTP $HTTP_STATUS)"
-            sleep 15
-          done
-          [[ "$HTTP_STATUS" =~ ^(200|301|302|307|308)$ ]]             || fail "Front Door endpoint validation failed with HTTP $HTTP_STATUS"
-          echo "SUCCESS: Craves Front Door endpoint is serving traffic with HTTP $HTTP_STATUS"
-        else
-          echo 'SUCCESS: CDN discovery completed; no Azure resource was changed.'
-        fi
+      scriptLocation: scriptPath
+      scriptPath: infra/frontdoor/production/deploy-front-door.sh
+    env:
+      ACTION: ${{ parameters.action }}
+      RESOURCE_GROUP: $(resourceGroup)
+      WEB_CONTAINER_APP: $(webContainerApp)
+      FRONT_DOOR_PROFILE: $(frontDoorProfile)
+      KEY_VAULT_NAME: $(keyVaultName)
+      CERTIFICATE_SECRET_NAME: $(certificateSecretName)
+      WAF_MODE: ${{ parameters.wafMode }}
+      CONFIRM_PREMIUM: ${{ parameters.confirmPremium }}
+      CONFIRM_DOMAINS: ${{ parameters.confirmDomains }}
+      CONFIRM_ASSOCIATE: ${{ parameters.confirmAssociate }}
+      LOG_ANALYTICS_WORKSPACE_NAME: ${{ parameters.logAnalyticsWorkspaceName }}
+      ARTIFACT_DIR: $(Build.ArtifactStagingDirectory)/craves-frontdoor-status
 
   - task: PublishPipelineArtifact@1
-    displayName: Publish Craves CDN status report
+    displayName: Publish Craves Front Door status and DNS handoff
     condition: always()
     inputs:
-      targetPath: $(Build.ArtifactStagingDirectory)/craves-cdn-status
-      artifact: craves-cdn-status
+      targetPath: $(Build.ArtifactStagingDirectory)/craves-frontdoor-status
+      artifact: craves-frontdoor-status

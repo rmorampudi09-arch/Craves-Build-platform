@@ -25,6 +25,8 @@ REVISION="$(jq -r '.properties.latestReadyRevisionName // .properties.latestRevi
 ENVIRONMENT_ID="$(jq -r '.properties.environmentId // .properties.managedEnvironmentId // ""' <<<"$APP_JSON")"
 ENVIRONMENT_NAME="${ENVIRONMENT_ID##*/}"
 IMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$APP_JSON")"
+MIN_REPLICAS="$(jq -r '.properties.template.scale.minReplicas // 0' <<<"$APP_JSON")"
+MAX_REPLICAS="$(jq -r '.properties.template.scale.maxReplicas // 10' <<<"$APP_JSON")"
 
 printf '%s\n' '============================================================'
 printf '%s\n' 'READ-ONLY SUBSCRIPTION HTTP + DATABASE RUNTIME DIAGNOSTICS'
@@ -33,6 +35,7 @@ echo "Revision: ${REVISION:-unknown}"
 echo "Image: ${IMAGE:-unknown}"
 echo "FQDN: ${FQDN:-unknown}"
 echo "Environment: ${ENVIRONMENT_NAME:-unknown}"
+echo "Scale: minReplicas=$MIN_REPLICAS maxReplicas=$MAX_REPLICAS"
 
 echo 'Runtime environment variable sources (values are NOT printed):'
 jq -r '
@@ -75,10 +78,14 @@ if [[ -n "$FQDN" ]]; then
   probe "$BASE/actuator/health/readiness" 'DIRECT_READINESS' 15
   probe "$BASE/actuator/health" 'DIRECT_FULL_HEALTH' 40
   probe "$BASE/api/v1/subscriptions/plans" 'DIRECT_PUBLIC_PLANS' 40
+  probe "$BASE/api/v1/subscriptions/plans" 'DIRECT_PUBLIC_PLANS_WARM' 40
 fi
 
 APIM_JSON="$(az apim show --resource-group "$RG" --name "$APIM" -o json --only-show-errors 2>/dev/null || true)"
-APIM_GATEWAY_URL="$(jq -r '.gatewayUrl // .properties.gatewayUrl // ""' <<<"${APIM_JSON:-{}}")"
+APIM_GATEWAY_URL=""
+if [[ -n "$APIM_JSON" ]] && jq -e . >/dev/null 2>&1 <<<"$APIM_JSON"; then
+  APIM_GATEWAY_URL="$(jq -r '.gatewayUrl // .properties.gatewayUrl // ""' <<<"$APIM_JSON")"
+fi
 if [[ -n "$APIM_GATEWAY_URL" ]]; then
   probe "${APIM_GATEWAY_URL%/}/api/v1/subscriptions/plans" 'APIM_PUBLIC_PLANS' 45
 fi

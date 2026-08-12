@@ -82,7 +82,7 @@ function LandingPage() {
         #how-it-works,
         #why-craves,
         #become-a-chef {
-          margin-inline: 0.7cm;
+          margin-inline: 1.1cm;
         }
       `}</style>
 

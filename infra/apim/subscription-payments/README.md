@@ -6,6 +6,7 @@ This package exposes the customer-authorized subscription payment flow and Cashf
 
 Authenticated customer routes:
 
+- `GET /api/v1/subscription-payments/subscriptions/{subscriptionId}` — resolves the latest payment intent for an owned meal subscription so Customer Mode can continue an asynchronously generated invoice without exposing database or invoice-discovery logic to the browser.
 - `GET /api/v1/subscription-payments/invoices/{invoiceId}`
 - `POST /api/v1/subscription-payments/invoices/{invoiceId}/orders`
 
@@ -21,7 +22,7 @@ The customer routes require a Bearer access token at APIM and are re-authorized 
 - `cashfree-webhook-policy.xml` — provider-public raw-body pass-through, Integration backend, no-store/nosniff response headers.
 - `scripts/apim/configure-subscription-payments-apim.sh` — guarded idempotent apply; adopts an existing operation when method + URL template already exists.
 - `scripts/apim/status-subscription-payments-apim.sh` — read-only route/policy validation.
-- `scripts/apim/rollback-subscription-payments-apim.sh` — removes only the three named method/template routes and retains API containers.
+- `scripts/apim/rollback-subscription-payments-apim.sh` — removes only the four named method/template routes and retains API containers.
 
 ## Pipelines
 

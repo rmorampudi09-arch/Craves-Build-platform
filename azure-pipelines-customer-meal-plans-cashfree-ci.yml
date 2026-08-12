@@ -131,11 +131,14 @@ stages:
               COMPONENT='apps/customer-web-next/src/components/subscription-cashfree-payment.tsx'
               ENROLL='apps/customer-web-next/src/components/subscription-enrollment-form.tsx'
               BFF='apps/customer-web-next/src/app/api/subscription-payments/invoices/[invoiceId]/orders/route.ts'
+              SERVICE='services/integration-service/src/main/java/in/craves/integration/subscription/SubscriptionPaymentService.java'
 
               grep -Fq 'Cashfree({ mode: "sandbox" })' "$COMPONENT"
               grep -Fq '/subscriptions/${encodeURIComponent(subscription.id)}/payment' "$ENROLL"
               grep -Fq 'authenticatedApiFetch' "$BFF"
               grep -Fq 'isSameOrigin' "$BFF"
+              grep -Fq '.header("x-idempotency-key", invoiceId.toString())' "$SERVICE"
+              grep -Fq 'StringUtils.hasText(intent.paymentSessionId())' "$SERVICE"
 
               if grep -Fq 'mode: "production"' "$COMPONENT"; then
                 echo 'ERROR: Customer Meal Plans payment component contains production Cashfree mode.' >&2

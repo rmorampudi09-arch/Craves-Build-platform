@@ -46,6 +46,7 @@ remove_route() {
   echo "REMOVED: ${METHOD^^} ${PATH_VALUE}${TEMPLATE} operation ${MATCHES[0]}"
 }
 
+remove_route "api/v1/subscription-payments" GET "/subscriptions/{subscriptionId}"
 remove_route "api/v1/subscription-payments" GET "/invoices/{invoiceId}"
 remove_route "api/v1/subscription-payments" POST "/invoices/{invoiceId}/orders"
 remove_route "api/v1/payments" POST "/webhooks/cashfree"

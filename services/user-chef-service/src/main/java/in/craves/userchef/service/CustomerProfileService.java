@@ -171,7 +171,7 @@ public class CustomerProfileService {
             blankToNull(request.addressLine2()),
             blankToNull(request.landmark()),
             request.areaName().trim(),
-            request.districtName().trim(),
+            blankToNull(request.districtName()),
             request.city().trim(),
             request.state().trim(),
             request.postalCode().trim(),
@@ -202,7 +202,7 @@ public class CustomerProfileService {
             blankToNull(request.addressLine2()),
             blankToNull(request.landmark()),
             request.areaName().trim(),
-            request.districtName().trim(),
+            blankToNull(request.districtName()),
             request.city().trim(),
             request.state().trim(),
             request.postalCode().trim(),
@@ -339,9 +339,6 @@ public class CustomerProfileService {
         }
         if (!StringUtils.hasText(request.areaName())) {
             throw ApiException.badRequest("AREA_NAME_REQUIRED", "Area name is required");
-        }
-        if (!StringUtils.hasText(request.districtName())) {
-            throw ApiException.badRequest("DISTRICT_NAME_REQUIRED", "District is required");
         }
         if (!StringUtils.hasText(request.postalCode())) {
             throw ApiException.badRequest("POSTAL_CODE_REQUIRED", "Postal code is required");

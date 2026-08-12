@@ -231,13 +231,43 @@ ensure_diagnostics(){
 prepare_domains(){
   [[ "$CONFIRM_DOMAINS" == PREPARE_CRAVES_DOMAINS ]] || fail "Use confirmDomains=PREPARE_CRAVES_DOMAINS"
   az afd profile identity assign -g "$RG" --profile-name "$PROFILE" --system-assigned --only-show-errors >/dev/null
-  local principal kvid source access
+  local principal kvid source access secret_uri secret_body secret_state
   principal="$(az afd profile identity show -g "$RG" --profile-name "$PROFILE" --query principalId -o tsv)"
   kvid="$(az keyvault show -g "$RG" -n "$KV" --query id -o tsv)"
   source="$kvid/secrets/$CERT"
   access="$(az role assignment list --assignee-object-id "$principal" --scope "$kvid" --query "[?roleDefinitionName=='Key Vault Secrets User'] | length(@)" -o tsv 2>/dev/null || echo 0)"
   [[ "$access" != 0 ]] || fail "Assign Key Vault Secrets User on $KV to Front Door identity object ID $principal, then rerun"
-  az afd secret show -g "$RG" --profile-name "$PROFILE" --secret-name "$AFD_SECRET" >/dev/null 2>&1 || az afd secret create -g "$RG" --profile-name "$PROFILE" --secret-name "$AFD_SECRET" --secret-source "$source" --use-latest-version true --only-show-errors >/dev/null
+  # Azure CLI 2.88.0 replaced the prior --secret-source and
+  # --use-latest-version flags with a fragile structured --parameters input.
+  # Use the documented 2025-04-15 ARM Secret PUT so the Key Vault reference
+  # stays versionless and Front Door automatically follows the latest version.
+  secret_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/secrets/${AFD_SECRET}?api-version=2025-04-15"
+  secret_body="$(jq -nc --arg source "$source" '{
+    properties: {
+      parameters: {
+        type: "CustomerCertificate",
+        secretSource: {id: $source},
+        useLatestVersion: true
+      }
+    }
+  }')"
+  az rest \
+    --method put \
+    --uri "$secret_uri" \
+    --headers Content-Type=application/json \
+    --body "$secret_body" \
+    --only-show-errors >/dev/null
+
+  # az rest returns after an accepted asynchronous PUT. Wait for the secret
+  # before creating domains that reference it.
+  secret_state=''
+  for _ in $(seq 1 80); do
+    secret_state="$(az afd secret show -g "$RG" --profile-name "$PROFILE" --secret-name "$AFD_SECRET" --query provisioningState -o tsv 2>/dev/null || true)"
+    [[ "$secret_state" == Succeeded ]] && break
+    [[ "$secret_state" == Failed ]] && fail "Front Door secret provisioning failed"
+    sleep 15
+  done
+  [[ "$secret_state" == Succeeded ]] || fail "Front Door secret provisioning did not complete"
   az afd custom-domain show -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$APEX_RES" >/dev/null 2>&1 || az afd custom-domain create -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$APEX_RES" --host-name craves.in --minimum-tls-version TLS12 --certificate-type CustomerCertificate --secret "$AFD_SECRET" --only-show-errors >/dev/null
   az afd custom-domain show -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$WWW_RES" >/dev/null 2>&1 || az afd custom-domain create -g "$RG" --profile-name "$PROFILE" --custom-domain-name "$WWW_RES" --host-name www.craves.in --minimum-tls-version TLS12 --certificate-type CustomerCertificate --secret "$AFD_SECRET" --only-show-errors >/dev/null
 }

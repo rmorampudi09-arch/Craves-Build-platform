@@ -1,7 +1,6 @@
 package in.craves.integration.web;
 
 import in.craves.integration.config.PaymentApiProperties;
-import in.craves.integration.subscription.SubscriptionPaymentLookupService;
 import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
 import in.craves.integration.subscription.SubscriptionPaymentService;
@@ -20,16 +19,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/subscription-payments")
 public class SubscriptionPaymentController {
     private final SubscriptionPaymentService service;
-    private final SubscriptionPaymentLookupService lookupService;
     private final PaymentApiProperties apiProperties;
 
     public SubscriptionPaymentController(
         SubscriptionPaymentService service,
-        SubscriptionPaymentLookupService lookupService,
         PaymentApiProperties apiProperties
     ) {
         this.service = service;
-        this.lookupService = lookupService;
         this.apiProperties = apiProperties;
     }
 
@@ -38,7 +34,7 @@ public class SubscriptionPaymentController {
         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
         @PathVariable UUID subscriptionId
     ) {
-        return lookupService.getLatestOwned(authorization, subscriptionId);
+        return service.getLatestOwned(authorization, subscriptionId);
     }
 
     @GetMapping("/invoices/{invoiceId}")

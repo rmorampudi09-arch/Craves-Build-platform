@@ -157,7 +157,7 @@ export default function AddressesPage() {
           setDraft((current) => ({
             ...current,
             addressLine1: detected.houseNumber || detected.formattedAddress,
-            addressLine2: detected.houseNumber ? detected.street : null,
+            addressLine2: detected.street || current.addressLine2,
             areaName: detected.area || detected.city || current.areaName,
             districtName: detected.district || detected.city || current.districtName,
             city: detected.city || current.city,

@@ -80,15 +80,22 @@ function readCurrentPosition(): Promise<GeolocationPosition> {
 async function resolveLiveBrowsingLocation(
   fallback: CravesAddress | null,
 ): Promise<CravesAddress | null> {
+  let position: GeolocationPosition;
   try {
-    const position = await readCurrentPosition();
-    const latitude = Number(position.coords.latitude.toFixed(7));
-    const longitude = Number(position.coords.longitude.toFixed(7));
-    const query = new URLSearchParams({
-      latitude: String(latitude),
-      longitude: String(longitude),
-      matchRadiusMeters: String(SAVED_ADDRESS_MATCH_RADIUS_METERS),
-    });
+    position = await readCurrentPosition();
+  } catch {
+    return fallback;
+  }
+
+  const latitude = Number(position.coords.latitude.toFixed(7));
+  const longitude = Number(position.coords.longitude.toFixed(7));
+  const query = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    matchRadiusMeters: String(SAVED_ADDRESS_MATCH_RADIUS_METERS),
+  });
+
+  try {
     const recommendationResponse = await fetch(
       `/api/customer/addresses/recommendation?${query}`,
       { cache: "no-store", credentials: "same-origin" },
@@ -105,7 +112,12 @@ async function resolveLiveBrowsingLocation(
         }
       }
     }
+  } catch {
+    // A saved-address recommendation is an optimization. Once GPS succeeded,
+    // discovery must continue from the live point even if this lookup fails.
+  }
 
+  try {
     const detected = await reverseGeocodeCurrentLocation(latitude, longitude);
     const live: CravesAddress = {
       label: "CURRENT LOCATION",
@@ -121,7 +133,18 @@ async function resolveLiveBrowsingLocation(
     saveAddress(live);
     return live;
   } catch {
-    return fallback;
+    const liveWithoutAddress: CravesAddress = {
+      label: "CURRENT LOCATION",
+      hno: "Current location",
+      city: fallback?.city || "",
+      mandal: "Current location",
+      district: fallback?.district || "",
+      pincode: fallback?.pincode,
+      lat: latitude,
+      lng: longitude,
+    };
+    saveAddress(liveWithoutAddress);
+    return liveWithoutAddress;
   }
 }
 

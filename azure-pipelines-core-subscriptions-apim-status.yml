@@ -23,6 +23,19 @@ pool:
 
 steps:
   - checkout: self
+
+  - task: AzureCLI@2
+    displayName: Diagnose core Subscription network layers
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: scriptPath
+      scriptPath: scripts/apim/diagnose-core-subscriptions-network.sh
+    env:
+      RG: ${{ parameters.resourceGroupName }}
+      APIM: ${{ parameters.apimName }}
+      SUB_APP: ${{ parameters.subscriptionContainerAppName }}
+
   - task: AzureCLI@2
     displayName: Verify core Subscription APIM routes and transport
     inputs:

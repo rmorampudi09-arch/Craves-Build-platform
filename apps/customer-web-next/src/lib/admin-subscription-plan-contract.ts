@@ -1,5 +1,5 @@
 export type AdminPlanPeriod = "WEEKLY" | "MONTHLY";
-export type AdminPlanStatus = "DRAFT" | "ACTIVE" | "INACTIVE";
+export type AdminPlanStatus = "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "REJECTED" | "INACTIVE";
 
 export type AdminSubscriptionPlan = {
   id: string;
@@ -34,7 +34,7 @@ export type AdminSubscriptionPlanInput = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PERIODS = new Set(["WEEKLY", "MONTHLY"]);
-const STATUSES = new Set(["DRAFT", "ACTIVE", "INACTIVE"]);
+const STATUSES = new Set(["DRAFT", "PENDING_APPROVAL", "ACTIVE", "REJECTED", "INACTIVE"]);
 
 function text(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;

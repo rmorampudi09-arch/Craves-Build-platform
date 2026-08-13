@@ -32,7 +32,7 @@ function sanitize(value: unknown): SafeEvidence | null {
 
 export async function GET(request: NextRequest) {
   try {
-    const upstream = await authenticatedApiFetch(request, "/chef/application/evidence");
+    const upstream = await authenticatedApiFetch(request, "/chef/application?evidence=true");
     if (!upstream.ok) {
       return NextResponse.json(
         { code: upstream.status === 401 ? "SESSION_EXPIRED" : "EVIDENCE_STATUS_UNAVAILABLE" },

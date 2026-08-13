@@ -37,6 +37,17 @@ test("allow-lists chef application and document metadata", () => {
   assert.equal("blobName" in (parsed?.documents[0] ?? {}), false);
 });
 
+test("accepts current Chef application evidence types", () => {
+  for (const documentType of [
+    "APPLICANT_PHOTO",
+    "GOVERNMENT_ID_FRONT",
+    "GOVERNMENT_ID_BACK",
+    "TAX_ID_CARD",
+  ]) {
+    assert.ok(parseChefProofDocument({ ...application.documents[0], documentType }));
+  }
+});
+
 test("rejects unsupported document metadata", () => {
   assert.equal(parseChefProofDocument({ ...application.documents[0], documentType: "UNKNOWN" }), null);
   assert.equal(parseChefProofDocument({ ...application.documents[0], fileSizeBytes: 50_000_000 }), null);

@@ -36,3 +36,16 @@ steps:
       SUBSCRIPTION_APP: ${{ parameters.subscriptionContainerAppName }}
       USER_CHEF_APP: ${{ parameters.userChefContainerAppName }}
       CONFIRM_APIM_WRITE: ${{ parameters.confirmApimWrite }}
+
+  - task: AzureCLI@2
+    displayName: Enforce Chef-owned meal plan APIM workflow
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: scriptPath
+      scriptPath: scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
+    env:
+      RG: ${{ parameters.resourceGroupName }}
+      APIM: ${{ parameters.apimName }}
+      SUBSCRIPTION_APP: ${{ parameters.subscriptionContainerAppName }}
+      CONFIRM_APIM_WRITE: ${{ parameters.confirmApimWrite }}

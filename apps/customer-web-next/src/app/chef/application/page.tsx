@@ -1,3 +1,4 @@
+import { ChefApplicationDocumentPanel } from "@/components/chef-application-document-panel";
 import { ChefApplicationWorkspace } from "@/components/chef-application-workspace";
 import { ChefPageHeader } from "@/components/chef-page-header";
 
@@ -12,10 +13,13 @@ export default function ChefApplicationPage() {
       <ChefPageHeader
         eyebrow="Onboarding and evidence"
         title="Chef application"
-        description="Submit the current backend application fields and supported proof files. Approval, rejection notes and document review remain controlled by authorized Craves administrators."
+        description="Complete the application details and upload each required document separately. Upload status and review remain controlled by Craves."
       />
-      <div className="mt-6">
-        <ChefApplicationWorkspace />
+      <div className="mt-6 space-y-6">
+        <div className="[&>div>section:last-child]:hidden">
+          <ChefApplicationWorkspace />
+        </div>
+        <ChefApplicationDocumentPanel />
       </div>
     </main>
   );

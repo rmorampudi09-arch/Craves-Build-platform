@@ -2,15 +2,18 @@ package in.craves.subscription.plan;
 
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.schedule.PlanCatalogClient;
+import in.craves.subscription.schedule.PlanCatalogClient.MenuItem;
 import in.craves.subscription.schedule.PlanScheduleModels.PlanScheduleResponse;
 import in.craves.subscription.schedule.PlanScheduleModels.PutScheduleRequest;
 import in.craves.subscription.schedule.PlanScheduleModels.ScheduleItemRequest;
 import in.craves.subscription.schedule.PlanScheduleRepository;
 import in.craves.subscription.schedule.PlanScheduleRepository.PlanOwner;
+import in.craves.subscription.schedule.PlanScheduleRepository.PreparedScheduleItem;
 import in.craves.subscription.security.CurrentUser;
 import java.time.DateTimeException;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -51,14 +54,14 @@ public class ChefPlanScheduleService {
             throw ApiException.conflict("RECURRENCE_BILLING_PERIOD_MISMATCH", "Meal schedule frequency must match the plan billing period");
         }
         requireTimezone(request.timezone());
-        validateItems(recurrence, request.items(), user.identityId());
+        List<PreparedScheduleItem> prepared = validateAndPrepareItems(recurrence, request.items(), user.identityId());
         try {
             return repository.replaceDraft(
                 planId,
                 recurrence,
                 request.timezone().trim(),
                 request.generationLeadHours(),
-                List.copyOf(request.items()),
+                prepared,
                 user.identityId()
             );
         } catch (IllegalArgumentException | IllegalStateException exception) {
@@ -74,7 +77,8 @@ public class ChefPlanScheduleService {
         if (schedule.items().isEmpty()) {
             throw ApiException.conflict("PLAN_SCHEDULE_EMPTY", "Add at least one meal to the plan before submitting it");
         }
-        validateItems(
+        requireScheduleMatchesPlan(plan, schedule);
+        validateAndPrepareItems(
             schedule.recurrenceType(),
             schedule.items().stream().map(item -> new ScheduleItemRequest(
                 item.menuItemId(), item.quantity(), item.isoDayOfWeek(), item.dayOfMonth(),
@@ -98,7 +102,8 @@ public class ChefPlanScheduleService {
         if (schedule.items().isEmpty()) {
             throw ApiException.conflict("PLAN_SCHEDULE_EMPTY", "Submitted plan has no meal items");
         }
-        validateItems(
+        requireScheduleMatchesPlan(plan, schedule);
+        validateAndPrepareItems(
             schedule.recurrenceType(),
             schedule.items().stream().map(item -> new ScheduleItemRequest(
                 item.menuItemId(), item.quantity(), item.isoDayOfWeek(), item.dayOfMonth(),
@@ -119,12 +124,20 @@ public class ChefPlanScheduleService {
         return plan;
     }
 
-    private void validateItems(String recurrence, List<ScheduleItemRequest> items, UUID chefIdentityId) {
+    private List<PreparedScheduleItem> validateAndPrepareItems(
+        String recurrence,
+        List<ScheduleItemRequest> items,
+        UUID chefIdentityId
+    ) {
+        if (chefIdentityId == null) {
+            throw ApiException.conflict("PLAN_CHEF_REQUIRED", "Meal plan must belong to an approved Chef");
+        }
         if (items == null || items.isEmpty()) {
             throw ApiException.badRequest("PLAN_SCHEDULE_EMPTY", "Select at least one available menu item");
         }
         Set<String> uniqueness = new HashSet<>();
         Map<String, LocalTime> slotTimes = new HashMap<>();
+        List<PreparedScheduleItem> prepared = new ArrayList<>();
         for (ScheduleItemRequest item : items) {
             if ("WEEKLY".equals(recurrence)) {
                 if (item.isoDayOfWeek() == null || item.dayOfMonth() != null) {
@@ -144,10 +157,28 @@ public class ChefPlanScheduleService {
                 throw ApiException.badRequest("INCONSISTENT_MEAL_SLOT_TIME", "Meals in one slot must use the same service time");
             }
             try {
-                catalogClient.requireSellableOwnedItem(item.menuItemId(), chefIdentityId);
+                MenuItem menuItem = catalogClient.requireSellableOwnedItem(item.menuItemId(), chefIdentityId);
+                prepared.add(new PreparedScheduleItem(
+                    item,
+                    menuItem.itemName().trim(),
+                    trim(menuItem.category()),
+                    trim(menuItem.foodType()),
+                    menuItem.price(),
+                    menuItem.currency().trim().toUpperCase(Locale.ROOT)
+                ));
             } catch (org.springframework.web.server.ResponseStatusException exception) {
                 throw ApiException.conflict("MENU_ITEM_NOT_AVAILABLE", exception.getReason() == null ? "Menu item is not available for this Chef" : exception.getReason());
             }
+        }
+        return List.copyOf(prepared);
+    }
+
+    private static void requireScheduleMatchesPlan(PlanOwner plan, PlanScheduleResponse schedule) {
+        if (!plan.billingPeriod().equals(schedule.recurrenceType())) {
+            throw ApiException.conflict(
+                "RECURRENCE_BILLING_PERIOD_MISMATCH",
+                "Meal schedule frequency no longer matches the plan. Save the meal schedule again before submitting or approving."
+            );
         }
     }
 
@@ -157,6 +188,12 @@ public class ChefPlanScheduleService {
         } catch (DateTimeException | NullPointerException exception) {
             throw ApiException.badRequest("INVALID_TIMEZONE", "timezone must be a valid IANA timezone");
         }
+    }
+
+    private static String trim(String value) {
+        if (value == null) return null;
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private static void requireChef(CurrentUser user) {

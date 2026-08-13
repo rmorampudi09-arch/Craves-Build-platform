@@ -4,13 +4,11 @@ import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
-import in.craves.subscription.web.ApiDtos.CreatePlanRequest;
 import in.craves.subscription.web.ApiDtos.CreateSubscriptionRequest;
 import in.craves.subscription.web.ApiDtos.CustomerSubscriptionResponse;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
 import in.craves.subscription.web.ApiDtos.PublicPlanResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -23,8 +21,6 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class SubscriptionService {
-    private static final Set<String> BILLING_PERIODS = Set.of("WEEKLY", "MONTHLY");
-    private static final Set<String> PLAN_STATUSES = Set.of("DRAFT", "ACTIVE", "INACTIVE");
     private static final Set<String> ADMIN_STATUS_CHANGES = Set.of(
         "PENDING_PAYMENT", "ACTIVE", "PAUSED", "PAYMENT_FAILED", "EXPIRED", "CANCELLED"
     );
@@ -36,24 +32,6 @@ public class SubscriptionService {
     public SubscriptionService(SubscriptionRepository repository, CapacityService capacityService) {
         this.repository = repository;
         this.capacityService = capacityService;
-    }
-
-    public PlanResponse createPlan(CreatePlanRequest request, CurrentUser user) {
-        requireSubscriptionAdmin(user);
-        String billingPeriod = normalize(request.billingPeriod(), "billingPeriod");
-        if (!BILLING_PERIODS.contains(billingPeriod)) {
-            throw ApiException.badRequest("INVALID_BILLING_PERIOD", "billingPeriod must be WEEKLY or MONTHLY");
-        }
-        BigDecimal amount = request.amount();
-        if (amount == null || amount.signum() < 0) {
-            throw ApiException.badRequest("INVALID_AMOUNT", "amount must be zero or greater");
-        }
-        String currency = StringUtils.hasText(request.currency())
-            ? request.currency().toUpperCase(Locale.ROOT) : "INR";
-        return repository.createPlan(
-            request.planCode().trim(), request.chefIdentityId(), request.name().trim(), request.description(),
-            billingPeriod, amount, currency, user.identityId()
-        );
     }
 
     public List<PublicPlanResponse> listActivePlans() {
@@ -80,20 +58,14 @@ public class SubscriptionService {
     public PlanResponse updatePlanStatus(UUID planId, String status, CurrentUser user) {
         requireSubscriptionAdmin(user);
         String normalized = normalize(status, "status");
-        if (!PLAN_STATUSES.contains(normalized)) {
-            throw ApiException.badRequest("INVALID_PLAN_STATUS", "status must be DRAFT, ACTIVE, or INACTIVE");
-        }
-        PlanResponse plan = repository.findPlanById(planId)
-            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
-        if ("ACTIVE".equals(normalized) && !capacityService.isPlanBookable(new PlanResponse(
-            plan.id(), plan.planCode(), plan.chefIdentityId(), plan.name(), plan.description(), plan.billingPeriod(),
-            plan.amount(), plan.currency(), "ACTIVE", plan.createdAt(), plan.updatedAt()
-        ))) {
-            throw ApiException.conflict(
-                "PLAN_CAPACITY_NOT_READY",
-                "Plan activation requires chef capacity for every required meal slot"
+        if (!"INACTIVE".equals(normalized)) {
+            throw ApiException.badRequest(
+                "PLAN_REVIEW_REQUIRED",
+                "Administrators can only deactivate plans here; Chef submissions must be approved through the review workflow"
             );
         }
+        repository.findPlanById(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_NOT_FOUND", "Subscription plan was not found"));
         return repository.updatePlanStatus(planId, normalized, user.identityId());
     }
 

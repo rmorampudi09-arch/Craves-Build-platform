@@ -3,6 +3,7 @@ package in.craves.userchef.service;
 import in.craves.userchef.exception.ApiException;
 import in.craves.userchef.security.CurrentUser;
 import in.craves.userchef.service.BlobDocumentStorageService.StoredDocumentBytes;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,27 @@ public class ChefDocumentReviewService {
     public ChefDocumentReviewService(JdbcTemplate jdbcTemplate, BlobDocumentStorageService storageService) {
         this.jdbcTemplate = jdbcTemplate;
         this.storageService = storageService;
+    }
+
+    public List<DocumentMetadata> list(CurrentUser admin, UUID applicationId) {
+        requireAdmin(admin);
+        return jdbcTemplate.query(
+            """
+                SELECT id, document_type, original_file_name, content_type, file_size_bytes, status
+                FROM chef_kyc_document
+                WHERE application_id = ?
+                ORDER BY document_type
+                """,
+            (resultSet, rowNumber) -> new DocumentMetadata(
+                resultSet.getObject("id", UUID.class),
+                resultSet.getString("document_type"),
+                resultSet.getString("original_file_name"),
+                resultSet.getString("content_type"),
+                resultSet.getLong("file_size_bytes"),
+                resultSet.getString("status")
+            ),
+            applicationId
+        );
     }
 
     public StoredDocumentBytes download(
@@ -57,6 +79,16 @@ public class ChefDocumentReviewService {
                 "Chef document review access is required"
             );
         }
+    }
+
+    public record DocumentMetadata(
+        UUID id,
+        String documentType,
+        String originalFileName,
+        String contentType,
+        long fileSizeBytes,
+        String status
+    ) {
     }
 
     private record DocumentLocation(

@@ -14,6 +14,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ChefApplicationService {
+    private static final Set<KycDocumentType> REQUIRED_APPLICATION_DOCUMENTS = Set.of(
+        KycDocumentType.APPLICANT_PHOTO,
+        KycDocumentType.GOVERNMENT_ID_FRONT,
+        KycDocumentType.GOVERNMENT_ID_BACK,
+        KycDocumentType.TAX_ID_CARD
+    );
+
     private final JdbcTemplate jdbcTemplate;
     private final BlobDocumentStorageService storageService;
     private final AuthInternalClient authInternalClient;
@@ -133,6 +141,7 @@ public class ChefApplicationService {
         if (application.status() != ChefApplicationStatus.PENDING) {
             throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be approved");
         }
+        requireCompleteApplicationDocuments(application);
         updateDecision(applicationId, admin.identityId(), "APPROVED", null);
         authInternalClient.grantChefRole(application.identityId(), applicationId);
         ChefApplicationResponse approved = getApplicationForAdmin(admin, applicationId);
@@ -154,6 +163,35 @@ public class ChefApplicationService {
         ChefApplicationResponse rejected = getApplicationForAdmin(admin, applicationId);
         notificationInternalClient.chefRejected(rejected);
         return rejected;
+    }
+
+    private static void requireCompleteApplicationDocuments(ChefApplicationResponse application) {
+        Set<KycDocumentType> uploaded = application.documents().stream()
+            .map(KycDocumentResponse::documentType)
+            .collect(java.util.stream.Collectors.toSet());
+        List<KycDocumentType> missing = REQUIRED_APPLICATION_DOCUMENTS.stream()
+            .filter(type -> !uploaded.contains(type))
+            .sorted()
+            .toList();
+        if (!missing.isEmpty()) {
+            throw ApiException.conflict(
+                "CHEF_REQUIRED_DOCUMENTS_MISSING",
+                "Required FSSAI application documents are missing: " + missing.stream()
+                    .map(ChefApplicationService::documentLabel)
+                    .toList()
+            );
+        }
+    }
+
+    private static String documentLabel(KycDocumentType type) {
+        return switch (type) {
+            case APPLICANT_PHOTO -> "Applicant photo";
+            case GOVERNMENT_ID_FRONT -> "Aadhaar front";
+            case GOVERNMENT_ID_BACK -> "Aadhaar back";
+            case TAX_ID_CARD -> "PAN card";
+            case AADHAAR_CARD -> "Legacy Aadhaar card";
+            case PAN_CARD -> "Legacy PAN card";
+        };
     }
 
     private void updateDecision(UUID applicationId, UUID adminIdentityId, String decision, String reason) {

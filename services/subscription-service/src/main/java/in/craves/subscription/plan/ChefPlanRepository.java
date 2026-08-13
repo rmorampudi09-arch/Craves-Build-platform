@@ -6,6 +6,7 @@ import in.craves.subscription.plan.ChefPlanModels.ChefPlanResponse;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -150,11 +151,16 @@ public class ChefPlanRepository {
             rs.getString("currency"),
             rs.getString("status"),
             rs.getString("review_reason"),
-            rs.getObject("submitted_at", Instant.class),
-            rs.getObject("reviewed_at", Instant.class),
-            rs.getObject("created_at", Instant.class),
-            rs.getObject("updated_at", Instant.class)
+            instant(rs, "submitted_at"),
+            instant(rs, "reviewed_at"),
+            instant(rs, "created_at"),
+            instant(rs, "updated_at")
         );
+    }
+
+    private static Instant instant(ResultSet rs, String column) throws SQLException {
+        OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
     }
 
     private static String trim(String value) {

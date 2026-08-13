@@ -3,6 +3,8 @@ package in.craves.userchef.web;
 import in.craves.userchef.security.CurrentUser;
 import in.craves.userchef.service.BlobDocumentStorageService.StoredDocumentBytes;
 import in.craves.userchef.service.ChefDocumentReviewService;
+import in.craves.userchef.service.ChefDocumentReviewService.DocumentMetadata;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
@@ -22,6 +24,14 @@ public class BackofficeChefDocumentController {
 
     public BackofficeChefDocumentController(ChefDocumentReviewService service) {
         this.service = service;
+    }
+
+    @GetMapping("/{applicationId}/documents")
+    public List<DocumentMetadata> list(
+        @AuthenticationPrincipal CurrentUser admin,
+        @PathVariable UUID applicationId
+    ) {
+        return service.list(admin, applicationId);
     }
 
     @GetMapping("/{applicationId}/documents/{documentId}/content")

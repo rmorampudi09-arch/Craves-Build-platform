@@ -1,7 +1,7 @@
 import {createSlice, type PayloadAction} from '@reduxjs/toolkit';
 
 export interface CustomerBrowsingLocation {
-  kind: 'SAVED_ADDRESS';
+  kind: 'SAVED_ADDRESS' | 'LIVE_GPS';
   addressId: string;
   label: string;
   displayName: string;

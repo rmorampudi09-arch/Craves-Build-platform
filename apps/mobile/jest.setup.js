@@ -45,6 +45,29 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(async () => undefined),
 }));
 
+jest.mock('expo-location', () => ({
+  Accuracy: {High: 4},
+  PermissionStatus: {GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined'},
+  requestForegroundPermissionsAsync: jest.fn(async () => ({
+    status: 'granted',
+    granted: true,
+    canAskAgain: true,
+    expires: 'never',
+  })),
+  getCurrentPositionAsync: jest.fn(async () => ({
+    coords: {
+      latitude: 17.4483,
+      longitude: 78.3915,
+      altitude: null,
+      accuracy: 10,
+      altitudeAccuracy: null,
+      heading: null,
+      speed: null,
+    },
+    timestamp: Date.now(),
+  })),
+}));
+
 jest.mock('@react-native-firebase/auth', () => ({
   getAuth: jest.fn(() => ({})),
   getIdToken: jest.fn(),

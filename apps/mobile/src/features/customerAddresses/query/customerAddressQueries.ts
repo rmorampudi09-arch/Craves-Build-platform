@@ -17,6 +17,7 @@ import {customerAddressesApi} from '../api/customerAddressesApi';
 import {
   toCustomerBrowsingLocation,
   type CustomerAddress,
+  type CustomerAddressCreateRequest,
   type CustomerAddressUpdateRequest,
 } from '../domain/customerAddressContract';
 
@@ -57,7 +58,6 @@ export function writeCustomerAddressQuery(
   queryClient: QueryClient,
   identityId: string,
   updated: CustomerAddress,
-  options: {resetOtherDefaults?: boolean} = {},
 ): void {
   queryClient.setQueryData<CustomerAddress[]>(
     createCustomerAddressesQueryKey(identityId),
@@ -65,15 +65,13 @@ export function writeCustomerAddressQuery(
       if (!current) {
         return current;
       }
-      return current.map(address => {
-        if (address.id === updated.id) {
-          return updated;
-        }
-        if (options.resetOtherDefaults && address.isDefault) {
-          return {...address, isDefault: false};
-        }
-        return address;
-      });
+      const exists = current.some(address => address.id === updated.id);
+      if (!exists) {
+        return [updated, ...current];
+      }
+      return current.map(address =>
+        address.id === updated.id ? updated : address,
+      );
     },
   );
 }
@@ -116,13 +114,59 @@ function requireAddressSession(identityId: string | null): void {
   }
 }
 
-export function useUpdateCustomerAddressMutation() {
+function useAddressMutationReconciliation() {
   const dispatch = useAppDispatch();
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const selectedLocation = useAppSelector(
     state => state.customerShell.selectedLocation,
   );
   const queryClient = useQueryClient();
+
+  const reconcileSavedAddress = async (updated: CustomerAddress) => {
+    if (identityId) {
+      writeCustomerAddressQuery(queryClient, identityId, updated);
+    }
+
+    const authoritativeLocation = toCustomerBrowsingLocation(updated);
+    if (authoritativeLocation) {
+      const reconciledLocation = reconcileSelectedCustomerLocation(
+        selectedLocation,
+        authoritativeLocation,
+      );
+      if (reconciledLocation !== selectedLocation && reconciledLocation) {
+        dispatch(customerShellActions.locationSelected(reconciledLocation));
+        await invalidateCustomerLocationDependentQueries(queryClient);
+      }
+    }
+
+    await invalidateCustomerAddressQueries(queryClient);
+  };
+
+  return {
+    dispatch,
+    identityId,
+    selectedLocation,
+    queryClient,
+    reconcileSavedAddress,
+  };
+}
+
+export function useCreateCustomerAddressMutation() {
+  const reconciliation = useAddressMutationReconciliation();
+
+  return useMutation({
+    mutationKey: [...customerAddressesQueryPrefix, 'create'],
+    mutationFn: (request: CustomerAddressCreateRequest) => {
+      requireAddressSession(reconciliation.identityId);
+      return customerAddressesApi.create(request);
+    },
+    retry: false,
+    onSuccess: reconciliation.reconcileSavedAddress,
+  });
+}
+
+export function useUpdateCustomerAddressMutation() {
+  const reconciliation = useAddressMutationReconciliation();
 
   return useMutation({
     mutationKey: [...customerAddressesQueryPrefix, 'update'],
@@ -133,64 +177,11 @@ export function useUpdateCustomerAddressMutation() {
       addressId: string;
       request: CustomerAddressUpdateRequest;
     }) => {
-      requireAddressSession(identityId);
+      requireAddressSession(reconciliation.identityId);
       return customerAddressesApi.update(addressId, request);
     },
     retry: false,
-    onSuccess: async updated => {
-      if (identityId) {
-        writeCustomerAddressQuery(queryClient, identityId, updated);
-      }
-
-      const authoritativeLocation = toCustomerBrowsingLocation(updated);
-      const reconciledLocation = reconcileSelectedCustomerLocation(
-        selectedLocation,
-        authoritativeLocation,
-      );
-      if (reconciledLocation !== selectedLocation && reconciledLocation) {
-        dispatch(customerShellActions.locationSelected(reconciledLocation));
-        await invalidateCustomerLocationDependentQueries(queryClient);
-      }
-
-      await invalidateCustomerAddressQueries(queryClient);
-    },
-  });
-}
-
-export function useSetDefaultCustomerAddressMutation() {
-  const dispatch = useAppDispatch();
-  const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
-  const selectedLocation = useAppSelector(
-    state => state.customerShell.selectedLocation,
-  );
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationKey: [...customerAddressesQueryPrefix, 'set-default'],
-    mutationFn: (address: CustomerAddress) => {
-      requireAddressSession(identityId);
-      return customerAddressesApi.setDefault(address);
-    },
-    retry: false,
-    onSuccess: async updated => {
-      if (identityId) {
-        writeCustomerAddressQuery(queryClient, identityId, updated, {
-          resetOtherDefaults: true,
-        });
-      }
-
-      const authoritativeLocation = toCustomerBrowsingLocation(updated);
-      const reconciledLocation = reconcileSelectedCustomerLocation(
-        selectedLocation,
-        authoritativeLocation,
-      );
-      if (reconciledLocation !== selectedLocation && reconciledLocation) {
-        dispatch(customerShellActions.locationSelected(reconciledLocation));
-        await invalidateCustomerLocationDependentQueries(queryClient);
-      }
-
-      await invalidateCustomerAddressQueries(queryClient);
-    },
+    onSuccess: reconciliation.reconcileSavedAddress,
   });
 }
 

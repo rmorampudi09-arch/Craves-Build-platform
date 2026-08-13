@@ -46,13 +46,13 @@ import {CustomerAddressesContractError} from '../api/customerAddressesApi';
 import {
   customerAddressDisplayLine,
   customerAddressLabel,
+  isCustomerAddressDeliveryReady,
   toCustomerBrowsingLocation,
   type CustomerAddress,
 } from '../domain/customerAddressContract';
 import {
   useCustomerAddressesQuery,
   useDeleteCustomerAddressMutation,
-  useSetDefaultCustomerAddressMutation,
 } from '../query/customerAddressQueries';
 import {CustomerAddressEditorModal} from './CustomerAddressEditorModal';
 
@@ -96,23 +96,20 @@ function AddressCard({
   selected,
   deleting,
   delivering,
-  settingDefault,
   onDelete,
   onDeliver,
   onEdit,
-  onSetDefault,
 }: {
   address: CustomerAddress;
   selected: boolean;
   deleting: boolean;
   delivering: boolean;
-  settingDefault: boolean;
   onDelete: () => void;
   onDeliver: () => void;
   onEdit: () => void;
-  onSetDefault: () => void;
 }) {
-  const busy = deleting || delivering || settingDefault;
+  const busy = deleting || delivering;
+  const deliveryReady = isCustomerAddressDeliveryReady(address);
 
   return (
     <View style={[styles.addressCard, selected && styles.addressCardSelected]}>
@@ -123,11 +120,6 @@ function AddressCard({
         <View style={styles.addressHeadingCopy}>
           <View style={styles.labelRow}>
             <Text style={styles.addressLabel}>{customerAddressLabel(address)}</Text>
-            {address.isDefault ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>Default</Text>
-              </View>
-            ) : null}
             {selected ? (
               <View style={styles.selectedBadge}>
                 <Icon name="check" size={iconSize.xs} color={colors.flameRed} />
@@ -135,12 +127,23 @@ function AddressCard({
               </View>
             ) : null}
           </View>
-          <Text style={styles.recipientName}>{address.recipientName}</Text>
+          <Text style={styles.recipientName}>
+            {address.recipientName || 'Address details need an update'}
+          </Text>
           <Text style={styles.phone}>{address.contactPhoneNumber}</Text>
         </View>
       </View>
 
       <Text style={styles.fullAddress}>{customerAddressDisplayLine(address)}</Text>
+
+      {!deliveryReady ? (
+        <View style={styles.updateNotice}>
+          <Text style={styles.updateNoticeText}>
+            Update this saved address before using it for delivery. Older saved
+            addresses may be missing the mapped location or locality details.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.actions}>
         <Button
@@ -151,25 +154,23 @@ function AddressCard({
           variant="outline"
         />
         <Button
-          disabled={busy || address.isDefault}
-          label={address.isDefault ? 'Default' : 'Set default'}
-          loading={settingDefault}
-          onPress={onSetDefault}
+          disabled={busy}
+          label="Delete"
+          loading={deleting}
+          onPress={onDelete}
           style={styles.actionButton}
-          variant="outline"
+          variant="ghost"
         />
       </View>
       <Button
-        disabled={busy}
-        label="Delete"
-        loading={deleting}
-        onPress={onDelete}
-        style={styles.deleteButton}
-        variant="ghost"
-      />
-      <Button
-        disabled={busy}
-        label={selected ? 'Deliver Here · Selected' : 'Deliver Here'}
+        disabled={busy || !deliveryReady}
+        label={
+          !deliveryReady
+            ? 'Update address to deliver'
+            : selected
+              ? 'Deliver Here · Selected'
+              : 'Deliver Here'
+        }
         loading={delivering}
         onPress={onDeliver}
         style={styles.deliverButton}
@@ -178,46 +179,20 @@ function AddressCard({
   );
 }
 
-/** P66 list plus the P67 partial Add/Edit address entry points. */
 export function CustomerAddressesScreen() {
   const navigation = useNavigation<AddressesNavigation>();
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
   const addressesQuery = useCustomerAddressesQuery();
-  const setDefaultMutation = useSetDefaultCustomerAddressMutation();
   const deleteMutation = useDeleteCustomerAddressMutation();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const selectedLocation = useAppSelector(state => state.customerShell.selectedLocation);
   const cartDependencies = useAppSelector(selectCartDependencies);
   const itemCount = useAppSelector(selectCartItemCount);
-  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deliveringId, setDeliveringId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [editorTarget, setEditorTarget] = useState<EditorTarget>(null);
-
-  const handleSetDefault = useCallback(
-    async (address: CustomerAddress) => {
-      if (setDefaultMutation.isPending) {
-        return;
-      }
-      setFeedback(null);
-      setSettingDefaultId(address.id);
-      try {
-        await setDefaultMutation.mutateAsync(address);
-        setFeedback({
-          tone: 'success',
-          message: `${customerAddressLabel(address)} is now your default address.`,
-        });
-      } catch (caught) {
-        const error = toAppApiError(caught);
-        setFeedback({tone: 'error', message: error.message});
-      } finally {
-        setSettingDefaultId(null);
-      }
-    },
-    [setDefaultMutation],
-  );
 
   const performDelete = useCallback(
     async (address: CustomerAddress) => {
@@ -292,13 +267,22 @@ export function CustomerAddressesScreen() {
         return;
       }
 
+      const location = toCustomerBrowsingLocation(address);
+      if (!location) {
+        setFeedback({
+          tone: 'error',
+          message:
+            'Update this address and map its current location before using it for delivery.',
+        });
+        return;
+      }
+
       setFeedback(null);
       setDeliveringId(address.id);
-      const location = toCustomerBrowsingLocation(address);
       const browsingLocationChanged =
         selectedLocation?.addressId !== location.addressId ||
-        selectedLocation.latitude !== location.latitude ||
-        selectedLocation.longitude !== location.longitude;
+        selectedLocation?.latitude !== location.latitude ||
+        selectedLocation?.longitude !== location.longitude;
 
       dispatch(customerShellActions.locationSelected(location));
       if (browsingLocationChanged) {
@@ -384,7 +368,7 @@ export function CustomerAddressesScreen() {
           actionLabel="Try again"
           description={
             invalidContract
-              ? 'The saved-address response did not match the approved mobile contract.'
+              ? 'The saved-address response could not be read safely. Try again after the latest app update.'
               : 'Check your connection and try loading your saved addresses again.'
           }
           onAction={retry}
@@ -430,11 +414,7 @@ export function CustomerAddressesScreen() {
                 setFeedback(null);
                 setEditorTarget({mode: 'edit', address});
               }}
-              onSetDefault={() => {
-                handleSetDefault(address).catch(() => undefined);
-              }}
               selected={selected}
-              settingDefault={settingDefaultId === address.id}
             />
           );
         })}
@@ -486,8 +466,9 @@ export function CustomerAddressesScreen() {
             <View style={styles.intro}>
               <Text style={styles.introTitle}>Saved delivery addresses</Text>
               <Text style={styles.introCopy}>
-                Add or edit address details, choose a default address, remove an
-                address, or use Deliver Here for your current order.
+                Add, edit or remove saved addresses. Craves uses your current
+                browsing location when the app opens; choose Deliver Here only
+                when you want a saved address for the current order.
               </Text>
               {!addressesQuery.sessionRequired ? (
                 <Button
@@ -643,17 +624,6 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },
-  badge: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xxs,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceWarm,
-  },
-  badgeText: {
-    color: colors.flameRed,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
-  },
   selectedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -685,13 +655,25 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: spacing.md,
   },
+  updateNotice: {
+    marginTop: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.warning,
+    backgroundColor: colors.surfaceWarm,
+  },
+  updateNoticeText: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    lineHeight: 19,
+  },
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.md,
   },
   actionButton: {flex: 1},
-  deleteButton: {marginTop: spacing.xs},
   deliverButton: {marginTop: spacing.sm},
   skeletonWrap: {
     width: '100%',

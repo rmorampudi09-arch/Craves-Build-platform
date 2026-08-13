@@ -1,6 +1,5 @@
 import {
-  CUSTOMER_ADDRESS_CREATE_CONTRACT_BLOCKER,
-  applyCustomerAddressDefaultRule,
+  applyDetectedCustomerAddress,
   createCustomerAddressDraft,
   createCustomerAddressSavePlan,
   findDuplicateCustomerAddress,
@@ -18,6 +17,7 @@ const savedAddress: CustomerAddress = {
   addressLine2: 'Floor 2',
   landmark: null,
   areaName: 'Indiranagar',
+  districtName: 'Bengaluru Urban',
   city: 'Bengaluru',
   state: 'Karnataka',
   postalCode: '560038',
@@ -36,16 +36,18 @@ function validNewDraft() {
     contactPhoneNumber: '+919000000000',
     addressLine1: '44 Market Street',
     areaName: 'Koramangala',
+    districtName: 'Bengaluru Urban',
     city: 'Bengaluru',
     state: 'Karnataka',
     postalCode: '560034',
+    latitude: 12.9352,
+    longitude: 77.6245,
   };
 }
 
-describe('P67 partial address editor domain', () => {
+describe('customer address editor domain', () => {
   it('returns a controlled error for an invalid pincode', () => {
     const draft = {...validNewDraft(), postalCode: '56003'};
-
     expect(validateCustomerAddressDraft(draft).postalCode).toBe(
       'Enter a valid 6-digit pincode.',
     );
@@ -53,7 +55,6 @@ describe('P67 partial address editor domain', () => {
 
   it('detects semantic duplicate addresses while ignoring the address being edited', () => {
     const draft = createCustomerAddressDraft(savedAddress);
-
     expect(findDuplicateCustomerAddress(draft, [savedAddress], null)?.id).toBe(
       savedAddress.id,
     );
@@ -62,44 +63,44 @@ describe('P67 partial address editor domain', () => {
     ).toBeNull();
   });
 
-  it('forces the first address to remain default', () => {
-    const draft = validNewDraft();
+  it('maps a resolved current location into editable written fields', () => {
+    const draft = applyDetectedCustomerAddress(createCustomerAddressDraft(), {
+      formattedAddress: '12 Lake Road, Indiranagar, Bengaluru',
+      houseNumber: '12',
+      street: 'Lake Road',
+      area: 'Indiranagar',
+      district: 'Bengaluru Urban',
+      city: 'Bengaluru',
+      state: 'Karnataka',
+      postalCode: '560038',
+      latitude: 12.9784,
+      longitude: 77.6408,
+    });
 
-    expect(applyCustomerAddressDefaultRule(draft, [], null).isDefault).toBe(
-      true,
-    );
+    expect(draft).toMatchObject({
+      addressLine1: '12, Lake Road',
+      areaName: 'Indiranagar',
+      districtName: 'Bengaluru Urban',
+      city: 'Bengaluru',
+      state: 'Karnataka',
+      postalCode: '560038',
+      latitude: 12.9784,
+      longitude: 77.6408,
+    });
   });
 
-  it('does not allow the current default address to be unset during edit', () => {
-    const draft = {...createCustomerAddressDraft(savedAddress), isDefault: false};
-
-    expect(
-      applyCustomerAddressDefaultRule(
-        draft,
-        [savedAddress],
-        savedAddress.id,
-      ).isDefault,
-    ).toBe(true);
-  });
-
-  it('builds the already-approved full PUT request for a valid edit', () => {
-    const draft = {
-      ...createCustomerAddressDraft(savedAddress),
-      addressLine1: '14 Lake Road',
-    };
-
+  it('builds the approved full PUT request for a valid edit', () => {
     const plan = createCustomerAddressSavePlan(
-      draft,
+      {...createCustomerAddressDraft(savedAddress), addressLine1: '14 Lake Road'},
       [savedAddress],
       savedAddress.id,
     );
 
     expect(plan.status).toBe('ready');
-    if (plan.status !== 'ready') {
-      return;
-    }
+    if (plan.status !== 'ready') return;
     expect(plan.request).toMatchObject({
       addressLine1: '14 Lake Road',
+      districtName: 'Bengaluru Urban',
       postalCode: '560038',
       latitude: 12.9784,
       longitude: 77.6408,
@@ -107,35 +108,46 @@ describe('P67 partial address editor domain', () => {
     });
   });
 
-  it('keeps a valid manual add flow blocked instead of inventing a POST contract', () => {
+  it('builds the approved POST request for a mapped new address', () => {
     const plan = createCustomerAddressSavePlan(validNewDraft(), [], null);
-
-    expect(plan.status).toBe('blocked');
-    if (plan.status !== 'blocked') {
-      return;
-    }
-    expect(plan.blocker).toBe(CUSTOMER_ADDRESS_CREATE_CONTRACT_BLOCKER);
+    expect(plan.status).toBe('ready');
+    if (plan.status !== 'ready') return;
+    expect(plan.request).toMatchObject({
+      addressLabel: 'HOME',
+      districtName: 'Bengaluru Urban',
+      latitude: 12.9352,
+      longitude: 77.6245,
+      isDefault: false,
+    });
   });
 
-  it('blocks a duplicate before reaching the deferred create contract', () => {
+  it('requires a mapped delivery point before saving a manual address', () => {
+    const plan = createCustomerAddressSavePlan(
+      {...validNewDraft(), latitude: null, longitude: null},
+      [],
+      null,
+    );
+    expect(plan.status).toBe('invalid');
+    if (plan.status !== 'invalid') return;
+    expect(plan.formError).toContain('Use current location');
+  });
+
+  it('blocks a duplicate before saving', () => {
     const duplicateDraft = {
       ...validNewDraft(),
       addressLine1: savedAddress.addressLine1,
-      areaName: savedAddress.areaName,
+      areaName: savedAddress.areaName ?? '',
       city: savedAddress.city,
       state: savedAddress.state,
-      postalCode: savedAddress.postalCode,
+      postalCode: savedAddress.postalCode ?? '',
     };
     const plan = createCustomerAddressSavePlan(
       duplicateDraft,
       [savedAddress],
       null,
     );
-
     expect(plan.status).toBe('invalid');
-    if (plan.status !== 'invalid') {
-      return;
-    }
+    if (plan.status !== 'invalid') return;
     expect(plan.formError).toBe('This delivery address is already saved.');
   });
 });

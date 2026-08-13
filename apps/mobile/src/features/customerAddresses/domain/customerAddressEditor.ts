@@ -4,19 +4,8 @@ import type {
   CustomerAddressUpdateRequest,
 } from './customerAddressContract';
 
-export const CUSTOMER_ADDRESS_CREATE_CONTRACT_BLOCKER =
-  'CUSTOMER_ADDRESS_CREATE_CONTRACT_UNAVAILABLE';
-export const CUSTOMER_ADDRESS_PINCODE_LOOKUP_BLOCKER =
-  'CUSTOMER_ADDRESS_PINCODE_LOOKUP_UNAVAILABLE';
-export const CUSTOMER_ADDRESS_CURRENT_LOCATION_BLOCKER =
-  'CUSTOMER_ADDRESS_CURRENT_LOCATION_UNAVAILABLE';
-
-export const CUSTOMER_ADDRESS_CREATE_BLOCKED_COPY =
-  'New-address saving is waiting for the approved create-address backend contract. Your manual entries are kept on this screen so the flow can be completed when that contract is added.';
-export const CUSTOMER_ADDRESS_LOCATION_FALLBACK_COPY =
-  'Current-location permission and geocoding are not wired on this branch yet. You can continue by entering the address manually.';
 export const CUSTOMER_ADDRESS_PINCODE_FALLBACK_COPY =
-  'City and state stay editable until an approved pincode lookup/geocode contract is available.';
+  'Confirm the pincode before saving. Current location can fill the available postal address automatically.';
 
 export interface CustomerAddressDraft {
   addressLabel: CustomerAddressLabel | null;
@@ -26,6 +15,7 @@ export interface CustomerAddressDraft {
   addressLine2: string;
   landmark: string;
   areaName: string;
+  districtName: string;
   city: string;
   state: string;
   postalCode: string;
@@ -41,6 +31,7 @@ export type CustomerAddressTextField =
   | 'addressLine2'
   | 'landmark'
   | 'areaName'
+  | 'districtName'
   | 'city'
   | 'state'
   | 'postalCode';
@@ -56,18 +47,13 @@ export type CustomerAddressSavePlan =
       formError: string | null;
     }
   | {
-      status: 'blocked';
-      blocker: typeof CUSTOMER_ADDRESS_CREATE_CONTRACT_BLOCKER;
-      fieldErrors: CustomerAddressFieldErrors;
-      formError: string;
-    }
-  | {
       status: 'ready';
       request: CustomerAddressUpdateRequest;
       draft: CustomerAddressDraft;
     };
 
 const PINCODE_PATTERN = /^[1-9][0-9]{5}$/;
+const PHONE_PATTERN = /^\+?[0-9]{10,15}$/;
 
 function normalizeRequired(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
@@ -93,6 +79,7 @@ export function createCustomerAddressDraft(
       addressLine2: '',
       landmark: '',
       areaName: '',
+      districtName: '',
       city: '',
       state: '',
       postalCode: '',
@@ -104,15 +91,16 @@ export function createCustomerAddressDraft(
 
   return {
     addressLabel: address.addressLabel,
-    recipientName: address.recipientName,
+    recipientName: address.recipientName ?? '',
     contactPhoneNumber: address.contactPhoneNumber,
     addressLine1: address.addressLine1,
     addressLine2: address.addressLine2 ?? '',
     landmark: address.landmark ?? '',
-    areaName: address.areaName,
+    areaName: address.areaName ?? '',
+    districtName: address.districtName ?? '',
     city: address.city,
     state: address.state,
-    postalCode: address.postalCode,
+    postalCode: address.postalCode ?? '',
     latitude: address.latitude,
     longitude: address.longitude,
     isDefault: address.isDefault,
@@ -127,6 +115,41 @@ export function updateCustomerAddressDraftText(
   return {...draft, [field]: value};
 }
 
+export function applyDetectedCustomerAddress(
+  draft: CustomerAddressDraft,
+  detected: {
+    formattedAddress: string;
+    houseNumber: string | null;
+    street: string | null;
+    area: string | null;
+    district: string | null;
+    city: string | null;
+    state: string | null;
+    postalCode: string | null;
+    latitude: number;
+    longitude: number;
+  },
+): CustomerAddressDraft {
+  const line1 =
+    detected.houseNumber && detected.street
+      ? `${detected.houseNumber}, ${detected.street}`
+      : detected.houseNumber || detected.street || detected.formattedAddress;
+
+  return {
+    ...draft,
+    addressLine1: line1,
+    addressLine2:
+      detected.houseNumber && detected.street ? draft.addressLine2 : detected.street || draft.addressLine2,
+    areaName: detected.area || detected.city || draft.areaName,
+    districtName: detected.district || detected.city || draft.districtName,
+    city: detected.city || draft.city,
+    state: detected.state || draft.state,
+    postalCode: detected.postalCode || draft.postalCode,
+    latitude: detected.latitude,
+    longitude: detected.longitude,
+  };
+}
+
 export function validateCustomerAddressDraft(
   draft: CustomerAddressDraft,
 ): CustomerAddressFieldErrors {
@@ -137,8 +160,9 @@ export function validateCustomerAddressDraft(
   > = [
     ['recipientName', 'Recipient name', 160, 'Enter the recipient name.'],
     ['contactPhoneNumber', 'Phone number', 32, 'Enter a contact phone number.'],
-    ['addressLine1', 'Address line 1', 240, 'Enter the street/building address.'],
+    ['addressLine1', 'Address line 1', 250, 'Enter the house, building, or street address.'],
     ['areaName', 'Area', 160, 'Enter the area or locality.'],
+    ['districtName', 'District', 160, 'Enter the district.'],
     ['city', 'City', 120, 'Enter the city.'],
     ['state', 'State', 120, 'Enter the state.'],
   ];
@@ -152,8 +176,13 @@ export function validateCustomerAddressDraft(
     }
   });
 
-  if (normalizeOptional(draft.addressLine2).length > 240) {
-    errors.addressLine2 = 'Address line 2 must be 240 characters or fewer.';
+  const phone = normalizeRequired(draft.contactPhoneNumber);
+  if (phone && !PHONE_PATTERN.test(phone)) {
+    errors.contactPhoneNumber = 'Enter a valid 10 to 15 digit phone number.';
+  }
+
+  if (normalizeOptional(draft.addressLine2).length > 250) {
+    errors.addressLine2 = 'Address line 2 must be 250 characters or fewer.';
   }
   if (normalizeOptional(draft.landmark).length > 240) {
     errors.landmark = 'Landmark must be 240 characters or fewer.';
@@ -196,25 +225,6 @@ export function findDuplicateCustomerAddress(
   );
 }
 
-export function applyCustomerAddressDefaultRule(
-  draft: CustomerAddressDraft,
-  addresses: CustomerAddress[],
-  editingAddressId: string | null,
-): CustomerAddressDraft {
-  if (!editingAddressId && addresses.length === 0) {
-    return {...draft, isDefault: true};
-  }
-
-  const current = editingAddressId
-    ? addresses.find(address => address.id === editingAddressId)
-    : null;
-  if (current?.isDefault) {
-    return {...draft, isDefault: true};
-  }
-
-  return draft;
-}
-
 function normalizedDraft(draft: CustomerAddressDraft): CustomerAddressDraft {
   return {
     ...draft,
@@ -224,6 +234,7 @@ function normalizedDraft(draft: CustomerAddressDraft): CustomerAddressDraft {
     addressLine2: normalizeOptional(draft.addressLine2),
     landmark: normalizeOptional(draft.landmark),
     areaName: normalizeRequired(draft.areaName),
+    districtName: normalizeRequired(draft.districtName),
     city: normalizeRequired(draft.city),
     state: normalizeRequired(draft.state),
     postalCode: draft.postalCode.trim(),
@@ -235,11 +246,7 @@ export function createCustomerAddressSavePlan(
   addresses: CustomerAddress[],
   editingAddressId: string | null,
 ): CustomerAddressSavePlan {
-  const draft = applyCustomerAddressDefaultRule(
-    normalizedDraft(input),
-    addresses,
-    editingAddressId,
-  );
+  const draft = normalizedDraft(input);
   const fieldErrors = validateCustomerAddressDraft(draft);
   if (Object.keys(fieldErrors).length > 0) {
     return {status: 'invalid', fieldErrors, formError: null};
@@ -258,21 +265,12 @@ export function createCustomerAddressSavePlan(
     };
   }
 
-  if (!editingAddressId) {
-    return {
-      status: 'blocked',
-      blocker: CUSTOMER_ADDRESS_CREATE_CONTRACT_BLOCKER,
-      fieldErrors: {},
-      formError: CUSTOMER_ADDRESS_CREATE_BLOCKED_COPY,
-    };
-  }
-
   if (draft.latitude === null || draft.longitude === null) {
     return {
       status: 'invalid',
       fieldErrors: {},
       formError:
-        'This saved address is missing coordinates required by the approved update contract.',
+        'Use current location before saving so Craves can map the delivery point accurately.',
     };
   }
 
@@ -287,6 +285,7 @@ export function createCustomerAddressSavePlan(
       addressLine2: draft.addressLine2 || null,
       landmark: draft.landmark || null,
       areaName: draft.areaName,
+      districtName: draft.districtName || null,
       city: draft.city,
       state: draft.state,
       postalCode: draft.postalCode,
@@ -312,11 +311,11 @@ export function isCustomerAddressDraftDirty(
     left.addressLine2 !== right.addressLine2 ||
     left.landmark !== right.landmark ||
     left.areaName !== right.areaName ||
+    left.districtName !== right.districtName ||
     left.city !== right.city ||
     left.state !== right.state ||
     left.postalCode !== right.postalCode ||
     left.latitude !== right.latitude ||
-    left.longitude !== right.longitude ||
-    left.isDefault !== right.isDefault
+    left.longitude !== right.longitude
   );
 }

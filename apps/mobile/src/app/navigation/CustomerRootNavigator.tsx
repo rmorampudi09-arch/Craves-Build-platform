@@ -106,7 +106,7 @@ const tabScreenOptions = {
   tabBarStyle: {
     backgroundColor: colors.white,
     borderTopColor: colors.border,
-    borderTopWidth: 1,
+    borderTopWidth: 2,
     paddingTop: spacing.xs,
   },
 } as const;
@@ -177,7 +177,7 @@ function CustomerLaunchLocationResolver() {
 
     const resolveLocation = async () => {
       const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== Location.PermissionStatus.GRANTED) {
+      if (!permission.granted) {
         await selectSavedFallback();
         return;
       }

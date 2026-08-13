@@ -37,6 +37,16 @@ public class SubscriptionPolicyRepository {
         ).stream().findFirst();
     }
 
+    public Optional<SubscriptionPolicyResponse> findPublicActive(UUID planId) {
+        return jdbcTemplate.query(
+            "SELECT pp.* FROM subscription_schema.subscription_plan_policy pp " +
+                "JOIN subscription_schema.subscription_plan p ON p.id = pp.plan_id " +
+                "WHERE pp.plan_id = ? AND pp.status = 'ACTIVE' AND p.status = 'ACTIVE'",
+            this::map,
+            planId
+        ).stream().findFirst();
+    }
+
     @Transactional
     public SubscriptionPolicyResponse putDraft(UUID planId, PutPolicyRequest request, UUID actorIdentityId) {
         requirePlan(planId);

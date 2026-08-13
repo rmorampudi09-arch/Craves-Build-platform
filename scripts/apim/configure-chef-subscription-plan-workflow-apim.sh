@@ -7,6 +7,8 @@ APIM="${APIM:-apim-craves-prodlow-l3ing6}"
 SUBSCRIPTION_APP="${SUBSCRIPTION_APP:-ca-craves-subscription-service-p}"
 API_VERSION="${API_VERSION:-2022-08-01}"
 CONFIRM_APIM_WRITE="${CONFIRM_APIM_WRITE:-false}"
+HEALTH_ATTEMPTS="${CRAVES_APIM_BACKEND_HEALTH_ATTEMPTS:-12}"
+HEALTH_SLEEP_SECONDS="${CRAVES_APIM_BACKEND_HEALTH_SLEEP_SECONDS:-10}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 AUTH_POLICY="$ROOT/infra/apim/subscription-backoffice/authenticated-policy.xml"
@@ -15,15 +17,49 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 for tool in az jq curl sed; do command -v "$tool" >/dev/null || fail "$tool is required"; done
 [[ -f "$AUTH_POLICY" ]] || fail "Authenticated APIM policy template is missing"
 [[ "${CONFIRM_APIM_WRITE,,}" == "true" ]] || fail "Set CONFIRM_APIM_WRITE=true for the controlled APIM write"
+[[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || fail "CRAVES_APIM_BACKEND_HEALTH_ATTEMPTS must be a positive integer"
+[[ "$HEALTH_SLEEP_SECONDS" =~ ^[0-9]+$ ]] || fail "CRAVES_APIM_BACKEND_HEALTH_SLEEP_SECONDS must be a non-negative integer"
 
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 APP_JSON=$(az containerapp show -g "$RG" -n "$SUBSCRIPTION_APP" -o json --only-show-errors)
 FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
 LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
 READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
-[[ -n "$FQDN" && "$LATEST" == "$READY" ]] || fail "Subscription Service is not ready"
+RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
+[[ -n "$FQDN" && "$LATEST" == "$READY" && "$RUNNING" == "Running" ]] || fail "Subscription Service is not ready: latest=$LATEST ready=$READY running=$RUNNING"
 SUB_BASE="https://${FQDN}"
-curl -sS --fail --max-time 30 "${SUB_BASE}/actuator/health" >/dev/null
+
+wait_for_backend_health() {
+  local ATTEMPT BODY CODE STATUS
+  BODY="/tmp/craves-chef-subscription-apim-health-${BASHPID}.json"
+  for ((ATTEMPT=1; ATTEMPT<=HEALTH_ATTEMPTS; ATTEMPT++)); do
+    : >"$BODY"
+    CODE=$(curl \
+      --silent \
+      --show-error \
+      --connect-timeout 10 \
+      --max-time 30 \
+      --output "$BODY" \
+      --write-out '%{http_code}' \
+      "${SUB_BASE}/actuator/health" || true)
+    STATUS=$(jq -r '.status // empty' "$BODY" 2>/dev/null || true)
+
+    if [[ "$CODE" == "200" && "$STATUS" == "UP" ]]; then
+      rm -f "$BODY"
+      echo "PASS: Subscription Service aggregate health is UP attempt=$ATTEMPT/$HEALTH_ATTEMPTS"
+      return 0
+    fi
+
+    echo "WAIT: Subscription Service aggregate health attempt=$ATTEMPT/$HEALTH_ATTEMPTS HTTP=${CODE:-curl-error} status=${STATUS:-unavailable}" >&2
+    if (( ATTEMPT < HEALTH_ATTEMPTS )); then
+      sleep "$HEALTH_SLEEP_SECONDS"
+    fi
+  done
+  rm -f "$BODY"
+  return 1
+}
+
+wait_for_backend_health || fail "Subscription Service aggregate health did not become UP; APIM write was not attempted"
 
 ensure_api() {
   local PATH_VALUE="$1" NEW_ID="$2" DISPLAY="$3" SERVICE_URL="$4"

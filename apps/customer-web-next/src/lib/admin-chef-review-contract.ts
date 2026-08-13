@@ -1,9 +1,8 @@
 export type AdminChefApplicationStatus = "PENDING" | "APPROVED" | "REJECTED";
-export type AdminChefDocumentType = "AADHAAR_CARD" | "PAN_CARD";
 
 export type AdminChefDocument = {
   id: string;
-  documentType: AdminChefDocumentType;
+  documentType: string;
   originalFileName: string;
   contentType: "application/pdf" | "image/jpeg" | "image/png";
   fileSizeBytes: number;
@@ -35,7 +34,6 @@ export type AdminChefApplication = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATUSES = new Set(["PENDING", "APPROVED", "REJECTED"]);
-const DOCUMENT_TYPES = new Set(["AADHAAR_CARD", "PAN_CARD"]);
 const CONTENT_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
 
 function text(value: unknown, max: number): string | null {
@@ -57,8 +55,8 @@ function parseDocument(value: unknown): AdminChefDocument | null {
   const id = text(raw.id, 64); const documentType = text(raw.documentType, 40); const originalFileName = text(raw.originalFileName, 255);
   const contentType = text(raw.contentType, 100); const status = text(raw.status, 40); const createdAt = instant(raw.createdAt); const updatedAt = instant(raw.updatedAt);
   const fileSizeBytes = typeof raw.fileSizeBytes === "number" && Number.isSafeInteger(raw.fileSizeBytes) ? raw.fileSizeBytes : -1;
-  if (!id || !UUID.test(id) || !documentType || !DOCUMENT_TYPES.has(documentType) || !originalFileName || !contentType || !CONTENT_TYPES.has(contentType) || !status || !createdAt || !updatedAt || fileSizeBytes < 1 || fileSizeBytes > 10_000_000) return null;
-  return { id, documentType: documentType as AdminChefDocumentType, originalFileName, contentType: contentType as AdminChefDocument["contentType"], fileSizeBytes, status, createdAt, updatedAt };
+  if (!id || !UUID.test(id) || !documentType || !originalFileName || !contentType || !CONTENT_TYPES.has(contentType) || !status || !createdAt || !updatedAt || fileSizeBytes < 1 || fileSizeBytes > 10_000_000) return null;
+  return { id, documentType, originalFileName, contentType: contentType as AdminChefDocument["contentType"], fileSizeBytes, status, createdAt, updatedAt };
 }
 
 export function parseAdminChefApplication(value: unknown): AdminChefApplication | null {

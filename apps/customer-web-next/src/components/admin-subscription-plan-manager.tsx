@@ -60,7 +60,7 @@ export function AdminSubscriptionPlanManager() {
       const body = await response.json().catch(() => null) as { code?: string; details?: { message?: string } } | null;
       if (!response.ok) {
         const detail = body?.details?.message;
-        throw new Error(detail || (response.status === 409 ? "Plan is not ready. Confirm Chef meals, active platform policy and subscription capacity before approval." : "Meal plan review failed."));
+        throw new Error(detail || (response.status === 409 ? "Plan is not ready. The Chef must finish the meal schedule and subscription capacity before approval." : "Meal plan review failed."));
       }
       setReasons(current => ({ ...current, [plan.id]: "" }));
       await load();
@@ -94,7 +94,7 @@ export function AdminSubscriptionPlanManager() {
     <section className="rounded-[28px] bg-[#FFF8EC] p-6 text-slate-950">
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6930CA]">Chef-authored meal plans</p>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-        <div><h2 className="text-2xl font-bold">Approval queue</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Chefs create the plan and choose meals from their own available menu. Admin reviews the submitted content, maintains platform lifecycle policy, then approves or rejects.</p></div>
+        <div><h2 className="text-2xl font-bold">Approval queue</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Chefs create the plan and choose meals from their own available menu. Admin only reviews the submitted content and approves it or requests changes. Craves applies the safe platform lifecycle default automatically.</p></div>
         <div className="rounded-2xl bg-white px-5 py-3 text-center"><p className="text-xs font-bold uppercase text-slate-500">Waiting</p><p className="text-3xl font-bold text-[#6930CA]">{pendingCount}</p></div>
       </div>
     </section>

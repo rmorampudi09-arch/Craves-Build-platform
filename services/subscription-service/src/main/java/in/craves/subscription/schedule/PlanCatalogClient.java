@@ -14,7 +14,7 @@ public class PlanCatalogClient {
     private final RestClient restClient;
 
     public PlanCatalogClient(
-        @Value("${craves.catalog.base-url:https://apim-craves-prodlowl3ing6.azure-api.net/api/v1/catalog}") String baseUrl,
+        @Value("${craves.catalog.base-url:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}") String baseUrl,
         RestClient.Builder builder
     ) {
         this.restClient = builder.baseUrl(baseUrl).build();

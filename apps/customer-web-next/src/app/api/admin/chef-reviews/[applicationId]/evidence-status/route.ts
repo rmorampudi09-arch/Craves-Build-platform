@@ -40,7 +40,7 @@ export async function GET(
   try {
     const upstream = await authenticatedApiFetch(
       request,
-      `/backoffice/chef-reviews/${applicationId}/evidence`,
+      `/backoffice/chef-reviews/${applicationId}/documents`,
     );
     if (!upstream.ok) {
       return NextResponse.json(

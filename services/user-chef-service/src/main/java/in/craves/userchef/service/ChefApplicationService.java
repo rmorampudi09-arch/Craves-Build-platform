@@ -93,6 +93,9 @@ public class ChefApplicationService {
         if (application.status() == ChefApplicationStatus.APPROVED) {
             throw ApiException.conflict("CHEF_ALREADY_APPROVED", "Documents cannot be changed after approval");
         }
+        if (!REQUIRED_APPLICATION_DOCUMENTS.contains(documentType)) {
+            throw ApiException.badRequest("CHEF_DOCUMENT_TYPE_NOT_ALLOWED", "Use one of the current Chef application evidence types");
+        }
 
         StoredDocument stored = storageService.uploadKycDocument(user.identityId(), documentType, file);
         List<UUID> existing = jdbcTemplate.query(
@@ -115,6 +118,17 @@ public class ChefApplicationService {
             );
         }
         return getDocument(documentId);
+    }
+
+    public List<KycDocumentResponse> listMyApplicationEvidence(CurrentUser user) {
+        ChefApplicationResponse application = getExistingApplication(user.identityId());
+        return listApplicationEvidence(application.id());
+    }
+
+    public List<KycDocumentResponse> listApplicationEvidenceForAdmin(CurrentUser admin, UUID applicationId) {
+        requireReviewAccess(admin);
+        getApplicationForAdmin(admin, applicationId);
+        return listApplicationEvidence(applicationId);
     }
 
     public List<ChefApplicationResponse> listApplications(CurrentUser admin, ChefApplicationStatus status) {
@@ -141,7 +155,7 @@ public class ChefApplicationService {
         if (application.status() != ChefApplicationStatus.PENDING) {
             throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be approved");
         }
-        requireCompleteApplicationDocuments(application);
+        requireCompleteApplicationDocuments(applicationId);
         updateDecision(applicationId, admin.identityId(), "APPROVED", null);
         authInternalClient.grantChefRole(application.identityId(), applicationId);
         ChefApplicationResponse approved = getApplicationForAdmin(admin, applicationId);
@@ -165,8 +179,8 @@ public class ChefApplicationService {
         return rejected;
     }
 
-    private static void requireCompleteApplicationDocuments(ChefApplicationResponse application) {
-        Set<KycDocumentType> uploaded = application.documents().stream()
+    private void requireCompleteApplicationDocuments(UUID applicationId) {
+        Set<KycDocumentType> uploaded = listApplicationEvidence(applicationId).stream()
             .map(KycDocumentResponse::documentType)
             .collect(java.util.stream.Collectors.toSet());
         List<KycDocumentType> missing = REQUIRED_APPLICATION_DOCUMENTS.stream()
@@ -176,7 +190,7 @@ public class ChefApplicationService {
         if (!missing.isEmpty()) {
             throw ApiException.conflict(
                 "CHEF_REQUIRED_DOCUMENTS_MISSING",
-                "Required FSSAI application documents are missing: " + missing.stream()
+                "Required Chef application evidence is incomplete: " + missing.stream()
                     .map(ChefApplicationService::documentLabel)
                     .toList()
             );
@@ -186,11 +200,11 @@ public class ChefApplicationService {
     private static String documentLabel(KycDocumentType type) {
         return switch (type) {
             case APPLICANT_PHOTO -> "Applicant photo";
-            case GOVERNMENT_ID_FRONT -> "Aadhaar front";
-            case GOVERNMENT_ID_BACK -> "Aadhaar back";
-            case TAX_ID_CARD -> "PAN card";
-            case AADHAAR_CARD -> "Legacy Aadhaar card";
-            case PAN_CARD -> "Legacy PAN card";
+            case GOVERNMENT_ID_FRONT -> "Government ID front";
+            case GOVERNMENT_ID_BACK -> "Government ID back";
+            case TAX_ID_CARD -> "Tax ID card";
+            case AADHAAR_CARD -> "Legacy government ID";
+            case PAN_CARD -> "Legacy tax ID";
         };
     }
 
@@ -235,13 +249,20 @@ public class ChefApplicationService {
             rs.getBigDecimal("latitude"), rs.getBigDecimal("longitude"),
             ChefApplicationStatus.valueOf(rs.getString("status")), rs.getString("rejection_reason"),
             instant(rs, "submitted_at"), instant(rs, "reviewed_at"),
-            rs.getObject("reviewed_by_identity_id", UUID.class), listDocuments(applicationId)
+            rs.getObject("reviewed_by_identity_id", UUID.class), listLegacyDocuments(applicationId)
         );
     }
 
-    private List<KycDocumentResponse> listDocuments(UUID applicationId) {
+    private List<KycDocumentResponse> listLegacyDocuments(UUID applicationId) {
         return jdbcTemplate.query(
-            "SELECT * FROM chef_kyc_document WHERE application_id = ? ORDER BY document_type",
+            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND document_type IN ('AADHAAR_CARD', 'PAN_CARD') ORDER BY document_type",
+            this::mapDocument, applicationId
+        );
+    }
+
+    private List<KycDocumentResponse> listApplicationEvidence(UUID applicationId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND document_type IN ('APPLICANT_PHOTO', 'GOVERNMENT_ID_FRONT', 'GOVERNMENT_ID_BACK', 'TAX_ID_CARD') ORDER BY document_type",
             this::mapDocument, applicationId
         );
     }

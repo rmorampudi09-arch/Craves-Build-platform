@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -199,8 +200,8 @@ public class PlanScheduleRepository {
         return new PlanScheduleResponse(
             rs.getObject("plan_id", UUID.class), rs.getString("recurrence_type"), rs.getString("timezone"),
             rs.getObject("service_time", LocalTime.class), rs.getInt("generation_lead_hours"), rs.getString("status"),
-            rs.getInt("version"), items, rs.getObject("created_at", Instant.class), rs.getObject("updated_at", Instant.class),
-            rs.getObject("activated_at", Instant.class)
+            rs.getInt("version"), items, instant(rs, "created_at"), instant(rs, "updated_at"),
+            instant(rs, "activated_at")
         );
     }
 
@@ -208,8 +209,13 @@ public class PlanScheduleRepository {
         return new PlanScheduleResponse(
             rs.getObject("plan_id", UUID.class), rs.getString("recurrence_type"), rs.getString("timezone"),
             rs.getObject("service_time", LocalTime.class), rs.getInt("generation_lead_hours"), "DRAFT",
-            rs.getInt("version"), items, rs.getObject("created_at", Instant.class), rs.getObject("updated_at", Instant.class), null
+            rs.getInt("version"), items, instant(rs, "created_at"), instant(rs, "updated_at"), null
         );
+    }
+
+    private static Instant instant(ResultSet rs, String column) throws SQLException {
+        OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
     }
 
     private static Integer integer(ResultSet rs, String column) throws SQLException {

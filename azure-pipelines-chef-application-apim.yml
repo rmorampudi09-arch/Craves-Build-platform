@@ -25,7 +25,8 @@ steps:
       CONFIRM='${{ parameters.confirmConfigureChefApplication }}'
       [[ "${CONFIRM,,}" == "true" ]] || { echo 'ERROR: confirmConfigureChefApplication must be true.' >&2; exit 1; }
       bash -n scripts/apim/configure-chef-application-apim.sh
-    displayName: Confirm and validate APIM script
+      bash -n scripts/apim/configure-chef-review-document-list-apim.sh
+    displayName: Confirm and validate APIM scripts
   - task: AzureCLI@2
     displayName: Configure chef application operations
     inputs:
@@ -38,3 +39,9 @@ steps:
         APIM='${{ parameters.apimName }}' \
         USER_CHEF_APP='${{ parameters.userChefContainerAppName }}' \
         bash scripts/apim/configure-chef-application-apim.sh
+
+        RG='${{ parameters.resourceGroupName }}' \
+        APIM='${{ parameters.apimName }}' \
+        USER_CHEF_APP='${{ parameters.userChefContainerAppName }}' \
+        CONFIRM_APIM_WRITE=true \
+        bash scripts/apim/configure-chef-review-document-list-apim.sh

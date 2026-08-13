@@ -18,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class BlobDocumentStorageService {
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("application/pdf", "image/jpeg", "image/png");
+    private static final Set<String> APPLICANT_PHOTO_CONTENT_TYPES = Set.of("image/jpeg", "image/png");
 
     private final DocumentStoreProperties properties;
 
@@ -26,7 +27,7 @@ public class BlobDocumentStorageService {
     }
 
     public StoredDocument uploadKycDocument(UUID identityId, KycDocumentType documentType, MultipartFile file) {
-        validateFile(file);
+        validateFile(documentType, file);
         BlobContainerClient containerClient = documentsContainer();
         try {
             containerClient.createIfNotExists();
@@ -109,7 +110,7 @@ public class BlobDocumentStorageService {
         }
     }
 
-    private void validateFile(MultipartFile file) {
+    private void validateFile(KycDocumentType documentType, MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw ApiException.badRequest("DOCUMENT_FILE_REQUIRED", "Document file is required");
         }
@@ -118,6 +119,12 @@ public class BlobDocumentStorageService {
         }
         if (!ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
             throw ApiException.badRequest("DOCUMENT_FILE_TYPE_NOT_ALLOWED", "Only PDF, JPG, and PNG files are allowed");
+        }
+        if (documentType == KycDocumentType.APPLICANT_PHOTO && !APPLICANT_PHOTO_CONTENT_TYPES.contains(file.getContentType())) {
+            throw ApiException.badRequest(
+                "APPLICANT_PHOTO_FILE_TYPE_NOT_ALLOWED",
+                "Applicant photo must be a JPG or PNG image"
+            );
         }
     }
 

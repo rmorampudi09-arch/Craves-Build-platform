@@ -144,5 +144,14 @@ export function parseChefMealScheduleInput(value: unknown): ChefMealScheduleInpu
   if (!recurrenceType || !PERIODS.has(recurrenceType) || !timezone || !Number.isInteger(raw.generationLeadHours) || Number(raw.generationLeadHours) < 1 || Number(raw.generationLeadHours) > 168 || !Array.isArray(raw.items) || raw.items.length < 1 || raw.items.length > 100) return null;
   const parsed = raw.items.map(item => scheduleItem(item, recurrenceType as ChefMealPlanPeriod, false));
   if (parsed.some(item => item === null)) return null;
-  return { recurrenceType: recurrenceType as ChefMealPlanPeriod, timezone, generationLeadHours: Number(raw.generationLeadHours), items: (parsed as ChefMealScheduleItem[]).map(({ id: _id, ...item }) => item) };
+  const items = (parsed as ChefMealScheduleItem[]).map(item => ({
+    menuItemId: item.menuItemId,
+    quantity: item.quantity,
+    isoDayOfWeek: item.isoDayOfWeek,
+    dayOfMonth: item.dayOfMonth,
+    mealSlotCode: item.mealSlotCode,
+    serviceTime: item.serviceTime,
+    sequenceNumber: item.sequenceNumber,
+  }));
+  return { recurrenceType: recurrenceType as ChefMealPlanPeriod, timezone, generationLeadHours: Number(raw.generationLeadHours), items };
 }

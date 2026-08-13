@@ -7,19 +7,20 @@ export type CustomerAddressLabel = 'HOME' | 'WORK' | 'OTHER';
 
 export interface CustomerAddress {
   id: string;
-  identityId: string;
+  identityId: string | null;
   addressLabel: CustomerAddressLabel | null;
-  recipientName: string;
+  recipientName: string | null;
   contactPhoneNumber: string;
   addressLine1: string;
   addressLine2: string | null;
   landmark: string | null;
-  areaName: string;
+  areaName: string | null;
+  districtName: string | null;
   city: string;
   state: string;
-  postalCode: string;
-  latitude: number;
-  longitude: number;
+  postalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
   isDefault: boolean;
   active: boolean;
   createdAt: string;
@@ -34,6 +35,7 @@ export interface CustomerAddressUpdateRequest {
   addressLine2: string | null;
   landmark: string | null;
   areaName: string;
+  districtName: string | null;
   city: string;
   state: string;
   postalCode: string;
@@ -41,6 +43,8 @@ export interface CustomerAddressUpdateRequest {
   longitude: number;
   isDefault: boolean;
 }
+
+export type CustomerAddressCreateRequest = CustomerAddressUpdateRequest;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -57,7 +61,7 @@ function boundedString(value: unknown, maxLength: number): string | null {
 }
 
 function optionalString(value: unknown, maxLength: number): string | null {
-  if (value == null) {
+  if (value == null || value === '') {
     return null;
   }
   if (typeof value !== 'string') {
@@ -82,13 +86,21 @@ function parseCoordinate(
   value: unknown,
   minimum: number,
   maximum: number,
-): number | null {
-  return typeof value === 'number' &&
-    Number.isFinite(value) &&
-    value >= minimum &&
-    value <= maximum
-    ? value
-    : null;
+): number | null | undefined {
+  if (value == null || value === '') {
+    return null;
+  }
+  const numberValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value)
+        : Number.NaN;
+  return Number.isFinite(numberValue) &&
+    numberValue >= minimum &&
+    numberValue <= maximum
+    ? numberValue
+    : undefined;
 }
 
 function parseAddressLabel(value: unknown): CustomerAddressLabel | null {
@@ -108,14 +120,15 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
   }
 
   const id = parseUuid(item.id);
-  const identityId = parseUuid(item.identityId);
-  const recipientName = boundedString(item.recipientName, 160);
+  const identityId = item.identityId == null ? null : parseUuid(item.identityId);
+  const recipientName = optionalString(item.recipientName, 160);
   const contactPhoneNumber = boundedString(item.contactPhoneNumber, 32);
-  const addressLine1 = boundedString(item.addressLine1, 240);
-  const areaName = boundedString(item.areaName, 160);
+  const addressLine1 = boundedString(item.addressLine1, 250);
+  const areaName = optionalString(item.areaName, 160);
+  const districtName = optionalString(item.districtName, 160);
   const city = boundedString(item.city, 120);
   const state = boundedString(item.state, 120);
-  const postalCode = boundedString(item.postalCode, 32);
+  const postalCode = optionalString(item.postalCode, 32);
   const latitude = parseCoordinate(item.latitude, -90, 90);
   const longitude = parseCoordinate(item.longitude, -180, 180);
   const createdAt = parseTimestamp(item.createdAt);
@@ -123,16 +136,14 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
 
   if (
     !id ||
-    !identityId ||
-    !recipientName ||
+    (item.identityId != null && !identityId) ||
     !contactPhoneNumber ||
     !addressLine1 ||
-    !areaName ||
     !city ||
     !state ||
-    !postalCode ||
-    latitude === null ||
-    longitude === null ||
+    latitude === undefined ||
+    longitude === undefined ||
+    (latitude === null) !== (longitude === null) ||
     typeof item.isDefault !== 'boolean' ||
     typeof item.active !== 'boolean' ||
     !createdAt ||
@@ -145,11 +156,15 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
     return null;
   }
 
-  const addressLine2 = optionalString(item.addressLine2, 240);
+  const addressLine2 = optionalString(item.addressLine2, 250);
   const landmark = optionalString(item.landmark, 240);
   if (
     (item.addressLine2 != null && typeof item.addressLine2 !== 'string') ||
-    (item.landmark != null && typeof item.landmark !== 'string')
+    (item.landmark != null && typeof item.landmark !== 'string') ||
+    (item.recipientName != null && typeof item.recipientName !== 'string') ||
+    (item.areaName != null && typeof item.areaName !== 'string') ||
+    (item.districtName != null && typeof item.districtName !== 'string') ||
+    (item.postalCode != null && typeof item.postalCode !== 'string')
   ) {
     return null;
   }
@@ -164,6 +179,7 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
     addressLine2,
     landmark,
     areaName,
+    districtName,
     city,
     state,
     postalCode,
@@ -195,6 +211,7 @@ export function customerAddressDisplayLine(address: CustomerAddress): string {
     address.addressLine2,
     address.landmark,
     address.areaName,
+    address.districtName,
     address.city,
     address.state,
     address.postalCode,
@@ -203,10 +220,32 @@ export function customerAddressDisplayLine(address: CustomerAddress): string {
     .join(', ');
 }
 
+export function isCustomerAddressDeliveryReady(
+  address: CustomerAddress,
+): address is CustomerAddress & {
+  recipientName: string;
+  areaName: string;
+  postalCode: string;
+  latitude: number;
+  longitude: number;
+} {
+  return Boolean(
+    address.active &&
+      address.recipientName &&
+      address.areaName &&
+      address.postalCode &&
+      address.latitude !== null &&
+      address.longitude !== null,
+  );
+}
+
 export function toCustomerAddressUpdateRequest(
   address: CustomerAddress,
   isDefault = address.isDefault,
-): CustomerAddressUpdateRequest {
+): CustomerAddressUpdateRequest | null {
+  if (!isCustomerAddressDeliveryReady(address)) {
+    return null;
+  }
   return {
     addressLabel: address.addressLabel,
     recipientName: address.recipientName,
@@ -215,6 +254,7 @@ export function toCustomerAddressUpdateRequest(
     addressLine2: address.addressLine2,
     landmark: address.landmark,
     areaName: address.areaName,
+    districtName: address.districtName,
     city: address.city,
     state: address.state,
     postalCode: address.postalCode,
@@ -226,7 +266,10 @@ export function toCustomerAddressUpdateRequest(
 
 export function toCustomerBrowsingLocation(
   address: CustomerAddress,
-): CustomerBrowsingLocation {
+): CustomerBrowsingLocation | null {
+  if (!isCustomerAddressDeliveryReady(address)) {
+    return null;
+  }
   return {
     kind: 'SAVED_ADDRESS',
     addressId: address.id,

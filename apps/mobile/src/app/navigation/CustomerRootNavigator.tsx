@@ -94,7 +94,7 @@ const tabScreenOptions = {
   tabBarStyle: {
     backgroundColor: colors.white,
     borderTopColor: colors.border,
-    borderTopWidth: 1,
+    borderTopWidth: 2,
     paddingTop: spacing.xs,
   },
 } as const;

@@ -1,13 +1,13 @@
 ALTER TABLE subscription_schema.subscription_plan_schedule_draft_item
-    ADD COLUMN IF NOT EXISTS menu_item_name_snapshot VARCHAR(160),
-    ADD COLUMN IF NOT EXISTS menu_item_category_snapshot VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS menu_item_name_snapshot TEXT,
+    ADD COLUMN IF NOT EXISTS menu_item_category_snapshot TEXT,
     ADD COLUMN IF NOT EXISTS menu_item_food_type_snapshot VARCHAR(40),
     ADD COLUMN IF NOT EXISTS menu_item_price_snapshot NUMERIC(10,2),
     ADD COLUMN IF NOT EXISTS menu_item_currency_snapshot VARCHAR(3);
 
 ALTER TABLE subscription_schema.subscription_plan_schedule_item
-    ADD COLUMN IF NOT EXISTS menu_item_name_snapshot VARCHAR(160),
-    ADD COLUMN IF NOT EXISTS menu_item_category_snapshot VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS menu_item_name_snapshot TEXT,
+    ADD COLUMN IF NOT EXISTS menu_item_category_snapshot TEXT,
     ADD COLUMN IF NOT EXISTS menu_item_food_type_snapshot VARCHAR(40),
     ADD COLUMN IF NOT EXISTS menu_item_price_snapshot NUMERIC(10,2),
     ADD COLUMN IF NOT EXISTS menu_item_currency_snapshot VARCHAR(3);

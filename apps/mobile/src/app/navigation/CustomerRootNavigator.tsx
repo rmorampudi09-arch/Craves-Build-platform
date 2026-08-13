@@ -1,11 +1,19 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {useQueryClient} from '@tanstack/react-query';
+import * as Location from 'expo-location';
+import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
+import {customerAddressesApi} from '../../features/customerAddresses/api/customerAddressesApi';
+import {
+  isCustomerAddressDeliveryReady,
+  toCustomerBrowsingLocation,
+} from '../../features/customerAddresses/domain/customerAddressContract';
 import {CustomerAddressesRouteScreen} from '../../features/customerAddresses/screens/CustomerAddressesRouteScreen';
 import {CustomerOrderDetailScreen} from '../../features/customerOrders/screens/CustomerOrderDetailScreen';
 import {CustomerOrdersRouteScreen} from '../../features/customerOrders/screens/CustomerOrdersRouteScreen';
@@ -35,6 +43,8 @@ import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
 import {CustomerNotificationsRouteScreen} from '../../features/notifications/screens/CustomerNotificationsRouteScreen';
 import {CustomerPaymentMethodsRouteScreen} from '../../features/payment/screens/CustomerPaymentMethodsRouteScreen';
+import {invalidateCustomerLocationDependentQueries} from '../../features/customerShell/query/customerLocationReconciliation';
+import {customerShellActions} from '../../features/customerShell/state/customerShellSlice';
 import {Icon} from '../../shared/components/Icon';
 import {
   CustomerBottomNavVisibilityProvider,
@@ -65,6 +75,8 @@ const homeTab = getCustomerTabDefinition('Home');
 const chefsTab = getCustomerTabDefinition('Chefs');
 const ordersTab = getCustomerTabDefinition('Orders');
 const profileTab = getCustomerTabDefinition('Profile');
+const LIVE_LOCATION_ID = 'LIVE_GPS';
+const SAVED_ADDRESS_MATCH_RADIUS_METERS = 100;
 
 interface TabIconProps {
   color: string;
@@ -137,6 +149,102 @@ function useCustomerStackScreenOptions() {
 function useCustomerTabRootListeners() {
   const showBottomNav = useCustomerBottomNavReveal();
   return React.useMemo(() => ({focus: showBottomNav}), [showBottomNav]);
+}
+
+function CustomerLaunchLocationResolver() {
+  const dispatch = useAppDispatch();
+  const queryClient = useQueryClient();
+  const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
+  const attemptedIdentity = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!identityId || attemptedIdentity.current === identityId) return;
+    attemptedIdentity.current = identityId;
+    let cancelled = false;
+
+    const selectSavedFallback = async () => {
+      const addresses = await customerAddressesApi.list();
+      const fallback =
+        addresses.find(
+          candidate => candidate.isDefault && isCustomerAddressDeliveryReady(candidate),
+        ) ?? addresses.find(isCustomerAddressDeliveryReady);
+      const savedLocation = fallback ? toCustomerBrowsingLocation(fallback) : null;
+      if (!cancelled && savedLocation) {
+        dispatch(customerShellActions.locationSelected(savedLocation));
+        await invalidateCustomerLocationDependentQueries(queryClient);
+      }
+    };
+
+    const resolveLocation = async () => {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== Location.PermissionStatus.GRANTED) {
+        await selectSavedFallback();
+        return;
+      }
+
+      const current = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const latitude = current.coords.latitude;
+      const longitude = current.coords.longitude;
+      const recommendation = await customerAddressesApi.recommendLocation(
+        latitude,
+        longitude,
+        SAVED_ADDRESS_MATCH_RADIUS_METERS,
+      );
+
+      if (
+        recommendation.locationType === 'SAVED_ADDRESS' &&
+        recommendation.selectedSavedAddress &&
+        isCustomerAddressDeliveryReady(recommendation.selectedSavedAddress)
+      ) {
+        const savedLocation = toCustomerBrowsingLocation(
+          recommendation.selectedSavedAddress,
+        );
+        if (!cancelled && savedLocation) {
+          dispatch(customerShellActions.locationSelected(savedLocation));
+          await invalidateCustomerLocationDependentQueries(queryClient);
+        }
+        return;
+      }
+
+      let displayName = 'Current location';
+      try {
+        const resolved = await customerAddressesApi.reverseGeocode(latitude, longitude);
+        displayName =
+          resolved.area ||
+          resolved.city ||
+          resolved.district ||
+          resolved.formattedAddress;
+      } catch {
+        // Discovery still works from the live coordinates if the written label is unavailable.
+      }
+
+      if (!cancelled) {
+        dispatch(
+          customerShellActions.locationSelected({
+            kind: 'LIVE_GPS',
+            addressId: LIVE_LOCATION_ID,
+            label: 'Current location',
+            displayName,
+            latitude,
+            longitude,
+          }),
+        );
+        await invalidateCustomerLocationDependentQueries(queryClient);
+      }
+    };
+
+    resolveLocation().catch(() => {
+      if (!cancelled) selectSavedFallback().catch(() => undefined);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, identityId, queryClient]);
+
+  return null;
 }
 
 function CustomerHomeStackNavigator() {
@@ -245,6 +353,7 @@ function CustomerTabsNavigator() {
 export function CustomerRootNavigator() {
   return (
     <CustomerBottomNavVisibilityProvider>
+      <CustomerLaunchLocationResolver />
       <CustomerTabsNavigator />
     </CustomerBottomNavVisibilityProvider>
   );

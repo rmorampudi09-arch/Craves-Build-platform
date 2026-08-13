@@ -25,6 +25,11 @@ pool:
 steps:
   - checkout: self
 
+  - script: |
+      set -euo pipefail
+      bash scripts/release/validate-chef-owned-subscription-plans.sh
+    displayName: Verify Chef-owned meal plan boundaries
+
   - task: JavaToolInstaller@0
     displayName: Use Java 21
     inputs:

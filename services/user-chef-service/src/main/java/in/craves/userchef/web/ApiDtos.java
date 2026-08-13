@@ -34,6 +34,10 @@ public final class ApiDtos {
     }
 
     public enum KycDocumentType {
+        APPLICANT_PHOTO,
+        GOVERNMENT_ID_FRONT,
+        GOVERNMENT_ID_BACK,
+        TAX_ID_CARD,
         AADHAAR_CARD,
         PAN_CARD
     }

@@ -2,11 +2,24 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { AdminSubscriptionPlan } from "@/lib/admin-subscription-plan-contract";
-import type { AdminSubscriptionSchedule } from "@/lib/admin-subscription-runtime-contract";
+import type { AdminSubscriptionSchedule, AdminSubscriptionScheduleItem } from "@/lib/admin-subscription-runtime-contract";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-export function AdminSubscriptionScheduleManager({ plan }: { plan: AdminSubscriptionPlan; onChanged?: () => Promise<void> }) {
+type ReviewScheduleItem = AdminSubscriptionScheduleItem & {
+  menuItemName?: string | null;
+  menuItemCategory?: string | null;
+  menuItemFoodType?: string | null;
+  menuItemPrice?: number | null;
+  menuItemCurrency?: string | null;
+};
+
+function money(value: number, currency: string): string {
+  try { return new Intl.NumberFormat("en-IN", { style: "currency", currency }).format(value); }
+  catch { return `${currency} ${value.toFixed(2)}`; }
+}
+
+export function AdminSubscriptionScheduleManager({ plan }: { plan: AdminSubscriptionPlan }) {
   const [schedule, setSchedule] = useState<AdminSubscriptionSchedule | null>(null);
   const [message, setMessage] = useState("Loading Chef meal schedule…");
 
@@ -26,7 +39,7 @@ export function AdminSubscriptionScheduleManager({ plan }: { plan: AdminSubscrip
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h4 className="text-lg font-bold">Chef meal schedule</h4>
-        <p className="mt-1 text-xs text-slate-500">Review-only. Meal content is authored by the Chef and revalidated against their live menu during approval.</p>
+        <p className="mt-1 text-xs text-slate-500">Review-only. These dish details are snapshotted when the Chef saves the plan, and live availability is checked again during approval.</p>
       </div>
       {schedule && <span className="rounded-full bg-[#FFF8EC] px-3 py-1 text-xs font-bold text-[#6930CA]">{schedule.status} · v{schedule.version}</span>}
     </div>
@@ -38,14 +51,22 @@ export function AdminSubscriptionScheduleManager({ plan }: { plan: AdminSubscrip
         <div className="rounded-xl bg-[#FFF8EC] p-3"><p className="text-xs font-bold uppercase text-slate-500">Meals</p><p className="mt-1 font-bold">{schedule.items.length}</p></div>
       </div>
       <div className="mt-4 space-y-2">
-        {schedule.items.map(item => {
+        {schedule.items.map(rawItem => {
+          const item = rawItem as ReviewScheduleItem;
           const day = schedule.recurrenceType === "WEEKLY"
             ? WEEKDAYS[(item.isoDayOfWeek ?? 1) - 1]
             : `Day ${item.dayOfMonth}`;
-          return <div key={item.id} className="grid gap-2 rounded-2xl border border-[#eadfd0] p-3 text-sm sm:grid-cols-[1.2fr_1fr_1fr_.6fr]">
+          const details = [item.menuItemCategory, item.menuItemFoodType?.replaceAll("_", " ")].filter(Boolean).join(" · ");
+          return <div key={item.id} className="grid gap-3 rounded-2xl border border-[#eadfd0] p-4 text-sm sm:grid-cols-[1.3fr_1fr_1.8fr_.6fr]">
             <div><p className="text-xs font-bold uppercase text-slate-500">When</p><p className="font-semibold">{day} · {item.serviceTime.slice(0, 5)}</p></div>
             <div><p className="text-xs font-bold uppercase text-slate-500">Meal slot</p><p className="font-semibold">{item.mealSlotCode.replaceAll("_", " ")}</p></div>
-            <div><p className="text-xs font-bold uppercase text-slate-500">Menu item</p><p className="truncate font-mono text-xs" title={item.menuItemId}>{item.menuItemId}</p></div>
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-500">Dish</p>
+              <p className="font-bold text-slate-900">{item.menuItemName ?? "Legacy menu item"}</p>
+              {details && <p className="mt-0.5 text-xs text-slate-500">{details}</p>}
+              {item.menuItemPrice != null && item.menuItemCurrency && <p className="mt-0.5 text-xs font-semibold text-[#6930CA]">{money(item.menuItemPrice, item.menuItemCurrency)}</p>}
+              {!item.menuItemName && <p className="mt-1 truncate font-mono text-[11px] text-slate-400" title={item.menuItemId}>{item.menuItemId}</p>}
+            </div>
             <div><p className="text-xs font-bold uppercase text-slate-500">Qty</p><p className="font-semibold">{item.quantity}</p></div>
           </div>;
         })}

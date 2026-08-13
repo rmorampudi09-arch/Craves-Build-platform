@@ -21,6 +21,12 @@ public class DefaultSubscriptionPolicyService {
 
     @Transactional
     public void ensureActiveDefault(UUID planId, UUID actorIdentityId) {
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM subscription_schema.subscription_plan WHERE id = ? FOR UPDATE",
+            UUID.class,
+            planId
+        );
+
         if (repository.findActive(planId).isPresent()) {
             return;
         }

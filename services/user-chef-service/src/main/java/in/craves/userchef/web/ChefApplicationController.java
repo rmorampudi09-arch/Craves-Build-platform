@@ -7,6 +7,7 @@ import in.craves.userchef.web.ApiDtos.ChefApplicationResponse;
 import in.craves.userchef.web.ApiDtos.KycDocumentResponse;
 import in.craves.userchef.web.ApiDtos.KycDocumentType;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +30,11 @@ public class ChefApplicationController {
     @GetMapping
     public ChefApplicationResponse getMyApplication(@AuthenticationPrincipal CurrentUser user) {
         return service.getMyApplication(user);
+    }
+
+    @GetMapping(params = "evidence=true")
+    public List<KycDocumentResponse> getMyEvidence(@AuthenticationPrincipal CurrentUser user) {
+        return service.listMyApplicationEvidence(user);
     }
 
     @PostMapping

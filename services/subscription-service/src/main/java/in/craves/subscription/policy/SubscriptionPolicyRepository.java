@@ -6,6 +6,7 @@ import in.craves.subscription.policy.SubscriptionPolicyModels.SubscriptionPolicy
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -216,10 +217,15 @@ public class SubscriptionPolicyRepository {
             rs.getString("unused_meal_policy_reference"),
             rs.getString("refund_policy_reference"),
             rs.getString("notes"),
-            rs.getObject("created_at", Instant.class),
-            rs.getObject("updated_at", Instant.class),
-            rs.getObject("activated_at", Instant.class)
+            instant(rs, "created_at"),
+            instant(rs, "updated_at"),
+            instant(rs, "activated_at")
         );
+    }
+
+    private static Instant instant(ResultSet rs, String column) throws SQLException {
+        OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
     }
 
     private static Integer integer(ResultSet rs, String column) throws SQLException {

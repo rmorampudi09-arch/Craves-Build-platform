@@ -8,7 +8,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ p
   const { planId } = await context.params;
   if (!isUuid(planId)) return NextResponse.json({ code: "INVALID_PLAN_ID" }, { status: 400 });
   const input = parseAdminPlanStatus(await request.json().catch(() => null));
-  if (!input) return NextResponse.json({ code: "INVALID_PLAN_STATUS" }, { status: 400 });
+  if (!input || input.status !== "INACTIVE") {
+    return NextResponse.json({ code: "PLAN_REVIEW_REQUIRED", message: "Admin can only deactivate here; approval must use the review action." }, { status: 400 });
+  }
   try {
     const upstream = await authenticatedApiFetch(request, `/admin/subscription-plans/${planId}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
     const body = await upstream.json().catch(() => null);

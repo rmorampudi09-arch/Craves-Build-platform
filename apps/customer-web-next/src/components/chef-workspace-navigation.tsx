@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BadgeIndianRupee,
+  CalendarDays,
   ChefHat,
   ClipboardCheck,
   ClipboardList,
@@ -19,6 +20,7 @@ const links = [
   { href: "/chef/application", label: "Application", icon: ClipboardCheck },
   { href: "/chef/kitchen", label: "Kitchen", icon: Store },
   { href: "/chef/menu", label: "Menu", icon: Utensils },
+  { href: "/chef/meal-plans", label: "Meal Plans", icon: CalendarDays },
   { href: "/chef/capacity", label: "Capacity", icon: Gauge },
   { href: "/chef/orders", label: "Orders", icon: ClipboardList },
   { href: "/chef/earnings", label: "Earnings", icon: BadgeIndianRupee },

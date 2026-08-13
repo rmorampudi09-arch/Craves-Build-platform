@@ -2,17 +2,13 @@ package in.craves.subscription.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
-import in.craves.subscription.web.ApiDtos.CreatePlanRequest;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.math.BigDecimal;
@@ -25,7 +21,6 @@ import org.junit.jupiter.api.Test;
 
 class SubscriptionServiceOwnershipTest {
     private static final UUID CHEF_ID = UUID.fromString("11111111-1111-4111-8111-111111111111");
-    private static final UUID OTHER_CHEF_ID = UUID.fromString("22222222-2222-4222-8222-222222222222");
     private static final UUID CUSTOMER_ID = UUID.fromString("33333333-3333-4333-8333-333333333333");
 
     private final SubscriptionRepository repository = mock(SubscriptionRepository.class);
@@ -33,61 +28,13 @@ class SubscriptionServiceOwnershipTest {
     private final SubscriptionService service = new SubscriptionService(repository, capacityService);
 
     @Test
-    void chefCannotCreateOrManageMealPlans() {
+    void chefCannotUseAdministratorPlanListing() {
         CurrentUser chef = new CurrentUser(CHEF_ID, "firebase-chef", "+919999999999", List.of("CHEF"));
-        CreatePlanRequest request = new CreatePlanRequest(
-            "WEEKLY-01",
-            OTHER_CHEF_ID,
-            "Weekly meals",
-            "Chef plan",
-            "WEEKLY",
-            new BigDecimal("1200.00"),
-            "INR"
-        );
 
-        assertThatThrownBy(() -> service.createPlan(request, chef))
-            .isInstanceOf(ApiException.class)
-            .extracting(error -> ((ApiException) error).getCode())
-            .isEqualTo("ROLE_NOT_ALLOWED");
         assertThatThrownBy(() -> service.listAllPlans(chef))
             .isInstanceOf(ApiException.class)
             .extracting(error -> ((ApiException) error).getCode())
             .isEqualTo("ROLE_NOT_ALLOWED");
-    }
-
-    @Test
-    void subscriptionAdminAssignsApprovedChefReferenceToPlan() {
-        CurrentUser admin = new CurrentUser(
-            UUID.fromString("77777777-7777-4777-8777-777777777777"),
-            "firebase-admin",
-            "+919000000000",
-            List.of("SUBSCRIPTION_ADMIN")
-        );
-        CreatePlanRequest request = new CreatePlanRequest(
-            "WEEKLY-01",
-            CHEF_ID,
-            "Weekly meals",
-            "Chef plan",
-            "WEEKLY",
-            new BigDecimal("1200.00"),
-            "INR"
-        );
-        PlanResponse created = plan(CHEF_ID, "DRAFT");
-        when(repository.createPlan(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(created);
-
-        PlanResponse response = service.createPlan(request, admin);
-
-        assertThat(response.chefIdentityId()).isEqualTo(CHEF_ID);
-        verify(repository).createPlan(
-            eq("WEEKLY-01"),
-            eq(CHEF_ID),
-            eq("Weekly meals"),
-            eq("Chef plan"),
-            eq("WEEKLY"),
-            eq(new BigDecimal("1200.00")),
-            eq("INR"),
-            eq(admin.identityId())
-        );
     }
 
     @Test

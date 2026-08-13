@@ -58,7 +58,7 @@ put_operation() {
       '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:[{name:"identityId",type:"string",required:true}],responses:[{statusCode:200,description:"Audited internal administrator result"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"Internal role required"},{statusCode:404,description:"Identity not found"},{statusCode:409,description:"Concurrent or lockout conflict"},{statusCode:503,description:"Feature disabled"}]}}' >"$BODY"
   else
     jq -n --arg display "$DISPLAY" --arg method "$METHOD" --arg template "$TEMPLATE" \
-      '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:[],responses:[{statusCode:200,description:"Audited internal administrator result"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"Internal role required"},{statusCode:503,description:"Feature disabled"}]}}' >"$BODY"
+      '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:[],responses:[{statusCode:200,description:"Audited internal administrator result"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"Internal role required"},{statusCode:404,description:"Identity not found"},{statusCode:409,description:"Concurrent or lockout conflict"},{statusCode:503,description:"Feature disabled"}]}}' >"$BODY"
   fi
   az rest --method put --url "${API_MGMT}/operations/${ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
   sed "s|__BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
@@ -71,6 +71,7 @@ put_operation "get-internal-admin-role-catalog" "GET" "/roles" "List internal ad
 put_operation "get-internal-admin-users" "GET" "/users" "List internal administrators"
 put_operation "get-internal-admin-user" "GET" "/users/{identityId}" "Get internal administrator"
 put_operation "put-internal-admin-user-roles" "PUT" "/users/{identityId}/roles" "Replace internal administrator roles"
+put_operation "put-internal-admin-staff-role-grants" "PUT" "/staff-role-grants" "Grant Chef and internal administrator roles to staff"
 put_operation "get-internal-admin-role-changes" "GET" "/role-changes" "List internal role changes"
 
 verify_operation() {
@@ -90,6 +91,7 @@ verify_operation "get-internal-admin-role-catalog" "GET" "/roles"
 verify_operation "get-internal-admin-users" "GET" "/users"
 verify_operation "get-internal-admin-user" "GET" "/users/{identityId}"
 verify_operation "put-internal-admin-user-roles" "PUT" "/users/{identityId}/roles"
+verify_operation "put-internal-admin-staff-role-grants" "PUT" "/staff-role-grants"
 verify_operation "get-internal-admin-role-changes" "GET" "/role-changes"
 
 GATEWAY_URL=$(az apim show -g "$RG" -n "$APIM" --query gatewayUrl -o tsv)

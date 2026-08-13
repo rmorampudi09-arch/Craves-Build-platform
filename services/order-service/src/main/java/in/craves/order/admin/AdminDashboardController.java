@@ -14,6 +14,10 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/v1/admin/dashboard")
 public class AdminDashboardController {
+    private static final String[] DASHBOARD_READ_ROLES = {
+        "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "AUDIT_ADMIN"
+    };
+
     private final AdminDashboardService dashboardService;
 
     public AdminDashboardController(AdminDashboardService dashboardService) {
@@ -22,18 +26,21 @@ public class AdminDashboardController {
 
     @GetMapping("/summary")
     public ResponseEntity<DashboardSummary> summary(Authentication authentication) {
-        requireAdmin(authentication);
+        requireDashboardReader(authentication);
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
             .body(dashboardService.loadSummary());
     }
 
-    static CravesPrincipal requireAdmin(Authentication authentication) {
+    static CravesPrincipal requireDashboardReader(Authentication authentication) {
         if (authentication == null || !(authentication.getPrincipal() instanceof CravesPrincipal principal)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
         }
-        if (!principal.hasRole("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN role is required");
+        if (!principal.hasAnyRole(DASHBOARD_READ_ROLES)) {
+            throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "PLATFORM_ADMIN, SUPPORT_ADMIN, PAYMENTS_ADMIN or AUDIT_ADMIN role is required"
+            );
         }
         return principal;
     }

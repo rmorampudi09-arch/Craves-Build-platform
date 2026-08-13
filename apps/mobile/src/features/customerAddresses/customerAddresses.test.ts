@@ -6,6 +6,7 @@ import {
   resolveCustomerAddressesContentBottomInset,
 } from './customerAddressesActiveCart';
 import {
+  isCustomerAddressDeliveryReady,
   parseCustomerAddress,
   toCustomerAddressUpdateRequest,
   toCustomerBrowsingLocation,
@@ -21,6 +22,7 @@ const validAddressResponse = {
   addressLine2: 'Floor 2',
   landmark: null,
   areaName: 'Indiranagar',
+  districtName: 'Bengaluru Urban',
   city: 'Bengaluru',
   state: 'Karnataka',
   postalCode: '560038',
@@ -38,14 +40,13 @@ const addressesRoutePolicy = resolveRouteChromePolicy(
   'CustomerAddresses',
 );
 
-describe('P66 My Addresses contract and active/empty visuals', () => {
-  it('parses the exact supported saved-address response and maps it to global location state', () => {
+describe('customer address contract and active/empty visuals', () => {
+  it('parses a current saved address and maps it to browsing location state', () => {
     const address = parseCustomerAddress(validAddressResponse);
     expect(address).not.toBeNull();
-    if (!address) {
-      return;
-    }
+    if (!address) return;
 
+    expect(isCustomerAddressDeliveryReady(address)).toBe(true);
     expect(toCustomerBrowsingLocation(address)).toEqual({
       kind: 'SAVED_ADDRESS',
       addressId: validAddressResponse.id,
@@ -56,17 +57,35 @@ describe('P66 My Addresses contract and active/empty visuals', () => {
     });
   });
 
-  it('preserves the full PUT request while setting an existing address as default', () => {
+  it('keeps a legacy incomplete address visible so it can be edited or deleted', () => {
+    const legacy = parseCustomerAddress({
+      ...validAddressResponse,
+      recipientName: null,
+      areaName: null,
+      districtName: null,
+      postalCode: null,
+      latitude: null,
+      longitude: null,
+    });
+
+    expect(legacy).not.toBeNull();
+    if (!legacy) return;
+    expect(isCustomerAddressDeliveryReady(legacy)).toBe(false);
+    expect(toCustomerBrowsingLocation(legacy)).toBeNull();
+    expect(toCustomerAddressUpdateRequest(legacy)).toBeNull();
+  });
+
+  it('preserves district and the complete backend PUT request', () => {
     const address = parseCustomerAddress(validAddressResponse);
     expect(address).not.toBeNull();
-    if (!address) {
-      return;
-    }
+    if (!address) return;
 
     expect(toCustomerAddressUpdateRequest(address, true)).toMatchObject({
       addressLabel: 'HOME',
       recipientName: 'Asha Rao',
       addressLine1: '12 Lake Road',
+      areaName: 'Indiranagar',
+      districtName: 'Bengaluru Urban',
       latitude: 12.9784,
       longitude: 77.6408,
       isDefault: true,
@@ -86,7 +105,6 @@ describe('P66 My Addresses contract and active/empty visuals', () => {
     expect(resolveCustomerAddressesContentBottomInset(true)).toBe(
       CUSTOMER_ADDRESSES_VIEW_CART_CONTENT_CLEARANCE,
     );
-
     expect(
       isViewCartOverlayVisible({itemCount: 0, subtotal}, addressesRoutePolicy),
     ).toBe(false);

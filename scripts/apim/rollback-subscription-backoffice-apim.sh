@@ -73,6 +73,7 @@ delete_operation_by_route() {
 }
 
 SUB_API=$(resolve_api_optional "api/v1/subscriptions")
+CHEF_PLAN_API=$(resolve_api_optional "api/v1/chef/subscription-plans")
 ADMIN_PLAN_API=$(resolve_api_optional "api/v1/admin/subscription-plans")
 ADMIN_SUB_API=$(resolve_api_optional "api/v1/admin/subscriptions")
 CHEF_CAPACITY_API=$(resolve_api_optional "api/v1/chef/subscription-capacity")
@@ -92,12 +93,21 @@ delete_operation_by_route "$SUB_API" "api/v1/subscriptions" PATCH "/{subscriptio
 delete_operation_by_route "$SUB_API" "api/v1/subscriptions" PATCH "/{subscriptionId}/cancel"
 delete_operation_by_route "$SUB_API" "api/v1/subscriptions" POST "/{subscriptionId}/skips"
 
+delete_operation_by_route "$CHEF_PLAN_API" "api/v1/chef/subscription-plans" GET "/"
+delete_operation_by_route "$CHEF_PLAN_API" "api/v1/chef/subscription-plans" POST "/"
+delete_operation_by_route "$CHEF_PLAN_API" "api/v1/chef/subscription-plans" GET "/{planId}"
+delete_operation_by_route "$CHEF_PLAN_API" "api/v1/chef/subscription-plans" PUT "/{planId}"
+delete_operation_by_route "$CHEF_PLAN_API" "api/v1/chef/subscription-plans" GET "/{planId}/schedule"
+delete_operation_by_route "$CHEF_PLAN_API" "api/v1/chef/subscription-plans" PUT "/{planId}/schedule"
+delete_operation_by_route "$CHEF_PLAN_API" "api/v1/chef/subscription-plans" POST "/{planId}/submit"
+
 delete_operation_by_route "$ADMIN_PLAN_API" "api/v1/admin/subscription-plans" GET "/"
 delete_operation_by_route "$ADMIN_PLAN_API" "api/v1/admin/subscription-plans" POST "/"
 delete_operation_by_route "$ADMIN_PLAN_API" "api/v1/admin/subscription-plans" PATCH "/{planId}/status"
 delete_operation_by_route "$ADMIN_PLAN_API" "api/v1/admin/subscription-plans" GET "/{planId}/schedule"
 delete_operation_by_route "$ADMIN_PLAN_API" "api/v1/admin/subscription-plans" PUT "/{planId}/schedule"
 delete_operation_by_route "$ADMIN_PLAN_API" "api/v1/admin/subscription-plans" POST "/{planId}/schedule/activate"
+delete_operation_by_route "$ADMIN_PLAN_API" "api/v1/admin/subscription-plans" POST "/{planId}/review"
 delete_operation_by_route "$ADMIN_PLAN_API" "api/v1/admin/subscription-plans" GET "/{planId}/policy"
 delete_operation_by_route "$ADMIN_PLAN_API" "api/v1/admin/subscription-plans" PUT "/{planId}/policy"
 delete_operation_by_route "$ADMIN_PLAN_API" "api/v1/admin/subscription-plans" POST "/{planId}/policy/activate"
@@ -124,4 +134,4 @@ delete_operation_by_route "$CHEF_REVIEW_API" "api/v1/backoffice/chef-reviews" PO
 delete_operation_by_route "$CHEF_REVIEW_API" "api/v1/backoffice/chef-reviews" POST "/{applicationId}/reject"
 delete_operation_by_route "$CHEF_REVIEW_API" "api/v1/backoffice/chef-reviews" GET "/{applicationId}/documents/{documentId}/content"
 
-echo "SUCCESS: Named subscription/capacity/backoffice routes removed. API containers were retained."
+echo "SUCCESS: Named subscription, Chef meal-plan, capacity, and backoffice routes removed. API containers were retained."

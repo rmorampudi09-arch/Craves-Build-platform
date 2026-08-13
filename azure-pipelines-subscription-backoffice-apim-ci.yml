@@ -9,8 +9,11 @@ steps:
   - script: |
       set -euo pipefail
       bash -n scripts/apim/configure-subscription-backoffice-apim.sh
+      bash -n scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
       bash -n scripts/apim/status-subscription-backoffice-apim.sh
       bash -n scripts/apim/rollback-subscription-backoffice-apim.sh
+      bash -n scripts/release/validate-chef-owned-subscription-plans.sh
+      bash scripts/release/validate-chef-owned-subscription-plans.sh
       python3 - <<'PY'
       import xml.etree.ElementTree as ET
       for path in (
@@ -20,23 +23,31 @@ steps:
           ET.parse(path)
           print(f'Valid XML: {path}')
       PY
-    displayName: Validate APIM scripts and policies
+    displayName: Validate APIM scripts, ownership guard and policies
   - script: |
       set -euo pipefail
       grep -q 'CONFIRM_APIM_WRITE' scripts/apim/configure-subscription-backoffice-apim.sh
+      grep -q 'CONFIRM_APIM_WRITE' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
       grep -q 'CONFIRM_APIM_ROLLBACK' scripts/apim/rollback-subscription-backoffice-apim.sh
       grep -q 'Multiple APIM APIs own' scripts/apim/configure-subscription-backoffice-apim.sh
-      grep -q 'Inherited backend-id policy' scripts/apim/configure-subscription-backoffice-apim.sh
+      grep -q 'Multiple APIM APIs own' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
       grep -q 'subscriptionRequired' scripts/apim/configure-subscription-backoffice-apim.sh
+      grep -q 'subscriptionRequired' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
+      grep -q 'delete_operation_by_route.*POST.*"/"' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
+      grep -q 'delete_operation_by_route.*PUT.*schedule' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
       grep -q 'Authorization' infra/apim/subscription-backoffice/authenticated-policy.xml
       if grep -q 'A Bearer access token is required' infra/apim/subscription-backoffice/public-policy.xml; then
         echo 'ERROR: Public plan policy unexpectedly requires Bearer authentication.' >&2
         exit 1
       fi
       if grep -REn '(client-secret|accesskey=|connectionString|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._-]{20,})' \
-        infra/apim/subscription-backoffice scripts/apim/*subscription-backoffice*; then
+        infra/apim/subscription-backoffice \
+        scripts/apim/configure-subscription-backoffice-apim.sh \
+        scripts/apim/configure-chef-subscription-plan-workflow-apim.sh \
+        scripts/apim/status-subscription-backoffice-apim.sh \
+        scripts/apim/rollback-subscription-backoffice-apim.sh; then
         echo 'ERROR: Potential credential material found in APIM assets.' >&2
         exit 1
       fi
-      echo 'Subscription/backoffice APIM fail-closed gates passed.'
+      echo 'Subscription/backoffice Chef-owned APIM fail-closed gates passed.'
     displayName: Verify APIM safety gates

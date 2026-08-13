@@ -1,0 +1,84 @@
+package in.craves.subscription.capacity;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+@Repository
+@Primary
+public class PostgresSlotCapacityRepository extends CapacityRepository {
+    private final JdbcTemplate jdbcTemplate;
+
+    public PostgresSlotCapacityRepository(JdbcTemplate jdbcTemplate) {
+        super(jdbcTemplate);
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @Override
+    public SlotRuleRow upsertSlotRule(
+        UUID chefIdentityId,
+        int isoDayOfWeek,
+        String mealSlotCode,
+        int totalCapacityUnits,
+        int subscriptionCapacityUnits,
+        boolean salesEnabled,
+        UUID actorIdentityId
+    ) {
+        UUID id = UUID.randomUUID();
+        return jdbcTemplate.query(
+            "INSERT INTO subscription_schema.chef_capacity_rule " +
+                "(id, chef_identity_id, iso_day_of_week, meal_slot_code, total_capacity_units, subscription_capacity_units, " +
+                "sales_enabled, version, updated_by_identity_id, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, now(), now()) " +
+                "ON CONFLICT (chef_identity_id, iso_day_of_week, meal_slot_code) DO UPDATE SET " +
+                "total_capacity_units = EXCLUDED.total_capacity_units, subscription_capacity_units = EXCLUDED.subscription_capacity_units, " +
+                "sales_enabled = EXCLUDED.sales_enabled, version = subscription_schema.chef_capacity_rule.version + 1, " +
+                "updated_by_identity_id = EXCLUDED.updated_by_identity_id, updated_at = now() RETURNING *",
+            (rs, rowNum) -> mapSlotRuleRow(rs),
+            id, chefIdentityId, isoDayOfWeek, mealSlotCode, totalCapacityUnits,
+            subscriptionCapacityUnits, salesEnabled, actorIdentityId
+        ).stream().findFirst().orElseThrow();
+    }
+
+    @Override
+    public Optional<SlotRuleRow> findSlotRule(UUID chefIdentityId, int isoDayOfWeek, String mealSlotCode) {
+        return jdbcTemplate.query(
+            "SELECT * FROM subscription_schema.chef_capacity_rule WHERE chef_identity_id = ? AND iso_day_of_week = ? AND meal_slot_code = ?",
+            (rs, rowNum) -> mapSlotRuleRow(rs), chefIdentityId, isoDayOfWeek, mealSlotCode
+        ).stream().findFirst();
+    }
+
+    @Override
+    public List<SlotRuleRow> listSlotRuleRows(UUID chefIdentityId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM subscription_schema.chef_capacity_rule WHERE chef_identity_id = ? ORDER BY iso_day_of_week, meal_slot_code",
+            (rs, rowNum) -> mapSlotRuleRow(rs), chefIdentityId
+        );
+    }
+
+    private SlotRuleRow mapSlotRuleRow(ResultSet rs) throws SQLException {
+        return new SlotRuleRow(
+            rs.getObject("id", UUID.class),
+            rs.getObject("chef_identity_id", UUID.class),
+            rs.getInt("iso_day_of_week"),
+            rs.getString("meal_slot_code"),
+            rs.getInt("total_capacity_units"),
+            rs.getInt("subscription_capacity_units"),
+            rs.getBoolean("sales_enabled"),
+            rs.getInt("version"),
+            instant(rs, "updated_at")
+        );
+    }
+
+    private static Instant instant(ResultSet rs, String column) throws SQLException {
+        OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
+    }
+}

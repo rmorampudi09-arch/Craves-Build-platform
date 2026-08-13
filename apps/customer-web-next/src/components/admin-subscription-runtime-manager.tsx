@@ -26,20 +26,23 @@ export function AdminSubscriptionRuntimeManager({ plan }: { plan: AdminSubscript
 
   const checks = useMemo(() => readiness ? [
     ["Chef assigned", readiness.chefAssigned],
-    ["Active schedule", readiness.activeSchedule],
-    ["Active policy", readiness.activePolicy],
-    ["Plan activation", readiness.readyForActivation],
+    ["Approved meal schedule", readiness.activeSchedule],
+    ["Platform policy", readiness.activePolicy],
+    ["Customer-ready", readiness.readyForActivation],
   ] as const : [], [readiness]);
 
   return <div className="mt-5 border-t border-[#eadfd0] pt-5">
     <button type="button" onClick={() => setExpanded(value => !value)} className="rounded-2xl border border-[#6930CA] px-4 py-2 text-sm font-bold text-[#6930CA]">
-      {expanded ? "Hide meal configuration" : "Configure meals & policy"}
+      {expanded ? "Hide review details" : "Review meals & policy"}
     </button>
     {expanded && <div className="mt-5 space-y-5">
       {message && <p role="status" className="rounded-2xl bg-white p-4 text-sm text-slate-700">{message}</p>}
       {readiness && <div className="grid gap-2 sm:grid-cols-4">{checks.map(([label, ready]) => <div key={label} className="rounded-2xl bg-white p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className={`mt-1 font-bold ${ready ? "text-emerald-700" : "text-amber-700"}`}>{ready ? "Ready" : "Pending"}</p></div>)}</div>}
-      <AdminSubscriptionScheduleManager plan={plan} onChanged={loadReadiness} />
-      <AdminSubscriptionPolicyManager plan={plan} onChanged={loadReadiness} />
+      <AdminSubscriptionScheduleManager plan={plan} />
+      <div>
+        <p className="mb-2 text-xs leading-5 text-slate-500">Meal content above is Chef-owned and read-only. Subscription lifecycle policy remains a platform safeguard managed by authorized administrators.</p>
+        <AdminSubscriptionPolicyManager plan={plan} onChanged={loadReadiness} />
+      </div>
     </div>}
   </div>;
 }

@@ -1,6 +1,12 @@
 {
   "extends": "@react-native/typescript-config",
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "expo-location": [
+        "src/features/customerAddresses/location/currentLocation.ts"
+      ]
+    },
     "types": ["jest"]
   },
   "include": ["**/*.ts", "**/*.tsx"],

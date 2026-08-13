@@ -2,12 +2,6 @@
   "name": "CravesMobile",
   "displayName": "CravesMobile",
   "plugins": [
-    "expo-secure-store",
-    [
-      "expo-location",
-      {
-        "locationWhenInUsePermission": "Craves uses your location to find nearby food and fill your delivery address."
-      }
-    ]
+    "expo-secure-store"
   ]
 }

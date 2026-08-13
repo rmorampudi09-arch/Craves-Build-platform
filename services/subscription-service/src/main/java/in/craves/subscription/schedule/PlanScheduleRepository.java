@@ -3,6 +3,7 @@ package in.craves.subscription.schedule;
 import in.craves.subscription.schedule.PlanScheduleModels.PlanScheduleResponse;
 import in.craves.subscription.schedule.PlanScheduleModels.ScheduleItemRequest;
 import in.craves.subscription.schedule.PlanScheduleModels.ScheduleItemResponse;
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -37,7 +38,6 @@ public class PlanScheduleRepository {
         ).stream().findFirst();
     }
 
-    /** Returns the administrator's draft when present; otherwise the currently active/inactive schedule. */
     public Optional<PlanScheduleResponse> find(UUID planId) {
         Optional<PlanScheduleResponse> draft = findDraft(planId);
         return draft.isPresent() ? draft : findCurrent(planId);
@@ -57,14 +57,14 @@ public class PlanScheduleRepository {
         String recurrenceType,
         String timezone,
         int generationLeadHours,
-        List<ScheduleItemRequest> items,
+        List<PreparedScheduleItem> items,
         UUID actor
     ) {
         int nextVersion = findDraft(planId)
             .map(PlanScheduleResponse::version)
             .orElseGet(() -> findCurrent(planId).map(value -> value.version() + 1).orElse(1));
         LocalTime earliestServiceTime = items.stream()
-            .map(ScheduleItemRequest::serviceTime)
+            .map(item -> item.request().serviceTime())
             .min(Comparator.naturalOrder())
             .orElseThrow(() -> new IllegalArgumentException("At least one schedule item is required"));
 
@@ -81,14 +81,21 @@ public class PlanScheduleRepository {
             "DELETE FROM subscription_schema.subscription_plan_schedule_draft_item WHERE plan_id = ?",
             planId
         );
-        for (ScheduleItemRequest item : items) {
+        for (PreparedScheduleItem prepared : items) {
+            ScheduleItemRequest item = prepared.request();
             jdbcTemplate.update(
                 "INSERT INTO subscription_schema.subscription_plan_schedule_draft_item " +
-                    "(id, plan_id, menu_item_id, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number, created_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
+                    "(id, plan_id, menu_item_id, menu_item_name_snapshot, menu_item_category_snapshot, menu_item_food_type_snapshot, " +
+                    "menu_item_price_snapshot, menu_item_currency_snapshot, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number, created_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
                 UUID.randomUUID(),
                 planId,
                 item.menuItemId(),
+                prepared.menuItemName(),
+                prepared.menuItemCategory(),
+                prepared.menuItemFoodType(),
+                prepared.menuItemPrice(),
+                prepared.menuItemCurrency(),
                 item.quantity(),
                 item.isoDayOfWeek(),
                 item.dayOfMonth(),
@@ -100,7 +107,7 @@ public class PlanScheduleRepository {
         jdbcTemplate.update(
             "INSERT INTO subscription_schema.subscription_plan_schedule_audit " +
                 "(id, plan_id, actor_identity_id, action, schedule_version, reason, created_at) " +
-                "VALUES (?, ?, ?, 'PUT_DRAFT', ?, 'Schedule draft saved; current active schedule preserved', now())",
+                "VALUES (?, ?, ?, 'PUT_DRAFT', ?, 'Chef meal schedule draft saved with catalog snapshots', now())",
             UUID.randomUUID(), planId, actor, nextVersion
         );
         return findDraft(planId).orElseThrow();
@@ -124,8 +131,10 @@ public class PlanScheduleRepository {
         jdbcTemplate.update("DELETE FROM subscription_schema.subscription_plan_schedule_item WHERE plan_id = ?", planId);
         jdbcTemplate.update(
             "INSERT INTO subscription_schema.subscription_plan_schedule_item " +
-                "(id, plan_id, menu_item_id, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number, created_at) " +
-                "SELECT id, plan_id, menu_item_id, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number, created_at " +
+                "(id, plan_id, menu_item_id, menu_item_name_snapshot, menu_item_category_snapshot, menu_item_food_type_snapshot, " +
+                "menu_item_price_snapshot, menu_item_currency_snapshot, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number, created_at) " +
+                "SELECT id, plan_id, menu_item_id, menu_item_name_snapshot, menu_item_category_snapshot, menu_item_food_type_snapshot, " +
+                "menu_item_price_snapshot, menu_item_currency_snapshot, quantity, iso_day_of_week, day_of_month, meal_slot_code, service_time, sequence_number, created_at " +
                 "FROM subscription_schema.subscription_plan_schedule_draft_item WHERE plan_id = ?",
             planId
         );
@@ -172,6 +181,11 @@ public class PlanScheduleRepository {
         return new ScheduleItemResponse(
             rs.getObject("id", UUID.class),
             rs.getObject("menu_item_id", UUID.class),
+            rs.getString("menu_item_name_snapshot"),
+            rs.getString("menu_item_category_snapshot"),
+            rs.getString("menu_item_food_type_snapshot"),
+            rs.getBigDecimal("menu_item_price_snapshot"),
+            rs.getString("menu_item_currency_snapshot"),
             rs.getInt("quantity"),
             integer(rs, "iso_day_of_week"),
             integer(rs, "day_of_month"),
@@ -201,6 +215,16 @@ public class PlanScheduleRepository {
     private static Integer integer(ResultSet rs, String column) throws SQLException {
         int value = rs.getInt(column);
         return rs.wasNull() ? null : value;
+    }
+
+    public record PreparedScheduleItem(
+        ScheduleItemRequest request,
+        String menuItemName,
+        String menuItemCategory,
+        String menuItemFoodType,
+        BigDecimal menuItemPrice,
+        String menuItemCurrency
+    ) {
     }
 
     public record PlanOwner(UUID planId, UUID chefIdentityId, String status, String billingPeriod) {}

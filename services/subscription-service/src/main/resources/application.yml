@@ -8,6 +8,10 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/craves_business_db}
     username: ${SPRING_DATASOURCE_USERNAME:cravesadmin}
     password: ${SPRING_DATASOURCE_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:5}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
+      connection-timeout: 30000
   flyway:
     enabled: true
     baseline-on-migrate: true

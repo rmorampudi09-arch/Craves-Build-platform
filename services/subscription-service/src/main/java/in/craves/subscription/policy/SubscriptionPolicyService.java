@@ -26,7 +26,7 @@ public class SubscriptionPolicyService {
     }
 
     public PublicSubscriptionPolicyResponse getPublicActive(UUID planId) {
-        SubscriptionPolicyResponse policy = repository.findActive(planId)
+        SubscriptionPolicyResponse policy = repository.findPublicActive(planId)
             .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_POLICY_NOT_FOUND", "Active subscription policy was not found"));
         return toPublic(policy);
     }

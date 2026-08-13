@@ -5,7 +5,7 @@ import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.plan.ChefPlanModels.ChefPlanInput;
 import in.craves.subscription.plan.ChefPlanModels.ChefPlanResponse;
 import in.craves.subscription.plan.ChefPlanModels.ReviewChefPlanRequest;
-import in.craves.subscription.policy.SubscriptionPolicyRepository;
+import in.craves.subscription.policy.DefaultSubscriptionPolicyService;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
@@ -25,29 +25,32 @@ public class ChefPlanWorkflowService {
 
     private final ChefPlanRepository repository;
     private final ChefPlanScheduleService scheduleService;
-    private final SubscriptionPolicyRepository policyRepository;
+    private final DefaultSubscriptionPolicyService defaultPolicyService;
     private final SubscriptionRepository subscriptionRepository;
     private final CapacityService capacityService;
 
     public ChefPlanWorkflowService(
         ChefPlanRepository repository,
         ChefPlanScheduleService scheduleService,
-        SubscriptionPolicyRepository policyRepository,
+        DefaultSubscriptionPolicyService defaultPolicyService,
         SubscriptionRepository subscriptionRepository,
         CapacityService capacityService
     ) {
         this.repository = repository;
         this.scheduleService = scheduleService;
-        this.policyRepository = policyRepository;
+        this.defaultPolicyService = defaultPolicyService;
         this.subscriptionRepository = subscriptionRepository;
         this.capacityService = capacityService;
     }
 
+    @Transactional
     public ChefPlanResponse create(ChefPlanInput input, CurrentUser user) {
         requireChef(user);
         ChefPlanInput normalized = normalize(input);
         String planCode = "MEAL-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
-        return repository.create(user.identityId(), planCode, normalized);
+        ChefPlanResponse created = repository.create(user.identityId(), planCode, normalized);
+        defaultPolicyService.ensureActiveDefault(created.id(), user.identityId());
+        return created;
     }
 
     public List<ChefPlanResponse> listMine(CurrentUser user) {
@@ -92,12 +95,7 @@ public class ChefPlanWorkflowService {
             return repository.review(planId, admin.identityId(), false, request.reason());
         }
 
-        if (policyRepository.findActive(planId).isEmpty()) {
-            throw ApiException.conflict(
-                "PLAN_POLICY_NOT_READY",
-                "Administrator approval requires an active platform subscription policy for this plan"
-            );
-        }
+        defaultPolicyService.ensureActiveDefault(planId, admin.identityId());
         scheduleService.activateSubmittedDraft(planId, admin);
         ChefPlanResponse approved = repository.review(planId, admin.identityId(), true, request.reason());
 
@@ -106,7 +104,7 @@ public class ChefPlanWorkflowService {
         if (!capacityService.isPlanBookable(active)) {
             throw ApiException.conflict(
                 "PLAN_CAPACITY_NOT_READY",
-                "Plan approval requires subscription capacity for every selected meal slot"
+                "The Chef must configure subscription capacity for every selected meal slot before this plan can be approved"
             );
         }
         return approved;

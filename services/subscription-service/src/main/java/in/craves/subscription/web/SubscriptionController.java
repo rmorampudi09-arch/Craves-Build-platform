@@ -1,5 +1,6 @@
 package in.craves.subscription.web;
 
+import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.AdminSubscriptionPage;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.CustomerOccurrenceResponse;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.ResumeSubscriptionRequest;
@@ -9,7 +10,6 @@ import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.Subscription
 import in.craves.subscription.lifecycle.SubscriptionLifecycleService;
 import in.craves.subscription.security.CurrentUser;
 import in.craves.subscription.service.SubscriptionService;
-import in.craves.subscription.web.ApiDtos.CreatePlanRequest;
 import in.craves.subscription.web.ApiDtos.CreateSubscriptionRequest;
 import in.craves.subscription.web.ApiDtos.CustomerSubscriptionResponse;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
@@ -58,15 +58,6 @@ public class SubscriptionController {
         return service.getPlan(planId);
     }
 
-    @PostMapping("/admin/subscription-plans")
-    public ResponseEntity<PlanResponse> createPlan(
-        @Valid @RequestBody CreatePlanRequest request,
-        @AuthenticationPrincipal CurrentUser user
-    ) {
-        PlanResponse response = service.createPlan(request, user);
-        return ResponseEntity.created(URI.create("/api/v1/subscriptions/plans/" + response.id())).body(response);
-    }
-
     @GetMapping("/admin/subscription-plans")
     public List<PlanResponse> listAllPlans(@AuthenticationPrincipal CurrentUser user) {
         return service.listAllPlans(user);
@@ -78,7 +69,13 @@ public class SubscriptionController {
         @Valid @RequestBody UpdatePlanStatusRequest request,
         @AuthenticationPrincipal CurrentUser user
     ) {
-        return service.updatePlanStatus(planId, request.status(), user);
+        if (!"INACTIVE".equalsIgnoreCase(request.status())) {
+            throw ApiException.badRequest(
+                "PLAN_REVIEW_REQUIRED",
+                "Administrators approve or reject submitted meal plans through the review action; direct activation is not allowed"
+            );
+        }
+        return service.updatePlanStatus(planId, "INACTIVE", user);
     }
 
     @PostMapping("/subscriptions")

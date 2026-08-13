@@ -1,4 +1,10 @@
-export type ChefDocumentType = string;
+export type ChefDocumentType =
+  | "APPLICANT_PHOTO"
+  | "GOVERNMENT_ID_FRONT"
+  | "GOVERNMENT_ID_BACK"
+  | "TAX_ID_CARD"
+  | "AADHAAR_CARD"
+  | "PAN_CARD";
 export type ChefApplicationStatus = "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "REJECTED";
 
 export type ChefProofDocument = {
@@ -48,6 +54,14 @@ export type ChefApplicationInput = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STATUSES = new Set<ChefApplicationStatus>(["NOT_SUBMITTED", "PENDING", "APPROVED", "REJECTED"]);
+const DOCUMENT_TYPES = new Set<ChefDocumentType>([
+  "APPLICANT_PHOTO",
+  "GOVERNMENT_ID_FRONT",
+  "GOVERNMENT_ID_BACK",
+  "TAX_ID_CARD",
+  "AADHAAR_CARD",
+  "PAN_CARD",
+]);
 
 function text(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
@@ -70,13 +84,25 @@ export function parseChefProofDocument(value: unknown): ChefProofDocument | null
   if (!value || typeof value !== "object") return null;
   const document = value as Record<string, unknown>;
   const id = text(document.id, 64);
-  const documentType = text(document.documentType, 40);
+  const documentTypeText = text(document.documentType, 40);
+  const documentType = documentTypeText as ChefDocumentType | null;
   const originalFileName = text(document.originalFileName, 255);
   const contentType = text(document.contentType, 100);
   const status = text(document.status, 40);
   const createdAt = instant(document.createdAt);
   const fileSizeBytes = typeof document.fileSizeBytes === "number" && Number.isSafeInteger(document.fileSizeBytes) ? document.fileSizeBytes : -1;
-  if (!id || !UUID.test(id) || !documentType || !originalFileName || !contentType || !status || !createdAt || fileSizeBytes < 0 || fileSizeBytes > 10_000_000) return null;
+  if (
+    !id ||
+    !UUID.test(id) ||
+    !documentType ||
+    !DOCUMENT_TYPES.has(documentType) ||
+    !originalFileName ||
+    !contentType ||
+    !status ||
+    !createdAt ||
+    fileSizeBytes < 0 ||
+    fileSizeBytes > 10_000_000
+  ) return null;
   return { id, documentType, originalFileName, contentType, fileSizeBytes, status, createdAt };
 }
 

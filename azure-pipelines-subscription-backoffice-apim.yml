@@ -33,3 +33,16 @@ steps:
       APIM: ${{ parameters.apimName }}
       SUBSCRIPTION_APP: ${{ parameters.subscriptionContainerAppName }}
       CONFIRM_APIM_WRITE: ${{ parameters.confirmApimWrite }}
+
+  - task: AzureCLI@2
+    displayName: Configure Admin meal plan review reads
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: scriptPath
+      scriptPath: scripts/apim/configure-chef-subscription-admin-read-apim.sh
+    env:
+      RG: ${{ parameters.resourceGroupName }}
+      APIM: ${{ parameters.apimName }}
+      SUBSCRIPTION_APP: ${{ parameters.subscriptionContainerAppName }}
+      CONFIRM_APIM_WRITE: ${{ parameters.confirmApimWrite }}

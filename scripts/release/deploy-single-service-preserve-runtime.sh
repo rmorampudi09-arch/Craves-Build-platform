@@ -9,7 +9,9 @@ SERVICE_KEY=${4:-service}
 
 SMOKE_ATTEMPTS=${SMOKE_ATTEMPTS:-6}
 SMOKE_SLEEP_SECONDS=${SMOKE_SLEEP_SECONDS:-5}
-READY_ATTEMPTS=${READY_ATTEMPTS:-24}
+# Azure Container Apps control-plane readiness can lag a healthy revision by several minutes.
+# Use a five-minute default window while still failing immediately on an explicit unhealthy state.
+READY_ATTEMPTS=${READY_ATTEMPTS:-60}
 READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-5}
 STATUS_READ_FAILURE_LIMIT=${STATUS_READ_FAILURE_LIMIT:-4}
 
@@ -387,108 +389,97 @@ Runtime template hash:      $TEMPLATE_HASH_BEFORE
 Configuration hash:         $CONFIG_HASH_BEFORE
 Identity hash:              $IDENTITY_HASH_BEFORE
 Secret metadata hash:       $SECRET_HASH_BEFORE
-Credential values read:     NO
-Credential values changed:  NO
-Readiness timeout:          $((READY_ATTEMPTS * READY_SLEEP_SECONDS)) seconds
 ============================================================
 EOF
-
-NEW_REVISION=''
-
-rollback() {
-  local reason=$1
-  local rollback_revision
-  local wait_rc
-
-  echo "ROLLBACK: $reason" >&2
-  echo "Restoring image from previous READY revision: $PREVIOUS_IMAGE" >&2
-
-  az containerapp update \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$APP_NAME" \
-    --image "$PREVIOUS_IMAGE" \
-    --no-wait \
-    --only-show-errors >/dev/null || fail 'Rollback image update failed.'
-
-  if rollback_revision=$(wait_for_image "$PREVIOUS_IMAGE" "$NEW_REVISION"); then
-    :
-  else
-    wait_rc=$?
-    fail "Rollback image update was submitted but could not be confirmed healthy (wait result $wait_rc). Manual Container App verification is required."
-  fi
-
-  [[ "$(runtime_template_hash "$rollback_revision")" == "$TEMPLATE_HASH_BEFORE" ]] || \
-    fail 'Rollback runtime template differs from the pre-deployment state.'
-  [[ "$(configuration_hash)" == "$CONFIG_HASH_BEFORE" ]] || \
-    fail 'Rollback Container App configuration differs from the pre-deployment state.'
-  [[ "$(identity_hash)" == "$IDENTITY_HASH_BEFORE" ]] || \
-    fail 'Rollback managed identity differs from the pre-deployment state.'
-  [[ "$(secret_metadata_hash)" == "$SECRET_HASH_BEFORE" ]] || \
-    fail 'Rollback secret metadata differs from the pre-deployment state.'
-
-  echo "Rollback completed: $rollback_revision" >&2
-  exit 1
-}
-
-echo 'Deploying image only. Runtime env, flags, ingress, scaling, identity and secrets are not being modified.'
 
 az containerapp update \
   --resource-group "$RESOURCE_GROUP" \
   --name "$APP_NAME" \
   --image "$TARGET_IMAGE" \
   --no-wait \
-  --only-show-errors >/dev/null || fail 'Image update failed before a new revision was created.'
+  --only-show-errors >/dev/null
 
-if NEW_REVISION=$(wait_for_image "$TARGET_IMAGE" "$PREVIOUS_REVISION"); then
-  :
-else
-  wait_rc=$?
-  if [[ "$wait_rc" -eq 10 ]]; then
-    if verify_previous_ready_revision_intact; then
-      fail 'New revision explicitly failed before readiness. The previous ready revision remains healthy in Single revision mode; no redundant rollback revision was created.'
-    fi
-    rollback 'New revision explicitly reported a failed/unhealthy state and the previous ready revision could not be proven intact.'
+set +e
+NEW_REVISION=$(wait_for_image "$TARGET_IMAGE" "$PREVIOUS_REVISION")
+WAIT_RC=$?
+set -e
+
+if [[ "$WAIT_RC" -eq 10 ]]; then
+  echo 'ERROR: New revision reported an explicit failed/unhealthy state. Attempting guarded rollback to the previous immutable image.' >&2
+  az containerapp update \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$APP_NAME" \
+    --image "$PREVIOUS_IMAGE" \
+    --no-wait \
+    --only-show-errors >/dev/null || \
+    fail 'New revision failed and rollback submission also failed. Manual Azure recovery is required.'
+
+  set +e
+  ROLLBACK_REVISION=$(wait_for_image "$PREVIOUS_IMAGE" "$NEW_REVISION")
+  ROLLBACK_RC=$?
+  set -e
+
+  if [[ "$ROLLBACK_RC" -ne 0 ]]; then
+    fail 'New revision failed and the rollback revision could not be proven healthy. Manual Azure recovery is required.'
   fi
-  fail "Deployment verification was inconclusive after $((READY_ATTEMPTS * READY_SLEEP_SECONDS)) seconds. Automatic rollback was suppressed because Azure did not report an explicit unhealthy state. Inspect the latest revision before retrying."
+
+  fail "New revision failed. Previous image was restored as ready revision $ROLLBACK_REVISION."
 fi
 
-[[ "$(runtime_template_hash "$NEW_REVISION")" == "$TEMPLATE_HASH_BEFORE" ]] || \
-  rollback 'Runtime template changed unexpectedly.'
-[[ "$(configuration_hash)" == "$CONFIG_HASH_BEFORE" ]] || \
-  rollback 'Container App configuration changed unexpectedly.'
-[[ "$(identity_hash)" == "$IDENTITY_HASH_BEFORE" ]] || \
-  rollback 'Managed identity changed unexpectedly.'
-[[ "$(secret_metadata_hash)" == "$SECRET_HASH_BEFORE" ]] || \
-  rollback 'Secret metadata changed unexpectedly.'
+if [[ "$WAIT_RC" -eq 20 ]]; then
+  if verify_previous_ready_revision_intact; then
+    fail 'Deployment verification was inconclusive after 300 seconds. The previous ready revision is still healthy and serving; retry only after inspecting Azure control-plane status.'
+  fi
+  fail 'Deployment verification was inconclusive after 300 seconds. Automatic rollback was suppressed because Azure did not report an explicit unhealthy state. Inspect the latest revision before retrying.'
+fi
+
+[[ "$WAIT_RC" -eq 0 ]] || fail "Deployment verification failed with unexpected status $WAIT_RC."
 
 AFTER=$(az containerapp show \
   --resource-group "$RESOURCE_GROUP" \
   --name "$APP_NAME" \
   --output json \
   --only-show-errors)
-jq -e . >/dev/null 2>&1 <<<"$AFTER" || rollback 'Container App post-deployment state was not valid JSON.'
+
+jq -e . >/dev/null 2>&1 <<<"$AFTER" || fail 'Container App post-deployment state was not valid JSON.'
 
 SECRET_META_AFTER=$(secret_metadata_json)
 verify_active_secret_refs_are_key_vault_backed "$AFTER" "$SECRET_META_AFTER"
 
-smoke_health "$AFTER" || rollback 'Liveness/readiness smoke check failed.'
+TEMPLATE_HASH_AFTER=$(runtime_template_hash "$NEW_REVISION")
+CONFIG_HASH_AFTER=$(configuration_hash)
+IDENTITY_HASH_AFTER=$(identity_hash)
+SECRET_HASH_AFTER=$(secret_metadata_hash)
 
-cat <<EOF
-============================================================
-SINGLE-SERVICE DEPLOYMENT RESULT: PASS
-============================================================
-Service:                       $SERVICE_KEY
-Container App:                 $APP_NAME
-New revision:                  $NEW_REVISION
-Image:                         $TARGET_IMAGE
-Runtime environment preserved: YES
-Feature/provider flags kept:   YES
-Ingress configuration kept:    YES
-Scaling configuration kept:    YES
-Managed identity preserved:    YES
-Key Vault metadata preserved:  YES
-Credential values read:        NO
-Credential values changed:     NO
-Secret objects changed:        NO
-============================================================
-EOF
+[[ "$TEMPLATE_HASH_AFTER" == "$TEMPLATE_HASH_BEFORE" ]] || \
+  fail 'Runtime template drift detected after image deployment; non-image settings changed.'
+[[ "$CONFIG_HASH_AFTER" == "$CONFIG_HASH_BEFORE" ]] || \
+  fail 'Container App configuration drift detected after image deployment.'
+[[ "$IDENTITY_HASH_AFTER" == "$IDENTITY_HASH_BEFORE" ]] || \
+  fail 'Managed identity drift detected after image deployment.'
+[[ "$SECRET_HASH_AFTER" == "$SECRET_HASH_BEFORE" ]] || \
+  fail 'Container App secret metadata drift detected after image deployment.'
+
+smoke_health "$AFTER" || {
+  echo 'ERROR: New revision passed Azure health but failed HTTP liveness/readiness smoke. Attempting guarded rollback.' >&2
+  az containerapp update \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$APP_NAME" \
+    --image "$PREVIOUS_IMAGE" \
+    --no-wait \
+    --only-show-errors >/dev/null || \
+    fail 'HTTP smoke failed and rollback submission also failed. Manual Azure recovery is required.'
+
+  set +e
+  ROLLBACK_REVISION=$(wait_for_image "$PREVIOUS_IMAGE" "$NEW_REVISION")
+  ROLLBACK_RC=$?
+  set -e
+
+  if [[ "$ROLLBACK_RC" -ne 0 ]]; then
+    fail 'HTTP smoke failed and the rollback revision could not be proven healthy. Manual Azure recovery is required.'
+  fi
+
+  fail "HTTP smoke failed. Previous image was restored as ready revision $ROLLBACK_REVISION."
+}
+
+echo "SUCCESS: $SERVICE_KEY deployed as $TARGET_IMAGE on revision $NEW_REVISION with runtime configuration preserved."

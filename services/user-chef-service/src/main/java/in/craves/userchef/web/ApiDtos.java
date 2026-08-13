@@ -98,29 +98,13 @@ public final class ApiDtos {
     ) {
     }
 
-    public record CustomerResolvedAddress(
-        String formattedAddress,
-        String houseNumber,
-        String street,
-        String area,
-        String city,
-        String district,
-        String state,
-        String postalCode,
-        String country,
-        String confidence,
-        boolean preciseHouseNumber
-    ) {
-    }
-
     public record CustomerLocationRecommendationResponse(
         ActiveLocationType locationType,
         BigDecimal latitude,
         BigDecimal longitude,
         CustomerAddressResponse selectedSavedAddress,
         Long distanceMeters,
-        int matchRadiusMeters,
-        CustomerResolvedAddress resolvedAddress
+        int matchRadiusMeters
     ) {
     }
 

@@ -29,7 +29,7 @@ HEALTH=$(curl -fsS --max-time 30 "${SUB_BASE}/actuator/health")
 
 ensure_api() {
   local PATH_VALUE="$1" API_ID="$2" DISPLAY="$3" BACKEND="$4"
-  local EXISTING
+  local EXISTING COUNT SUB_REQUIRED
   EXISTING=$(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='${PATH_VALUE}'].name | [0]" -o tsv)
   if [[ -z "$EXISTING" ]]; then
     az apim api create -g "$RG" --service-name "$APIM" --api-id "$API_ID" --display-name "$DISPLAY" \
@@ -37,18 +37,21 @@ ensure_api() {
     printf '%s' "$API_ID"
     return
   fi
-  local COUNT
   COUNT=$(az apim api list -g "$RG" --service-name "$APIM" --query "length([?path=='${PATH_VALUE}'])" -o tsv)
   [[ "$COUNT" == "1" ]] || fail "Multiple APIM APIs own ${PATH_VALUE}"
+  SUB_REQUIRED=$(az apim api show -g "$RG" --service-name "$APIM" --api-id "$EXISTING" --query subscriptionRequired -o tsv)
+  [[ "${SUB_REQUIRED,,}" == "false" ]] || fail "Existing API ${EXISTING} unexpectedly requires a subscription key"
   az apim api update -g "$RG" --service-name "$APIM" --api-id "$EXISTING" --set serviceUrl="$BACKEND" -o none --only-show-errors
   printf '%s' "$EXISTING"
 }
 
 put_read() {
   local API_ID="$1" BACKEND="$2" OP_ID="$3" TEMPLATE="$4" DISPLAY="$5" PARAMS="$6"
-  local MGMT OPS_JSON EFFECTIVE_ID BODY RENDERED POLICY_BODY POLICY
+  local MGMT OPS_JSON EFFECTIVE_ID BODY RENDERED POLICY_BODY POLICY MATCH_COUNT
   MGMT="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis/${API_ID}"
   OPS_JSON=$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "$API_ID" -o json --only-show-errors)
+  MATCH_COUNT=$(jq -r --arg template "$TEMPLATE" '[.[] | select((.method | ascii_upcase) == "GET" and .urlTemplate == $template)] | length' <<<"$OPS_JSON")
+  (( MATCH_COUNT <= 1 )) || fail "Multiple GET operations own ${TEMPLATE} in ${API_ID}"
   EFFECTIVE_ID=$(jq -r --arg template "$TEMPLATE" '[.[] | select((.method | ascii_upcase) == "GET" and .urlTemplate == $template) | .name][0] // empty' <<<"$OPS_JSON")
   [[ -n "$EFFECTIVE_ID" ]] || EFFECTIVE_ID="$OP_ID"
 

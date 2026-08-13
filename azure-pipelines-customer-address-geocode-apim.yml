@@ -1,0 +1,72 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: apimName
+    type: string
+    default: apim-craves-prodlow-l3ing6
+  - name: apiPath
+    type: string
+    default: api/v1/customer
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - task: AzureCLI@2
+    displayName: Add customer address geocoding operation
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        APIM='${{ parameters.apimName }}'
+        API_PATH='${{ parameters.apiPath }}'
+        OP_ID='reverse-geocode-customer-address'
+        TEMPLATE='/addresses/reverse-geocode'
+
+        mapfile -t API_IDS < <(az apim api list \
+          -g "$RG" \
+          --service-name "$APIM" \
+          --query "[?path=='${API_PATH}'].name" \
+          -o tsv)
+        (( ${#API_IDS[@]} == 1 )) || { echo 'Expected exactly one customer API in APIM.' >&2; exit 1; }
+        API_ID="${API_IDS[0]}"
+
+        EXISTING=$(az apim api operation list \
+          -g "$RG" \
+          --service-name "$APIM" \
+          --api-id "$API_ID" \
+          --query "[?method=='POST' && urlTemplate=='${TEMPLATE}'].name | [0]" \
+          -o tsv)
+
+        if [[ -z "$EXISTING" ]]; then
+          az apim api operation create \
+            -g "$RG" \
+            --service-name "$APIM" \
+            --api-id "$API_ID" \
+            --operation-id "$OP_ID" \
+            --display-name 'Reverse geocode customer address' \
+            --method POST \
+            --url-template "$TEMPLATE" \
+            -o none
+        elif [[ "$EXISTING" != "$OP_ID" ]]; then
+          echo "Existing POST $TEMPLATE belongs to operation $EXISTING; refusing to overwrite it." >&2
+          exit 1
+        fi
+
+        az apim api operation show \
+          -g "$RG" \
+          --service-name "$APIM" \
+          --api-id "$API_ID" \
+          --operation-id "$OP_ID" \
+          -o none
+
+        echo 'SUCCESS: Customer address geocoding operation is present in APIM.'

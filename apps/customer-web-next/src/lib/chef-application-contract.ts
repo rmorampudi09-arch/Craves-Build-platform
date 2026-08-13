@@ -1,13 +1,9 @@
-export type ChefDocumentType =
-  | "APPLICANT_PHOTO"
-  | "GOVERNMENT_ID_FRONT"
-  | "GOVERNMENT_ID_BACK"
-  | "TAX_ID_CARD";
+export type ChefDocumentType = string;
 export type ChefApplicationStatus = "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "REJECTED";
 
 export type ChefProofDocument = {
   id: string;
-  documentType: string;
+  documentType: ChefDocumentType;
   originalFileName: string;
   contentType: string;
   fileSizeBytes: number;

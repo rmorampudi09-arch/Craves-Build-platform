@@ -11,7 +11,7 @@ const EMPTY_FORM: PlanForm = { name: "", description: "", billingPeriod: "WEEKLY
 const SLOT_DEFAULT_TIME: Record<string, string> = { BREAKFAST: "08:30", LUNCH: "12:30", DINNER: "19:30", SNACK: "16:30" };
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-function emptyMeal(period: ChefMealPlanPeriod): MealRow {
+function emptyMeal(): MealRow {
   return { day: "1", mealSlotCode: "LUNCH", serviceTime: "12:30", menuItemId: "", quantity: "1" };
 }
 
@@ -44,7 +44,7 @@ export function ChefSubscriptionPlanManager() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<PlanForm>(EMPTY_FORM);
   const [showNew, setShowNew] = useState(false);
-  const [rows, setRows] = useState<MealRow[]>([emptyMeal("WEEKLY")]);
+  const [rows, setRows] = useState<MealRow[]>([emptyMeal()]);
   const [timezone] = useState("Asia/Kolkata");
   const [leadHours, setLeadHours] = useState("24");
   const [note, setNote] = useState("");
@@ -75,7 +75,7 @@ export function ChefSubscriptionPlanManager() {
   const loadSchedule = useCallback(async (plan: ChefMealPlan) => {
     const response = await fetch(`/api/chef/subscription-plans/${plan.id}/schedule`, { cache: "no-store" });
     if (response.status === 404) {
-      setRows([emptyMeal(plan.billingPeriod)]);
+      setRows([emptyMeal()]);
       setLeadHours("24");
       return;
     }
@@ -90,7 +90,7 @@ export function ChefSubscriptionPlanManager() {
     if (!selected) return;
     setForm({ name: selected.name, description: selected.description ?? "", billingPeriod: selected.billingPeriod, amount: String(selected.amount) });
     void loadSchedule(selected).catch(error => setMessage(error instanceof Error ? error.message : "Meal schedule is unavailable."));
-  }, [selected?.id, loadSchedule]);
+  }, [selected, loadSchedule]);
 
   function setField<K extends keyof PlanForm>(field: K, value: PlanForm[K]) {
     setForm(current => ({ ...current, [field]: value }));
@@ -125,7 +125,7 @@ export function ChefSubscriptionPlanManager() {
       const created = body as ChefMealPlan;
       setPlans(current => [created, ...current]);
       setSelectedId(created.id);
-      setRows([emptyMeal(created.billingPeriod)]);
+      setRows([emptyMeal()]);
       setLeadHours("24");
       setShowNew(false);
       setMessage("Draft created. Now choose the meals you can actually prepare.");
@@ -178,7 +178,6 @@ export function ChefSubscriptionPlanManager() {
     setBusy(true); setMessage("");
     try {
       const save = await fetch(`/api/chef/subscription-plans/${selected.id}/schedule`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const saveBody = await save.json().catch(() => null) as { code?: string } | null;
       if (!save.ok) throw new Error(save.status === 409 ? "One of the selected dishes is no longer active/available or does not belong to your kitchen." : "Meal schedule could not be saved.");
       if (!submitAfterSave) { setMessage("Meal schedule saved as a draft."); return; }
       const submit = await fetch(`/api/chef/subscription-plans/${selected.id}/submit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note: note.trim() || null }) });
@@ -196,7 +195,7 @@ export function ChefSubscriptionPlanManager() {
     setShowNew(true);
     setSelectedId(null);
     setForm(EMPTY_FORM);
-    setRows([emptyMeal("WEEKLY")]);
+    setRows([emptyMeal()]);
     setMessage(availableMenu.length ? "Create the plan first, then add meals from your available menu." : "You need at least one active and available menu item before building a meal plan.");
   }
 
@@ -225,7 +224,7 @@ export function ChefSubscriptionPlanManager() {
         <p className="craves-overline text-primary">Step 1 of 2</p><h2 className="mt-1 font-display text-2xl font-bold text-ink">Plan details</h2><p className="mt-2 text-sm text-muted-foreground">No plan codes or Chef assignment needed. Craves links the plan to your signed-in Chef account automatically.</p>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold text-ink sm:col-span-2">Plan name<input value={form.name} onChange={event => setField("name", event.target.value)} maxLength={160} placeholder="Weekly home lunch plan" className="mt-2 min-h-12 w-full rounded-xl border border-border bg-white px-4" required /></label>
-          <label className="text-sm font-semibold text-ink">Frequency<select value={form.billingPeriod} onChange={event => { const period = event.target.value as ChefMealPlanPeriod; setField("billingPeriod", period); setRows([emptyMeal(period)]); }} className="mt-2 min-h-12 w-full rounded-xl border border-border bg-white px-4"><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option></select></label>
+          <label className="text-sm font-semibold text-ink">Frequency<select value={form.billingPeriod} onChange={event => { const period = event.target.value as ChefMealPlanPeriod; setField("billingPeriod", period); setRows([emptyMeal()]); }} className="mt-2 min-h-12 w-full rounded-xl border border-border bg-white px-4"><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option></select></label>
           <label className="text-sm font-semibold text-ink">Plan price (₹)<input value={form.amount} onChange={event => setField("amount", event.target.value)} type="number" min="0" step="0.01" className="mt-2 min-h-12 w-full rounded-xl border border-border bg-white px-4" required /></label>
           <label className="text-sm font-semibold text-ink sm:col-span-2">Description<textarea value={form.description} onChange={event => setField("description", event.target.value)} maxLength={2000} placeholder="What customers receive and what makes this plan special" className="mt-2 min-h-28 w-full rounded-xl border border-border bg-white p-4" /></label>
         </div>
@@ -259,7 +258,7 @@ export function ChefSubscriptionPlanManager() {
             </div>)}
           </div>
           {editable && <>
-            <div className="mt-4 flex flex-wrap gap-3"><button type="button" disabled={busy || availableMenu.length === 0} onClick={() => setRows(current => [...current, emptyMeal(selected.billingPeriod)])} className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">+ Add meal</button><label className="flex items-center gap-2 text-sm text-muted-foreground">Preparation lead<input type="number" min="1" max="168" value={leadHours} onChange={event => setLeadHours(event.target.value)} className="w-20 rounded-lg border border-border px-2 py-2 text-ink" /> hours</label></div>
+            <div className="mt-4 flex flex-wrap gap-3"><button type="button" disabled={busy || availableMenu.length === 0} onClick={() => setRows(current => [...current, emptyMeal()])} className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">+ Add meal</button><label className="flex items-center gap-2 text-sm text-muted-foreground">Preparation lead<input type="number" min="1" max="168" value={leadHours} onChange={event => setLeadHours(event.target.value)} className="w-20 rounded-lg border border-border px-2 py-2 text-ink" /> hours</label></div>
             <label className="mt-4 block text-sm font-semibold text-ink">Note for Admin (optional)<textarea maxLength={1000} value={note} onChange={event => setNote(event.target.value)} placeholder="Anything the reviewer should know" className="mt-2 min-h-20 w-full rounded-xl border border-border p-3" /></label>
             <div className="mt-4 flex flex-wrap gap-3"><button type="button" disabled={busy || availableMenu.length === 0} onClick={() => void saveSchedule(false)} className="rounded-xl border border-primary px-5 py-2.5 font-semibold text-primary disabled:opacity-50">Save draft</button><button type="button" disabled={busy || availableMenu.length === 0} onClick={() => void saveSchedule(true)} className="btn-primary disabled:opacity-50">Save & submit for approval</button></div>
           </>}

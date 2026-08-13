@@ -63,6 +63,49 @@ public class PostgresSlotCapacityRepository extends CapacityRepository {
         );
     }
 
+    @Override
+    public MenuRuleRow upsertMenuRule(
+        UUID chefIdentityId,
+        UUID menuItemId,
+        int isoDayOfWeek,
+        String mealSlotCode,
+        int maxSubscriptionUnits,
+        boolean salesEnabled,
+        UUID actorIdentityId
+    ) {
+        UUID id = UUID.randomUUID();
+        return jdbcTemplate.query(
+            "INSERT INTO subscription_schema.chef_menu_item_capacity_rule " +
+                "(id, chef_identity_id, menu_item_id, iso_day_of_week, meal_slot_code, max_subscription_units, sales_enabled, " +
+                "version, updated_by_identity_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, now(), now()) " +
+                "ON CONFLICT (chef_identity_id, menu_item_id, iso_day_of_week, meal_slot_code) DO UPDATE SET " +
+                "max_subscription_units = EXCLUDED.max_subscription_units, sales_enabled = EXCLUDED.sales_enabled, " +
+                "version = subscription_schema.chef_menu_item_capacity_rule.version + 1, updated_by_identity_id = EXCLUDED.updated_by_identity_id, " +
+                "updated_at = now() RETURNING *",
+            (rs, rowNum) -> mapMenuRuleRow(rs),
+            id, chefIdentityId, menuItemId, isoDayOfWeek, mealSlotCode,
+            maxSubscriptionUnits, salesEnabled, actorIdentityId
+        ).stream().findFirst().orElseThrow();
+    }
+
+    @Override
+    public Optional<MenuRuleRow> findMenuRule(UUID chefIdentityId, UUID menuItemId, int isoDayOfWeek, String mealSlotCode) {
+        return jdbcTemplate.query(
+            "SELECT * FROM subscription_schema.chef_menu_item_capacity_rule WHERE chef_identity_id = ? AND menu_item_id = ? " +
+                "AND iso_day_of_week = ? AND meal_slot_code = ?",
+            (rs, rowNum) -> mapMenuRuleRow(rs), chefIdentityId, menuItemId, isoDayOfWeek, mealSlotCode
+        ).stream().findFirst();
+    }
+
+    @Override
+    public List<MenuRuleRow> listMenuRuleRows(UUID chefIdentityId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM subscription_schema.chef_menu_item_capacity_rule WHERE chef_identity_id = ? " +
+                "ORDER BY iso_day_of_week, meal_slot_code, menu_item_id",
+            (rs, rowNum) -> mapMenuRuleRow(rs), chefIdentityId
+        );
+    }
+
     private SlotRuleRow mapSlotRuleRow(ResultSet rs) throws SQLException {
         return new SlotRuleRow(
             rs.getObject("id", UUID.class),
@@ -71,6 +114,20 @@ public class PostgresSlotCapacityRepository extends CapacityRepository {
             rs.getString("meal_slot_code"),
             rs.getInt("total_capacity_units"),
             rs.getInt("subscription_capacity_units"),
+            rs.getBoolean("sales_enabled"),
+            rs.getInt("version"),
+            instant(rs, "updated_at")
+        );
+    }
+
+    private MenuRuleRow mapMenuRuleRow(ResultSet rs) throws SQLException {
+        return new MenuRuleRow(
+            rs.getObject("id", UUID.class),
+            rs.getObject("chef_identity_id", UUID.class),
+            rs.getObject("menu_item_id", UUID.class),
+            rs.getInt("iso_day_of_week"),
+            rs.getString("meal_slot_code"),
+            rs.getInt("max_subscription_units"),
             rs.getBoolean("sales_enabled"),
             rs.getInt("version"),
             instant(rs, "updated_at")

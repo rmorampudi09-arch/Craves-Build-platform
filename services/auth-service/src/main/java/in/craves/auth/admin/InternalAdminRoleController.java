@@ -3,6 +3,7 @@ package in.craves.auth.admin;
 import in.craves.auth.admin.InternalAdminRoleRepository.InternalAdminUserResponse;
 import in.craves.auth.admin.InternalAdminRoleRepository.RoleChangeAuditResponse;
 import in.craves.auth.admin.InternalAdminRoleRepository.RoleReplacementResponse;
+import in.craves.auth.admin.StaffRoleGrantService.BatchStaffRoleGrantResponse;
 import in.craves.auth.security.CurrentUser;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -32,13 +33,16 @@ import org.springframework.web.server.ResponseStatusException;
 public class InternalAdminRoleController {
     private final InternalAdminRbacProperties properties;
     private final InternalAdminRoleRepository repository;
+    private final StaffRoleGrantService staffRoleGrantService;
 
     public InternalAdminRoleController(
         InternalAdminRbacProperties properties,
-        InternalAdminRoleRepository repository
+        InternalAdminRoleRepository repository,
+        StaffRoleGrantService staffRoleGrantService
     ) {
         this.properties = properties;
         this.repository = repository;
+        this.staffRoleGrantService = staffRoleGrantService;
     }
 
     @GetMapping("/roles")
@@ -92,6 +96,30 @@ public class InternalAdminRoleController {
         RoleReplacementResponse response = repository.replaceRoles(
             actor.identityId(), actor.tokenVersion(), identityId, request.roles(),
             request.expectedTokenVersion(), normalizeReason(request.reason()), correlationId
+        );
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .header("X-Correlation-ID", correlationId.toString())
+            .body(response);
+    }
+
+    @PutMapping("/staff-role-grants")
+    public ResponseEntity<BatchStaffRoleGrantResponse> grantStaffRoles(
+        Authentication authentication,
+        @Valid @RequestBody StaffRoleGrantRequest request,
+        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader
+    ) {
+        requireEnabled();
+        CurrentUser actor = requirePlatformAdmin(authentication);
+        UUID correlationId = correlationId(correlationHeader);
+        BatchStaffRoleGrantResponse response = staffRoleGrantService.grant(
+            actor.identityId(),
+            actor.tokenVersion(),
+            request.phoneNumbers(),
+            request.grantChef(),
+            request.internalRoles(),
+            normalizeReason(request.reason()),
+            correlationId
         );
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
@@ -199,6 +227,14 @@ public class InternalAdminRoleController {
     public record RoleReplacementRequest(
         @NotNull @Size(max = 9) Set<@NotBlank String> roles,
         @Min(1) long expectedTokenVersion,
+        @NotBlank @Size(min = 10, max = 500) String reason
+    ) {
+    }
+
+    public record StaffRoleGrantRequest(
+        @NotNull @Size(min = 1, max = 20) Set<@NotBlank String> phoneNumbers,
+        boolean grantChef,
+        @NotNull @Size(max = 9) Set<@NotBlank String> internalRoles,
         @NotBlank @Size(min = 10, max = 500) String reason
     ) {
     }

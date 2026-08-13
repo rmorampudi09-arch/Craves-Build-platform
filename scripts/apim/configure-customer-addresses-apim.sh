@@ -23,7 +23,16 @@ LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
 READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
 RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
 [[ -n "$FQDN" && "$LATEST" == "$READY" && "$RUNNING" == "Running" ]] || fail "User/Chef Service is not ready"
-curl -sS --fail --max-time 30 "https://$FQDN/actuator/health" >/dev/null
+curl \
+  --silent \
+  --show-error \
+  --fail \
+  --retry 6 \
+  --retry-delay 5 \
+  --retry-all-errors \
+  --max-time 20 \
+  "https://$FQDN/actuator/health/readiness" \
+  >/dev/null
 
 mapfile -t API_IDS < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='${API_PATH}'].name" -o tsv)
 (( ${#API_IDS[@]} <= 1 )) || fail "Multiple APIM APIs own $API_PATH"

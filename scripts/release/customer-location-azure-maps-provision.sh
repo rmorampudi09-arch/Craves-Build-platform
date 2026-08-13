@@ -5,6 +5,7 @@ set -euo pipefail
 : "${CRAVES_EXPECTED_SUBSCRIPTION_ID:=4f897b61-9b52-44b4-8cf1-bdac281cc1aa}"
 : "${CRAVES_RESOURCE_GROUP:=rg-craves-prodlow-centralindia}"
 : "${CRAVES_CUSTOMER_WEB_APP:=ca-craves-web-prodlow}"
+: "${CRAVES_USER_CHEF_APP:=ca-craves-user-chef-service-prod}"
 : "${CRAVES_AZURE_MAPS_ACCOUNT:=maps-craves-prodlow-l3ing6}"
 : "${CRAVES_AZURE_MAPS_LOCATION:=global}"
 
@@ -36,31 +37,38 @@ RG_LOCATION="$(az group show \
 MAPS_LOCATION="$CRAVES_AZURE_MAPS_LOCATION"
 [[ -n "$MAPS_LOCATION" ]] || fail "Azure Maps account location could not be resolved"
 
-APP_JSON="$(az containerapp show \
-  --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
-  --resource-group "$CRAVES_RESOURCE_GROUP" \
-  --name "$CRAVES_CUSTOMER_WEB_APP" \
-  -o json \
-  --only-show-errors)"
-
-WEB_PRINCIPAL_ID="$(jq -r '.identity.principalId // ""' <<<"$APP_JSON")"
-if [[ -z "$WEB_PRINCIPAL_ID" ]]; then
-  echo "Customer web has no system-assigned managed identity. Enabling it now."
-  az containerapp identity assign \
+ensure_system_identity() {
+  local app_name="$1"
+  local principal_id
+  principal_id="$(az containerapp show \
     --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
     --resource-group "$CRAVES_RESOURCE_GROUP" \
-    --name "$CRAVES_CUSTOMER_WEB_APP" \
-    --system-assigned \
-    --only-show-errors >/dev/null
-  WEB_PRINCIPAL_ID="$(az containerapp show \
-    --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
-    --resource-group "$CRAVES_RESOURCE_GROUP" \
-    --name "$CRAVES_CUSTOMER_WEB_APP" \
+    --name "$app_name" \
     --query identity.principalId \
     -o tsv \
     --only-show-errors)"
-fi
-[[ -n "$WEB_PRINCIPAL_ID" ]] || fail "Customer web managed identity principal ID could not be resolved"
+  if [[ -z "$principal_id" ]]; then
+    echo "$app_name has no system-assigned managed identity. Enabling it now." >&2
+    az containerapp identity assign \
+      --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
+      --resource-group "$CRAVES_RESOURCE_GROUP" \
+      --name "$app_name" \
+      --system-assigned \
+      --only-show-errors >/dev/null
+    principal_id="$(az containerapp show \
+      --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
+      --resource-group "$CRAVES_RESOURCE_GROUP" \
+      --name "$app_name" \
+      --query identity.principalId \
+      -o tsv \
+      --only-show-errors)"
+  fi
+  [[ -n "$principal_id" ]] || fail "$app_name managed identity principal ID could not be resolved"
+  printf '%s\n' "$principal_id"
+}
+
+WEB_PRINCIPAL_ID="$(ensure_system_identity "$CRAVES_CUSTOMER_WEB_APP")"
+USER_CHEF_PRINCIPAL_ID="$(ensure_system_identity "$CRAVES_USER_CHEF_APP")"
 
 if az maps account show \
   --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
@@ -115,69 +123,82 @@ MAPS_CLIENT_ID="$(az maps account show \
   --query properties.uniqueId -o tsv --only-show-errors)"
 [[ -n "$MAPS_ID" && -n "$MAPS_CLIENT_ID" ]] || fail "Azure Maps account ID/unique client ID could not be resolved"
 
-ROLE_EXISTS="$(az role assignment list \
-  --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
-  --assignee-object-id "$WEB_PRINCIPAL_ID" \
-  --scope "$MAPS_ID" \
-  --query "[?roleDefinitionName=='Azure Maps Data Reader'] | length(@)" \
-  -o tsv \
-  --only-show-errors)"
-if [[ "$ROLE_EXISTS" == "0" ]]; then
-  echo "Granting customer-web managed identity Azure Maps Data Reader at the Maps account scope."
-  az role assignment create \
+grant_maps_reader() {
+  local principal_id="$1"
+  local app_name="$2"
+  local role_count
+  role_count="$(az role assignment list \
     --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
-    --assignee-object-id "$WEB_PRINCIPAL_ID" \
-    --assignee-principal-type ServicePrincipal \
-    --role "Azure Maps Data Reader" \
-    --scope "$MAPS_ID" \
-    --only-show-errors >/dev/null
-else
-  echo "Azure Maps Data Reader role assignment already exists."
-fi
-
-for attempt in $(seq 1 12); do
-  ROLE_COUNT="$(az role assignment list \
-    --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
-    --assignee-object-id "$WEB_PRINCIPAL_ID" \
+    --assignee-object-id "$principal_id" \
     --scope "$MAPS_ID" \
     --query "[?roleDefinitionName=='Azure Maps Data Reader'] | length(@)" \
     -o tsv \
-    --only-show-errors || true)"
-  [[ "$ROLE_COUNT" != "0" && -n "$ROLE_COUNT" ]] && break
-  [[ "$attempt" -lt 12 ]] && sleep 10
-done
-[[ "${ROLE_COUNT:-0}" != "0" ]] || fail "Azure Maps Data Reader role assignment did not become visible"
+    --only-show-errors)"
+  if [[ "$role_count" == "0" ]]; then
+    echo "Granting $app_name managed identity Azure Maps Data Reader at the Maps account scope."
+    az role assignment create \
+      --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
+      --assignee-object-id "$principal_id" \
+      --assignee-principal-type ServicePrincipal \
+      --role "Azure Maps Data Reader" \
+      --scope "$MAPS_ID" \
+      --only-show-errors >/dev/null
+  fi
 
-echo "Binding non-secret Azure Maps configuration to customer web Container App."
-az containerapp update \
-  --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
-  --resource-group "$CRAVES_RESOURCE_GROUP" \
-  --name "$CRAVES_CUSTOMER_WEB_APP" \
-  --set-env-vars \
-    "AZURE_MAPS_CLIENT_ID=$MAPS_CLIENT_ID" \
-    "AZURE_MAPS_ENDPOINT=https://atlas.microsoft.com" \
-  --only-show-errors >/dev/null
+  for attempt in $(seq 1 12); do
+    role_count="$(az role assignment list \
+      --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
+      --assignee-object-id "$principal_id" \
+      --scope "$MAPS_ID" \
+      --query "[?roleDefinitionName=='Azure Maps Data Reader'] | length(@)" \
+      -o tsv \
+      --only-show-errors || true)"
+    [[ "$role_count" != "0" && -n "$role_count" ]] && return
+    [[ "$attempt" -lt 12 ]] && sleep 10
+  done
+  fail "Azure Maps Data Reader role assignment for $app_name did not become visible"
+}
 
-for attempt in $(seq 1 40); do
-  APP_JSON="$(az containerapp show \
+grant_maps_reader "$WEB_PRINCIPAL_ID" "$CRAVES_CUSTOMER_WEB_APP"
+grant_maps_reader "$USER_CHEF_PRINCIPAL_ID" "$CRAVES_USER_CHEF_APP"
+
+bind_maps_config() {
+  local app_name="$1"
+  local app_json latest_revision latest_ready configured_client_id configured_endpoint
+  echo "Binding non-secret Azure Maps configuration to $app_name."
+  az containerapp update \
     --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
     --resource-group "$CRAVES_RESOURCE_GROUP" \
-    --name "$CRAVES_CUSTOMER_WEB_APP" \
-    -o json --only-show-errors)"
-  LATEST_REVISION="$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")"
-  LATEST_READY_REVISION="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")"
-  if [[ -n "$LATEST_REVISION" && "$LATEST_READY_REVISION" == "$LATEST_REVISION" ]]; then
-    break
-  fi
-  [[ "$attempt" -lt 40 ]] && sleep 10
-done
-[[ -n "${LATEST_REVISION:-}" && "$LATEST_READY_REVISION" == "$LATEST_REVISION" ]] || fail \
-  "Customer web did not report the new revision Ready after Azure Maps configuration"
+    --name "$app_name" \
+    --set-env-vars \
+      "AZURE_MAPS_CLIENT_ID=$MAPS_CLIENT_ID" \
+      "AZURE_MAPS_ENDPOINT=https://atlas.microsoft.com" \
+    --only-show-errors >/dev/null
 
-CONFIGURED_CLIENT_ID="$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "AZURE_MAPS_CLIENT_ID") | .value][0] // ""' <<<"$APP_JSON")"
-CONFIGURED_ENDPOINT="$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "AZURE_MAPS_ENDPOINT") | .value][0] // ""' <<<"$APP_JSON")"
-[[ "$CONFIGURED_CLIENT_ID" == "$MAPS_CLIENT_ID" ]] || fail "AZURE_MAPS_CLIENT_ID was not bound correctly"
-[[ "$CONFIGURED_ENDPOINT" == "https://atlas.microsoft.com" ]] || fail "AZURE_MAPS_ENDPOINT was not bound correctly"
+  for attempt in $(seq 1 40); do
+    app_json="$(az containerapp show \
+      --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
+      --resource-group "$CRAVES_RESOURCE_GROUP" \
+      --name "$app_name" \
+      -o json --only-show-errors)"
+    latest_revision="$(jq -r '.properties.latestRevisionName // ""' <<<"$app_json")"
+    latest_ready="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$app_json")"
+    if [[ -n "$latest_revision" && "$latest_ready" == "$latest_revision" ]]; then
+      break
+    fi
+    [[ "$attempt" -lt 40 ]] && sleep 10
+  done
+  [[ -n "${latest_revision:-}" && "$latest_ready" == "$latest_revision" ]] || fail \
+    "$app_name did not report the Azure Maps configuration revision Ready"
+
+  configured_client_id="$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "AZURE_MAPS_CLIENT_ID") | .value][0] // ""' <<<"$app_json")"
+  configured_endpoint="$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "AZURE_MAPS_ENDPOINT") | .value][0] // ""' <<<"$app_json")"
+  [[ "$configured_client_id" == "$MAPS_CLIENT_ID" ]] || fail "$app_name AZURE_MAPS_CLIENT_ID was not bound correctly"
+  [[ "$configured_endpoint" == "https://atlas.microsoft.com" ]] || fail "$app_name AZURE_MAPS_ENDPOINT was not bound correctly"
+}
+
+bind_maps_config "$CRAVES_CUSTOMER_WEB_APP"
+bind_maps_config "$CRAVES_USER_CHEF_APP"
 
 LOCAL_AUTH_DISABLED="$(az maps account show \
   --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
@@ -193,7 +214,7 @@ Maps region: $MAPS_LOCATION
 Maps kind/SKU: Gen2/G2
 Shared-key auth: disabled
 Customer web managed identity: $WEB_PRINCIPAL_ID
+User-Chef managed identity: $USER_CHEF_PRINCIPAL_ID
 Role: Azure Maps Data Reader
-Container App revision: $LATEST_READY_REVISION
-Browser-exposed map credential: none
+Browser/mobile-exposed map credential: none
 EOF

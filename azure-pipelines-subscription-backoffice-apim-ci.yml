@@ -10,6 +10,7 @@ steps:
       set -euo pipefail
       bash -n scripts/apim/configure-subscription-backoffice-apim.sh
       bash -n scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
+      bash -n scripts/apim/configure-chef-subscription-admin-read-apim.sh
       bash -n scripts/apim/status-subscription-backoffice-apim.sh
       bash -n scripts/apim/rollback-subscription-backoffice-apim.sh
       bash -n scripts/release/validate-chef-owned-subscription-plans.sh
@@ -28,11 +29,14 @@ steps:
       set -euo pipefail
       grep -q 'CONFIRM_APIM_WRITE' scripts/apim/configure-subscription-backoffice-apim.sh
       grep -q 'CONFIRM_APIM_WRITE' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
+      grep -q 'CONFIRM_APIM_WRITE' scripts/apim/configure-chef-subscription-admin-read-apim.sh
       grep -q 'CONFIRM_APIM_ROLLBACK' scripts/apim/rollback-subscription-backoffice-apim.sh
       grep -q 'Multiple APIM APIs own' scripts/apim/configure-subscription-backoffice-apim.sh
       grep -q 'Multiple APIM APIs own' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
+      grep -q 'Multiple APIM APIs own' scripts/apim/configure-chef-subscription-admin-read-apim.sh
       grep -q 'subscriptionRequired' scripts/apim/configure-subscription-backoffice-apim.sh
       grep -q 'subscriptionRequired' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
+      grep -q 'subscriptionRequired' scripts/apim/configure-chef-subscription-admin-read-apim.sh
       grep -q 'delete_operation_by_route.*POST.*"/"' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
       grep -q 'delete_operation_by_route.*PUT.*schedule' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
       grep -q 'Authorization' infra/apim/subscription-backoffice/authenticated-policy.xml
@@ -44,6 +48,7 @@ steps:
         infra/apim/subscription-backoffice \
         scripts/apim/configure-subscription-backoffice-apim.sh \
         scripts/apim/configure-chef-subscription-plan-workflow-apim.sh \
+        scripts/apim/configure-chef-subscription-admin-read-apim.sh \
         scripts/apim/status-subscription-backoffice-apim.sh \
         scripts/apim/rollback-subscription-backoffice-apim.sh; then
         echo 'ERROR: Potential credential material found in APIM assets.' >&2

@@ -137,6 +137,7 @@ put_operation "get-customer-address" "GET" "/addresses/{addressId}" "Get custome
 put_operation "update-customer-address" "PUT" "/addresses/{addressId}" "Update customer address" "$ADDRESS_PARAM" 200
 put_operation "delete-customer-address" "DELETE" "/addresses/{addressId}" "Delete customer address" "$ADDRESS_PARAM" 204
 put_operation "recommend-customer-location" "GET" "/addresses/recommendation" "Recommend customer location" '[]' 200
+put_operation "reverse-geocode-customer-address" "POST" "/addresses/reverse-geocode" "Reverse geocode customer address" '[]' 200
 
 for ID in "${CONFIGURED_OPERATION_IDS[@]}"; do
   az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none

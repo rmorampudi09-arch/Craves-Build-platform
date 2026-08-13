@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -44,6 +45,11 @@ public final class PlanScheduleModels {
     public record ScheduleItemResponse(
         UUID id,
         UUID menuItemId,
+        String menuItemName,
+        String menuItemCategory,
+        String menuItemFoodType,
+        BigDecimal menuItemPrice,
+        String menuItemCurrency,
         int quantity,
         Integer isoDayOfWeek,
         Integer dayOfMonth,
@@ -70,6 +76,11 @@ public final class PlanScheduleModels {
 
     public record PublicScheduleItemResponse(
         UUID menuItemId,
+        String menuItemName,
+        String menuItemCategory,
+        String menuItemFoodType,
+        BigDecimal menuItemPrice,
+        String menuItemCurrency,
         int quantity,
         Integer isoDayOfWeek,
         Integer dayOfMonth,

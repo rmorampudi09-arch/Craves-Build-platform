@@ -22,7 +22,7 @@ fi
 
 APPROVED=(
   get-internal-admin-role-catalog get-internal-admin-users get-internal-admin-user
-  put-internal-admin-user-roles get-internal-admin-role-changes
+  put-internal-admin-user-roles put-internal-admin-staff-role-grants get-internal-admin-role-changes
 )
 for ID in "${APPROVED[@]}"; do
   if az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none 2>/dev/null; then

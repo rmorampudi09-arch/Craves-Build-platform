@@ -1,5 +1,6 @@
 package in.craves.subscription.schedule;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -13,7 +14,7 @@ public class PlanCatalogClient {
     private final RestClient restClient;
 
     public PlanCatalogClient(
-        @Value("${craves.catalog.base-url:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}") String baseUrl,
+        @Value("${craves.catalog.base-url:https://apim-craves-prodlowl3ing6.azure-api.net/api/v1/catalog}") String baseUrl,
         RestClient.Builder builder
     ) {
         this.restClient = builder.baseUrl(baseUrl).build();
@@ -25,7 +26,8 @@ public class PlanCatalogClient {
                 .uri("/menu-items/{menuItemId}", menuItemId)
                 .retrieve()
                 .body(MenuItem.class);
-            if (item == null || item.id() == null || item.kitchenId() == null) {
+            if (item == null || item.id() == null || item.kitchenId() == null || item.itemName() == null
+                || item.itemName().isBlank() || item.price() == null || item.currency() == null || item.currency().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Catalog returned an incomplete menu item");
             }
             if (!item.available() || !"ACTIVE".equalsIgnoreCase(item.status())) {
@@ -46,7 +48,17 @@ public class PlanCatalogClient {
         }
     }
 
-    public record MenuItem(UUID id, UUID kitchenId, boolean available, String status) {
+    public record MenuItem(
+        UUID id,
+        UUID kitchenId,
+        String itemName,
+        String category,
+        String foodType,
+        BigDecimal price,
+        String currency,
+        boolean available,
+        String status
+    ) {
     }
 
     public record Kitchen(UUID id, UUID identityId, String status) {

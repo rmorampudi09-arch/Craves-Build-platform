@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MIGRATION="$ROOT/services/auth-service/src/main/resources/db/migration/V6__internal_admin_rbac.sql"
 CONTROLLER="$ROOT/services/auth-service/src/main/java/in/craves/auth/admin/InternalAdminRoleController.java"
 REPOSITORY="$ROOT/services/auth-service/src/main/java/in/craves/auth/admin/InternalAdminRoleRepository.java"
+STAFF_GRANT_SERVICE="$ROOT/services/auth-service/src/main/java/in/craves/auth/admin/StaffRoleGrantService.java"
 ROLE_CATALOG="$ROOT/services/auth-service/src/main/java/in/craves/auth/admin/InternalAdminRoles.java"
 APIM_POLICY="$ROOT/infra/apim/internal-admin-rbac/authenticated-policy.xml"
 APIM_CONFIG="$ROOT/scripts/apim/configure-internal-admin-rbac-apim.sh"
@@ -16,7 +17,7 @@ fail() {
   exit 1
 }
 
-for file in "$MIGRATION" "$CONTROLLER" "$REPOSITORY" "$ROLE_CATALOG"; do
+for file in "$MIGRATION" "$CONTROLLER" "$REPOSITORY" "$STAFF_GRANT_SERVICE" "$ROLE_CATALOG"; do
   [[ -s "$file" ]] || fail "missing internal-admin RBAC file: $file"
 done
 
@@ -49,6 +50,20 @@ grep -Fq 'token_version = token_version + 1' "$REPOSITORY" \
 grep -Fq 'expectedTargetTokenVersion' "$REPOSITORY" \
   || fail 'stale role replacement protection is missing'
 
+grep -Fq '@PutMapping("/staff-role-grants")' "$CONTROLLER" \
+  || fail 'platform-admin staff-role grant endpoint is missing'
+grep -Fq 'pg_advisory_xact_lock' "$STAFF_GRANT_SERVICE" \
+  || fail 'staff role grants are not serialized with administrator role changes'
+grep -Fq "'STAFF_ROLES_GRANTED'" "$STAFF_GRANT_SERVICE" \
+  || fail 'staff role grant auth audit is missing'
+grep -Fq "'STAFF_ROLE_GRANT'" "$STAFF_GRANT_SERVICE" \
+  || fail 'staff role grants do not revoke refresh sessions'
+grep -Fq 'token_version = token_version + 1' "$STAFF_GRANT_SERVICE" \
+  || fail 'staff role grants do not invalidate access-token versions'
+if grep -Fq 'DELETE FROM auth_identity_role' "$STAFF_GRANT_SERVICE"; then
+  fail 'staff role grant endpoint must remain grant-only and non-destructive'
+fi
+
 bash -n "$APIM_CONFIG"
 bash -n "$APIM_STATUS"
 bash -n "$APIM_ROLLBACK"
@@ -59,6 +74,9 @@ ET.parse(sys.argv[1])
 PY
 grep -Fq 'CONFIRM_APIM_WRITE' "$APIM_CONFIG" || fail 'APIM write confirmation is missing'
 grep -Fq 'put-internal-admin-user-roles' "$APIM_CONFIG" || fail 'APIM role mutation is missing'
+grep -Fq 'put-internal-admin-staff-role-grants' "$APIM_CONFIG" || fail 'APIM staff role grant operation is missing'
+grep -Fq 'put-internal-admin-staff-role-grants' "$APIM_STATUS" || fail 'APIM staff role grant status check is missing'
+grep -Fq 'put-internal-admin-staff-role-grants' "$APIM_ROLLBACK" || fail 'APIM staff role grant rollback coverage is missing'
 grep -Fq 'EXPECTED_METHOD' "$APIM_CONFIG" || fail 'APIM method read-back is missing'
 grep -Fq 'EXPECTED_TEMPLATE' "$APIM_CONFIG" || fail 'APIM path read-back is missing'
 grep -Fq 'Bearer' "$APIM_POLICY" || fail 'APIM Bearer precheck is missing'
@@ -109,7 +127,7 @@ if grep -R -n -F 'hasRole("ADMIN")' \
 fi
 
 if grep -R -En 'apps/customer-web|apps/mobile|NEXT_PUBLIC|React Native' \
-  "$CONTROLLER" "$REPOSITORY" "$ROLE_CATALOG" "$MIGRATION"; then
+  "$CONTROLLER" "$REPOSITORY" "$STAFF_GRANT_SERVICE" "$ROLE_CATALOG" "$MIGRATION"; then
   fail 'backend RBAC module contains web or mobile scope'
 fi
 

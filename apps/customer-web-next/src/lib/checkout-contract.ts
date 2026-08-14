@@ -216,7 +216,7 @@ function parseTaxes(value: unknown): CheckoutTaxBreakdown | null {
     raw.deliveryTaxIncluded,
     raw.taxAmountAddedToCheckout,
     raw.totalTaxAmount,
-  ].map(nonNegativeNumber);
+  ].map((entry) => nonNegativeNumber(entry));
   if (!profileVersion || values.some((entry) => entry === null)) return null;
   return {
     profileVersion,
@@ -246,7 +246,7 @@ function parseDelivery(value: unknown): KitchenDeliveryQuote | null {
     raw.extraPerKm,
     raw.extraDistanceFee,
     raw.deliveryFee,
-  ].map(nonNegativeNumber);
+  ].map((entry) => nonNegativeNumber(entry));
   if (
     !kitchenId ||
     !RESOURCE_UUID.test(kitchenId) ||

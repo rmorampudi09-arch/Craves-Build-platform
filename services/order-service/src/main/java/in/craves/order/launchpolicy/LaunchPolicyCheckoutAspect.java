@@ -41,7 +41,7 @@ public class LaunchPolicyCheckoutAspect {
         this.catalogClient = catalogClient;
     }
 
-    @Around("execution(* in.craves.order.service.OrderService.checkout(..)) && args(principal, request)")
+    @Around("execution(* in.craves.order.pricing.CheckoutPricingService.checkout(..)) && args(principal, request)")
     public Object enforce(ProceedingJoinPoint joinPoint, CravesPrincipal principal, CheckoutRequest request) throws Throwable {
         if (principal == null || request == null || request.deliveryAddressId() == null) {
             return joinPoint.proceed();
@@ -69,8 +69,7 @@ public class LaunchPolicyCheckoutAspect {
         }
 
         CustomerAddress dropoff = customerAddressClient.getActiveOwnedAddress(
-            principal.identityId(),
-            request.deliveryAddressId()
+            principal.identityId(), request.deliveryAddressId()
         );
         requireCoordinates(dropoff.latitude(), dropoff.longitude(), "DELIVERY_ADDRESS_COORDINATES_REQUIRED");
 

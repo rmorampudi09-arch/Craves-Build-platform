@@ -1,15 +1,19 @@
 # Craves Documentation Suite
 
-Evidence snapshot: **14 August 2026**, repository **rmorampudi09-arch/Craves-Build-platform**, branch **main**, commit `3225f7fa531a6b07185fb5e034f7930f8bd8b571`.
+**Edition 2.0 - professional language and flow-diagram revision**
 
-Start with `01-overview`; engineering folders `02`-`07` cover implementation and operations; `08-features` catalogs product capability; `09-knowledge-base` is for support; `10-confidential-internal` is internal-only; `11-investor-overview` is for diligence.
+Evidence date: **14 August 2026**  
+Repository: **rmorampudi09-arch/Craves-Build-platform**  
+Product evidence snapshot: **main @ 3225f7fa531a6b07185fb5e034f7930f8bd8b571**
 
-## Evidence vocabulary
+This edition uses the user-approved Craves logo only. It uses straightforward professional headings such as Summary, Technical explanation, Process flow, Common issues and Validation. Flowcharts are included where a multi-step process benefits from a visual explanation.
 
-- **Implemented on main** - direct module/README/commit evidence exists.
-- **Legacy/reference** - older implementation is retained but not assumed to be the preferred runtime.
-- **Milestone foundation** - handover/contract/CI groundwork exists without complete-runtime proof.
-- **Repository gap** - a referenced artifact/value could not be verified and is not invented.
+## Status language
+
+- **Current implementation** - direct repository evidence supports the capability.
+- **Foundation / partial** - useful groundwork exists, but complete runtime proof is not established.
+- **Legacy / reference** - older source is retained but is not assumed to be the preferred runtime.
+- **Needs source confirmation** - a referenced artifact or exact value could not be verified; it is not invented.
 
 ## Document index
 
@@ -39,10 +43,10 @@ Start with `01-overview`; engineering folders `02`-`07` cover implementation and
 - [`10-confidential-internal/known-limitations-and-risks.pdf`](10-confidential-internal/known-limitations-and-risks.pdf) - Internal evidence-based technical/product risk register.
 - [`11-investor-overview/investor-facing-product-and-tech-summary.pdf`](11-investor-overview/investor-facing-product-and-tech-summary.pdf) - Narrative diligence summary of product depth, technology and maturity.
 
-## Security
+## Safety
 
-The suite contains no credential values, private keys, passwords, access tokens or payment secrets.
+The PDFs do not include credential values, OTPs, access tokens, refresh tokens, private keys, payment secrets or banking credentials.
 
 ## Maintenance
 
-Regenerate after major architecture, API, provider, security, deployment or milestone changes. Correct repository gaps when authoritative source artifacts are restored.
+Regenerate after major product, API, security, provider, deployment or milestone changes. Update the source evidence rather than converting an unresolved gap into an assumption.

@@ -34,7 +34,7 @@ steps:
       npm run lint
       npm run typecheck
       npm run test
-    displayName: Verify Cashfree customer-web contracts and legal routes
+    displayName: Verify Cashfree customer-web contracts and public routes
 
   - bash: |
       set -euo pipefail
@@ -46,9 +46,13 @@ steps:
       checkout=services/integration-service/src/main/java/in/craves/integration/service/PaymentService.java
       subscription=services/integration-service/src/main/java/in/craves/integration/subscription/SubscriptionPaymentService.java
       activation=azure-pipelines-cashfree-production-activation.yml
+      merchant_identity=azure-pipelines-cashfree-customer-web-merchant-identity.yml
       webhook_policy=infra/apim/customer-payments/cashfree-webhook-policy.xml
       webhook_script=scripts/apim/configure-cashfree-webhook-apim.sh
       webhook_pipeline=azure-pipelines-cashfree-webhook-apim.yml
+      web_readiness=apps/customer-web-next/src/app/api/readiness/cashfree/route.ts
+      contact=apps/customer-web-next/src/app/contact/page.tsx
+      pricing=apps/customer-web-next/src/app/products-pricing/page.tsx
 
       grep -Fq '${CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED:false}' "$properties"
       grep -Fq '${CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED:false}' "$properties"
@@ -71,19 +75,35 @@ steps:
       grep -Fq 'Customer phone must be a valid 10-digit Indian mobile number' "$safety"
       grep -Fq 'Payment return URL must use the configured Craves domain' "$safety"
 
-      test -f apps/customer-web-next/src/app/contact/page.tsx
+      test -f "$contact"
       test -f apps/customer-web-next/src/app/terms/page.tsx
       test -f apps/customer-web-next/src/app/refunds-cancellations/page.tsx
       test -f apps/customer-web-next/src/app/privacy/page.tsx
       test -f apps/customer-web-next/src/app/security/page.tsx
-      test -f apps/customer-web-next/src/app/api/readiness/cashfree/route.ts
+      test -f "$pricing"
+      test -f "$web_readiness"
       grep -Fq 'data-craves-policy-status={policyStatus}' \
         apps/customer-web-next/src/components/legal/PublicPolicyPage.tsx
-      grep -Fq 'cashfreeMode === "production"' \
-        apps/customer-web-next/src/app/api/readiness/cashfree/route.ts
+      grep -Fq 'CRAVES_PUBLIC_SUPPORT_PHONE' "$contact"
+      grep -Fq 'CRAVES_REGISTERED_BUSINESS_NAME' "$contact"
+      grep -Fq 'data-craves-live-pricing-status' "$pricing"
+      grep -Fq '/catalog/kitchens?city=Hyderabad' "$pricing"
+      grep -Fq 'item.currency === "INR"' "$pricing"
+      grep -Fq 'cashfreeMode === "production"' "$web_readiness"
+      grep -Fq 'publicSupportPhoneConfigured' "$web_readiness"
+      grep -Fq 'registeredBusinessNameConfigured' "$web_readiness"
+      grep -Fq '/products-pricing' "$web_readiness"
+
       grep -Fq '/api/readiness/cashfree' "$activation"
       grep -Fq 'Customer web is not built in Cashfree production mode.' "$activation"
       grep -Fq 'data-craves-policy-status="approved"' "$activation"
+      grep -Fq 'data-craves-live-pricing-status="ready"' "$activation"
+      grep -Fq 'Run the Cashfree webhook APIM pipeline first.' "$activation"
+
+      test -f "$merchant_identity"
+      grep -Fq 'CRAVES_PUBLIC_SUPPORT_PHONE_INPUT' "$merchant_identity"
+      grep -Fq 'CRAVES_REGISTERED_BUSINESS_NAME_INPUT' "$merchant_identity"
+      grep -Fq "azureSubscription: 'Craves-Dev-Service-Connection'" "$merchant_identity"
 
       test -f "$webhook_policy"
       test -f "$webhook_script"
@@ -97,4 +117,4 @@ steps:
       grep -Fq 'urlTemplate": "/webhooks/cashfree"' "$webhook_script"
       grep -Fq 'expected HTTP 400 for missing provider headers' "$webhook_script"
       grep -Fq "azureSubscription: 'Craves-Dev-Service-Connection'" "$webhook_pipeline"
-    displayName: Verify production payment, customer-web, policy and APIM safety guards
+    displayName: Verify production payment, public web, merchant identity and APIM safety guards

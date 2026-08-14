@@ -45,7 +45,7 @@ put_operation() {
   local BODY RENDERED POLICY_BODY
   BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
   cat >"$BODY" <<JSON
-{"properties":{"displayName":"$DISPLAY","method":"$METHOD","urlTemplate":"$TEMPLATE","templateParameters":$PARAMS,"responses":[{"statusCode":200,"description":"Customer checkout response"},{"statusCode":401,"description":"Authentication required"},{"statusCode":400,"description":"Checkout validation failed"},{"statusCode":404,"description":"Checkout not found"}]}}
+{"properties":{"displayName":"$DISPLAY","method":"$METHOD","urlTemplate":"$TEMPLATE","templateParameters":$PARAMS,"responses":[{"statusCode":200,"description":"Customer checkout response"},{"statusCode":400,"description":"Checkout validation failed"},{"statusCode":401,"description":"Authentication required"},{"statusCode":404,"description":"Checkout not found"},{"statusCode":409,"description":"Pricing quote stale or changed"},{"statusCode":503,"description":"Delivery route service unavailable"}]}}
 JSON
   az rest --method put --url "${MGMT}/operations/${ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
   sed "s|__CHECKOUT_BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
@@ -54,12 +54,13 @@ JSON
   rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
 }
 
+put_operation "quote-customer-checkout" "POST" "/quote" "Calculate customer checkout price" '[]'
 put_operation "create-customer-checkout" "POST" "/" "Create customer checkout" '[]'
 put_operation "get-customer-checkout" "GET" "/{checkoutId}" "Get customer checkout" '[{"name":"checkoutId","type":"string","required":true}]'
-for ID in create-customer-checkout get-customer-checkout; do
+for ID in quote-customer-checkout create-customer-checkout get-customer-checkout; do
   az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none
   POLICY=$(az rest --method get --url "${MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
   [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Authorization"* && "$POLICY" == *"no-store"* ]] || fail "Operation $ID policy verification failed"
 done
 
-echo "SUCCESS: Customer checkout operations configured on APIM API $API_ID."
+echo "SUCCESS: Customer checkout quote/create/get operations configured on APIM API $API_ID."

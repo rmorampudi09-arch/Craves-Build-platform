@@ -14,6 +14,9 @@ parameters:
   - name: imageTag
     type: string
     default: $(Build.BuildId)
+  - name: deliveryBaseFeeInr
+    type: string
+    default: '45.00'
 
 variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
@@ -40,6 +43,52 @@ steps:
     displayName: Maven build and tests
 
   - task: AzureCLI@2
+    displayName: Enforce customer delivery base fee runtime configuration
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        APP='${{ parameters.containerAppName }}'
+        BASE_FEE='${{ parameters.deliveryBaseFeeInr }}'
+
+        [[ "$BASE_FEE" =~ ^[0-9]+([.][0-9]{1,2})?$ ]] || {
+          echo "ERROR: deliveryBaseFeeInr must be a non-negative INR decimal amount." >&2
+          exit 1
+        }
+
+        az containerapp update \
+          --resource-group "$RG" \
+          --name "$APP" \
+          --set-env-vars "CRAVES_DELIVERY_BASE_FEE=$BASE_FEE" \
+          --only-show-errors \
+          --output none
+
+        for ATTEMPT in $(seq 1 40); do
+          APP_JSON=$(az containerapp show \
+            --resource-group "$RG" \
+            --name "$APP" \
+            --output json \
+            --only-show-errors)
+          LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
+          READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
+          CONFIGURED=$(jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_DELIVERY_BASE_FEE") | .value][0] // ""' <<<"$APP_JSON")
+
+          if [[ -n "$LATEST" && "$LATEST" == "$READY" && "$CONFIGURED" == "$BASE_FEE" ]]; then
+            echo "Delivery base fee runtime verified: INR $CONFIGURED for 0-5 km."
+            break
+          fi
+
+          if [[ "$ATTEMPT" == '40' ]]; then
+            echo "ERROR: Order Service did not report the INR $BASE_FEE delivery base fee revision Ready." >&2
+            exit 1
+          fi
+          sleep 10
+        done
+
+  - task: AzureCLI@2
     displayName: Build and push immutable Order image
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
@@ -58,7 +107,7 @@ steps:
         echo "Image pushed: $IMAGE"
 
   - task: AzureCLI@2
-    displayName: Deploy Order image without changing runtime configuration
+    displayName: Deploy Order image while preserving verified runtime configuration
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash

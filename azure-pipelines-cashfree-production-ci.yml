@@ -46,6 +46,9 @@ steps:
       checkout=services/integration-service/src/main/java/in/craves/integration/service/PaymentService.java
       subscription=services/integration-service/src/main/java/in/craves/integration/subscription/SubscriptionPaymentService.java
       activation=azure-pipelines-cashfree-production-activation.yml
+      webhook_policy=infra/apim/customer-payments/cashfree-webhook-policy.xml
+      webhook_script=scripts/apim/configure-cashfree-webhook-apim.sh
+      webhook_pipeline=azure-pipelines-cashfree-webhook-apim.yml
 
       grep -Fq '${CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED:false}' "$properties"
       grep -Fq '${CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED:false}' "$properties"
@@ -78,8 +81,20 @@ steps:
         apps/customer-web-next/src/components/legal/PublicPolicyPage.tsx
       grep -Fq 'cashfreeMode === "production"' \
         apps/customer-web-next/src/app/api/readiness/cashfree/route.ts
-      grep -Fq "'/api/readiness/cashfree'" <(sed 's/"/\x27/g' "$activation") || \
-        grep -Fq '/api/readiness/cashfree' "$activation"
+      grep -Fq '/api/readiness/cashfree' "$activation"
       grep -Fq 'Customer web is not built in Cashfree production mode.' "$activation"
-      grep -Fq 'data-craves-policy-status=\"approved\"' "$activation"
-    displayName: Verify production payment, customer-web and policy safety guards
+      grep -Fq 'data-craves-policy-status="approved"' "$activation"
+
+      test -f "$webhook_policy"
+      test -f "$webhook_script"
+      test -f "$webhook_pipeline"
+      grep -Fq 'x-webhook-timestamp' "$webhook_policy"
+      grep -Fq 'x-webhook-signature' "$webhook_policy"
+      grep -Fq 'x-webhook-version' "$webhook_policy"
+      grep -Fq '__PAYMENT_BACKEND_URL__' "$webhook_policy"
+      ! grep -Fq 'validate-jwt' "$webhook_policy"
+      ! grep -Fq 'Bearer ' "$webhook_policy"
+      grep -Fq 'urlTemplate": "/webhooks/cashfree"' "$webhook_script"
+      grep -Fq 'expected HTTP 400 for missing provider headers' "$webhook_script"
+      grep -Fq "azureSubscription: 'Craves-Dev-Service-Connection'" "$webhook_pipeline"
+    displayName: Verify production payment, customer-web, policy and APIM safety guards

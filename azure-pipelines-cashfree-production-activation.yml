@@ -111,8 +111,7 @@ steps:
             [[ "$dead" == '0' ]] || { echo 'Cashfree production execution requires an empty webhook dead-letter set.' >&2; exit 2; }
             [[ "$config_ready" == 'true' ]] || { echo 'Cashfree production configuration readiness is false.' >&2; exit 2; }
 
-            web_readiness="$(curl -fsS --connect-timeout 10 --max-time 30 \
-              "$customer_web_base/api/readiness/cashfree")"
+            web_readiness="$(curl -fsS --connect-timeout 10 --max-time 30 "$customer_web_base/api/readiness/cashfree")"
             [[ "$(jq -r '.cashfreeMode' <<<"$web_readiness")" == 'production' ]] || { echo 'Customer web is not built in Cashfree production mode.' >&2; exit 2; }
             [[ "$(jq -r '.productionEligible' <<<"$web_readiness")" == 'true' ]] || { echo 'Customer web reports Cashfree production ineligible.' >&2; exit 2; }
             [[ "$(jq -r '.merchantIdentity.publicSupportPhoneConfigured' <<<"$web_readiness")" == 'true' ]] || { echo 'Public Craves support phone is not configured.' >&2; exit 2; }
@@ -134,8 +133,16 @@ steps:
             grep -Fqi 'support@craves.in' <<<"$contact_page" || { echo 'Customer contact page does not expose the support address.' >&2; exit 2; }
             ! grep -Fq 'data-craves-contact-phone-status="pending"' <<<"$contact_page" || { echo 'Customer contact phone is still pending.' >&2; exit 2; }
             ! grep -Fq 'data-craves-business-name-status="pending"' <<<"$contact_page" || { echo 'Registered business name is still pending.' >&2; exit 2; }
-            discover_page="$(curl -fsS --connect-timeout 10 --max-time 30 "$customer_web_base/discover")"
-            grep -Fqi 'Find home food near you' <<<"$discover_page" || { echo 'Public Craves products/discovery page is not reachable.' >&2; exit 2; }
+
+            pricing_page="$(curl -fsS --connect-timeout 10 --max-time 30 "$customer_web_base/products-pricing")"
+            grep -Fq 'data-craves-live-pricing-status="ready"' <<<"$pricing_page" || {
+              echo 'Public products/pricing page does not currently expose at least one real active INR-priced Craves dish.' >&2
+              exit 2
+            }
+            grep -Fq '₹' <<<"$pricing_page" || {
+              echo 'Public products/pricing page is not rendering INR prices.' >&2
+              exit 2
+            }
 
             az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
               --set-env-vars \

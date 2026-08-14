@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseIdentity } from "@/lib/auth-contract";
+import { parseCustomerProfile } from "@/lib/profile-contract";
 import { isSameOrigin } from "@/lib/request-security";
 import { parseSubscriptionPayment } from "@/lib/subscription-payment-contract";
 import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
@@ -44,7 +45,28 @@ export async function POST(
     if (!identity) {
       return NextResponse.json({ code: "INVALID_CUSTOMER_PROFILE" }, { status: 502 });
     }
-    if (!identity.displayName) {
+
+    let customerName = identity.displayName?.trim() ?? "";
+    let customerPhone = identity.phoneNumber;
+    let customerEmail = identity.email;
+
+    if (!customerName) {
+      const profileResponse = await authenticatedApiFetch(request, "/customer/profile", {}, 8_000);
+      const profileBody = await profileResponse.json().catch(() => null);
+      if (profileResponse.status === 401 || profileResponse.status === 403) {
+        return NextResponse.json({ code: "SESSION_EXPIRED" }, { status: 401 });
+      }
+      if (profileResponse.ok) {
+        const profile = parseCustomerProfile(profileBody);
+        if (profile) {
+          customerName = `${profile.firstName} ${profile.lastName}`.trim();
+          customerPhone = profile.registeredPhoneNumber;
+          customerEmail = profile.email ?? identity.email;
+        }
+      }
+    }
+
+    if (!customerName) {
       return NextResponse.json(
         { code: "CUSTOMER_NAME_REQUIRED", message: "Add your name to your Craves profile before starting payment." },
         { status: 409 },
@@ -58,9 +80,9 @@ export async function POST(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customerName: identity.displayName,
-          customerPhone: identity.phoneNumber,
-          customerEmail: identity.email,
+          customerName,
+          customerPhone,
+          customerEmail,
           returnUrl: httpsReturnUrl(request, subscriptionId),
         }),
       },

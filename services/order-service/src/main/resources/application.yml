@@ -43,7 +43,7 @@ craves:
     quote-ttl-minutes: ${CRAVES_CHECKOUT_QUOTE_TTL_MINUTES:10}
     delivery:
       base-distance-km: ${CRAVES_DELIVERY_BASE_DISTANCE_KM:5.0}
-      base-fee: ${CRAVES_DELIVERY_BASE_FEE:75.00}
+      base-fee: ${CRAVES_DELIVERY_BASE_FEE:45.00}
       extra-per-km: ${CRAVES_DELIVERY_EXTRA_PER_KM:8.00}
     tax:
       restaurant-gst-percent: ${CRAVES_RESTAURANT_GST_PERCENT:5.00}

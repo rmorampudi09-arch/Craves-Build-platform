@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import in.craves.order.exception.OrderApiException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -15,28 +16,37 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
 public class AzureMapsRouteClient {
     private static final String AZURE_MAPS_RESOURCE = "https://atlas.microsoft.com/";
     private static final String ROUTE_API_VERSION = "2025-01-01";
+    private static final String ROUTE_CACHE_PREFIX = "craves:route:2025-01-01:";
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final String mapsClientId;
     private final String mapsEndpoint;
+    private final StringRedisTemplate redisTemplate;
+    private final Duration routeCacheTtl;
     private volatile CachedToken cachedToken;
 
     public AzureMapsRouteClient(
         ObjectMapper objectMapper,
+        ObjectProvider<StringRedisTemplate> redisTemplateProvider,
         @Value("${craves.azure-maps.client-id:}") String mapsClientId,
-        @Value("${craves.azure-maps.endpoint:https://atlas.microsoft.com}") String mapsEndpoint
+        @Value("${craves.azure-maps.endpoint:https://atlas.microsoft.com}") String mapsEndpoint,
+        @Value("${craves.checkout-pricing.route-cache-ttl-seconds:300}") long routeCacheTtlSeconds
     ) {
         this.objectMapper = objectMapper;
+        this.redisTemplate = redisTemplateProvider.getIfAvailable();
         this.mapsClientId = mapsClientId == null ? "" : mapsClientId.trim();
         this.mapsEndpoint = normalizeEndpoint(mapsEndpoint);
+        this.routeCacheTtl = Duration.ofSeconds(Math.max(30L, Math.min(routeCacheTtlSeconds, 1_800L)));
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .build();
@@ -52,6 +62,17 @@ public class AzureMapsRouteClient {
         requireCoordinates(dropoffLatitude, dropoffLongitude);
         if (mapsClientId.isBlank()) {
             throw unavailable();
+        }
+
+        String cacheKey = routeCacheKey(
+            pickupLatitude,
+            pickupLongitude,
+            dropoffLatitude,
+            dropoffLongitude
+        );
+        RouteResult cached = readCachedRoute(cacheKey);
+        if (cached != null) {
+            return cached;
         }
 
         try {
@@ -86,6 +107,7 @@ public class AzureMapsRouteClient {
             if (result == null || result.distanceMeters() < 0 || result.trafficDurationSeconds() < 0) {
                 throw unavailable();
             }
+            writeCachedRoute(cacheKey, result);
             return result;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -155,6 +177,57 @@ public class AzureMapsRouteClient {
             return new RouteResult(distance.asLong(), Math.max(seconds, 0L));
         }
         return null;
+    }
+
+    private RouteResult readCachedRoute(String key) {
+        if (redisTemplate == null) {
+            return null;
+        }
+        try {
+            String cached = redisTemplate.opsForValue().get(key);
+            if (cached == null || cached.isBlank()) {
+                return null;
+            }
+            String[] parts = cached.split(":", 2);
+            if (parts.length != 2) {
+                return null;
+            }
+            long distance = Long.parseLong(parts[0]);
+            long duration = Long.parseLong(parts[1]);
+            return distance >= 0 && duration >= 0 ? new RouteResult(distance, duration) : null;
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
+    private void writeCachedRoute(String key, RouteResult route) {
+        if (redisTemplate == null) {
+            return;
+        }
+        try {
+            redisTemplate.opsForValue().set(
+                key,
+                route.distanceMeters() + ":" + route.trafficDurationSeconds(),
+                routeCacheTtl
+            );
+        } catch (RuntimeException ignored) {
+            // Redis is an optimization only. A cache outage must not break checkout pricing.
+        }
+    }
+
+    private static String routeCacheKey(
+        BigDecimal pickupLatitude,
+        BigDecimal pickupLongitude,
+        BigDecimal dropoffLatitude,
+        BigDecimal dropoffLongitude
+    ) {
+        return ROUTE_CACHE_PREFIX
+            + coordinate(pickupLatitude) + ":" + coordinate(pickupLongitude) + ":"
+            + coordinate(dropoffLatitude) + ":" + coordinate(dropoffLongitude);
+    }
+
+    private static String coordinate(BigDecimal value) {
+        return value.setScale(5, RoundingMode.HALF_UP).toPlainString();
     }
 
     private synchronized String managedIdentityToken() throws Exception {

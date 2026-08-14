@@ -32,7 +32,7 @@ steps:
       grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/checkout/route.ts
       grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/checkout/quote/route.ts
       grep -q 'quote-customer-checkout' scripts/apim/configure-customer-checkout-apim.sh
-      if grep -REn '(platformFee|taxAmount|deliveryFee|grandTotal).*[-+*/]' apps/customer-web-next/src/components/customer-checkout.tsx; then
+      if grep -REn '(platformFee|taxAmount|deliveryFee|grandTotal)[[:space:]]*[-+*/]|[-+*/][[:space:]]*(platformFee|taxAmount|deliveryFee|grandTotal)' apps/customer-web-next/src/components/customer-checkout.tsx; then
         echo 'ERROR: Frontend checkout appears to calculate backend-owned charges.' >&2
         exit 1
       fi

@@ -44,7 +44,7 @@ cat >"$BODY" <<'JSON'
     "urlTemplate": "/webhooks/cashfree",
     "templateParameters": [],
     "responses": [
-      {"statusCode": 202, "description": "Webhook accepted or duplicate delivery acknowledged"},
+      {"statusCode": 200, "description": "Webhook accepted or duplicate delivery acknowledged"},
       {"statusCode": 400, "description": "Webhook headers or payload invalid"},
       {"statusCode": 401, "description": "Cashfree signature invalid"},
       {"statusCode": 409, "description": "Idempotency key reused with different content"}

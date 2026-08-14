@@ -2,6 +2,10 @@ package in.craves.order.pricing;
 
 import in.craves.order.exception.OrderApiException;
 import in.craves.order.pricing.AzureMapsRouteClient.RouteResult;
+import in.craves.order.pricing.CheckoutPricingModels.KitchenQuoteWrite;
+import in.craves.order.pricing.CheckoutPricingModels.QuoteWrite;
+import in.craves.order.pricing.CheckoutPricingModels.StoredKitchenQuote;
+import in.craves.order.pricing.CheckoutPricingModels.StoredQuote;
 import in.craves.order.pricing.MarketDeliveryPricing.DeliveryPrice;
 import in.craves.order.pricing.MarketplaceTaxPolicy.TaxBreakdown;
 import in.craves.order.security.CravesPrincipal;
@@ -31,11 +35,6 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
@@ -68,6 +67,7 @@ public class CheckoutPricingService {
     private final CustomerAddressClient customerAddressClient;
     private final CheckoutSnapshotFactory checkoutSnapshotFactory;
     private final NotificationInternalClient notificationInternalClient;
+    private final CheckoutPricingQuoteRepository quoteRepository;
     private final AzureMapsRouteClient routeClient;
     private final MarketDeliveryPricing deliveryPricing;
     private final MarketplaceTaxPolicy taxPolicy;
@@ -80,6 +80,7 @@ public class CheckoutPricingService {
         CustomerAddressClient customerAddressClient,
         CheckoutSnapshotFactory checkoutSnapshotFactory,
         NotificationInternalClient notificationInternalClient,
+        CheckoutPricingQuoteRepository quoteRepository,
         AzureMapsRouteClient routeClient,
         MarketDeliveryPricing deliveryPricing,
         MarketplaceTaxPolicy taxPolicy,
@@ -92,13 +93,17 @@ public class CheckoutPricingService {
         this.customerAddressClient = customerAddressClient;
         this.checkoutSnapshotFactory = checkoutSnapshotFactory;
         this.notificationInternalClient = notificationInternalClient;
+        this.quoteRepository = quoteRepository;
         this.routeClient = routeClient;
         this.deliveryPricing = deliveryPricing;
         this.taxPolicy = taxPolicy;
         this.quoteTtlMinutes = Math.max(1L, Math.min(quoteTtlMinutes, 30L));
     }
 
-    @Transactional
+    /**
+     * Deliberately not transactional: address/catalog/route I/O must not hold a PostgreSQL
+     * connection. Quote persistence is atomic inside CheckoutPricingQuoteRepository.save().
+     */
     public CheckoutQuoteResponse quote(CravesPrincipal principal, CheckoutQuoteRequest request) {
         requireCustomer(principal);
         if (request == null || request.deliveryAddressId() == null) {
@@ -112,14 +117,17 @@ public class CheckoutPricingService {
         CustomerAddressSnapshotResponse dropoff = checkoutSnapshotFactory.customerDropoff(customerAddress);
         CartResponse cart = orderService.validateCart(principal);
         if (cart.items().isEmpty()) {
-            throw OrderApiException.badRequest("CART_EMPTY", "Add at least one item before calculating checkout charges.");
+            throw OrderApiException.badRequest(
+                "CART_EMPTY",
+                "Add at least one item before calculating checkout charges."
+            );
         }
 
         ChargePolicyResponse policy = orderService.currentChargePolicy();
         PreparedCart prepared = prepareCart(cart);
         UUID quoteId = UUID.randomUUID();
-        Instant createdAt = Instant.now();
-        Instant expiresAt = createdAt.plus(quoteTtlMinutes, ChronoUnit.MINUTES);
+        java.time.Instant createdAt = java.time.Instant.now();
+        java.time.Instant expiresAt = createdAt.plusSeconds(quoteTtlMinutes * 60L);
         List<PricedKitchen> pricedKitchens = new ArrayList<>();
 
         BigDecimal checkoutFood = BigDecimal.ZERO;
@@ -136,6 +144,7 @@ public class CheckoutPricingService {
             KitchenPickupSnapshotResponse pickup = checkoutSnapshotFactory.kitchenPickup(kitchen);
             BigDecimal foodSubtotal = sumFood(entry.getValue());
             BigDecimal platformFee = platformFee(foodSubtotal, policy);
+
             RouteResult route = routeClient.drivingRoute(
                 pickup.latitude(),
                 pickup.longitude(),
@@ -183,55 +192,33 @@ public class CheckoutPricingService {
             .add(checkoutDelivery)
             .setScale(2, RoundingMode.HALF_UP);
 
-        jdbcTemplate.update(
-            "DELETE FROM order_schema.checkout_pricing_quote WHERE customer_identity_id = ? AND consumed_at IS NULL AND expires_at < now() - INTERVAL '1 day'",
-            principal.identityId()
-        );
-
-        MapSqlParameterSource quoteParams = new MapSqlParameterSource()
-            .addValue("id", quoteId)
-            .addValue("customerIdentityId", principal.identityId())
-            .addValue("deliveryAddressId", dropoff.sourceAddressId())
-            .addValue("currency", INR)
-            .addValue("cartFingerprint", cartFingerprint(cart))
-            .addValue("foodSubtotal", checkoutFood)
-            .addValue("platformFee", checkoutPlatform)
-            .addValue("foodTaxAdded", checkoutTaxAdded)
-            .addValue("platformTaxIncluded", checkoutPlatformTaxIncluded)
-            .addValue("deliveryTaxIncluded", checkoutDeliveryTaxIncluded)
-            .addValue("taxAmount", checkoutTaxAdded)
-            .addValue("totalTaxAmount", checkoutTotalTax)
-            .addValue("deliveryFee", checkoutDelivery)
-            .addValue("grandTotal", grandTotal)
-            .addValue("chargePolicyId", policy.id())
-            .addValue("deliveryPricingVersion", MarketDeliveryPricing.VERSION)
-            .addValue("taxProfileVersion", MarketplaceTaxPolicy.VERSION)
-            .addValue("dropoffLatitude", dropoff.latitude())
-            .addValue("dropoffLongitude", dropoff.longitude())
-            .addValue("expiresAt", Timestamp.from(expiresAt))
-            .addValue("createdAt", Timestamp.from(createdAt));
-        namedJdbc.update(
-            """
-                INSERT INTO order_schema.checkout_pricing_quote (
-                    id, customer_identity_id, delivery_address_id, currency, cart_fingerprint,
-                    food_subtotal, platform_fee, food_tax_added, platform_tax_included,
-                    delivery_tax_included, tax_amount, total_tax_amount, delivery_fee, grand_total,
-                    charge_policy_id, delivery_pricing_version, tax_profile_version,
-                    dropoff_latitude, dropoff_longitude, expires_at, created_at
-                ) VALUES (
-                    :id, :customerIdentityId, :deliveryAddressId, :currency, :cartFingerprint,
-                    :foodSubtotal, :platformFee, :foodTaxAdded, :platformTaxIncluded,
-                    :deliveryTaxIncluded, :taxAmount, :totalTaxAmount, :deliveryFee, :grandTotal,
-                    :chargePolicyId, :deliveryPricingVersion, :taxProfileVersion,
-                    :dropoffLatitude, :dropoffLongitude, :expiresAt, :createdAt
-                )
-                """,
-            quoteParams
-        );
-
-        for (PricedKitchen priced : pricedKitchens) {
-            insertKitchenQuote(quoteId, priced);
-        }
+        List<KitchenQuoteWrite> kitchenWrites = pricedKitchens.stream()
+            .map(this::toKitchenQuoteWrite)
+            .toList();
+        quoteRepository.save(new QuoteWrite(
+            quoteId,
+            principal.identityId(),
+            dropoff.sourceAddressId(),
+            INR,
+            cartFingerprint(cart),
+            checkoutFood,
+            checkoutPlatform,
+            checkoutTaxAdded,
+            checkoutPlatformTaxIncluded,
+            checkoutDeliveryTaxIncluded,
+            checkoutTaxAdded,
+            checkoutTotalTax,
+            checkoutDelivery,
+            grandTotal,
+            policy.id(),
+            MarketDeliveryPricing.VERSION,
+            MarketplaceTaxPolicy.VERSION,
+            dropoff.latitude(),
+            dropoff.longitude(),
+            expiresAt,
+            createdAt,
+            kitchenWrites
+        ));
 
         TaxBreakdown aggregateTaxes = taxPolicy.calculate(checkoutFood, checkoutPlatform, checkoutDelivery);
         TaxBreakdownResponse taxResponse = new TaxBreakdownResponse(
@@ -268,6 +255,12 @@ public class CheckoutPricingService {
         if (request == null || request.deliveryAddressId() == null) {
             throw OrderApiException.badRequest("DELIVERY_ADDRESS_REQUIRED", DELIVERY_ADDRESS_REQUIRED_MESSAGE);
         }
+        if (request.pricingQuoteId() == null) {
+            throw OrderApiException.badRequest(
+                "PRICING_QUOTE_REQUIRED",
+                "Calculate and review delivery pricing before creating checkout."
+            );
+        }
 
         CustomerAddress customerAddress = customerAddressClient.getActiveOwnedAddress(
             principal.identityId(),
@@ -279,11 +272,12 @@ public class CheckoutPricingService {
             throw OrderApiException.badRequest("CART_EMPTY", "Your cart is empty.");
         }
 
-        UUID quoteId = request.pricingQuoteId();
-        if (quoteId == null) {
-            quoteId = quote(principal, new CheckoutQuoteRequest(request.deliveryAddressId())).quoteId();
-        }
-        StoredQuote quote = requireUsableQuote(principal.identityId(), quoteId, dropoff, cart);
+        StoredQuote quote = requireUsableQuote(
+            principal.identityId(),
+            request.pricingQuoteId(),
+            dropoff,
+            cart
+        );
         PreparedCart prepared = prepareCart(cart);
         Map<UUID, StoredKitchenQuote> quoteByKitchen = new LinkedHashMap<>();
         for (StoredKitchenQuote kitchenQuote : quote.kitchens()) {
@@ -321,9 +315,115 @@ public class CheckoutPricingService {
         }
 
         UUID checkoutId = UUID.randomUUID();
-        MapSqlParameterSource checkoutParams = new MapSqlParameterSource()
+        if (quoteRepository.consume(quote.id(), checkoutId) != 1) {
+            throw staleQuote();
+        }
+
+        insertCheckout(checkoutId, principal.identityId(), dropoff, quote);
+        for (PendingKitchenOrder pending : pendingOrders) {
+            UUID orderId = UUID.randomUUID();
+            insertCustomerOrder(orderId, checkoutId, principal.identityId(), dropoff, pending, quote);
+            addStatusHistory(orderId, principal.identityId());
+            insertOrderItems(orderId, pending.items(), prepared.catalogItems());
+        }
+
+        orderService.clearCart(principal);
+        CheckoutResponse response = orderService.getCheckout(principal, checkoutId);
+        notifyOrderCreatedAfterCommit(response);
+        return response;
+    }
+
+    private PreparedCart prepareCart(CartResponse cart) {
+        Map<UUID, CatalogMenuItem> catalogItems = new LinkedHashMap<>();
+        Map<UUID, List<CartItemResponse>> byKitchen = new LinkedHashMap<>();
+        for (CartItemResponse cartItem : cart.items()) {
+            CatalogMenuItem catalogItem = catalogClient.getActiveMenuItem(cartItem.menuItemId());
+            catalogItems.put(catalogItem.id(), catalogItem);
+            byKitchen.computeIfAbsent(catalogItem.kitchenId(), ignored -> new ArrayList<>()).add(cartItem);
+        }
+        return new PreparedCart(catalogItems, byKitchen);
+    }
+
+    private KitchenQuoteWrite toKitchenQuoteWrite(PricedKitchen priced) {
+        return new KitchenQuoteWrite(
+            priced.kitchenId(),
+            priced.kitchenName(),
+            priced.pickup().latitude(),
+            priced.pickup().longitude(),
+            priced.route().distanceMeters(),
+            priced.route().trafficDurationSeconds(),
+            priced.foodSubtotal(),
+            priced.platformFee(),
+            priced.taxes().foodTaxAdded(),
+            priced.taxes().platformTaxIncluded(),
+            priced.taxes().deliveryTaxIncluded(),
+            priced.taxes().taxAmountAddedToCheckout(),
+            priced.delivery().baseDistanceKm(),
+            priced.delivery().baseFee(),
+            priced.delivery().extraDistanceKm(),
+            priced.delivery().extraPerKm(),
+            priced.delivery().extraDistanceFee(),
+            priced.delivery().total(),
+            priced.grandTotal()
+        );
+    }
+
+    private KitchenDeliveryQuoteResponse toDeliveryResponse(PricedKitchen priced) {
+        long minutes = Math.max(1L, (priced.route().trafficDurationSeconds() + 59L) / 60L);
+        return new KitchenDeliveryQuoteResponse(
+            priced.kitchenId(),
+            priced.kitchenName(),
+            priced.delivery().roadDistanceKm(),
+            priced.route().distanceMeters(),
+            minutes,
+            priced.delivery().baseDistanceKm(),
+            priced.delivery().baseFee(),
+            priced.delivery().extraDistanceKm(),
+            priced.delivery().extraPerKm(),
+            priced.delivery().extraDistanceFee(),
+            priced.delivery().total(),
+            priced.delivery().version()
+        );
+    }
+
+    private StoredQuote requireUsableQuote(
+        UUID customerIdentityId,
+        UUID quoteId,
+        CustomerAddressSnapshotResponse dropoff,
+        CartResponse cart
+    ) {
+        StoredQuote quote = quoteRepository.findOwned(quoteId, customerIdentityId)
+            .orElseThrow(() -> OrderApiException.notFound(
+                "PRICING_QUOTE_NOT_FOUND",
+                "The checkout pricing quote was not found."
+            ));
+        if (quote.consumedAt() != null
+            || quote.expiresAt() == null
+            || !quote.expiresAt().isAfter(java.time.Instant.now())) {
+            throw staleQuote();
+        }
+        if (!quote.deliveryAddressId().equals(dropoff.sourceAddressId())
+            || !quote.cartFingerprint().equals(cartFingerprint(cart))) {
+            throw staleQuote();
+        }
+        requireSameCoordinates(
+            dropoff.latitude(),
+            dropoff.longitude(),
+            quote.dropoffLatitude(),
+            quote.dropoffLongitude()
+        );
+        return quote;
+    }
+
+    private void insertCheckout(
+        UUID checkoutId,
+        UUID customerIdentityId,
+        CustomerAddressSnapshotResponse dropoff,
+        StoredQuote quote
+    ) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("id", checkoutId)
-            .addValue("customerIdentityId", principal.identityId())
+            .addValue("customerIdentityId", customerIdentityId)
             .addValue("status", CheckoutStatus.PAYMENT_PENDING.name())
             .addValue("currency", quote.currency())
             .addValue("foodSubtotal", quote.foodSubtotal())
@@ -373,92 +473,6 @@ public class CheckoutPricingService {
                     :pricingQuoteId, :deliveryPricingVersion, :taxProfileVersion,
                     :foodTaxAdded, :platformTaxIncluded, :deliveryTaxIncluded, :totalTaxAmount,
                     now(), now()
-                )
-                """,
-            checkoutParams
-        );
-
-        for (PendingKitchenOrder pending : pendingOrders) {
-            UUID orderId = UUID.randomUUID();
-            insertCustomerOrder(orderId, checkoutId, principal.identityId(), dropoff, pending, quote);
-            addStatusHistory(orderId, principal.identityId());
-            for (CartItemResponse cartItem : pending.items()) {
-                CatalogMenuItem catalogItem = prepared.catalogItems().get(cartItem.menuItemId());
-                jdbcTemplate.update(
-                    "INSERT INTO order_schema.order_item (id, order_id, menu_item_id, item_name_snapshot, category_snapshot, food_type_snapshot, unit_price_snapshot, unit_package_weight_grams_snapshot, thermobox_required_snapshot, quantity, line_total, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
-                    UUID.randomUUID(),
-                    orderId,
-                    cartItem.menuItemId(),
-                    cartItem.itemName(),
-                    catalogItem.category(),
-                    catalogItem.foodType(),
-                    cartItem.unitPrice(),
-                    catalogItem.unitPackageWeightGrams(),
-                    catalogItem.thermoboxRequired(),
-                    cartItem.quantity(),
-                    cartItem.lineTotal()
-                );
-            }
-        }
-
-        int consumed = jdbcTemplate.update(
-            "UPDATE order_schema.checkout_pricing_quote SET consumed_at = now(), consumed_checkout_id = ? WHERE id = ? AND consumed_at IS NULL",
-            checkoutId,
-            quote.id()
-        );
-        if (consumed != 1) {
-            throw staleQuote();
-        }
-
-        orderService.clearCart(principal);
-        CheckoutResponse response = orderService.getCheckout(principal, checkoutId);
-        notifyOrderCreatedAfterCommit(response);
-        return response;
-    }
-
-    private PreparedCart prepareCart(CartResponse cart) {
-        Map<UUID, CatalogMenuItem> catalogItems = new LinkedHashMap<>();
-        Map<UUID, List<CartItemResponse>> byKitchen = new LinkedHashMap<>();
-        for (CartItemResponse cartItem : cart.items()) {
-            CatalogMenuItem catalogItem = catalogClient.getActiveMenuItem(cartItem.menuItemId());
-            catalogItems.put(catalogItem.id(), catalogItem);
-            byKitchen.computeIfAbsent(catalogItem.kitchenId(), ignored -> new ArrayList<>()).add(cartItem);
-        }
-        return new PreparedCart(catalogItems, byKitchen);
-    }
-
-    private void insertKitchenQuote(UUID quoteId, PricedKitchen priced) {
-        MapSqlParameterSource params = new MapSqlParameterSource()
-            .addValue("quoteId", quoteId)
-            .addValue("kitchenId", priced.kitchenId())
-            .addValue("kitchenName", priced.kitchenName())
-            .addValue("pickupLatitude", priced.pickup().latitude())
-            .addValue("pickupLongitude", priced.pickup().longitude())
-            .addValue("roadDistanceMeters", priced.route().distanceMeters())
-            .addValue("trafficDurationSeconds", priced.route().trafficDurationSeconds())
-            .addValue("foodSubtotal", priced.foodSubtotal())
-            .addValue("platformFee", priced.platformFee())
-            .addValue("foodTaxAdded", priced.taxes().foodTaxAdded())
-            .addValue("platformTaxIncluded", priced.taxes().platformTaxIncluded())
-            .addValue("deliveryTaxIncluded", priced.taxes().deliveryTaxIncluded())
-            .addValue("taxAmount", priced.taxes().taxAmountAddedToCheckout())
-            .addValue("baseDeliveryFee", priced.delivery().baseFee())
-            .addValue("extraDistanceKm", priced.delivery().extraDistanceKm())
-            .addValue("extraDistanceFee", priced.delivery().extraDistanceFee())
-            .addValue("deliveryFee", priced.delivery().total())
-            .addValue("grandTotal", priced.grandTotal());
-        namedJdbc.update(
-            """
-                INSERT INTO order_schema.checkout_pricing_quote_kitchen (
-                    quote_id, kitchen_id, kitchen_name, pickup_latitude, pickup_longitude,
-                    road_distance_meters, traffic_duration_seconds, food_subtotal, platform_fee,
-                    food_tax_added, platform_tax_included, delivery_tax_included, tax_amount,
-                    base_delivery_fee, extra_distance_km, extra_distance_fee, delivery_fee, grand_total
-                ) VALUES (
-                    :quoteId, :kitchenId, :kitchenName, :pickupLatitude, :pickupLongitude,
-                    :roadDistanceMeters, :trafficDurationSeconds, :foodSubtotal, :platformFee,
-                    :foodTaxAdded, :platformTaxIncluded, :deliveryTaxIncluded, :taxAmount,
-                    :baseDeliveryFee, :extraDistanceKm, :extraDistanceFee, :deliveryFee, :grandTotal
                 )
                 """,
             params
@@ -521,7 +535,13 @@ public class CheckoutPricingService {
             .addValue("foodTaxAdded", priced.foodTaxAdded())
             .addValue("platformTaxIncluded", priced.platformTaxIncluded())
             .addValue("deliveryTaxIncluded", priced.deliveryTaxIncluded())
-            .addValue("totalTaxAmount", priced.foodTaxAdded().add(priced.platformTaxIncluded()).add(priced.deliveryTaxIncluded()).setScale(2, RoundingMode.HALF_UP));
+            .addValue(
+                "totalTaxAmount",
+                priced.foodTaxAdded()
+                    .add(priced.platformTaxIncluded())
+                    .add(priced.deliveryTaxIncluded())
+                    .setScale(2, RoundingMode.HALF_UP)
+            );
         namedJdbc.update(
             """
                 INSERT INTO order_schema.customer_order (
@@ -560,104 +580,28 @@ public class CheckoutPricingService {
         );
     }
 
-    private StoredQuote requireUsableQuote(
-        UUID customerIdentityId,
-        UUID quoteId,
-        CustomerAddressSnapshotResponse dropoff,
-        CartResponse cart
+    private void insertOrderItems(
+        UUID orderId,
+        List<CartItemResponse> items,
+        Map<UUID, CatalogMenuItem> catalogItems
     ) {
-        List<StoredQuote> rows = jdbcTemplate.query(
-            "SELECT * FROM order_schema.checkout_pricing_quote WHERE id = ? AND customer_identity_id = ?",
-            (rs, rowNum) -> mapStoredQuote(rs, loadKitchenQuotes(quoteId)),
-            quoteId,
-            customerIdentityId
-        );
-        if (rows.isEmpty()) {
-            throw OrderApiException.notFound("PRICING_QUOTE_NOT_FOUND", "The checkout pricing quote was not found.");
+        for (CartItemResponse cartItem : items) {
+            CatalogMenuItem catalogItem = catalogItems.get(cartItem.menuItemId());
+            jdbcTemplate.update(
+                "INSERT INTO order_schema.order_item (id, order_id, menu_item_id, item_name_snapshot, category_snapshot, food_type_snapshot, unit_price_snapshot, unit_package_weight_grams_snapshot, thermobox_required_snapshot, quantity, line_total, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
+                UUID.randomUUID(),
+                orderId,
+                cartItem.menuItemId(),
+                cartItem.itemName(),
+                catalogItem.category(),
+                catalogItem.foodType(),
+                cartItem.unitPrice(),
+                catalogItem.unitPackageWeightGrams(),
+                catalogItem.thermoboxRequired(),
+                cartItem.quantity(),
+                cartItem.lineTotal()
+            );
         }
-        StoredQuote quote = rows.getFirst();
-        if (quote.consumedAt() != null || quote.expiresAt() == null || !quote.expiresAt().isAfter(Instant.now())) {
-            throw staleQuote();
-        }
-        if (!quote.deliveryAddressId().equals(dropoff.sourceAddressId())
-            || !quote.cartFingerprint().equals(cartFingerprint(cart))) {
-            throw staleQuote();
-        }
-        requireSameCoordinates(
-            dropoff.latitude(),
-            dropoff.longitude(),
-            quote.dropoffLatitude(),
-            quote.dropoffLongitude()
-        );
-        return quote;
-    }
-
-    private StoredQuote mapStoredQuote(ResultSet rs, List<StoredKitchenQuote> kitchens) throws SQLException {
-        return new StoredQuote(
-            rs.getObject("id", UUID.class),
-            rs.getObject("customer_identity_id", UUID.class),
-            rs.getObject("delivery_address_id", UUID.class),
-            rs.getString("currency"),
-            rs.getString("cart_fingerprint"),
-            rs.getBigDecimal("food_subtotal"),
-            rs.getBigDecimal("platform_fee"),
-            rs.getBigDecimal("food_tax_added"),
-            rs.getBigDecimal("platform_tax_included"),
-            rs.getBigDecimal("delivery_tax_included"),
-            rs.getBigDecimal("tax_amount"),
-            rs.getBigDecimal("total_tax_amount"),
-            rs.getBigDecimal("delivery_fee"),
-            rs.getBigDecimal("grand_total"),
-            rs.getObject("charge_policy_id", UUID.class),
-            rs.getString("delivery_pricing_version"),
-            rs.getString("tax_profile_version"),
-            rs.getBigDecimal("dropoff_latitude"),
-            rs.getBigDecimal("dropoff_longitude"),
-            instant(rs, "expires_at"),
-            instant(rs, "consumed_at"),
-            kitchens
-        );
-    }
-
-    private List<StoredKitchenQuote> loadKitchenQuotes(UUID quoteId) {
-        return jdbcTemplate.query(
-            "SELECT * FROM order_schema.checkout_pricing_quote_kitchen WHERE quote_id = ? ORDER BY kitchen_id",
-            (rs, rowNum) -> new StoredKitchenQuote(
-                rs.getObject("kitchen_id", UUID.class),
-                rs.getString("kitchen_name"),
-                rs.getBigDecimal("pickup_latitude"),
-                rs.getBigDecimal("pickup_longitude"),
-                rs.getLong("road_distance_meters"),
-                rs.getLong("traffic_duration_seconds"),
-                rs.getBigDecimal("food_subtotal"),
-                rs.getBigDecimal("platform_fee"),
-                rs.getBigDecimal("food_tax_added"),
-                rs.getBigDecimal("platform_tax_included"),
-                rs.getBigDecimal("delivery_tax_included"),
-                rs.getBigDecimal("tax_amount"),
-                rs.getBigDecimal("delivery_fee"),
-                rs.getBigDecimal("grand_total")
-            ),
-            quoteId
-        );
-    }
-
-    private KitchenDeliveryQuoteResponse toDeliveryResponse(PricedKitchen priced) {
-        long minutes = Math.max(1L, (priced.route().trafficDurationSeconds() + 59L) / 60L);
-        return new KitchenDeliveryQuoteResponse(
-            priced.kitchenId(),
-            priced.kitchenName(),
-            priced.delivery().roadDistanceKm(),
-            priced.route().distanceMeters(),
-            minutes,
-            priced.delivery().baseDistanceKm(),
-            priced.delivery().baseFee(),
-            priced.delivery().extraDistanceKm(),
-            priced.delivery().extraPerKm(),
-            priced.delivery().extraDistanceFee(),
-            priced.delivery().total(),
-            priced.delivery().version()
-        );
     }
 
     private static BigDecimal platformFee(BigDecimal foodSubtotal, ChargePolicyResponse policy) {
@@ -686,7 +630,9 @@ public class CheckoutPricingService {
                 .append(item.quantity()).append(';'));
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(
+                digest.digest(canonical.toString().getBytes(StandardCharsets.UTF_8))
+            );
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available", exception);
         }
@@ -701,21 +647,35 @@ public class CheckoutPricingService {
         try {
             for (CartItemResponse cartItem : cartItems) {
                 CatalogMenuItem catalogItem = catalogItems.get(cartItem.menuItemId());
-                if (catalogItem == null || catalogItem.unitPackageWeightGrams() == null
-                    || catalogItem.unitPackageWeightGrams() <= 0 || catalogItem.thermoboxRequired() == null) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Menu item delivery metadata is incomplete");
+                if (catalogItem == null
+                    || catalogItem.unitPackageWeightGrams() == null
+                    || catalogItem.unitPackageWeightGrams() <= 0
+                    || catalogItem.thermoboxRequired() == null) {
+                    throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Menu item delivery metadata is incomplete"
+                    );
                 }
                 totalWeightGrams = Math.addExact(
                     totalWeightGrams,
-                    Math.multiplyExact(catalogItem.unitPackageWeightGrams().longValue(), cartItem.quantity())
+                    Math.multiplyExact(
+                        catalogItem.unitPackageWeightGrams().longValue(),
+                        cartItem.quantity()
+                    )
                 );
                 thermoboxRequired = thermoboxRequired || catalogItem.thermoboxRequired();
             }
         } catch (ArithmeticException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Calculated package weight is too large");
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Calculated package weight is too large"
+            );
         }
         if (totalWeightGrams <= 0 || totalWeightGrams > Integer.MAX_VALUE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Calculated package weight is invalid");
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Calculated package weight is invalid"
+            );
         }
         return new OrderPackaging((int) totalWeightGrams, thermoboxRequired);
     }
@@ -726,8 +686,12 @@ public class CheckoutPricingService {
         BigDecimal rightLatitude,
         BigDecimal rightLongitude
     ) {
-        if (leftLatitude == null || leftLongitude == null || rightLatitude == null || rightLongitude == null
-            || leftLatitude.compareTo(rightLatitude) != 0 || leftLongitude.compareTo(rightLongitude) != 0) {
+        if (leftLatitude == null
+            || leftLongitude == null
+            || rightLatitude == null
+            || rightLongitude == null
+            || leftLatitude.compareTo(rightLatitude) != 0
+            || leftLongitude.compareTo(rightLongitude) != 0) {
             throw staleQuote();
         }
     }
@@ -772,11 +736,6 @@ public class CheckoutPricingService {
         return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private static Instant instant(ResultSet rs, String column) throws SQLException {
-        Timestamp timestamp = rs.getTimestamp(column);
-        return timestamp == null ? null : timestamp.toInstant();
-    }
-
     private static void requireCustomer(CravesPrincipal principal) {
         if (principal == null || !principal.hasRole("CUSTOMER")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Customer role is required");
@@ -798,50 +757,6 @@ public class CheckoutPricingService {
         RouteResult route,
         DeliveryPrice delivery,
         TaxBreakdown taxes,
-        BigDecimal grandTotal
-    ) {
-    }
-
-    private record StoredQuote(
-        UUID id,
-        UUID customerIdentityId,
-        UUID deliveryAddressId,
-        String currency,
-        String cartFingerprint,
-        BigDecimal foodSubtotal,
-        BigDecimal platformFee,
-        BigDecimal foodTaxAdded,
-        BigDecimal platformTaxIncluded,
-        BigDecimal deliveryTaxIncluded,
-        BigDecimal taxAmount,
-        BigDecimal totalTaxAmount,
-        BigDecimal deliveryFee,
-        BigDecimal grandTotal,
-        UUID chargePolicyId,
-        String deliveryPricingVersion,
-        String taxProfileVersion,
-        BigDecimal dropoffLatitude,
-        BigDecimal dropoffLongitude,
-        Instant expiresAt,
-        Instant consumedAt,
-        List<StoredKitchenQuote> kitchens
-    ) {
-    }
-
-    private record StoredKitchenQuote(
-        UUID kitchenId,
-        String kitchenName,
-        BigDecimal pickupLatitude,
-        BigDecimal pickupLongitude,
-        long roadDistanceMeters,
-        long trafficDurationSeconds,
-        BigDecimal foodSubtotal,
-        BigDecimal platformFee,
-        BigDecimal foodTaxAdded,
-        BigDecimal platformTaxIncluded,
-        BigDecimal deliveryTaxIncluded,
-        BigDecimal taxAmount,
-        BigDecimal deliveryFee,
         BigDecimal grandTotal
     ) {
     }

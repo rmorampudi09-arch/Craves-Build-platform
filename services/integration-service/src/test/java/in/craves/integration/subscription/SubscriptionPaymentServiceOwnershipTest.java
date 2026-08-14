@@ -76,7 +76,7 @@ class SubscriptionPaymentServiceOwnershipTest {
             repository,
             paymentProperties,
             providerProperties,
-            new ObjectMapper(),
+            new ObjectMapper().findAndRegisterModules(),
             builder
         );
     }

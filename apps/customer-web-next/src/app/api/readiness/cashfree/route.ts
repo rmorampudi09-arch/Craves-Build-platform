@@ -26,7 +26,7 @@ export function GET() {
       refundsAndCancellations: "/refunds-cancellations",
       privacy: "/privacy",
       security: "/security",
-      liveProductsAndPricing: "/discover",
+      liveProductsAndPricing: "/products-pricing",
     },
     policies: {
       termsPublished: true,

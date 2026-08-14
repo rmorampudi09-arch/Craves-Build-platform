@@ -8,15 +8,15 @@ import org.junit.jupiter.api.Test;
 class MarketDeliveryPricingTest {
     private final MarketDeliveryPricing pricing = new MarketDeliveryPricing(
         new BigDecimal("5.0"),
-        new BigDecimal("75.00"),
+        new BigDecimal("45.00"),
         new BigDecimal("8.00")
     );
 
     @Test
     void pricesAnyRouteUpToFiveKmAtBaseFee() {
-        assertThat(pricing.calculate(0).total()).isEqualByComparingTo("75.00");
-        assertThat(pricing.calculate(4_999).total()).isEqualByComparingTo("75.00");
-        assertThat(pricing.calculate(5_000).total()).isEqualByComparingTo("75.00");
+        assertThat(pricing.calculate(0).total()).isEqualByComparingTo("45.00");
+        assertThat(pricing.calculate(4_999).total()).isEqualByComparingTo("45.00");
+        assertThat(pricing.calculate(5_000).total()).isEqualByComparingTo("45.00");
     }
 
     @Test
@@ -25,15 +25,15 @@ class MarketDeliveryPricingTest {
 
         assertThat(price.extraDistanceKm()).isEqualByComparingTo("0.1");
         assertThat(price.extraDistanceFee()).isEqualByComparingTo("0.80");
-        assertThat(price.total()).isEqualByComparingTo("75.80");
+        assertThat(price.total()).isEqualByComparingTo("45.80");
     }
 
     @Test
-    void tenKmMatchesCurrentHyperlocalMarketBenchmark() {
+    void tenKmUsesConfiguredBaseAndPerKmRate() {
         var price = pricing.calculate(10_000);
 
         assertThat(price.extraDistanceKm()).isEqualByComparingTo("5.0");
         assertThat(price.extraDistanceFee()).isEqualByComparingTo("40.00");
-        assertThat(price.total()).isEqualByComparingTo("115.00");
+        assertThat(price.total()).isEqualByComparingTo("85.00");
     }
 }

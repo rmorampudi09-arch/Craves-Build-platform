@@ -34,17 +34,17 @@ export function FooterSection() {
             <div className="mt-5 grid gap-2.5">
               <a href="#why-craves" className={`${styles.footerLink} text-sm leading-6`}>About us</a>
               <a href="#how-it-works" className={`${styles.footerLink} text-sm leading-6`}>How it works</a>
-              <a href="mailto:support@craves.in" className={`${styles.footerLink} text-sm leading-6`}>Contact us</a>
+              <a href="/contact" className={`${styles.footerLink} text-sm leading-6`}>Contact us</a>
             </div>
           </div>
 
           <div>
             <FooterHeading>LEGAL</FooterHeading>
-            <div className="mt-5 grid gap-2.5" aria-label="Legal pages planned for publishing">
-              <span className={mutedItemClass}>Privacy policy</span>
-              <span className={mutedItemClass}>Terms of service</span>
-              <span className={mutedItemClass}>Refund policy</span>
-              <span className={mutedItemClass}>Security</span>
+            <div className="mt-5 grid gap-2.5" aria-label="Craves legal and security pages">
+              <a href="/privacy" className={`${styles.footerLink} text-sm leading-6`}>Privacy policy</a>
+              <a href="/terms" className={`${styles.footerLink} text-sm leading-6`}>Terms of service</a>
+              <a href="/refunds-cancellations" className={`${styles.footerLink} text-sm leading-6`}>Refunds &amp; cancellations</a>
+              <a href="/security" className={`${styles.footerLink} text-sm leading-6`}>Security</a>
             </div>
           </div>
 

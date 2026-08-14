@@ -71,10 +71,62 @@ public final class ApiDtos {
     ) {
     }
 
-    public record CheckoutRequest(UUID deliveryAddressId, String note) {
-        public CheckoutRequest(String note) {
-            this(null, note);
+    public record CheckoutQuoteRequest(@NotNull UUID deliveryAddressId) {
+    }
+
+    public record CheckoutRequest(UUID deliveryAddressId, UUID pricingQuoteId, String note) {
+        public CheckoutRequest(UUID deliveryAddressId, String note) {
+            this(deliveryAddressId, null, note);
         }
+
+        public CheckoutRequest(String note) {
+            this(null, null, note);
+        }
+    }
+
+    public record TaxBreakdownResponse(
+        String profileVersion,
+        BigDecimal restaurantGstPercent,
+        BigDecimal feeInclusiveGstPercent,
+        BigDecimal foodTaxAdded,
+        BigDecimal platformTaxIncluded,
+        BigDecimal deliveryTaxIncluded,
+        BigDecimal taxAmountAddedToCheckout,
+        BigDecimal totalTaxAmount
+    ) {
+    }
+
+    public record KitchenDeliveryQuoteResponse(
+        UUID kitchenId,
+        String kitchenName,
+        BigDecimal roadDistanceKm,
+        long roadDistanceMeters,
+        long estimatedTravelMinutes,
+        BigDecimal baseDistanceKm,
+        BigDecimal baseDeliveryFee,
+        BigDecimal extraDistanceKm,
+        BigDecimal extraPerKm,
+        BigDecimal extraDistanceFee,
+        BigDecimal deliveryFee,
+        String pricingVersion
+    ) {
+    }
+
+    public record CheckoutQuoteResponse(
+        UUID quoteId,
+        UUID deliveryAddressId,
+        String currency,
+        BigDecimal foodSubtotal,
+        BigDecimal platformFee,
+        BigDecimal taxAmount,
+        BigDecimal deliveryFee,
+        BigDecimal grandTotal,
+        UUID chargePolicyId,
+        TaxBreakdownResponse taxes,
+        List<KitchenDeliveryQuoteResponse> deliveries,
+        Instant expiresAt,
+        Instant createdAt
+    ) {
     }
 
     public record CustomerAddressSnapshotResponse(

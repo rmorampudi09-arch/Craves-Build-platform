@@ -70,3 +70,41 @@ jobs:
             exit 1
           fi
           echo 'Checkout safety contracts passed.'
+
+  package-implementation:
+    name: Package tested implementation
+    if: github.event_name == 'pull_request'
+    needs: [checkout-web, checkout-contracts]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Build implementation archive
+        id: package
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          ARCHIVE="craves-dynamic-delivery-pricing-pr240.zip"
+          git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" | sort > IMPLEMENTATION-MANIFEST.txt
+          git diff --binary "$BASE_SHA" "$HEAD_SHA" > craves-dynamic-delivery-pricing-pr240.patch
+          zip -q "$ARCHIVE" IMPLEMENTATION-MANIFEST.txt craves-dynamic-delivery-pricing-pr240.patch
+          while IFS= read -r file; do
+            if [[ -f "$file" ]]; then
+              zip -q "$ARCHIVE" "$file"
+            fi
+          done < IMPLEMENTATION-MANIFEST.txt
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "Packaged $(wc -l < IMPLEMENTATION-MANIFEST.txt) complete changed files."
+      - name: Upload implementation archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: craves-dynamic-delivery-pricing-pr240
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+          retention-days: 30

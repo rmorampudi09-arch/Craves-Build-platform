@@ -91,8 +91,10 @@ jobs:
         run: |
           set -euo pipefail
           ARCHIVE="craves-dynamic-delivery-pricing-pr240.zip"
-          git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" | sort > IMPLEMENTATION-MANIFEST.txt
-          git diff --binary "$BASE_SHA" "$HEAD_SHA" > craves-dynamic-delivery-pricing-pr240.patch
+          MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          echo "Packaging feature changes from merge base $MERGE_BASE to $HEAD_SHA"
+          git diff --name-only --diff-filter=ACMR "$MERGE_BASE" "$HEAD_SHA" | sort > IMPLEMENTATION-MANIFEST.txt
+          git diff --binary "$MERGE_BASE" "$HEAD_SHA" > craves-dynamic-delivery-pricing-pr240.patch
           zip -q "$ARCHIVE" IMPLEMENTATION-MANIFEST.txt craves-dynamic-delivery-pricing-pr240.patch
           while IFS= read -r file; do
             if [[ -f "$file" ]]; then
@@ -100,7 +102,7 @@ jobs:
             fi
           done < IMPLEMENTATION-MANIFEST.txt
           echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
-          echo "Packaged $(wc -l < IMPLEMENTATION-MANIFEST.txt) complete changed files."
+          echo "Packaged $(wc -l < IMPLEMENTATION-MANIFEST.txt) complete feature-changed files."
       - name: Upload implementation archive
         uses: actions/upload-artifact@v4
         with:

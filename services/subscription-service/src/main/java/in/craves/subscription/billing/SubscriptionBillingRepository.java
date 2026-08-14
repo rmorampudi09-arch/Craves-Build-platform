@@ -36,9 +36,9 @@ public class SubscriptionBillingRepository {
             )
             UPDATE subscription_schema.customer_subscription cs
                SET billing_lock_token = ?, billing_locked_at = now()
-              FROM candidates c
-              JOIN subscription_schema.subscription_plan sp ON sp.id = cs.plan_id
+              FROM candidates c, subscription_schema.subscription_plan sp
              WHERE cs.id = c.id
+               AND sp.id = cs.plan_id
             RETURNING cs.id, cs.customer_identity_id, cs.plan_id, cs.chef_identity_id,
                       cs.next_billing_date, sp.billing_period, sp.amount, sp.currency
             """;

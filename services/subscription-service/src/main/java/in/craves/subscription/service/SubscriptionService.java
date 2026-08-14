@@ -10,6 +10,7 @@ import in.craves.subscription.web.ApiDtos.PlanResponse;
 import in.craves.subscription.web.ApiDtos.PublicPlanResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -25,6 +26,7 @@ public class SubscriptionService {
         "PENDING_PAYMENT", "ACTIVE", "PAUSED", "PAYMENT_FAILED", "EXPIRED", "CANCELLED"
     );
     private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("^[A-Za-z0-9._:-]{8,128}$");
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
 
     private final SubscriptionRepository repository;
     private final CapacityService capacityService;
@@ -93,7 +95,7 @@ public class SubscriptionService {
         if (!capacityService.isPlanBookable(plan)) {
             throw ApiException.conflict("SUBSCRIPTION_CAPACITY_UNAVAILABLE", "Subscription capacity is no longer available");
         }
-        if (request.startDate().isBefore(LocalDate.now())) {
+        if (request.startDate().isBefore(LocalDate.now(BUSINESS_ZONE))) {
             throw ApiException.badRequest("INVALID_START_DATE", "startDate cannot be in the past");
         }
         if (request.deliveryAddressId() == null) {
@@ -144,16 +146,16 @@ public class SubscriptionService {
         if ("ACTIVE".equals(normalized)) {
             if ("PAUSED".equals(subscription.status())) {
                 LocalDate resumeDate = subscription.nextServiceDate() == null
-                    ? LocalDate.now()
-                    : subscription.nextServiceDate().isBefore(LocalDate.now()) ? LocalDate.now() : subscription.nextServiceDate();
+                    ? LocalDate.now(BUSINESS_ZONE)
+                    : subscription.nextServiceDate().isBefore(LocalDate.now(BUSINESS_ZONE)) ? LocalDate.now(BUSINESS_ZONE) : subscription.nextServiceDate();
                 capacityService.reacquireForResume(subscription, resumeDate);
             } else {
                 capacityService.commitForActivation(subscription);
             }
         } else if ("PAUSED".equals(normalized)) {
-            capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(), "Administrator paused subscription: " + reason.trim());
+            capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(BUSINESS_ZONE), "Administrator paused subscription: " + reason.trim());
         } else if (Set.of("PAYMENT_FAILED", "EXPIRED", "CANCELLED").contains(normalized)) {
-            capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(), "Administrator moved subscription to " + normalized + ": " + reason.trim());
+            capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(BUSINESS_ZONE), "Administrator moved subscription to " + normalized + ": " + reason.trim());
         }
         return repository.updateSubscriptionStatus(subscription.id(), normalized, reason.trim(), user.identityId());
     }

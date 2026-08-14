@@ -16,6 +16,7 @@ parameters:
     default: $(Build.BuildId)
 
 variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
   modulePath: services/order-service
   imageRepository: craves/order-service
 

@@ -14,7 +14,7 @@ Cashfree HTTPS callback
 → completed, retry, or local dead-letter state
 ```
 
-The signature check uses the exact raw request body and timestamp. Payload size is capped at 1 MiB. Idempotency-key reuse with different content is rejected. A signed `SUCCESS` webhook is not sufficient by itself to finalize money state: the worker calls Cashfree `GET /pg/orders/{orderId}/payments/{cfPaymentId}` and requires matching order ID, payment ID, `SUCCESS` status, amount and currency before dispatching the event to either checkout or subscription payment logic.
+The signature check uses the exact raw request body and timestamp. Payload size is capped at 1 MiB. Idempotency-key reuse with different content is rejected. A signed `SUCCESS` webhook is not sufficient by itself to finalize money state: the worker calls Cashfree `GET /pg/orders/{orderId}/payments/{cfPaymentId}` and requires matching order ID, payment ID, `SUCCESS` status, payment/order amount and payment/order currency before dispatching the event to either checkout or subscription payment logic.
 
 ## Internal readiness API
 
@@ -83,5 +83,16 @@ Use an explicitly approved low-value real transaction. Never use a fake or synth
 5. initiate an approved low-value refund through the Craves refund path;
 6. confirm Cashfree refund status, Integration DB refund state, Order state and customer notification agree;
 7. capture the transaction IDs, timestamps and screenshots/log references as production-readiness evidence without recording secrets, card data, CVV or UPI PIN.
+
+## Known closure blocker found on 2026-08-15
+
+The current customer-web source does not yet publish the legal/support pages required for Cashfree website whitelisting:
+
+- `apps/customer-web-next/src/screens/public/Terms/README.md` says the Terms page folder is empty and still needs a page component/route;
+- `apps/customer-web-next/src/screens/public/Contact/README.md` says the Contact page folder is empty and still needs a page component/route;
+- `apps/customer-web-next/src/components/sections/FooterSection.tsx` renders Privacy policy, Terms of service, Refund policy and Security as non-clickable planned items rather than published legal pages;
+- no dedicated customer-facing Refund/Cancellation policy page was found in the current source audit.
+
+Do not fabricate refund/cancellation or legal terms in engineering code. Publish business/legal-approved content before submitting or re-submitting the production domain for Cashfree whitelisting.
 
 Cashfree production readiness is closed only after all three groups above pass. Code completion alone must not be recorded as live-payment approval.

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { publicApiFetch } from "@/lib/public-api";
 
 export const dynamic = "force-dynamic";
@@ -92,10 +94,10 @@ export default async function ProductsPricingPage() {
     <main className="min-h-screen bg-white text-[#2B1A12]">
       <header className="border-b border-black/5">
         <div className="mx-auto flex min-h-20 max-w-6xl items-center justify-between px-4 md:px-6">
-          <a href="/" className="font-display text-2xl font-black tracking-[-0.04em] text-[#F62E18]">CRAVES</a>
-          <a href="/discover" className="rounded-full bg-[#F62E18] px-5 py-2.5 text-sm font-bold text-white">
+          <Link href="/" className="font-display text-2xl font-black tracking-[-0.04em] text-[#F62E18]">CRAVES</Link>
+          <Link href="/discover" className="rounded-full bg-[#F62E18] px-5 py-2.5 text-sm font-bold text-white">
             Discover near me
-          </a>
+          </Link>
         </div>
       </header>
 

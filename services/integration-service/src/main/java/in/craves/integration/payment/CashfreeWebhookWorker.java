@@ -29,6 +29,11 @@ public class CashfreeWebhookWorker {
             try {
                 dispatcher.dispatch(item.timestamp(), item.signature(), item.rawPayload());
                 inbox.complete(item);
+                LOGGER.info(
+                    "Cashfree webhook processed deliveryId={} attempt={}",
+                    item.id(),
+                    item.attemptCount()
+                );
             } catch (Exception exception) {
                 inbox.fail(item, exception);
                 LOGGER.warn(

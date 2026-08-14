@@ -50,6 +50,17 @@ function optionalText(value: unknown, max: number): string | null { return value
 function dateOnly(value: unknown): string | null { return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null; }
 function instant(value: unknown): string | null { return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null; }
 
+export function indiaBusinessDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 export function parsePublicSubscriptionPlan(value: unknown): PublicSubscriptionPlan | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
@@ -83,8 +94,7 @@ export function parseCreateSubscriptionInput(value: unknown): CreateSubscription
   const raw = value as Record<string, unknown>;
   const planId = text(raw.planId, 64); const startDate = dateOnly(raw.startDate); const deliveryAddressId = optionalText(raw.deliveryAddressId, 64);
   if (!planId || !UUID.test(planId) || !startDate || (deliveryAddressId && !UUID.test(deliveryAddressId))) return null;
-  const today = new Date(); const todayText = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())).toISOString().slice(0, 10);
-  if (startDate < todayText) return null;
+  if (startDate < indiaBusinessDate()) return null;
   return { planId, startDate, deliveryAddressId, notes: optionalText(raw.notes, 2000) };
 }
 

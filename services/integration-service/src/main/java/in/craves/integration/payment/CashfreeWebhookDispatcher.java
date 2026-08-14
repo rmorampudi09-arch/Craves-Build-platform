@@ -11,15 +11,18 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class CashfreeWebhookDispatcher {
     private final ObjectMapper objectMapper;
+    private final CashfreeWebhookProviderVerifier providerVerifier;
     private final PaymentService checkoutPayments;
     private final SubscriptionPaymentService subscriptionPayments;
 
     public CashfreeWebhookDispatcher(
         ObjectMapper objectMapper,
+        CashfreeWebhookProviderVerifier providerVerifier,
         PaymentService checkoutPayments,
         SubscriptionPaymentService subscriptionPayments
     ) {
         this.objectMapper = objectMapper;
+        this.providerVerifier = providerVerifier;
         this.checkoutPayments = checkoutPayments;
         this.subscriptionPayments = subscriptionPayments;
     }
@@ -27,6 +30,7 @@ public class CashfreeWebhookDispatcher {
     public void dispatch(String timestamp, String signature, String rawPayload) {
         try {
             JsonNode payload = objectMapper.readTree(rawPayload);
+            providerVerifier.verifySuccessfulPayment(payload);
             if (subscriptionPayments.handlesWebhook(payload)) {
                 subscriptionPayments.applyWebhook(payload);
                 return;

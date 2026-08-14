@@ -6,6 +6,7 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import javax.crypto.Mac;
@@ -37,12 +38,12 @@ public class CashfreeWebhookInboxService {
 
     @Transactional
     public boolean accept(String timestamp, String signature, String version, String idempotencyKey, String rawBody) {
-        validate(timestamp, signature, version, idempotencyKey, rawBody);
+        String effectiveIdempotencyKey = validate(timestamp, signature, version, idempotencyKey, rawBody);
         int inserted = jdbcTemplate.update(
             "INSERT INTO payment_schema.cashfree_webhook_delivery " +
                 "(id, idempotency_key, webhook_version, webhook_timestamp, webhook_signature, raw_payload, processing_status, next_attempt_at, first_seen_at, last_seen_at) " +
                 "VALUES (?, ?, ?, ?, ?, ?, 'RECEIVED', now(), now(), now()) ON CONFLICT (idempotency_key) DO NOTHING",
-            UUID.randomUUID(), idempotencyKey, version, Long.parseLong(timestamp), signature, rawBody
+            UUID.randomUUID(), effectiveIdempotencyKey, version, Long.parseLong(timestamp), signature, rawBody
         );
         if (inserted == 1) {
             return true;
@@ -50,7 +51,7 @@ public class CashfreeWebhookInboxService {
         DuplicateRow existing = jdbcTemplate.query(
             "SELECT raw_payload, webhook_signature FROM payment_schema.cashfree_webhook_delivery WHERE idempotency_key = ?",
             (rs, rowNum) -> new DuplicateRow(rs.getString("raw_payload"), rs.getString("webhook_signature")),
-            idempotencyKey
+            effectiveIdempotencyKey
         ).stream().findFirst().orElseThrow();
         if (!MessageDigest.isEqual(
             existing.rawPayload().getBytes(StandardCharsets.UTF_8),
@@ -63,7 +64,7 @@ public class CashfreeWebhookInboxService {
         }
         jdbcTemplate.update(
             "UPDATE payment_schema.cashfree_webhook_delivery SET last_seen_at = now() WHERE idempotency_key = ?",
-            idempotencyKey
+            effectiveIdempotencyKey
         );
         return false;
     }
@@ -132,13 +133,9 @@ public class CashfreeWebhookInboxService {
         );
     }
 
-    private void validate(String timestamp, String signature, String version, String idempotencyKey, String rawBody) {
-        if (!StringUtils.hasText(timestamp) || !StringUtils.hasText(signature)
-            || !StringUtils.hasText(version) || !StringUtils.hasText(idempotencyKey)) {
+    private String validate(String timestamp, String signature, String version, String idempotencyKey, String rawBody) {
+        if (!StringUtils.hasText(timestamp) || !StringUtils.hasText(signature) || !StringUtils.hasText(version)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Required Cashfree webhook headers are missing");
-        }
-        if (idempotencyKey.length() > 160) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Webhook idempotency key is too long");
         }
         if (rawBody == null || rawBody.isBlank() || rawBody.getBytes(StandardCharsets.UTF_8).length > MAX_PAYLOAD_BYTES) {
             throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Webhook payload is empty or too large");
@@ -158,6 +155,24 @@ public class CashfreeWebhookInboxService {
         }
         if (!verifySignature(timestamp, signature, rawBody)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Cashfree webhook signature");
+        }
+        String effectiveIdempotencyKey = StringUtils.hasText(idempotencyKey)
+            ? idempotencyKey.trim()
+            : derivedIdempotencyKey(version, rawBody);
+        if (effectiveIdempotencyKey.length() > 160) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Webhook idempotency key is too long");
+        }
+        return effectiveIdempotencyKey;
+    }
+
+    static String derivedIdempotencyKey(String version, String rawBody) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(
+                (version + "\n" + rawBody).getBytes(StandardCharsets.UTF_8)
+            );
+            return "derived-" + HexFormat.of().formatHex(digest);
+        } catch (Exception exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
     }
 

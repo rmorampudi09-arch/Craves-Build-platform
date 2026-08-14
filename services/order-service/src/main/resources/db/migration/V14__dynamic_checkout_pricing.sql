@@ -53,8 +53,10 @@ CREATE TABLE order_schema.checkout_pricing_quote_kitchen (
     platform_tax_included NUMERIC(12,2) NOT NULL,
     delivery_tax_included NUMERIC(12,2) NOT NULL,
     tax_amount NUMERIC(12,2) NOT NULL,
+    base_distance_km NUMERIC(10,3) NOT NULL,
     base_delivery_fee NUMERIC(12,2) NOT NULL,
     extra_distance_km NUMERIC(10,3) NOT NULL,
+    extra_per_km NUMERIC(12,2) NOT NULL,
     extra_distance_fee NUMERIC(12,2) NOT NULL,
     delivery_fee NUMERIC(12,2) NOT NULL,
     grand_total NUMERIC(12,2) NOT NULL,
@@ -64,7 +66,13 @@ CREATE TABLE order_schema.checkout_pricing_quote_kitchen (
         AND pickup_longitude BETWEEN -180 AND 180
     ),
     CONSTRAINT chk_checkout_pricing_quote_kitchen_route CHECK (
-        road_distance_meters >= 0 AND traffic_duration_seconds >= 0
+        road_distance_meters >= 0
+        AND traffic_duration_seconds >= 0
+        AND base_distance_km > 0
+        AND base_delivery_fee >= 0
+        AND extra_distance_km >= 0
+        AND extra_per_km >= 0
+        AND extra_distance_fee >= 0
     )
 );
 
@@ -138,6 +146,9 @@ CREATE INDEX idx_customer_order_pricing_quote
 
 COMMENT ON TABLE order_schema.checkout_pricing_quote IS
     'Immutable customer-visible pricing quote calculated by Order Service before payment. Quotes expire and can be consumed once.';
+
+COMMENT ON TABLE order_schema.checkout_pricing_quote_kitchen IS
+    'Per-chef road-route and pricing inputs used to build a checkout quote. Stores the actual pricing curve values used for auditability.';
 
 COMMENT ON COLUMN order_schema.checkout_pricing_quote.delivery_fee IS
     'Backend-calculated market delivery price derived from Azure Maps road distance. This is not an admin charge-policy field.';

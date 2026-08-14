@@ -1,0 +1,72 @@
+name: Customer checkout CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/customer-web-next/**'
+      - 'infra/apim/customer-checkout/**'
+      - 'scripts/apim/configure-customer-checkout-apim.sh'
+      - 'azure-pipelines-customer-web-next-checkout-ci.yml'
+      - '.github/workflows/customer-checkout-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customer-checkout-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checkout-web:
+    name: Customer checkout typecheck, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - name: Install dependencies
+        working-directory: apps/customer-web-next
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Typecheck
+        working-directory: apps/customer-web-next
+        run: npm run typecheck
+      - name: Test
+        working-directory: apps/customer-web-next
+        run: npm run test
+      - name: Build
+        working-directory: apps/customer-web-next
+        run: npm run build
+
+  checkout-contracts:
+    name: Checkout and APIM safety contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate scripts and contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/apim/configure-customer-checkout-apim.sh
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          ET.parse('infra/apim/customer-checkout/customer-checkout-policy.xml')
+          print('Customer checkout APIM policy XML is valid.')
+          PY
+          grep -q 'deliveryAddressId' apps/customer-web-next/src/lib/checkout-contract.ts
+          grep -q 'pricingQuoteId' apps/customer-web-next/src/lib/checkout-contract.ts
+          grep -q 'parseCheckoutQuote' apps/customer-web-next/src/lib/checkout-contract.ts
+          grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/checkout/route.ts
+          grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/checkout/quote/route.ts
+          grep -q 'quote-customer-checkout' scripts/apim/configure-customer-checkout-apim.sh
+          if grep -REn '(platformFee|taxAmount|deliveryFee|grandTotal)[[:space:]]*[-+*/]|[-+*/][[:space:]]*(platformFee|taxAmount|deliveryFee|grandTotal)' apps/customer-web-next/src/components/customer-checkout.tsx; then
+            echo 'ERROR: Frontend checkout appears to calculate backend-owned charges.' >&2
+            exit 1
+          fi
+          echo 'Checkout safety contracts passed.'

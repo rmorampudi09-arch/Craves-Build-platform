@@ -88,10 +88,19 @@ public class CashfreeWebhookProviderVerifier {
             "/payment_amount"
         ));
         BigDecimal verifiedAmount = decimal(text(verified, "payment_amount"));
+        BigDecimal verifiedOrderAmount = decimal(text(verified, "order_amount"));
         if (webhookAmount != null && verifiedAmount != null && webhookAmount.compareTo(verifiedAmount) != 0) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
                 "Cashfree verified payment amount does not match the webhook"
+            );
+        }
+        if (verifiedAmount == null
+            || verifiedOrderAmount == null
+            || verifiedAmount.compareTo(verifiedOrderAmount) != 0) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Cashfree successful payment amount does not match the Cashfree order amount"
             );
         }
 
@@ -102,12 +111,21 @@ public class CashfreeWebhookProviderVerifier {
             "/payment_currency"
         );
         String verifiedCurrency = text(verified, "payment_currency");
+        String verifiedOrderCurrency = text(verified, "order_currency");
         if (StringUtils.hasText(webhookCurrency)
             && StringUtils.hasText(verifiedCurrency)
             && !webhookCurrency.equalsIgnoreCase(verifiedCurrency)) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
                 "Cashfree verified payment currency does not match the webhook"
+            );
+        }
+        if (!StringUtils.hasText(verifiedCurrency)
+            || !StringUtils.hasText(verifiedOrderCurrency)
+            || !verifiedCurrency.equalsIgnoreCase(verifiedOrderCurrency)) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Cashfree successful payment currency does not match the Cashfree order currency"
             );
         }
     }

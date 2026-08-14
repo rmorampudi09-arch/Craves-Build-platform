@@ -32,15 +32,7 @@ class CashfreeWebhookProviderVerifierTest {
             .andExpect(header("x-client-secret", "client-secret"))
             .andExpect(header("x-api-version", "2025-01-01"))
             .andRespond(withSuccess(
-                """
-                {
-                  "order_id":"CRV_ORDER_1",
-                  "cf_payment_id":"123456",
-                  "payment_status":"SUCCESS",
-                  "payment_amount":125.50,
-                  "payment_currency":"INR"
-                }
-                """,
+                providerPayment("SUCCESS", "125.50", "INR", "125.50", "INR"),
                 MediaType.APPLICATION_JSON
             ));
 
@@ -57,15 +49,7 @@ class CashfreeWebhookProviderVerifierTest {
 
         server.expect(requestTo("https://sandbox.cashfree.com/pg/orders/CRV_ORDER_1/payments/123456"))
             .andRespond(withSuccess(
-                """
-                {
-                  "order_id":"CRV_ORDER_1",
-                  "cf_payment_id":"123456",
-                  "payment_status":"FAILED",
-                  "payment_amount":125.50,
-                  "payment_currency":"INR"
-                }
-                """,
+                providerPayment("FAILED", "125.50", "INR", "125.50", "INR"),
                 MediaType.APPLICATION_JSON
             ));
 
@@ -86,20 +70,33 @@ class CashfreeWebhookProviderVerifierTest {
 
         server.expect(requestTo("https://sandbox.cashfree.com/pg/orders/CRV_ORDER_1/payments/123456"))
             .andRespond(withSuccess(
-                """
-                {
-                  "order_id":"CRV_ORDER_1",
-                  "cf_payment_id":"123456",
-                  "payment_status":"SUCCESS",
-                  "payment_amount":100.00,
-                  "payment_currency":"INR"
-                }
-                """,
+                providerPayment("SUCCESS", "100.00", "INR", "125.50", "INR"),
                 MediaType.APPLICATION_JSON
             ));
 
         assertThatThrownBy(() -> verifier.verifySuccessfulPayment(
             objectMapper.readTree(successWebhook("125.50", "INR"))
+        )).isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+            assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)
+        );
+
+        server.verify();
+    }
+
+    @Test
+    void rejectsProviderPaymentThatDoesNotMatchProviderOrderTotal() throws Exception {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        CashfreeWebhookProviderVerifier verifier = new CashfreeWebhookProviderVerifier(provider(), builder);
+
+        server.expect(requestTo("https://sandbox.cashfree.com/pg/orders/CRV_ORDER_1/payments/123456"))
+            .andRespond(withSuccess(
+                providerPayment("SUCCESS", "100.00", "INR", "125.50", "INR"),
+                MediaType.APPLICATION_JSON
+            ));
+
+        assertThatThrownBy(() -> verifier.verifySuccessfulPayment(
+            objectMapper.readTree(successWebhook("100.00", "INR"))
         )).isInstanceOfSatisfying(ResponseStatusException.class, exception ->
             assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)
         );
@@ -134,6 +131,26 @@ class CashfreeWebhookProviderVerifierTest {
               }
             }
             """.formatted(amount, currency);
+    }
+
+    private static String providerPayment(
+        String paymentStatus,
+        String paymentAmount,
+        String paymentCurrency,
+        String orderAmount,
+        String orderCurrency
+    ) {
+        return """
+            {
+              "order_id":"CRV_ORDER_1",
+              "cf_payment_id":"123456",
+              "payment_status":"%s",
+              "payment_amount":%s,
+              "payment_currency":"%s",
+              "order_amount":%s,
+              "order_currency":"%s"
+            }
+            """.formatted(paymentStatus, paymentAmount, paymentCurrency, orderAmount, orderCurrency);
     }
 
     private static PaymentProviderProperties provider() {

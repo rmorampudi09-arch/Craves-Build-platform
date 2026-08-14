@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 export function PublicPolicyPage({
@@ -20,15 +21,15 @@ export function PublicPolicyPage({
     >
       <header className="border-b border-black/5 bg-white">
         <div className="mx-auto flex min-h-20 max-w-5xl items-center justify-between px-4 md:px-6">
-          <a href="/" className="font-display text-2xl font-black tracking-[-0.04em] text-[#F62E18]">
+          <Link href="/" className="font-display text-2xl font-black tracking-[-0.04em] text-[#F62E18]">
             CRAVES
-          </a>
-          <a
+          </Link>
+          <Link
             href="/"
             className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold transition-colors hover:border-[#F62E18]"
           >
             Back to Craves
-          </a>
+          </Link>
         </div>
       </header>
 

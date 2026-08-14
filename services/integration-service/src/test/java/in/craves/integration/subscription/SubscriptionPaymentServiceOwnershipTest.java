@@ -3,6 +3,8 @@ package in.craves.integration.subscription;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -13,6 +15,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.PaymentProviderProperties;
 import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
@@ -30,6 +33,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
@@ -144,6 +148,52 @@ class SubscriptionPaymentServiceOwnershipTest {
     }
 
     @Test
+    void pendingPaymentReconcilesSuccessfulCashfreePayment() {
+        UUID intentId = UUID.fromString("22222222-2222-4222-8222-222222222222");
+        UUID invoiceId = UUID.fromString("33333333-3333-4333-8333-333333333333");
+        String orderId = "CRVSUB_33333333333343338333333333333333";
+        PaymentIntent pending = paymentIntent(intentId, invoiceId, "PAYMENT_PENDING", orderId, "session_pending");
+        PaymentIntent paid = paymentIntent(intentId, invoiceId, "PAID", orderId, "session_pending");
+        SubscriptionPaymentResponse response = paymentResponse(intentId, invoiceId, "PAID", "session_pending");
+
+        server.expect(requestTo("https://subscription.test/api/v1/subscriptions/" + SUBSCRIPTION_ID))
+            .andExpect(method(HttpMethod.GET))
+            .andExpect(header("Authorization", AUTHORIZATION))
+            .andRespond(withSuccess());
+        server.expect(requestTo("https://sandbox.cashfree.com/pg/orders/" + orderId + "/payments"))
+            .andExpect(method(HttpMethod.GET))
+            .andExpect(header("x-client-id", "sandbox-client-id"))
+            .andExpect(header("x-client-secret", "sandbox-client-key"))
+            .andExpect(header("x-api-version", "2025-01-01"))
+            .andRespond(withSuccess(
+                "[{\"cf_payment_id\":\"12376123\",\"payment_status\":\"SUCCESS\",\"payment_amount\":1499.00,\"payment_currency\":\"INR\"}]",
+                MediaType.APPLICATION_JSON
+            ));
+
+        when(repository.findByInvoice(invoiceId)).thenReturn(Optional.of(pending), Optional.of(paid));
+        when(repository.applyProviderStatus(
+            eq(pending),
+            eq("PAID"),
+            eq("SUCCESS"),
+            eq("12376123"),
+            any(JsonNode.class)
+        )).thenReturn(true);
+        when(repository.response(paid)).thenReturn(response);
+
+        SubscriptionPaymentResponse actual = service.getOwned(AUTHORIZATION, invoiceId);
+
+        assertSame(response, actual);
+        verify(repository).applyProviderStatus(
+            eq(pending),
+            eq("PAID"),
+            eq("SUCCESS"),
+            eq("12376123"),
+            any(JsonNode.class)
+        );
+        server.verify();
+    }
+
+    @Test
     void failedPaymentReusesExistingCashfreeSessionForCustomerRetry() {
         UUID intentId = UUID.fromString("66666666-6666-4666-8666-666666666666");
         UUID invoiceId = UUID.fromString("77777777-7777-4777-8777-777777777777");
@@ -205,10 +255,10 @@ class SubscriptionPaymentServiceOwnershipTest {
             cashfreeOrderId,
             null,
             paymentSessionId,
-            status.equals("FAILED") ? "FAILED" : null,
+            status.equals("FAILED") ? "FAILED" : status.equals("PAID") ? "SUCCESS" : null,
             Instant.parse("2026-08-12T06:30:00Z"),
             Instant.parse("2026-08-12T06:30:00Z"),
-            null
+            status.equals("PAID") ? Instant.parse("2026-08-12T06:31:00Z") : null
         );
     }
 
@@ -228,10 +278,10 @@ class SubscriptionPaymentServiceOwnershipTest {
             "INR",
             status,
             paymentSessionId,
-            status.equals("FAILED") ? "FAILED" : null,
+            status.equals("FAILED") ? "FAILED" : status.equals("PAID") ? "SUCCESS" : null,
             Instant.parse("2026-08-12T06:30:00Z"),
             Instant.parse("2026-08-12T06:30:00Z"),
-            null
+            status.equals("PAID") ? Instant.parse("2026-08-12T06:31:00Z") : null
         );
     }
 }

@@ -17,6 +17,9 @@ parameters:
   - name: webhookUrl
     type: string
     default: https://replace-before-run.invalid
+  - name: customerWebBaseUrl
+    type: string
+    default: https://craves.in
   - name: expectedWebhookPendingCount
     type: number
     default: 0
@@ -47,8 +50,11 @@ steps:
           set -euo pipefail
           stage='${{ parameters.activationStage }}'
           webhook_url='${{ parameters.webhookUrl }}'
+          customer_web_base='${{ parameters.customerWebBaseUrl }}'
+          customer_web_base="${customer_web_base%/}"
           [[ "$webhook_url" == https://* ]] || { echo 'Cashfree webhook URL must use HTTPS.' >&2; exit 2; }
           [[ "$webhook_url" != *replace-before-run.invalid* ]] || { echo 'Replace the placeholder webhook URL.' >&2; exit 2; }
+          [[ "$customer_web_base" == https://* ]] || { echo 'Customer web production URL must use HTTPS.' >&2; exit 2; }
           [[ -n "${CRAVES_INTERNAL_SMOKE_SECRET:-}" ]] || { echo 'Secret variable CRAVES_INTERNAL_SMOKE_SECRET is required.' >&2; exit 2; }
 
           secrets="$(az containerapp secret list -g '$(resourceGroup)' -n '$(containerApp)' --query '[].name' -o tsv)"
@@ -61,6 +67,16 @@ steps:
           if [[ "$stage" == 'webhook' ]]; then
             [[ "$(current CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED)" != 'true' ]] || { echo 'Payment execution must be disabled before webhook cutover.' >&2; exit 2; }
             [[ "$(current CRAVES_PAYMENT_ORDER_API_ENABLED)" != 'true' ]] || { echo 'Payment-order API must be disabled before webhook cutover.' >&2; exit 2; }
+
+            probe_file=$(mktemp)
+            probe_status=$(curl -sS -o "$probe_file" -w '%{http_code}' --connect-timeout 10 --max-time 30 \
+              -X POST "$webhook_url" -H 'Content-Type: application/json' --data '{}' || true)
+            rm -f "$probe_file"
+            [[ "$probe_status" == '400' ]] || {
+              echo "Cashfree webhook public route must reject a headerless probe with HTTP 400; got $probe_status. Run the Cashfree webhook APIM pipeline first." >&2
+              exit 2
+            }
+
             az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
               --set-env-vars \
                 PAYMENT_PROVIDER_ENVIRONMENT=production \
@@ -94,6 +110,39 @@ steps:
             [[ "$dead" == '${{ parameters.expectedWebhookDeadLetterCount }}' ]] || { echo "Unexpected Cashfree webhook dead-letter count: $dead" >&2; exit 2; }
             [[ "$dead" == '0' ]] || { echo 'Cashfree production execution requires an empty webhook dead-letter set.' >&2; exit 2; }
             [[ "$config_ready" == 'true' ]] || { echo 'Cashfree production configuration readiness is false.' >&2; exit 2; }
+
+            web_readiness="$(curl -fsS --connect-timeout 10 --max-time 30 "$customer_web_base/api/readiness/cashfree")"
+            [[ "$(jq -r '.cashfreeMode' <<<"$web_readiness")" == 'production' ]] || { echo 'Customer web is not built in Cashfree production mode.' >&2; exit 2; }
+            [[ "$(jq -r '.productionEligible' <<<"$web_readiness")" == 'true' ]] || { echo 'Customer web reports Cashfree production ineligible.' >&2; exit 2; }
+            [[ "$(jq -r '.merchantIdentity.publicSupportPhoneConfigured' <<<"$web_readiness")" == 'true' ]] || { echo 'Public Craves support phone is not configured.' >&2; exit 2; }
+            [[ "$(jq -r '.merchantIdentity.registeredBusinessNameConfigured' <<<"$web_readiness")" == 'true' ]] || { echo 'Registered Cashfree merchant/business name is not configured on the public site.' >&2; exit 2; }
+            [[ "$(jq -r '.policies.contactPublished' <<<"$web_readiness")" == 'true' ]] || { echo 'Customer contact page is not published.' >&2; exit 2; }
+            [[ "$(jq -r '.policies.termsPublished' <<<"$web_readiness")" == 'true' ]] || { echo 'Customer terms are not published.' >&2; exit 2; }
+            [[ "$(jq -r '.policies.refundsAndCancellationsPublished' <<<"$web_readiness")" == 'true' ]] || { echo 'Customer refund/cancellation policy is not published.' >&2; exit 2; }
+            [[ "$(jq -r '.policies.privacyPublished' <<<"$web_readiness")" == 'true' ]] || { echo 'Customer privacy policy is not published.' >&2; exit 2; }
+            [[ "$(jq -r '.policies.productsAndPricingRoutePublished' <<<"$web_readiness")" == 'true' ]] || { echo 'Public products/pricing route is not published.' >&2; exit 2; }
+
+            for public_path in contact terms refunds-cancellations privacy; do
+              page="$(curl -fsS --connect-timeout 10 --max-time 30 "$customer_web_base/$public_path")"
+              grep -Fq 'data-craves-policy-status="approved"' <<<"$page" || {
+                echo "Customer page /$public_path is missing the approved policy marker." >&2
+                exit 2
+              }
+            done
+            contact_page="$(curl -fsS --connect-timeout 10 --max-time 30 "$customer_web_base/contact")"
+            grep -Fqi 'support@craves.in' <<<"$contact_page" || { echo 'Customer contact page does not expose the support address.' >&2; exit 2; }
+            ! grep -Fq 'data-craves-contact-phone-status="pending"' <<<"$contact_page" || { echo 'Customer contact phone is still pending.' >&2; exit 2; }
+            ! grep -Fq 'data-craves-business-name-status="pending"' <<<"$contact_page" || { echo 'Registered business name is still pending.' >&2; exit 2; }
+
+            pricing_page="$(curl -fsS --connect-timeout 10 --max-time 30 "$customer_web_base/products-pricing")"
+            grep -Fq 'data-craves-live-pricing-status="ready"' <<<"$pricing_page" || {
+              echo 'Public products/pricing page does not currently expose at least one real active INR-priced Craves dish.' >&2
+              exit 2
+            }
+            grep -Fq '₹' <<<"$pricing_page" || {
+              echo 'Public products/pricing page is not rendering INR prices.' >&2
+              exit 2
+            }
 
             az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
               --set-env-vars \

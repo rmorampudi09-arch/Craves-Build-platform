@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import in.craves.integration.config.PaymentProviderProperties;
+import in.craves.integration.payment.CashfreeRequestSafety;
 import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
 import in.craves.integration.subscription.SubscriptionPaymentModels.EventEnvelope;
 import in.craves.integration.subscription.SubscriptionPaymentModels.PaymentRequestedData;
@@ -116,12 +117,15 @@ public class SubscriptionPaymentService {
         Map<String, Object> customer = new LinkedHashMap<>();
         customer.put("customer_id", intent.customerIdentityId().toString());
         customer.put("customer_name", request.customerName().trim());
-        customer.put("customer_phone", request.customerPhone().trim());
+        customer.put(
+            "customer_phone",
+            CashfreeRequestSafety.normalizeIndianPhone(request.customerPhone(), provider.sandbox())
+        );
         if (StringUtils.hasText(request.customerEmail())) {
             customer.put("customer_email", request.customerEmail().trim());
         }
         Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("return_url", returnUrl(request.returnUrl()));
+        meta.put("return_url", CashfreeRequestSafety.safeReturnUrl(provider, request.returnUrl()));
         meta.put("notify_url", provider.webhookUrl());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("order_id", orderId);
@@ -140,9 +144,9 @@ public class SubscriptionPaymentService {
             .body(body)
             .retrieve()
             .body(JsonNode.class);
-        if (response == null || !StringUtils.hasText(text(response, "payment_session_id"))) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Cashfree subscription payment response is incomplete");
-        }
+        CashfreeRequestSafety.requireCreateOrderResponse(
+            response, orderId, intent.amount(), intent.currency()
+        );
         PaymentIntent stored = repository.storeProviderOrder(
             intent.id(),
             text(response, "order_id"),
@@ -261,12 +265,9 @@ public class SubscriptionPaymentService {
     }
 
     private void validateProviderAmount(PaymentIntent intent, BigDecimal amount, String currency) {
-        if (amount == null || amount.compareTo(intent.amount()) != 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Subscription payment amount does not match invoice");
-        }
-        if (StringUtils.hasText(currency) && !intent.currency().equalsIgnoreCase(currency)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Subscription payment currency does not match invoice");
-        }
+        CashfreeRequestSafety.requireMoney(
+            intent.amount(), intent.currency(), amount, currency, "Subscription Cashfree payment"
+        );
     }
 
     private void applyStatusEvent(
@@ -339,14 +340,6 @@ public class SubscriptionPaymentService {
             || !StringUtils.hasText(data.currency()) || data.currency().length() != 3) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Subscription payment event data is incomplete");
         }
-    }
-
-    private String returnUrl(String requested) {
-        String value = StringUtils.hasText(requested) ? requested.trim() : provider.defaultReturnUrl();
-        if (!value.startsWith("https://")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment return URL must use HTTPS");
-        }
-        return value;
     }
 
     private static void requireAuthorization(String authorization) {

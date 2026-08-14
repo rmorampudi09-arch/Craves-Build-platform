@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.OrderClientProperties;
 import in.craves.integration.config.PaymentProviderProperties;
+import in.craves.integration.payment.CashfreeRequestSafety;
 import in.craves.integration.web.PaymentDtos.CreatePaymentOrderRequest;
 import in.craves.integration.web.PaymentDtos.CreatePaymentOrderResponse;
 import in.craves.integration.web.PaymentDtos.PaymentOrderResponse;
@@ -33,8 +34,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class PaymentService {
-    private static final String INR = "INR";
-
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final PaymentProviderProperties provider;
@@ -92,13 +91,27 @@ public class PaymentService {
             .header("x-api-version", provider.apiVersion())
             .retrieve()
             .body(JsonNode.class);
+        if (response == null || !existing.cashfreeOrderId().equals(text(response, "order_id"))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cashfree order verification identity does not match Craves");
+        }
+        CashfreeRequestSafety.requireMoney(
+            existing.amount(),
+            existing.currency(),
+            CashfreeRequestSafety.decimal(text(response, "order_amount")),
+            text(response, "order_currency"),
+            "Cashfree order verification"
+        );
         String providerStatus = text(response, "order_status");
-        PaymentOrderStatus status = "PAID".equalsIgnoreCase(providerStatus) ? PaymentOrderStatus.PAID : existing.status();
+        boolean paidTransition = "PAID".equalsIgnoreCase(providerStatus)
+            && existing.status() != PaymentOrderStatus.PAID;
+        PaymentOrderStatus status = "PAID".equalsIgnoreCase(providerStatus)
+            ? PaymentOrderStatus.PAID
+            : existing.status();
         jdbcTemplate.update(
             "UPDATE payment_schema.payment_order SET status = ?, provider_status = ?, response_payload = ?::jsonb, updated_at = now() WHERE id = ?",
             status.name(), providerStatus, json(response), paymentOrderId
         );
-        if (status == PaymentOrderStatus.PAID) {
+        if (paidTransition) {
             notifyOrderPaid(existing.checkoutId(), existing, null);
         }
         return new VerifyPaymentResponse(paymentOrderId, status, providerStatus);
@@ -124,13 +137,22 @@ public class PaymentService {
             String cfPaymentId = firstText(payload, "/data/payment/cf_payment_id", "/payment/cf_payment_id", "/cf_payment_id");
             String paymentStatus = firstText(payload, "/data/payment/payment_status", "/payment/payment_status", "/payment_status");
             BigDecimal amount = decimal(firstText(payload, "/data/payment/payment_amount", "/payment/payment_amount", "/payment_amount"));
+            String currency = firstText(payload, "/data/payment/payment_currency", "/payment/payment_currency", "/payment_currency");
             PaymentOrderResponse order = findByProviderOrderId(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found"));
-            String eventIdentity = StringUtils.hasText(cfPaymentId) ? cfPaymentId : orderId + ":" + paymentStatus + ":" + hash(rawBody);
+            if ("SUCCESS".equalsIgnoreCase(paymentStatus)) {
+                CashfreeRequestSafety.requireMoney(
+                    order.amount(), order.currency(), amount, currency, "Cashfree success webhook"
+                );
+            }
+            String eventIdentity = StringUtils.hasText(cfPaymentId)
+                ? cfPaymentId
+                : orderId + ":" + paymentStatus + ":" + hash(rawBody);
             try {
                 jdbcTemplate.update(
                     "INSERT INTO payment_schema.payment_event (id, payment_order_id, provider_event_id, event_type, payment_status, raw_payload, created_at) VALUES (?, ?, ?, ?, ?, ?::jsonb, now())",
-                    UUID.randomUUID(), order.paymentOrderId(), eventIdentity, firstText(payload, "/type", "/event_type"), paymentStatus, rawBody
+                    UUID.randomUUID(), order.paymentOrderId(), eventIdentity,
+                    firstText(payload, "/type", "/event_type"), paymentStatus, rawBody
                 );
             } catch (DuplicateKeyException duplicate) {
                 jdbcTemplate.update(
@@ -139,16 +161,20 @@ public class PaymentService {
                 );
                 return;
             }
+            String attemptCurrency = StringUtils.hasText(currency) ? currency : order.currency();
             jdbcTemplate.update(
                 "INSERT INTO payment_schema.payment_attempt (id, payment_order_id, cf_payment_id, payment_status, payment_amount, payment_currency, raw_payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, now())",
-                UUID.randomUUID(), order.paymentOrderId(), cfPaymentId, paymentStatus, amount, INR, rawBody
+                UUID.randomUUID(), order.paymentOrderId(), cfPaymentId, paymentStatus, amount, attemptCurrency, rawBody
             );
             if ("SUCCESS".equalsIgnoreCase(paymentStatus)) {
+                boolean paidTransition = order.status() != PaymentOrderStatus.PAID;
                 jdbcTemplate.update(
                     "UPDATE payment_schema.payment_order SET status = ?, provider_status = ?, updated_at = now() WHERE id = ?",
                     PaymentOrderStatus.PAID.name(), paymentStatus, order.paymentOrderId()
                 );
-                notifyOrderPaid(order.checkoutId(), order, cfPaymentId);
+                if (paidTransition) {
+                    notifyOrderPaid(order.checkoutId(), order, cfPaymentId);
+                }
             } else {
                 jdbcTemplate.update(
                     "UPDATE payment_schema.payment_order SET provider_status = ?, updated_at = now() WHERE id = ?",
@@ -198,13 +224,17 @@ public class PaymentService {
     }
 
     static void requireAuthorization(String authorizationHeader) {
-        if (!StringUtils.hasText(authorizationHeader) || !authorizationHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
+        if (!StringUtils.hasText(authorizationHeader)
+            || !authorizationHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing or invalid access token");
         }
     }
 
     static void requireMatchingCustomer(UUID paymentCustomerIdentityId, CheckoutResponse checkout) {
-        if (paymentCustomerIdentityId == null || checkout == null || checkout.customerIdentityId() == null || !paymentCustomerIdentityId.equals(checkout.customerIdentityId())) {
+        if (paymentCustomerIdentityId == null
+            || checkout == null
+            || checkout.customerIdentityId() == null
+            || !paymentCustomerIdentityId.equals(checkout.customerIdentityId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found");
         }
     }
@@ -214,11 +244,19 @@ public class PaymentService {
         String orderRef = "CRV_" + checkout.id().toString().replace("-", "");
         Map<String, Object> customer = new LinkedHashMap<>();
         customer.put("customer_id", checkout.customerIdentityId().toString());
-        customer.put("customer_phone", StringUtils.hasText(request.customerPhone()) ? request.customerPhone() : "9999999999");
-        customer.put("customer_email", StringUtils.hasText(request.customerEmail()) ? request.customerEmail() : "sandbox@craves.in");
-        customer.put("customer_name", StringUtils.hasText(request.customerName()) ? request.customerName() : "Craves Customer");
+        customer.put(
+            "customer_phone",
+            CashfreeRequestSafety.normalizeIndianPhone(request.customerPhone(), provider.sandbox())
+        );
+        if (StringUtils.hasText(request.customerEmail())) {
+            customer.put("customer_email", request.customerEmail().trim());
+        }
+        customer.put(
+            "customer_name",
+            StringUtils.hasText(request.customerName()) ? request.customerName().trim() : "Craves Customer"
+        );
         Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("return_url", StringUtils.hasText(request.returnUrl()) ? request.returnUrl() : provider.defaultReturnUrl());
+        meta.put("return_url", CashfreeRequestSafety.safeReturnUrl(provider, request.returnUrl()));
         meta.put("notify_url", provider.webhookUrl());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("order_id", orderRef);
@@ -231,17 +269,22 @@ public class PaymentService {
             .header("x-client-id", provider.clientId())
             .header("x-client-" + "secret", provider.clientKey())
             .header("x-api-version", provider.apiVersion())
+            .header("x-idempotency-key", checkout.id().toString())
             .body(body)
             .retrieve()
             .body(JsonNode.class);
+        CashfreeRequestSafety.requireCreateOrderResponse(
+            response, orderRef, checkout.grandTotal(), checkout.currency()
+        );
         String paymentSessionId = text(response, "payment_session_id");
         String cfOrderId = text(response, "cf_order_id");
         String cashfreeOrderId = text(response, "order_id");
         String providerStatus = text(response, "order_status");
         jdbcTemplate.update(
             "INSERT INTO payment_schema.payment_order (id, checkout_id, customer_identity_id, craves_payment_order_ref, cashfree_order_id, cashfree_cf_order_id, payment_session_id, amount, currency, status, provider_status, request_payload, response_payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, now(), now())",
-            paymentOrderId, checkout.id(), checkout.customerIdentityId(), orderRef, cashfreeOrderId, cfOrderId, paymentSessionId,
-            checkout.grandTotal(), checkout.currency(), PaymentOrderStatus.PAYMENT_PENDING.name(), providerStatus, json(body), json(response)
+            paymentOrderId, checkout.id(), checkout.customerIdentityId(), orderRef, cashfreeOrderId, cfOrderId,
+            paymentSessionId, checkout.grandTotal(), checkout.currency(), PaymentOrderStatus.PAYMENT_PENDING.name(),
+            providerStatus, json(body), json(response)
         );
         return new CreatePaymentOrderResponse(
             paymentOrderId, checkout.id(), orderRef, cashfreeOrderId, cfOrderId, paymentSessionId,
@@ -267,7 +310,9 @@ public class PaymentService {
                 rs.getTimestamp("updated_at").toInstant()
             ),
             paymentOrderId
-        ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found"));
+        ).stream().findFirst().orElseThrow(() ->
+            new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found")
+        );
     }
 
     private Optional<PaymentOrderResponse> findByCheckout(UUID checkoutId) {
@@ -290,8 +335,9 @@ public class PaymentService {
             (rs, rowNum) -> rs.getString("payment_session_id"), existing.paymentOrderId()
         ).stream().findFirst().orElse(null);
         return new CreatePaymentOrderResponse(
-            existing.paymentOrderId(), existing.checkoutId(), existing.cravesPaymentOrderRef(), existing.cashfreeOrderId(),
-            existing.cfOrderId(), paymentSessionId, existing.amount(), existing.currency(), existing.status(), existing.createdAt()
+            existing.paymentOrderId(), existing.checkoutId(), existing.cravesPaymentOrderRef(),
+            existing.cashfreeOrderId(), existing.cfOrderId(), paymentSessionId, existing.amount(),
+            existing.currency(), existing.status(), existing.createdAt()
         );
     }
 
@@ -310,18 +356,31 @@ public class PaymentService {
 
     private boolean verifySignature(String timestamp, String signature, String rawBody) {
         try {
-            if (!StringUtils.hasText(timestamp) || !StringUtils.hasText(signature) || !StringUtils.hasText(provider.clientKey())) return false;
+            if (!StringUtils.hasText(timestamp)
+                || !StringUtils.hasText(signature)
+                || !StringUtils.hasText(provider.clientKey())) {
+                return false;
+            }
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(provider.clientKey().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            String generated = Base64.getEncoder().encodeToString(mac.doFinal((timestamp + rawBody).getBytes(StandardCharsets.UTF_8)));
-            return MessageDigest.isEqual(generated.getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8));
+            String generated = Base64.getEncoder().encodeToString(
+                mac.doFinal((timestamp + rawBody).getBytes(StandardCharsets.UTF_8))
+            );
+            return MessageDigest.isEqual(
+                generated.getBytes(StandardCharsets.UTF_8),
+                signature.getBytes(StandardCharsets.UTF_8)
+            );
         } catch (Exception ex) {
             return false;
         }
     }
 
     private String json(Object value) {
-        try { return objectMapper.writeValueAsString(value); } catch (Exception ex) { return "{}"; }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            return "{}";
+        }
     }
 
     private static String text(JsonNode node, String field) {
@@ -332,28 +391,49 @@ public class PaymentService {
     private static String firstText(JsonNode node, String... pointers) {
         for (String pointer : pointers) {
             JsonNode value = node.at(pointer);
-            if (!value.isMissingNode() && !value.isNull()) return value.asText();
+            if (!value.isMissingNode() && !value.isNull()) {
+                return value.asText();
+            }
         }
         return null;
     }
 
     private static BigDecimal decimal(String value) {
-        if (!StringUtils.hasText(value)) return null;
-        try { return new BigDecimal(value); } catch (Exception ex) { return null; }
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return new BigDecimal(value);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     private static String hash(String value) {
         try {
-            return Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(String.valueOf(value).getBytes(StandardCharsets.UTF_8)));
+            return Base64.getEncoder().encodeToString(
+                MessageDigest.getInstance("SHA-256").digest(
+                    String.valueOf(value).getBytes(StandardCharsets.UTF_8)
+                )
+            );
         } catch (Exception ex) {
             return null;
         }
     }
 
     private static String safe(String value) {
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         return value.length() > 500 ? value.substring(0, 500) : value;
     }
 
-    public record CheckoutResponse(UUID id, UUID customerIdentityId, String status, String currency, BigDecimal grandTotal) {}
+    public record CheckoutResponse(
+        UUID id,
+        UUID customerIdentityId,
+        String status,
+        String currency,
+        BigDecimal grandTotal
+    ) {
+    }
 }

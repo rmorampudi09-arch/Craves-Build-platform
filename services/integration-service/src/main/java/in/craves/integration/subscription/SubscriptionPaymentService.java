@@ -13,12 +13,15 @@ import in.craves.integration.subscription.SubscriptionPaymentModels.Subscription
 import in.craves.integration.subscription.SubscriptionPaymentRepository.PaymentIntent;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -29,7 +32,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class SubscriptionPaymentService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SubscriptionPaymentService.class);
     private static final Set<String> SUPPORTED_EVENT_VERSIONS = Set.of("v1");
+    private static final long RECONCILIATION_MIN_AGE_SECONDS = 5L;
 
     private final SubscriptionPaymentRepository repository;
     private final SubscriptionPaymentProperties properties;
@@ -77,12 +82,12 @@ public class SubscriptionPaymentService {
         validateSubscriptionOwnership(authorization, subscriptionId);
         PaymentIntent intent = repository.findLatestBySubscription(subscriptionId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Subscription payment invoice is not ready"));
-        return repository.response(intent);
+        return repository.response(reconcilePending(intent));
     }
 
     public SubscriptionPaymentResponse getOwned(String authorization, UUID invoiceId) {
         PaymentIntent intent = owned(authorization, invoiceId);
-        return repository.response(intent);
+        return repository.response(reconcilePending(intent));
     }
 
     public SubscriptionPaymentResponse createProviderOrder(
@@ -91,12 +96,16 @@ public class SubscriptionPaymentService {
         CreateSubscriptionPaymentOrderRequest request
     ) {
         PaymentIntent intent = owned(authorization, invoiceId);
+        if ("PAID".equals(intent.status())) {
+            return repository.response(intent);
+        }
+        if ("PAYMENT_PENDING".equals(intent.status())) {
+            return repository.response(reconcilePending(intent));
+        }
         if (
-            "PAID".equals(intent.status())
-                || "PAYMENT_PENDING".equals(intent.status())
-                || ("FAILED".equals(intent.status())
-                    && StringUtils.hasText(intent.cashfreeOrderId())
-                    && StringUtils.hasText(intent.paymentSessionId()))
+            "FAILED".equals(intent.status())
+                && StringUtils.hasText(intent.cashfreeOrderId())
+                && StringUtils.hasText(intent.paymentSessionId())
         ) {
             return repository.response(intent);
         }
@@ -159,19 +168,115 @@ public class SubscriptionPaymentService {
         String currency = firstText(payload, "/data/payment/payment_currency", "/payment/payment_currency", "/payment_currency");
         PaymentIntent intent = repository.findByCashfreeOrder(orderId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Subscription payment intent was not found"));
+        validateProviderAmount(intent, amount, currency);
+        String normalized = switch (paymentStatus == null ? "" : paymentStatus.toUpperCase(Locale.ROOT)) {
+            case "SUCCESS" -> "PAID";
+            case "FAILED", "USER_DROPPED", "CANCELLED" -> "FAILED";
+            default -> "PAYMENT_PENDING";
+        };
+        applyStatusEvent(intent, normalized, paymentStatus, providerPaymentId);
+    }
+
+    private PaymentIntent reconcilePending(PaymentIntent intent) {
+        if (!"PAYMENT_PENDING".equals(intent.status()) || !StringUtils.hasText(intent.cashfreeOrderId())) {
+            return intent;
+        }
+        if (
+            intent.updatedAt() != null
+                && Duration.between(intent.updatedAt(), Instant.now()).abs().getSeconds() < RECONCILIATION_MIN_AGE_SECONDS
+        ) {
+            return intent;
+        }
+
+        try {
+            JsonNode payments = providerClient.get()
+                .uri("/pg/orders/{orderId}/payments", intent.cashfreeOrderId())
+                .header("x-client-id", provider.clientId())
+                .header("x-client-" + "secret", provider.clientKey())
+                .header("x-api-version", provider.apiVersion())
+                .retrieve()
+                .body(JsonNode.class);
+
+            JsonNode successful = successfulPayment(payments);
+            if (successful != null) {
+                BigDecimal amount = decimal(text(successful, "payment_amount"));
+                String currency = text(successful, "payment_currency");
+                validateProviderAmount(intent, amount, currency);
+                String providerPaymentId = text(successful, "cf_payment_id");
+                applyStatusEvent(intent, "PAID", "SUCCESS", providerPaymentId);
+                LOGGER.info(
+                    "Subscription Cashfree reconciliation marked invoice paid invoiceId={} orderId={}",
+                    intent.invoiceId(),
+                    intent.cashfreeOrderId()
+                );
+            } else {
+                String providerStatus = firstPaymentStatus(payments);
+                if (StringUtils.hasText(providerStatus)) {
+                    repository.applyProviderStatus(
+                        intent,
+                        intent.status(),
+                        providerStatus,
+                        null,
+                        objectMapper.createObjectNode()
+                    );
+                }
+            }
+            return repository.findByInvoice(intent.invoiceId()).orElse(intent);
+        } catch (RestClientResponseException exception) {
+            LOGGER.warn(
+                "Subscription Cashfree reconciliation request failed invoiceId={} orderId={} status={}",
+                intent.invoiceId(),
+                intent.cashfreeOrderId(),
+                exception.getStatusCode().value()
+            );
+            return intent;
+        } catch (RuntimeException exception) {
+            LOGGER.warn(
+                "Subscription Cashfree reconciliation failed invoiceId={} orderId={} reason={}",
+                intent.invoiceId(),
+                intent.cashfreeOrderId(),
+                safeLog(exception)
+            );
+            return intent;
+        }
+    }
+
+    private JsonNode successfulPayment(JsonNode payments) {
+        if (payments == null || !payments.isArray()) {
+            return null;
+        }
+        for (JsonNode payment : payments) {
+            if ("SUCCESS".equalsIgnoreCase(text(payment, "payment_status"))) {
+                return payment;
+            }
+        }
+        return null;
+    }
+
+    private String firstPaymentStatus(JsonNode payments) {
+        if (payments == null || !payments.isArray() || payments.isEmpty()) {
+            return null;
+        }
+        return text(payments.get(0), "payment_status");
+    }
+
+    private void validateProviderAmount(PaymentIntent intent, BigDecimal amount, String currency) {
         if (amount == null || amount.compareTo(intent.amount()) != 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Subscription payment amount does not match invoice");
         }
         if (StringUtils.hasText(currency) && !intent.currency().equalsIgnoreCase(currency)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Subscription payment currency does not match invoice");
         }
-        String normalized = switch (paymentStatus == null ? "" : paymentStatus.toUpperCase(Locale.ROOT)) {
-            case "SUCCESS" -> "PAID";
-            case "FAILED", "USER_DROPPED", "CANCELLED" -> "FAILED";
-            default -> "PAYMENT_PENDING";
-        };
+    }
+
+    private void applyStatusEvent(
+        PaymentIntent intent,
+        String normalized,
+        String providerStatus,
+        String providerPaymentId
+    ) {
         StatusChangedData data = new StatusChangedData(
-            intent.id(), intent.invoiceId(), intent.subscriptionId(), normalized, paymentStatus,
+            intent.id(), intent.invoiceId(), intent.subscriptionId(), normalized, providerStatus,
             providerPaymentId, intent.amount(), intent.currency(), Instant.now()
         );
         ObjectNode event = objectMapper.createObjectNode();
@@ -189,7 +294,7 @@ public class SubscriptionPaymentService {
         );
         event.put("subject", intent.invoiceId().toString());
         event.set("data", objectMapper.valueToTree(data));
-        repository.applyProviderStatus(intent, normalized, paymentStatus, providerPaymentId, event);
+        repository.applyProviderStatus(intent, normalized, providerStatus, providerPaymentId, event);
     }
 
     private PaymentIntent owned(String authorization, UUID invoiceId) {
@@ -277,5 +382,11 @@ public class SubscriptionPaymentService {
         } catch (NumberFormatException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cashfree payment amount is invalid");
         }
+    }
+
+    private static String safeLog(Throwable error) {
+        String value = error == null || error.getMessage() == null ? "unknown" : error.getMessage();
+        value = value.replace('\n', ' ').replace('\r', ' ').trim();
+        return value.length() > 300 ? value.substring(0, 300) : value;
     }
 }

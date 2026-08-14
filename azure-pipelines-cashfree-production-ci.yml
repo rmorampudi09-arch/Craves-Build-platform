@@ -32,4 +32,8 @@ steps:
         services/integration-service/src/main/resources/application.yml
       grep -Fq 'FOR UPDATE SKIP LOCKED' \
         services/integration-service/src/main/java/in/craves/integration/payment/CashfreeWebhookInboxService.java
-    displayName: Verify financial switches and durable claims
+      grep -Fq 'providerVerifier.verifySuccessfulPayment(payload);' \
+        services/integration-service/src/main/java/in/craves/integration/payment/CashfreeWebhookDispatcher.java
+      grep -Fq '/pg/orders/{orderId}/payments/{paymentId}' \
+        services/integration-service/src/main/java/in/craves/integration/payment/CashfreeWebhookProviderVerifier.java
+    displayName: Verify financial switches, durable claims and provider reconciliation

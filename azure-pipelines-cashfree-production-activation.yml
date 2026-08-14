@@ -17,6 +17,9 @@ parameters:
   - name: webhookUrl
     type: string
     default: https://replace-before-run.invalid
+  - name: customerWebBaseUrl
+    type: string
+    default: https://craves.in
   - name: expectedWebhookPendingCount
     type: number
     default: 0
@@ -47,8 +50,11 @@ steps:
           set -euo pipefail
           stage='${{ parameters.activationStage }}'
           webhook_url='${{ parameters.webhookUrl }}'
+          customer_web_base='${{ parameters.customerWebBaseUrl }}'
+          customer_web_base="${customer_web_base%/}"
           [[ "$webhook_url" == https://* ]] || { echo 'Cashfree webhook URL must use HTTPS.' >&2; exit 2; }
           [[ "$webhook_url" != *replace-before-run.invalid* ]] || { echo 'Replace the placeholder webhook URL.' >&2; exit 2; }
+          [[ "$customer_web_base" == https://* ]] || { echo 'Customer web production URL must use HTTPS.' >&2; exit 2; }
           [[ -n "${CRAVES_INTERNAL_SMOKE_SECRET:-}" ]] || { echo 'Secret variable CRAVES_INTERNAL_SMOKE_SECRET is required.' >&2; exit 2; }
 
           secrets="$(az containerapp secret list -g '$(resourceGroup)' -n '$(containerApp)' --query '[].name' -o tsv)"
@@ -94,6 +100,26 @@ steps:
             [[ "$dead" == '${{ parameters.expectedWebhookDeadLetterCount }}' ]] || { echo "Unexpected Cashfree webhook dead-letter count: $dead" >&2; exit 2; }
             [[ "$dead" == '0' ]] || { echo 'Cashfree production execution requires an empty webhook dead-letter set.' >&2; exit 2; }
             [[ "$config_ready" == 'true' ]] || { echo 'Cashfree production configuration readiness is false.' >&2; exit 2; }
+
+            web_readiness="$(curl -fsS --connect-timeout 10 --max-time 30 \
+              "$customer_web_base/api/readiness/cashfree")"
+            [[ "$(jq -r '.cashfreeMode' <<<"$web_readiness")" == 'production' ]] || { echo 'Customer web is not built in Cashfree production mode.' >&2; exit 2; }
+            [[ "$(jq -r '.productionEligible' <<<"$web_readiness")" == 'true' ]] || { echo 'Customer web reports Cashfree production ineligible.' >&2; exit 2; }
+            [[ "$(jq -r '.policies.contactPublished' <<<"$web_readiness")" == 'true' ]] || { echo 'Customer contact page is not published.' >&2; exit 2; }
+            [[ "$(jq -r '.policies.termsPublished' <<<"$web_readiness")" == 'true' ]] || { echo 'Customer terms are not published.' >&2; exit 2; }
+            [[ "$(jq -r '.policies.refundsAndCancellationsPublished' <<<"$web_readiness")" == 'true' ]] || { echo 'Customer refund/cancellation policy is not published.' >&2; exit 2; }
+
+            for public_path in contact terms refunds-cancellations; do
+              page="$(curl -fsS --connect-timeout 10 --max-time 30 "$customer_web_base/$public_path")"
+              grep -Fq 'data-craves-policy-status="approved"' <<<"$page" || {
+                echo "Customer page /$public_path is missing the approved policy marker." >&2
+                exit 2
+              }
+            done
+            grep -Fqi 'support@craves.in' <<<"$(curl -fsS --connect-timeout 10 --max-time 30 "$customer_web_base/contact")" || {
+              echo 'Customer contact page does not expose the support address.' >&2
+              exit 2
+            }
 
             az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
               --set-env-vars \

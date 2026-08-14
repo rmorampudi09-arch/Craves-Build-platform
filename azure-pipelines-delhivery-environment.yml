@@ -1,0 +1,150 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: targetEnvironment
+    type: string
+    default: SANDBOX
+    values:
+      - SANDBOX
+      - PRODUCTION
+  - name: enableProvider
+    type: boolean
+    default: false
+  - name: confirmProductionSwitch
+    type: boolean
+    default: false
+  - name: providerBaseUrl
+    type: string
+    default: https://replace-before-run.invalid
+  - name: authSecretName
+    type: string
+    default: delhivery-api-token
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: integrationContainerAppName
+    type: string
+    default: ca-craves-integration-service-pr
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    persistCredentials: false
+
+  - task: AzureCLI@2
+    displayName: Apply Delhivery sandbox or production switch
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+
+        RG='${{ parameters.resourceGroupName }}'
+        APP='${{ parameters.integrationContainerAppName }}'
+        environment='${{ parameters.targetEnvironment }}'
+        enable_raw='${{ parameters.enableProvider }}'
+        enable="${enable_raw,,}"
+        confirm_raw='${{ parameters.confirmProductionSwitch }}'
+        confirm="${confirm_raw,,}"
+        base_url='${{ parameters.providerBaseUrl }}'
+        secret_name='${{ parameters.authSecretName }}'
+        app_yml='services/integration-service/src/main/resources/application.yml'
+
+        fail() {
+          echo "ERROR: $*" >&2
+          exit 2
+        }
+
+        [[ "$environment" == 'SANDBOX' || "$environment" == 'PRODUCTION' ]] || fail 'targetEnvironment must be SANDBOX or PRODUCTION.'
+        [[ "$enable" == 'true' || "$enable" == 'false' ]] || fail 'enableProvider must resolve to true or false.'
+
+        if [[ "$environment" == 'PRODUCTION' ]]; then
+          [[ "$confirm" == 'true' ]] || fail 'PRODUCTION requires confirmProductionSwitch=true.'
+        fi
+
+        runtime_config_present=false
+        if grep -Fq 'DELHIVERY_API_ENABLED' "$app_yml" && grep -Fq 'DELHIVERY_API_ENVIRONMENT' "$app_yml"; then
+          runtime_config_present=true
+        fi
+
+        # SIMPLE_SANDBOX intentionally does not require provider code or credentials.
+        # It only establishes a fail-closed runtime state in Azure.
+        if [[ "$enable" == 'true' || "$environment" == 'PRODUCTION' ]]; then
+          [[ "$runtime_config_present" == 'true' ]] || fail 'Delhivery runtime configuration is not present in the current Spring Integration Service. Commit the Delhivery adapter/config before full sandbox or production use.'
+          [[ "$base_url" == https://* ]] || fail 'Delhivery provider base URL must use HTTPS.'
+          [[ "$base_url" != *replace-before-run.invalid* ]] || fail 'Replace the Delhivery provider base URL placeholder.'
+          if [[ "$environment" == 'PRODUCTION' ]]; then
+            [[ "$base_url" != *test* && "$base_url" != *sandbox* ]] || fail 'Delhivery production cannot use a test/sandbox host.'
+          fi
+        fi
+
+        if [[ "$enable" == 'true' ]]; then
+          secrets="$(az containerapp secret list -g "$RG" -n "$APP" --query '[].name' -o tsv --only-show-errors)"
+          grep -qx "$secret_name" <<<"$secrets" || fail "Missing Container App secret $secret_name."
+        fi
+
+        approved=false
+        [[ "$environment" == 'PRODUCTION' ]] && approved=true
+
+        if [[ "$enable" == 'false' ]]; then
+          az containerapp update -g "$RG" -n "$APP" \
+            --set-env-vars \
+              DELHIVERY_API_ENVIRONMENT="$environment" \
+              DELHIVERY_PRODUCTION_ACTIVATION_APPROVED="$approved" \
+              DELHIVERY_API_ENABLED=false \
+              CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+        else
+          az containerapp update -g "$RG" -n "$APP" \
+            --set-env-vars \
+              DELHIVERY_API_ENVIRONMENT="$environment" \
+              DELHIVERY_PRODUCTION_ACTIVATION_APPROVED="$approved" \
+              DELHIVERY_API_BASE_URL="$base_url" \
+              DELHIVERY_API_AUTH_TOKEN="secretref:${secret_name}" \
+              DELHIVERY_API_ENABLED=true \
+              CRAVES_DELIVERY_RECONCILIATION_ENABLED=true \
+              CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=true \
+              CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=true \
+              CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=true \
+              CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+        fi
+
+        latest="$(az containerapp show -g "$RG" -n "$APP" --query properties.latestRevisionName -o tsv --only-show-errors)"
+        active_revision=''
+        provisioning=''
+        replicas='0'
+        for _ in $(seq 1 60); do
+          active_revision="$(az containerapp revision show -g "$RG" -n "$APP" --revision "$latest" --query properties.active -o tsv --only-show-errors 2>/dev/null || true)"
+          provisioning="$(az containerapp revision show -g "$RG" -n "$APP" --revision "$latest" --query properties.provisioningState -o tsv --only-show-errors 2>/dev/null || true)"
+          replicas="$(az containerapp revision show -g "$RG" -n "$APP" --revision "$latest" --query properties.replicas -o tsv --only-show-errors 2>/dev/null || echo 0)"
+          [[ "$active_revision" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] && break
+          sleep 10
+        done
+        [[ "$active_revision" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] || fail 'New Integration Service revision did not become active and provisioned.'
+
+        env_json="$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].env' -o json --only-show-errors)"
+        value() { jq -r --arg name "$1" '.[] | select(.name == $name) | .value' <<<"$env_json" | tail -1; }
+        [[ "$(value DELHIVERY_API_ENVIRONMENT)" == "$environment" ]] || fail 'Delhivery environment verification failed.'
+        [[ "$(value DELHIVERY_API_ENABLED)" == "$enable" ]] || fail 'Delhivery enabled-state verification failed.'
+
+        echo '============================================================'
+        echo 'DELHIVERY DELIVERY PROVIDER SWITCH: PASS'
+        echo "Environment: $environment"
+        echo "Provider enabled: $enable"
+        if [[ "$environment" == 'SANDBOX' && "$enable" == 'false' ]]; then
+          echo 'Mode: SIMPLE_SANDBOX'
+        elif [[ "$environment" == 'SANDBOX' ]]; then
+          echo 'Mode: FULL_SANDBOX'
+        else
+          echo 'Mode: PRODUCTION'
+        fi
+        echo "Spring runtime configuration detected: $runtime_config_present"
+        echo '============================================================'

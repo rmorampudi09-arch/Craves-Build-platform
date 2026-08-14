@@ -25,6 +25,9 @@ steps:
   - ${{ if eq(parameters.confirmPublicMerchantIdentity, true) }}:
     - task: AzureCLI@2
       displayName: Configure and verify public Craves merchant identity
+      env:
+        CRAVES_PUBLIC_SUPPORT_PHONE_INPUT: ${{ parameters.publicSupportPhone }}
+        CRAVES_REGISTERED_BUSINESS_NAME_INPUT: ${{ parameters.registeredBusinessName }}
       inputs:
         azureSubscription: 'Craves-Dev-Service-Connection'
         scriptType: bash
@@ -33,8 +36,8 @@ steps:
           set -euo pipefail
           RG='$(resourceGroup)'
           APP='$(containerApp)'
-          PHONE='${{ parameters.publicSupportPhone }}'
-          BUSINESS='${{ parameters.registeredBusinessName }}'
+          PHONE="${CRAVES_PUBLIC_SUPPORT_PHONE_INPUT:-}"
+          BUSINESS="${CRAVES_REGISTERED_BUSINESS_NAME_INPUT:-}"
 
           [[ "$PHONE" != 'replace-before-run' && -n "${PHONE// /}" ]] || { echo 'Enter the real public support/business phone number.' >&2; exit 2; }
           [[ "$BUSINESS" != 'replace-before-run' && ${#BUSINESS} -ge 2 ]] || { echo 'Enter the registered Cashfree merchant/business name exactly as approved.' >&2; exit 2; }

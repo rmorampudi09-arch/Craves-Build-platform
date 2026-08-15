@@ -51,7 +51,7 @@ export function Icon({
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" accessibilityElementsHidden>
       {name === 'account' && (<><Circle cx="12" cy="8" r="4" {...common} /><Path d="M4.5 21c.8-4.1 3.3-6.2 7.5-6.2s6.7 2.1 7.5 6.2" {...common} /></>)}
-      {name === 'chef' && (<><Path d="M6 9.5V20h12V9.5" {...common} /><Path d="M7 10a4 4 0 0 1 1.2-7.8A4.8 4.8 0 0 1 12 4a4.8 4.8 0 0 1 3.8-1.8A4 4 0 0 1 17 10" {...common} /><Path d="M9 14h6M9 17h6" {...common} /></>)}
+      {name === 'chef' && (<><Path d="M7 10.5v8.7c0 .5.4.8.9.8h8.2c.5 0 .9-.3.9-.8v-8.7" {...common} /><Path d="M7.4 10.6a3.8 3.8 0 0 1 .9-7.4A4.3 4.3 0 0 1 12 5a4.3 4.3 0 0 1 3.7-1.8 3.8 3.8 0 0 1 .9 7.4" {...common} /><Path d="M9.4 16.5h5.2" {...common} /></>)}
       {name === 'home' && (<><Path d="M3 11.5 12 4l9 7.5" {...common} /><Path d="M5.5 10.5V20h13v-9.5M9.5 20v-6h5v6" {...common} /></>)}
       {name === 'orders' && (<><Rect x="5" y="3" width="14" height="18" rx="2" {...common} /><Path d="M8.5 8h7M8.5 12h7M8.5 16h4" {...common} /></>)}
       {name === 'analytics' && (<><Path d="M4 20V10M10 20V4M16 20v-7M22 20H2" {...common} /><Path d="M4 10h3M10 4h3M16 13h3" {...common} /></>)}

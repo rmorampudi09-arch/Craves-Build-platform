@@ -77,6 +77,9 @@ steps:
               exit 2
             }
 
+            # Payments move to production configuration first. Refund provider execution and
+            # reconciliation stay explicitly disabled until the separate guarded refund
+            # production pipeline is activated later.
             az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
               --set-env-vars \
                 PAYMENT_PROVIDER_ENVIRONMENT=production \
@@ -89,7 +92,11 @@ steps:
                 PAYMENT_PROVIDER_API_VERSION='${{ parameters.apiVersion }}' \
                 PAYMENT_PROVIDER_WEBHOOK_URL="$webhook_url" \
                 CRAVES_CASHFREE_SANDBOX_REFUND_SIMULATION_STATUS= \
-                CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED=true >/dev/null
+                CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED=true \
+                CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED=false \
+                CRAVES_REFUND_RECONCILIATION_ENABLED=false \
+                CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED=false \
+                CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED=false >/dev/null
           else
             [[ "$(current PAYMENT_PROVIDER_ENVIRONMENT)" == 'production' ]] || { echo 'Cashfree environment is not production.' >&2; exit 2; }
             [[ "$(current CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED)" == 'true' ]] || { echo 'Cashfree production configuration is not approved.' >&2; exit 2; }
@@ -151,25 +158,55 @@ steps:
           fi
 
           latest="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.latestRevisionName -o tsv)"
-          active=''; provisioning=''; replicas='0'
+          active=''; provisioning=''; replicas='0'; health=''; ready=''; app_running=''; revision_running=''
           for _ in $(seq 1 60); do
+            app_json="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' -o json)"
+            ready="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$app_json")"
+            app_running="$(jq -r '.properties.runningStatus // ""' <<<"$app_json")"
             active="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.active -o tsv 2>/dev/null || true)"
             provisioning="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.provisioningState -o tsv 2>/dev/null || true)"
             replicas="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.replicas -o tsv 2>/dev/null || echo 0)"
-            [[ "$active" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] && break
+            health="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.healthState -o tsv 2>/dev/null || true)"
+            revision_running="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.runningState -o tsv 2>/dev/null || true)"
+            [[ "$active" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 && "$health" == 'Healthy' && "$ready" == "$latest" && "$app_running" == 'Running' ]] && break
+            if [[ "$health" == 'Unhealthy' || "$revision_running" == 'ActivationFailed' || "$revision_running" == 'Failed' ]]; then
+              echo "Cashfree revision failed: latest=$latest ready=$ready active=$active provisioning=$provisioning replicas=$replicas health=$health revisionRunning=$revision_running appRunning=$app_running" >&2
+              az containerapp logs show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --type console --tail 100 --format text || true
+              exit 2
+            fi
             sleep 10
           done
-          [[ "$active" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] || { echo 'Cashfree revision did not become active.' >&2; exit 2; }
+          [[ "$active" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 && "$health" == 'Healthy' && "$ready" == "$latest" && "$app_running" == 'Running' ]] || {
+            echo "Cashfree revision did not become healthy: latest=$latest ready=$ready active=$active provisioning=$provisioning replicas=$replicas health=$health revisionRunning=$revision_running appRunning=$app_running" >&2
+            exit 2
+          }
 
           values="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].env' -o json)"
           value() { jq -r --arg name "$1" '.[] | select(.name == $name) | .value' <<<"$values" | tail -1; }
           if [[ "$stage" == 'webhook' ]]; then
-            [[ "$(value CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED)" == 'true' ]]
-            [[ "$(value CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED)" == 'true' ]]
-            [[ "$(value CRAVES_PAYMENT_ORDER_API_ENABLED)" == 'false' ]]
+            [[ "$(value PAYMENT_PROVIDER_ENVIRONMENT)" == 'production' ]] || { echo 'Webhook stage did not persist PAYMENT_PROVIDER_ENVIRONMENT=production.' >&2; exit 2; }
+            [[ "$(value CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED)" == 'true' ]] || { echo 'Webhook stage did not persist production activation approval.' >&2; exit 2; }
+            [[ "$(value CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED)" == 'false' ]] || { echo 'Production payment execution must remain disabled after webhook stage.' >&2; exit 2; }
+            [[ "$(value CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED)" == 'true' ]] || { echo 'Webhook ingress is not enabled after webhook stage.' >&2; exit 2; }
+            [[ "$(value CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED)" == 'true' ]] || { echo 'Webhook worker is not enabled after webhook stage.' >&2; exit 2; }
+            [[ "$(value CRAVES_PAYMENT_ORDER_API_ENABLED)" == 'false' ]] || { echo 'Payment-order API must remain disabled after webhook stage.' >&2; exit 2; }
+            [[ "$(value CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED)" == 'false' ]] || { echo 'Refund provider execution must remain disabled during payment cutover.' >&2; exit 2; }
+            [[ "$(value CRAVES_REFUND_RECONCILIATION_ENABLED)" == 'false' ]] || { echo 'Refund reconciliation must remain disabled during payment cutover.' >&2; exit 2; }
+            [[ "$(value CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED)" == 'false' ]] || { echo 'Refund provider production approval must remain false during payment cutover.' >&2; exit 2; }
+            [[ "$(value CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED)" == 'false' ]] || { echo 'Refund reconciliation production approval must remain false during payment cutover.' >&2; exit 2; }
+
+            fqdn="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.configuration.ingress.fqdn -o tsv)"
+            readiness="$(curl -fsS --connect-timeout 10 --max-time 30 \
+              -H "X-Craves-Internal-Secret: ${CRAVES_INTERNAL_SMOKE_SECRET}" \
+              "https://${fqdn}/internal/v1/payment-provider-readiness")"
+            [[ "$(jq -r '.configurationReady' <<<"$readiness")" == 'true' ]] || {
+              echo 'Webhook stage completed but Cashfree production configuration readiness is false.' >&2
+              jq '{environment,configurationReady,productionPaymentReady,productionPaymentExecutionEnabled,webhookWorkerEnabled,apiVersion,webhookPendingCount,webhookDeadLetterCount,blockers}' <<<"$readiness" >&2
+              exit 2
+            }
           else
-            [[ "$(value CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED)" == 'true' ]]
-            [[ "$(value CRAVES_PAYMENT_ORDER_API_ENABLED)" == 'true' ]]
+            [[ "$(value CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED)" == 'true' ]] || { echo 'Production payment execution was not enabled.' >&2; exit 2; }
+            [[ "$(value CRAVES_PAYMENT_ORDER_API_ENABLED)" == 'true' ]] || { echo 'Payment-order API was not enabled.' >&2; exit 2; }
           fi
 
   - ${{ if ne(parameters.confirmCashfreeProductionActivation, true) }}:

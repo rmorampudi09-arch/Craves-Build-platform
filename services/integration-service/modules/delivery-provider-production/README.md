@@ -6,16 +6,28 @@ It does not choose a provider commercially and it does not make an unimplemented
 
 ## Current Spring implementation status
 
-Borzo is implemented in the Spring Integration Service and remains the only delivery provider currently proven by the repository source to have:
+Borzo is implemented in the Spring Integration Service and remains the only delivery provider currently proven by repository source and sandbox evidence to have:
 
 - provider adapter code;
 - provider-specific Spring configuration;
 - signed webhook handling;
 - readiness checks;
 - delivery command integration;
-- production safety tests.
+- production safety tests;
+- successful Craves sandbox quote/create/tracking flow.
 
-Shiprocket and Delhivery environment pipelines exist so Azure can maintain explicit fail-closed environment state and so the production switch is already governed. Their `enableProvider=true` and `PRODUCTION` paths deliberately refuse to continue unless corresponding Spring runtime configuration is present in `application.yml`.
+The architecture/blueprint core provider sequence is:
+
+1. Shadowfax;
+2. Borzo;
+3. Porter;
+4. Shiprocket Quick as supplementary/hold until vendor API and attribution requirements are confirmed.
+
+Delhivery was added later as an additional guarded provider environment and is not treated as a substitute for the original Shadowfax/Porter rollout.
+
+At present, Shadowfax, Porter and Shiprocket Quick do not have executable Spring provider adapters in the Integration Service. Their environment pipelines therefore support a safe `SIMPLE_SANDBOX` state only. Their `enableProvider=true` and `PRODUCTION` paths deliberately refuse to continue until a real provider-specific Spring adapter and runtime configuration are committed and the required secret exists.
+
+Delhivery likewise remains non-executable until its Spring adapter/runtime configuration is implemented.
 
 ## Runtime modes
 
@@ -32,9 +44,10 @@ Purpose:
 - keep provider execution disabled;
 - require no provider credential;
 - prevent accidental production activity;
-- allow the Integration Service image and shared delivery infrastructure to be deployed safely.
+- allow the Integration Service image and shared delivery infrastructure to be deployed safely;
+- make each provider's intended environment visible in Azure before vendor onboarding is complete.
 
-This is the required initial state for Delhivery.
+This is the required initial state for Shadowfax, Porter, Shiprocket Quick and Delhivery while their executable adapters are incomplete.
 
 ### FULL_SANDBOX
 
@@ -47,11 +60,13 @@ Purpose:
 
 - run real provider sandbox API calls;
 - require secret-backed provider credentials;
-- require a real sandbox/test base URL;
-- enable delivery reconciliation, webhook processing, tracking reconciliation and status publication;
-- require the provider's Spring runtime configuration to exist before activation.
+- require a real vendor-approved sandbox/test base URL;
+- enable delivery reconciliation, webhook processing, tracking reconciliation and status publication as supported by the adapter;
+- require the provider's Spring runtime configuration and Java adapter implementation to exist before activation.
 
 Borzo full sandbox also enables the delivery-command worker because the current Spring delivery-command implementation is proven against the Borzo adapter.
+
+For Shadowfax, Porter and Shiprocket Quick, `FULL_SANDBOX` remains intentionally blocked until vendor-issued API contracts/credentials are available and their adapters are implemented. Do not use a production endpoint as a substitute for a sandbox/test contract.
 
 ### PRODUCTION
 
@@ -98,15 +113,17 @@ Both remain false by default in Spring configuration.
 
 ## Azure DevOps pipeline chain
 
-Run these in this order:
+The delivery safety/deployment chain is now:
 
 ```text
 1. azure-pipelines-delivery-provider-production-ci.yml
 2. azure-pipelines-integration-service.yml
 3. azure-pipelines-delivery-provider-webhooks-apim.yml
-4. azure-pipelines-delivery-provider-production-activation.yml
-5. azure-pipelines-shiprocket-production-activation.yml
-6. azure-pipelines-delhivery-environment.yml
+4. azure-pipelines-delivery-provider-production-activation.yml       # Borzo
+5. azure-pipelines-shadowfax-environment.yml
+6. azure-pipelines-porter-environment.yml
+7. azure-pipelines-shiprocket-production-activation.yml
+8. azure-pipelines-delhivery-environment.yml
 ```
 
 The approved Azure service connection is pinned in the deployment pipelines as:
@@ -115,22 +132,24 @@ The approved Azure service connection is pinned in the deployment pipelines as:
 Craves-Dev-Service-Connection
 ```
 
-### Safe initial run parameters
+### Safe multi-provider sandbox baseline
 
-For the first controlled rollout:
+The safe Azure state before executable onboarding is:
 
 ```text
-APIM:
-  confirmApimWrite=true
-  enableBorzoRoute=true
-  enableShiprocketRoute=false
-  enableDelhiveryRoute=false
-
 Borzo:
+  targetEnvironment=SANDBOX
+  enableProvider=true
+
+Shadowfax:
   targetEnvironment=SANDBOX
   enableProvider=false
 
-Shiprocket:
+Porter:
+  targetEnvironment=SANDBOX
+  enableProvider=false
+
+Shiprocket Quick:
   targetEnvironment=SANDBOX
   enableProvider=false
 
@@ -139,7 +158,62 @@ Delhivery:
   enableProvider=false
 ```
 
-This produces a simple-sandbox baseline without activating any new provider execution.
+This means all planned providers are explicitly sandbox-scoped, while only Borzo can execute provider calls. The delivery-intelligence engine therefore currently receives Borzo as the only real provider quote candidate. `SIMPLE_SANDBOX` providers are configuration baselines, not fake routing candidates.
+
+## Per-provider pipeline controls
+
+### Shadowfax
+
+```text
+azure-pipelines-shadowfax-environment.yml
+```
+
+Default: `SANDBOX / enableProvider=false`.
+
+`enableProvider=true` additionally requires:
+
+- Java adapter files under `services/integration-service/src/main/java/in/craves/integration/delivery/shadowfax`;
+- `SHADOWFAX_API_ENABLED` and `SHADOWFAX_API_ENVIRONMENT` Spring runtime configuration;
+- vendor-approved HTTPS endpoint;
+- secret-backed credential, default secret name `shadowfax-api-token`.
+
+### Porter
+
+```text
+azure-pipelines-porter-environment.yml
+```
+
+Default: `SANDBOX / enableProvider=false`.
+
+`enableProvider=true` additionally requires:
+
+- Java adapter files under `services/integration-service/src/main/java/in/craves/integration/delivery/porter`;
+- `PORTER_API_ENABLED` and `PORTER_API_ENVIRONMENT` Spring runtime configuration;
+- vendor-approved HTTPS endpoint;
+- secret-backed credential, default secret name `porter-api-token`.
+
+### Shiprocket Quick
+
+```text
+azure-pipelines-shiprocket-production-activation.yml
+```
+
+Default: `SANDBOX / enableProvider=false`.
+
+`enableProvider=true` additionally requires:
+
+- Java adapter files under `services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket`;
+- `SHIPROCKET_API_ENABLED` and `SHIPROCKET_API_ENVIRONMENT` Spring runtime configuration;
+- vendor-approved test/sandbox endpoint;
+- secret-backed credential, default secret name `shiprocket-api-token`.
+
+### Delhivery
+
+```text
+azure-pipelines-delhivery-environment.yml
+```
+
+Default: `SANDBOX / enableProvider=false`. Full sandbox remains blocked by the existing Spring runtime configuration guard until the adapter exists.
 
 ## APIM webhook exposure
 
@@ -151,28 +225,34 @@ The implemented Borzo callback is:
 POST /api/v1/webhooks/delivery/borzo
 ```
 
-Shiprocket and Delhivery webhook routes remain disabled by default until matching Spring controllers exist. The APIM policy does not transform the raw webhook body so provider signature verification remains possible.
+Shadowfax, Porter, Shiprocket and Delhivery webhook routes must remain disabled until matching Spring controllers and signature verification exist. The APIM policy must not transform raw provider webhook bodies when signatures depend on exact payload bytes.
 
 ## Secret handling
 
-Provider pipelines use Azure Container App secret references only. Examples of expected secret names are:
+Provider pipelines use Azure Container App secret references only. Expected/default secret names include:
 
 ```text
 borzo-api-auth-token
 borzo-callback-token
+shadowfax-api-token
+porter-api-token
 shiprocket-api-token
 delhivery-api-token
 ```
 
-The Shiprocket and Delhivery secret names are pipeline defaults and may be changed as parameters to match the final Spring adapter contract. Do not paste credential values into YAML, Git, pipeline parameters or chat.
+Do not paste credential values into YAML, Git, pipeline parameters or chat. Secret names may be changed as pipeline parameters to match the final provider contract.
 
 ## Manual work before full sandbox or production
 
-- Confirm the selected delivery-provider commercial contract and onboarding/KYC state.
-- Create or rotate provider credentials in Azure Key Vault/Container Apps.
-- Confirm the exact provider sandbox and production base URLs from the provider documentation/account.
+- Confirm the selected delivery-provider commercial/account onboarding state.
+- Obtain authoritative provider sandbox/test documentation and credentials.
+- Confirm the exact provider sandbox and production base URLs from the provider account/documentation.
+- Confirm quote/serviceability, create, cancellation, tracking and webhook contracts.
+- Confirm the webhook authentication/signature scheme and normalized status mapping.
+- Create or rotate provider credentials in Azure Key Vault/Container App secret storage.
+- Implement the provider-specific Spring adapter behind the canonical `DeliveryProviderAdapter` contract.
 - Register the final APIM callback URL in the provider portal where callbacks are supported.
-- For Shiprocket and Delhivery, commit the Spring adapter/runtime configuration before setting `enableProvider=true`.
+- Synchronize `delivery_schema.delivery_provider.is_active` only when executable full-sandbox activation is proven.
 - Validate one quote, one booking, one callback, tracking and cancellation with an approved sandbox/test order before production.
 - Keep exact operational evidence and return to fail-closed state after testing when required.
 
@@ -184,10 +264,10 @@ Borzo production rollback is handled by:
 azure-pipelines-delivery-provider-production-rollback.yml
 ```
 
-For Shiprocket and Delhivery, the immediate provider-level kill switch is:
+For Shadowfax, Porter, Shiprocket and Delhivery, the immediate environment-level kill switch is:
 
 ```text
 enableProvider=false
 ```
 
-A provider-specific production rollback pipeline should be added when its Spring adapter is committed and its production execution contract is finalized.
+A provider-specific production rollback pipeline must be added when each Spring adapter is committed and its production execution contract is finalized.

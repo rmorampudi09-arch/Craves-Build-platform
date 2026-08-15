@@ -169,15 +169,9 @@ public class ChefAcceptedOrderEventFactory {
         requireText(source.pickupPhoneNumber(), "pickupPhoneNumber");
         requireText(source.pickupAddressLine1(), "pickupAddressLine1");
         requireText(source.pickupAreaName(), "pickupAreaName");
-        requireText(source.pickupCity(), "pickupCity");
-        requireText(source.pickupState(), "pickupState");
-        requireText(source.pickupPostalCode(), "pickupPostalCode");
         requireText(source.dropoffRecipientName(), "dropoffRecipientName");
         requireText(source.dropoffPhoneNumber(), "dropoffPhoneNumber");
         requireText(source.dropoffAddressLine1(), "dropoffAddressLine1");
-        requireText(source.dropoffCity(), "dropoffCity");
-        requireText(source.dropoffState(), "dropoffState");
-        requireText(source.dropoffPostalCode(), "dropoffPostalCode");
     }
 
     private static void requireText(String value, String field) {

@@ -1,7 +1,9 @@
 package in.craves.integration.delivery.command;
 
+import com.azure.messaging.servicebus.ServiceBusMessage;
 import com.azure.messaging.servicebus.ServiceBusProcessorClient;
 import com.azure.messaging.servicebus.ServiceBusReceivedMessageContext;
+import com.azure.messaging.servicebus.ServiceBusSenderClient;
 import com.azure.messaging.servicebus.models.DeadLetterOptions;
 import com.azure.messaging.servicebus.models.ServiceBusReceiveMode;
 import com.fasterxml.jackson.databind.JavaType;
@@ -15,8 +17,11 @@ import in.craves.integration.delivery.command.DeliveryCommandWorker.DeliveryComm
 import in.craves.integration.delivery.command.DeliveryServiceBusConfiguration.DeliveryServiceBusClientFactory;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +34,7 @@ public class DeliveryServiceBusProcessors {
     private final DeliveryCommandWorker worker;
     private final DeliveryCommandProperties properties;
     private final ObjectMapper objectMapper;
+    private final ServiceBusSenderClient commandRetrySender;
     private final ServiceBusProcessorClient chefAcceptedProcessor;
     private final ServiceBusProcessorClient commandProcessor;
 
@@ -36,11 +42,14 @@ public class DeliveryServiceBusProcessors {
                                         DeliveryCommandScheduler scheduler,
                                         DeliveryCommandWorker worker,
                                         DeliveryCommandProperties properties,
-                                        ObjectMapper objectMapper) {
+                                        ObjectMapper objectMapper,
+                                        @Qualifier("deliveryCommandSender")
+                                        ServiceBusSenderClient commandRetrySender) {
         this.scheduler = scheduler;
         this.worker = worker;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.commandRetrySender = commandRetrySender;
 
         this.chefAcceptedProcessor = factory.newBuilder()
             .processor()
@@ -103,17 +112,53 @@ public class DeliveryServiceBusProcessors {
     }
 
     private void processDeliveryCommand(ServiceBusReceivedMessageContext context) {
+        String rawBody = context.getMessage().getBody().toString();
         try {
-            String rawBody = context.getMessage().getBody().toString();
             DeliveryCommandMessage message = objectMapper.readValue(rawBody, DeliveryCommandMessage.class);
             worker.process(message);
             context.complete();
         } catch (DeliveryCommandNonRetryableException | IllegalArgumentException ex) {
             deadLetter(context, "DELIVERY_COMMAND_NON_RETRYABLE", ex);
         } catch (DeliveryCommandTransientException ex) {
-            retryOrDeadLetter(context, "DELIVERY_COMMAND_RETRY_EXHAUSTED", ex);
+            scheduleDeliveryRetry(context, rawBody, ex);
         } catch (Exception ex) {
             retryOrDeadLetter(context, "DELIVERY_COMMAND_UNEXPECTED_FAILURE", ex);
+        }
+    }
+
+    private void scheduleDeliveryRetry(ServiceBusReceivedMessageContext context,
+                                       String rawBody,
+                                       DeliveryCommandTransientException error) {
+        Instant retryAt = error.retryAt();
+        if (retryAt == null || !retryAt.isAfter(Instant.now())) {
+            retryAt = Instant.now().plusSeconds(1);
+        }
+
+        String retryKey = error.retryKey();
+        if (retryKey == null || retryKey.isBlank()) {
+            retryKey = context.getMessage().getMessageId() + "-retry";
+        }
+
+        ServiceBusMessage retryMessage = new ServiceBusMessage(rawBody)
+            .setContentType("application/json")
+            .setMessageId("delivery-retry:" + retryKey);
+
+        try {
+            long sequenceNumber = commandRetrySender.scheduleMessage(
+                retryMessage,
+                retryAt.atOffset(ZoneOffset.UTC)
+            );
+            log.warn(
+                "Scheduled delivery-command retry messageId={} retryAt={} sequenceNumber={} reason={}",
+                retryMessage.getMessageId(), retryAt, sequenceNumber, safeMessage(error)
+            );
+            context.complete();
+        } catch (Exception scheduleError) {
+            log.error(
+                "Failed to schedule delivery-command retry for messageId={} retryAt={}; abandoning original message",
+                context.getMessage().getMessageId(), retryAt, scheduleError
+            );
+            context.abandon();
         }
     }
 

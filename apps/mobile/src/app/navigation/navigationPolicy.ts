@@ -62,6 +62,18 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'CustomerKitchenProfile',
   'CustomerKitchenDishes',
   'CustomerCart',
+  'CustomerSettings',
+  'CustomerSettingsNotifications',
+  'CustomerSettingsPrivacySecurity',
+  'CustomerSettingsChangePassword',
+  'CustomerSettingsLanguage',
+  'CustomerSettingsAppearance',
+  'CustomerSettingsAbout',
+  'CustomerSettingsShare',
+  'CustomerSettingsReferral',
+  'CustomerSettingsSupport',
+  'CustomerSettingsSubscription',
+  'CustomerSettingsLegal',
 ]);
 
 const IMMERSIVE_POLICY: RouteChromePolicy = {

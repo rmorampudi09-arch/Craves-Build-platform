@@ -1,3 +1,4 @@
+-- V108 follows the existing V105-V107 production migration sequence.
 ALTER TABLE payment_schema.payment_order
     ADD COLUMN IF NOT EXISTS provider VARCHAR(30) NOT NULL DEFAULT 'CASHFREE',
     ADD COLUMN IF NOT EXISTS provider_order_id VARCHAR(160),

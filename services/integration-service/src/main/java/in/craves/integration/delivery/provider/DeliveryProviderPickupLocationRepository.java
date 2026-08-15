@@ -26,12 +26,34 @@ public class DeliveryProviderPickupLocationRepository {
                   AND is_verified = TRUE
                 """,
             (rs, rowNum) -> rs.getString("external_location_code"),
-            providerId.trim().toLowerCase(),
+            normalize(providerId),
             pickupLocationReference
         ).stream().filter(value -> value != null && !value.isBlank()).findFirst();
     }
 
     public boolean isVerified(String providerId, UUID pickupLocationReference) {
         return findVerifiedExternalLocation(providerId, pickupLocationReference).isPresent();
+    }
+
+    public int countVerified(String providerId) {
+        if (providerId == null || providerId.isBlank()) {
+            return 0;
+        }
+        Integer count = jdbc.queryForObject(
+            """
+                SELECT COUNT(*)
+                FROM delivery_schema.delivery_provider_pickup_location
+                WHERE provider_id = ?
+                  AND is_verified = TRUE
+                  AND NULLIF(BTRIM(external_location_code), '') IS NOT NULL
+                """,
+            Integer.class,
+            normalize(providerId)
+        );
+        return count == null ? 0 : count;
+    }
+
+    private static String normalize(String providerId) {
+        return providerId.trim().toLowerCase(java.util.Locale.ROOT);
     }
 }

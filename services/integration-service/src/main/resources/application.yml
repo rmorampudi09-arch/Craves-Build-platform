@@ -138,3 +138,8 @@ management:
     health:
       probes:
         enabled: true
+      group:
+        payments:
+          include: readinessState,db
+        token-revocation:
+          include: readinessState,redis

@@ -19,7 +19,8 @@ import org.junit.jupiter.api.Test;
 class ShiprocketStatusMapperTest {
 
     @Test
-    void mapsDocumentedNumericLifecycleStates() {
+    void mapsDocumentedTrackingShipmentStatusCodes() {
+        assertThat(ShiprocketStatusMapper.map(6, null)).isEqualTo(IN_TRANSIT);
         assertThat(ShiprocketStatusMapper.map(7, null)).isEqualTo(DELIVERED);
         assertThat(ShiprocketStatusMapper.map(8, null)).isEqualTo(CANCELLED);
         assertThat(ShiprocketStatusMapper.map(9, null)).isEqualTo(RETURNING);
@@ -28,14 +29,26 @@ class ShiprocketStatusMapperTest {
         assertThat(ShiprocketStatusMapper.map(13, null)).isEqualTo(DELAYED);
         assertThat(ShiprocketStatusMapper.map(17, null)).isEqualTo(AT_DROPOFF);
         assertThat(ShiprocketStatusMapper.map(19, null)).isEqualTo(COURIER_TO_PICKUP);
+        assertThat(ShiprocketStatusMapper.map(22, null)).isEqualTo(DELAYED);
         assertThat(ShiprocketStatusMapper.map(27, null)).isEqualTo(COURIER_ASSIGNED);
+        assertThat(ShiprocketStatusMapper.map(38, null)).isEqualTo(IN_TRANSIT);
         assertThat(ShiprocketStatusMapper.map(42, null)).isEqualTo(PICKED_UP);
-        assertThat(ShiprocketStatusMapper.map(43, null)).isEqualTo(IN_TRANSIT);
+        assertThat(ShiprocketStatusMapper.map(45, null)).isEqualTo(CANCELLED);
+        assertThat(ShiprocketStatusMapper.map(46, null)).isEqualTo(RETURNING);
+        assertThat(ShiprocketStatusMapper.map(76, null)).isEqualTo(FAILED);
+        assertThat(ShiprocketStatusMapper.map(78, null)).isEqualTo(RETURNING);
+    }
+
+    @Test
+    void leavesFulfillmentOnlyStatesUnknownInsteadOfInventingDeliveryProgress() {
+        assertThat(ShiprocketStatusMapper.map(43, "SELF FULFILLED")).isEqualTo(UNKNOWN);
+        assertThat(ShiprocketStatusMapper.map(59, "BOX PACKING")).isEqualTo(UNKNOWN);
     }
 
     @Test
     void fallsBackToTextWithoutTurningUndeliveredIntoDelivered() {
         assertThat(ShiprocketStatusMapper.map(null, "Delivered")).isEqualTo(DELIVERED);
+        assertThat(ShiprocketStatusMapper.map(null, "RTO Delivered")).isEqualTo(RETURNED);
         assertThat(ShiprocketStatusMapper.map(null, "Undelivered")).isEqualTo(DELAYED);
         assertThat(ShiprocketStatusMapper.map(null, "Out For Delivery")).isEqualTo(AT_DROPOFF);
         assertThat(ShiprocketStatusMapper.map(null, "Pickup Booked")).isEqualTo(COURIER_ASSIGNED);

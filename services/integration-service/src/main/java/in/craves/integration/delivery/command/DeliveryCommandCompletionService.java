@@ -73,7 +73,7 @@ public class DeliveryCommandCompletionService {
             DeliveryCommandModels.DELIVERY_STATUS_CHANGED,
             "1.0",
             Instant.now(),
-            command.correlationId(),
+            command.orderId(),
             command.sourceEventId(),
             "integration-service",
             "delivery-job/" + deliveryJobId,
@@ -83,7 +83,7 @@ public class DeliveryCommandCompletionService {
         outbox.enqueue(
             DeliveryCommandModels.DELIVERY_STATUS_CHANGED,
             deliveryJobId,
-            command.correlationId(),
+            command.orderId(),
             payload
         );
         commands.markCompleted(command.commandId());

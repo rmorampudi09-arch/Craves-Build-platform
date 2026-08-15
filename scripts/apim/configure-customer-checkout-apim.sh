@@ -44,23 +44,25 @@ done
 find_operation_by_method_template() {
   local METHOD="$1" TEMPLATE="$2"
   local OPS_JSON FOUND_ID
-  OPS_JSON=$(az rest --method get --url "${MGMT}/operations?api-version=${API_VERSION}" --query "value" -o json 2>/dev/null || echo "[]")
-  FOUND_ID=$(jq -r ".[] | select(.properties.method==\"${METHOD}\" and .properties.urlTemplate==\"${TEMPLATE}\") | .name" <<<"$OPS_JSON" | head -1)
+  
+  # List all operations in this API
+  OPS_JSON=$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "$API_ID" -o json 2>/dev/null || echo "[]")
+  
+  # Extract operation IDs that match both method and template
+  FOUND_ID=$(jq -r ".[]? | select(.method==\"${METHOD}\" and .urlTemplate==\"${TEMPLATE}\") | .name" <<<"$OPS_JSON" 2>/dev/null | head -1)
   [[ -n "$FOUND_ID" ]] && echo "$FOUND_ID" || echo ""
 }
 
-# Check if an operation ID exists and return its properties
-check_operation_id_exists() {
+# Get operation details by ID
+get_operation_details() {
   local OP_ID="$1"
-  local OP_JSON
-  OP_JSON=$(az rest --method get --url "${MGMT}/operations/${OP_ID}?api-version=${API_VERSION}" -o json 2>/dev/null || echo "{}")
-  jq -r '.properties // empty' <<<"$OP_JSON"
+  az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$OP_ID" -o json 2>/dev/null || echo "{}"
 }
 
 # Reconcile a single operation: match by method+template, reuse if exists, create if not
 reconcile_operation() {
   local PREFERRED_ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" PARAMS="$5"
-  local EXISTING_ID EXISTING_OP_JSON BODY RENDERED POLICY_BODY
+  local EXISTING_ID OP_JSON BODY RENDERED POLICY_BODY OP_ID
   
   # Step 1: Check if any operation already owns this method + URL template
   EXISTING_ID=$(find_operation_by_method_template "$METHOD" "$TEMPLATE")
@@ -72,33 +74,28 @@ reconcile_operation() {
     fi
     OP_ID="$EXISTING_ID"
   else
-    # No operation owns this method+template yet; check if preferred ID is available or in use for a different method+template
-    EXISTING_OP_JSON=$(check_operation_id_exists "$PREFERRED_ID")
-    if [[ -n "$EXISTING_OP_JSON" ]]; then
-      # Preferred ID exists; verify it's for a different method/template, which would be a conflict
-      local EXISTING_METHOD EXISTING_TEMPLATE
-      EXISTING_METHOD=$(jq -r '.method // ""' <<<"$EXISTING_OP_JSON")
-      EXISTING_TEMPLATE=$(jq -r '.urlTemplate // ""' <<<"$EXISTING_OP_JSON")
-      if [[ "$EXISTING_METHOD" != "$METHOD" || "$EXISTING_TEMPLATE" != "$TEMPLATE" ]]; then
-        fail "Operation ID '$PREFERRED_ID' already exists for $EXISTING_METHOD $EXISTING_TEMPLATE but desired method/template is $METHOD $TEMPLATE; refusing to overwrite"
-      fi
-    fi
-    # Create the operation with the preferred ID
+    # No operation owns this method+template yet; use preferred ID
     OP_ID="$PREFERRED_ID"
   fi
   
-  # Step 2: Update or create the operation definition
-  BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
+  # Step 2: Create or update the operation definition using az rest
+  BODY=$(mktemp)
   cat >"$BODY" <<JSON
 {"properties":{"displayName":"$DISPLAY","method":"$METHOD","urlTemplate":"$TEMPLATE","templateParameters":$PARAMS,"responses":[{"statusCode":200,"description":"Customer checkout response"},{"statusCode":400,"description":"Checkout validation failed"},{"statusCode":401,"description":"Authentication required"},{"statusCode":404,"description":"Checkout not found"},{"statusCode":409,"description":"Pricing quote stale or changed"},{"statusCode":503,"description":"Delivery route service unavailable"}]}}
 JSON
-  az rest --method put --url "${MGMT}/operations/${OP_ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
+  
+  echo "DEBUG: Creating/updating operation $OP_ID for $METHOD $TEMPLATE"
+  az rest --method put --url "${MGMT}/operations/${OP_ID}?api-version=${API_VERSION}" --body @"$BODY" -o none || fail "Failed to create/update operation $OP_ID"
+  rm -f "$BODY"
   
   # Step 3: Apply the policy to the operation
+  RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
   sed "s|__CHECKOUT_BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
   jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
-  az rest --method put --url "${MGMT}/operations/${OP_ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none
-  rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
+  
+  echo "DEBUG: Applying policy to operation $OP_ID"
+  az rest --method put --url "${MGMT}/operations/${OP_ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none || fail "Failed to apply policy to operation $OP_ID"
+  rm -f "$RENDERED" "$POLICY_BODY"
   
   # Return the actual resolved operation ID
   echo "$OP_ID"

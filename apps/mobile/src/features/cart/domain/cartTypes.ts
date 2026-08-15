@@ -12,6 +12,10 @@ export interface CartLine {
   unitPrice: CartMoney;
   quantity: number;
   lineTotal: CartMoney;
+  imageUrl: string | null;
+  foodType: 'VEG' | 'NON_VEG' | 'EGG' | null;
+  servesCount: number | null;
+  spiceLevel: 'MILD' | 'MEDIUM' | 'SPICY' | null;
   createdAt: string;
   updatedAt: string;
 }

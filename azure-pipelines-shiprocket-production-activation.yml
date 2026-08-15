@@ -114,16 +114,12 @@ steps:
         app_yml='services/integration-service/src/main/resources/application.yml'
         adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket'
 
-        fail() {
-          echo "ERROR: $*" >&2
-          exit 2
-        }
+        fail() { echo "ERROR: $*" >&2; exit 2; }
 
         wait_ready() {
           local app="$1"
           local latest ready
           latest="$(az containerapp show -g "$RG" -n "$app" --query properties.latestRevisionName -o tsv --only-show-errors)"
-          ready=''
           for _ in $(seq 1 60); do
             ready="$(az containerapp show -g "$RG" -n "$app" --query properties.latestReadyRevisionName -o tsv --only-show-errors 2>/dev/null || true)"
             [[ "$ready" == "$latest" ]] && return 0
@@ -141,8 +137,8 @@ steps:
         [[ "$enable_create" == 'true' || "$enable_create" == 'false' ]] || fail 'enableCreate is invalid.'
         [[ "$configured_environment" == 'READ_ONLY' || "$configured_environment" == 'SANDBOX' || "$configured_environment" == 'PRODUCTION' ]] || fail 'targetEnvironment is invalid.'
 
-        # Shiprocket documents that authenticated API requests use the real account. SANDBOX is
-        # retained only as a compatibility alias for non-mutating READ_ONLY mode.
+        # Shiprocket authenticated API calls operate against the account. SANDBOX is retained only
+        # as a compatibility alias for non-mutating READ_ONLY mode.
         runtime_environment="$configured_environment"
         [[ "$runtime_environment" == 'SANDBOX' ]] && runtime_environment='READ_ONLY'
 
@@ -205,6 +201,7 @@ steps:
         current_environment="$(current_value SHIPROCKET_API_ENVIRONMENT)"
         [[ "$current_environment" == 'SANDBOX' ]] && current_environment='READ_ONLY'
         [[ -n "$current_environment" ]] || current_environment='READ_ONLY'
+
         if [[ "$current_environment" != "$runtime_environment" ]]; then
           open_jobs="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_job WHERE provider_id='shiprocket' AND status NOT IN ('DELIVERED','CANCELLED','RETURNED','FAILED');")"
           [[ "$open_jobs" == '0' ]] || fail "Cannot change Shiprocket execution environment while $open_jobs Shiprocket job(s) are non-terminal."
@@ -220,11 +217,16 @@ steps:
           [[ "$(jq '[.[] | select((.method | ascii_upcase) == "POST" and .urlTemplate == "/p4")] | length' <<<"$operations")" == '1' ]] || fail 'Neutral APIM POST /p4 route is missing.'
         fi
 
-        # Deactivation/read-only transition removes the provider from routing before the adapter is
-        # disabled. Activation does the reverse: runtime first, routing catalog second.
-        if [[ "$enable_create" == 'false' ]]; then
-          psql "$DB" -v ON_ERROR_STOP=1 \
-            -c "UPDATE delivery_schema.delivery_provider SET is_active=FALSE, updated_at=now() WHERE provider_id='shiprocket';" >/dev/null
+        # Take Shiprocket out of routing before touching its runtime. If this leaves no active
+        # provider, pause command consumption so no command can be claimed during the cutover.
+        psql "$DB" -v ON_ERROR_STOP=1 -c "UPDATE delivery_schema.delivery_provider SET is_active=FALSE, updated_at=now() WHERE provider_id='shiprocket';" >/dev/null
+        [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket' AND is_active=TRUE;")" == '0' ]] || fail 'Shiprocket could not be removed from routing before reconfiguration.'
+        other_active_count="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE is_active=TRUE;")"
+        if [[ "$other_active_count" == '0' ]]; then
+          az containerapp update -g "$RG" -n "$APP" --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=false >/dev/null
+          wait_ready "$APP"
+        else
+          echo "INFO: $other_active_count other provider(s) remain active; command worker stays available for them."
         fi
 
         if [[ "$enable_provider" == 'false' ]]; then
@@ -275,8 +277,8 @@ steps:
         wait_ready "$APP"
 
         if [[ "$enable_create" == 'true' ]]; then
-          psql "$DB" -v ON_ERROR_STOP=1 \
-            -c "UPDATE delivery_schema.delivery_provider SET is_active=TRUE, updated_at=now() WHERE provider_id='shiprocket';" >/dev/null
+          psql "$DB" -v ON_ERROR_STOP=1 -c "UPDATE delivery_schema.delivery_provider SET is_active=TRUE, updated_at=now() WHERE provider_id='shiprocket';" >/dev/null
+          [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket';")" == 't' ]] || fail 'Shiprocket DB activation verification failed.'
 
           az containerapp update -g "$RG" -n "$ORDER_APP" \
             --set-env-vars \
@@ -285,18 +287,8 @@ steps:
               CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true >/dev/null
           wait_ready "$ORDER_APP"
 
-          az containerapp update -g "$RG" -n "$APP" \
-            --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=true >/dev/null
+          az containerapp update -g "$RG" -n "$APP" --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=true >/dev/null
           wait_ready "$APP"
-        else
-          active_provider_count="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE is_active=TRUE;")"
-          if [[ "$active_provider_count" == '0' ]]; then
-            az containerapp update -g "$RG" -n "$APP" \
-              --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=false >/dev/null
-            wait_ready "$APP"
-          else
-            echo "INFO: $active_provider_count other provider(s) remain active; global delivery-command worker is unchanged."
-          fi
         fi
 
         env_json="$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].env' -o json --only-show-errors)"
@@ -307,7 +299,7 @@ steps:
 
         expected_active='f'
         [[ "$enable_create" == 'true' ]] && expected_active='t'
-        [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket';")" == "$expected_active" ]] || fail 'Shiprocket DB activation verification failed.'
+        [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket';")" == "$expected_active" ]] || fail 'Shiprocket DB routing-state verification failed.'
 
         if [[ "$enable_create" == 'true' ]]; then
           [[ "$(value CRAVES_DELIVERY_COMMAND_ENABLED)" == 'true' ]] || fail 'Delivery command worker is not enabled.'
@@ -333,5 +325,5 @@ steps:
         else
           echo 'Mode: FAIL_CLOSED'
         fi
-        echo 'Routing activation occurs only after the new runtime revision is ready.'
+        echo 'Provider is removed from routing before every runtime reconfiguration.'
         echo '============================================================'

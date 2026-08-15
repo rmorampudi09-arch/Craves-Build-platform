@@ -3,9 +3,11 @@ package in.craves.order.event;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryItemData;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryRequestData;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryStopData;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -92,6 +94,18 @@ public class ChefAcceptedOrderEventFactory {
             DEFAULT_COUNTRY
         );
 
+        List<DeliveryItemData> items = source.deliveryItems() == null
+            ? List.of()
+            : source.deliveryItems().stream()
+                .map(item -> new DeliveryItemData(
+                    item.menuItemId(),
+                    item.itemName(),
+                    item.unitPrice(),
+                    item.quantity(),
+                    item.lineTotal()
+                ))
+                .toList();
+
         ChefAcceptedOrderEventData data = new ChefAcceptedOrderEventData(
             source.checkoutId(),
             source.orderId(),
@@ -103,7 +117,10 @@ public class ChefAcceptedOrderEventFactory {
                 source.totalPackageWeightGrams(),
                 source.thermoboxRequired(),
                 pickup,
-                dropoff
+                dropoff,
+                items,
+                source.declaredGoodsValue(),
+                source.paymentCollectionMode()
             )
         );
 

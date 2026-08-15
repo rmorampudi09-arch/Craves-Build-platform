@@ -64,7 +64,7 @@ parameters:
     default: order-service-delivery-status-changed
   - name: apimName
     type: string
-    default: apim-craves-prodlowl3ing6
+    default: apim-craves-prodlow-l3ing6
 
 variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection

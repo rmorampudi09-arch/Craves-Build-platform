@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Provider-neutral contract used by the Integration Service delivery worker.
@@ -116,7 +117,7 @@ public interface DeliveryProviderAdapter {
     }
 
     record ShipmentItem(
-        String itemReference,
+        UUID menuItemId,
         String itemName,
         BigDecimal unitPrice,
         int quantity,

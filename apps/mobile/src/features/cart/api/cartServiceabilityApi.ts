@@ -59,6 +59,16 @@ function parseDish(value: unknown): CartDiscoveryDish | null {
   };
 }
 
+function parseNearbyKitchenIds(value: unknown): Set<string> {
+  const raw = record(value);
+  const kitchens = raw && Array.isArray(raw.kitchens) ? raw.kitchens : [];
+  return new Set(
+    kitchens
+      .map(kitchen => record(kitchen)?.id)
+      .filter((id): id is string => typeof id === 'string'),
+  );
+}
+
 export async function checkCartServiceability(
   latitude: number,
   longitude: number,
@@ -69,20 +79,31 @@ export async function checkCartServiceability(
     `&longitude=${encodeURIComponent(String(longitude))}` +
     `&radiusMeters=${CART_MAX_DELIVERY_RADIUS_METERS}` +
     '&page=0&size=100';
-  const response = await httpClient.get<unknown>(`/api/v1/discovery/menu-items?${query}`, {
-    dedupeKey: `cart-serviceability:${latitude}:${longitude}:10000`,
-  });
-  const raw = record(response);
-  const values = raw && Array.isArray(raw.menuItems) ? raw.menuItems : [];
-  const dishes = values.map(parseDish).filter((dish): dish is CartDiscoveryDish => Boolean(dish));
-  const nearbyKitchenIds = new Set(dishes.map(dish => dish.kitchenId));
+
+  const [kitchenResponse, menuResponse] = await Promise.all([
+    httpClient.get<unknown>(`/api/v1/discovery/kitchens?${query}`, {
+      dedupeKey: `cart-serviceability-kitchens:${latitude}:${longitude}:10000`,
+    }),
+    httpClient.get<unknown>(`/api/v1/discovery/menu-items?${query}`, {
+      dedupeKey: `cart-serviceability-menu:${latitude}:${longitude}:10000`,
+    }),
+  ]);
+
+  const nearbyKitchenIds = parseNearbyKitchenIds(kitchenResponse);
   const uniqueKitchenIds = [...new Set(kitchenIds)];
   const missingKitchenIds = uniqueKitchenIds.filter(id => !nearbyKitchenIds.has(id));
+
+  const rawMenu = record(menuResponse);
+  const menuValues = rawMenu && Array.isArray(rawMenu.menuItems) ? rawMenu.menuItems : [];
+  const dishes = menuValues
+    .map(parseDish)
+    .filter((dish): dish is CartDiscoveryDish => Boolean(dish));
   const prepTimes = dishes
     .filter(dish => uniqueKitchenIds.includes(dish.kitchenId))
     .map(dish => dish.preparationTimeMinutes)
     .filter((value): value is number => value !== null);
   const maxPrep = prepTimes.length ? Math.max(...prepTimes) : null;
+
   return {
     serviceable: missingKitchenIds.length === 0,
     missingKitchenIds,

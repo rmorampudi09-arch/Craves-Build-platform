@@ -21,7 +21,15 @@ FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
 LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
 READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
 [[ -n "$FQDN" && "$LATEST" == "$READY" ]] || fail "Integration Service is not ready"
-curl -sS --fail --max-time 30 "https://$FQDN/actuator/health" >/dev/null
+payments_healthy=false
+for _ in $(seq 1 12); do
+  if curl -sS --fail --max-time 30 "https://$FQDN/actuator/health/payments" >/dev/null; then
+    payments_healthy=true
+    break
+  fi
+  sleep 5
+done
+[[ "$payments_healthy" == true ]] || fail "Integration Service payments health group is not ready"
 
 mapfile -t API_IDS < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='${API_PATH}'].name" -o tsv)
 (( ${#API_IDS[@]} == 1 )) || fail "Expected exactly one APIM API to own $API_PATH"
@@ -41,7 +49,7 @@ OP_JSON=$(az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$
 [[ "$(jq -r '.method' <<<"$OP_JSON")" == "POST" && "$(jq -r '.urlTemplate' <<<"$OP_JSON")" == "/webhooks/razorpay" ]] || fail "Razorpay webhook operation verification failed"
 POLICY=$(az rest --method get --url "${MGMT}/operations/${OPERATION_ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
 [[ "$POLICY" == *"X-Razorpay-Signature"* && "$POLICY" != *"validate-jwt"* ]] || fail "Razorpay webhook policy verification failed"
-PUBLIC_URL="https://${APIM}.azure-api.net/${API_PATH}/webhooks/razorpay"
+PUBLIC_URL="${PUBLIC_URL:-https://api.craves.in/${API_PATH}/webhooks/razorpay}"
 STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -X POST "$PUBLIC_URL" -H 'Content-Type: application/json' --data '{}' || true)
 [[ "$STATUS" == "400" ]] || fail "Razorpay headerless probe expected HTTP 400, got $STATUS"
 echo "SUCCESS: Razorpay webhook APIM operation is reachable at $PUBLIC_URL."

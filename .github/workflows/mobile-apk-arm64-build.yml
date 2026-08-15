@@ -1,6 +1,6 @@
 name: CRAVES Mobile ARM64 APK Build
 
-# ARM64 rebuild after customer bottom navigation update: 2026-08-16
+# ARM64 rebuild after white surfaces and soft flame-red icon background update: 2026-08-16
 on:
   push:
     branches:

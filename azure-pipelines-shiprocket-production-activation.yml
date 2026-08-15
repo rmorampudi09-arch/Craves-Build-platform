@@ -30,7 +30,7 @@ parameters:
     type: string
     default: https://apiv2.shiprocket.in/v1/external
   - name: callbackUrl
-    displayName: Neutral Shiprocket callback URL configured in Shiprocket
+    displayName: Neutral callback configured in Shiprocket
     type: string
     default: https://api.craves.in/api/v1/webhooks/delivery/p4
   - name: apiEmailSecretName
@@ -47,15 +47,12 @@ parameters:
     type: string
     default: ''
   - name: packageLengthCm
-    displayName: Standard food package length in cm
     type: string
     default: ''
   - name: packageBreadthCm
-    displayName: Standard food package breadth in cm
     type: string
     default: ''
   - name: packageHeightCm
-    displayName: Standard food package height in cm
     type: string
     default: ''
   - name: resourceGroupName
@@ -116,15 +113,23 @@ steps:
         package_height='${{ parameters.packageHeightCm }}'
         app_yml='services/integration-service/src/main/resources/application.yml'
         adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket'
-        webhook_route='/api/v1/webhooks/delivery/p4'
 
         fail() {
           echo "ERROR: $*" >&2
           exit 2
         }
 
-        bool() {
-          [[ "$1" == 'true' || "$1" == 'false' ]] || fail "$2 must resolve to true or false."
+        wait_ready() {
+          local app="$1"
+          local latest ready
+          latest="$(az containerapp show -g "$RG" -n "$app" --query properties.latestRevisionName -o tsv --only-show-errors)"
+          ready=''
+          for _ in $(seq 1 60); do
+            ready="$(az containerapp show -g "$RG" -n "$app" --query properties.latestReadyRevisionName -o tsv --only-show-errors 2>/dev/null || true)"
+            [[ "$ready" == "$latest" ]] && return 0
+            sleep 10
+          done
+          fail "$app revision $latest did not become ready."
         }
 
         positive_decimal() {
@@ -132,50 +137,44 @@ steps:
           awk -v value="$1" 'BEGIN { exit !(value > 0) }'
         }
 
-        bool "$enable_provider" 'enableProvider'
-        bool "$enable_create" 'enableCreate'
-        bool "$confirm" 'confirmProductionActivation'
-        bool "$attribution" 'attributionApproved'
+        [[ "$enable_provider" == 'true' || "$enable_provider" == 'false' ]] || fail 'enableProvider is invalid.'
+        [[ "$enable_create" == 'true' || "$enable_create" == 'false' ]] || fail 'enableCreate is invalid.'
+        [[ "$configured_environment" == 'READ_ONLY' || "$configured_environment" == 'SANDBOX' || "$configured_environment" == 'PRODUCTION' ]] || fail 'targetEnvironment is invalid.'
 
-        [[ "$configured_environment" == 'READ_ONLY' || "$configured_environment" == 'SANDBOX' || "$configured_environment" == 'PRODUCTION' ]] \
-          || fail 'targetEnvironment must be READ_ONLY, SANDBOX, or PRODUCTION.'
-
-        # Shiprocket documents that valid API credentials operate on the real account. There is no
-        # assumed isolated shipment sandbox. Legacy SANDBOX is therefore only a READ_ONLY alias.
+        # Shiprocket documents that authenticated API requests use the real account. SANDBOX is
+        # retained only as a compatibility alias for non-mutating READ_ONLY mode.
         runtime_environment="$configured_environment"
         [[ "$runtime_environment" == 'SANDBOX' ]] && runtime_environment='READ_ONLY'
 
         grep -Fq 'enabled: ${SHIPROCKET_API_ENABLED:false}' "$app_yml" || fail 'SHIPROCKET_API_ENABLED is not fail-closed.'
         grep -Fq 'create-enabled: ${SHIPROCKET_CREATE_ENABLED:false}' "$app_yml" || fail 'SHIPROCKET_CREATE_ENABLED is not fail-closed.'
-        grep -Fq 'environment: ${SHIPROCKET_API_ENVIRONMENT:READ_ONLY}' "$app_yml" || fail 'Shiprocket environment does not default to READ_ONLY.'
-        grep -Fq 'production-activation-approved: ${SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED:false}' "$app_yml" || fail 'Shiprocket production approval does not default false.'
-        grep -Fq 'attribution-approved: ${SHIPROCKET_ATTRIBUTION_APPROVED:false}' "$app_yml" || fail 'Shiprocket attribution approval does not default false.'
-        grep -Fq 'email: ${SHIPROCKET_API_EMAIL:}' "$app_yml" || fail 'SHIPROCKET_API_EMAIL binding is missing.'
-        grep -Fq 'password: ${SHIPROCKET_API_PASSWORD:}' "$app_yml" || fail 'SHIPROCKET_API_PASSWORD binding is missing.'
-        grep -Fq 'webhook-token: ${SHIPROCKET_WEBHOOK_TOKEN:}' "$app_yml" || fail 'SHIPROCKET_WEBHOOK_TOKEN binding is missing.'
-        grep -R -Fq "$webhook_route" services/integration-service/src/main/java || fail 'Neutral Shiprocket webhook backend route is not implemented.'
-        [[ -d "$adapter_dir" ]] && find "$adapter_dir" -type f -name '*.java' -print -quit | grep -q . \
-          || fail 'Shiprocket Spring adapter is not present.'
+        grep -Fq 'environment: ${SHIPROCKET_API_ENVIRONMENT:READ_ONLY}' "$app_yml" || fail 'Shiprocket does not default to READ_ONLY.'
+        grep -Fq 'production-activation-approved: ${SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED:false}' "$app_yml" || fail 'Production approval does not default false.'
+        grep -Fq 'attribution-approved: ${SHIPROCKET_ATTRIBUTION_APPROVED:false}' "$app_yml" || fail 'Attribution approval does not default false.'
+        grep -Fq 'email: ${SHIPROCKET_API_EMAIL:}' "$app_yml" || fail 'API email binding is missing.'
+        grep -Fq 'password: ${SHIPROCKET_API_PASSWORD:}' "$app_yml" || fail 'API password binding is missing.'
+        grep -Fq 'webhook-token: ${SHIPROCKET_WEBHOOK_TOKEN:}' "$app_yml" || fail 'Webhook token binding is missing.'
+        [[ -d "$adapter_dir" ]] && find "$adapter_dir" -type f -name '*.java' -print -quit | grep -q . || fail 'Shiprocket adapter is missing.'
+        grep -R -Fq '@PostMapping("/p4")' "$adapter_dir" || fail 'Neutral Shiprocket /p4 webhook route is missing.'
 
         [[ "$base_url" == https://* ]] || fail 'Shiprocket API base URL must use HTTPS.'
         base_host="$(python3 -c 'from urllib.parse import urlparse; import sys; print((urlparse(sys.argv[1]).hostname or "").lower())' "$base_url")"
-        [[ "$base_host" == 'apiv2.shiprocket.in' ]] || fail 'Shiprocket base URL must use the currently approved apiv2.shiprocket.in host.'
+        [[ "$base_host" == 'apiv2.shiprocket.in' ]] || fail 'Shiprocket base URL must use the approved apiv2.shiprocket.in host.'
 
         if [[ "$enable_create" == 'true' ]]; then
           [[ "$enable_provider" == 'true' ]] || fail 'enableCreate=true requires enableProvider=true.'
-          [[ "$runtime_environment" == 'PRODUCTION' ]] || fail 'Shipment creation is allowed only in PRODUCTION. READ_ONLY/SANDBOX never creates Shiprocket shipments.'
-          [[ "$confirm" == 'true' ]] || fail 'Production shipment creation requires confirmProductionActivation=true.'
-          [[ "$attribution" == 'true' ]] || fail 'Production shipment creation requires attributionApproved=true.'
-          [[ -n "$order_email" && "$order_email" == *@*.* ]] || fail 'A valid orderEmail is required for Shiprocket create.'
-          positive_decimal "$package_length" || fail 'packageLengthCm must be a positive number.'
-          positive_decimal "$package_breadth" || fail 'packageBreadthCm must be a positive number.'
-          positive_decimal "$package_height" || fail 'packageHeightCm must be a positive number.'
-          [[ "$callback_url" == https://* ]] || fail 'Shiprocket callback URL must use HTTPS.'
+          [[ "$runtime_environment" == 'PRODUCTION' ]] || fail 'Shiprocket create is allowed only in PRODUCTION.'
+          [[ "$confirm" == 'true' ]] || fail 'Production create requires confirmProductionActivation=true.'
+          [[ "$attribution" == 'true' ]] || fail 'Production create requires attributionApproved=true.'
+          [[ -n "$order_email" && "$order_email" == *@*.* ]] || fail 'A valid orderEmail is required.'
+          positive_decimal "$package_length" || fail 'packageLengthCm must be positive.'
+          positive_decimal "$package_breadth" || fail 'packageBreadthCm must be positive.'
+          positive_decimal "$package_height" || fail 'packageHeightCm must be positive.'
+          [[ "$callback_url" == https://*'/api/v1/webhooks/delivery/p4' ]] || fail 'Shiprocket callback must use the neutral /p4 route.'
           callback_lower="${callback_url,,}"
-          [[ "$callback_lower" == *'/api/v1/webhooks/delivery/p4' ]] || fail 'Shiprocket callback must use the neutral /api/v1/webhooks/delivery/p4 route.'
-          [[ "$callback_lower" != *'shiprocket'* && "$callback_lower" != *'kartrocket'* ]] || fail 'Shiprocket callback URL must remain provider-neutral.'
+          [[ "$callback_lower" != *shiprocket* && "$callback_lower" != *kartrocket* ]] || fail 'Shiprocket callback URL must remain provider-neutral.'
         elif [[ "$runtime_environment" == 'PRODUCTION' && "$confirm" != 'true' ]]; then
-          fail 'Selecting PRODUCTION requires confirmProductionActivation=true even while create is disabled.'
+          fail 'Selecting PRODUCTION requires confirmProductionActivation=true.'
         fi
 
         if [[ "$enable_provider" == 'true' ]]; then
@@ -190,34 +189,43 @@ steps:
         db_url="$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].env[?name=='SPRING_DATASOURCE_URL']|[0].value" -o tsv --only-show-errors)"
         db_user="$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].env[?name=='SPRING_DATASOURCE_USERNAME']|[0].value" -o tsv --only-show-errors)"
         db_secret_url="$(az containerapp secret list -g "$RG" -n "$APP" --query "[?name=='kv-db-password']|[0].keyVaultUrl" -o tsv --only-show-errors)"
-        [[ "$db_url" == jdbc:postgresql://* && -n "$db_user" && "$db_secret_url" == https://*.vault.azure.net/secrets/* ]] \
-          || fail 'Integration database binding is incomplete.'
+        [[ "$db_url" == jdbc:postgresql://* && -n "$db_user" && "$db_secret_url" == https://*.vault.azure.net/secrets/* ]] || fail 'Integration DB binding is incomplete.'
         vault_name="$(cut -d. -f1 <<<"${db_secret_url#https://}")"
         db_secret_name="${db_secret_url##*/}"
         db_password="$(az keyvault secret show --vault-name "$vault_name" --name "$db_secret_name" --query value -o tsv --only-show-errors)"
-        [[ -n "$db_password" ]] || fail 'Integration database password could not be resolved.'
+        [[ -n "$db_password" ]] || fail 'Integration DB password could not be resolved.'
         export PGPASSWORD="$db_password" PGUSER="$db_user"
-        db="${db_url#jdbc:}"
+        DB="${db_url#jdbc:}"
 
-        provider_row="$(psql "$db" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket';")"
-        [[ "$provider_row" == '1' ]] || fail 'Shiprocket provider catalog row is missing. Deploy Integration Service migrations before activation.'
-        pickup_table="$(psql "$db" -At -v ON_ERROR_STOP=1 -c "SELECT to_regclass('delivery_schema.delivery_provider_pickup_location') IS NOT NULL;")"
-        [[ "$pickup_table" == 't' ]] || fail 'Provider pickup-location mapping migration is missing.'
+        [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket';")" == '1' ]] || fail 'Shiprocket provider catalog row is missing.'
+        [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT to_regclass('delivery_schema.delivery_provider_pickup_location') IS NOT NULL;")" == 't' ]] || fail 'Provider pickup-location mapping migration is missing.'
 
-        if [[ "$enable_create" == 'true' ]]; then
-          verified_pickups="$(psql "$db" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider_pickup_location WHERE provider_id='shiprocket' AND is_verified=TRUE AND NULLIF(BTRIM(external_location_code),'') IS NOT NULL;")"
-          [[ "$verified_pickups" -ge 1 ]] || fail 'At least one verified kitchen -> Shiprocket pickup mapping is required before create activation.'
-
-          mapfile -t API_IDS < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='api/v1/webhooks/delivery'].name" -o tsv --only-show-errors)
-          (( ${#API_IDS[@]} == 1 )) || fail 'Expected exactly one APIM delivery webhook API before Shiprocket create activation.'
-          operation_count="$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "${API_IDS[0]}" -o json --only-show-errors \
-            | jq '[.[] | select((.method | ascii_upcase) == "POST" and .urlTemplate == "/p4")] | length')"
-          [[ "$operation_count" == '1' ]] || fail 'Neutral APIM POST /p4 webhook route is not configured.'
+        current_env_json="$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].env' -o json --only-show-errors)"
+        current_value() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // "")' <<<"$current_env_json" | tail -1; }
+        current_environment="$(current_value SHIPROCKET_API_ENVIRONMENT)"
+        [[ "$current_environment" == 'SANDBOX' ]] && current_environment='READ_ONLY'
+        [[ -n "$current_environment" ]] || current_environment='READ_ONLY'
+        if [[ "$current_environment" != "$runtime_environment" ]]; then
+          open_jobs="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_job WHERE provider_id='shiprocket' AND status NOT IN ('DELIVERED','CANCELLED','RETURNED','FAILED');")"
+          [[ "$open_jobs" == '0' ]] || fail "Cannot change Shiprocket execution environment while $open_jobs Shiprocket job(s) are non-terminal."
         fi
 
-        # Provider stays out of intelligent routing until create is explicitly enabled.
-        psql "$db" -v ON_ERROR_STOP=1 \
-          -c "UPDATE delivery_schema.delivery_provider SET is_active = ${enable_create}, updated_at = now() WHERE provider_id = 'shiprocket';" >/dev/null
+        if [[ "$enable_create" == 'true' ]]; then
+          verified_pickups="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider_pickup_location WHERE provider_id='shiprocket' AND is_verified=TRUE AND NULLIF(BTRIM(external_location_code),'') IS NOT NULL;")"
+          [[ "$verified_pickups" -ge 1 ]] || fail 'At least one verified kitchen -> Shiprocket pickup mapping is required.'
+
+          mapfile -t API_IDS < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='api/v1/webhooks/delivery'].name" -o tsv --only-show-errors)
+          (( ${#API_IDS[@]} == 1 )) || fail 'Expected exactly one APIM delivery webhook API.'
+          operations="$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "${API_IDS[0]}" -o json --only-show-errors)"
+          [[ "$(jq '[.[] | select((.method | ascii_upcase) == "POST" and .urlTemplate == "/p4")] | length' <<<"$operations")" == '1' ]] || fail 'Neutral APIM POST /p4 route is missing.'
+        fi
+
+        # Deactivation/read-only transition removes the provider from routing before the adapter is
+        # disabled. Activation does the reverse: runtime first, routing catalog second.
+        if [[ "$enable_create" == 'false' ]]; then
+          psql "$DB" -v ON_ERROR_STOP=1 \
+            -c "UPDATE delivery_schema.delivery_provider SET is_active=FALSE, updated_at=now() WHERE provider_id='shiprocket';" >/dev/null
+        fi
 
         if [[ "$enable_provider" == 'false' ]]; then
           az containerapp update -g "$RG" -n "$APP" \
@@ -262,42 +270,52 @@ steps:
               CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=true \
               CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=true \
               CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=true \
-              CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true \
-              CRAVES_DELIVERY_COMMAND_ENABLED=true >/dev/null
+              CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+        fi
+        wait_ready "$APP"
+
+        if [[ "$enable_create" == 'true' ]]; then
+          psql "$DB" -v ON_ERROR_STOP=1 \
+            -c "UPDATE delivery_schema.delivery_provider SET is_active=TRUE, updated_at=now() WHERE provider_id='shiprocket';" >/dev/null
+
+          az containerapp update -g "$RG" -n "$ORDER_APP" \
+            --set-env-vars \
+              CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED=true \
+              CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED=true \
+              CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true >/dev/null
+          wait_ready "$ORDER_APP"
+
+          az containerapp update -g "$RG" -n "$APP" \
+            --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=true >/dev/null
+          wait_ready "$APP"
+        else
+          active_provider_count="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE is_active=TRUE;")"
+          if [[ "$active_provider_count" == '0' ]]; then
+            az containerapp update -g "$RG" -n "$APP" \
+              --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=false >/dev/null
+            wait_ready "$APP"
+          else
+            echo "INFO: $active_provider_count other provider(s) remain active; global delivery-command worker is unchanged."
+          fi
         fi
 
-        latest="$(az containerapp show -g "$RG" -n "$APP" --query properties.latestRevisionName -o tsv --only-show-errors)"
-        ready=''
-        for _ in $(seq 1 60); do
-          ready="$(az containerapp show -g "$RG" -n "$APP" --query properties.latestReadyRevisionName -o tsv --only-show-errors 2>/dev/null || true)"
-          [[ "$ready" == "$latest" ]] && break
-          sleep 10
-        done
-        [[ "$ready" == "$latest" ]] || fail 'New Integration Service revision did not become ready.'
-
         env_json="$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].env' -o json --only-show-errors)"
-        value() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // "")' <<<"$env_json" | tail -1; }
+        value() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // .secretRef // "")' <<<"$env_json" | tail -1; }
         [[ "$(value SHIPROCKET_API_ENVIRONMENT)" == "$runtime_environment" ]] || fail 'Shiprocket environment verification failed.'
         [[ "$(value SHIPROCKET_API_ENABLED)" == "$enable_provider" ]] || fail 'Shiprocket API enabled-state verification failed.'
         [[ "$(value SHIPROCKET_CREATE_ENABLED)" == "$enable_create" ]] || fail 'Shiprocket create enabled-state verification failed.'
 
-        provider_active="$(psql "$db" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket';")"
         expected_active='f'
         [[ "$enable_create" == 'true' ]] && expected_active='t'
-        [[ "$provider_active" == "$expected_active" ]] || fail 'Shiprocket database activation state verification failed.'
+        [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket';")" == "$expected_active" ]] || fail 'Shiprocket DB activation verification failed.'
 
         if [[ "$enable_create" == 'true' ]]; then
-          az containerapp update -g "$RG" -n "$ORDER_APP" \
-            --set-env-vars \
-              CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED=true \
-              CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED=true >/dev/null
-          order_latest="$(az containerapp show -g "$RG" -n "$ORDER_APP" --query properties.latestRevisionName -o tsv --only-show-errors)"
-          for _ in $(seq 1 60); do
-            order_ready="$(az containerapp show -g "$RG" -n "$ORDER_APP" --query properties.latestReadyRevisionName -o tsv --only-show-errors 2>/dev/null || true)"
-            [[ "$order_ready" == "$order_latest" ]] && break
-            sleep 10
-          done
-          [[ "${order_ready:-}" == "$order_latest" ]] || fail 'Order Service event-publisher revision did not become ready.'
+          [[ "$(value CRAVES_DELIVERY_COMMAND_ENABLED)" == 'true' ]] || fail 'Delivery command worker is not enabled.'
+          order_env="$(az containerapp show -g "$RG" -n "$ORDER_APP" --query 'properties.template.containers[0].env' -o json --only-show-errors)"
+          order_value() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // "")' <<<"$order_env" | tail -1; }
+          [[ "$(order_value CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED)" == 'true' ]] || fail 'Order outbox is not enabled.'
+          [[ "$(order_value CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED)" == 'true' ]] || fail 'Order domain-event publisher is not enabled.'
+          [[ "$(order_value CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED)" == 'true' ]] || fail 'Order delivery-status consumer is not enabled.'
         fi
 
         unset db_password PGPASSWORD PGUSER
@@ -315,5 +333,5 @@ steps:
         else
           echo 'Mode: FAIL_CLOSED'
         fi
-        echo 'Provider catalog participates in intelligent routing only when create is enabled.'
+        echo 'Routing activation occurs only after the new runtime revision is ready.'
         echo '============================================================'

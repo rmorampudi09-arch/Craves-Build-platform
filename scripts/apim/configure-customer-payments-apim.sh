@@ -29,13 +29,10 @@ TOKEN_REVOCATION_ENABLED=$(jq -r '[.properties.template.containers[0].env[]? | s
 TOKEN_REVOCATION_ENABLED=${TOKEN_REVOCATION_ENABLED,,}
 
 probe_health() {
-  local PATH_SUFFIX="$1" LABEL="$2" REQUIRED="$3"
+  local PATH_SUFFIX="$1" LABEL="$2"
   local attempt body code status
-  local attempts=1
 
-  [[ "$REQUIRED" == "true" ]] && attempts="$HEALTH_ATTEMPTS"
-
-  for attempt in $(seq 1 "$attempts"); do
+  for attempt in $(seq 1 "$HEALTH_ATTEMPTS"); do
     body=$(mktemp)
     code=$(curl \
       --silent \
@@ -53,37 +50,31 @@ probe_health() {
       return 0
     fi
 
-    echo "Health check $LABEL attempt $attempt/$attempts -> HTTP ${code:-curl-error}, status=$status" >&2
+    echo "Health check $LABEL attempt $attempt/$HEALTH_ATTEMPTS -> HTTP ${code:-curl-error}, status=$status" >&2
     if jq -e . "$body" >/dev/null 2>&1; then
       jq -c '{status:(.status // "UNKNOWN"),components:((.components // {}) | with_entries(.value={status:(.value.status // "UNKNOWN")}))}' "$body" >&2 || true
     fi
     rm -f "$body"
 
-    if (( attempt < attempts )); then
+    if (( attempt < HEALTH_ATTEMPTS )); then
       sleep "$HEALTH_SLEEP_SECONDS"
     fi
   done
 
-  if [[ "$REQUIRED" == "true" ]]; then
-    fail "Required Integration Service health check failed: $LABEL ($PATH_SUFFIX)"
-  fi
-
-  echo "INFO: Optional health check is not UP: $LABEL ($PATH_SUFFIX)" >&2
-  return 0
+  fail "Required Integration Service health check failed: $LABEL ($PATH_SUFFIX)"
 }
 
-# Spring Boot readiness/liveness groups intentionally do not include external dependencies by default.
-# Customer payments require the application and PostgreSQL. Redis is required here only when
-# token-revocation enforcement is enabled for this service.
-probe_health "/actuator/health/liveness" "liveness" "true"
-probe_health "/actuator/health/readiness" "readiness" "true"
-probe_health "/actuator/health/db" "PostgreSQL datasource" "true"
+# The payment-specific health group is defined by the Integration Service itself and contains
+# readinessState + db. This avoids exposing all health components while still proving PostgreSQL
+# is available before APIM payment routes are changed.
+probe_health "/actuator/health/liveness" "liveness"
+probe_health "/actuator/health/readiness" "readiness"
+probe_health "/actuator/health/payments" "payments dependency group (readiness + PostgreSQL)"
 
 if [[ "$TOKEN_REVOCATION_ENABLED" == "true" ]]; then
-  probe_health "/actuator/health/redis" "Redis token-revocation store" "true"
+  probe_health "/actuator/health/token-revocation" "token-revocation dependency group (readiness + Redis)"
 else
-  echo "Token revocation is disabled; Redis health is diagnostic-only for this payment APIM gate."
-  probe_health "/actuator/health/redis" "Redis token-revocation store" "false"
+  echo "Token revocation is disabled; Redis is not a required dependency for this payment APIM gate."
 fi
 
 mapfile -t API_IDS < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='${API_PATH}'].name" -o tsv --only-show-errors)

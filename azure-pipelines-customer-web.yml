@@ -18,7 +18,7 @@ parameters:
 variables:
   appPath: apps/customer-web
   imageRepository: craves/customer-web
-  viteApiBaseUrl: https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
+  viteApiBaseUrl: https://api.craves.in/api/v1
 
 pool:
   vmImage: ubuntu-latest

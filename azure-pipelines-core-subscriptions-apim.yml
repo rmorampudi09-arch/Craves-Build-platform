@@ -16,7 +16,7 @@ parameters:
     default: ca-craves-subscription-service-p
   - name: apimHost
     type: string
-    default: apim-craves-prodlow-l3ing6.azure-api.net
+    default: api.craves.in
 
 pool:
   vmImage: ubuntu-latest

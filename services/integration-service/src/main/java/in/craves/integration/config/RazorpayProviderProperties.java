@@ -28,7 +28,7 @@ public class RazorpayProviderProperties {
         @Value("${RAZORPAY_KEY_SECRET:}") String keySecret,
         @Value("${RAZORPAY_WEBHOOK_SECRET:}") String webhookSecret,
         @Value("${RAZORPAY_BASE_URL:https://api.razorpay.com}") String baseUrl,
-        @Value("${RAZORPAY_WEBHOOK_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/payments/webhooks/razorpay}") String webhookUrl,
+        @Value("${RAZORPAY_WEBHOOK_URL:https://api.craves.in/api/v1/payments/webhooks/razorpay}") String webhookUrl,
         @Value("${RAZORPAY_AUTO_CAPTURE:true}") boolean autoCapture
     ) {
         this.environment = environment;

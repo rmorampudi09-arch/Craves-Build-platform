@@ -86,13 +86,13 @@ Customer web/mobile app
 Current APIM hostname:
 
 ```text
-https://apim-craves-prodlow-l3ing6.azure-api.net
+https://api.craves.in
 ```
 
 Final route:
 
 ```text
-https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/orders/{orderId}/delivery-status
+https://api.craves.in/api/v1/orders/{orderId}/delivery-status
 ```
 
 ## 8. Backend URL
@@ -780,7 +780,7 @@ PY
 
 ```bash
 curl -i \
-  "https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/orders/00000000-0000-0000-0000-000000000000/delivery-status"
+  "https://api.craves.in/api/v1/orders/00000000-0000-0000-0000-000000000000/delivery-status"
 ```
 
 Expected:
@@ -795,7 +795,7 @@ AUTHENTICATION_REQUIRED
 ```bash
 curl -i \
   -H "Authorization: Bearer $CRAVES_TOKEN" \
-  "https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/orders/$ORDER_ID/delivery-status"
+  "https://api.craves.in/api/v1/orders/$ORDER_ID/delivery-status"
 ```
 
 Do not print or commit `$CRAVES_TOKEN`.

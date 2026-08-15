@@ -117,7 +117,7 @@ Chef notice outbox event sent ...
 Then check chef notification inbox through APIM:
 
 ```bash
-APIM_URL="https://apim-craves-prodlow-l3ing6.azure-api.net"
+APIM_URL="https://api.craves.in"
 CHEF_TOKEN="paste_chef_craves_access_token_here"
 
 curl -sS "$APIM_URL/api/v1/notifications/in-app" \

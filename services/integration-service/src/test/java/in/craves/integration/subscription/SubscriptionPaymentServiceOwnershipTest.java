@@ -68,7 +68,7 @@ class SubscriptionPaymentServiceOwnershipTest {
             "https://sandbox.cashfree.com",
             "https://api.cashfree.com",
             "https://craves.in/payment/return",
-            "https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/payments/webhooks/cashfree",
+            "https://api.craves.in/api/v1/payments/webhooks/cashfree",
             "",
             300,
             "2025-01-01"

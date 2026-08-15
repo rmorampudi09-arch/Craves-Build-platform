@@ -4,7 +4,7 @@ import { ChefHat, Heart, Home, Search, ShoppingCart, User, Bell, Star, CreditCar
 import './styles.css';
 import './payment-test.css';
 
-const API = (import.meta.env.VITE_API_BASE_URL ?? 'https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1').replace(/\/$/, '');
+const API = (import.meta.env.VITE_API_BASE_URL ?? 'https://api.craves.in/api/v1').replace(/\/$/, '');
 
 type Chef = { id:string; kitchenName:string; cuisine:string; rating:number; status:string };
 type MenuItem = { id:string; name:string; description:string; price:number; category:string; isVeg:boolean; imageUrl:string };

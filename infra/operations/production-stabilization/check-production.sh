@@ -424,7 +424,7 @@ printf 'APIM root: HTTP %s, TLS %s, remote %s\n' \
   "${API_TLS:-empty}" \
   "${API_REMOTE:-empty}"
 
-if [[ "$API_CNAME" == "apim-craves-prodlow-l3ing6.azure-api.net" ]]; then
+if [[ "$API_CNAME" == "api.craves.in" ]]; then
   record_pass "api.craves.in CNAME is unchanged."
 else
   record_failure "api.craves.in CNAME changed to ${API_CNAME:-empty}."

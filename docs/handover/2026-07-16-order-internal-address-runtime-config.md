@@ -144,7 +144,7 @@ Expected safe runtime configuration output:
 Use the existing customer token locally without sharing it.
 
 ```bash
-APIM_URL="https://apim-craves-prodlow-l3ing6.azure-api.net"
+APIM_URL="https://api.craves.in"
 DELIVERY_ADDRESS_ID="b8c25f7c-8535-4765-ab2b-f3ba930124a6"
 
 curl -sS -i \

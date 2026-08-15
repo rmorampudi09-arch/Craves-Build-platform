@@ -33,7 +33,7 @@ type ExchangeResponse = {
 type StatusType = "idle" | "ok" | "error";
 
 const CONFIG_STORAGE_KEY = "craves.firebase.web.config.v1";
-const DEFAULT_AUTH_BASE_URL = "https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/auth";
+const DEFAULT_AUTH_BASE_URL = "https://api.craves.in/api/v1/auth";
 
 function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);

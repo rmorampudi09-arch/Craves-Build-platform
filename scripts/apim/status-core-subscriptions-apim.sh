@@ -6,7 +6,7 @@ RG="${RG:-rg-craves-prodlow-centralindia}"
 APIM="${APIM:-apim-craves-prodlow-l3ing6}"
 SUB_APP="${SUB_APP:-ca-craves-subscription-service-p}"
 WEB_APP="${WEB_APP:-ca-craves-web-prodlow}"
-APIM_HOST="${APIM_HOST:-apim-craves-prodlow-l3ing6.azure-api.net}"
+APIM_HOST="${APIM_HOST:-api.craves.in}"
 API_ID="craves-subscriptions-v1"
 API_VERSION="2022-08-01"
 

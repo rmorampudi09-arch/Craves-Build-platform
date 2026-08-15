@@ -36,7 +36,7 @@ Requirements: Node.js 24 and npm.
 2. Keep the API base as:
 
    ```text
-   https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
+   https://api.craves.in/api/v1
    ```
 
 3. In Firebase Console, open the Craves web app and copy only the public Web SDK configuration into the `NEXT_PUBLIC_FIREBASE_*` variables. Do not use or expose a Firebase Admin private key.

@@ -39,7 +39,7 @@ craves:
   token-revocation:
     enabled: ${CRAVES_TOKEN_REVOCATION_ENABLED:false}
   catalog:
-    base-url: ${CRAVES_CATALOG_BASE_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}
+    base-url: ${CRAVES_CATALOG_BASE_URL:https://api.craves.in/api/v1/catalog}
   subscription:
     capacity:
       hold-minutes: ${CRAVES_SUBSCRIPTION_CAPACITY_HOLD_MINUTES:15}

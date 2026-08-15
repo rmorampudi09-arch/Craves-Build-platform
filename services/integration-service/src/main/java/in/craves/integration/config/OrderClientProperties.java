@@ -10,7 +10,7 @@ public class OrderClientProperties {
     private final String internalKey;
 
     public OrderClientProperties(
-        @Value("${CRAVES_ORDER_BASE_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1}") String baseUrl,
+        @Value("${CRAVES_ORDER_BASE_URL:https://api.craves.in/api/v1}") String baseUrl,
         @Value("${CRAVES_ORDER_INTERNAL_BASE_URL:https://ca-craves-order-service-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io/internal/v1}") String internalBaseUrl,
         @Value("${CRAVES_INTERNAL_SERVICE_KEY:}") String internalKey
     ) {

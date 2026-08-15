@@ -41,7 +41,7 @@ infra/certificates/apim-letsencrypt/
 
 The following production prerequisites must remain in place:
 
-- GoDaddy CNAME `api` points to `apim-craves-prodlow-l3ing6.azure-api.net`.
+- GoDaddy CNAME `api` points to `api.craves.in`.
 - GoDaddy delegates `_acme-challenge.api.craves.in` to the four Azure DNS nameservers assigned to the child zone.
 - Azure DNS zone `_acme-challenge.api.craves.in` exists in `rg-craves-prodlow-centralindia`.
 - Key Vault `kvcravesprodlowl3ing6` uses Azure RBAC.
@@ -184,7 +184,7 @@ shellcheck infra/certificates/apim-letsencrypt/renew-apim-certificate.sh
 The default APIM gateway remains available at:
 
 ```text
-https://apim-craves-prodlow-l3ing6.azure-api.net
+https://api.craves.in
 ```
 
 If the custom-domain binding fails, remove only `api.craves.in` from APIM Custom domains. Do not delete the default APIM hostname, the Key Vault certificate, the GoDaddy CNAME, or the ACME DNS delegation while investigating.

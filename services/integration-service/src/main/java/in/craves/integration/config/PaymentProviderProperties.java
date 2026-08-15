@@ -36,7 +36,7 @@ public class PaymentProviderProperties {
         @Value("${PAYMENT_PROVIDER_SANDBOX_BASE_URL:https://sandbox.cashfree.com}") String sandboxBaseUrl,
         @Value("${PAYMENT_PROVIDER_PRODUCTION_BASE_URL:https://api.cashfree.com}") String productionBaseUrl,
         @Value("${PAYMENT_PROVIDER_DEFAULT_RETURN_URL:https://craves.in/payment/return}") String defaultReturnUrl,
-        @Value("${PAYMENT_PROVIDER_WEBHOOK_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/payments/webhooks/cashfree}") String webhookUrl,
+        @Value("${PAYMENT_PROVIDER_WEBHOOK_URL:https://api.craves.in/api/v1/payments/webhooks/cashfree}") String webhookUrl,
         @Value("${CRAVES_CASHFREE_SANDBOX_REFUND_SIMULATION_STATUS:}") String sandboxRefundSimulationStatus,
         @Value("${CRAVES_CASHFREE_WEBHOOK_MAX_SKEW_SECONDS:300}") long webhookMaxSkewSeconds,
         @Value("${CRAVES_CASHFREE_ALLOWED_WEBHOOK_VERSIONS:2025-01-01,2023-08-01}") String allowedWebhookVersions

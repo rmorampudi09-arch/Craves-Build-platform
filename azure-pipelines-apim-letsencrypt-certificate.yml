@@ -28,7 +28,7 @@ variables:
   keyVaultCertificateName: craves-api-tls
   apimName: apim-craves-prodlow-l3ing6
   apimHostname: api.craves.in
-  apimDefaultHostname: apim-craves-prodlow-l3ing6.azure-api.net
+  apimDefaultHostname: api.craves.in
   acmeShVersion: 3.1.4
   renewBeforeDays: 30
   dnsPropagationSeconds: 60

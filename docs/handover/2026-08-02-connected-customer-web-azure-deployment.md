@@ -9,7 +9,7 @@ This package updates only the existing Next.js web module and the guarded web de
 | Resource group | `rg-craves-prodlow-centralindia` |
 | Azure Container Registry | `cravesprodlowacr82121` |
 | Customer web Container App | `ca-craves-web-prodlow` |
-| API Management base | `https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1` |
+| API Management base | `https://api.craves.in/api/v1` |
 
 ## Repository placement
 

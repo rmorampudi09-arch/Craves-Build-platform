@@ -98,7 +98,7 @@ These can be overridden with environment variables.
 ## Smoke test
 
 ```bash
-APIM_URL="https://apim-craves-prodlow-l3ing6.azure-api.net"
+APIM_URL="https://api.craves.in"
 
 curl -sS -i \
   "$APIM_URL/api/v1/discovery/kitchens?latitude=17.4483&longitude=78.3915&radiusMeters=5000&page=0&size=20"

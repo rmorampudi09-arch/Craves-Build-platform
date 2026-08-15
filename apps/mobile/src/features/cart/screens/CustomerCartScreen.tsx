@@ -1,30 +1,30 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   RefreshControl,
   SectionList,
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
-  type LayoutChangeEvent,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NavigationProp} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {CFEnvironment, CFSession} from 'cashfree-pg-api-contract';
+import {
+  CFPaymentGatewayService,
+  type CFErrorResponse,
+} from 'react-native-cashfree-pg-sdk';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
 import type {
   CustomerCartStackParamList,
   CustomerTabParamList,
 } from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
-import {
-  getBottomActionPadding,
-  shouldStackCriticalActions,
-} from '../../../design/responsive';
 import {
   colors,
   elevation,
@@ -44,6 +44,15 @@ import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmpt
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
+import {checkoutApi} from '../../checkout/api/checkoutApi';
+import {
+  paymentApi,
+  type MobilePaymentSession,
+} from '../../checkout/api/paymentApi';
+import {
+  checkCartServiceability,
+  type CartDiscoveryDish,
+} from '../api/cartServiceabilityApi';
 import type {
   CartScreenAmountField,
   CartScreenItem,
@@ -51,9 +60,6 @@ import type {
 } from '../domain/cartScreenModel';
 import {resolveCartQuantityInteraction} from '../domain/cartScreenModel';
 import {
-  getCartAddressStatusCopy,
-  getCartCheckoutStatusCopy,
-  getCartEtaStatusCopy,
   getCartItemInitial,
   groupCartItemsByKitchen,
   type CartKitchenSectionModel,
@@ -67,183 +73,166 @@ import {refreshCartSnapshot} from '../state/cartRefresh';
 import {selectCartScreenModel} from '../state/cartSelectors';
 import {formatCartMoney} from '../viewCartOverlayModel';
 
-const CART_FOOTER_CLEARANCE = touchTarget.comfortable + spacing.xxxl + spacing.xl;
+const DELIVERY_RADIUS_KM = 10;
+type ServiceabilityState = 'IDLE' | 'CHECKING' | 'SERVICEABLE' | 'UNSERVICEABLE' | 'ERROR';
 
 function formatAmountField(field: CartScreenAmountField): string {
-  return field.amount ? formatCartMoney(field.amount) : 'Not available';
+  return field.amount ? formatCartMoney(field.amount) : '₹0';
 }
 
-function CartAmountRow({
-  label,
-  field,
-  emphasized = false,
-}: {
+function CartAmountRow({label, field, emphasized = false}: {
   label: string;
   field: CartScreenAmountField;
   emphasized?: boolean;
 }) {
   return (
     <View style={styles.amountRow}>
-      <Text style={[styles.amountLabel, emphasized && styles.amountLabelStrong]}>
-        {label}
-      </Text>
-      <Text
-        accessibilityLabel={`${label}: ${formatAmountField(field)}`}
-        style={[styles.amountValue, emphasized && styles.amountValueStrong]}>
+      <Text style={[styles.amountLabel, emphasized && styles.amountLabelStrong]}>{label}</Text>
+      <Text style={[styles.amountValue, emphasized && styles.amountValueStrong]}>
         {formatAmountField(field)}
       </Text>
     </View>
   );
 }
 
-function CartLineCard({
-  item,
-  pending,
-  onDecrease,
-  onIncrease,
-  onRemove,
-}: {
+function foodTypeLabel(value: CartDiscoveryDish['foodType'] | CartScreenItem['foodType']): string | null {
+  if (value === 'VEG') return 'Veg';
+  if (value === 'NON_VEG') return 'Non-veg';
+  if (value === 'EGG') return 'Egg';
+  return null;
+}
+
+function spiceLabel(value: CartDiscoveryDish['spiceLevel'] | CartScreenItem['spiceLevel']): string | null {
+  if (value === 'MILD') return 'Mild';
+  if (value === 'MEDIUM') return 'Medium';
+  if (value === 'SPICY') return 'Spicy';
+  return null;
+}
+
+function CartLineCard({item, discovery, pending, onDecrease, onIncrease, onRemove}: {
   item: CartScreenItem;
+  discovery?: CartDiscoveryDish;
   pending: boolean;
   onDecrease: (item: CartScreenItem) => void;
   onIncrease: (item: CartScreenItem) => void;
   onRemove: (item: CartScreenItem) => void;
 }) {
+  const imageUrl = discovery?.imageUrl ?? item.imageUrl;
+  const serves = discovery?.servesCount ?? item.servesCount;
+  const spice = spiceLabel(discovery?.spiceLevel ?? item.spiceLevel);
+  const foodType = foodTypeLabel(discovery?.foodType ?? item.foodType);
+  const metadata = [spice, serves ? `Serves ${serves}` : null, foodType].filter(Boolean).join('  •  ');
+
   return (
     <View style={styles.lineCard}>
-      <View style={styles.lineMediaFallback}>
-        <Text accessibilityElementsHidden style={styles.lineMediaInitial}>
-          {getCartItemInitial(item.itemName)}
-        </Text>
-      </View>
+      {imageUrl ? (
+        <Image source={{uri: imageUrl}} resizeMode="cover" style={styles.lineImage} />
+      ) : (
+        <View style={styles.lineMediaFallback}>
+          <Text style={styles.lineMediaInitial}>{getCartItemInitial(item.itemName)}</Text>
+        </View>
+      )}
 
       <View style={styles.lineBody}>
-        <View style={styles.lineHeadingRow}>
-          <View style={styles.lineHeadingCopy}>
-            <Text numberOfLines={2} style={styles.lineName}>
-              {item.itemName}
-            </Text>
-            <Text style={styles.lineUnitPrice}>
-              {formatCartMoney(item.unitPrice)} each
-            </Text>
-          </View>
-          <Text style={styles.lineTotal}>{formatCartMoney(item.lineTotal)}</Text>
+        <Text numberOfLines={2} style={styles.lineName}>{item.itemName}</Text>
+        <View style={styles.kitchenInline}>
+          <Text numberOfLines={1} style={styles.lineKitchen}>{item.kitchenName}</Text>
+          <Icon name="check" size={14} color={colors.flameRed} />
         </View>
+        {metadata ? <Text numberOfLines={1} style={styles.lineMeta}>{metadata}</Text> : null}
+        <Text style={styles.linePrice}>{formatCartMoney(item.unitPrice)}</Text>
+      </View>
 
-        <View style={styles.lineActions}>
-          <View
-            accessibilityLabel={`${item.itemName} quantity ${item.quantity}`}
-            style={styles.quantityControl}>
-            <Pressable
-              accessibilityLabel={`Decrease ${item.itemName} quantity`}
-              accessibilityRole="button"
-              accessibilityState={{disabled: pending}}
-              disabled={pending}
-              onPress={() => onDecrease(item)}
-              style={({pressed}) => [
-                styles.quantityButton,
-                pressed && !pending && styles.quantityButtonPressed,
-                pending && styles.controlDisabled,
-              ]}>
-              <Text style={styles.quantitySymbol}>−</Text>
-            </Pressable>
-            <Text accessibilityLiveRegion="polite" style={styles.quantityValue}>
-              {item.quantity}
-            </Text>
-            <Pressable
-              accessibilityLabel={`Increase ${item.itemName} quantity`}
-              accessibilityRole="button"
-              accessibilityState={{disabled: pending}}
-              disabled={pending}
-              onPress={() => onIncrease(item)}
-              style={({pressed}) => [
-                styles.quantityButton,
-                pressed && !pending && styles.quantityButtonPressed,
-                pending && styles.controlDisabled,
-              ]}>
-              <Text style={styles.quantitySymbol}>+</Text>
-            </Pressable>
-          </View>
-
+      <View style={styles.lineRight}>
+        <View style={styles.quantityControl}>
           <Pressable
-            accessibilityLabel={`Remove ${item.itemName} from cart`}
-            accessibilityRole="button"
-            accessibilityState={{disabled: pending}}
+            accessibilityLabel={`Decrease ${item.itemName} quantity`}
             disabled={pending}
-            onPress={() => onRemove(item)}
-            style={({pressed}) => [
-              styles.removeButton,
-              pressed && !pending && styles.removeButtonPressed,
-              pending && styles.controlDisabled,
-            ]}>
-            <Text style={styles.removeText}>Remove</Text>
+            onPress={() => onDecrease(item)}
+            style={styles.quantityButton}>
+            <Text style={styles.quantitySymbol}>−</Text>
+          </Pressable>
+          <Text style={styles.quantityValue}>{item.quantity}</Text>
+          <Pressable
+            accessibilityLabel={`Increase ${item.itemName} quantity`}
+            disabled={pending}
+            onPress={() => onIncrease(item)}
+            style={styles.quantityButton}>
+            <Text style={styles.quantitySymbol}>+</Text>
           </Pressable>
         </View>
+        <Pressable
+          accessibilityLabel={`Remove ${item.itemName}`}
+          disabled={pending}
+          onPress={() => onRemove(item)}
+          style={styles.removeButton}>
+          <Text style={styles.removeIcon}>⌫</Text>
+        </Pressable>
       </View>
     </View>
   );
 }
 
-function DependencyCard({
-  title,
-  message,
-  icon,
+function DeliveryCard({
+  address,
+  serviceability,
+  estimatedMinutes,
+  onChange,
 }: {
-  title: string;
-  message: string;
-  icon: 'location' | 'check';
+  address: string | null;
+  serviceability: ServiceabilityState;
+  estimatedMinutes: number | null;
+  onChange: () => void;
 }) {
+  const estimate =
+    serviceability === 'CHECKING'
+      ? 'Checking delivery availability…'
+      : serviceability === 'UNSERVICEABLE'
+        ? `Outside our ${DELIVERY_RADIUS_KM} km delivery area`
+        : serviceability === 'ERROR'
+          ? 'Delivery availability could not be verified'
+          : serviceability === 'SERVICEABLE'
+            ? estimatedMinutes
+              ? `Delivery in approximately ${estimatedMinutes} min`
+              : 'Delivery available within 10 km'
+            : 'Choose an address to check delivery';
+
   return (
-    <View style={styles.dependencyCard}>
-      <View style={styles.dependencyIcon}>
-        <Icon name={icon} size={iconSize.sm} color={colors.flameRed} />
+    <View style={styles.deliveryCard}>
+      <View style={styles.deliveryIconBox}>
+        <Icon name="location" size={24} color={colors.flameRed} />
       </View>
-      <View style={styles.dependencyCopy}>
-        <Text style={styles.dependencyTitle}>{title}</Text>
-        <Text style={styles.dependencyMessage}>{message}</Text>
+      <View style={styles.deliveryCopy}>
+        <Text style={styles.deliveryLabel}>Delivering to</Text>
+        <Text numberOfLines={2} style={styles.deliveryAddress}>
+          {address ?? 'No delivery address selected'}
+        </Text>
+        <View style={styles.estimateRow}>
+          <Icon name={serviceability === 'UNSERVICEABLE' ? 'location' : 'check'} size={16} color={colors.flameRed} />
+          <Text style={[styles.estimateText, serviceability === 'UNSERVICEABLE' && styles.unserviceableText]}>
+            {estimate}
+          </Text>
+        </View>
       </View>
+      <Pressable accessibilityRole="button" onPress={onChange} style={styles.changeButton}>
+        <Text style={styles.changeText}>Change</Text>
+      </Pressable>
     </View>
   );
 }
 
 function BillSummary({model}: {model: CartScreenModel}) {
-  const [expanded, setExpanded] = useState(true);
-
   return (
     <View style={styles.billCard}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} bill details`}
-        accessibilityState={{expanded}}
-        onPress={() => setExpanded(current => !current)}
-        style={({pressed}) => [styles.billHeader, pressed && styles.cardPressed]}>
-        <View>
-          <Text style={styles.cardTitle}>Bill details</Text>
-          <Text style={styles.cardCaption}>Server-verified amounts only</Text>
-        </View>
-        <Text style={styles.expandText}>{expanded ? 'Hide' : 'Show'}</Text>
-      </Pressable>
-
-      {expanded ? (
-        <View style={styles.billRows}>
-          <CartAmountRow label="Food subtotal" field={model.billSummary.foodSubtotal} />
-          <CartAmountRow label="Delivery fee" field={model.billSummary.deliveryFee} />
-          <CartAmountRow label="Platform fee" field={model.billSummary.platformFee} />
-          <CartAmountRow label="Taxes" field={model.billSummary.taxAmount} />
-          <CartAmountRow label="Coupon discount" field={model.billSummary.couponDiscount} />
-          <View style={styles.billDivider} />
-          <CartAmountRow
-            emphasized
-            label="Payable total"
-            field={model.billSummary.grandTotal}
-          />
-          {!model.billSummary.complete ? (
-            <Text accessibilityRole="alert" style={styles.billNotice}>
-              Final fees, taxes and payable total are not available yet. Checkout stays disabled until the complete bill is verified.
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
+      <Text style={styles.cardTitle}>Bill Details</Text>
+      <View style={styles.billRows}>
+        <CartAmountRow label="Food subtotal" field={model.billSummary.foodSubtotal} />
+        <CartAmountRow label="Delivery fee" field={model.billSummary.deliveryFee} />
+        <CartAmountRow label="Taxes" field={model.billSummary.taxAmount} />
+        <CartAmountRow label="Coupon discount" field={model.billSummary.couponDiscount} />
+        <View style={styles.billDivider} />
+        <CartAmountRow emphasized label="To Pay" field={model.billSummary.grandTotal} />
+      </View>
     </View>
   );
 }
@@ -251,29 +240,27 @@ function BillSummary({model}: {model: CartScreenModel}) {
 export function CustomerCartScreen() {
   const navigation = useNavigation<NavigationProp<CustomerCartStackParamList>>();
   const dispatch = useAppDispatch();
-  const {fontScale, width} = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const model = useAppSelector(selectCartScreenModel);
   const snapshotStatus = useAppSelector(state => state.cart.snapshotStatus);
   const snapshotErrorCode = useAppSelector(state => state.cart.snapshotErrorCode);
   const mutations = useAppSelector(state => state.cart.mutations);
+  const authPhone = useAppSelector(state => {
+    const identity = state.auth.identity as unknown as {phoneNumber?: string | null} | null;
+    return identity?.phoneNumber ?? null;
+  });
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [interactionError, setInteractionError] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
-  const [checkoutBarHeight, setCheckoutBarHeight] = useState(0);
-  const stackCheckoutActions = shouldStackCriticalActions(width, fontScale);
-  const checkoutBottomPadding = getBottomActionPadding(insets.bottom);
-  const checkoutListClearance =
-    checkoutBarHeight > 0
-      ? checkoutBarHeight + spacing.xl
-      : CART_FOOTER_CLEARANCE + insets.bottom;
+  const [serviceability, setServiceability] = useState<ServiceabilityState>('IDLE');
+  const [estimatedMinutes, setEstimatedMinutes] = useState<number | null>(null);
+  const [discoveryByMenuItem, setDiscoveryByMenuItem] = useState<Record<string, CartDiscoveryDish>>({});
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const paymentRef = useRef<MobilePaymentSession | null>(null);
 
-  const sections = useMemo(
-    () => groupCartItemsByKitchen(model?.items ?? []),
-    [model?.items],
-  );
+  const sections = useMemo(() => groupCartItemsByKitchen(model?.items ?? []), [model?.items]);
   const itemCount = useMemo(
     () => model?.items.reduce((total, item) => total + item.quantity, 0) ?? 0,
     [model?.items],
@@ -282,704 +269,324 @@ export function CustomerCartScreen() {
   const refreshCart = useCallback(async () => {
     setRefreshError(null);
     const outcome = await dispatch(refreshCartSnapshot());
-    if (outcome.status === 'FAILED') {
-      setRefreshError(outcome.error.message);
-    }
+    if (outcome.status === 'FAILED') setRefreshError(outcome.error.message);
   }, [dispatch]);
 
   useEffect(() => {
-    if (snapshotStatus === 'UNINITIALIZED') {
-      refreshCart();
-    }
+    if (snapshotStatus === 'UNINITIALIZED') refreshCart();
   }, [refreshCart, snapshotStatus]);
+
+  const verifyServiceability = useCallback(async () => {
+    const location = header.selectedLocation;
+    if (!model || !location || model.items.length === 0) {
+      setServiceability('IDLE');
+      setEstimatedMinutes(null);
+      setDiscoveryByMenuItem({});
+      return false;
+    }
+
+    setServiceability('CHECKING');
+    try {
+      const result = await checkCartServiceability(
+        location.latitude,
+        location.longitude,
+        model.items.map(item => item.kitchenId),
+      );
+      const nextMap: Record<string, CartDiscoveryDish> = {};
+      result.dishes.forEach(dish => {
+        if (model.items.some(item => item.menuItemId === dish.menuItemId)) nextMap[dish.menuItemId] = dish;
+      });
+      setDiscoveryByMenuItem(nextMap);
+      setEstimatedMinutes(result.estimatedMinutes);
+      setServiceability(result.serviceable ? 'SERVICEABLE' : 'UNSERVICEABLE');
+      return result.serviceable;
+    } catch {
+      setServiceability('ERROR');
+      setEstimatedMinutes(null);
+      return false;
+    }
+  }, [header.selectedLocation, model]);
+
+  useEffect(() => {
+    verifyServiceability();
+  }, [verifyServiceability]);
+
+  useEffect(() => {
+    CFPaymentGatewayService.setCallback({
+      onVerify: (cashfreeOrderId: string) => {
+        const current = paymentRef.current;
+        if (!current || current.cashfreeOrderId !== cashfreeOrderId) {
+          setInteractionError('Cashfree returned an unexpected order reference. Payment was not accepted.');
+          return;
+        }
+        setCheckoutBusy(true);
+        paymentApi.verify(current.paymentOrderId)
+          .then(result => {
+            if (result.status === 'PAID') {
+              Alert.alert('Payment successful', 'Your payment was verified by Craves.');
+              paymentRef.current = null;
+              refreshCart();
+            } else {
+              setInteractionError('Payment is not verified as paid yet. Please try verification again.');
+            }
+          })
+          .catch(() => setInteractionError('Payment verification failed. No payment has been marked successful.'))
+          .finally(() => setCheckoutBusy(false));
+      },
+      onError: (_error: CFErrorResponse, cashfreeOrderId: string) => {
+        const current = paymentRef.current;
+        setInteractionError(
+          current?.cashfreeOrderId === cashfreeOrderId
+            ? 'Cashfree checkout did not complete. No payment was marked successful.'
+            : 'Cashfree returned an unexpected order reference.',
+        );
+      },
+    });
+    return () => CFPaymentGatewayService.removeCallback();
+  }, [refreshCart]);
 
   const browseMeals = useCallback(() => {
     const tabs = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
-    if (tabs) {
-      tabs.navigate('Home');
-      return;
-    }
-    navigation.goBack();
+    if (tabs) tabs.navigate('Home');
+    else navigation.goBack();
   }, [navigation]);
 
   const handleMutationOutcome = useCallback((outcome: CartMutationOutcome) => {
-    if (outcome.status === 'FAILED') {
-      setInteractionError(outcome.error.message);
-    }
+    if (outcome.status === 'FAILED') setInteractionError(outcome.error.message);
   }, []);
 
-  const updateQuantity = useCallback(
-    (item: CartScreenItem, targetQuantity: number) => {
-      const interaction = resolveCartQuantityInteraction(targetQuantity);
-      setInteractionError(null);
-
-      if (interaction.kind === 'INVALID') {
-        setInteractionError('Choose a valid cart quantity.');
-        return;
-      }
-
-      if (interaction.kind === 'REMOVE') {
-        Alert.alert(
-          'Remove this item?',
-          `${item.itemName} will be removed from your cart.`,
-          [
-            {text: 'Keep item', style: 'cancel'},
-            {
-              text: 'Remove',
-              style: 'destructive',
-              onPress: () => {
-                dispatch(removeCartItem({lineId: item.lineId})).then(
-                  handleMutationOutcome,
-                );
-              },
-            },
-          ],
-        );
-        return;
-      }
-
-      dispatch(
-        setCartItemQuantity({
-          lineId: item.lineId,
-          quantity: interaction.quantity,
-        }),
-      ).then(handleMutationOutcome);
-    },
-    [dispatch, handleMutationOutcome],
-  );
-
-  const handleRemove = useCallback(
-    (item: CartScreenItem) => {
-      updateQuantity(item, 0);
-    },
-    [updateQuantity],
-  );
-
-  const handleCheckout = useCallback(() => {
-    if (!model) {
+  const updateQuantity = useCallback((item: CartScreenItem, targetQuantity: number) => {
+    const interaction = resolveCartQuantityInteraction(targetQuantity);
+    setInteractionError(null);
+    if (interaction.kind === 'INVALID') {
+      setInteractionError('Choose a valid cart quantity.');
       return;
     }
-    setInteractionError(
-      getCartCheckoutStatusCopy(model.checkout, model.billSummary.complete),
-    );
-  }, [model]);
+    if (interaction.kind === 'REMOVE') {
+      Alert.alert('Remove this item?', `${item.itemName} will be removed from your cart.`, [
+        {text: 'Keep item', style: 'cancel'},
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => dispatch(removeCartItem({lineId: item.lineId})).then(handleMutationOutcome),
+        },
+      ]);
+      return;
+    }
+    dispatch(setCartItemQuantity({lineId: item.lineId, quantity: interaction.quantity}))
+      .then(handleMutationOutcome);
+  }, [dispatch, handleMutationOutcome]);
 
-  const handleCheckoutBarLayout = useCallback((event: LayoutChangeEvent) => {
-    const measuredHeight = Math.ceil(event.nativeEvent.layout.height);
-    setCheckoutBarHeight(current =>
-      current === measuredHeight ? current : measuredHeight,
-    );
-  }, []);
+  const handleCheckout = useCallback(async () => {
+    if (!model || !header.selectedLocation?.addressId || checkoutBusy) return;
+    setInteractionError(null);
+    setCheckoutBusy(true);
+    try {
+      const serviceable = await verifyServiceability();
+      if (!serviceable) {
+        setInteractionError(`This address is outside the ${DELIVERY_RADIUS_KM} km delivery area for one or more kitchens. Choose another address.`);
+        return;
+      }
+      const checkout = await checkoutApi.createSession({
+        deliveryAddressId: header.selectedLocation.addressId,
+      });
+      const payment = await paymentApi.createSession(checkout.checkoutId, authPhone);
+      paymentRef.current = payment;
+      const session = new CFSession(
+        payment.paymentSessionId,
+        payment.cashfreeOrderId,
+        CFEnvironment.SANDBOX,
+      );
+      CFPaymentGatewayService.doWebPayment(session);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Checkout could not be started.';
+      setInteractionError(message);
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }, [authPhone, checkoutBusy, header.selectedLocation, model, verifyServiceability]);
 
-  const storedRefreshError =
+  const visibleRefreshError = refreshError ?? (
     snapshotStatus === 'ERROR'
       ? snapshotErrorCode === 'NETWORK_ERROR'
         ? 'You appear to be offline. Your last valid cart is still shown when available.'
         : 'The cart could not be refreshed. Your last valid cart is still shown when available.'
-      : null;
-  const visibleRefreshError = refreshError ?? storedRefreshError;
+      : null
+  );
 
   const renderHeader = () => (
     <View>
       <View style={styles.titleRow}>
-        <Pressable
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          hitSlop={spacing.xs}
-          onPress={() => navigation.goBack()}
-          style={({pressed}) => [styles.backButton, pressed && styles.backPressed]}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Icon name="arrow-left" size={iconSize.md} color={colors.espressoBrown} />
         </Pressable>
         <View style={styles.titleCopy}>
-          <Text accessibilityRole="header" style={styles.title}>
-            Your Cart
-          </Text>
+          <Text style={styles.title}>Your Cart</Text>
           <Text style={styles.subtitle}>
-            {itemCount} {itemCount === 1 ? 'item' : 'items'} across {sections.length}{' '}
-            {sections.length === 1 ? 'kitchen' : 'kitchens'}
+            {itemCount} {itemCount === 1 ? 'item' : 'items'} from {sections.length} {sections.length === 1 ? 'kitchen' : 'kitchens'}
           </Text>
         </View>
       </View>
 
-      {visibleRefreshError ? (
-        <RecoverableErrorBanner
-          message={visibleRefreshError}
-          onRetry={() => {
-            refreshCart();
-          }}
-          style={styles.notice}
-        />
-      ) : null}
-      {interactionError ? (
-        <RecoverableErrorBanner message={interactionError} style={styles.notice} />
-      ) : null}
+      {visibleRefreshError ? <RecoverableErrorBanner message={visibleRefreshError} onRetry={refreshCart} style={styles.notice} /> : null}
+      {interactionError ? <RecoverableErrorBanner message={interactionError} style={styles.notice} /> : null}
 
       {model ? (
-        <View style={styles.dependencies}>
-          <DependencyCard
-            icon="location"
-            title="Delivery address"
-            message={getCartAddressStatusCopy(model.deliveryAddress)}
-          />
-          <DependencyCard
-            icon="check"
-            title="Delivery estimate"
-            message={getCartEtaStatusCopy(model.eta)}
-          />
-        </View>
+        <DeliveryCard
+          address={header.selectedLocation?.displayName ?? null}
+          serviceability={serviceability}
+          estimatedMinutes={estimatedMinutes}
+          onChange={() => setLocationSelectorVisible(true)}
+        />
       ) : null}
     </View>
   );
 
-  const renderFooter = () =>
-    model ? (
-      <View style={styles.listFooter}>
-        <View style={styles.offerCard}>
+  const renderFooter = () => model ? (
+    <View style={styles.listFooter}>
+      <View style={styles.offerCard}>
+        <View style={styles.offerTitleRow}>
+          <View style={styles.offerIcon}><Icon name="ticket" size={20} color={colors.flameRed} /></View>
           <Text style={styles.cardTitle}>Offers & Coupons</Text>
-          <Text style={styles.cardCaption}>
-            {model.coupon.status === 'ERROR'
-              ? 'Offers could not be verified for this cart.'
-              : 'Offer application is unavailable until Craves can verify coupon results for this cart.'}
-          </Text>
         </View>
-        <BillSummary model={model} />
+        <Text style={styles.offerCaption}>Offers will appear here when coupon verification is enabled.</Text>
       </View>
-    ) : null;
-
-  const renderSectionHeader = ({section}: {section: CartKitchenSectionModel}) => (
-    <View style={styles.kitchenHeader}>
-      <Text style={styles.kitchenName}>{section.kitchenName}</Text>
-      <Text style={styles.kitchenMeta}>
-        {section.data.length} {section.data.length === 1 ? 'dish' : 'dishes'}
-      </Text>
+      <BillSummary model={model} />
     </View>
-  );
+  ) : null;
 
   const renderItem = ({item}: {item: CartScreenItem}) => (
     <CartLineCard
       item={item}
+      discovery={discoveryByMenuItem[item.menuItemId]}
       pending={mutations[`line:${item.lineId}`]?.status === 'PENDING'}
       onDecrease={line => updateQuantity(line, line.quantity - 1)}
       onIncrease={line => updateQuantity(line, line.quantity + 1)}
-      onRemove={handleRemove}
+      onRemove={line => updateQuantity(line, 0)}
     />
   );
 
-  const checkoutEnabled = Boolean(model?.checkout.enabled && model.billSummary.complete);
-  const foodSubtotal = model?.billSummary.foodSubtotal.amount ?? null;
-  const checkoutStatus = model
-    ? getCartCheckoutStatusCopy(model.checkout, model.billSummary.complete)
-    : 'Load the cart before checkout.';
-
   const content = (() => {
     if (!model && (snapshotStatus === 'UNINITIALIZED' || snapshotStatus === 'LOADING')) {
-      return (
-        <View
-          accessibilityLabel="Loading cart"
-          accessibilityRole="progressbar"
-          style={styles.loadingState}>
-          <ActivityIndicator color={colors.flameRed} size="large" />
-          <Text style={styles.loadingText}>Loading your cart…</Text>
-        </View>
-      );
+      return <View style={styles.loadingState}><ActivityIndicator color={colors.flameRed} size="large" /><Text>Loading your cart…</Text></View>;
     }
-
     if (!model) {
-      if (snapshotErrorCode === 'NETWORK_ERROR') {
-        return (
-          <CustomerEmptyState
-            actionPending={snapshotStatus === 'LOADING'}
-            connectivity="OFFLINE"
-            model={customerEmptyStateAdapters.noInternet()}
-            onAction={actionId => {
-              if (actionId === 'RETRY') {
-                refreshCart();
-              }
-            }}
-            testID="customer-cart-offline"
-          />
-        );
-      }
-      return (
-        <TerminalState
-          title="Cart could not be loaded"
-          description={visibleRefreshError ?? 'Refresh to load your current cart.'}
-          actionLabel="Try again"
-          onAction={() => {
-            refreshCart();
-          }}
-          actionLoading={snapshotStatus === 'LOADING'}
-        />
-      );
+      return <TerminalState title="Cart could not be loaded" description={visibleRefreshError ?? 'Refresh to load your current cart.'} actionLabel="Try again" onAction={refreshCart} />;
     }
-
     return (
       <SectionList<CartScreenItem, CartKitchenSectionModel>
         sections={sections}
         keyExtractor={item => item.lineId}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={
           <CustomerEmptyState
             model={customerEmptyStateAdapters.emptyCart()}
-            onAction={actionId => {
-              if (actionId === 'BROWSE_MEALS') {
-                browseMeals();
-              }
-            }}
-            style={styles.emptyState}
+            onAction={actionId => { if (actionId === 'BROWSE_MEALS') browseMeals(); }}
             testID="customer-cart-empty"
           />
         }
-        onScroll={bottomNavScroll.onScroll}
-        refreshControl={
-          <RefreshControl
-            colors={[colors.flameRed]}
-            onRefresh={() => {
-              refreshCart();
-            }}
-            refreshing={snapshotStatus === 'LOADING'}
-            tintColor={colors.flameRed}
-          />
-        }
         renderItem={renderItem}
-        renderSectionHeader={renderSectionHeader}
+        renderSectionHeader={() => null}
+        refreshControl={<RefreshControl refreshing={snapshotStatus === 'LOADING'} onRefresh={refreshCart} tintColor={colors.flameRed} />}
+        onScroll={bottomNavScroll.onScroll}
         scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
         showsVerticalScrollIndicator={false}
-        stickySectionHeadersEnabled={false}
-        contentContainerStyle={[
-          styles.listContent,
-          model.items.length > 0 && {paddingBottom: checkoutListClearance},
-        ]}
+        contentContainerStyle={styles.listContent}
       />
     );
   })();
+
+  const checkoutEnabled = Boolean(
+    model?.items.length &&
+    header.selectedLocation?.addressId &&
+    serviceability === 'SERVICEABLE' &&
+    !checkoutBusy,
+  );
 
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-cart">
       <CustomerHeader
         variant="compact"
         onPressLocation={() => setLocationSelectorVisible(true)}
-        onPressNotifications={() => {
-          header.refreshNotifications();
-        }}
+        onPressNotifications={() => header.refreshNotifications()}
       />
-
       <View style={styles.content}>{content}</View>
 
       {model && model.items.length > 0 ? (
-        <View
-          onLayout={handleCheckoutBarLayout}
-          style={[
-            styles.checkoutBar,
-            {paddingBottom: checkoutBottomPadding},
-            stackCheckoutActions && styles.checkoutBarStacked,
-          ]}>
-          <View
-            style={[
-              styles.checkoutCopy,
-              stackCheckoutActions && styles.checkoutCopyStacked,
-            ]}>
-            <Text style={styles.checkoutEyebrow}>Payable total</Text>
-            <Text style={styles.checkoutTotal}>
-              {model.billSummary.grandTotal.amount
-                ? formatCartMoney(model.billSummary.grandTotal.amount)
-                : 'Not available'}
-            </Text>
-            {foodSubtotal ? (
-              <Text style={styles.checkoutSubtotal}>
-                Food subtotal {formatCartMoney(foodSubtotal)}
-              </Text>
-            ) : null}
+        <View style={[styles.checkoutBar, {paddingBottom: Math.max(insets.bottom, spacing.sm)}]}>
+          <View style={styles.checkoutCopy}>
+            <Text style={styles.checkoutTotal}>{formatAmountField(model.billSummary.grandTotal)}</Text>
+            <Text style={styles.checkoutLink}>View Bill Details</Text>
           </View>
           <Button
-            label="Proceed to Checkout"
-            accessibilityHint={checkoutEnabled ? undefined : checkoutStatus}
+            label={checkoutBusy ? 'Please wait…' : 'Proceed to Checkout'}
             disabled={!checkoutEnabled}
             onPress={handleCheckout}
-            style={[
-              styles.checkoutButton,
-              stackCheckoutActions && styles.checkoutButtonStacked,
-            ]}
+            style={styles.checkoutButton}
           />
         </View>
       ) : null}
 
-      <CustomerLocationSelector
-        visible={locationSelectorVisible}
-        onClose={() => setLocationSelectorVisible(false)}
-      />
+      <CustomerLocationSelector visible={locationSelectorVisible} onClose={() => setLocationSelectorVisible(false)} />
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    flex: 1,
-    backgroundColor: colors.surfaceBase,
-  },
-  loadingState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    padding: spacing.xl,
-  },
-  loadingText: {
-    color: colors.textSecondary,
-    fontSize: typography.body,
-  },
-  listContent: {
-    flexGrow: 1,
-    paddingBottom: spacing.xxl,
-    backgroundColor: colors.surfaceBase,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  backButton: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
-  },
-  backPressed: {
-    opacity: 0.75,
-  },
-  titleCopy: {
-    minWidth: 0,
-    flex: 1,
-  },
-  title: {
-    color: colors.espressoBrown,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
-  },
-  subtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xxs,
-  },
-  notice: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  dependencies: {
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
-  },
-  dependencyCard: {
-    minHeight: 80,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-    padding: spacing.md,
-  },
-  dependencyIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
-  },
-  dependencyCopy: {
-    minWidth: 0,
-    flex: 1,
-  },
-  dependencyTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  dependencyMessage: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xxs,
-  },
-  kitchenHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
-    backgroundColor: colors.surfaceBase,
-  },
-  kitchenName: {
-    minWidth: 0,
-    flex: 1,
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  kitchenMeta: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  lineCard: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    padding: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-    ...elevation.card,
-  },
-  lineMediaFallback: {
-    width: 76,
-    height: 76,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceWarmStrong,
-  },
-  lineMediaInitial: {
-    color: colors.flameRed,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
-  },
-  lineBody: {
-    minWidth: 0,
-    flex: 1,
-  },
-  lineHeadingRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-  },
-  lineHeadingCopy: {
-    minWidth: 0,
-    flex: 1,
-  },
-  lineName: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  lineUnitPrice: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xxs,
-  },
-  lineTotal: {
-    color: colors.flameRed,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  lineActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  quantityControl: {
-    minHeight: touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.flameRed,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-  },
-  quantityButton: {
-    width: touchTarget.minimum,
-    minHeight: touchTarget.minimum,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quantityButtonPressed: {
-    backgroundColor: colors.surfaceWarm,
-  },
-  quantitySymbol: {
-    color: colors.flameRed,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  quantityValue: {
-    minWidth: 28,
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-  },
-  removeButton: {
-    minHeight: touchTarget.minimum,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  removeButtonPressed: {
-    opacity: 0.7,
-  },
-  removeText: {
-    color: colors.error,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  controlDisabled: {
-    opacity: 0.45,
-  },
-  listFooter: {
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-  },
-  offerCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceWarm,
-    padding: spacing.md,
-  },
-  billCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-  },
-  billHeader: {
-    minHeight: touchTarget.comfortable,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  cardPressed: {
-    backgroundColor: colors.surfaceMuted,
-  },
-  cardTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  cardCaption: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xxs,
-  },
-  expandText: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  billRows: {
-    gap: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    padding: spacing.md,
-  },
-  amountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  amountLabel: {
-    minWidth: 0,
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.body,
-  },
-  amountLabelStrong: {
-    color: colors.espressoBrown,
-    fontWeight: fontWeight.bold,
-  },
-  amountValue: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.medium,
-    textAlign: 'right',
-  },
-  amountValueStrong: {
-    fontWeight: fontWeight.extrabold,
-  },
-  billDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  billNotice: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.md,
-    padding: spacing.sm,
-  },
-  emptyState: {
-    minHeight: 360,
-  },
-  checkoutBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    minHeight: 96,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.white,
-    ...elevation.card,
-  },
-  checkoutBarStacked: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-  },
-  checkoutCopy: {
-    minWidth: 112,
-    flex: 1,
-  },
-  checkoutCopyStacked: {
-    flex: 0,
-    minWidth: 0,
-    width: '100%',
-  },
-  checkoutEyebrow: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.medium,
-  },
-  checkoutTotal: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.extrabold,
-    marginTop: spacing.xxs,
-  },
-  checkoutSubtotal: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    marginTop: spacing.xxs,
-  },
-  checkoutButton: {
-    flex: 1.6,
-  },
-  checkoutButtonStacked: {
-    flex: 0,
-    width: '100%',
-  },
+  content: {flex: 1, backgroundColor: colors.surfaceBase},
+  listContent: {flexGrow: 1, paddingBottom: 145, backgroundColor: colors.surfaceBase},
+  loadingState: {flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm},
+  titleRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm},
+  backButton: {width: touchTarget.minimum, height: touchTarget.minimum, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarm},
+  titleCopy: {flex: 1},
+  title: {color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.extrabold},
+  subtitle: {color: colors.textSecondary, fontSize: typography.small, marginTop: spacing.xxs},
+  notice: {marginHorizontal: spacing.md, marginBottom: spacing.sm},
+  deliveryCard: {marginHorizontal: spacing.md, marginVertical: spacing.sm, padding: spacing.md, minHeight: 112, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, ...elevation.card},
+  deliveryIconBox: {width: 52, height: 52, borderRadius: radius.md, backgroundColor: colors.surfaceWarm, alignItems: 'center', justifyContent: 'center'},
+  deliveryCopy: {flex: 1, minWidth: 0},
+  deliveryLabel: {color: colors.textSecondary, fontSize: typography.small},
+  deliveryAddress: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.semibold, marginTop: 2},
+  estimateRow: {flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.xs},
+  estimateText: {flex: 1, color: colors.textSecondary, fontSize: typography.small},
+  unserviceableText: {color: colors.error},
+  changeButton: {alignSelf: 'flex-start', paddingVertical: spacing.xs, paddingLeft: spacing.xs},
+  changeText: {color: colors.flameRed, fontSize: typography.small, fontWeight: fontWeight.bold},
+  lineCard: {minHeight: 128, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.md, marginBottom: spacing.sm, padding: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, ...elevation.card},
+  lineImage: {width: 92, height: 92, borderRadius: radius.md, backgroundColor: colors.surfaceWarm},
+  lineMediaFallback: {width: 92, height: 92, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarmStrong},
+  lineMediaInitial: {color: colors.flameRed, fontSize: typography.hero, fontWeight: fontWeight.extrabold},
+  lineBody: {flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center'},
+  lineName: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
+  kitchenInline: {flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3},
+  lineKitchen: {maxWidth: '88%', color: colors.textSecondary, fontSize: typography.small},
+  lineMeta: {color: colors.textSecondary, fontSize: typography.tiny, marginTop: 5},
+  linePrice: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold, marginTop: spacing.xs},
+  lineRight: {alignSelf: 'stretch', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 4},
+  quantityControl: {height: 44, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.md, backgroundColor: colors.white},
+  quantityButton: {width: 38, height: 42, alignItems: 'center', justifyContent: 'center'},
+  quantitySymbol: {color: colors.flameRed, fontSize: 24, fontWeight: fontWeight.semibold},
+  quantityValue: {minWidth: 26, textAlign: 'center', color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
+  removeButton: {minWidth: 42, minHeight: 40, alignItems: 'center', justifyContent: 'center', marginTop: 5},
+  removeIcon: {color: colors.flameRed, fontSize: 22, fontWeight: fontWeight.bold},
+  listFooter: {gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.sm},
+  offerCard: {borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.white, padding: spacing.md},
+  offerTitleRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  offerIcon: {width: 32, height: 32, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarm},
+  offerCaption: {color: colors.textSecondary, fontSize: typography.small, marginTop: spacing.xs},
+  billCard: {borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.white, padding: spacing.md},
+  cardTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
+  billRows: {gap: spacing.sm, marginTop: spacing.md},
+  amountRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md},
+  amountLabel: {flex: 1, color: colors.textSecondary, fontSize: typography.body},
+  amountLabelStrong: {color: colors.espressoBrown, fontWeight: fontWeight.bold},
+  amountValue: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.medium},
+  amountValueStrong: {fontSize: typography.heading, fontWeight: fontWeight.extrabold},
+  billDivider: {height: 1, backgroundColor: colors.border, marginVertical: 2},
+  checkoutBar: {position: 'absolute', left: 0, right: 0, bottom: 0, minHeight: 96, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.sm, backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.border, ...elevation.card},
+  checkoutCopy: {minWidth: 110},
+  checkoutTotal: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.extrabold},
+  checkoutLink: {color: colors.flameRed, fontSize: typography.tiny, fontWeight: fontWeight.semibold, marginTop: 3},
+  checkoutButton: {flex: 1},
 });

@@ -17,7 +17,7 @@ final class ShiprocketStatusMapper {
         if (statusCode != null) {
             return switch (statusCode) {
                 case 6, 18, 38, 48, 49, 50, 51, 54, 55, 56, 57 -> DeliveryStatus.IN_TRANSIT;
-                case 7, 26 -> DeliveryStatus.DELIVERED;
+                case 7 -> DeliveryStatus.DELIVERED;
                 case 8, 16, 45 -> DeliveryStatus.CANCELLED;
                 case 9, 14, 40, 41, 46, 75, 78 -> DeliveryStatus.RETURNING;
                 case 10 -> DeliveryStatus.RETURNED;
@@ -28,8 +28,8 @@ final class ShiprocketStatusMapper {
                 case 19 -> DeliveryStatus.COURIER_TO_PICKUP;
                 case 27, 52 -> DeliveryStatus.COURIER_ASSIGNED;
                 case 42 -> DeliveryStatus.PICKED_UP;
-                // 43 SELF FULFILLED and fulfillment-centre-only states such as 59-63/67/68
-                // do not prove a last-mile customer state, so fall back conservatively.
+                // 26 FULFILLED, 43 SELF FULFILLED and fulfillment-centre-only states such as
+                // 59-63/67/68 do not prove customer delivery progress.
                 default -> byText(statusText);
             };
         }
@@ -45,6 +45,9 @@ final class ShiprocketStatusMapper {
             .replace(' ', '_');
         if (value.contains("RTO_DELIVERED") || value.contains("RETURN_DELIVERED")) {
             return DeliveryStatus.RETURNED;
+        }
+        if (value.contains("FULFILLED")) {
+            return DeliveryStatus.UNKNOWN;
         }
         if (value.contains("DELIVERED") && !value.contains("UNDELIVERED")) {
             return DeliveryStatus.DELIVERED;

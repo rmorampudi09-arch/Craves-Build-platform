@@ -22,7 +22,8 @@ public record ChefAcceptedOrderEventData(
         DeliveryStopData dropoff,
         List<DeliveryItemData> items,
         BigDecimal declaredGoodsValue,
-        String paymentCollectionMode
+        String paymentCollectionMode,
+        UUID pickupLocationReference
     ) {
         public DeliveryRequestData(String matter,
                                    int totalWeightGrams,
@@ -36,6 +37,7 @@ public record ChefAcceptedOrderEventData(
                 pickup,
                 dropoff,
                 List.of(),
+                null,
                 null,
                 null
             );

@@ -127,7 +127,7 @@ public class DeliveryCommandWorker {
                 );
             }
             throw new DeliveryCommandDeferredException(
-                command.lastErrorOrDefault("Delivery provider is temporarily unavailable"),
+                "Delivery provider is temporarily unavailable",
                 retryAt,
                 "provider-wait-" + command.id() + "-" + command.providerWaitAttemptCount()
             );

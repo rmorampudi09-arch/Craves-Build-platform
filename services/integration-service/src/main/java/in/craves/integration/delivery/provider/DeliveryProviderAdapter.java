@@ -115,13 +115,41 @@ public interface DeliveryProviderAdapter {
         }
     }
 
+    record ShipmentItem(
+        String itemReference,
+        String itemName,
+        BigDecimal unitPrice,
+        int quantity,
+        BigDecimal lineTotal
+    ) {}
+
     record QuoteRequest(
         String matter,
         int totalWeightGrams,
         boolean thermoboxRequired,
         Stop pickup,
-        Stop dropoff
-    ) {}
+        Stop dropoff,
+        List<ShipmentItem> items,
+        BigDecimal declaredGoodsValue,
+        String paymentCollectionMode
+    ) {
+        public QuoteRequest(String matter,
+                            int totalWeightGrams,
+                            boolean thermoboxRequired,
+                            Stop pickup,
+                            Stop dropoff) {
+            this(
+                matter,
+                totalWeightGrams,
+                thermoboxRequired,
+                pickup,
+                dropoff,
+                List.of(),
+                null,
+                null
+            );
+        }
+    }
 
     record CreateDeliveryRequest(
         String clientReference,

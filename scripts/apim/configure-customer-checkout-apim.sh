@@ -54,11 +54,13 @@ operation_inventory() {
 }
 
 reconcile_operation() {
-  local PREFERRED_ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" PARAMS="$5"
+  local RESULT_VAR="$1" PREFERRED_ID="$2" METHOD="$3" TEMPLATE="$4" DISPLAY="$5" PARAMS="$6"
   local OPS_JSON OP_ID BODY RENDERED POLICY_BODY
   local EXISTING_METHOD EXISTING_TEMPLATE
   local -a MATCHING_IDS=()
   local -a PREFERRED_MATCHES=()
+
+  [[ "$RESULT_VAR" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || fail "Invalid result variable name: $RESULT_VAR"
 
   OPS_JSON="$(operation_inventory)"
 
@@ -120,7 +122,7 @@ reconcile_operation() {
 JSON
 
   echo "INFO: Reconciling APIM operation '$OP_ID' as $METHOD $TEMPLATE." >&2
-  if ! az rest --method put --url "${MGMT}/operations/${OP_ID}?api-version=${API_VERSION}" --body @"$BODY" -o none; then
+  if ! az rest --method put --url "${MGMT}/operations/${OP_ID}?api-version=${API_VERSION}" --body @"$BODY" -o none >/dev/null; then
     rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
     fail "Failed to create/update operation $OP_ID"
   fi
@@ -129,21 +131,23 @@ JSON
   jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
 
   echo "INFO: Applying checkout policy to APIM operation '$OP_ID'." >&2
-  if ! az rest --method put --url "${MGMT}/operations/${OP_ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none; then
+  if ! az rest --method put --url "${MGMT}/operations/${OP_ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none >/dev/null; then
     rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
     fail "Failed to apply policy to operation $OP_ID"
   fi
 
   rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
 
-  # IMPORTANT: this is the only stdout produced by this function because callers
-  # capture the resolved operation ID using command substitution.
-  printf '%s\n' "$OP_ID"
+  printf -v "$RESULT_VAR" '%s' "$OP_ID"
 }
 
-QUOTE_OP=$(reconcile_operation "quote-customer-checkout" "POST" "/quote" "Calculate customer checkout price" '[]')
-CREATE_OP=$(reconcile_operation "create-customer-checkout" "POST" "/" "Create customer checkout" '[]')
-GET_OP=$(reconcile_operation "get-customer-checkout" "GET" "/{checkoutId}" "Get customer checkout" '[{"name":"checkoutId","type":"string","required":true}]')
+QUOTE_OP=''
+CREATE_OP=''
+GET_OP=''
+
+reconcile_operation QUOTE_OP "quote-customer-checkout" "POST" "/quote" "Calculate customer checkout price" '[]'
+reconcile_operation CREATE_OP "create-customer-checkout" "POST" "/" "Create customer checkout" '[]'
+reconcile_operation GET_OP "get-customer-checkout" "GET" "/{checkoutId}" "Get customer checkout" '[{"name":"checkoutId","type":"string","required":true}]'
 
 for ID in "$QUOTE_OP" "$CREATE_OP" "$GET_OP"; do
   [[ -n "$ID" && "$ID" != *$'\n'* ]] || fail "Resolved APIM operation ID is invalid"

@@ -216,6 +216,7 @@ public class ChefAcceptanceService {
             instant(resultSet, "ready_at"),
             totalPackageWeightGrams,
             thermoboxRequired,
+            resultSet.getObject("kitchen_id", UUID.class),
             resultSet.getString("kitchen_name_snapshot"),
             resultSet.getString("pickup_phone_number"),
             resultSet.getString("pickup_address_line1"),

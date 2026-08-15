@@ -37,7 +37,10 @@ import {
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
-import {RecoverableErrorBanner, TerminalState} from '../../../shared/components/LifecycleStates';
+import {
+  RecoverableErrorBanner,
+  TerminalState,
+} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
 import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
@@ -74,20 +77,31 @@ import {selectCartScreenModel} from '../state/cartSelectors';
 import {formatCartMoney} from '../viewCartOverlayModel';
 
 const DELIVERY_RADIUS_KM = 10;
-type ServiceabilityState = 'IDLE' | 'CHECKING' | 'SERVICEABLE' | 'UNSERVICEABLE' | 'ERROR';
+type ServiceabilityState =
+  | 'IDLE'
+  | 'CHECKING'
+  | 'SERVICEABLE'
+  | 'UNSERVICEABLE'
+  | 'ERROR';
 
 function formatAmountField(field: CartScreenAmountField): string {
   return field.amount ? formatCartMoney(field.amount) : '₹0';
 }
 
-function CartAmountRow({label, field, emphasized = false}: {
+function CartAmountRow({
+  label,
+  field,
+  emphasized = false,
+}: {
   label: string;
   field: CartScreenAmountField;
   emphasized?: boolean;
 }) {
   return (
     <View style={styles.amountRow}>
-      <Text style={[styles.amountLabel, emphasized && styles.amountLabelStrong]}>{label}</Text>
+      <Text style={[styles.amountLabel, emphasized && styles.amountLabelStrong]}>
+        {label}
+      </Text>
       <Text style={[styles.amountValue, emphasized && styles.amountValueStrong]}>
         {formatAmountField(field)}
       </Text>
@@ -95,21 +109,32 @@ function CartAmountRow({label, field, emphasized = false}: {
   );
 }
 
-function foodTypeLabel(value: CartDiscoveryDish['foodType'] | CartScreenItem['foodType']): string | null {
+function foodTypeLabel(
+  value: CartDiscoveryDish['foodType'] | CartScreenItem['foodType'],
+): string | null {
   if (value === 'VEG') return 'Veg';
   if (value === 'NON_VEG') return 'Non-veg';
   if (value === 'EGG') return 'Egg';
   return null;
 }
 
-function spiceLabel(value: CartDiscoveryDish['spiceLevel'] | CartScreenItem['spiceLevel']): string | null {
+function spiceLabel(
+  value: CartDiscoveryDish['spiceLevel'] | CartScreenItem['spiceLevel'],
+): string | null {
   if (value === 'MILD') return 'Mild';
   if (value === 'MEDIUM') return 'Medium';
   if (value === 'SPICY') return 'Spicy';
   return null;
 }
 
-function CartLineCard({item, discovery, pending, onDecrease, onIncrease, onRemove}: {
+function CartLineCard({
+  item,
+  discovery,
+  pending,
+  onDecrease,
+  onIncrease,
+  onRemove,
+}: {
   item: CartScreenItem;
   discovery?: CartDiscoveryDish;
   pending: boolean;
@@ -121,7 +146,13 @@ function CartLineCard({item, discovery, pending, onDecrease, onIncrease, onRemov
   const serves = discovery?.servesCount ?? item.servesCount;
   const spice = spiceLabel(discovery?.spiceLevel ?? item.spiceLevel);
   const foodType = foodTypeLabel(discovery?.foodType ?? item.foodType);
-  const metadata = [spice, serves ? `Serves ${serves}` : null, foodType].filter(Boolean).join('  •  ');
+  const metadata = [
+    spice,
+    serves ? `Serves ${serves}` : null,
+    foodType,
+  ]
+    .filter(Boolean)
+    .join('  •  ');
 
   return (
     <View style={styles.lineCard}>
@@ -129,17 +160,27 @@ function CartLineCard({item, discovery, pending, onDecrease, onIncrease, onRemov
         <Image source={{uri: imageUrl}} resizeMode="cover" style={styles.lineImage} />
       ) : (
         <View style={styles.lineMediaFallback}>
-          <Text style={styles.lineMediaInitial}>{getCartItemInitial(item.itemName)}</Text>
+          <Text style={styles.lineMediaInitial}>
+            {getCartItemInitial(item.itemName)}
+          </Text>
         </View>
       )}
 
       <View style={styles.lineBody}>
-        <Text numberOfLines={2} style={styles.lineName}>{item.itemName}</Text>
+        <Text numberOfLines={2} style={styles.lineName}>
+          {item.itemName}
+        </Text>
         <View style={styles.kitchenInline}>
-          <Text numberOfLines={1} style={styles.lineKitchen}>{item.kitchenName}</Text>
+          <Text numberOfLines={1} style={styles.lineKitchen}>
+            {item.kitchenName}
+          </Text>
           <Icon name="check" size={14} color={colors.flameRed} />
         </View>
-        {metadata ? <Text numberOfLines={1} style={styles.lineMeta}>{metadata}</Text> : null}
+        {metadata ? (
+          <Text numberOfLines={1} style={styles.lineMeta}>
+            {metadata}
+          </Text>
+        ) : null}
         <Text style={styles.linePrice}>{formatCartMoney(item.unitPrice)}</Text>
       </View>
 
@@ -166,7 +207,7 @@ function CartLineCard({item, discovery, pending, onDecrease, onIncrease, onRemov
           disabled={pending}
           onPress={() => onRemove(item)}
           style={styles.removeButton}>
-          <Text style={styles.removeIcon}>⌫</Text>
+          <Icon name="trash" size={22} color={colors.flameRed} />
         </Pressable>
       </View>
     </View>
@@ -200,7 +241,7 @@ function DeliveryCard({
   return (
     <View style={styles.deliveryCard}>
       <View style={styles.deliveryIconBox}>
-        <Icon name="location" size={24} color={colors.flameRed} />
+        <Icon name="delivery" size={28} color={colors.flameRed} />
       </View>
       <View style={styles.deliveryCopy}>
         <Text style={styles.deliveryLabel}>Delivering to</Text>
@@ -208,13 +249,20 @@ function DeliveryCard({
           {address ?? 'No delivery address selected'}
         </Text>
         <View style={styles.estimateRow}>
-          <Icon name={serviceability === 'UNSERVICEABLE' ? 'location' : 'check'} size={16} color={colors.flameRed} />
-          <Text style={[styles.estimateText, serviceability === 'UNSERVICEABLE' && styles.unserviceableText]}>
+          <Icon name="clock" size={16} color={colors.flameRed} />
+          <Text
+            style={[
+              styles.estimateText,
+              serviceability === 'UNSERVICEABLE' && styles.unserviceableText,
+            ]}>
             {estimate}
           </Text>
         </View>
       </View>
-      <Pressable accessibilityRole="button" onPress={onChange} style={styles.changeButton}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onChange}
+        style={styles.changeButton}>
         <Text style={styles.changeText}>Change</Text>
       </Pressable>
     </View>
@@ -245,10 +293,7 @@ export function CustomerCartScreen() {
   const snapshotStatus = useAppSelector(state => state.cart.snapshotStatus);
   const snapshotErrorCode = useAppSelector(state => state.cart.snapshotErrorCode);
   const mutations = useAppSelector(state => state.cart.mutations);
-  const authPhone = useAppSelector(state => {
-    const identity = state.auth.identity as unknown as {phoneNumber?: string | null} | null;
-    return identity?.phoneNumber ?? null;
-  });
+  const authPhone = useAppSelector(state => state.auth.identity?.phoneNumber ?? null);
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
@@ -256,11 +301,16 @@ export function CustomerCartScreen() {
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [serviceability, setServiceability] = useState<ServiceabilityState>('IDLE');
   const [estimatedMinutes, setEstimatedMinutes] = useState<number | null>(null);
-  const [discoveryByMenuItem, setDiscoveryByMenuItem] = useState<Record<string, CartDiscoveryDish>>({});
+  const [discoveryByMenuItem, setDiscoveryByMenuItem] = useState<
+    Record<string, CartDiscoveryDish>
+  >({});
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const paymentRef = useRef<MobilePaymentSession | null>(null);
 
-  const sections = useMemo(() => groupCartItemsByKitchen(model?.items ?? []), [model?.items]);
+  const sections = useMemo(
+    () => groupCartItemsByKitchen(model?.items ?? []),
+    [model?.items],
+  );
   const itemCount = useMemo(
     () => model?.items.reduce((total, item) => total + item.quantity, 0) ?? 0,
     [model?.items],
@@ -294,7 +344,9 @@ export function CustomerCartScreen() {
       );
       const nextMap: Record<string, CartDiscoveryDish> = {};
       result.dishes.forEach(dish => {
-        if (model.items.some(item => item.menuItemId === dish.menuItemId)) nextMap[dish.menuItemId] = dish;
+        if (model.items.some(item => item.menuItemId === dish.menuItemId)) {
+          nextMap[dish.menuItemId] = dish;
+        }
       });
       setDiscoveryByMenuItem(nextMap);
       setEstimatedMinutes(result.estimatedMinutes);
@@ -316,21 +368,30 @@ export function CustomerCartScreen() {
       onVerify: (cashfreeOrderId: string) => {
         const current = paymentRef.current;
         if (!current || current.cashfreeOrderId !== cashfreeOrderId) {
-          setInteractionError('Cashfree returned an unexpected order reference. Payment was not accepted.');
+          setInteractionError(
+            'Cashfree returned an unexpected order reference. Payment was not accepted.',
+          );
           return;
         }
         setCheckoutBusy(true);
-        paymentApi.verify(current.paymentOrderId)
+        paymentApi
+          .verify(current.paymentOrderId)
           .then(result => {
             if (result.status === 'PAID') {
               Alert.alert('Payment successful', 'Your payment was verified by Craves.');
               paymentRef.current = null;
               refreshCart();
             } else {
-              setInteractionError('Payment is not verified as paid yet. Please try verification again.');
+              setInteractionError(
+                'Payment is not verified as paid yet. Please try verification again.',
+              );
             }
           })
-          .catch(() => setInteractionError('Payment verification failed. No payment has been marked successful.'))
+          .catch(() =>
+            setInteractionError(
+              'Payment verification failed. No payment has been marked successful.',
+            ),
+          )
           .finally(() => setCheckoutBusy(false));
       },
       onError: (_error: CFErrorResponse, cashfreeOrderId: string) => {
@@ -355,27 +416,38 @@ export function CustomerCartScreen() {
     if (outcome.status === 'FAILED') setInteractionError(outcome.error.message);
   }, []);
 
-  const updateQuantity = useCallback((item: CartScreenItem, targetQuantity: number) => {
-    const interaction = resolveCartQuantityInteraction(targetQuantity);
-    setInteractionError(null);
-    if (interaction.kind === 'INVALID') {
-      setInteractionError('Choose a valid cart quantity.');
-      return;
-    }
-    if (interaction.kind === 'REMOVE') {
-      Alert.alert('Remove this item?', `${item.itemName} will be removed from your cart.`, [
-        {text: 'Keep item', style: 'cancel'},
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => dispatch(removeCartItem({lineId: item.lineId})).then(handleMutationOutcome),
-        },
-      ]);
-      return;
-    }
-    dispatch(setCartItemQuantity({lineId: item.lineId, quantity: interaction.quantity}))
-      .then(handleMutationOutcome);
-  }, [dispatch, handleMutationOutcome]);
+  const updateQuantity = useCallback(
+    (item: CartScreenItem, targetQuantity: number) => {
+      const interaction = resolveCartQuantityInteraction(targetQuantity);
+      setInteractionError(null);
+      if (interaction.kind === 'INVALID') {
+        setInteractionError('Choose a valid cart quantity.');
+        return;
+      }
+      if (interaction.kind === 'REMOVE') {
+        Alert.alert(
+          'Remove this item?',
+          `${item.itemName} will be removed from your cart.`,
+          [
+            {text: 'Keep item', style: 'cancel'},
+            {
+              text: 'Remove',
+              style: 'destructive',
+              onPress: () =>
+                dispatch(removeCartItem({lineId: item.lineId})).then(
+                  handleMutationOutcome,
+                ),
+            },
+          ],
+        );
+        return;
+      }
+      dispatch(
+        setCartItemQuantity({lineId: item.lineId, quantity: interaction.quantity}),
+      ).then(handleMutationOutcome);
+    },
+    [dispatch, handleMutationOutcome],
+  );
 
   const handleCheckout = useCallback(async () => {
     if (!model || !header.selectedLocation?.addressId || checkoutBusy) return;
@@ -384,7 +456,9 @@ export function CustomerCartScreen() {
     try {
       const serviceable = await verifyServiceability();
       if (!serviceable) {
-        setInteractionError(`This address is outside the ${DELIVERY_RADIUS_KM} km delivery area for one or more kitchens. Choose another address.`);
+        setInteractionError(
+          `This address is outside the ${DELIVERY_RADIUS_KM} km delivery area for one or more kitchens. Choose another address.`,
+        );
         return;
       }
       const checkout = await checkoutApi.createSession({
@@ -399,20 +473,27 @@ export function CustomerCartScreen() {
       );
       CFPaymentGatewayService.doWebPayment(session);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Checkout could not be started.';
+      const message =
+        error instanceof Error ? error.message : 'Checkout could not be started.';
       setInteractionError(message);
     } finally {
       setCheckoutBusy(false);
     }
-  }, [authPhone, checkoutBusy, header.selectedLocation, model, verifyServiceability]);
+  }, [
+    authPhone,
+    checkoutBusy,
+    header.selectedLocation,
+    model,
+    verifyServiceability,
+  ]);
 
-  const visibleRefreshError = refreshError ?? (
-    snapshotStatus === 'ERROR'
+  const visibleRefreshError =
+    refreshError ??
+    (snapshotStatus === 'ERROR'
       ? snapshotErrorCode === 'NETWORK_ERROR'
         ? 'You appear to be offline. Your last valid cart is still shown when available.'
         : 'The cart could not be refreshed. Your last valid cart is still shown when available.'
-      : null
-  );
+      : null);
 
   const renderHeader = () => (
     <View>
@@ -423,13 +504,22 @@ export function CustomerCartScreen() {
         <View style={styles.titleCopy}>
           <Text style={styles.title}>Your Cart</Text>
           <Text style={styles.subtitle}>
-            {itemCount} {itemCount === 1 ? 'item' : 'items'} from {sections.length} {sections.length === 1 ? 'kitchen' : 'kitchens'}
+            {itemCount} {itemCount === 1 ? 'item' : 'items'} from {sections.length}{' '}
+            {sections.length === 1 ? 'kitchen' : 'kitchens'}
           </Text>
         </View>
       </View>
 
-      {visibleRefreshError ? <RecoverableErrorBanner message={visibleRefreshError} onRetry={refreshCart} style={styles.notice} /> : null}
-      {interactionError ? <RecoverableErrorBanner message={interactionError} style={styles.notice} /> : null}
+      {visibleRefreshError ? (
+        <RecoverableErrorBanner
+          message={visibleRefreshError}
+          onRetry={refreshCart}
+          style={styles.notice}
+        />
+      ) : null}
+      {interactionError ? (
+        <RecoverableErrorBanner message={interactionError} style={styles.notice} />
+      ) : null}
 
       {model ? (
         <DeliveryCard
@@ -442,18 +532,23 @@ export function CustomerCartScreen() {
     </View>
   );
 
-  const renderFooter = () => model ? (
-    <View style={styles.listFooter}>
-      <View style={styles.offerCard}>
-        <View style={styles.offerTitleRow}>
-          <View style={styles.offerIcon}><Icon name="ticket" size={20} color={colors.flameRed} /></View>
-          <Text style={styles.cardTitle}>Offers & Coupons</Text>
+  const renderFooter = () =>
+    model ? (
+      <View style={styles.listFooter}>
+        <View style={styles.offerCard}>
+          <View style={styles.offerTitleRow}>
+            <View style={styles.offerIcon}>
+              <Icon name="ticket" size={20} color={colors.flameRed} />
+            </View>
+            <Text style={styles.cardTitle}>Offers & Coupons</Text>
+          </View>
+          <Text style={styles.offerCaption}>
+            Offers will appear here when coupon verification is enabled.
+          </Text>
         </View>
-        <Text style={styles.offerCaption}>Offers will appear here when coupon verification is enabled.</Text>
+        <BillSummary model={model} />
       </View>
-      <BillSummary model={model} />
-    </View>
-  ) : null;
+    ) : null;
 
   const renderItem = ({item}: {item: CartScreenItem}) => (
     <CartLineCard
@@ -467,11 +562,26 @@ export function CustomerCartScreen() {
   );
 
   const content = (() => {
-    if (!model && (snapshotStatus === 'UNINITIALIZED' || snapshotStatus === 'LOADING')) {
-      return <View style={styles.loadingState}><ActivityIndicator color={colors.flameRed} size="large" /><Text>Loading your cart…</Text></View>;
+    if (
+      !model &&
+      (snapshotStatus === 'UNINITIALIZED' || snapshotStatus === 'LOADING')
+    ) {
+      return (
+        <View style={styles.loadingState}>
+          <ActivityIndicator color={colors.flameRed} size="large" />
+          <Text>Loading your cart…</Text>
+        </View>
+      );
     }
     if (!model) {
-      return <TerminalState title="Cart could not be loaded" description={visibleRefreshError ?? 'Refresh to load your current cart.'} actionLabel="Try again" onAction={refreshCart} />;
+      return (
+        <TerminalState
+          title="Cart could not be loaded"
+          description={visibleRefreshError ?? 'Refresh to load your current cart.'}
+          actionLabel="Try again"
+          onAction={refreshCart}
+        />
+      );
     }
     return (
       <SectionList<CartScreenItem, CartKitchenSectionModel>
@@ -482,13 +592,21 @@ export function CustomerCartScreen() {
         ListEmptyComponent={
           <CustomerEmptyState
             model={customerEmptyStateAdapters.emptyCart()}
-            onAction={actionId => { if (actionId === 'BROWSE_MEALS') browseMeals(); }}
+            onAction={actionId => {
+              if (actionId === 'BROWSE_MEALS') browseMeals();
+            }}
             testID="customer-cart-empty"
           />
         }
         renderItem={renderItem}
         renderSectionHeader={() => null}
-        refreshControl={<RefreshControl refreshing={snapshotStatus === 'LOADING'} onRefresh={refreshCart} tintColor={colors.flameRed} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={snapshotStatus === 'LOADING'}
+            onRefresh={refreshCart}
+            tintColor={colors.flameRed}
+          />
+        }
         onScroll={bottomNavScroll.onScroll}
         scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
         showsVerticalScrollIndicator={false}
@@ -499,9 +617,9 @@ export function CustomerCartScreen() {
 
   const checkoutEnabled = Boolean(
     model?.items.length &&
-    header.selectedLocation?.addressId &&
-    serviceability === 'SERVICEABLE' &&
-    !checkoutBusy,
+      header.selectedLocation?.addressId &&
+      serviceability === 'SERVICEABLE' &&
+      !checkoutBusy,
   );
 
   return (
@@ -514,9 +632,15 @@ export function CustomerCartScreen() {
       <View style={styles.content}>{content}</View>
 
       {model && model.items.length > 0 ? (
-        <View style={[styles.checkoutBar, {paddingBottom: Math.max(insets.bottom, spacing.sm)}]}>
+        <View
+          style={[
+            styles.checkoutBar,
+            {paddingBottom: Math.max(insets.bottom, spacing.sm)},
+          ]}>
           <View style={styles.checkoutCopy}>
-            <Text style={styles.checkoutTotal}>{formatAmountField(model.billSummary.grandTotal)}</Text>
+            <Text style={styles.checkoutTotal}>
+              {formatAmountField(model.billSummary.grandTotal)}
+            </Text>
             <Text style={styles.checkoutLink}>View Bill Details</Text>
           </View>
           <Button
@@ -528,65 +652,293 @@ export function CustomerCartScreen() {
         </View>
       ) : null}
 
-      <CustomerLocationSelector visible={locationSelectorVisible} onClose={() => setLocationSelectorVisible(false)} />
+      <CustomerLocationSelector
+        visible={locationSelectorVisible}
+        onClose={() => setLocationSelectorVisible(false)}
+      />
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
   content: {flex: 1, backgroundColor: colors.surfaceBase},
-  listContent: {flexGrow: 1, paddingBottom: 145, backgroundColor: colors.surfaceBase},
-  loadingState: {flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm},
-  titleRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm},
-  backButton: {width: touchTarget.minimum, height: touchTarget.minimum, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarm},
+  listContent: {
+    flexGrow: 1,
+    paddingBottom: 145,
+    backgroundColor: colors.surfaceBase,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  backButton: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceWarm,
+  },
   titleCopy: {flex: 1},
-  title: {color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.extrabold},
-  subtitle: {color: colors.textSecondary, fontSize: typography.small, marginTop: spacing.xxs},
+  title: {
+    color: colors.espressoBrown,
+    fontSize: typography.hero,
+    fontWeight: fontWeight.extrabold,
+  },
+  subtitle: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    marginTop: spacing.xxs,
+  },
   notice: {marginHorizontal: spacing.md, marginBottom: spacing.sm},
-  deliveryCard: {marginHorizontal: spacing.md, marginVertical: spacing.sm, padding: spacing.md, minHeight: 112, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, ...elevation.card},
-  deliveryIconBox: {width: 52, height: 52, borderRadius: radius.md, backgroundColor: colors.surfaceWarm, alignItems: 'center', justifyContent: 'center'},
+  deliveryCard: {
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.sm,
+    padding: spacing.md,
+    minHeight: 112,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...elevation.card,
+  },
+  deliveryIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceWarm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   deliveryCopy: {flex: 1, minWidth: 0},
   deliveryLabel: {color: colors.textSecondary, fontSize: typography.small},
-  deliveryAddress: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.semibold, marginTop: 2},
-  estimateRow: {flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.xs},
+  deliveryAddress: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.semibold,
+    marginTop: 2,
+  },
+  estimateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.xs,
+  },
   estimateText: {flex: 1, color: colors.textSecondary, fontSize: typography.small},
   unserviceableText: {color: colors.error},
-  changeButton: {alignSelf: 'flex-start', paddingVertical: spacing.xs, paddingLeft: spacing.xs},
-  changeText: {color: colors.flameRed, fontSize: typography.small, fontWeight: fontWeight.bold},
-  lineCard: {minHeight: 128, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.md, marginBottom: spacing.sm, padding: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, ...elevation.card},
-  lineImage: {width: 92, height: 92, borderRadius: radius.md, backgroundColor: colors.surfaceWarm},
-  lineMediaFallback: {width: 92, height: 92, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarmStrong},
-  lineMediaInitial: {color: colors.flameRed, fontSize: typography.hero, fontWeight: fontWeight.extrabold},
-  lineBody: {flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center'},
-  lineName: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
-  kitchenInline: {flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3},
-  lineKitchen: {maxWidth: '88%', color: colors.textSecondary, fontSize: typography.small},
-  lineMeta: {color: colors.textSecondary, fontSize: typography.tiny, marginTop: 5},
-  linePrice: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold, marginTop: spacing.xs},
-  lineRight: {alignSelf: 'stretch', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 4},
-  quantityControl: {height: 44, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.md, backgroundColor: colors.white},
-  quantityButton: {width: 38, height: 42, alignItems: 'center', justifyContent: 'center'},
-  quantitySymbol: {color: colors.flameRed, fontSize: 24, fontWeight: fontWeight.semibold},
-  quantityValue: {minWidth: 26, textAlign: 'center', color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
-  removeButton: {minWidth: 42, minHeight: 40, alignItems: 'center', justifyContent: 'center', marginTop: 5},
-  removeIcon: {color: colors.flameRed, fontSize: 22, fontWeight: fontWeight.bold},
-  listFooter: {gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.sm},
-  offerCard: {borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.white, padding: spacing.md},
+  changeButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.xs,
+    paddingLeft: spacing.xs,
+  },
+  changeText: {
+    color: colors.flameRed,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  lineCard: {
+    minHeight: 128,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...elevation.card,
+  },
+  lineImage: {
+    width: 92,
+    height: 92,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceWarm,
+  },
+  lineMediaFallback: {
+    width: 92,
+    height: 92,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceWarmStrong,
+  },
+  lineMediaInitial: {
+    color: colors.flameRed,
+    fontSize: typography.hero,
+    fontWeight: fontWeight.extrabold,
+  },
+  lineBody: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  lineName: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  kitchenInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 3,
+  },
+  lineKitchen: {
+    maxWidth: '88%',
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
+  lineMeta: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    marginTop: 5,
+  },
+  linePrice: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+    marginTop: spacing.xs,
+  },
+  lineRight: {
+    alignSelf: 'stretch',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 4,
+  },
+  quantityControl: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    backgroundColor: colors.white,
+  },
+  quantityButton: {
+    width: 38,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantitySymbol: {
+    color: colors.flameRed,
+    fontSize: 24,
+    fontWeight: fontWeight.semibold,
+  },
+  quantityValue: {
+    minWidth: 26,
+    textAlign: 'center',
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  removeButton: {
+    minWidth: 42,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 5,
+  },
+  listFooter: {
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  offerCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    padding: spacing.md,
+  },
   offerTitleRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
-  offerIcon: {width: 32, height: 32, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarm},
-  offerCaption: {color: colors.textSecondary, fontSize: typography.small, marginTop: spacing.xs},
-  billCard: {borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.white, padding: spacing.md},
-  cardTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
+  offerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceWarm,
+  },
+  offerCaption: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    marginTop: spacing.xs,
+  },
+  billCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    padding: spacing.md,
+  },
+  cardTitle: {
+    color: colors.espressoBrown,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
   billRows: {gap: spacing.sm, marginTop: spacing.md},
-  amountRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md},
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
   amountLabel: {flex: 1, color: colors.textSecondary, fontSize: typography.body},
   amountLabelStrong: {color: colors.espressoBrown, fontWeight: fontWeight.bold},
-  amountValue: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.medium},
-  amountValueStrong: {fontSize: typography.heading, fontWeight: fontWeight.extrabold},
+  amountValue: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.medium,
+  },
+  amountValueStrong: {
+    fontSize: typography.heading,
+    fontWeight: fontWeight.extrabold,
+  },
   billDivider: {height: 1, backgroundColor: colors.border, marginVertical: 2},
-  checkoutBar: {position: 'absolute', left: 0, right: 0, bottom: 0, minHeight: 96, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.sm, backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.border, ...elevation.card},
+  checkoutBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    minHeight: 96,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    ...elevation.card,
+  },
   checkoutCopy: {minWidth: 110},
-  checkoutTotal: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.extrabold},
-  checkoutLink: {color: colors.flameRed, fontSize: typography.tiny, fontWeight: fontWeight.semibold, marginTop: 3},
+  checkoutTotal: {
+    color: colors.espressoBrown,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.extrabold,
+  },
+  checkoutLink: {
+    color: colors.flameRed,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.semibold,
+    marginTop: 3,
+  },
   checkoutButton: {flex: 1},
 });

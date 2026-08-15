@@ -5,7 +5,9 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryComm
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
+import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryRoutingException;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -17,17 +19,20 @@ public class DeliveryCommandWorker {
     private final DeliveryProviderRouter router;
     private final DeliveryCommandCompletionService completionService;
     private final DeliveryCommandProperties properties;
+    private final DeliveryCommandRetryProperties retryProperties;
 
     public DeliveryCommandWorker(DeliveryCommandRepository commands,
                                  DeliveryJobRepository deliveryJobs,
                                  DeliveryProviderRouter router,
                                  DeliveryCommandCompletionService completionService,
-                                 DeliveryCommandProperties properties) {
+                                 DeliveryCommandProperties properties,
+                                 DeliveryCommandRetryProperties retryProperties) {
         this.commands = commands;
         this.deliveryJobs = deliveryJobs;
         this.router = router;
         this.completionService = completionService;
         this.properties = properties;
+        this.retryProperties = retryProperties;
     }
 
     public WorkerReceipt process(DeliveryCommandMessage message) {
@@ -64,18 +69,37 @@ public class DeliveryCommandWorker {
                 safeMessage(ex)
             );
             if (!stored) {
-                throw new DeliveryCommandTransientException(
+                throw transientRetry(
+                    command,
                     "Uncertain provider create could not be moved to reconciliation",
                     ex
                 );
             }
             return new WorkerReceipt(null, false, "RECONCILIATION_PENDING");
+        } catch (DeliveryProviderTemporarilyUnavailableException ex) {
+            int providerWaitAttempt = command.providerWaitAttemptCount() + 1;
+            Instant retryAt = Instant.now().plus(retryProperties.delay(providerWaitAttempt));
+            boolean stored = commands.markProviderWait(command.id(), retryAt, safeMessage(ex));
+            if (!stored) {
+                throw new DeliveryCommandTransientException(
+                    "Provider wait state could not be persisted",
+                    Instant.now().plus(retryProperties.claimContentionDelay()),
+                    "provider-wait-store-" + command.id() + "-" + providerWaitAttempt,
+                    ex
+                );
+            }
+            throw new DeliveryCommandDeferredException(
+                safeMessage(ex),
+                retryAt,
+                "provider-wait-" + command.id() + "-" + providerWaitAttempt,
+                ex
+            );
         } catch (DeliveryRoutingException ex) {
             handleFailure(command, ex);
-            throw new DeliveryCommandTransientException(ex.getMessage(), ex);
+            throw transientRetry(command, ex.getMessage(), ex);
         } catch (RuntimeException ex) {
             handleFailure(command, ex);
-            throw new DeliveryCommandTransientException("Delivery command processing failed", ex);
+            throw transientRetry(command, "Delivery command processing failed", ex);
         }
     }
 
@@ -95,6 +119,19 @@ public class DeliveryCommandWorker {
         if ("RECONCILIATION_PENDING".equals(command.status())) {
             return new WorkerReceipt(null, true, "RECONCILIATION_PENDING");
         }
+        if ("WAITING_FOR_PROVIDER".equals(command.status())) {
+            Instant retryAt = command.nextProviderRetryAt();
+            if (retryAt == null) {
+                throw new DeliveryCommandNonRetryableException(
+                    "Provider wait command has no next retry time"
+                );
+            }
+            throw new DeliveryCommandDeferredException(
+                command.lastErrorOrDefault("Delivery provider is temporarily unavailable"),
+                retryAt,
+                "provider-wait-" + command.id() + "-" + command.providerWaitAttemptCount()
+            );
+        }
         if ("DEAD_LETTER".equals(command.status())
             || command.attemptCount() >= properties.getMaxDeliveryAttempts()) {
             commands.markDeadLetter(commandId, "Delivery command attempt limit exhausted");
@@ -103,7 +140,23 @@ public class DeliveryCommandWorker {
             );
         }
         throw new DeliveryCommandTransientException(
-            "Delivery command is currently being processed or is not claimable"
+            "Delivery command is currently being processed or is not claimable",
+            Instant.now().plus(retryProperties.claimContentionDelay()),
+            "claim-contention-" + commandId + "-" + UUID.randomUUID()
+        );
+    }
+
+    private DeliveryCommandTransientException transientRetry(CommandRecord command,
+                                                              String message,
+                                                              Throwable cause) {
+        Instant retryAt = Instant.now().plus(
+            retryProperties.delay(Math.max(1, command.attemptCount()))
+        );
+        return new DeliveryCommandTransientException(
+            message,
+            retryAt,
+            "delivery-attempt-" + command.id() + "-" + command.attemptCount(),
+            cause
         );
     }
 
@@ -130,12 +183,49 @@ public class DeliveryCommandWorker {
     public record WorkerReceipt(UUID deliveryJobId, boolean duplicate, String providerId) {}
 
     public static class DeliveryCommandTransientException extends RuntimeException {
-        public DeliveryCommandTransientException(String message) {
+        private final Instant retryAt;
+        private final String retryKey;
+
+        public DeliveryCommandTransientException(String message,
+                                                 Instant retryAt,
+                                                 String retryKey) {
             super(message);
+            this.retryAt = retryAt;
+            this.retryKey = retryKey;
         }
 
-        public DeliveryCommandTransientException(String message, Throwable cause) {
+        public DeliveryCommandTransientException(String message,
+                                                 Instant retryAt,
+                                                 String retryKey,
+                                                 Throwable cause) {
             super(message, cause);
+            this.retryAt = retryAt;
+            this.retryKey = retryKey;
+        }
+
+        public Instant retryAt() {
+            return retryAt;
+        }
+
+        public String retryKey() {
+            return retryKey;
+        }
+    }
+
+    public static final class DeliveryCommandDeferredException
+        extends DeliveryCommandTransientException {
+
+        public DeliveryCommandDeferredException(String message,
+                                                Instant retryAt,
+                                                String retryKey) {
+            super(message, retryAt, retryKey);
+        }
+
+        public DeliveryCommandDeferredException(String message,
+                                                Instant retryAt,
+                                                String retryKey,
+                                                Throwable cause) {
+            super(message, retryAt, retryKey, cause);
         }
     }
 

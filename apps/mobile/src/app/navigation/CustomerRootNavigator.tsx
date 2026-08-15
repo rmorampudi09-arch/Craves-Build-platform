@@ -6,7 +6,7 @@ import * as Location from 'expo-location';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {colors, fontWeight, spacing, typography} from '../../design/tokens';
+import {colors, fontWeight, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
 import {customerAddressesApi} from '../../features/customerAddresses/api/customerAddressesApi';
@@ -102,22 +102,31 @@ const tabScreenOptions = {
   tabBarActiveTintColor: CUSTOMER_TAB_ACTIVE_COLOR,
   tabBarInactiveTintColor: CUSTOMER_TAB_INACTIVE_COLOR,
   tabBarHideOnKeyboard: true,
-  tabBarIconStyle: {marginTop: 0},
+  tabBarIconStyle: {
+    marginTop: 0,
+    marginBottom: 0,
+  },
   tabBarLabelStyle: {
     fontSize: typography.tiny,
     fontWeight: fontWeight.semibold,
-    marginTop: spacing.xxs,
+    marginTop: 1,
+    marginBottom: 0,
   },
   tabBarItemStyle: {
-    paddingVertical: spacing.xxs,
+    height: 72,
+    paddingVertical: 0,
+    justifyContent: 'center',
   },
   tabBarStyle: {
-    height: 88,
-    backgroundColor: colors.white,
+    height: 72,
+    backgroundColor: 'transparent',
     borderTopWidth: 0,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs,
+    paddingTop: 0,
+    paddingBottom: 0,
     elevation: 0,
+    shadowColor: 'transparent',
+    shadowOffset: {width: 0, height: 0},
+    shadowRadius: 0,
     shadowOpacity: 0,
   },
 } as const;

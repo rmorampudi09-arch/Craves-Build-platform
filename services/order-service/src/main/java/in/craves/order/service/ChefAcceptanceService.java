@@ -2,6 +2,7 @@ package in.craves.order.service;
 
 import in.craves.order.event.ChefAcceptedOrderEventFactory;
 import in.craves.order.event.ChefAcceptedOrderEventSource;
+import in.craves.order.event.ChefAcceptedOrderEventSource.DeliveryItemSource;
 import in.craves.order.event.SerializedDomainEvent;
 import in.craves.order.exception.OrderApiException;
 import in.craves.order.outbox.OrderDomainOutboxRepository;
@@ -14,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,8 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class ChefAcceptanceService {
+    private static final String PAYMENT_COLLECTION_MODE_PREPAID = "PREPAID";
+
     private final JdbcTemplate jdbcTemplate;
     private final OrderService orderService;
     private final ChefAcceptedOrderEventFactory eventFactory;
@@ -164,9 +168,27 @@ public class ChefAcceptanceService {
     }
 
     private ChefAcceptedOrderEventSource loadEventSource(UUID orderId) {
+        List<DeliveryItemSource> deliveryItems = jdbcTemplate.query(
+            """
+                SELECT menu_item_id, item_name_snapshot, unit_price_snapshot,
+                       quantity, line_total
+                FROM order_schema.order_item
+                WHERE order_id = ?
+                ORDER BY created_at, id
+                """,
+            (resultSet, rowNumber) -> new DeliveryItemSource(
+                resultSet.getObject("menu_item_id", UUID.class),
+                resultSet.getString("item_name_snapshot"),
+                resultSet.getBigDecimal("unit_price_snapshot"),
+                resultSet.getInt("quantity"),
+                resultSet.getBigDecimal("line_total")
+            ),
+            orderId
+        );
+
         return jdbcTemplate.query(
             "SELECT * FROM order_schema.customer_order WHERE id = ?",
-            this::mapEventSource,
+            (resultSet, rowNumber) -> mapEventSource(resultSet, deliveryItems),
             orderId
         ).stream().findFirst().orElseThrow(() -> OrderApiException.notFound(
             "ORDER_NOT_FOUND",
@@ -174,7 +196,10 @@ public class ChefAcceptanceService {
         ));
     }
 
-    private ChefAcceptedOrderEventSource mapEventSource(ResultSet resultSet, int rowNumber) throws SQLException {
+    private ChefAcceptedOrderEventSource mapEventSource(
+        ResultSet resultSet,
+        List<DeliveryItemSource> deliveryItems
+    ) throws SQLException {
         Integer totalPackageWeightGrams = integerOrNull(resultSet, "total_package_weight_grams");
         Boolean thermoboxRequired = booleanOrNull(resultSet, "thermobox_required");
         if (totalPackageWeightGrams == null || thermoboxRequired == null) {
@@ -212,7 +237,10 @@ public class ChefAcceptanceService {
             resultSet.getString("dropoff_state"),
             resultSet.getString("dropoff_postal_code"),
             resultSet.getBigDecimal("dropoff_latitude"),
-            resultSet.getBigDecimal("dropoff_longitude")
+            resultSet.getBigDecimal("dropoff_longitude"),
+            List.copyOf(deliveryItems),
+            resultSet.getBigDecimal("food_subtotal"),
+            PAYMENT_COLLECTION_MODE_PREPAID
         );
     }
 
@@ -247,6 +275,9 @@ public class ChefAcceptanceService {
     ) {
     }
 
-    private record AcceptanceTimes(Instant acceptedAt, Instant readyAt) {
+    private record AcceptanceTimes(
+        Instant acceptedAt,
+        Instant readyAt
+    ) {
     }
 }

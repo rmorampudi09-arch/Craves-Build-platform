@@ -1,0 +1,125 @@
+name: CRAVES Apply White Surfaces And Icon Tint
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/mobile-icon-surface-update.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-ui-surface-update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout mobile branch
+        uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+          fetch-depth: 0
+
+      - name: Apply reference icon tint and remove cream backgrounds
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const root = 'apps/mobile/src';
+          const tokenPath = path.join(root, 'design/tokens.ts');
+          const allowedExtensions = new Set(['.ts', '.tsx']);
+
+          function walk(dir) {
+            return fs.readdirSync(dir, {withFileTypes: true}).flatMap(entry => {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) return walk(full);
+              return allowedExtensions.has(path.extname(entry.name)) ? [full] : [];
+            });
+          }
+
+          let tokens = fs.readFileSync(tokenPath, 'utf8');
+          if (!tokens.includes("iconSurface: '#FEF3F3'")) {
+            const marker = "  flameRedSoft: '#FF5548',\n";
+            if (!tokens.includes(marker)) {
+              throw new Error('Could not find flameRedSoft token insertion point.');
+            }
+            tokens = tokens.replace(
+              marker,
+              `${marker}  /** Soft flame-red tint sampled from the approved icon-background reference. */\n  iconSurface: '#FEF3F3',\n`,
+            );
+          }
+          tokens = tokens
+            .replace("  surfaceWarm: '#FFF5E9',", "  surfaceWarm: '#FFFFFF',")
+            .replace("  surfaceWarmStrong: '#FBEBDD',", "  surfaceWarmStrong: '#FFFFFF',");
+          fs.writeFileSync(tokenPath, tokens);
+
+          let iconSurfaceUpdates = 0;
+          let creamBackgroundUpdates = 0;
+          const files = walk(root);
+
+          for (const file of files) {
+            let text = fs.readFileSync(file, 'utf8');
+            const before = text;
+
+            const iconTokenPattern = /(^\s*([A-Za-z0-9_]*[Ii]con[A-Za-z0-9_]*)\s*:\s*\{[^}]*?)backgroundColor:\s*colors\.(surfaceWarmStrong|surfaceWarm|creamDeep|cream|errorSoft|surfaceMuted)(\s*[,}])/gm;
+            text = text.replace(iconTokenPattern, (match, prefix, styleName, _token, suffix) => {
+              if (styleName.toLowerCase().includes('skeleton')) return match;
+              iconSurfaceUpdates += 1;
+              return `${prefix}backgroundColor: colors.iconSurface${suffix}`;
+            });
+
+            const iconRawPattern = /(^\s*([A-Za-z0-9_]*[Ii]con[A-Za-z0-9_]*)\s*:\s*\{[^}]*?)backgroundColor:\s*(['"])(#FFF5E9|#FBEBDD)\3(\s*[,}])/gmi;
+            text = text.replace(iconRawPattern, (match, prefix, styleName, _quote, _color, suffix) => {
+              if (styleName.toLowerCase().includes('skeleton')) return match;
+              iconSurfaceUpdates += 1;
+              return `${prefix}backgroundColor: colors.iconSurface${suffix}`;
+            });
+
+            const creamTokenBackground = /backgroundColor:\s*colors\.(surfaceWarmStrong|surfaceWarm|creamDeep|cream)(\s*[,}])/g;
+            text = text.replace(creamTokenBackground, (_match, _token, suffix) => {
+              creamBackgroundUpdates += 1;
+              return `backgroundColor: colors.white${suffix}`;
+            });
+
+            const creamRawBackground = /backgroundColor:\s*(['"])(#FFF5E9|#FBEBDD)\1(\s*[,}])/gi;
+            text = text.replace(creamRawBackground, (_match, _quote, _color, suffix) => {
+              creamBackgroundUpdates += 1;
+              return `backgroundColor: colors.white${suffix}`;
+            });
+
+            if (text !== before) fs.writeFileSync(file, text);
+          }
+
+          if (iconSurfaceUpdates < 5) {
+            throw new Error(`Expected at least 5 icon-surface updates, found ${iconSurfaceUpdates}.`);
+          }
+          if (creamBackgroundUpdates < 5) {
+            throw new Error(`Expected at least 5 cream-background updates, found ${creamBackgroundUpdates}.`);
+          }
+
+          console.log(`Updated ${iconSurfaceUpdates} icon background styles to #FEF3F3.`);
+          console.log(`Converted ${creamBackgroundUpdates} cream background styles to white.`);
+          NODE
+
+      - name: Review scoped changes
+        run: |
+          set -euo pipefail
+          git diff -- apps/mobile/src
+          if git diff --name-only | grep -Ev '^apps/mobile/src/|^\.github/workflows/mobile-icon-surface-update.yml$'; then
+            echo 'Unexpected file changed.' >&2
+            exit 1
+          fi
+
+      - name: Commit UI surface update and remove one-shot workflow
+        run: |
+          set -euo pipefail
+          rm .github/workflows/mobile-icon-surface-update.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/mobile/src .github/workflows/mobile-icon-surface-update.yml
+          git commit -m 'Use white surfaces and soft flame-red icon backgrounds'
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

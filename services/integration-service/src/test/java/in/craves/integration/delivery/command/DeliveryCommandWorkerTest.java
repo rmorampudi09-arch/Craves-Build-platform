@@ -1,14 +1,19 @@
 package in.craves.integration.delivery.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
+import in.craves.integration.delivery.command.DeliveryCommandWorker.DeliveryCommandDeferredException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
+import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
 import java.math.BigDecimal;
@@ -28,7 +33,7 @@ class DeliveryCommandWorkerTest {
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setMaxDeliveryAttempts(5);
         DeliveryCommandWorker worker = new DeliveryCommandWorker(
-            commands, deliveryJobs, router, completion, properties
+            commands, deliveryJobs, router, completion, properties, retryProperties()
         );
 
         DeliveryCommandMessage message = command();
@@ -56,7 +61,7 @@ class DeliveryCommandWorkerTest {
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setMaxDeliveryAttempts(5);
         DeliveryCommandWorker worker = new DeliveryCommandWorker(
-            commands, deliveryJobs, router, completion, properties
+            commands, deliveryJobs, router, completion, properties, retryProperties()
         );
 
         DeliveryCommandMessage message = command();
@@ -92,6 +97,57 @@ class DeliveryCommandWorkerTest {
         verifyNoInteractions(completion);
     }
 
+    @Test
+    void defersWhenNoProviderIsTemporarilyAvailableWithoutDeadLettering() {
+        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
+        DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);
+        DeliveryProviderRouter router = mock(DeliveryProviderRouter.class);
+        DeliveryCommandCompletionService completion = mock(DeliveryCommandCompletionService.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setMaxDeliveryAttempts(5);
+        DeliveryCommandRetryProperties retry = retryProperties();
+        DeliveryCommandWorker worker = new DeliveryCommandWorker(
+            commands, deliveryJobs, router, completion, properties, retry
+        );
+
+        DeliveryCommandMessage message = command();
+        CommandRecord claimed = commandRecord(message, "PROCESSING");
+        when(commands.claim(message.commandId(), 5)).thenReturn(Optional.of(claimed));
+        when(deliveryJobs.findIdByChefSubOrderId(message.chefSubOrderId()))
+            .thenReturn(Optional.empty());
+        when(router.route(message)).thenThrow(
+            new DeliveryProviderTemporarilyUnavailableException(
+                "No active delivery providers are configured"
+            )
+        );
+        when(commands.markProviderWait(
+            org.mockito.ArgumentMatchers.eq(message.commandId()),
+            any(Instant.class),
+            org.mockito.ArgumentMatchers.eq("No active delivery providers are configured")
+        )).thenReturn(true);
+
+        assertThatThrownBy(() -> worker.process(message))
+            .isInstanceOf(DeliveryCommandDeferredException.class)
+            .hasMessage("No active delivery providers are configured");
+
+        verify(commands).markProviderWait(
+            org.mockito.ArgumentMatchers.eq(message.commandId()),
+            any(Instant.class),
+            org.mockito.ArgumentMatchers.eq("No active delivery providers are configured")
+        );
+        verify(commands, never()).markFailed(any(), any());
+        verify(commands, never()).markDeadLetter(any(), any());
+        verifyNoInteractions(completion);
+    }
+
+    private static DeliveryCommandRetryProperties retryProperties() {
+        DeliveryCommandRetryProperties retry = new DeliveryCommandRetryProperties();
+        retry.setBaseSeconds(30);
+        retry.setMaxSeconds(600);
+        retry.setClaimContentionSeconds(10);
+        return retry;
+    }
+
     private static CommandRecord commandRecord(DeliveryCommandMessage message, String status) {
         return new CommandRecord(
             message.commandId(),
@@ -105,7 +161,10 @@ class DeliveryCommandWorkerTest {
             null,
             null,
             null,
-            0
+            0,
+            0,
+            null,
+            null
         );
     }
 

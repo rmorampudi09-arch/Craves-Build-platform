@@ -64,7 +64,7 @@ parameters:
     default: order-service-delivery-status-changed
   - name: apimName
     type: string
-    default: apim-craves-prodlow-l3ing6
+    default: apim-craves-prodlowl3ing6
 
 variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
@@ -209,10 +209,19 @@ steps:
           [[ "$current_environment" == 'PRODUCTION' ]] || fail 'Run PRODUCTION downstream stage before provider_create.'
           [[ "$(current_value BORZO_PRODUCTION_ACTIVATION_APPROVED)" == 'true' ]] || fail 'Borzo production approval is not staged.'
 
+          # Runtime adapter becomes ready first; command execution resumes only after DB activation.
           az containerapp update -g "$RG" -n "$APP" \
             --set-env-vars \
               BORZO_API_ENABLED=true \
-              CRAVES_DELIVERY_COMMAND_ENABLED=true \
+              CRAVES_DELIVERY_COMMAND_ENABLED=false \
+              CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+        elif [[ "$environment" == 'SANDBOX' && "$enable" == 'false' ]]; then
+          # SIMPLE_SANDBOX requires no provider credential at all.
+          az containerapp update -g "$RG" -n "$APP" \
+            --set-env-vars \
+              BORZO_API_ENVIRONMENT=SANDBOX \
+              BORZO_PRODUCTION_ACTIVATION_APPROVED=false \
+              BORZO_API_ENABLED=false \
               CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
         else
           approved=false
@@ -247,6 +256,7 @@ steps:
               CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED=true \
               CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true >/dev/null
           wait_ready "$ORDER_APP"
+
           az containerapp update -g "$RG" -n "$APP" \
             --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=true >/dev/null
           wait_ready "$APP"
@@ -287,5 +297,5 @@ steps:
         else
           echo "Mode: PRODUCTION_${stage^^}"
         fi
-        echo 'Global command worker is preserved when other delivery providers remain active.'
+        echo 'Runtime adapter is verified before DB routing activation; global worker is provider-safe.'
         echo '============================================================'

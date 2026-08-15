@@ -44,6 +44,7 @@ jobs:
         working-directory: apps/mobile
         run: cp .env.example .env
 
+      # Device-test build trigger: 2026-08-15. This keeps the existing standalone testing APK behavior unchanged.
       # A React Native debug variant expects Metro and does not package the JS bundle.
       # For device testing we intentionally build the release variant so the JavaScript
       # bundle/assets are embedded, while signing it with the repository's debug test key.

@@ -5,10 +5,10 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
-public class CashfreePaymentExecutionWebConfiguration implements WebMvcConfigurer {
-    private final CashfreePaymentExecutionInterceptor interceptor;
+public class PaymentExecutionWebConfiguration implements WebMvcConfigurer {
+    private final PaymentExecutionInterceptor interceptor;
 
-    public CashfreePaymentExecutionWebConfiguration(CashfreePaymentExecutionInterceptor interceptor) {
+    public PaymentExecutionWebConfiguration(PaymentExecutionInterceptor interceptor) {
         this.interceptor = interceptor;
     }
 

@@ -48,6 +48,13 @@ public final class SubscriptionPaymentModels {
     ) {
     }
 
+    public record VerifySubscriptionPaymentRequest(
+        String providerOrderId,
+        String providerPaymentId,
+        String providerSignature
+    ) {
+    }
+
     public record SubscriptionPaymentResponse(
         UUID id,
         UUID invoiceId,
@@ -61,8 +68,21 @@ public final class SubscriptionPaymentModels {
         String providerStatus,
         Instant createdAt,
         Instant updatedAt,
-        Instant paidAt
+        Instant paidAt,
+        String provider,
+        String providerOrderId,
+        String providerPaymentId,
+        String checkoutKeyId
     ) {
+        public SubscriptionPaymentResponse(
+            UUID id, UUID invoiceId, UUID subscriptionId, LocalDate cycleStart, LocalDate cycleEnd,
+            BigDecimal amount, String currency, String status, String paymentSessionId,
+            String providerStatus, Instant createdAt, Instant updatedAt, Instant paidAt
+        ) {
+            this(id, invoiceId, subscriptionId, cycleStart, cycleEnd, amount, currency, status,
+                paymentSessionId, providerStatus, createdAt, updatedAt, paidAt,
+                "CASHFREE", null, null, null);
+        }
     }
 
     public record StatusChangedData(

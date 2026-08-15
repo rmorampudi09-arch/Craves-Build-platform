@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SubscriptionCashfreePayment } from "@/components/subscription-cashfree-payment";
+import { SubscriptionRazorpayPayment } from "@/components/subscription-razorpay-payment";
 import { isUuid } from "@/lib/server-api";
 
 export const metadata = {
@@ -23,11 +23,11 @@ export default async function SubscriptionPaymentPage({
         Complete your meal-plan payment.
       </h1>
       <p className="mt-4 text-slate-300">
-        Cashfree sandbox handles payment details securely. Craves confirms the signed payment result before activating the subscription.
+        Razorpay handles payment details securely. Craves confirms the signed payment result before activating the subscription.
       </p>
       <div className="mt-8">
         {isUuid(subscriptionId) ? (
-          <SubscriptionCashfreePayment subscriptionId={subscriptionId} />
+          <SubscriptionRazorpayPayment subscriptionId={subscriptionId} />
         ) : (
           <section className="rounded-[28px] bg-[#FFF8EC] p-6 text-slate-950">
             Invalid subscription ID.

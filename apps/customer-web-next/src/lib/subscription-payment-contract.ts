@@ -13,6 +13,10 @@ export type SubscriptionPayment = {
   amount: number;
   currency: string;
   status: SubscriptionPaymentStatus;
+  provider: "CASHFREE" | "RAZORPAY";
+  providerOrderId: string | null;
+  providerPaymentId: string | null;
+  checkoutKeyId: string | null;
   paymentSessionId: string | null;
   providerStatus: string | null;
   createdAt: string;
@@ -58,6 +62,7 @@ export function parseSubscriptionPayment(value: unknown): SubscriptionPayment | 
   const amount = typeof raw.amount === "number" ? raw.amount : Number(raw.amount);
   const currency = text(raw.currency, 3)?.toUpperCase() ?? null;
   const status = text(raw.status, 40) as SubscriptionPaymentStatus | null;
+  const provider = text(raw.provider, 20)?.toUpperCase();
   const createdAt = instant(raw.createdAt);
   const updatedAt = instant(raw.updatedAt);
   const paidAt = raw.paidAt == null ? null : instant(raw.paidAt);
@@ -70,6 +75,7 @@ export function parseSubscriptionPayment(value: unknown): SubscriptionPayment | 
     !Number.isFinite(amount) || amount <= 0 ||
     !currency || !CURRENCY.test(currency) ||
     !status || !STATUSES.has(status) ||
+    (provider !== "CASHFREE" && provider !== "RAZORPAY") ||
     !createdAt || !updatedAt ||
     (raw.paidAt != null && !paidAt)
   ) {
@@ -85,6 +91,10 @@ export function parseSubscriptionPayment(value: unknown): SubscriptionPayment | 
     amount,
     currency,
     status,
+    provider,
+    providerOrderId: nullableText(raw.providerOrderId, 500),
+    providerPaymentId: nullableText(raw.providerPaymentId, 500),
+    checkoutKeyId: nullableText(raw.checkoutKeyId, 500),
     paymentSessionId: nullableText(raw.paymentSessionId, 4096),
     providerStatus: nullableText(raw.providerStatus, 120),
     createdAt,

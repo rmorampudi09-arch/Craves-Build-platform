@@ -32,9 +32,9 @@ test("checkout uses parsed active saved addresses and backend checkout", () => {
   assert.doesNotMatch(page, /deliveryFee\s*=|platformFee\s*=|taxAmount\s*=/);
 });
 
-test("Cashfree payment is contract validated and backend verified", () => {
-  const payment = source("../components/checkout/CashfreePayment.tsx");
-  assert.match(payment, /https:\/\/sdk\.cashfree\.com\/js\/v3\/cashfree\.js/);
+test("Razorpay payment is contract validated and backend verified", () => {
+  const payment = source("../components/checkout/RazorpayPayment.tsx");
+  assert.match(payment, /https:\/\/checkout\.razorpay\.com\/v1\/checkout\.js/);
   assert.match(payment, /parsePaymentSession\(raw\)/);
   assert.match(payment, /parsePaymentStatus\(raw\)/);
   assert.match(payment, /parsePaymentVerification\(raw\)/);

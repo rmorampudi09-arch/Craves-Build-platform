@@ -18,6 +18,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.PaymentProviderProperties;
+import in.craves.integration.config.PaymentRoutingProperties;
+import in.craves.integration.payment.RazorpayPaymentClient;
 import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
 import in.craves.integration.subscription.SubscriptionPaymentRepository.PaymentIntent;
@@ -45,6 +47,8 @@ class SubscriptionPaymentServiceOwnershipTest {
 
     @Mock
     private SubscriptionPaymentRepository repository;
+    @Mock
+    private RazorpayPaymentClient razorpayPaymentClient;
 
     private MockRestServiceServer server;
     private SubscriptionPaymentService service;
@@ -76,6 +80,8 @@ class SubscriptionPaymentServiceOwnershipTest {
             repository,
             paymentProperties,
             providerProperties,
+            new PaymentRoutingProperties("CASHFREE", true, false),
+            razorpayPaymentClient,
             new ObjectMapper().findAndRegisterModules(),
             builder
         );

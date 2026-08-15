@@ -1,6 +1,8 @@
 package in.craves.integration.refund;
 
 import in.craves.integration.config.PaymentProviderProperties;
+import in.craves.integration.config.PaymentRoutingProperties;
+import in.craves.integration.config.RazorpayProviderProperties;
 import in.craves.integration.refund.CashfreeRefundClient.RefundProviderConfigurationException;
 import in.craves.integration.refund.CashfreeRefundClient.RefundProviderNonRetryableException;
 import in.craves.integration.refund.CashfreeRefundClient.RefundProviderTransientException;
@@ -23,24 +25,33 @@ public class RefundExecutionWorker {
 
     private final RefundWorkflowProperties properties;
     private final PaymentProviderProperties paymentProviderProperties;
+    private final PaymentRoutingProperties paymentRoutingProperties;
+    private final RazorpayProviderProperties razorpayProviderProperties;
     private final RefundRepository repository;
     private final CashfreeRefundClient cashfreeRefundClient;
+    private final RazorpayRefundClient razorpayRefundClient;
 
     public RefundExecutionWorker(
         RefundWorkflowProperties properties,
         PaymentProviderProperties paymentProviderProperties,
+        PaymentRoutingProperties paymentRoutingProperties,
+        RazorpayProviderProperties razorpayProviderProperties,
         RefundRepository repository,
-        CashfreeRefundClient cashfreeRefundClient
+        CashfreeRefundClient cashfreeRefundClient,
+        RazorpayRefundClient razorpayRefundClient
     ) {
         this.properties = properties;
         this.paymentProviderProperties = paymentProviderProperties;
+        this.paymentRoutingProperties = paymentRoutingProperties;
+        this.razorpayProviderProperties = razorpayProviderProperties;
         this.repository = repository;
         this.cashfreeRefundClient = cashfreeRefundClient;
+        this.razorpayRefundClient = razorpayRefundClient;
     }
 
     @PostConstruct
     void validateProductionActivation() {
-        if (paymentProviderProperties.sandbox()) {
+        if (!production()) {
             return;
         }
         if (properties.isProviderExecutionEnabled() && !properties.isProductionProviderExecutionApproved()) {
@@ -59,7 +70,7 @@ public class RefundExecutionWorker {
     public void process() {
         boolean createEnabled = properties.isProviderExecutionEnabled();
         boolean reconcileEnabled = properties.isReconciliationEnabled();
-        if (!paymentProviderProperties.sandbox()) {
+        if (production()) {
             createEnabled = createEnabled && properties.isProductionProviderExecutionApproved();
             reconcileEnabled = reconcileEnabled && properties.isProductionReconciliationApproved();
         }
@@ -81,11 +92,24 @@ public class RefundExecutionWorker {
         }
     }
 
+    private boolean production() {
+        return paymentRoutingProperties.razorpay()
+            ? razorpayProviderProperties.production()
+            : !paymentProviderProperties.sandbox();
+    }
+
     private void processOne(RefundWorkItem workItem) {
         try {
-            ProviderRefundResult result = workItem.cfRefundId() == null
-                ? cashfreeRefundClient.createRefund(workItem)
-                : cashfreeRefundClient.getRefund(workItem);
+            ProviderRefundResult result;
+            if ("RAZORPAY".equalsIgnoreCase(workItem.provider())) {
+                result = workItem.providerRefundId() == null
+                    ? razorpayRefundClient.createRefund(workItem)
+                    : razorpayRefundClient.getRefund(workItem);
+            } else {
+                result = workItem.providerRefundId() == null
+                    ? cashfreeRefundClient.createRefund(workItem)
+                    : cashfreeRefundClient.getRefund(workItem);
+            }
             applyResult(workItem, result);
         } catch (RefundProviderNonRetryableException exception) {
             markFailure(workItem, exception, true);
@@ -130,7 +154,7 @@ public class RefundExecutionWorker {
                 nextAttemptAt = now;
             }
             default -> throw new RefundProviderTransientException(
-                "Cashfree returned unsupported refund status " + providerStatus
+                "Payment provider returned unsupported refund status " + providerStatus
             );
         }
 

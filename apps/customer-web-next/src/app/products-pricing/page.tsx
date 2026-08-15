@@ -148,7 +148,7 @@ export default async function ProductsPricingPage() {
         <div className="mt-10 rounded-3xl bg-[#111111] p-7 text-white">
           <h2 className="font-display text-2xl font-bold">How the final price is confirmed</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70">
-            Browse the live marketplace, add available dishes to your cart, and review checkout before paying. Craves creates the Cashfree payment order from the server-side checkout total; the customer client cannot choose a different payable amount.
+            Browse the live marketplace, add available dishes to your cart, and review checkout before paying. Craves creates the Razorpay payment order from the server-side checkout total; the customer client cannot choose a different payable amount.
           </p>
         </div>
       </section>

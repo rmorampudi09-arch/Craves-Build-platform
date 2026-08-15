@@ -2,7 +2,7 @@
 
 - Authentication tokens are server-only, HTTP-only cookies.
 - Mutating BFF routes require same-origin requests.
-- Cashfree secrets and Firebase Admin credentials do not belong in this repository or its environment files.
+- Razorpay secrets and Firebase Admin credentials do not belong in this repository or its environment files.
 - `sharp` is pinned and overridden to `0.35.3` so Next.js uses the patched libvips dependency.
 
 ## Current upstream audit exception

@@ -47,7 +47,7 @@ export default function ContactPage() {
           </p>
         ) : (
           <p data-craves-contact-phone-status="pending" className="font-semibold text-[#B54708]">
-            The public support phone is pending production configuration. Cashfree production activation remains blocked until it is configured.
+            The public support phone is pending production configuration. Razorpay live activation remains blocked until it is configured.
           </p>
         )}
         <p>Please include your Craves order reference when one is available. Never send a card number, CVV, UPI PIN, OTP, password, or API secret by email.</p>
@@ -64,7 +64,7 @@ export default function ContactPage() {
           <p>Registered business / merchant name: <strong>{businessName}</strong></p>
         ) : (
           <p data-craves-business-name-status="pending" className="font-semibold text-[#B54708]">
-            The registered merchant name is pending production configuration. Cashfree production activation remains blocked until it is configured.
+            The registered merchant name is pending production configuration. Razorpay live activation remains blocked until it is configured.
           </p>
         )}
       </PolicySection>

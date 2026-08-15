@@ -25,14 +25,32 @@ import { CheckoutHeader } from "@/components/checkout/CheckoutHeader";
 
 declare global {
   interface Window {
-    Cashfree?: (options: { mode: "sandbox" | "production" }) => {
-      checkout(options: {
-        paymentSessionId: string;
-        redirectTarget: "_modal" | "_self" | "_blank" | "_top";
-      }): Promise<unknown>;
-    };
+    Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayCheckout;
   }
 }
+
+type RazorpaySuccess = {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+};
+
+type RazorpayCheckout = {
+  open(): void;
+  on(event: "payment.failed", handler: (response: { error?: { description?: string } }) => void): void;
+};
+
+type RazorpayCheckoutOptions = {
+  key: string;
+  amount: number;
+  currency: string;
+  order_id: string;
+  name: string;
+  description: string;
+  handler(response: RazorpaySuccess): void;
+  modal: { ondismiss(): void };
+  theme: { color: string };
+};
 
 function money(amount: number, currency: string): string {
   try {
@@ -46,39 +64,31 @@ function money(amount: number, currency: string): string {
   }
 }
 
-function cashfreeMode(): "sandbox" | "production" {
-  const mode = process.env.NEXT_PUBLIC_CASHFREE_MODE;
-  if (mode !== "sandbox" && mode !== "production") {
-    throw new Error("Cashfree checkout mode is not configured.");
-  }
-  return mode;
-}
-
-function loadCashfree(): Promise<void> {
+function loadRazorpay(): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (window.Cashfree) {
+    if (window.Razorpay) {
       resolve();
       return;
     }
     const existing = document.querySelector<HTMLScriptElement>(
-      'script[data-craves-cashfree="v3"]',
+      'script[data-craves-razorpay="checkout-v1"]',
     );
     if (existing) {
       existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener(
         "error",
-        () => reject(new Error("Cashfree checkout could not be loaded.")),
+        () => reject(new Error("Razorpay checkout could not be loaded.")),
         { once: true },
       );
       return;
     }
     const script = document.createElement("script");
-    script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
-    script.dataset.cravesCashfree = "v3";
+    script.dataset.cravesRazorpay = "checkout-v1";
     script.referrerPolicy = "strict-origin";
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Cashfree checkout could not be loaded."));
+    script.onerror = () => reject(new Error("Razorpay checkout could not be loaded."));
     document.head.appendChild(script);
   });
 }
@@ -97,7 +107,7 @@ function statusLabel(status: PaymentStatus | null): string {
   return status.replaceAll("_", " ").toLocaleLowerCase("en-IN");
 }
 
-export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
+export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
   const [checkout, setCheckout] = useState<CustomerCheckout | null>(null);
   const [payment, setPayment] = useState<CustomerPaymentSession | null>(null);
   const [status, setStatus] = useState<PaymentStatus | null>(null);
@@ -133,7 +143,7 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
           ? "This checkout is already paid."
           : parsed.status === "CANCELLED"
             ? "This checkout was cancelled and cannot be paid."
-            : "Ready to create a secure Cashfree payment order.",
+            : "Ready to create a secure Razorpay payment order.",
       );
     } catch (caught) {
       setCheckout(null);
@@ -168,7 +178,7 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
     return parsed;
   }
 
-  async function verifyPayment(paymentOrderId = payment?.paymentOrderId) {
+  async function verifyPayment(result: RazorpaySuccess, paymentOrderId = payment?.paymentOrderId) {
     if (!paymentOrderId) {
       setError("Create the payment order before verification.");
       return;
@@ -179,7 +189,16 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
     try {
       const response = await fetch(
         `/api/payments/orders/${encodeURIComponent(paymentOrderId)}/verify`,
-        { method: "POST", credentials: "same-origin" },
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            providerOrderId: result.razorpay_order_id,
+            providerPaymentId: result.razorpay_payment_id,
+            providerSignature: result.razorpay_signature,
+          }),
+        },
       );
       const raw = await response.json().catch(() => null);
       if (!response.ok) {
@@ -193,7 +212,7 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
       setMessage(
         verification.status === "PAID"
           ? "Payment verified. Your order is now available in My Orders."
-          : `Payment is currently ${statusLabel(verification.status)}. Complete Cashfree checkout and verify again.`,
+          : `Payment is currently ${statusLabel(verification.status)}. Complete Razorpay checkout and refresh again.`,
       );
     } catch (caught) {
       setError(
@@ -208,20 +227,36 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
     if (!checkout || checkout.status !== "PAYMENT_PENDING" || busy) return;
     setBusy(true);
     setError("");
-    setMessage("Preparing secure Cashfree checkout…");
+    setMessage("Preparing secure Razorpay checkout…");
     try {
       const nextPayment = await createPayment();
-      await loadCashfree();
-      if (!window.Cashfree) throw new Error("Cashfree checkout is unavailable.");
+      await loadRazorpay();
+      if (!window.Razorpay) throw new Error("Razorpay checkout is unavailable.");
+      if (!nextPayment.checkoutKeyId || !nextPayment.providerOrderId) {
+        throw new Error("Razorpay checkout configuration is incomplete.");
+      }
       setMessage(
-        "Complete payment inside the Cashfree window. Craves does not receive your card number, CVV or UPI PIN.",
+        "Complete payment inside the Razorpay window. Craves does not receive your card number, CVV or UPI PIN.",
       );
-      await window.Cashfree({ mode: cashfreeMode() }).checkout({
-        paymentSessionId: nextPayment.paymentSessionId,
-        redirectTarget: "_modal",
+      const result = await new Promise<RazorpaySuccess>((resolve, reject) => {
+        const instance = new window.Razorpay!({
+          key: nextPayment.checkoutKeyId!,
+          amount: Math.round(nextPayment.amount * 100),
+          currency: nextPayment.currency,
+          order_id: nextPayment.providerOrderId!,
+          name: "Craves",
+          description: `Craves checkout ${checkout.id.slice(-8).toUpperCase()}`,
+          handler: resolve,
+          modal: { ondismiss: () => reject(new Error("Razorpay checkout was closed before payment confirmation.")) },
+          theme: { color: "#F62E18" },
+        });
+        instance.on("payment.failed", (response) => {
+          reject(new Error(response.error?.description || "Razorpay payment failed."));
+        });
+        instance.open();
       });
-      setMessage("Cashfree checkout closed. Verifying payment status…");
-      await verifyPayment(nextPayment.paymentOrderId);
+      setMessage("Razorpay returned a payment response. Verifying it with the Craves backend…");
+      await verifyPayment(result, nextPayment.paymentOrderId);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -269,7 +304,7 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
       <CheckoutHeader
         onBack={() => window.history.back()}
         title="Secure payment"
-        subtitle="Cashfree hosted checkout"
+        subtitle="Razorpay hosted checkout"
       />
       <main className="mx-auto max-w-4xl px-4 py-8 md:px-6">
         {loading ? (
@@ -322,10 +357,10 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
                   ? "Payment verified"
                   : cancelled
                     ? "Checkout cancelled"
-                    : "Pay through Cashfree"}
+                    : "Pay through Razorpay"}
               </h1>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Craves creates the payment order on the backend. Cashfree collects card, UPI and banking details in its hosted checkout.
+                Craves creates the payment order on the backend. Razorpay collects card, UPI and banking details in its hosted checkout.
               </p>
 
               <dl className="mt-6 space-y-3 rounded-2xl bg-cream p-5 text-sm">
@@ -365,7 +400,7 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
                   ) : (
                     <CreditCard className="h-4 w-4" aria-hidden="true" />
                   )}
-                  {busy ? "Processing…" : "Pay securely with Cashfree"}
+                  {busy ? "Processing…" : "Pay securely with Razorpay"}
                 </button>
               )}
 
@@ -374,16 +409,8 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void verifyPayment()}
-                    className="min-h-11 rounded-lg border border-primary px-4 text-sm font-semibold text-contrast-red hover:bg-secondary disabled:opacity-50"
-                  >
-                    Verify payment
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
                     onClick={() => void refreshStatus()}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-ink hover:border-primary disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-ink hover:border-primary disabled:opacity-50 sm:col-span-2"
                   >
                     <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh status
                   </button>
@@ -415,7 +442,7 @@ export function CashfreePayment({ checkoutId }: { checkoutId: string }) {
                   {statusLabel(status ?? (checkout.status === "PAID" ? "PAID" : null))}
                 </p>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Only the Craves backend determines whether a payment is paid. Closing the Cashfree window does not by itself confirm payment.
+                  Only the Craves backend determines whether a payment is paid. Closing the Razorpay window does not by itself confirm payment.
                 </p>
               </section>
               <Link

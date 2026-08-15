@@ -3,6 +3,7 @@ package in.craves.integration.web;
 import in.craves.integration.config.PaymentApiProperties;
 import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
+import in.craves.integration.subscription.SubscriptionPaymentModels.VerifySubscriptionPaymentRequest;
 import in.craves.integration.subscription.SubscriptionPaymentService;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -53,5 +54,15 @@ public class SubscriptionPaymentController {
     ) {
         apiProperties.requireOrderExecutionEnabled();
         return service.createProviderOrder(authorization, invoiceId, request);
+    }
+
+    @PostMapping("/invoices/{invoiceId}/verify")
+    public SubscriptionPaymentResponse verify(
+        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+        @PathVariable UUID invoiceId,
+        @RequestBody VerifySubscriptionPaymentRequest request
+    ) {
+        apiProperties.requireOrderExecutionEnabled();
+        return service.verifyRazorpay(authorization, invoiceId, request);
     }
 }

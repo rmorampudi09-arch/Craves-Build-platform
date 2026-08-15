@@ -24,8 +24,10 @@ public final class PaymentDtos {
         UUID paymentOrderId,
         UUID checkoutId,
         String cravesPaymentOrderRef,
-        String cashfreeOrderId,
-        String cfOrderId,
+        String provider,
+        String providerOrderId,
+        String providerPaymentId,
+        String checkoutKeyId,
         String paymentSessionId,
         BigDecimal amount,
         String currency,
@@ -38,8 +40,9 @@ public final class PaymentDtos {
         UUID checkoutId,
         UUID customerIdentityId,
         String cravesPaymentOrderRef,
-        String cashfreeOrderId,
-        String cfOrderId,
+        String provider,
+        String providerOrderId,
+        String providerPaymentId,
         BigDecimal amount,
         String currency,
         PaymentOrderStatus status,
@@ -48,5 +51,16 @@ public final class PaymentDtos {
         Instant updatedAt
     ) {}
 
-    public record VerifyPaymentResponse(UUID paymentOrderId, PaymentOrderStatus status, String providerStatus) {}
+    public record VerifyPaymentRequest(
+        String providerOrderId,
+        String providerPaymentId,
+        String providerSignature
+    ) {}
+
+    public record VerifyPaymentResponse(
+        UUID paymentOrderId,
+        PaymentOrderStatus status,
+        String providerStatus,
+        String providerPaymentId
+    ) {}
 }

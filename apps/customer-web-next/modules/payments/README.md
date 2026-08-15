@@ -1,10 +1,10 @@
-# Customer Web Cashfree Payment
+# Customer Web Razorpay Payment
 
-Adds customer-owned payment order creation, hosted Cashfree checkout, status read and backend verification.
+Adds customer-owned payment order creation, Razorpay Checkout, status read and backend verification.
 
 ## Security fix
 
-Integration Service now requires a Bearer token for payment create, read and verify. Before returning a payment or calling Cashfree verify, it loads the checkout through Order Service with the same token and confirms the checkout customer matches the payment record.
+Integration Service requires a Bearer token for payment create, read and verify. Before returning or verifying a payment, it loads the checkout through Order Service with the same token and confirms the checkout customer matches the payment record.
 
 ## Customer routes
 
@@ -13,24 +13,25 @@ Integration Service now requires a Bearer token for payment create, read and ver
 - `GET /api/payments/orders/{paymentOrderId}`
 - `POST /api/payments/orders/{paymentOrderId}/verify`
 
-## Cashfree integration
+## Razorpay integration
 
-The browser loads `https://sdk.cashfree.com/js/v3/cashfree.js` directly, creates the SDK in an explicit `sandbox` or `production` mode and opens hosted checkout with the backend-issued `paymentSessionId`. Cashfree client ID and secret remain only in Integration Service configuration.
+The browser loads `https://checkout.razorpay.com/v1/checkout.js` directly and opens Checkout with the backend-issued order ID and public key ID. The key secret and webhook secret remain only in Integration Service Key Vault-backed configuration. The backend verifies every checkout signature and webhook signature before changing payment state.
 
 ## Pipelines
 
-- `azure-pipelines-customer-payments-ci.yml`
-- `azure-pipelines-customer-payments-apim.yml`
-- existing guarded customer-web deployment pipeline with `cashfreeMode`
+- `azure-pipelines-razorpay-production-ci.yml`
+- `azure-pipelines-razorpay-webhook-apim.yml`
+- `azure-pipelines-razorpay-environment.yml`
+- `azure-pipelines-razorpay-customer-web.yml`
+- `azure-pipelines-razorpay-production-rollback.yml`
 
 ## Manual steps later
 
 - Run combined Java/web CI.
 - Deploy Integration Service ownership fix before exposing APIM read/verify.
 - Configure APIM customer payment operations.
-- Keep Cashfree mode `sandbox` until controlled tests pass.
-- Whitelist the final web domain in Cashfree.
+- Keep Razorpay mode `sandbox` until controlled tests pass.
 - Register and verify the webhook separately.
-- Do not paste Cashfree secrets into chat or repository.
+- Keep Razorpay secrets in Key Vault and out of the repository.
 
-No payment was created and no Cashfree API was called during development.
+Cashfree runtime execution remains disabled while its domain verification is pending.

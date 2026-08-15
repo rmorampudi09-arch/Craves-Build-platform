@@ -10,14 +10,15 @@ import {
 
 declare global {
   interface Window {
-    Cashfree?: (options: { mode: "sandbox" | "production" }) => {
-      checkout(options: {
-        paymentSessionId: string;
-        redirectTarget: "_modal" | "_self" | "_blank" | "_top";
-      }): Promise<unknown>;
-    };
+    Razorpay?: new (options: RazorpayOptions) => { open(): void; on(event: "payment.failed", handler: (response: { error?: { description?: string } }) => void): void };
   }
 }
+
+type RazorpaySuccess = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
+type RazorpayOptions = {
+  key: string; amount: number; currency: string; order_id: string; name: string; description: string;
+  handler(response: RazorpaySuccess): void; modal: { ondismiss(): void }; theme: { color: string };
+};
 
 const INVOICE_ATTEMPTS = 30;
 const INVOICE_WAIT_MS = 3_000;
@@ -38,25 +39,25 @@ function money(amount: number, currency: string): string {
   }
 }
 
-function loadCashfree(): Promise<void> {
+function loadRazorpay(): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (window.Cashfree) {
+    if (window.Razorpay) {
       resolve();
       return;
     }
-    const existing = document.querySelector<HTMLScriptElement>('script[data-craves-subscription-cashfree="v3"]');
+    const existing = document.querySelector<HTMLScriptElement>('script[data-craves-subscription-razorpay="v1"]');
     if (existing) {
       existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("Cashfree sandbox checkout could not be loaded.")), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Razorpay checkout could not be loaded.")), { once: true });
       return;
     }
     const script = document.createElement("script");
-    script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
-    script.dataset.cravesSubscriptionCashfree = "v3";
+    script.dataset.cravesSubscriptionRazorpay = "v1";
     script.referrerPolicy = "strict-origin";
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Cashfree sandbox checkout could not be loaded."));
+    script.onerror = () => reject(new Error("Razorpay checkout could not be loaded."));
     document.head.appendChild(script);
   });
 }
@@ -98,7 +99,7 @@ async function loadPayment(subscriptionId: string): Promise<SubscriptionPayment 
   return payment;
 }
 
-export function SubscriptionCashfreePayment({ subscriptionId }: { subscriptionId: string }) {
+export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId: string }) {
   const [subscription, setSubscription] = useState<CustomerSubscription | null>(null);
   const [payment, setPayment] = useState<SubscriptionPayment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,7 +133,7 @@ export function SubscriptionCashfreePayment({ subscriptionId }: { subscriptionId
         setMessage(
           current.status === "PAID"
             ? "Payment is confirmed. Checking subscription activation…"
-            : "Your invoice is ready. Continue with Cashfree sandbox when you are ready.",
+            : "Your invoice is ready. Continue with Razorpay when you are ready.",
         );
         if (current.status === "PAID") await waitForActivation();
         return current;
@@ -207,7 +208,7 @@ export function SubscriptionCashfreePayment({ subscriptionId }: { subscriptionId
     return latest;
   }
 
-  async function openCashfreeSandbox() {
+  async function openRazorpay() {
     if (busy) return;
     setBusy(true);
     setError("");
@@ -232,10 +233,10 @@ export function SubscriptionCashfreePayment({ subscriptionId }: { subscriptionId
       );
       const body = await response.json().catch(() => null);
       if (response.status === 401) throw new Error("Your session expired. Sign in again.");
-      if (!response.ok) throw new Error(responseMessage(body, "Cashfree sandbox payment order could not be created."));
+      if (!response.ok) throw new Error(responseMessage(body, "Razorpay payment order could not be created."));
       const ordered = parseSubscriptionPayment(body);
       if (!ordered || ordered.subscriptionId !== subscriptionId || ordered.invoiceId !== currentPayment.invoiceId) {
-        throw new Error("Craves returned an invalid Cashfree subscription payment response.");
+        throw new Error("Craves returned an invalid Razorpay subscription payment response.");
       }
       currentPayment = ordered;
       setPayment(ordered);
@@ -244,30 +245,45 @@ export function SubscriptionCashfreePayment({ subscriptionId }: { subscriptionId
         await waitForActivation();
         return;
       }
-      if (!ordered.paymentSessionId) {
-        throw new Error("Cashfree sandbox did not return a payment session. Nothing was charged.");
+      if (!ordered.checkoutKeyId || !ordered.providerOrderId) {
+        throw new Error("Razorpay did not return a valid checkout session. Nothing was charged.");
       }
 
-      setMessage("Opening Cashfree sandbox. No real money will be charged.");
-      await loadCashfree();
-      if (!window.Cashfree) throw new Error("Cashfree sandbox checkout is unavailable.");
-      await window.Cashfree({ mode: "sandbox" }).checkout({
-        paymentSessionId: ordered.paymentSessionId,
-        redirectTarget: "_modal",
+      setMessage("Opening secure Razorpay checkout.");
+      await loadRazorpay();
+      if (!window.Razorpay) throw new Error("Razorpay checkout is unavailable.");
+      const result = await new Promise<RazorpaySuccess>((resolve, reject) => {
+        const checkout = new window.Razorpay!({
+          key: ordered.checkoutKeyId!, amount: Math.round(ordered.amount * 100), currency: ordered.currency,
+          order_id: ordered.providerOrderId!, name: "Craves", description: `Meal-plan invoice ${ordered.invoiceId.slice(-8).toUpperCase()}`,
+          handler: resolve, modal: { ondismiss: () => reject(new Error("Razorpay checkout was closed before payment confirmation.")) },
+          theme: { color: "#6930CA" },
+        });
+        checkout.on("payment.failed", response => reject(new Error(response.error?.description || "Razorpay payment failed.")));
+        checkout.open();
       });
-
-      setMessage("Cashfree checkout closed. Waiting for the signed webhook confirmation…");
+      const verificationResponse = await fetch(`/api/subscription-payments/invoices/${encodeURIComponent(ordered.invoiceId)}/verify`, {
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscriptionId, providerOrderId: result.razorpay_order_id,
+          providerPaymentId: result.razorpay_payment_id, providerSignature: result.razorpay_signature }),
+      });
+      const verificationBody = await verificationResponse.json().catch(() => null);
+      if (!verificationResponse.ok) throw new Error(responseMessage(verificationBody, "Razorpay payment verification failed."));
+      const verified = parseSubscriptionPayment(verificationBody);
+      if (!verified || verified.invoiceId !== ordered.invoiceId) throw new Error("Craves returned an invalid verification response.");
+      setPayment(verified);
+      setMessage("Razorpay checkout completed. Confirming subscription activation…");
       const settled = await pollPaymentAfterCheckout();
       if (settled?.status === "PAID") {
         setMessage("Payment confirmed. Activating your meal subscription…");
         await waitForActivation();
       } else if (settled?.status === "FAILED") {
-        setMessage("The sandbox payment was not completed. You can retry safely; no successful charge was recorded.");
+        setMessage("The payment was not completed. You can retry safely; no successful charge was recorded.");
       } else {
-        setMessage("Cashfree confirmation is still pending. Use Refresh payment status; do not create a second subscription.");
+        setMessage("Razorpay confirmation is still pending. Use Refresh payment status; do not create a second subscription.");
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Cashfree sandbox checkout could not be opened.");
+      setError(caught instanceof Error ? caught.message : "Razorpay checkout could not be opened.");
     } finally {
       setBusy(false);
     }
@@ -280,12 +296,12 @@ export function SubscriptionCashfreePayment({ subscriptionId }: { subscriptionId
 
   return (
     <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 shadow-xl shadow-black/10 sm:p-8">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">Meal-plan payment · Cashfree sandbox</p>
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">Meal-plan payment · Razorpay secure checkout</p>
       <h2 className="mt-3 text-3xl font-bold">
         {active ? "Subscription active" : paid ? "Payment confirmed" : "Complete your meal-plan payment"}
       </h2>
       <p className="mt-3 text-sm leading-6 text-slate-600">
-        This payment flow is locked to Cashfree sandbox. Card, UPI and banking details stay inside Cashfree hosted checkout.
+        Card, UPI and banking details stay inside Razorpay hosted checkout. Craves verifies every payment server-side.
       </p>
 
       <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
@@ -319,10 +335,10 @@ export function SubscriptionCashfreePayment({ subscriptionId }: { subscriptionId
           <button
             type="button"
             disabled={busy}
-            onClick={() => void openCashfreeSandbox()}
+            onClick={() => void openRazorpay()}
             className="rounded-2xl bg-[#6930CA] px-5 py-3 font-bold text-white disabled:opacity-50"
           >
-            {busy ? "Processing…" : payment?.status === "FAILED" ? "Retry in Cashfree sandbox" : "Pay with Cashfree sandbox"}
+            {busy ? "Processing…" : payment?.status === "FAILED" ? "Retry with Razorpay" : "Pay with Razorpay"}
           </button>
         )}
         {!active && !terminal && !payment && (

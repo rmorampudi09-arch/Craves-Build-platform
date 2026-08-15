@@ -59,6 +59,15 @@ public interface DeliveryProviderAdapter {
         UNSUPPORTED
     }
 
+    /**
+     * Canonical delivery stop. The original free-form address remains authoritative for providers
+     * that accept it directly (for example Borzo). The additive structured fields preserve address
+     * data that Order Service already owns and are required by providers such as Shiprocket.
+     *
+     * <p>The eight-argument constructor is intentionally retained so older tests, stored command
+     * payloads and provider code remain source/backward compatible. Missing additive JSON fields
+     * deserialize as {@code null}.</p>
+     */
     record Stop(
         String address,
         String contactName,
@@ -67,8 +76,44 @@ public interface DeliveryProviderAdapter {
         BigDecimal longitude,
         OffsetDateTime requiredStart,
         OffsetDateTime requiredFinish,
-        String note
-    ) {}
+        String note,
+        String addressLine1,
+        String addressLine2,
+        String landmark,
+        String area,
+        String city,
+        String state,
+        String postalCode,
+        String country
+    ) {
+        public Stop(String address,
+                    String contactName,
+                    String contactPhone,
+                    BigDecimal latitude,
+                    BigDecimal longitude,
+                    OffsetDateTime requiredStart,
+                    OffsetDateTime requiredFinish,
+                    String note) {
+            this(
+                address,
+                contactName,
+                contactPhone,
+                latitude,
+                longitude,
+                requiredStart,
+                requiredFinish,
+                note,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            );
+        }
+    }
 
     record QuoteRequest(
         String matter,

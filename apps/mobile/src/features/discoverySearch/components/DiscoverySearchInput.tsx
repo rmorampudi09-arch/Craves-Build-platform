@@ -16,6 +16,7 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
+import {Icon} from '../../../shared/components/Icon';
 
 interface DiscoverySearchInputProps {
   accessibilityLabel: string;
@@ -38,6 +39,9 @@ export function DiscoverySearchInput({
 
   return (
     <View style={[styles.container, style]}>
+      <View pointerEvents="none" style={styles.searchIcon}>
+        <Icon name="search" size={18} color={colors.textSecondary} />
+      </View>
       <TextInput
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="search"
@@ -68,15 +72,25 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
   },
+  searchIcon: {
+    position: 'absolute',
+    left: spacing.sm,
+    top: 0,
+    bottom: 0,
+    zIndex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   input: {
-    minHeight: touchTarget.comfortable,
+    minHeight: touchTarget.minimum,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.white,
     color: colors.textPrimary,
-    fontSize: typography.body,
-    paddingHorizontal: spacing.md,
+    fontSize: typography.small,
+    paddingLeft: 40,
+    paddingRight: spacing.md,
   },
   inputWithClear: {
     paddingRight: 68,
@@ -92,7 +106,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   clearPressed: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surfaceMuted,
   },
   clearText: {
     color: colors.flameRedAccessible,

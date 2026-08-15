@@ -7,16 +7,19 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
 import type {CustomerHomeStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
+import {classifyResponsiveWidth, responsiveLayout} from '../../../design/responsive';
 import {
   colors,
   elevation,
@@ -27,6 +30,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
+import {Icon} from '../../../shared/components/Icon';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
 import {
   OfflineNotice,
@@ -110,6 +114,20 @@ function DishCard({
   const kitchenName = dish.kitchenDisplayName ?? dish.kitchenName;
   const location = [dish.areaName, dish.city].filter(Boolean).join(', ');
   const quantity = cartLine?.quantity ?? 0;
+  const foodTypeLabel =
+    dish.foodType === 'NON_VEG' ? 'Non-veg' : dish.foodType === 'EGG' ? 'Egg' : 'Veg';
+  const foodTypeColor =
+    dish.foodType === 'VEG'
+      ? colors.success
+      : dish.foodType === 'EGG'
+        ? colors.warning
+        : colors.error;
+  const spiceLabel = dish.spiceLevel
+    ? `${dish.spiceLevel.charAt(0)}${dish.spiceLevel.slice(1).toLowerCase()} spice`
+    : null;
+  const hasExtraMetadata = Boolean(
+    dish.preparationTimeMinutes || dish.servesCount || spiceLabel,
+  );
 
   return (
     <View style={styles.dishCard}>
@@ -132,31 +150,52 @@ function DishCard({
           </View>
         )}
       </Pressable>
+
       <View style={styles.dishBody}>
-        <View style={styles.dishTitleRow}>
-          <Pressable
-            accessibilityLabel={`Open ${dish.itemName}`}
-            accessibilityRole="button"
-            onPress={() => onOpen(dish.id)}
-            style={({pressed}) => [styles.dishTitleCopy, pressed && styles.dishOpenPressed]}>
-            <Text numberOfLines={2} style={styles.dishName}>
-              {dish.itemName}
-            </Text>
-            <Text numberOfLines={1} style={styles.kitchenName}>
-              {kitchenName}
-            </Text>
-          </Pressable>
-          <Text style={styles.price}>{formatDishPrice(dish.price, dish.currency)}</Text>
+        <Pressable
+          accessibilityLabel={`Open ${dish.itemName}`}
+          accessibilityRole="button"
+          onPress={() => onOpen(dish.id)}
+          style={({pressed}) => pressed && styles.dishOpenPressed}>
+          <Text numberOfLines={2} style={styles.dishName}>
+            {dish.itemName}
+          </Text>
+          <Text numberOfLines={1} style={styles.kitchenName}>
+            {kitchenName}
+          </Text>
+        </Pressable>
+
+        <View style={styles.metadataRow}>
+          <Icon name="location" size={14} color={colors.textSecondary} />
+          <Text numberOfLines={1} style={styles.metadata}>
+            {[formatDistance(dish.distanceMeters), location].filter(Boolean).join(' · ')}
+          </Text>
         </View>
-        <Text numberOfLines={1} style={styles.metadata}>
-          {[formatDistance(dish.distanceMeters), location].filter(Boolean).join(' • ')}
-        </Text>
-        <View style={styles.dishFooter}>
-          <View style={styles.foodTypePill}>
-            <Text style={styles.foodTypeText}>
-              {dish.foodType === 'NON_VEG' ? 'Non-veg' : dish.foodType === 'EGG' ? 'Egg' : 'Veg'}
-            </Text>
+
+        {hasExtraMetadata ? (
+          <View style={styles.detailRow}>
+            {dish.preparationTimeMinutes ? (
+              <View style={styles.detailItem}>
+                <Icon name="clock" size={14} color={colors.textSecondary} />
+                <Text style={styles.detailText}>{dish.preparationTimeMinutes} min</Text>
+              </View>
+            ) : null}
+            {dish.servesCount ? (
+              <Text style={styles.detailText}>Serves {dish.servesCount}</Text>
+            ) : null}
+            {spiceLabel ? <Text style={styles.detailText}>{spiceLabel}</Text> : null}
           </View>
+        ) : null}
+
+        <View style={styles.dishFooter}>
+          <View style={styles.priceGroup}>
+            <Text style={styles.price}>{formatDishPrice(dish.price, dish.currency)}</Text>
+            <View style={styles.foodTypePill}>
+              <View style={[styles.foodTypeDot, {backgroundColor: foodTypeColor}]} />
+              <Text style={styles.foodTypeText}>{foodTypeLabel}</Text>
+            </View>
+          </View>
+
           {cartLine && quantity > 0 ? (
             <View
               accessibilityLabel={`${dish.itemName} quantity ${quantity}`}
@@ -193,7 +232,7 @@ function DishCard({
             </View>
           ) : (
             <Button
-              label="Add"
+              label="+ Add"
               accessibilityLabel={`Add ${dish.itemName} to cart`}
               loading={adding}
               onPress={() => onAdd(dish.id)}
@@ -218,6 +257,15 @@ export function CustomerHomeScreen() {
   const storedFilters = useAppSelector(state => state.discoveryFilters.sessions.HOME);
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
+  const insets = useSafeAreaInsets();
+  const {width, fontScale} = useWindowDimensions();
+  const compactLayout =
+    classifyResponsiveWidth(width) === 'compact' ||
+    fontScale >= responsiveLayout.enlargedFontScale;
+  const listBottomPadding = Math.max(
+    spacing.xxxl * 3,
+    insets.bottom + touchTarget.comfortable + spacing.xxxl,
+  );
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -502,14 +550,16 @@ export function CustomerHomeScreen() {
           header.refreshNotifications();
         }}
       />
-      <View style={styles.heroCopy}>
+      <View style={[styles.heroCopy, compactLayout && styles.heroCopyCompact]}>
         <Text style={styles.greeting}>{greeting}</Text>
-        <Text style={styles.heading}>What are you craving today?</Text>
+        <Text accessibilityRole="header" style={styles.heading}>
+          What are you craving today?
+        </Text>
         <Text style={styles.subheading}>
           Fresh meals from active home kitchens around your selected location.
         </Text>
       </View>
-      <View style={styles.searchRow}>
+      <View style={[styles.searchRow, compactLayout && styles.searchRowCompact]}>
         <DiscoverySearchInput
           accessibilityLabel="Search nearby meals"
           onChangeText={handleSearchChange}
@@ -523,7 +573,11 @@ export function CustomerHomeScreen() {
           accessibilityLabel="Filters"
           accessibilityRole="button"
           onPress={openFilters}
-          style={({pressed}) => [styles.filterButton, pressed && styles.filterButtonPressed]}>
+          style={({pressed}) => [
+            styles.filterButton,
+            activeDiscoveryFilterCount > 0 && styles.filterButtonActive,
+            pressed && styles.filterButtonPressed,
+          ]}>
           <Text style={styles.filterButtonText}>
             {activeDiscoveryFilterCount > 0
               ? `Filters (${activeDiscoveryFilterCount})`
@@ -538,10 +592,8 @@ export function CustomerHomeScreen() {
         />
       ) : null}
       <View style={styles.sectionHeadingRow}>
-        <View>
-          <Text style={styles.sectionTitle}>Popular near you</Text>
-          <Text style={styles.sectionCaption}>Available meals ordered by distance</Text>
-        </View>
+        <Text style={styles.sectionTitle}>Popular near you</Text>
+        <Text style={styles.sectionCaption}>Available meals ordered by distance</Text>
       </View>
       {mutationError ? (
         <RecoverableErrorBanner message={mutationError} style={styles.inlineNotice} />
@@ -617,7 +669,10 @@ export function CustomerHomeScreen() {
         }}
         scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          {paddingBottom: listBottomPadding},
+        ]}
       />
       <CustomerLocationSelector
         visible={locationSelectorVisible}
@@ -630,17 +685,19 @@ export function CustomerHomeScreen() {
 const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
-    paddingBottom: spacing.xxl,
     backgroundColor: colors.surfaceBase,
   },
   heroCopy: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.xs,
+  },
+  heroCopyCompact: {
+    paddingTop: spacing.xxs,
   },
   greeting: {
-    color: colors.flameRed,
+    color: colors.flameRedAccessible,
     fontSize: typography.small,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.semibold,
   },
   heading: {
     color: colors.espressoBrown,
@@ -655,39 +712,45 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
   },
+  searchRowCompact: {
+    gap: spacing.xs,
+  },
   searchField: {
+    minWidth: 0,
     flex: 1,
   },
   filterButton: {
-    minHeight: touchTarget.comfortable,
-    paddingHorizontal: spacing.md,
+    minHeight: touchTarget.minimum,
+    minWidth: 78,
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: colors.flameRed,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    ...elevation.primaryAction,
+  },
+  filterButtonActive: {
+    borderColor: colors.flameRed,
+    backgroundColor: colors.iconSurface,
   },
   filterButtonPressed: {
-    opacity: 0.84,
+    backgroundColor: colors.surfaceMuted,
     transform: [{scale: 0.98}],
   },
   filterButtonText: {
-    color: colors.white,
+    color: colors.flameRedAccessible,
     fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-  },
-  categoryRow: {
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+    fontWeight: fontWeight.semibold,
   },
   sectionHeadingRow: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
   },
   sectionTitle: {
@@ -708,25 +771,26 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.white,
     overflow: 'hidden',
     ...elevation.card,
   },
   dishOpenPressed: {
-    opacity: 0.86,
+    opacity: 0.88,
   },
   dishImage: {
     width: '100%',
-    height: 176,
+    aspectRatio: 1.75,
     backgroundColor: colors.surfaceMuted,
   },
   imageFallback: {
-    height: 132,
+    width: '100%',
+    aspectRatio: 1.75,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surfaceMuted,
   },
   imageFallbackText: {
     color: colors.espressoBrown,
@@ -734,16 +798,9 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   dishBody: {
-    padding: spacing.md,
-  },
-  dishTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  dishTitleCopy: {
-    minWidth: 0,
-    flex: 1,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
   dishName: {
     color: colors.espressoBrown,
@@ -753,30 +810,70 @@ const styles = StyleSheet.create({
   kitchenName: {
     color: colors.textSecondary,
     fontSize: typography.small,
+    fontWeight: fontWeight.medium,
     marginTop: spacing.xxs,
   },
-  price: {
-    color: colors.flameRed,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
+  metadataRow: {
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    marginTop: spacing.xs,
   },
   metadata: {
+    minWidth: 0,
+    flex: 1,
     color: colors.textSecondary,
     fontSize: typography.small,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     marginTop: spacing.xs,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+  },
+  detailText: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.medium,
   },
   dishFooter: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
+  },
+  priceGroup: {
+    minWidth: 0,
+    flex: 1,
+    alignItems: 'flex-start',
+    gap: spacing.xxs,
+  },
+  price: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.extrabold,
   },
   foodTypePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
     borderRadius: radius.pill,
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    backgroundColor: colors.surfaceMuted,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xxs,
+  },
+  foodTypeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: radius.pill,
   },
   foodTypeText: {
     color: colors.espressoBrown,
@@ -784,40 +881,41 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   addButton: {
-    minHeight: 48,
-    minWidth: 104,
+    minHeight: touchTarget.minimum,
+    minWidth: 88,
+    paddingHorizontal: spacing.sm,
   },
   quantitySelector: {
-    minHeight: 48,
-    minWidth: 128,
+    minHeight: touchTarget.minimum,
+    minWidth: 120,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: colors.flameRed,
-    borderRadius: radius.pill,
+    borderRadius: radius.md,
     backgroundColor: colors.white,
     overflow: 'hidden',
   },
   quantityButton: {
-    width: 44,
-    minHeight: 46,
+    width: touchTarget.minimum,
+    minHeight: touchTarget.minimum,
     alignItems: 'center',
     justifyContent: 'center',
   },
   quantityButtonPressed: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.iconSurface,
   },
   quantityButtonDisabled: {
     opacity: 0.45,
   },
   quantityButtonText: {
-    color: colors.flameRed,
+    color: colors.flameRedAccessible,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
   },
   quantityText: {
-    minWidth: 28,
+    minWidth: 24,
     textAlign: 'center',
     color: colors.espressoBrown,
     fontSize: typography.body,
@@ -842,7 +940,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   skeletonHero: {
-    height: 96,
+    height: 88,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceMuted,
   },
@@ -859,7 +957,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   skeletonCard: {
-    height: 220,
+    aspectRatio: 1.25,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceMuted,
   },

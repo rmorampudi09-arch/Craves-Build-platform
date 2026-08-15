@@ -1,6 +1,13 @@
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
-import {colors, fontWeight, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {
+  colors,
+  fontWeight,
+  radius,
+  spacing,
+  touchTarget,
+  typography,
+} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {useCustomerHeaderState} from '../hooks/useCustomerHeaderState';
 
@@ -27,17 +34,23 @@ export function CustomerHeader({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Location: ${locationDisplayName}`}
+        accessibilityHint="Choose a different delivery location"
         hitSlop={spacing.xs}
         onPress={onPressLocation}
-        style={styles.locationButton}>
+        style={({pressed}) => [styles.locationButton, pressed && styles.locationPressed]}>
         <View style={styles.locationIcon}>
-          <Icon name="location" size={20} color={colors.flameRed} />
+          <Icon name="location" size={19} color={colors.flameRed} />
         </View>
         <View style={styles.locationCopy}>
           {!compact && <Text style={styles.eyebrow}>Delivering to</Text>}
-          <Text numberOfLines={1} style={styles.locationText}>
-            {locationDisplayName}
-          </Text>
+          <View style={styles.locationValueRow}>
+            <Text numberOfLines={1} style={styles.locationText}>
+              {locationDisplayName}
+            </Text>
+            <View style={styles.locationChevron}>
+              <Icon name="chevron" size={14} color={colors.textSecondary} />
+            </View>
+          </View>
         </View>
       </Pressable>
 
@@ -54,8 +67,11 @@ export function CustomerHeader({
         }
         hitSlop={spacing.xs}
         onPress={onPressNotifications}
-        style={styles.notificationButton}>
-        <Icon name="bell" size={22} color={colors.espressoBrown} />
+        style={({pressed}) => [
+          styles.notificationButton,
+          pressed && styles.notificationPressed,
+        ]}>
+        <Icon name="bell" size={21} color={colors.espressoBrown} />
         {badgeLabel ? (
           <View style={styles.badge} accessibilityElementsHidden>
             <Text style={styles.badgeText}>{badgeLabel}</Text>
@@ -68,12 +84,12 @@ export function CustomerHeader({
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: 68,
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     backgroundColor: colors.white,
   },
   containerCompact: {
@@ -87,10 +103,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    borderRadius: radius.md,
+  },
+  locationPressed: {
+    opacity: 0.78,
   },
   locationIcon: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -105,10 +125,21 @@ const styles = StyleSheet.create({
     fontSize: typography.tiny,
     fontWeight: fontWeight.medium,
   },
+  locationValueRow: {
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+  },
   locationText: {
+    minWidth: 0,
+    flexShrink: 1,
     color: colors.espressoBrown,
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
+  },
+  locationChevron: {
+    transform: [{rotate: '90deg'}],
   },
   title: {
     maxWidth: '34%',
@@ -122,6 +153,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  notificationPressed: {
+    backgroundColor: colors.surfaceMuted,
   },
   badge: {
     position: 'absolute',

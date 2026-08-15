@@ -57,13 +57,14 @@ export function HomeCategoryRail({
             accessibilityLabel={`${category} category`}
             accessibilityRole="button"
             accessibilityState={{selected}}
+            hitSlop={spacing.xxs}
             onPress={() => onSelect(filterValue)}
             style={({pressed}) => [styles.item, pressed && styles.itemPressed]}>
             <Image
               accessibilityIgnoresInvertColors
               resizeMode="cover"
               source={CATEGORY_IMAGES[category]}
-              style={styles.image}
+              style={[styles.image, selected && styles.imageSelected]}
             />
             <Text
               numberOfLines={2}
@@ -80,32 +81,39 @@ export function HomeCategoryRail({
 const styles = StyleSheet.create({
   row: {
     gap: spacing.md,
-    paddingHorizontal: spacing.md,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xl,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs,
   },
   item: {
     alignItems: 'center',
-    width: 76,
+    width: 72,
   },
   itemPressed: {
-    opacity: 0.82,
+    opacity: 0.8,
+    transform: [{scale: 0.98}],
   },
   image: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: 'transparent',
     backgroundColor: colors.surfaceMuted,
   },
+  imageSelected: {
+    borderColor: colors.flameRed,
+  },
   label: {
-    color: colors.espressoBrown,
+    color: colors.textSecondary,
     fontSize: typography.tiny,
     fontWeight: fontWeight.semibold,
     marginTop: spacing.xs,
     textAlign: 'center',
   },
-  // Selection intentionally changes only the label color; the food image stays unchanged.
   labelSelected: {
-    color: colors.flameRed,
+    color: colors.flameRedAccessible,
+    fontWeight: fontWeight.bold,
   },
 });

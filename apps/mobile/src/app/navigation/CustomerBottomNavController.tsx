@@ -33,6 +33,7 @@ import {resolveMotion} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {
   colors,
+  elevation,
   fontWeight,
   radius,
   spacing,
@@ -152,10 +153,6 @@ export function CustomerBottomNavVisibilityProvider({
   );
 }
 
-/**
- * React Navigation invokes the `tabBar` renderer as a callback. Keep that
- * callback hook-free and render a real component boundary before using hooks.
- */
 export function CustomerBottomTabBar(props: BottomTabBarProps) {
   return <CustomerBottomTabBarContent {...props} />;
 }
@@ -220,10 +217,7 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
       ]}>
       <View style={styles.shell}>
         <View style={styles.tabsArea}>
-          <BottomTabBar
-            {...props}
-            insets={{...props.insets, bottom: 0}}
-          />
+          <BottomTabBar {...props} insets={{...props.insets, bottom: 0}} />
         </View>
 
         {cartVisible ? (
@@ -268,8 +262,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.flameRed,
+    borderColor: colors.border,
     overflow: 'hidden',
+    ...elevation.card,
   },
   tabsArea: {
     flex: 1,
@@ -278,22 +273,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cartAction: {
-    width: 124,
-    height: 54,
+    width: 120,
+    minHeight: touchTarget.minimum,
+    height: 52,
     flexShrink: 0,
     alignSelf: 'center',
     marginLeft: spacing.xxs,
     marginRight: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.lg,
-    backgroundColor: colors.flameRed,
+    backgroundColor: colors.flameRedAccessible,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
   },
   cartActionPressed: {
-    opacity: 0.9,
+    opacity: 0.86,
+    transform: [{scale: 0.98}],
   },
   cartCopy: {
     flex: 1,
@@ -319,10 +316,6 @@ export interface CustomerBottomNavScrollBinding {
   readonly scrollEventThrottle: 16;
 }
 
-/**
- * Attach this binding to a vertical Customer tab-root ScrollView/FlatList/
- * FlashList. Focus reveals the bar while preserving the list's own offset.
- */
 export function useCustomerBottomNavScroll(): CustomerBottomNavScrollBinding {
   const {handleScrollOffset, show} = useCustomerBottomNavVisibilityContext();
 
@@ -349,7 +342,6 @@ export function useCustomerBottomNavScroll(): CustomerBottomNavScrollBinding {
   );
 }
 
-/** Tab focus/tab presses must always bring navigation back into view. */
 export function useCustomerBottomNavReveal() {
   return useCustomerBottomNavVisibilityContext().show;
 }

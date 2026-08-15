@@ -2,6 +2,15 @@ trigger: none
 pr: none
 
 parameters:
+  - name: targetEnvironment
+    type: string
+    default: SANDBOX
+    values:
+      - SANDBOX
+      - PRODUCTION
+  - name: enableProvider
+    type: boolean
+    default: false
   - name: activationStage
     type: string
     default: downstream
@@ -13,7 +22,7 @@ parameters:
     default: false
   - name: providerBaseUrl
     type: string
-    default: https://replace-before-run.invalid
+    default: https://robotapitest-in.borzodelivery.com/api/business/1.8
   - name: callbackUrl
     type: string
     default: https://replace-before-run.invalid
@@ -25,6 +34,7 @@ parameters:
     default: 0
 
 variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia
   containerApp: ca-craves-integration-service-pr
   serviceBusNamespace: sb-craves-prodlow-l3ing6
@@ -34,78 +44,166 @@ pool:
   vmImage: ubuntu-latest
 
 steps:
-  - checkout: none
+  - checkout: self
+    clean: true
+    persistCredentials: false
 
-  - ${{ if eq(parameters.confirmProductionActivation, true) }}:
-    - task: AzureCLI@2
-      displayName: Apply guarded delivery production stage
-      inputs:
-        azureSubscription: $(AZURE_SERVICE_CONNECTION)
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          set -euo pipefail
-          stage='${{ parameters.activationStage }}'
-          base_url='${{ parameters.providerBaseUrl }}'
-          callback_url='${{ parameters.callbackUrl }}'
+  - task: AzureCLI@2
+    displayName: Apply guarded Borzo environment switch
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
 
-          [[ "$base_url" == https://* ]] || { echo 'Provider base URL must use HTTPS.' >&2; exit 2; }
-          [[ "$callback_url" == https://* ]] || { echo 'Callback URL must use HTTPS.' >&2; exit 2; }
-          [[ "$base_url" != *test* && "$base_url" != *sandbox* ]] || { echo 'Production activation cannot use a test host.' >&2; exit 2; }
+        environment='${{ parameters.targetEnvironment }}'
+        enable_raw='${{ parameters.enableProvider }}'
+        enable="${enable_raw,,}"
+        stage='${{ parameters.activationStage }}'
+        confirm_raw='${{ parameters.confirmProductionActivation }}'
+        confirm="${confirm_raw,,}"
+        base_url='${{ parameters.providerBaseUrl }}'
+        callback_url='${{ parameters.callbackUrl }}'
+        app_yml='services/integration-service/src/main/resources/application.yml'
 
+        fail() {
+          echo "ERROR: $*" >&2
+          exit 2
+        }
+
+        [[ "$environment" == 'SANDBOX' || "$environment" == 'PRODUCTION' ]] || fail 'targetEnvironment must be SANDBOX or PRODUCTION.'
+        [[ "$enable" == 'true' || "$enable" == 'false' ]] || fail 'enableProvider must resolve to true or false.'
+
+        grep -Fq 'enabled: ${BORZO_API_ENABLED:false}' "$app_yml" || fail 'BORZO_API_ENABLED is not fail-closed in application.yml.'
+        grep -Fq 'environment: ${BORZO_API_ENVIRONMENT:SANDBOX}' "$app_yml" || fail 'BORZO_API_ENVIRONMENT does not default to SANDBOX.'
+        grep -Fq 'production-activation-approved: ${BORZO_PRODUCTION_ACTIVATION_APPROVED:false}' "$app_yml" || fail 'BORZO production approval does not default to false.'
+
+        if [[ "$environment" == 'PRODUCTION' ]]; then
+          [[ "$confirm" == 'true' ]] || fail 'Production switch requires confirmProductionActivation=true.'
+          [[ "$base_url" == https://* ]] || fail 'Production provider base URL must use HTTPS.'
+          [[ "$callback_url" == https://* ]] || fail 'Production callback URL must use HTTPS.'
+          [[ "$base_url" != *replace-before-run.invalid* ]] || fail 'Replace the production provider base URL placeholder.'
+          [[ "$callback_url" != *replace-before-run.invalid* ]] || fail 'Replace the production callback URL placeholder.'
+          [[ "$base_url" != *test* && "$base_url" != *sandbox* ]] || fail 'Production activation cannot use a test or sandbox host.'
+
+          if [[ "$enable" == 'true' ]]; then
+            [[ "$stage" == 'provider_create' ]] || fail 'PRODUCTION with enableProvider=true requires activationStage=provider_create.'
+          else
+            [[ "$stage" == 'downstream' ]] || fail 'PRODUCTION with enableProvider=false requires activationStage=downstream.'
+          fi
+        fi
+
+        if [[ "$environment" == 'SANDBOX' && "$enable" == 'true' ]]; then
+          [[ "$base_url" == https://* ]] || fail 'Sandbox provider base URL must use HTTPS.'
+          [[ "$callback_url" == https://* ]] || fail 'Sandbox callback URL must use HTTPS.'
+          [[ "$base_url" == *test* || "$base_url" == *sandbox* || "$base_url" == *robotapitest* ]] || fail 'Full sandbox activation must use a recognizable sandbox/test provider host.'
+          [[ "$callback_url" != *replace-before-run.invalid* ]] || fail 'Full sandbox activation requires a real callback URL.'
+        fi
+
+        requires_secrets=false
+        if [[ "$environment" == 'PRODUCTION' || "$enable" == 'true' ]]; then
+          requires_secrets=true
+        fi
+
+        if [[ "$requires_secrets" == 'true' ]]; then
           secrets="$(az containerapp secret list -g '$(resourceGroup)' -n '$(containerApp)' --query '[].name' -o tsv)"
-          grep -qx 'borzo-api-auth-token' <<<"$secrets" || { echo 'Missing Container App secret borzo-api-auth-token.' >&2; exit 2; }
-          grep -qx 'borzo-callback-token' <<<"$secrets" || { echo 'Missing Container App secret borzo-callback-token.' >&2; exit 2; }
+          grep -qx 'borzo-api-auth-token' <<<"$secrets" || fail 'Missing Container App secret borzo-api-auth-token.'
+          grep -qx 'borzo-callback-token' <<<"$secrets" || fail 'Missing Container App secret borzo-callback-token.'
+        fi
 
+        if [[ "$environment" == 'PRODUCTION' && "$stage" == 'provider_create' ]]; then
           active="$(az servicebus queue show -g '$(resourceGroup)' --namespace-name '$(serviceBusNamespace)' -n '$(deliveryQueue)' --query countDetails.activeMessageCount -o tsv)"
           dead="$(az servicebus queue show -g '$(resourceGroup)' --namespace-name '$(serviceBusNamespace)' -n '$(deliveryQueue)' --query countDetails.deadLetterMessageCount -o tsv)"
-          [[ "$active" == '${{ parameters.expectedQueueActiveCount }}' ]] || { echo "Unexpected delivery queue active count: $active" >&2; exit 2; }
-          [[ "$dead" == '${{ parameters.expectedQueueDeadLetterCount }}' ]] || { echo "Unexpected delivery queue DLQ count: $dead" >&2; exit 2; }
+          [[ "$active" == '${{ parameters.expectedQueueActiveCount }}' ]] || fail "Unexpected delivery queue active count: $active"
+          [[ "$dead" == '${{ parameters.expectedQueueDeadLetterCount }}' ]] || fail "Unexpected delivery queue DLQ count: $dead"
+        fi
 
-          env_json="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].env' -o json)"
-          current() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // .secretRef // "")' <<<"$env_json" | tail -1; }
-
-          [[ "$(current BORZO_API_ENABLED)" == 'false' ]] || { echo 'Borzo must be disabled before staged activation.' >&2; exit 2; }
-          [[ "$(current CRAVES_DELIVERY_COMMAND_ENABLED)" == 'false' ]] || { echo 'Delivery command must be disabled before staged activation.' >&2; exit 2; }
-
-          if [[ "$stage" == 'downstream' ]]; then
+        if [[ "$environment" == 'SANDBOX' ]]; then
+          if [[ "$enable" == 'false' ]]; then
             az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
               --set-env-vars \
-                BORZO_API_ENVIRONMENT=PRODUCTION \
-                BORZO_PRODUCTION_ACTIVATION_APPROVED=true \
+                BORZO_API_ENVIRONMENT=SANDBOX \
+                BORZO_PRODUCTION_ACTIVATION_APPROVED=false \
+                BORZO_API_ENABLED=false \
+                CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+          else
+            az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
+              --set-env-vars \
+                BORZO_API_ENVIRONMENT=SANDBOX \
+                BORZO_PRODUCTION_ACTIVATION_APPROVED=false \
                 BORZO_API_BASE_URL="$base_url" \
                 BORZO_CALLBACK_URL="$callback_url" \
                 BORZO_API_AUTH_TOKEN=secretref:borzo-api-auth-token \
                 BORZO_CALLBACK_TOKEN=secretref:borzo-callback-token \
-                BORZO_API_ENABLED=false \
-                CRAVES_DELIVERY_COMMAND_ENABLED=false \
+                BORZO_API_ENABLED=true \
                 CRAVES_DELIVERY_RECONCILIATION_ENABLED=true \
                 CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=true \
                 CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=true \
                 CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=true \
-                CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
-          else
-            for name in CRAVES_DELIVERY_RECONCILIATION_ENABLED CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED; do
-              [[ "$(current "$name")" == 'true' ]] || { echo "$name must already be true." >&2; exit 2; }
-            done
-            [[ "$(current BORZO_API_ENVIRONMENT)" == 'PRODUCTION' ]] || { echo 'Borzo environment is not PRODUCTION.' >&2; exit 2; }
-            [[ "$(current BORZO_PRODUCTION_ACTIVATION_APPROVED)" == 'true' ]] || { echo 'Production approval flag is not true.' >&2; exit 2; }
-            az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
-              --set-env-vars BORZO_API_ENABLED=true CRAVES_DELIVERY_COMMAND_ENABLED=true CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+                CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true \
+                CRAVES_DELIVERY_COMMAND_ENABLED=true >/dev/null
           fi
+        elif [[ "$stage" == 'downstream' ]]; then
+          az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
+            --set-env-vars \
+              BORZO_API_ENVIRONMENT=PRODUCTION \
+              BORZO_PRODUCTION_ACTIVATION_APPROVED=true \
+              BORZO_API_BASE_URL="$base_url" \
+              BORZO_CALLBACK_URL="$callback_url" \
+              BORZO_API_AUTH_TOKEN=secretref:borzo-api-auth-token \
+              BORZO_CALLBACK_TOKEN=secretref:borzo-callback-token \
+              BORZO_API_ENABLED=false \
+              CRAVES_DELIVERY_RECONCILIATION_ENABLED=true \
+              CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=true \
+              CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=true \
+              CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=true \
+              CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+        else
+          env_json="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].env' -o json)"
+          current() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // .secretRef // "")' <<<"$env_json" | tail -1; }
 
-          latest="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.latestRevisionName -o tsv)"
-          for _ in $(seq 1 60); do
-            active_revision="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.active -o tsv 2>/dev/null || true)"
-            provisioning="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.provisioningState -o tsv 2>/dev/null || true)"
-            replicas="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.replicas -o tsv 2>/dev/null || echo 0)"
-            [[ "$active_revision" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] && break
-            sleep 10
+          for name in CRAVES_DELIVERY_RECONCILIATION_ENABLED CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED; do
+            [[ "$(current "$name")" == 'true' ]] || fail "$name must already be true before provider_create."
           done
-          [[ "$active_revision" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] || { echo 'New revision did not become active and provisioned.' >&2; exit 2; }
+          [[ "$(current BORZO_API_ENVIRONMENT)" == 'PRODUCTION' ]] || fail 'Borzo environment is not PRODUCTION.'
+          [[ "$(current BORZO_PRODUCTION_ACTIVATION_APPROVED)" == 'true' ]] || fail 'Borzo production approval flag is not true.'
 
-  - ${{ if ne(parameters.confirmProductionActivation, true) }}:
-    - bash: |
-        echo 'confirmProductionActivation must be true.' >&2
-        exit 2
-      displayName: Block unconfirmed activation
+          az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
+            --set-env-vars \
+              BORZO_API_ENABLED=true \
+              CRAVES_DELIVERY_COMMAND_ENABLED=true \
+              CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+        fi
+
+        latest="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.latestRevisionName -o tsv)"
+        active_revision=''
+        provisioning=''
+        replicas='0'
+        for _ in $(seq 1 60); do
+          active_revision="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.active -o tsv 2>/dev/null || true)"
+          provisioning="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.provisioningState -o tsv 2>/dev/null || true)"
+          replicas="$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.replicas -o tsv 2>/dev/null || echo 0)"
+          [[ "$active_revision" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] && break
+          sleep 10
+        done
+        [[ "$active_revision" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] || fail 'New Integration Service revision did not become active and provisioned.'
+
+        values="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].env' -o json)"
+        value() { jq -r --arg name "$1" '.[] | select(.name == $name) | .value' <<<"$values" | tail -1; }
+        [[ "$(value BORZO_API_ENVIRONMENT)" == "$environment" ]] || fail 'Borzo environment verification failed.'
+        [[ "$(value BORZO_API_ENABLED)" == "$enable" ]] || fail 'Borzo enabled-state verification failed.'
+
+        echo '============================================================'
+        echo 'BORZO DELIVERY PROVIDER SWITCH: PASS'
+        echo "Environment: $environment"
+        echo "Provider enabled: $enable"
+        if [[ "$environment" == 'SANDBOX' && "$enable" == 'false' ]]; then
+          echo 'Mode: SIMPLE_SANDBOX'
+        elif [[ "$environment" == 'SANDBOX' ]]; then
+          echo 'Mode: FULL_SANDBOX'
+        else
+          echo "Mode: PRODUCTION_${stage^^}"
+        fi
+        echo '============================================================'

@@ -1,0 +1,149 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: targetEnvironment
+    type: string
+    default: SANDBOX
+    values:
+      - SANDBOX
+      - PRODUCTION
+  - name: enableProvider
+    type: boolean
+    default: false
+  - name: confirmProductionActivation
+    type: boolean
+    default: false
+  - name: providerBaseUrl
+    type: string
+    default: https://replace-before-run.invalid
+  - name: authSecretName
+    type: string
+    default: shiprocket-api-token
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: integrationContainerAppName
+    type: string
+    default: ca-craves-integration-service-pr
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    persistCredentials: false
+
+  - task: AzureCLI@2
+    displayName: Apply guarded Shiprocket environment switch
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+
+        RG='${{ parameters.resourceGroupName }}'
+        APP='${{ parameters.integrationContainerAppName }}'
+        environment='${{ parameters.targetEnvironment }}'
+        enable_raw='${{ parameters.enableProvider }}'
+        enable="${enable_raw,,}"
+        confirm_raw='${{ parameters.confirmProductionActivation }}'
+        confirm="${confirm_raw,,}"
+        base_url='${{ parameters.providerBaseUrl }}'
+        secret_name='${{ parameters.authSecretName }}'
+        app_yml='services/integration-service/src/main/resources/application.yml'
+
+        fail() {
+          echo "ERROR: $*" >&2
+          exit 2
+        }
+
+        [[ "$environment" == 'SANDBOX' || "$environment" == 'PRODUCTION' ]] || fail 'targetEnvironment must be SANDBOX or PRODUCTION.'
+        [[ "$enable" == 'true' || "$enable" == 'false' ]] || fail 'enableProvider must resolve to true or false.'
+
+        if [[ "$environment" == 'PRODUCTION' ]]; then
+          [[ "$confirm" == 'true' ]] || fail 'Production switch requires confirmProductionActivation=true.'
+        fi
+
+        runtime_config_present=false
+        if grep -Fq 'SHIPROCKET_API_ENABLED' "$app_yml" && grep -Fq 'SHIPROCKET_API_ENVIRONMENT' "$app_yml"; then
+          runtime_config_present=true
+        fi
+
+        if [[ "$enable" == 'true' || "$environment" == 'PRODUCTION' ]]; then
+          [[ "$runtime_config_present" == 'true' ]] || fail 'Shiprocket runtime configuration is not present in the current Spring Integration Service. Commit the Shiprocket adapter/config before enabling or switching production.'
+          [[ "$base_url" == https://* ]] || fail 'Shiprocket provider base URL must use HTTPS.'
+          [[ "$base_url" != *replace-before-run.invalid* ]] || fail 'Replace the Shiprocket provider base URL placeholder.'
+          if [[ "$environment" == 'PRODUCTION' ]]; then
+            [[ "$base_url" != *test* && "$base_url" != *sandbox* ]] || fail 'Shiprocket production cannot use a test/sandbox host.'
+          fi
+        fi
+
+        if [[ "$enable" == 'true' ]]; then
+          secrets="$(az containerapp secret list -g "$RG" -n "$APP" --query '[].name' -o tsv --only-show-errors)"
+          grep -qx "$secret_name" <<<"$secrets" || fail "Missing Container App secret $secret_name."
+        fi
+
+        if [[ "$enable" == 'false' ]]; then
+          approved=false
+          [[ "$environment" == 'PRODUCTION' ]] && approved=true
+          az containerapp update -g "$RG" -n "$APP" \
+            --set-env-vars \
+              SHIPROCKET_API_ENVIRONMENT="$environment" \
+              SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED="$approved" \
+              SHIPROCKET_API_ENABLED=false \
+              CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+        else
+          approved=false
+          [[ "$environment" == 'PRODUCTION' ]] && approved=true
+          az containerapp update -g "$RG" -n "$APP" \
+            --set-env-vars \
+              SHIPROCKET_API_ENVIRONMENT="$environment" \
+              SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED="$approved" \
+              SHIPROCKET_API_BASE_URL="$base_url" \
+              SHIPROCKET_API_AUTH_TOKEN="secretref:${secret_name}" \
+              SHIPROCKET_API_ENABLED=true \
+              CRAVES_DELIVERY_RECONCILIATION_ENABLED=true \
+              CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=true \
+              CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=true \
+              CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=true \
+              CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+        fi
+
+        latest="$(az containerapp show -g "$RG" -n "$APP" --query properties.latestRevisionName -o tsv --only-show-errors)"
+        active_revision=''
+        provisioning=''
+        replicas='0'
+        for _ in $(seq 1 60); do
+          active_revision="$(az containerapp revision show -g "$RG" -n "$APP" --revision "$latest" --query properties.active -o tsv --only-show-errors 2>/dev/null || true)"
+          provisioning="$(az containerapp revision show -g "$RG" -n "$APP" --revision "$latest" --query properties.provisioningState -o tsv --only-show-errors 2>/dev/null || true)"
+          replicas="$(az containerapp revision show -g "$RG" -n "$APP" --revision "$latest" --query properties.replicas -o tsv --only-show-errors 2>/dev/null || echo 0)"
+          [[ "$active_revision" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] && break
+          sleep 10
+        done
+        [[ "$active_revision" == 'true' && "$provisioning" == 'Provisioned' && "$replicas" -ge 1 ]] || fail 'New Integration Service revision did not become active and provisioned.'
+
+        env_json="$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].env' -o json --only-show-errors)"
+        value() { jq -r --arg name "$1" '.[] | select(.name == $name) | .value' <<<"$env_json" | tail -1; }
+        [[ "$(value SHIPROCKET_API_ENVIRONMENT)" == "$environment" ]] || fail 'Shiprocket environment verification failed.'
+        [[ "$(value SHIPROCKET_API_ENABLED)" == "$enable" ]] || fail 'Shiprocket enabled-state verification failed.'
+
+        echo '============================================================'
+        echo 'SHIPROCKET DELIVERY PROVIDER SWITCH: PASS'
+        echo "Environment: $environment"
+        echo "Provider enabled: $enable"
+        if [[ "$environment" == 'SANDBOX' && "$enable" == 'false' ]]; then
+          echo 'Mode: SIMPLE_SANDBOX'
+        elif [[ "$environment" == 'SANDBOX' ]]; then
+          echo 'Mode: FULL_SANDBOX'
+        else
+          echo 'Mode: PRODUCTION'
+        fi
+        echo "Spring runtime configuration detected: $runtime_config_present"
+        echo '============================================================'

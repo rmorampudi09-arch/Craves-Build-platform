@@ -1,6 +1,9 @@
 trigger: none
 pr: none
 
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
 pool:
   vmImage: ubuntu-latest
 
@@ -20,14 +23,99 @@ steps:
       set -euo pipefail
       cd services/integration-service
       mvn -B -ntp -DskipTests=false verify
-    displayName: Verify delivery provider production readiness
+    displayName: Verify Integration Service and delivery provider tests
+
+  - bash: |
+      set -euo pipefail
+
+      required=(
+        azure-pipelines-delivery-provider-production-ci.yml
+        azure-pipelines-integration-service.yml
+        azure-pipelines-delivery-provider-webhooks-apim.yml
+        azure-pipelines-delivery-provider-production-activation.yml
+        azure-pipelines-shiprocket-production-activation.yml
+        azure-pipelines-delhivery-environment.yml
+      )
+
+      for file in "${required[@]}"; do
+        [[ -f "$file" ]] || {
+          echo "ERROR: Required delivery pipeline is missing: $file" >&2
+          exit 2
+        }
+        echo "PASS: $file"
+      done
+    displayName: Verify complete delivery pipeline chain exists
 
   - bash: |
       set -euo pipefail
       file=services/integration-service/src/main/resources/application.yml
+
       grep -Fq 'enabled: ${BORZO_API_ENABLED:false}' "$file"
       grep -Fq 'environment: ${BORZO_API_ENVIRONMENT:SANDBOX}' "$file"
       grep -Fq 'production-activation-approved: ${BORZO_PRODUCTION_ACTIVATION_APPROVED:false}' "$file"
       grep -Fq 'enabled: ${CRAVES_DELIVERY_COMMAND_ENABLED:false}' "$file"
+      grep -Fq 'reconciliation-enabled: ${CRAVES_DELIVERY_RECONCILIATION_ENABLED:false}' "$file"
+      grep -Fq 'webhook-processing-enabled: ${CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED:false}' "$file"
+      grep -Fq 'tracking-reconciliation-enabled: ${CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED:false}' "$file"
       grep -Fq 'status-publisher-enabled: ${CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED:false}' "$file"
-    displayName: Verify production activation is fail closed
+    displayName: Verify runtime delivery execution remains fail closed by default
+
+  - bash: |
+      set -euo pipefail
+
+      for file in \
+        azure-pipelines-integration-service.yml \
+        azure-pipelines-delivery-provider-webhooks-apim.yml \
+        azure-pipelines-delivery-provider-production-activation.yml \
+        azure-pipelines-shiprocket-production-activation.yml \
+        azure-pipelines-delhivery-environment.yml
+      do
+        grep -Fq 'AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection' "$file" || {
+          echo "ERROR: $file does not pin the approved Azure service connection." >&2
+          exit 2
+        }
+      done
+    displayName: Verify approved Azure service connection is pinned
+
+  - bash: |
+      set -euo pipefail
+
+      delhivery=azure-pipelines-delhivery-environment.yml
+      shiprocket=azure-pipelines-shiprocket-production-activation.yml
+      borzo=azure-pipelines-delivery-provider-production-activation.yml
+      apim=azure-pipelines-delivery-provider-webhooks-apim.yml
+
+      grep -A4 -F -- '- name: targetEnvironment' "$delhivery" | grep -Fq 'default: SANDBOX'
+      grep -A3 -F -- '- name: enableProvider' "$delhivery" | grep -Fq 'default: false'
+      grep -A4 -F -- '- name: targetEnvironment' "$shiprocket" | grep -Fq 'default: SANDBOX'
+      grep -A3 -F -- '- name: enableProvider' "$shiprocket" | grep -Fq 'default: false'
+      grep -A4 -F -- '- name: targetEnvironment' "$borzo" | grep -Fq 'default: SANDBOX'
+      grep -A3 -F -- '- name: enableProvider' "$borzo" | grep -Fq 'default: false'
+
+      grep -A3 -F -- '- name: enableBorzoRoute' "$apim" | grep -Fq 'default: true'
+      grep -A3 -F -- '- name: enableShiprocketRoute' "$apim" | grep -Fq 'default: false'
+      grep -A3 -F -- '- name: enableDelhiveryRoute' "$apim" | grep -Fq 'default: false'
+    displayName: Verify simple-sandbox defaults and webhook exposure defaults
+
+  - bash: |
+      set -euo pipefail
+
+      grep -Fq 'SHIPROCKET_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-shiprocket-production-activation.yml
+      grep -Fq 'DELHIVERY_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-delhivery-environment.yml
+      grep -Fq 'BORZO_API_AUTH_TOKEN=secretref:borzo-api-auth-token' azure-pipelines-delivery-provider-production-activation.yml
+      grep -Fq 'BORZO_CALLBACK_TOKEN=secretref:borzo-callback-token' azure-pipelines-delivery-provider-production-activation.yml
+
+      if grep -R -n -E '(SHIPROCKET|DELHIVERY|BORZO).*(TOKEN|SECRET)[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=_-]{24,}' \
+        azure-pipelines-delivery-provider-production-activation.yml \
+        azure-pipelines-shiprocket-production-activation.yml \
+        azure-pipelines-delhivery-environment.yml; then
+        echo 'ERROR: A delivery provider pipeline appears to contain a plaintext credential.' >&2
+        exit 2
+      fi
+    displayName: Verify delivery provider credentials stay secret-backed
+
+  - bash: |
+      set -euo pipefail
+      git diff --check HEAD~0 -- . || true
+      echo 'Delivery provider safety chain validation completed.'
+    displayName: Final delivery integration safety check

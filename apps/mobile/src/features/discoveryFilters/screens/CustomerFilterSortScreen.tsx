@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerActionPressed: {
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   headerCopy: {
     flex: 1,
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     opacity: 0.48,
   },
   optionPressed: {
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   optionCopy: {
     flex: 1,
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
     padding: spacing.md,
   },
   unavailableTitle: {

@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
   currentImage: {borderRadius: radius.md, height: 180, width: '100%'},
   mediaFallback: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
     borderRadius: radius.md,
     height: 150,
     justifyContent: 'center',
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   mediaBoundary: {
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
     borderColor: colors.border,
     borderRadius: radius.md,
     borderStyle: 'dashed',

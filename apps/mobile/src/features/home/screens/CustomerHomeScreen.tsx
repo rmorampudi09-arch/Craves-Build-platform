@@ -726,7 +726,7 @@ const styles = StyleSheet.create({
     height: 132,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   imageFallbackText: {
     color: colors.espressoBrown,
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
   },
   foodTypePill: {
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   quantityButtonPressed: {
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   quantityButtonDisabled: {
     opacity: 0.45,

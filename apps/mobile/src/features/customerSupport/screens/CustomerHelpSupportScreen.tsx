@@ -213,7 +213,7 @@ export function CustomerHelpSupportScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   titleBar: {
     minHeight: 64,
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   immediateHelpCopy: {
     minWidth: 0,
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.iconSurface,
   },
   unavailableCopy: {
     minWidth: 0,
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.iconSurface,
   },
   actionCopy: {
     minWidth: 0,
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: colors.cream,
+    backgroundColor: colors.white,
   },
   reassuranceText: {
     minWidth: 0,

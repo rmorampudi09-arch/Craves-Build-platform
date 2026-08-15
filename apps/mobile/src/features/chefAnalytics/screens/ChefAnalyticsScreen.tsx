@@ -307,7 +307,7 @@ export function ChefAnalyticsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   content: {
     width: '100%',
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.errorSoft,
+    backgroundColor: colors.iconSurface,
   },
   metricUnavailable: {
     color: colors.textSecondary,
@@ -493,7 +493,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.errorSoft,
+    backgroundColor: colors.iconSurface,
   },
   chartPlaceholder: {
     height: 170,
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.errorSoft,
+    backgroundColor: colors.iconSurface,
   },
   insightBanner: {
     flexDirection: 'row',
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderStrong,
     borderRadius: radius.lg,
-    backgroundColor: colors.creamDeep,
+    backgroundColor: colors.white,
     padding: spacing.md,
   },
   insightIcon: {

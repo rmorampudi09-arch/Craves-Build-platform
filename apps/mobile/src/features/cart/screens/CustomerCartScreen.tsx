@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   titleCopy: {flex: 1},
   title: {
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -767,7 +767,7 @@ const styles = StyleSheet.create({
     width: 92,
     height: 92,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   lineMediaFallback: {
     width: 92,
@@ -775,7 +775,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
   },
   lineMediaInitial: {
     color: colors.flameRed,
@@ -874,7 +874,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   offerCaption: {
     color: colors.textSecondary,

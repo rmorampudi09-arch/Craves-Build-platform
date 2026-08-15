@@ -289,7 +289,7 @@ export function CustomerSettingsRouteScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: colors.surfaceWarm},
+  root: {flex: 1, backgroundColor: colors.white},
   header: {
     minHeight: 64,
     flexDirection: 'row',
@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
   content: {width: '100%', maxWidth: 640, alignSelf: 'center'},
   sectionEyebrow: {marginTop: spacing.md, marginBottom: spacing.xs, color: colors.textSecondary, fontSize: typography.tiny, fontWeight: fontWeight.extrabold, letterSpacing: 0.8},
   accountCard: {flexDirection: 'row', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white, ...elevation.card},
-  avatar: {width: 58, height: 58, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.creamDeep},
+  avatar: {width: 58, height: 58, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white},
   avatarText: {color: colors.flameRed, fontSize: typography.heading, fontWeight: fontWeight.extrabold},
   accountCopy: {minWidth: 0, flex: 1, gap: spacing.xxs},
   accountName: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
@@ -320,8 +320,8 @@ const styles = StyleSheet.create({
   card: {overflow: 'hidden', borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
   row: {minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm},
   rowPressed: {backgroundColor: colors.surfaceMuted},
-  rowIcon: {width: 38, height: 38, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarm},
-  rowIconDanger: {backgroundColor: colors.surfaceMuted},
+  rowIcon: {width: 38, height: 38, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.iconSurface},
+  rowIconDanger: {backgroundColor: colors.iconSurface},
   rowCopy: {minWidth: 0, flex: 1},
   rowTitle: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.semibold},
   rowSubtitle: {marginTop: 2, color: colors.textSecondary, fontSize: typography.tiny},

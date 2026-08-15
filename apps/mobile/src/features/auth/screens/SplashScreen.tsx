@@ -12,4 +12,4 @@ export function SplashScreen() {
     </View>
   </SafeAreaView>;
 }
-const styles = StyleSheet.create({root:{flex:1,backgroundColor:colors.cream},center:{flex:1,alignItems:'center',justifyContent:'center',padding:spacing.xl},brand:{fontSize:44,fontWeight:'800',color:colors.espressoBrown,letterSpacing:-1.5},tagline:{marginTop:8,fontSize:15,color:colors.mutedText},loader:{marginTop:32}});
+const styles = StyleSheet.create({root:{flex:1,backgroundColor: colors.white},center:{flex:1,alignItems:'center',justifyContent:'center',padding:spacing.xl},brand:{fontSize:44,fontWeight:'800',color:colors.espressoBrown,letterSpacing:-1.5},tagline:{marginTop:8,fontSize:15,color:colors.mutedText},loader:{marginTop:32}});

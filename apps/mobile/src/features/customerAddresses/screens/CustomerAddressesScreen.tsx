@@ -516,7 +516,7 @@ export function CustomerAddressesScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: colors.surfaceWarm},
+  root: {flex: 1, backgroundColor: colors.white},
   header: {
     minHeight: 60,
     flexDirection: 'row',
@@ -610,7 +610,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   addressHeadingCopy: {flex: 1, minWidth: 0},
   labelRow: {
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xxs,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   selectedBadgeText: {
     color: colors.flameRed,
@@ -661,7 +661,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: borderWidth.standard,
     borderColor: colors.warning,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   updateNoticeText: {
     color: colors.textSecondary,

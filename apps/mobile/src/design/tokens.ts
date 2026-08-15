@@ -6,6 +6,8 @@ export const colors = {
    */
   flameRedAccessible: '#D92714',
   flameRedSoft: '#FF5548',
+  /** Soft flame-red tint sampled from the approved icon-background reference. */
+  iconSurface: '#FEF3F3',
   espresso: '#261A15',
   espressoBrown: '#261A15',
   cream: '#FFF5E9',
@@ -31,8 +33,8 @@ export const colors = {
   infoSoft: '#EAF0FF',
   muted: '#F7F5F3',
   surfaceBase: '#FFFFFF',
-  surfaceWarm: '#FFF5E9',
-  surfaceWarmStrong: '#FBEBDD',
+  surfaceWarm: '#FFFFFF',
+  surfaceWarmStrong: '#FFFFFF',
   surfaceMuted: '#F7F5F3',
   overlay: 'rgba(38,26,21,0.08)',
 } as const;

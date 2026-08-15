@@ -399,14 +399,14 @@ export function CustomerProfileScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xxl,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   content: {
     width: '100%',
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.creamDeep,
+    backgroundColor: colors.white,
     marginBottom: spacing.sm,
   },
   avatarText: {
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   rewardsCopy: {
     minWidth: 0,
@@ -572,10 +572,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   menuIconDanger: {
-    backgroundColor: colors.errorSoft,
+    backgroundColor: colors.iconSurface,
   },
   menuCopy: {
     minWidth: 0,

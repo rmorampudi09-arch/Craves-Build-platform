@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
     paddingBottom: spacing.xl,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   heroAvatar: {
     width: 112,
@@ -660,7 +660,7 @@ const styles = StyleSheet.create({
     borderRadius: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
     borderWidth: 3,
     borderColor: colors.white,
     ...elevation.card,
@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
   previewPill: {
     minHeight: touchTarget.minimum,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     alignItems: 'center',
@@ -877,7 +877,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.sm,
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
   },
   menuImageFallbackText: {
     color: colors.flameRed,

@@ -315,7 +315,7 @@ export function CustomerProfileEditScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: colors.surfaceWarm},
+  root: {flex: 1, backgroundColor: colors.white},
   header: {
     minHeight: 60,
     flexDirection: 'row',
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.creamDeep,
+    backgroundColor: colors.white,
     overflow: 'hidden',
   },
   avatarText: {

@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.flameRed,
   },
   tabPressed: {
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
     borderRadius: radius.sm,
   },
   tabText: {

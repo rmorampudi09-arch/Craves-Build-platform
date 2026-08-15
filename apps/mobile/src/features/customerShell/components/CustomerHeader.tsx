@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   locationCopy: {
     minWidth: 0,

@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
   },
   metricIcon: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
     borderRadius: radius.pill,
     height: 38,
     justifyContent: 'center',
@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
   },
   actionIcon: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
     borderRadius: radius.md,
     height: 46,
     justifyContent: 'center',
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
   },
   orderIcon: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
     borderRadius: radius.md,
     height: 44,
     justifyContent: 'center',
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
   unavailableRow: {alignItems: 'center', flexDirection: 'row', gap: spacing.sm},
   unavailableIcon: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.iconSurface,
     borderRadius: radius.pill,
     height: 44,
     justifyContent: 'center',
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
   },
   insightBanner: {
     alignItems: 'flex-start',
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
     borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: 1,

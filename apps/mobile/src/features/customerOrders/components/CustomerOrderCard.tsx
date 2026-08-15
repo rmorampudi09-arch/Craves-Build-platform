@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   kitchenCopy: {minWidth: 0, flex: 1},
   kitchenName: {
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xs,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   itemTileText: {
     color: colors.espressoBrown,

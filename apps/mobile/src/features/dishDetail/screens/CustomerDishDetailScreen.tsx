@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   headerSpacer: {flex: 1},
   textAction: {
@@ -706,7 +706,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   textActionLabel: {
     color: colors.espressoBrown,
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   heroFallbackCategory: {
     color: colors.flameRed,
@@ -800,7 +800,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   kitchenCopy: {flex: 1, minWidth: 0},
   kitchenLabel: {
@@ -831,7 +831,7 @@ const styles = StyleSheet.create({
     minWidth: 132,
     padding: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   factLabel: {color: colors.textSecondary, fontSize: typography.tiny},
   factValue: {
@@ -939,7 +939,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quantityButtonPressed: {backgroundColor: colors.surfaceWarm},
+  quantityButtonPressed: {backgroundColor: colors.white},
   quantityButtonText: {
     color: colors.flameRed,
     fontSize: typography.heading,

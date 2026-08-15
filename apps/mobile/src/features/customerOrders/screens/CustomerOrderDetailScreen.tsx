@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   heroCard: {
     padding: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   heroRow: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm},
   heroCopy: {minWidth: 0, flex: 1},

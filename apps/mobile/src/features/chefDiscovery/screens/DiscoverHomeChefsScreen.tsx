@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
   },
   radiusPill: {
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -249,7 +249,7 @@ export function CustomerAddressEditorModal({mode, address, addresses, onClose}: 
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: colors.surfaceWarm},
+  root: {flex: 1, backgroundColor: colors.white},
   header: {minHeight: 60, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, borderBottomWidth: borderWidth.standard, borderBottomColor: colors.border, backgroundColor: colors.white},
   headerButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill},
   pressed: {opacity: 0.72},
@@ -260,14 +260,14 @@ const styles = StyleSheet.create({
   sectionTitle: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.semibold, marginBottom: spacing.xs},
   labelOptions: {flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.md},
   labelOption: {flex: 1, minHeight: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: borderWidth.standard, borderColor: colors.borderStrong, backgroundColor: colors.white},
-  labelOptionSelected: {borderColor: colors.flameRed, backgroundColor: colors.surfaceWarm},
+  labelOptionSelected: {borderColor: colors.flameRed, backgroundColor: colors.white},
   labelOptionText: {color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.semibold},
   labelOptionTextSelected: {color: colors.flameRed},
   locationButton: {marginBottom: spacing.md},
-  notice: {padding: spacing.md, marginBottom: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceWarm},
+  notice: {padding: spacing.md, marginBottom: spacing.md, borderRadius: radius.md, backgroundColor: colors.white},
   noticeText: {color: colors.textPrimary, fontSize: typography.small},
   fields: {gap: spacing.md},
-  errorBox: {padding: spacing.md, marginTop: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceWarm, borderWidth: borderWidth.standard, borderColor: colors.error},
+  errorBox: {padding: spacing.md, marginTop: spacing.md, borderRadius: radius.md, backgroundColor: colors.white, borderWidth: borderWidth.standard, borderColor: colors.error},
   errorText: {color: colors.error, fontSize: typography.small},
   saveButton: {marginTop: spacing.lg},
 });

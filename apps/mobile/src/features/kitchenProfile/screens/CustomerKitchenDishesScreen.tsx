@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.sm,
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
   },
   dishImageFallbackText: {
     color: colors.flameRed,

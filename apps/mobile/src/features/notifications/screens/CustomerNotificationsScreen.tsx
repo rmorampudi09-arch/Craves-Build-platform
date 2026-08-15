@@ -373,7 +373,7 @@ export function CustomerNotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: colors.surfaceWarm},
+  root: {flex: 1, backgroundColor: colors.white},
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   title: {color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.bold},
   subtitle: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   markAllDisabledText: {color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  markAllReason: {paddingHorizontal: spacing.md, paddingTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny, backgroundColor: colors.surfaceWarm},
+  markAllReason: {paddingHorizontal: spacing.md, paddingTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny, backgroundColor: colors.white},
   listContent: {flexGrow: 1, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxl},
   chips: {gap: spacing.xs, paddingVertical: spacing.xs, marginBottom: spacing.sm},
   chip: {minHeight: touchTarget.minimum, justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: borderWidth.standard, borderColor: colors.borderStrong, backgroundColor: colors.white},
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   noticeCellFirst: {borderTopWidth: borderWidth.standard, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg},
   noticeCellLast: {marginBottom: spacing.sm, borderBottomWidth: borderWidth.standard, borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg},
   noticeRow: {minHeight: 104, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, backgroundColor: colors.white},
-  noticeRowUnread: {backgroundColor: colors.surfaceWarm},
+  noticeRowUnread: {backgroundColor: colors.white},
   noticeRowPressed: {backgroundColor: colors.surfaceMuted},
   noticeIcon: {width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white, borderWidth: borderWidth.standard, borderColor: colors.creamDeep},
   noticeCopy: {minWidth: 0, flex: 1},

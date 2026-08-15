@@ -436,7 +436,7 @@ export function CustomerSettingsLegalScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: colors.surfaceWarm},
+  root: {flex: 1, backgroundColor: colors.white},
   header: {
     minHeight: 68,
     flexDirection: 'row',

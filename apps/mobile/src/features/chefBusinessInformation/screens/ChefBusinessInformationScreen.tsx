@@ -627,7 +627,7 @@ export function ChefBusinessInformationScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.surfaceWarm},
+  safeArea: {flex: 1, backgroundColor: colors.white},
   content: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.borderStrong,
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
     padding: spacing.md,
   },
   sectionHeader: {gap: spacing.xxs},
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   documentCopy: {flex: 1, minWidth: 0},
   documentTitle: {
@@ -859,7 +859,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   actionCopy: {flex: 1, minWidth: 0},
   actionLabel: {
@@ -928,7 +928,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.borderStrong,
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
     flexDirection: 'row',
     gap: spacing.sm,
     padding: spacing.md,

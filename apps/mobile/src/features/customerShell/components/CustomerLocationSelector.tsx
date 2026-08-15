@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     marginBottom: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   manageAddressesPressed: {opacity: 0.78},
   manageIcon: {
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   },
   rowSelected: {
     borderColor: colors.flameRed,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   rowIcon: {
     width: 36,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   rowCopy: {
     minWidth: 0,

@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
   },
-  statusAccent: {backgroundColor: colors.surfaceWarm},
+  statusAccent: {backgroundColor: colors.white},
   statusSuccess: {backgroundColor: colors.successSoft},
   statusWarning: {backgroundColor: colors.warningSoft},
   statusDanger: {backgroundColor: colors.errorSoft},
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xl,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   waitingTitle: {
     marginTop: spacing.sm,

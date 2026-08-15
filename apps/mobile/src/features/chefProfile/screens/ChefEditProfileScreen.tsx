@@ -625,7 +625,7 @@ export function ChefEditProfileScreen({navigation}: Props) {
 
 const styles = StyleSheet.create({
   flex: {flex: 1},
-  safeArea: {flex: 1, backgroundColor: colors.surfaceWarm},
+  safeArea: {flex: 1, backgroundColor: colors.white},
   header: {
     minHeight: 64,
     flexDirection: 'row',
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
     borderWidth: borderWidth.standard,
     borderColor: colors.borderStrong,
   },
@@ -732,7 +732,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
     borderWidth: borderWidth.standard,
     borderColor: colors.borderStrong,
   },

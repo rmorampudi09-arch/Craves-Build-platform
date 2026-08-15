@@ -278,7 +278,7 @@ export function CustomerPaymentMethodsScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   header: {
     flexDirection: 'row',
@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.cream,
+    backgroundColor: colors.iconSurface,
   },
   methodHeadingCopy: {
     flex: 1,
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    backgroundColor: colors.cream,
+    backgroundColor: colors.white,
   },
   channelText: {
     color: colors.espressoBrown,

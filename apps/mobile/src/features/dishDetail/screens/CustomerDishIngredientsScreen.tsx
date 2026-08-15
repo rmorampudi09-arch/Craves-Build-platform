@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   headerTitle: {
     flex: 1,
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   contractCopy: {flex: 1, minWidth: 0},
   contractLabel: {
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     padding: spacing.lg,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   guidanceTitle: {
     color: colors.espressoBrown,

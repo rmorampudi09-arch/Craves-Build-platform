@@ -635,7 +635,7 @@ export function ChefProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.surfaceWarm},
+  safeArea: {flex: 1, backgroundColor: colors.white},
   content: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
@@ -661,7 +661,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
     borderWidth: borderWidth.standard,
     borderColor: colors.borderStrong,
   },
@@ -886,9 +886,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
-  rowIconDanger: {backgroundColor: colors.errorSoft},
+  rowIconDanger: {backgroundColor: colors.iconSurface},
   rowCopy: {flex: 1, minWidth: 0},
   rowTitle: {
     color: colors.textPrimary,

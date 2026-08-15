@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
   retryText: {color: colors.white, fontSize: typography.body, fontWeight: fontWeight.semibold},
   notificationList: {padding: spacing.md, gap: spacing.sm},
   notificationRow: {borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.white},
-  notificationRowUnread: {backgroundColor: colors.surfaceWarm},
+  notificationRowUnread: {backgroundColor: colors.white},
   notificationCopy: {minWidth: 0},
   notificationTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
   notificationBody: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small},

@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   summaryIcon: {
     width: 42,
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   itemName: {
     flex: 1,
@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   contractIcon: {
     width: 34,

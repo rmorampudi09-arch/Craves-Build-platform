@@ -273,7 +273,7 @@ export function ChefPayoutHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.surfaceWarm},
+  safeArea: {flex: 1, backgroundColor: colors.white},
   content: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.iconSurface,
   },
   detailBoundaryText: {
     marginTop: spacing.sm,

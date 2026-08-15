@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
   itemImage: {borderRadius: radius.md, height: 92, width: 92},
   imageFallback: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
     borderRadius: radius.md,
     height: 92,
     justifyContent: 'center',
@@ -703,7 +703,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {color: colors.white, fontSize: typography.body, fontWeight: fontWeight.semibold},
   secondaryButton: {alignItems: 'center', borderColor: colors.flameRed, borderRadius: radius.pill, borderWidth: 1, justifyContent: 'center', marginTop: spacing.md, minHeight: touchTarget.minimum, paddingHorizontal: spacing.lg},
   secondaryButtonText: {color: colors.flameRed, fontSize: typography.body, fontWeight: fontWeight.semibold},
-  educationBanner: {backgroundColor: colors.surfaceWarm, borderRadius: radius.md, flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs, padding: spacing.md},
+  educationBanner: {backgroundColor: colors.white, borderRadius: radius.md, flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs, padding: spacing.md},
   educationCopy: {flex: 1},
   educationTitle: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.bold},
   educationMessage: {color: colors.textSecondary, fontSize: typography.small, marginTop: spacing.xxs},

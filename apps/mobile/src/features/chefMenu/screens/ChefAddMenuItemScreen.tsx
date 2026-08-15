@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxs,
   },
   mediaBoundary: {
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
     borderColor: colors.border,
     borderRadius: radius.md,
     borderStyle: 'dashed',

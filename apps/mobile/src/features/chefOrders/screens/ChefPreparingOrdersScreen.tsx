@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   summaryIcon: {
     width: 42,
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
   timerTextOverdue: {color: colors.warning},
   itemSection: {marginTop: spacing.md, gap: spacing.xs},
   itemRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
-  itemGlyph: {width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarm},
+  itemGlyph: {width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white},
   itemName: {flex: 1, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.medium},
   moreItems: {marginLeft: 46, color: colors.textSecondary, fontSize: typography.small},
   secondaryText: {color: colors.textSecondary, fontSize: typography.small},

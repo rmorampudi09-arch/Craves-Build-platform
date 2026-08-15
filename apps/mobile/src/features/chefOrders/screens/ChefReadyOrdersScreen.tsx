@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
   updatedText: {marginTop: spacing.sm, color: colors.textSecondary, fontSize: typography.tiny},
   itemSection: {marginTop: spacing.md, gap: spacing.xs},
   itemRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
-  itemGlyph: {width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceWarm},
+  itemGlyph: {width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white},
   itemName: {flex: 1, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.medium},
   moreItems: {marginLeft: 46, color: colors.textSecondary, fontSize: typography.small},
   secondaryText: {color: colors.textSecondary, fontSize: typography.small},

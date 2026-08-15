@@ -273,7 +273,7 @@ export function ChefSubscriptionPlanScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.surfaceWarm},
+  safeArea: {flex: 1, backgroundColor: colors.white},
   content: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   planUnavailableTitle: {
     marginTop: spacing.md,
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.borderStrong,
-    backgroundColor: colors.creamDeep,
+    backgroundColor: colors.white,
     padding: spacing.md,
   },
   savingsIcon: {
@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.iconSurface,
   },
   supportCopy: {flex: 1, minWidth: 0},
   supportTitle: {

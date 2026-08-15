@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   heroImage: {borderRadius: radius.lg, height: 240, width: '100%'},
   heroFallback: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
     borderRadius: radius.lg,
     height: 240,
     justifyContent: 'center',
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxs,
   },
   statePill: {
-    backgroundColor: colors.surfaceWarmStrong,
+    backgroundColor: colors.white,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,

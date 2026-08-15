@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   clearPressed: {
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.white,
   },
   clearText: {
     color: colors.flameRedAccessible,

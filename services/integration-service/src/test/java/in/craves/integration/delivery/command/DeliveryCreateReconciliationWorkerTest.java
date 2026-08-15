@@ -110,7 +110,10 @@ class DeliveryCreateReconciliationWorkerTest {
             "borzo",
             "CRV-1234567890123456789012345678",
             Instant.parse("2026-07-24T03:00:00Z"),
-            1
+            1,
+            0,
+            null,
+            null
         );
     }
 

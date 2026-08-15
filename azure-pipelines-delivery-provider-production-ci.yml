@@ -33,6 +33,8 @@ steps:
         azure-pipelines-integration-service.yml
         azure-pipelines-delivery-provider-webhooks-apim.yml
         azure-pipelines-delivery-provider-production-activation.yml
+        azure-pipelines-shadowfax-environment.yml
+        azure-pipelines-porter-environment.yml
         azure-pipelines-shiprocket-production-activation.yml
         azure-pipelines-delhivery-environment.yml
       )
@@ -67,6 +69,8 @@ steps:
         azure-pipelines-integration-service.yml \
         azure-pipelines-delivery-provider-webhooks-apim.yml \
         azure-pipelines-delivery-provider-production-activation.yml \
+        azure-pipelines-shadowfax-environment.yml \
+        azure-pipelines-porter-environment.yml \
         azure-pipelines-shiprocket-production-activation.yml \
         azure-pipelines-delhivery-environment.yml
       do
@@ -80,33 +84,41 @@ steps:
   - bash: |
       set -euo pipefail
 
-      delhivery=azure-pipelines-delhivery-environment.yml
+      shadowfax=azure-pipelines-shadowfax-environment.yml
+      porter=azure-pipelines-porter-environment.yml
       shiprocket=azure-pipelines-shiprocket-production-activation.yml
+      delhivery=azure-pipelines-delhivery-environment.yml
       borzo=azure-pipelines-delivery-provider-production-activation.yml
       apim=azure-pipelines-delivery-provider-webhooks-apim.yml
 
-      grep -A4 -F -- '- name: targetEnvironment' "$delhivery" | grep -Fq 'default: SANDBOX'
-      grep -A3 -F -- '- name: enableProvider' "$delhivery" | grep -Fq 'default: false'
-      grep -A4 -F -- '- name: targetEnvironment' "$shiprocket" | grep -Fq 'default: SANDBOX'
-      grep -A3 -F -- '- name: enableProvider' "$shiprocket" | grep -Fq 'default: false'
-      grep -A4 -F -- '- name: targetEnvironment' "$borzo" | grep -Fq 'default: SANDBOX'
-      grep -A3 -F -- '- name: enableProvider' "$borzo" | grep -Fq 'default: false'
+      for file in "$shadowfax" "$porter" "$shiprocket" "$delhivery" "$borzo"; do
+        grep -A4 -F -- '- name: targetEnvironment' "$file" | grep -Fq 'default: SANDBOX'
+        grep -A3 -F -- '- name: enableProvider' "$file" | grep -Fq 'default: false'
+      done
+
+      grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shadowfax'" "$shadowfax"
+      grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/porter'" "$porter"
+      grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket'" "$shiprocket"
 
       grep -A3 -F -- '- name: enableBorzoRoute' "$apim" | grep -Fq 'default: true'
       grep -A3 -F -- '- name: enableShiprocketRoute' "$apim" | grep -Fq 'default: false'
       grep -A3 -F -- '- name: enableDelhiveryRoute' "$apim" | grep -Fq 'default: false'
-    displayName: Verify simple-sandbox defaults and webhook exposure defaults
+    displayName: Verify simple-sandbox defaults and full-sandbox adapter guards
 
   - bash: |
       set -euo pipefail
 
+      grep -Fq 'SHADOWFAX_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-shadowfax-environment.yml
+      grep -Fq 'PORTER_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-porter-environment.yml
       grep -Fq 'SHIPROCKET_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-shiprocket-production-activation.yml
       grep -Fq 'DELHIVERY_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-delhivery-environment.yml
       grep -Fq 'BORZO_API_AUTH_TOKEN=secretref:borzo-api-auth-token' azure-pipelines-delivery-provider-production-activation.yml
       grep -Fq 'BORZO_CALLBACK_TOKEN=secretref:borzo-callback-token' azure-pipelines-delivery-provider-production-activation.yml
 
-      if grep -R -n -E '(SHIPROCKET|DELHIVERY|BORZO).*(TOKEN|SECRET)[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=_-]{24,}' \
+      if grep -R -n -E '(SHADOWFAX|PORTER|SHIPROCKET|DELHIVERY|BORZO).*(TOKEN|SECRET)[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=_-]{24,}' \
         azure-pipelines-delivery-provider-production-activation.yml \
+        azure-pipelines-shadowfax-environment.yml \
+        azure-pipelines-porter-environment.yml \
         azure-pipelines-shiprocket-production-activation.yml \
         azure-pipelines-delhivery-environment.yml; then
         echo 'ERROR: A delivery provider pipeline appears to contain a plaintext credential.' >&2

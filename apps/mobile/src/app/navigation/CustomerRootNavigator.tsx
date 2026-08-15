@@ -102,12 +102,23 @@ const tabScreenOptions = {
   tabBarActiveTintColor: CUSTOMER_TAB_ACTIVE_COLOR,
   tabBarInactiveTintColor: CUSTOMER_TAB_INACTIVE_COLOR,
   tabBarHideOnKeyboard: true,
-  tabBarLabelStyle: {fontSize: typography.tiny, fontWeight: fontWeight.semibold},
+  tabBarIconStyle: {marginTop: 0},
+  tabBarLabelStyle: {
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.semibold,
+    marginTop: spacing.xxs,
+  },
+  tabBarItemStyle: {
+    paddingVertical: spacing.xxs,
+  },
   tabBarStyle: {
+    height: 88,
     backgroundColor: colors.white,
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
+    borderTopWidth: 0,
     paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+    elevation: 0,
+    shadowOpacity: 0,
   },
 } as const;
 

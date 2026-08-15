@@ -13,10 +13,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function boundedString(value: unknown, maxLength: number): string | null {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
+  if (typeof value !== 'string') return null;
   const normalized = value.trim();
   return normalized && normalized.length <= maxLength ? normalized : null;
 }
@@ -33,26 +30,17 @@ function parseCurrency(value: unknown): string | null {
 
 function parseDecimal(value: unknown): string | null {
   if (typeof value === 'number') {
-    if (!Number.isFinite(value) || value < 0) {
-      return null;
-    }
+    if (!Number.isFinite(value) || value < 0) return null;
     const normalized = String(value);
     return DECIMAL_PATTERN.test(normalized) ? normalized : null;
   }
-
-  if (typeof value !== 'string') {
-    return null;
-  }
-
+  if (typeof value !== 'string') return null;
   const normalized = value.trim();
   return DECIMAL_PATTERN.test(normalized) ? normalized : null;
 }
 
 function parseTimestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
-    return null;
-  }
-  return value;
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null;
 }
 
 function parseMoney(value: unknown, currency: string): CartMoney | null {
@@ -60,11 +48,28 @@ function parseMoney(value: unknown, currency: string): CartMoney | null {
   return amount ? {amount, currency} : null;
 }
 
+function parseOptionalImage(value: unknown): string | null {
+  const candidate = boundedString(value, 2048);
+  return candidate && /^https:\/\//i.test(candidate) ? candidate : null;
+}
+
+function parseOptionalPositiveInt(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : null;
+}
+
+function parseFoodType(value: unknown): CartLine['foodType'] {
+  return value === 'VEG' || value === 'NON_VEG' || value === 'EGG' ? value : null;
+}
+
+function parseSpiceLevel(value: unknown): CartLine['spiceLevel'] {
+  return value === 'MILD' || value === 'MEDIUM' || value === 'SPICY' ? value : null;
+}
+
 function parseCartLine(value: unknown, cartCurrency: string): CartLine | null {
   const item = asRecord(value);
-  if (!item) {
-    return null;
-  }
+  if (!item) return null;
 
   const lineId = parseUuid(item.id);
   const menuItemId = parseUuid(item.menuItemId);
@@ -77,26 +82,14 @@ function parseCartLine(value: unknown, cartCurrency: string): CartLine | null {
   const quantity = item.quantity;
 
   if (
-    !lineId ||
-    !menuItemId ||
-    !kitchenId ||
-    !itemName ||
-    !kitchenName ||
-    currency !== cartCurrency ||
-    !createdAt ||
-    !updatedAt ||
-    typeof quantity !== 'number' ||
-    !Number.isSafeInteger(quantity) ||
-    quantity < 1
-  ) {
-    return null;
-  }
+    !lineId || !menuItemId || !kitchenId || !itemName || !kitchenName ||
+    currency !== cartCurrency || !createdAt || !updatedAt ||
+    typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity < 1
+  ) return null;
 
   const unitPrice = parseMoney(item.unitPrice, cartCurrency);
   const lineTotal = parseMoney(item.lineTotal, cartCurrency);
-  if (!unitPrice || !lineTotal) {
-    return null;
-  }
+  if (!unitPrice || !lineTotal) return null;
 
   return {
     lineId,
@@ -107,6 +100,10 @@ function parseCartLine(value: unknown, cartCurrency: string): CartLine | null {
     unitPrice,
     quantity,
     lineTotal,
+    imageUrl: parseOptionalImage(item.imageUrl),
+    foodType: parseFoodType(item.foodType),
+    servesCount: parseOptionalPositiveInt(item.servesCount),
+    spiceLevel: parseSpiceLevel(item.spiceLevel),
     createdAt,
     updatedAt,
   };
@@ -114,113 +111,61 @@ function parseCartLine(value: unknown, cartCurrency: string): CartLine | null {
 
 export function parseCartSnapshot(value: unknown): CartSnapshot | null {
   const cart = asRecord(value);
-  if (!cart || !Array.isArray(cart.items)) {
-    return null;
-  }
+  if (!cart || !Array.isArray(cart.items)) return null;
 
   const cartId = parseUuid(cart.id);
   const currency = parseCurrency(cart.currency);
   const totals = asRecord(cart.totals);
-  if (!cartId || !currency || !totals || parseCurrency(totals.currency) !== currency) {
-    return null;
-  }
+  if (!cartId || !currency || !totals || parseCurrency(totals.currency) !== currency) return null;
 
   const foodSubtotal = parseMoney(totals.foodSubtotal, currency);
-  if (!foodSubtotal) {
-    return null;
-  }
+  if (!foodSubtotal) return null;
 
   const lines: CartLine[] = [];
   for (const item of cart.items) {
     const line = parseCartLine(item, currency);
-    if (!line) {
-      return null;
-    }
+    if (!line) return null;
     lines.push(line);
   }
 
-  return {
-    cartId,
-    currency,
-    lines,
-    totals: {foodSubtotal},
-  };
+  return {cartId, currency, lines, totals: {foodSubtotal}};
 }
 
 function requireUuid(value: string, code: string, message: string): void {
-  if (!UUID_PATTERN.test(value)) {
-    throw new AppApiError(code, message);
-  }
+  if (!UUID_PATTERN.test(value)) throw new AppApiError(code, message);
 }
 
 function requireQuantity(quantity: number): void {
   if (!Number.isSafeInteger(quantity) || quantity < 1) {
-    throw new AppApiError(
-      'CART_INVALID_QUANTITY',
-      'Choose a quantity of at least one item.',
-    );
+    throw new AppApiError('CART_INVALID_QUANTITY', 'Choose a quantity of at least one item.');
   }
 }
 
 function requireCartSnapshot(value: unknown): CartSnapshot {
   const snapshot = parseCartSnapshot(value);
   if (!snapshot) {
-    throw new AppApiError(
-      'CART_INVALID_RESPONSE',
-      'Cart information could not be verified. Please try again.',
-    );
+    throw new AppApiError('CART_INVALID_RESPONSE', 'Cart information could not be verified. Please try again.');
   }
   return snapshot;
 }
 
 export const cartApi = {
   async getSnapshot(): Promise<CartSnapshot> {
-    const response = await httpClient.get<unknown>('/api/v1/cart', {
-      dedupeKey: 'customer-cart:snapshot',
-    });
+    const response = await httpClient.get<unknown>('/api/v1/cart', {dedupeKey: 'customer-cart:snapshot'});
     return requireCartSnapshot(response);
   },
-
   async addItem(menuItemId: string, quantity: number): Promise<CartSnapshot> {
-    requireUuid(
-      menuItemId,
-      'CART_INVALID_MENU_ITEM_ID',
-      'This dish could not be added to the cart.',
-    );
+    requireUuid(menuItemId, 'CART_INVALID_MENU_ITEM_ID', 'This dish could not be added to the cart.');
     requireQuantity(quantity);
-
-    const response = await httpClient.post<unknown>('/api/v1/cart/items', {
-      menuItemId,
-      quantity,
-    });
-    return requireCartSnapshot(response);
+    return requireCartSnapshot(await httpClient.post<unknown>('/api/v1/cart/items', {menuItemId, quantity}));
   },
-
   async updateItem(cartItemId: string, quantity: number): Promise<CartSnapshot> {
-    requireUuid(
-      cartItemId,
-      'CART_INVALID_LINE_ID',
-      'This cart item could not be updated.',
-    );
+    requireUuid(cartItemId, 'CART_INVALID_LINE_ID', 'This cart item could not be updated.');
     requireQuantity(quantity);
-
-    const response = await httpClient.put<unknown>(
-      `/api/v1/cart/items/${cartItemId}`,
-      {quantity},
-    );
-    return requireCartSnapshot(response);
+    return requireCartSnapshot(await httpClient.put<unknown>(`/api/v1/cart/items/${cartItemId}`, {quantity}));
   },
-
   async removeItem(cartItemId: string): Promise<CartSnapshot> {
-    requireUuid(
-      cartItemId,
-      'CART_INVALID_LINE_ID',
-      'This cart item could not be removed.',
-    );
-
-    const response = await httpClient.delete<unknown>(
-      `/api/v1/cart/items/${cartItemId}`,
-    );
-    return requireCartSnapshot(response);
+    requireUuid(cartItemId, 'CART_INVALID_LINE_ID', 'This cart item could not be removed.');
+    return requireCartSnapshot(await httpClient.delete<unknown>(`/api/v1/cart/items/${cartItemId}`));
   },
 };

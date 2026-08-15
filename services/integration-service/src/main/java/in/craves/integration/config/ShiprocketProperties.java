@@ -60,6 +60,7 @@ public class ShiprocketProperties {
         if (maximumAcceptedEtaMinutes < 1 || maximumAcceptedEtaMinutes > 240) {
             throw new IllegalStateException("Shiprocket maximumAcceptedEtaMinutes must be between 1 and 240");
         }
+        validateDimensionsAllOrNone();
 
         if (enabled) {
             requireText(email, "SHIPROCKET_API_EMAIL");
@@ -100,6 +101,23 @@ public class ShiprocketProperties {
         }
     }
 
+    private void validateDimensionsAllOrNone() {
+        int configured = 0;
+        configured += packageLengthCm == null ? 0 : 1;
+        configured += packageBreadthCm == null ? 0 : 1;
+        configured += packageHeightCm == null ? 0 : 1;
+        if (configured != 0 && configured != 3) {
+            throw new IllegalStateException(
+                "SHIPROCKET_PACKAGE_LENGTH_CM, SHIPROCKET_PACKAGE_BREADTH_CM and SHIPROCKET_PACKAGE_HEIGHT_CM must be configured together"
+            );
+        }
+        if (configured == 3) {
+            requirePositive(packageLengthCm, "SHIPROCKET_PACKAGE_LENGTH_CM");
+            requirePositive(packageBreadthCm, "SHIPROCKET_PACKAGE_BREADTH_CM");
+            requirePositive(packageHeightCm, "SHIPROCKET_PACKAGE_HEIGHT_CM");
+        }
+    }
+
     public boolean credentialReady() {
         return StringUtils.hasText(email) && StringUtils.hasText(password);
     }
@@ -110,9 +128,7 @@ public class ShiprocketProperties {
             && productionActivationApproved
             && StringUtils.hasText(webhookToken)
             && StringUtils.hasText(orderEmail)
-            && positive(packageLengthCm)
-            && positive(packageBreadthCm)
-            && positive(packageHeightCm)
+            && packageDimensionsReady()
             && attributionApproved;
     }
 

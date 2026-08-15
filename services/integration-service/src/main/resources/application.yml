@@ -49,6 +49,10 @@ craves:
     quote-timeout-seconds: ${CRAVES_DELIVERY_QUOTE_TIMEOUT_SECONDS:4}
     max-provider-attempts: ${CRAVES_DELIVERY_MAX_PROVIDER_ATTEMPTS:3}
     max-delivery-attempts: ${CRAVES_DELIVERY_MAX_DELIVERY_ATTEMPTS:5}
+    retry:
+      base-seconds: ${CRAVES_DELIVERY_RETRY_BASE_SECONDS:30}
+      max-seconds: ${CRAVES_DELIVERY_RETRY_MAX_SECONDS:600}
+      claim-contention-seconds: ${CRAVES_DELIVERY_CLAIM_CONTENTION_SECONDS:10}
     max-concurrent-messages: ${CRAVES_DELIVERY_MAX_CONCURRENT_MESSAGES:4}
     prefetch-count: ${CRAVES_DELIVERY_PREFETCH_COUNT:8}
     max-auto-lock-renew-minutes: ${CRAVES_DELIVERY_MAX_AUTO_LOCK_RENEW_MINUTES:5}

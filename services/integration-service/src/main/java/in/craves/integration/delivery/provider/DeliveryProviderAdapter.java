@@ -152,10 +152,20 @@ public interface DeliveryProviderAdapter {
         }
     }
 
+    /**
+     * The selected quote is carried into create so an adapter can deterministically book the same
+     * courier/service option that delivery intelligence ranked. The legacy constructor remains for
+     * existing providers that do not require quote metadata during create.
+     */
     record CreateDeliveryRequest(
         String clientReference,
-        QuoteRequest quoteRequest
-    ) {}
+        QuoteRequest quoteRequest,
+        ProviderQuote selectedQuote
+    ) {
+        public CreateDeliveryRequest(String clientReference, QuoteRequest quoteRequest) {
+            this(clientReference, quoteRequest, null);
+        }
+    }
 
     record ProviderQuote(
         String providerId,

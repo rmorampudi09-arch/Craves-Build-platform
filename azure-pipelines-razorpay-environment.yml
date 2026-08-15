@@ -84,7 +84,15 @@ steps:
         done
         [[ "$ready" == Provisioned && "$replicas" -ge 1 ]] || { echo 'Razorpay revision did not become healthy.' >&2; exit 2; }
         fqdn=$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.configuration.ingress.fqdn -o tsv)
-        curl -fsS --max-time 30 "https://${fqdn}/actuator/health" >/dev/null
+        payments_healthy=false
+        for _ in $(seq 1 12); do
+          if curl -fsS --max-time 30 "https://${fqdn}/actuator/health/payments" >/dev/null; then
+            payments_healthy=true
+            break
+          fi
+          sleep 5
+        done
+        [[ "$payments_healthy" == true ]] || { echo 'Razorpay payments health group did not become healthy.' >&2; exit 2; }
         env_json=$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].env' -o json)
         value() { jq -r --arg name "$1" '.[] | select(.name == $name) | .value' <<<"$env_json" | tail -1; }
         [[ "$(value PAYMENT_PROVIDER_NAME)" == RAZORPAY ]]

@@ -41,8 +41,10 @@ class ShiprocketStatusMapperTest {
 
     @Test
     void leavesFulfillmentOnlyStatesUnknownInsteadOfInventingDeliveryProgress() {
+        assertThat(ShiprocketStatusMapper.map(26, "FULFILLED")).isEqualTo(UNKNOWN);
         assertThat(ShiprocketStatusMapper.map(43, "SELF FULFILLED")).isEqualTo(UNKNOWN);
         assertThat(ShiprocketStatusMapper.map(59, "BOX PACKING")).isEqualTo(UNKNOWN);
+        assertThat(ShiprocketStatusMapper.map(null, "Fulfilled")).isEqualTo(UNKNOWN);
     }
 
     @Test

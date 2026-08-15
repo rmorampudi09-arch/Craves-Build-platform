@@ -23,7 +23,13 @@ steps:
       set -euo pipefail
       cd services/integration-service
       mvn -B -ntp -DskipTests=false verify
-    displayName: Verify Integration Service and delivery provider tests
+    displayName: Verify Integration Service and delivery-provider tests
+
+  - bash: |
+      set -euo pipefail
+      cd services/order-service
+      mvn -B -ntp -DskipTests=false verify
+    displayName: Verify Order Service delivery event contract
 
   - bash: |
       set -euo pipefail
@@ -33,6 +39,7 @@ steps:
         azure-pipelines-integration-service.yml
         azure-pipelines-delivery-provider-webhooks-apim.yml
         azure-pipelines-delivery-provider-production-activation.yml
+        azure-pipelines-delivery-provider-coordinated-activation.yml
         azure-pipelines-shadowfax-environment.yml
         azure-pipelines-porter-environment.yml
         azure-pipelines-shiprocket-production-activation.yml
@@ -50,17 +57,120 @@ steps:
 
   - bash: |
       set -euo pipefail
-      file=services/integration-service/src/main/resources/application.yml
+      integration=services/integration-service/src/main/resources/application.yml
+      order=services/order-service/src/main/resources/application.yml
 
-      grep -Fq 'enabled: ${BORZO_API_ENABLED:false}' "$file"
-      grep -Fq 'environment: ${BORZO_API_ENVIRONMENT:SANDBOX}' "$file"
-      grep -Fq 'production-activation-approved: ${BORZO_PRODUCTION_ACTIVATION_APPROVED:false}' "$file"
-      grep -Fq 'enabled: ${CRAVES_DELIVERY_COMMAND_ENABLED:false}' "$file"
-      grep -Fq 'reconciliation-enabled: ${CRAVES_DELIVERY_RECONCILIATION_ENABLED:false}' "$file"
-      grep -Fq 'webhook-processing-enabled: ${CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED:false}' "$file"
-      grep -Fq 'tracking-reconciliation-enabled: ${CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED:false}' "$file"
-      grep -Fq 'status-publisher-enabled: ${CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED:false}' "$file"
-    displayName: Verify runtime delivery execution remains fail closed by default
+      grep -Fq 'enabled: ${BORZO_API_ENABLED:false}' "$integration"
+      grep -Fq 'production-activation-approved: ${BORZO_PRODUCTION_ACTIVATION_APPROVED:false}' "$integration"
+      grep -Fq 'enabled: ${SHIPROCKET_API_ENABLED:false}' "$integration"
+      grep -Fq 'create-enabled: ${SHIPROCKET_CREATE_ENABLED:false}' "$integration"
+      grep -Fq 'environment: ${SHIPROCKET_API_ENVIRONMENT:READ_ONLY}' "$integration"
+      grep -Fq 'production-activation-approved: ${SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED:false}' "$integration"
+      grep -Fq 'attribution-approved: ${SHIPROCKET_ATTRIBUTION_APPROVED:false}' "$integration"
+      grep -Fq 'enabled: ${CRAVES_DELIVERY_COMMAND_ENABLED:false}' "$integration"
+      grep -Fq 'reconciliation-enabled: ${CRAVES_DELIVERY_RECONCILIATION_ENABLED:false}' "$integration"
+      grep -Fq 'webhook-processing-enabled: ${CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED:false}' "$integration"
+      grep -Fq 'tracking-reconciliation-enabled: ${CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED:false}' "$integration"
+      grep -Fq 'status-publisher-enabled: ${CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED:false}' "$integration"
+
+      grep -Fq 'enabled: ${CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED:false}' "$order"
+      grep -Fq 'enabled: ${CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED:false}' "$order"
+      grep -Fq 'enabled: ${CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED:false}' "$order"
+    displayName: Verify runtime remains fail closed by default
+
+  - bash: |
+      set -euo pipefail
+
+      shiprocket_dir=services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket
+      test_dir=services/integration-service/src/test/java/in/craves/integration/delivery/shiprocket
+
+      for file in \
+        ShiprocketApiClient.java \
+        ShiprocketProperties.java \
+        ShiprocketTransport.java \
+        ShiprocketStatusMapper.java \
+        ShiprocketWebhookInboxRepository.java \
+        ShiprocketWebhookService.java \
+        ShiprocketWebhookNormalizer.java \
+        ShiprocketWebhookController.java
+      do
+        if [[ "$file" == 'ShiprocketProperties.java' ]]; then
+          [[ -f services/integration-service/src/main/java/in/craves/integration/config/$file ]]
+        else
+          [[ -f "$shiprocket_dir/$file" ]]
+        fi
+      done
+
+      [[ -f "$test_dir/ShiprocketStatusMapperTest.java" ]]
+      [[ -f "$test_dir/ShiprocketStatusIdSpaceTest.java" ]]
+      [[ -f "$test_dir/ShiprocketWebhookNormalizerTest.java" ]]
+      [[ -f services/integration-service/src/test/java/in/craves/integration/config/ShiprocketPropertiesTest.java ]]
+
+      grep -R -Fq '@PostMapping("/p4")' "$shiprocket_dir"
+      grep -R -Fq 'x-api-key' "$shiprocket_dir"
+      grep -R -Fq 'shipment_status_id' "$shiprocket_dir"
+      grep -R -Fq '_craves_received_at' "$shiprocket_dir"
+
+      if grep -R -Fq '@PostMapping("/shiprocket")' "$shiprocket_dir"; then
+        echo 'ERROR: Shiprocket callback must remain on the provider-neutral /p4 route.' >&2
+        exit 2
+      fi
+    displayName: Verify executable Shiprocket adapter and neutral webhook path
+
+  - bash: |
+      set -euo pipefail
+      file=azure-pipelines-shiprocket-production-activation.yml
+
+      grep -A6 -F -- '- name: targetEnvironment' "$file" | grep -Fq 'default: READ_ONLY'
+      grep -A4 -F -- '- name: enableProvider' "$file" | grep -Fq 'default: false'
+      grep -A4 -F -- '- name: enableCreate' "$file" | grep -Fq 'default: false'
+      grep -A4 -F -- '- name: confirmProductionActivation' "$file" | grep -Fq 'default: false'
+      grep -A4 -F -- '- name: attributionApproved' "$file" | grep -Fq 'default: false'
+      grep -Fq 'SHIPROCKET_API_EMAIL="secretref:${email_secret}"' "$file"
+      grep -Fq 'SHIPROCKET_API_PASSWORD="secretref:${password_secret}"' "$file"
+      grep -Fq 'SHIPROCKET_WEBHOOK_TOKEN="secretref:${webhook_secret}"' "$file"
+      grep -Fq 'SHIPROCKET_CREATE_ENABLED=true' "$file"
+      grep -Fq '/api/v1/webhooks/delivery/p4' "$file"
+      grep -Fq 'delivery_provider_pickup_location' "$file"
+
+      if grep -Fq 'SHIPROCKET_API_AUTH_TOKEN' "$file"; then
+        echo 'ERROR: Legacy Shiprocket single-token configuration has returned.' >&2
+        exit 2
+      fi
+    displayName: Verify Shiprocket read-only/create safety separation
+
+  - bash: |
+      set -euo pipefail
+      apim=azure-pipelines-delivery-provider-webhooks-apim.yml
+
+      grep -A3 -F -- '- name: enableBorzoRoute' "$apim" | grep -Fq 'default: true'
+      grep -A3 -F -- '- name: enableShiprocketRoute' "$apim" | grep -Fq 'default: false'
+      grep -Fq "'/api/v1/webhooks/delivery/p4'" "$apim"
+      grep -Fq "'/p4'" "$apim"
+      grep -Fq "'/api/v1/webhooks/delivery/borzo'" "$apim"
+
+      if grep -Fq "'/api/v1/webhooks/delivery/shiprocket'" "$apim" || grep -Fq "'/shiprocket'" "$apim"; then
+        echo 'ERROR: APIM contains a provider-named Shiprocket public webhook route.' >&2
+        exit 2
+      fi
+    displayName: Verify APIM webhook routes are safe and implementation-backed
+
+  - bash: |
+      set -euo pipefail
+      coordinated=azure-pipelines-delivery-provider-coordinated-activation.yml
+
+      grep -Fq 'VENDOR_PRIVATE_API_CONTRACT_REQUIRED' "$coordinated"
+      grep -Fq 'ENTERPRISE_API_ONBOARDING_REQUIRED' "$coordinated"
+      grep -Fq 'INTRACITY_API_PRODUCT_NOT_VERIFIED' "$coordinated"
+      grep -Fq 'CRAVES_DELIVERY_COMMAND_ENABLED=false' "$coordinated"
+      grep -Fq 'CRAVES_DELIVERY_COMMAND_ENABLED=true' "$coordinated"
+      grep -Fq 'CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED=true' "$coordinated"
+      grep -Fq 'CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED=true' "$coordinated"
+      grep -Fq 'CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true' "$coordinated"
+      grep -Fq "provider_id='borzo' AND status NOT IN ('DELIVERED','CANCELLED','RETURNED','FAILED')" "$coordinated"
+      grep -Fq 'expectedDeliveryQueueDeadLetterCount' "$coordinated"
+      grep -Fq 'expectedStatusSubscriptionDeadLetterCount' "$coordinated"
+    displayName: Verify coordinated production cutover is preflight-first
 
   - bash: |
       set -euo pipefail
@@ -69,6 +179,7 @@ steps:
         azure-pipelines-integration-service.yml \
         azure-pipelines-delivery-provider-webhooks-apim.yml \
         azure-pipelines-delivery-provider-production-activation.yml \
+        azure-pipelines-delivery-provider-coordinated-activation.yml \
         azure-pipelines-shadowfax-environment.yml \
         azure-pipelines-porter-environment.yml \
         azure-pipelines-shiprocket-production-activation.yml \
@@ -86,37 +197,30 @@ steps:
 
       shadowfax=azure-pipelines-shadowfax-environment.yml
       porter=azure-pipelines-porter-environment.yml
-      shiprocket=azure-pipelines-shiprocket-production-activation.yml
       delhivery=azure-pipelines-delhivery-environment.yml
-      borzo=azure-pipelines-delivery-provider-production-activation.yml
-      apim=azure-pipelines-delivery-provider-webhooks-apim.yml
 
-      for file in "$shadowfax" "$porter" "$shiprocket" "$delhivery" "$borzo"; do
+      for file in "$shadowfax" "$porter" "$delhivery"; do
         grep -A4 -F -- '- name: targetEnvironment' "$file" | grep -Fq 'default: SANDBOX'
         grep -A3 -F -- '- name: enableProvider' "$file" | grep -Fq 'default: false'
       done
 
       grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shadowfax'" "$shadowfax"
       grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/porter'" "$porter"
-      grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket'" "$shiprocket"
-
-      grep -A3 -F -- '- name: enableBorzoRoute' "$apim" | grep -Fq 'default: true'
-      grep -A3 -F -- '- name: enableShiprocketRoute' "$apim" | grep -Fq 'default: false'
-      grep -A3 -F -- '- name: enableDelhiveryRoute' "$apim" | grep -Fq 'default: false'
-    displayName: Verify simple-sandbox defaults and full-sandbox adapter guards
+      grep -Fq 'Commit the Delhivery adapter/config before full sandbox or production use.' "$delhivery"
+    displayName: Verify gated providers cannot be enabled by environment flags alone
 
   - bash: |
       set -euo pipefail
 
       grep -Fq 'SHADOWFAX_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-shadowfax-environment.yml
       grep -Fq 'PORTER_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-porter-environment.yml
-      grep -Fq 'SHIPROCKET_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-shiprocket-production-activation.yml
       grep -Fq 'DELHIVERY_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-delhivery-environment.yml
       grep -Fq 'BORZO_API_AUTH_TOKEN=secretref:borzo-api-auth-token' azure-pipelines-delivery-provider-production-activation.yml
       grep -Fq 'BORZO_CALLBACK_TOKEN=secretref:borzo-callback-token' azure-pipelines-delivery-provider-production-activation.yml
 
-      if grep -R -n -E '(SHADOWFAX|PORTER|SHIPROCKET|DELHIVERY|BORZO).*(TOKEN|SECRET)[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=_-]{24,}' \
+      if grep -R -n -E '(SHADOWFAX|PORTER|SHIPROCKET|DELHIVERY|BORZO).*(TOKEN|SECRET|PASSWORD)[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=_-]{24,}' \
         azure-pipelines-delivery-provider-production-activation.yml \
+        azure-pipelines-delivery-provider-coordinated-activation.yml \
         azure-pipelines-shadowfax-environment.yml \
         azure-pipelines-porter-environment.yml \
         azure-pipelines-shiprocket-production-activation.yml \
@@ -128,6 +232,6 @@ steps:
 
   - bash: |
       set -euo pipefail
-      git diff --check HEAD~0 -- . || true
-      echo 'Delivery provider safety chain validation completed.'
-    displayName: Final delivery integration safety check
+      git diff --check
+      echo 'Delivery provider productionization safety validation completed.'
+    displayName: Final source hygiene check

@@ -58,6 +58,7 @@ steps:
         base_url='${{ parameters.providerBaseUrl }}'
         secret_name='${{ parameters.authSecretName }}'
         app_yml='services/integration-service/src/main/resources/application.yml'
+        adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket'
 
         fail() {
           echo "ERROR: $*" >&2
@@ -76,12 +77,20 @@ steps:
           runtime_config_present=true
         fi
 
+        adapter_present=false
+        if [[ -d "$adapter_dir" ]] && find "$adapter_dir" -type f -name '*.java' -print -quit | grep -q .; then
+          adapter_present=true
+        fi
+
+        # SIMPLE_SANDBOX intentionally needs no credential and makes no provider calls.
+        # FULL_SANDBOX/PRODUCTION require both the real Spring adapter and runtime config.
         if [[ "$enable" == 'true' || "$environment" == 'PRODUCTION' ]]; then
+          [[ "$adapter_present" == 'true' ]] || fail 'Shiprocket Spring adapter is not present. Keep enableProvider=false until the provider adapter is committed.'
           [[ "$runtime_config_present" == 'true' ]] || fail 'Shiprocket runtime configuration is not present in the current Spring Integration Service. Commit the Shiprocket adapter/config before enabling or switching production.'
           [[ "$base_url" == https://* ]] || fail 'Shiprocket provider base URL must use HTTPS.'
-          [[ "$base_url" != *replace-before-run.invalid* ]] || fail 'Replace the Shiprocket provider base URL placeholder.'
+          [[ "$base_url" != *replace-before-run.invalid* ]] || fail 'Replace the Shiprocket provider base URL placeholder with the vendor-approved endpoint.'
           if [[ "$environment" == 'PRODUCTION' ]]; then
-            [[ "$base_url" != *test* && "$base_url" != *sandbox* ]] || fail 'Shiprocket production cannot use a test/sandbox host.'
+            [[ "$base_url" != *test* && "$base_url" != *sandbox* && "$base_url" != *stage* ]] || fail 'Shiprocket production cannot use a test/stage/sandbox host.'
           fi
         fi
 
@@ -90,9 +99,10 @@ steps:
           grep -qx "$secret_name" <<<"$secrets" || fail "Missing Container App secret $secret_name."
         fi
 
+        approved=false
+        [[ "$environment" == 'PRODUCTION' ]] && approved=true
+
         if [[ "$enable" == 'false' ]]; then
-          approved=false
-          [[ "$environment" == 'PRODUCTION' ]] && approved=true
           az containerapp update -g "$RG" -n "$APP" \
             --set-env-vars \
               SHIPROCKET_API_ENVIRONMENT="$environment" \
@@ -100,8 +110,6 @@ steps:
               SHIPROCKET_API_ENABLED=false \
               CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
         else
-          approved=false
-          [[ "$environment" == 'PRODUCTION' ]] && approved=true
           az containerapp update -g "$RG" -n "$APP" \
             --set-env-vars \
               SHIPROCKET_API_ENVIRONMENT="$environment" \
@@ -145,5 +153,6 @@ steps:
         else
           echo 'Mode: PRODUCTION'
         fi
+        echo "Spring adapter detected: $adapter_present"
         echo "Spring runtime configuration detected: $runtime_config_present"
         echo '============================================================'

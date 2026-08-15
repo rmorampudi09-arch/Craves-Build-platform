@@ -12,11 +12,17 @@ import org.springframework.util.StringUtils;
 @Component
 @ConfigurationProperties(prefix = "craves.providers.shiprocket")
 public class ShiprocketProperties {
-    private static final Set<String> ENVIRONMENTS = Set.of("SANDBOX", "PRODUCTION");
+    /**
+     * Shiprocket documents that authenticated API calls operate on real-time account data. There
+     * is therefore no assumed isolated sandbox here. READ_ONLY is the safe non-mutating mode. The
+     * legacy SANDBOX value is accepted only as an alias for READ_ONLY so existing Azure settings do
+     * not break during migration.
+     */
+    private static final Set<String> ENVIRONMENTS = Set.of("READ_ONLY", "SANDBOX", "PRODUCTION");
 
     private boolean enabled = false;
     private boolean createEnabled = false;
-    private String environment = "SANDBOX";
+    private String environment = "READ_ONLY";
     private boolean productionActivationApproved = false;
     private boolean attributionApproved = false;
     private String baseUrl = "https://apiv2.shiprocket.in/v1/external";
@@ -37,9 +43,11 @@ public class ShiprocketProperties {
     @PostConstruct
     void validate() {
         URI uri = parseHttps(baseUrl, "Shiprocket baseUrl");
-        String normalizedEnvironment = normalizedEnvironment();
-        if (!ENVIRONMENTS.contains(normalizedEnvironment)) {
-            throw new IllegalStateException("SHIPROCKET_API_ENVIRONMENT must be SANDBOX or PRODUCTION");
+        String configuredEnvironment = configuredEnvironment();
+        if (!ENVIRONMENTS.contains(configuredEnvironment)) {
+            throw new IllegalStateException(
+                "SHIPROCKET_API_ENVIRONMENT must be READ_ONLY, SANDBOX (legacy read-only alias), or PRODUCTION"
+            );
         }
         if (connectTimeoutSeconds < 1 || readTimeoutSeconds < 1) {
             throw new IllegalStateException("Shiprocket HTTP timeouts must be at least 1 second");
@@ -63,6 +71,16 @@ public class ShiprocketProperties {
             if (!enabled) {
                 throw new IllegalStateException("SHIPROCKET_CREATE_ENABLED requires SHIPROCKET_API_ENABLED=true");
             }
+            if (!"PRODUCTION".equals(executionMode())) {
+                throw new IllegalStateException(
+                    "Shiprocket create is allowed only in explicit PRODUCTION mode; READ_ONLY/SANDBOX never mutates the account"
+                );
+            }
+            if (!productionActivationApproved) {
+                throw new IllegalStateException(
+                    "SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED must be true before Shiprocket create is enabled"
+                );
+            }
             requireText(webhookToken, "SHIPROCKET_WEBHOOK_TOKEN");
             requireText(pickupLocation, "SHIPROCKET_PICKUP_LOCATION");
             requireText(orderEmail, "SHIPROCKET_ORDER_EMAIL");
@@ -76,15 +94,10 @@ public class ShiprocketProperties {
             }
         }
 
-        if ("PRODUCTION".equals(normalizedEnvironment)) {
+        if ("PRODUCTION".equals(executionMode())) {
             String host = uri.getHost().toLowerCase(Locale.ROOT);
             if (host.contains("test") || host.contains("sandbox") || host.contains("stage")) {
                 throw new IllegalStateException("Shiprocket production environment cannot use a test/stage/sandbox host");
-            }
-            if (createEnabled && !productionActivationApproved) {
-                throw new IllegalStateException(
-                    "SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED must be true before production create is enabled"
-                );
             }
         }
     }
@@ -95,6 +108,8 @@ public class ShiprocketProperties {
 
     public boolean createPrerequisitesReady() {
         return credentialReady()
+            && "PRODUCTION".equals(executionMode())
+            && productionActivationApproved
             && StringUtils.hasText(webhookToken)
             && StringUtils.hasText(pickupLocation)
             && StringUtils.hasText(orderEmail)
@@ -105,17 +120,20 @@ public class ShiprocketProperties {
     }
 
     public boolean productionCreateReady() {
-        return "PRODUCTION".equals(normalizedEnvironment())
-            && productionActivationApproved
-            && createPrerequisitesReady();
+        return createEnabled && createPrerequisitesReady();
     }
 
     public String normalizedBaseUrl() {
         return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
     }
 
-    public String normalizedEnvironment() {
+    public String configuredEnvironment() {
         return environment == null ? "" : environment.trim().toUpperCase(Locale.ROOT);
+    }
+
+    /** Legacy SANDBOX means READ_ONLY; it never authorizes account mutation. */
+    public String executionMode() {
+        return "SANDBOX".equals(configuredEnvironment()) ? "READ_ONLY" : configuredEnvironment();
     }
 
     private static URI parseHttps(String value, String name) {

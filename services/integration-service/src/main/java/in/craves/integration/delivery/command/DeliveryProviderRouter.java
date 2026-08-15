@@ -71,7 +71,9 @@ public class DeliveryProviderRouter {
         Objects.requireNonNull(command, "delivery command is required");
         List<String> activeProviderIds = providerCatalog.activeProviderIds();
         if (activeProviderIds.isEmpty()) {
-            throw new DeliveryRoutingException("No active delivery providers are configured");
+            throw new DeliveryProviderTemporarilyUnavailableException(
+                "No active delivery providers are configured"
+            );
         }
 
         List<QuoteAudit> quoteAudit = new ArrayList<>();
@@ -94,7 +96,15 @@ public class DeliveryProviderRouter {
         boolean anyAvailableQuote = outcomes.stream()
             .anyMatch(outcome -> outcome.quote() != null && outcome.quote().available());
         if (!anyAvailableQuote) {
-            throw new DeliveryRoutingException("No active delivery provider returned an available quote");
+            boolean anyProviderResponse = outcomes.stream().anyMatch(outcome -> outcome.quote() != null);
+            if (!anyProviderResponse) {
+                throw new DeliveryProviderTemporarilyUnavailableException(
+                    "Active delivery providers did not return a quote"
+                );
+            }
+            throw new DeliveryRoutingException(
+                "No active delivery provider returned an available quote"
+            );
         }
 
         AssignmentResponse assignment = intelligenceService.assign(
@@ -464,6 +474,12 @@ public class DeliveryProviderRouter {
 
         public DeliveryRoutingException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    public static class DeliveryProviderTemporarilyUnavailableException extends DeliveryRoutingException {
+        public DeliveryProviderTemporarilyUnavailableException(String message) {
+            super(message);
         }
     }
 

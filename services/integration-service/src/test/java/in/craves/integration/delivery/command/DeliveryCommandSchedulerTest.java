@@ -41,7 +41,8 @@ class DeliveryCommandSchedulerTest {
             return new CommandRecord(
                 message.commandId(), message.chefSubOrderId(), message.orderId(),
                 "SCHEDULED", 0, message, null, null,
-                null, null, null, 0
+                null, null, null, 0,
+                0, null, null
             );
         });
         when(publisher.schedule(any())).thenReturn(

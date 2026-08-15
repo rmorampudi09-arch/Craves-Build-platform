@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
   },
   shell: {
-    height: 88,
+    height: 72,
     flexDirection: 'row',
     alignItems: 'stretch',
     backgroundColor: colors.white,
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   },
   cartAction: {
     width: 124,
-    height: 64,
+    height: 54,
     flexShrink: 0,
     alignSelf: 'center',
     marginLeft: spacing.xxs,

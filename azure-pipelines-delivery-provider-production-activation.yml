@@ -37,6 +37,7 @@ variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia
   containerApp: ca-craves-integration-service-pr
+  orderContainerApp: ca-craves-order-service-prodlow
   serviceBusNamespace: sb-craves-prodlow-l3ing6
   deliveryQueue: delivery-command
 
@@ -127,6 +128,7 @@ steps:
                 BORZO_API_ENVIRONMENT=SANDBOX \
                 BORZO_PRODUCTION_ACTIVATION_APPROVED=false \
                 BORZO_API_ENABLED=false \
+                CRAVES_DELIVERY_COMMAND_ENABLED=false \
                 CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
           else
             az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
@@ -194,6 +196,37 @@ steps:
         value() { jq -r --arg name "$1" '.[] | select(.name == $name) | .value' <<<"$values" | tail -1; }
         [[ "$(value BORZO_API_ENVIRONMENT)" == "$environment" ]] || fail 'Borzo environment verification failed.'
         [[ "$(value BORZO_API_ENABLED)" == "$enable" ]] || fail 'Borzo enabled-state verification failed.'
+
+        if [[ "$enable" == 'true' ]]; then
+          az containerapp update -g '$(resourceGroup)' -n '$(orderContainerApp)' \
+            --set-env-vars \
+              CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED=true \
+              CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED=true >/dev/null
+
+          order_latest="$(az containerapp show -g '$(resourceGroup)' -n '$(orderContainerApp)' --query properties.latestRevisionName -o tsv)"
+          order_ready=''
+          for _ in $(seq 1 60); do
+            order_ready="$(az containerapp show -g '$(resourceGroup)' -n '$(orderContainerApp)' --query properties.latestReadyRevisionName -o tsv 2>/dev/null || true)"
+            [[ "$order_ready" == "$order_latest" ]] && break
+            sleep 10
+          done
+          [[ "$order_ready" == "$order_latest" ]] || fail 'Order Service publisher revision did not become ready.'
+        fi
+
+        db_url="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query "properties.template.containers[0].env[?name=='SPRING_DATASOURCE_URL']|[0].value" -o tsv)"
+        db_user="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query "properties.template.containers[0].env[?name=='SPRING_DATASOURCE_USERNAME']|[0].value" -o tsv)"
+        db_secret_url="$(az containerapp secret list -g '$(resourceGroup)' -n '$(containerApp)' --query "[?name=='kv-db-password']|[0].keyVaultUrl" -o tsv)"
+        [[ "$db_url" == jdbc:postgresql://* && -n "$db_user" && "$db_secret_url" == https://*.vault.azure.net/secrets/* ]] || fail 'Integration database binding is incomplete.'
+        vault_name="$(cut -d. -f1 <<<"${db_secret_url#https://}")"
+        secret_name="${db_secret_url##*/}"
+        db_password="$(az keyvault secret show --vault-name "$vault_name" --name "$secret_name" --query value -o tsv)"
+        [[ -n "$db_password" ]] || fail 'Integration database password could not be resolved.'
+        PGPASSWORD="$db_password" PGUSER="$db_user" psql "${db_url#jdbc:}" -v ON_ERROR_STOP=1 \
+          -c "UPDATE delivery_schema.delivery_provider SET is_active = $enable, updated_at = now() WHERE provider_id = 'borzo';" >/dev/null
+        unset db_password PGPASSWORD
+
+        provider_active="$(PGPASSWORD="$(az keyvault secret show --vault-name "$vault_name" --name "$secret_name" --query value -o tsv)" PGUSER="$db_user" psql "${db_url#jdbc:}" -Atc "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id = 'borzo';")"
+        [[ "$provider_active" == "${enable:0:1}" ]] || fail 'Borzo database activation-state verification failed.'
 
         echo '============================================================'
         echo 'BORZO DELIVERY PROVIDER SWITCH: PASS'

@@ -105,16 +105,12 @@ steps:
         callback_url='${{ parameters.callbackUrl }}'
         app_yml='services/integration-service/src/main/resources/application.yml'
 
-        fail() {
-          echo "ERROR: $*" >&2
-          exit 2
-        }
+        fail() { echo "ERROR: $*" >&2; exit 2; }
 
         wait_ready() {
           local app="$1"
           local latest ready
           latest="$(az containerapp show -g "$RG" -n "$app" --query properties.latestRevisionName -o tsv --only-show-errors)"
-          ready=''
           for _ in $(seq 1 60); do
             ready="$(az containerapp show -g "$RG" -n "$app" --query properties.latestReadyRevisionName -o tsv --only-show-errors 2>/dev/null || true)"
             [[ "$ready" == "$latest" ]] && return 0
@@ -200,23 +196,34 @@ steps:
           (( ${#API_IDS[@]} == 1 )) || fail 'Expected exactly one APIM delivery webhook API.'
           operations="$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "${API_IDS[0]}" -o json --only-show-errors)"
           [[ "$(jq '[.[] | select((.method | ascii_upcase) == "POST" and .urlTemplate == "/borzo")] | length' <<<"$operations")" == '1' ]] || fail 'Borzo APIM webhook route is missing.'
-        fi
 
-        if [[ "$environment" == 'PRODUCTION' && "$stage" == 'provider_create' ]]; then
           for name in CRAVES_DELIVERY_RECONCILIATION_ENABLED CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED; do
             [[ "$(current_value "$name")" == 'true' ]] || fail "$name must already be true before provider_create. Run downstream stage first."
           done
           [[ "$current_environment" == 'PRODUCTION' ]] || fail 'Run PRODUCTION downstream stage before provider_create.'
           [[ "$(current_value BORZO_PRODUCTION_ACTIVATION_APPROVED)" == 'true' ]] || fail 'Borzo production approval is not staged.'
+        fi
 
-          # Runtime adapter becomes ready first; command execution resumes only after DB activation.
+        # Remove Borzo from routing before any runtime reconfiguration. If no other provider remains,
+        # pause command consumption so a delivery command cannot be claimed during the cutover.
+        psql "$DB" -v ON_ERROR_STOP=1 -c "UPDATE delivery_schema.delivery_provider SET is_active=FALSE, updated_at=now() WHERE provider_id='borzo';" >/dev/null
+        [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE provider_id='borzo' AND is_active=TRUE;")" == '0' ]] || fail 'Borzo could not be removed from routing before reconfiguration.'
+        other_active_count="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE is_active=TRUE;")"
+        if [[ "$other_active_count" == '0' ]]; then
+          az containerapp update -g "$RG" -n "$APP" --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=false >/dev/null
+          wait_ready "$APP"
+        else
+          echo "INFO: $other_active_count other provider(s) remain active; command worker stays available for them."
+        fi
+
+        if [[ "$environment" == 'PRODUCTION' && "$stage" == 'provider_create' ]]; then
+          # Production metadata/downstream state was staged previously. Only provider execution is
+          # enabled here, while Borzo remains absent from the DB routing catalog.
           az containerapp update -g "$RG" -n "$APP" \
             --set-env-vars \
               BORZO_API_ENABLED=true \
-              CRAVES_DELIVERY_COMMAND_ENABLED=false \
               CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
         elif [[ "$environment" == 'SANDBOX' && "$enable" == 'false' ]]; then
-          # SIMPLE_SANDBOX requires no provider credential at all.
           az containerapp update -g "$RG" -n "$APP" \
             --set-env-vars \
               BORZO_API_ENVIRONMENT=SANDBOX \
@@ -243,13 +250,10 @@ steps:
         fi
         wait_ready "$APP"
 
-        psql "$DB" -v ON_ERROR_STOP=1 \
-          -c "UPDATE delivery_schema.delivery_provider SET is_active = ${enable}, updated_at = now() WHERE provider_id='borzo';" >/dev/null
-        expected_active='f'
-        [[ "$enable" == 'true' ]] && expected_active='t'
-        [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='borzo';")" == "$expected_active" ]] || fail 'Borzo DB activation verification failed.'
-
         if [[ "$enable" == 'true' ]]; then
+          psql "$DB" -v ON_ERROR_STOP=1 -c "UPDATE delivery_schema.delivery_provider SET is_active=TRUE, updated_at=now() WHERE provider_id='borzo';" >/dev/null
+          [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='borzo';")" == 't' ]] || fail 'Borzo DB activation verification failed.'
+
           az containerapp update -g "$RG" -n "$ORDER_APP" \
             --set-env-vars \
               CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED=true \
@@ -257,24 +261,19 @@ steps:
               CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true >/dev/null
           wait_ready "$ORDER_APP"
 
-          az containerapp update -g "$RG" -n "$APP" \
-            --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=true >/dev/null
+          az containerapp update -g "$RG" -n "$APP" --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=true >/dev/null
           wait_ready "$APP"
-        else
-          active_provider_count="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE is_active=TRUE;")"
-          if [[ "$active_provider_count" == '0' ]]; then
-            az containerapp update -g "$RG" -n "$APP" \
-              --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=false >/dev/null
-            wait_ready "$APP"
-          else
-            echo "INFO: $active_provider_count other provider(s) remain active; global delivery-command worker is unchanged."
-          fi
         fi
 
         values="$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].env' -o json --only-show-errors)"
         value() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // .secretRef // "")' <<<"$values" | tail -1; }
         [[ "$(value BORZO_API_ENVIRONMENT)" == "$environment" ]] || fail 'Borzo environment verification failed.'
         [[ "$(value BORZO_API_ENABLED)" == "$enable" ]] || fail 'Borzo API enabled-state verification failed.'
+
+        expected_active='f'
+        [[ "$enable" == 'true' ]] && expected_active='t'
+        [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='borzo';")" == "$expected_active" ]] || fail 'Borzo DB routing-state verification failed.'
+
         if [[ "$enable" == 'true' ]]; then
           [[ "$(value CRAVES_DELIVERY_COMMAND_ENABLED)" == 'true' ]] || fail 'Delivery command worker is not enabled.'
           order_values="$(az containerapp show -g "$RG" -n "$ORDER_APP" --query 'properties.template.containers[0].env' -o json --only-show-errors)"
@@ -297,5 +296,5 @@ steps:
         else
           echo "Mode: PRODUCTION_${stage^^}"
         fi
-        echo 'Runtime adapter is verified before DB routing activation; global worker is provider-safe.'
+        echo 'Provider is removed from routing before every runtime reconfiguration.'
         echo '============================================================'

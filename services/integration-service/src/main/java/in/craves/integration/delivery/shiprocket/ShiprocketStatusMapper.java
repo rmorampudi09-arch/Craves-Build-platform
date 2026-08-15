@@ -7,13 +7,18 @@ import java.util.Locale;
  * Maps Shiprocket tracking/webhook shipment status codes to Craves delivery states.
  *
  * <p>The numeric values intentionally follow Shiprocket's Tracking "Shipment Status Codes"
- * table rather than the separate Orders status-filter table. Unknown or fulfillment-only
- * states stay UNKNOWN so Craves never fabricates delivery progress.</p>
+ * table rather than the separate Orders/current-status id space. Shiprocket responses can expose
+ * both status id families, so an explicit recognized status label wins over a numeric id. Unknown
+ * or fulfillment-only states stay UNKNOWN so Craves never fabricates delivery progress.</p>
  */
 final class ShiprocketStatusMapper {
     private ShiprocketStatusMapper() {}
 
     static DeliveryStatus map(Integer statusCode, String statusText) {
+        DeliveryStatus textMapped = byText(statusText);
+        if (textMapped != DeliveryStatus.UNKNOWN) {
+            return textMapped;
+        }
         if (statusCode != null) {
             return switch (statusCode) {
                 case 6, 18, 38, 48, 49, 50, 51, 54, 55, 56, 57 -> DeliveryStatus.IN_TRANSIT;
@@ -30,10 +35,10 @@ final class ShiprocketStatusMapper {
                 case 42 -> DeliveryStatus.PICKED_UP;
                 // 26 FULFILLED, 43 SELF FULFILLED and fulfillment-centre-only states such as
                 // 59-63/67/68 do not prove customer delivery progress.
-                default -> byText(statusText);
+                default -> DeliveryStatus.UNKNOWN;
             };
         }
-        return byText(statusText);
+        return DeliveryStatus.UNKNOWN;
     }
 
     private static DeliveryStatus byText(String statusText) {

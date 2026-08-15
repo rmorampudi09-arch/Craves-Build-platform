@@ -3,6 +3,7 @@ pr: none
 
 variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  DELIVERY_PRODUCTIONIZATION_BASE_SHA: f0b4c27973bb987bccf68bb1f1a44e1250d94bd4
 
 pool:
   vmImage: ubuntu-latest
@@ -11,6 +12,7 @@ steps:
   - checkout: self
     clean: true
     persistCredentials: false
+    fetchDepth: 0
 
   - task: JavaToolInstaller@0
     displayName: Use Java 21
@@ -80,12 +82,38 @@ steps:
 
   - bash: |
       set -euo pipefail
+      migration=services/integration-service/src/main/resources/db/migration/V110__multi_provider_catalog_and_pickup_mapping.sql
+
+      [[ -f "$migration" ]] || {
+        echo "ERROR: Missing multi-provider migration: $migration" >&2
+        exit 2
+      }
+      for provider in shiprocket shadowfax porter delhivery; do
+        grep -Fq "'${provider}'" "$migration" || {
+          echo "ERROR: $provider is missing from the multi-provider catalog migration." >&2
+          exit 2
+        }
+      done
+      grep -Fq 'CREATE TABLE IF NOT EXISTS delivery_schema.delivery_provider_pickup_location' "$migration"
+      grep -Fq 'is_verified                 BOOLEAN NOT NULL DEFAULT FALSE' "$migration"
+      grep -Fq 'ON CONFLICT (provider_id) DO UPDATE SET' "$migration"
+
+      conflict_block="$(sed -n '/ON CONFLICT (provider_id) DO UPDATE SET/,/CREATE TABLE IF NOT EXISTS/p' "$migration")"
+      if grep -Eq '(^|[[:space:]])is_active[[:space:]]*=' <<<"$conflict_block"; then
+        echo 'ERROR: Provider catalog migration must never activate/deactivate an existing provider on conflict.' >&2
+        exit 2
+      fi
+    displayName: Verify provider catalog migration remains activation-neutral
+
+  - bash: |
+      set -euo pipefail
 
       shiprocket_dir=services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket
       test_dir=services/integration-service/src/test/java/in/craves/integration/delivery/shiprocket
 
       for file in \
         ShiprocketApiClient.java \
+        ShiprocketAuthClient.java \
         ShiprocketTransport.java \
         ShiprocketStatusMapper.java \
         ShiprocketWebhookInboxRepository.java \
@@ -102,7 +130,9 @@ steps:
       [[ -f "$test_dir/ShiprocketStatusMapperTest.java" ]]
       [[ -f "$test_dir/ShiprocketStatusIdSpaceTest.java" ]]
       [[ -f "$test_dir/ShiprocketWebhookNormalizerTest.java" ]]
+      [[ -f "$test_dir/ShiprocketWebhookServiceTest.java" ]]
       [[ -f services/integration-service/src/test/java/in/craves/integration/config/ShiprocketPropertiesTest.java ]]
+      [[ -f services/integration-service/src/test/java/in/craves/integration/delivery/production/DeliveryProviderReadinessServiceTest.java ]]
 
       grep -R -Fq '@PostMapping("/p4")' "$shiprocket_dir"
       grep -R -Fq 'x-api-key' "$shiprocket_dir"
@@ -252,7 +282,15 @@ steps:
 
   - bash: |
       set -euo pipefail
-      git status --short
-      git diff --check HEAD~1 HEAD || true
-      echo 'Delivery provider productionization safety validation completed.'
+      base="$(DELIVERY_PRODUCTIONIZATION_BASE_SHA)"
+      git cat-file -e "${base}^{commit}"
+      git diff --check "$base" HEAD
+
+      if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+        echo 'ERROR: Validation steps modified tracked source files.' >&2
+        git status --short
+        exit 2
+      fi
+
+      echo "Delivery provider productionization safety validation completed from $base to HEAD."
     displayName: Final source hygiene check

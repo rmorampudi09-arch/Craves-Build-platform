@@ -137,8 +137,6 @@ steps:
         [[ "$enable_create" == 'true' || "$enable_create" == 'false' ]] || fail 'enableCreate is invalid.'
         [[ "$configured_environment" == 'READ_ONLY' || "$configured_environment" == 'SANDBOX' || "$configured_environment" == 'PRODUCTION' ]] || fail 'targetEnvironment is invalid.'
 
-        # Shiprocket authenticated API calls operate against the account. SANDBOX is retained only
-        # as a compatibility alias for non-mutating READ_ONLY mode.
         runtime_environment="$configured_environment"
         [[ "$runtime_environment" == 'SANDBOX' ]] && runtime_environment='READ_ONLY'
 
@@ -277,15 +275,16 @@ steps:
         wait_ready "$APP"
 
         if [[ "$enable_create" == 'true' ]]; then
-          psql "$DB" -v ON_ERROR_STOP=1 -c "UPDATE delivery_schema.delivery_provider SET is_active=TRUE, updated_at=now() WHERE provider_id='shiprocket';" >/dev/null
-          [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket';")" == 't' ]] || fail 'Shiprocket DB activation verification failed.'
-
+          # Prepare both directions of the Order Service event flow before Shiprocket becomes routable.
           az containerapp update -g "$RG" -n "$ORDER_APP" \
             --set-env-vars \
               CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED=true \
               CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED=true \
               CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true >/dev/null
           wait_ready "$ORDER_APP"
+
+          psql "$DB" -v ON_ERROR_STOP=1 -c "UPDATE delivery_schema.delivery_provider SET is_active=TRUE, updated_at=now() WHERE provider_id='shiprocket';" >/dev/null
+          [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket';")" == 't' ]] || fail 'Shiprocket DB activation verification failed.'
 
           az containerapp update -g "$RG" -n "$APP" --set-env-vars CRAVES_DELIVERY_COMMAND_ENABLED=true >/dev/null
           wait_ready "$APP"
@@ -325,5 +324,5 @@ steps:
         else
           echo 'Mode: FAIL_CLOSED'
         fi
-        echo 'Provider is removed from routing before every runtime reconfiguration.'
+        echo 'Order projection and runtime are ready before DB routing activation.'
         echo '============================================================'

@@ -64,10 +64,6 @@ public interface DeliveryProviderAdapter {
      * Canonical delivery stop. The original free-form address remains authoritative for providers
      * that accept it directly (for example Borzo). The additive structured fields preserve address
      * data that Order Service already owns and are required by providers such as Shiprocket.
-     *
-     * <p>The eight-argument constructor is intentionally retained so older tests, stored command
-     * payloads and provider code remain source/backward compatible. Missing additive JSON fields
-     * deserialize as {@code null}.</p>
      */
     record Stop(
         String address,
@@ -132,7 +128,8 @@ public interface DeliveryProviderAdapter {
         Stop dropoff,
         List<ShipmentItem> items,
         BigDecimal declaredGoodsValue,
-        String paymentCollectionMode
+        String paymentCollectionMode,
+        UUID pickupLocationReference
     ) {
         public QuoteRequest(String matter,
                             int totalWeightGrams,
@@ -146,6 +143,7 @@ public interface DeliveryProviderAdapter {
                 pickup,
                 dropoff,
                 List.of(),
+                null,
                 null,
                 null
             );
@@ -270,9 +268,7 @@ public interface DeliveryProviderAdapter {
             }
         }
 
-        public static CreateReconciliationResult found(
-            ProviderDelivery delivery
-        ) {
+        public static CreateReconciliationResult found(ProviderDelivery delivery) {
             return new CreateReconciliationResult(
                 CreateReconciliationStatus.FOUND,
                 Objects.requireNonNull(delivery, "delivery is required"),
@@ -323,30 +319,13 @@ public interface DeliveryProviderAdapter {
                 "Provider create outcome is uncertain and requires reconciliation",
                 cause
             );
-            this.providerId = Objects.requireNonNull(
-                providerId,
-                "providerId is required"
-            );
-            this.clientReference = Objects.requireNonNull(
-                clientReference,
-                "clientReference is required"
-            );
-            this.attemptedAt = Objects.requireNonNull(
-                attemptedAt,
-                "attemptedAt is required"
-            );
+            this.providerId = Objects.requireNonNull(providerId, "providerId is required");
+            this.clientReference = Objects.requireNonNull(clientReference, "clientReference is required");
+            this.attemptedAt = Objects.requireNonNull(attemptedAt, "attemptedAt is required");
         }
 
-        public String providerId() {
-            return providerId;
-        }
-
-        public String clientReference() {
-            return clientReference;
-        }
-
-        public Instant attemptedAt() {
-            return attemptedAt;
-        }
+        public String providerId() { return providerId; }
+        public String clientReference() { return clientReference; }
+        public Instant attemptedAt() { return attemptedAt; }
     }
 }

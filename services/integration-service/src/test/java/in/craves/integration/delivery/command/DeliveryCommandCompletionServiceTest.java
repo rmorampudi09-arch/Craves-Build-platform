@@ -88,6 +88,12 @@ class DeliveryCommandCompletionServiceTest {
             eq(assignmentId), eq(backupCandidateId), eq(List.of("fast"))
         );
         verify(commands).markCompleted(command.commandId());
+        verify(outbox).enqueue(
+            eq(DeliveryCommandModels.DELIVERY_STATUS_CHANGED),
+            eq(deliveryJobId),
+            eq(command.orderId()),
+            any()
+        );
     }
 
     private static AssignmentResponse assignment(DeliveryCommandMessage command,

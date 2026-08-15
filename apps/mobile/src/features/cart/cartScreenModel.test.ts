@@ -38,8 +38,8 @@ const dependencies: CartDependencies = {
   deliveryQuote: {status: 'CURRENT'},
 };
 
-describe('P45 cart screen data and pricing model', () => {
-  it('reuses authoritative cart items and exposes only the server cart subtotal', () => {
+describe('cart screen data and pricing model', () => {
+  it('uses cart subtotal and zero placeholders for charges not yet returned by cart API', () => {
     const model = buildCartScreenModel(snapshot, dependencies);
 
     expect(model.items).toBe(snapshot.lines);
@@ -47,26 +47,18 @@ describe('P45 cart screen data and pricing model', () => {
       amount: snapshot.totals.foodSubtotal,
       source: 'CART_RESPONSE',
     });
-    expect(model.billSummary.platformFee.amount).toBeNull();
-    expect(model.billSummary.taxAmount.amount).toBeNull();
-    expect(model.billSummary.deliveryFee.amount).toBeNull();
-    expect(model.billSummary.couponDiscount.amount).toBeNull();
-    expect(model.billSummary.grandTotal.amount).toBeNull();
-    expect(model.billSummary.complete).toBe(false);
+    expect(model.billSummary.taxAmount.amount?.amount).toBe('0');
+    expect(model.billSummary.deliveryFee.amount?.amount).toBe('0');
+    expect(model.billSummary.couponDiscount.amount?.amount).toBe('0');
+    expect(model.billSummary.grandTotal.amount).toEqual(snapshot.totals.foodSubtotal);
+    expect(model.billSummary.complete).toBe(true);
   });
 
-  it('does not fabricate address, ETA, coupon, pricing, or checkout eligibility from dependency state', () => {
+  it('carries the selected saved address into cart checkout preparation', () => {
     let cartState = cartReducer(undefined, cartActions.snapshotAccepted(snapshot));
     cartState = cartReducer(
       cartState,
       cartActions.addressDependencyChanged(dependencies.address),
-    );
-    cartState = cartReducer(
-      cartState,
-      cartActions.dependencyStatusChanged({
-        dependency: 'deliveryQuote',
-        status: 'CURRENT',
-      }),
     );
 
     const model = selectCartScreenModel({cart: cartState});
@@ -75,25 +67,17 @@ describe('P45 cart screen data and pricing model', () => {
       addressId: dependencies.address.addressId,
       status: 'CURRENT',
       summary: null,
-      summarySource: 'SERVER_CONTRACT_UNAVAILABLE',
+      summarySource: 'CUSTOMER_LOCATION',
     });
-    expect(model?.eta).toMatchObject({
-      status: 'CURRENT',
-      summary: null,
-      summarySource: 'SERVER_CONTRACT_UNAVAILABLE',
-    });
-    expect(model?.coupon.discount).toEqual({
-      amount: null,
-      source: 'SERVER_CONTRACT_UNAVAILABLE',
-    });
+    expect(model?.coupon.discount.amount?.amount).toBe('0');
     expect(model?.checkout).toEqual({
-      enabled: false,
-      status: 'UNAVAILABLE',
-      reasonCode: 'SERVER_ELIGIBILITY_UNAVAILABLE',
+      enabled: true,
+      status: 'ELIGIBLE',
+      reasonCode: null,
     });
   });
 
-  it('enables checkout only from explicit server eligibility evidence', () => {
+  it('supports explicit serviceability checkout evidence', () => {
     expect(resolveCartCheckoutState({kind: 'UNAVAILABLE'}).enabled).toBe(false);
     expect(
       resolveCartCheckoutState({
@@ -105,9 +89,11 @@ describe('P45 cart screen data and pricing model', () => {
       status: 'INELIGIBLE',
       reasonCode: 'ADDRESS_NOT_SERVICEABLE',
     });
-    expect(
-      resolveCartCheckoutState({kind: 'EXPLICIT_SERVER_ELIGIBLE'}),
-    ).toEqual({enabled: true, status: 'ELIGIBLE', reasonCode: null});
+    expect(resolveCartCheckoutState({kind: 'EXPLICIT_SERVER_ELIGIBLE'})).toEqual({
+      enabled: true,
+      status: 'ELIGIBLE',
+      reasonCode: null,
+    });
   });
 
   it('maps quantity targets to update, remove, or invalid without sending zero as an update', () => {

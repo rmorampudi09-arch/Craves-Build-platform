@@ -1,31 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseCheckout, parseCheckoutInput } from "@/lib/checkout-contract";
+import {
+  parseCheckoutQuote,
+  parseCheckoutQuoteInput,
+} from "@/lib/checkout-contract";
 import { isSameOrigin } from "@/lib/request-security";
 import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
 
 function upstreamError(body: unknown, fallback: string): { error: string; message: string } {
   if (body && typeof body === "object") {
     const raw = body as Record<string, unknown>;
-    return {
-      error: typeof raw.error === "string" ? raw.error : "CHECKOUT_FAILED",
-      message: typeof raw.message === "string" ? raw.message : fallback,
-    };
+    const error = typeof raw.error === "string" ? raw.error : "PRICING_QUOTE_FAILED";
+    const message = typeof raw.message === "string" ? raw.message : fallback;
+    return { error, message };
   }
-  return { error: "CHECKOUT_FAILED", message: fallback };
+  return { error: "PRICING_QUOTE_FAILED", message: fallback };
 }
 
 export async function POST(request: NextRequest) {
   if (!isSameOrigin(request)) {
     return NextResponse.json(
-      { error: "ORIGIN_REJECTED", message: "Invalid checkout request origin." },
+      { error: "ORIGIN_REJECTED", message: "Invalid checkout pricing request origin." },
       { status: 403 },
     );
   }
 
-  const input = parseCheckoutInput(await request.json().catch(() => null));
+  const input = parseCheckoutQuoteInput(await request.json().catch(() => null));
   if (!input) {
     return NextResponse.json(
-      { error: "INVALID_CHECKOUT", message: "Choose a valid saved delivery address." },
+      { error: "INVALID_PRICING_QUOTE", message: "Choose a valid saved delivery address." },
       { status: 400 },
     );
   }
@@ -33,7 +35,7 @@ export async function POST(request: NextRequest) {
   try {
     const upstream = await authenticatedApiFetch(
       request,
-      "/checkout",
+      "/checkout/quote",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -50,21 +52,21 @@ export async function POST(request: NextRequest) {
         );
       }
       return NextResponse.json(
-        upstreamError(body, "Checkout could not be created."),
+        upstreamError(body, "Delivery pricing could not be calculated."),
         { status: upstream.status },
       );
     }
 
-    const checkout = parseCheckout(body);
-    return checkout
-      ? NextResponse.json(checkout, {
-          status: 201,
+    const quote = parseCheckoutQuote(body);
+    return quote
+      ? NextResponse.json(quote, {
+          status: 200,
           headers: { "Cache-Control": "no-store" },
         })
       : NextResponse.json(
           {
             error: "INVALID_UPSTREAM_RESPONSE",
-            message: "Checkout response validation failed.",
+            message: "Delivery pricing response validation failed.",
           },
           { status: 502 },
         );
@@ -76,9 +78,11 @@ export async function POST(request: NextRequest) {
         error: sessionRequired
           ? "SESSION_REQUIRED"
           : timedOut
-            ? "CHECKOUT_TIMEOUT"
-            : "CHECKOUT_UNAVAILABLE",
-        message: sessionRequired ? "Please sign in again." : "Checkout is unavailable right now.",
+            ? "PRICING_QUOTE_TIMEOUT"
+            : "PRICING_QUOTE_UNAVAILABLE",
+        message: sessionRequired
+          ? "Please sign in again."
+          : "Delivery pricing is unavailable right now.",
       },
       { status: sessionRequired ? 401 : timedOut ? 504 : 503 },
     );

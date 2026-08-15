@@ -11,6 +11,9 @@ parameters:
   - name: customerWebContainerApp
     type: string
     default: ca-craves-web-prodlow
+  - name: orderServiceContainerApp
+    type: string
+    default: ca-craves-order-service-prodlow
   - name: azureMapsAccount
     type: string
     default: maps-craves-prodlow-l3ing6
@@ -37,7 +40,7 @@ steps:
     displayName: Confirm billable Azure Maps provisioning
 
   - task: AzureCLI@2
-    displayName: Provision Azure Maps and bind managed identity
+    displayName: Verify Azure Maps and bind managed identities
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -51,4 +54,5 @@ steps:
       CRAVES_EXPECTED_SUBSCRIPTION_ID: $(expectedSubscriptionId)
       CRAVES_RESOURCE_GROUP: ${{ parameters.resourceGroupName }}
       CRAVES_CUSTOMER_WEB_APP: ${{ parameters.customerWebContainerApp }}
+      CRAVES_ORDER_APP: ${{ parameters.orderServiceContainerApp }}
       CRAVES_AZURE_MAPS_ACCOUNT: ${{ parameters.azureMapsAccount }}

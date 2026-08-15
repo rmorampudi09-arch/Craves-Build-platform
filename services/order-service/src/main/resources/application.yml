@@ -36,6 +36,18 @@ craves:
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}
+  azure-maps:
+    client-id: ${AZURE_MAPS_CLIENT_ID:}
+    endpoint: ${AZURE_MAPS_ENDPOINT:https://atlas.microsoft.com}
+  checkout-pricing:
+    quote-ttl-minutes: ${CRAVES_CHECKOUT_QUOTE_TTL_MINUTES:10}
+    delivery:
+      base-distance-km: ${CRAVES_DELIVERY_BASE_DISTANCE_KM:5.0}
+      base-fee: ${CRAVES_DELIVERY_BASE_FEE:45.00}
+      extra-per-km: ${CRAVES_DELIVERY_EXTRA_PER_KM:8.00}
+    tax:
+      restaurant-gst-percent: ${CRAVES_RESTAURANT_GST_PERCENT:5.00}
+      fee-inclusive-gst-percent: ${CRAVES_FEE_INCLUSIVE_GST_PERCENT:18.00}
   launch-policy:
     enforcement-enabled: ${CRAVES_LAUNCH_POLICY_ENFORCEMENT_ENABLED:false}
   notification:

@@ -27,10 +27,14 @@ steps:
       print('Customer checkout policy XML is valid.')
       PY
       grep -q 'deliveryAddressId' apps/customer-web-next/src/lib/checkout-contract.ts
+      grep -q 'pricingQuoteId' apps/customer-web-next/src/lib/checkout-contract.ts
+      grep -q 'parseCheckoutQuote' apps/customer-web-next/src/lib/checkout-contract.ts
       grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/checkout/route.ts
-      if grep -REn '(platformFee|taxAmount|deliveryFee|grandTotal).*[-+*/]' apps/customer-web-next/src/components/customer-checkout.tsx; then
+      grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/checkout/quote/route.ts
+      grep -q 'quote-customer-checkout' scripts/apim/configure-customer-checkout-apim.sh
+      if grep -REn '(platformFee|taxAmount|deliveryFee|grandTotal)[[:space:]]*[-+*/]|[-+*/][[:space:]]*(platformFee|taxAmount|deliveryFee|grandTotal)' apps/customer-web-next/src/components/customer-checkout.tsx; then
         echo 'ERROR: Frontend checkout appears to calculate backend-owned charges.' >&2
         exit 1
       fi
-      echo 'Checkout charge and APIM safety controls passed.'
-    displayName: Verify checkout safety controls
+      echo 'Dynamic checkout pricing, quote and APIM safety controls passed.'
+    displayName: Verify dynamic checkout pricing safety controls

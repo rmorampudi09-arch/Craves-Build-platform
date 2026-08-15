@@ -1,29 +1,201 @@
 # Craves Order Service
 
-Order Service owns customer carts, checkout, chef-specific orders, order items, immutable checkout snapshots, order status transitions, delivery-package metadata, and admin-managed charge policies.
+Order Service owns customer carts, pre-payment checkout pricing, chef-specific orders, order items, immutable checkout snapshots, order status transitions, delivery-package metadata, and the admin-controlled platform-fee policy.
 
-The service follows the approved Craves HLD boundary: User-Chef Service remains the source of truth for saved customer addresses, Catalog Service remains the source of truth for active kitchen profiles and menu items, and Order Service stores immutable snapshots needed to fulfil an order even when those source records change later.
+The service follows the Craves service boundaries already present in the repository: User-Chef Service remains the source of truth for saved customer addresses, Catalog Service remains the source of truth for active kitchens/menu items, Azure Maps provides road routing, and Order Service stores the immutable commercial snapshot used by payment and fulfilment.
 
-## Current V1 scope
+## Current scope
 
-- Customer cart CRUD.
-- Cart validation against active Catalog menu-item APIs.
-- Checkout that groups cart items by kitchen and creates one chef-specific order per kitchen.
-- Mandatory saved customer delivery address at checkout.
-- Ownership and active-status validation through the User-Chef internal API.
-- Immutable customer drop-off snapshot on the parent checkout and every kitchen-specific order.
-- Immutable kitchen pickup snapshot on every kitchen-specific order.
-- Package metadata copied from Catalog Service at checkout.
-- Dynamic chef-specific package-weight calculation.
-- Thermobox requirement aggregation per chef-specific order.
-- Chef acceptance calculates and persists `ready_at` from the submitted preparation time.
-- V1 zero-fee charge policy seeded by default.
-- Admin-managed charge policies.
-- Chef order listing, access, acceptance, rejection, and ready-for-pickup transitions.
+- Customer cart CRUD and catalog validation.
+- Saved customer delivery-address validation through User-Chef Service.
+- Immutable customer drop-off and kitchen pickup snapshots.
+- Pre-payment pricing quote derived completely on the backend.
+- Azure Maps driving-route distance from each chef pickup to the customer drop-off.
+- Redis best-effort route caching to reduce repeated Azure Maps transactions.
+- Hyderabad market delivery curve: `₹75` through `5 km`, then `₹8/km` beyond `5 km`, billed in `0.1 km` increments.
+- Admin-controlled platform fee only.
+- Versioned tax profile and persisted tax audit breakdown.
+- Ten-minute immutable pricing quote by default.
+- Quote/cart/address/kitchen-coordinate stale checks before checkout creation.
+- One-time quote consumption so a reviewed price cannot be reused for another checkout.
+- One chef-specific order per kitchen.
+- Package weight and thermobox metadata snapshots.
+- Chef acceptance/rejection/ready-for-pickup transitions.
 
-## Checkout address contract
+## Checkout pricing flow
 
-Checkout accepts only a saved address identifier:
+```text
+Customer selects saved address
+    ↓
+POST /api/v1/checkout/quote
+    ↓
+Order Service validates customer + cart
+    ↓
+Chef pickup coordinates + customer drop-off coordinates
+    ↓
+Azure Maps Route Directions 2025-01-01
+(driving + fastestWithTraffic)
+    ↓
+Road distance in metres
+    ↓
+Market delivery pricing rule
+    ↓
+Admin platform fee
+    ↓
+Tax profile
+    ↓
+Immutable checkout_pricing_quote stored
+    ↓
+Customer sees full payment details
+    ↓
+POST /api/v1/checkout with pricingQuoteId
+    ↓
+Backend verifies quote is owned, current and unconsumed
+    ↓
+Checkout/order rows copy the reviewed quote
+    ↓
+Cashfree later uses checkout.grandTotal from Order Service
+```
+
+The browser does not calculate platform fee, tax, delivery fee, or grand total.
+
+## Delivery-price rule
+
+Pricing version:
+
+```text
+HYDERABAD_MARKET_2026_08_V1
+```
+
+Default backend values:
+
+```text
+0.0 km – 5.0 km   = ₹75.00
+above 5.0 km      = ₹8.00 per additional km
+billing increment = 0.1 km, rounded upward
+```
+
+Examples:
+
+```text
+4.2 km   -> ₹75.00
+5.0 km   -> ₹75.00
+5.001 km -> ₹75.80
+7.5 km   -> ₹95.00
+10.0 km  -> ₹115.00
+```
+
+No rain surcharge, peak-hour surge, small-cart fee, handling fee, or hidden delivery surcharge is introduced by this module.
+
+These values are backend configuration, not admin charge-policy fields. They can be changed through controlled deployment configuration after Product/Finance review without releasing customer-web code.
+
+## Platform-fee policy
+
+The active `order_schema.charge_policy` row is still used for:
+
+```text
+platform_fee_percent
+platform_fee_flat
+```
+
+The legacy columns below remain temporarily for schema/API compatibility but are ignored by the new checkout path and the admin controller forces them to zero on newly created policies:
+
+```text
+tax_percent
+delivery_fee_flat
+```
+
+Admin endpoints remain:
+
+```http
+GET  /api/v1/admin/charge-policy/current
+POST /api/v1/admin/charge-policy
+```
+
+Only platform-fee fields affect new dynamic-pricing checkouts.
+
+## Tax profile
+
+Tax profile version:
+
+```text
+IN_MARKETPLACE_GST_2026_08_V1
+```
+
+Current configurable defaults are:
+
+```text
+restaurant/service GST added to food subtotal = 5%
+fee tax used for platform/delivery audit split = 18%
+```
+
+The customer-visible platform and delivery fee values are treated as gross amounts; the configured fee-tax component is extracted for audit rather than added again on top. The food-tax component is added to the checkout total.
+
+**Production gate:** Craves Finance/CA must confirm the final GST treatment and invoicing model for Craves' own platform and delivery services before production activation. The restaurant-service 5% framework and ECO responsibilities are statutory topics, but the treatment of Craves' own fees depends on the final legal/commercial contracting model. Do not treat competitor receipts as tax authority.
+
+## Quote API
+
+```http
+POST /api/v1/checkout/quote
+Authorization: Bearer <Craves access token>
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "deliveryAddressId": "11111111-2222-4333-8444-555555555555"
+}
+```
+
+Representative response shape:
+
+```json
+{
+  "quoteId": "99999999-9999-4999-8999-999999999999",
+  "deliveryAddressId": "11111111-2222-4333-8444-555555555555",
+  "currency": "INR",
+  "foodSubtotal": 200.00,
+  "platformFee": 10.00,
+  "taxAmount": 10.00,
+  "deliveryFee": 75.00,
+  "grandTotal": 295.00,
+  "chargePolicyId": "20000000-0000-0000-0000-000000000001",
+  "taxes": {
+    "profileVersion": "IN_MARKETPLACE_GST_2026_08_V1",
+    "restaurantGstPercent": 5.00,
+    "feeInclusiveGstPercent": 18.00,
+    "foodTaxAdded": 10.00,
+    "platformTaxIncluded": 1.53,
+    "deliveryTaxIncluded": 11.44,
+    "taxAmountAddedToCheckout": 10.00,
+    "totalTaxAmount": 22.97
+  },
+  "deliveries": [
+    {
+      "kitchenId": "44444444-4444-4444-8444-444444444444",
+      "kitchenName": "Annapurna",
+      "roadDistanceKm": 4.2,
+      "roadDistanceMeters": 4200,
+      "estimatedTravelMinutes": 16,
+      "baseDistanceKm": 5.0,
+      "baseDeliveryFee": 75.00,
+      "extraDistanceKm": 0.0,
+      "extraPerKm": 8.00,
+      "extraDistanceFee": 0.00,
+      "deliveryFee": 75.00,
+      "pricingVersion": "HYDERABAD_MARKET_2026_08_V1"
+    }
+  ],
+  "expiresAt": "2026-08-15T03:30:00Z",
+  "createdAt": "2026-08-15T03:20:00Z"
+}
+```
+
+## Checkout API
+
+A final checkout now requires the reviewed quote:
 
 ```http
 POST /api/v1/checkout
@@ -33,176 +205,97 @@ Content-Type: application/json
 
 ```json
 {
-  "deliveryAddressId": "11111111-2222-3333-4444-555555555555",
+  "deliveryAddressId": "11111111-2222-4333-8444-555555555555",
+  "pricingQuoteId": "99999999-9999-4999-8999-999999999999",
   "note": "Please call on arrival"
 }
 ```
 
-`deliveryAddressId` must identify an active address owned by the authenticated customer.
-
-A temporary live GPS coordinate is valid for browsing and discovery, but it cannot be used directly to place an order. The customer must save the current location or select an existing saved address first.
-
-When the field is missing, checkout returns:
-
-```json
-{
-  "error": "DELIVERY_ADDRESS_REQUIRED",
-  "message": "Save the current location or select a saved delivery address before placing the order."
-}
-```
-
-Other address-specific errors include:
+Important errors:
 
 ```text
+DELIVERY_ADDRESS_REQUIRED
 DELIVERY_ADDRESS_NOT_AVAILABLE
 DELIVERY_ADDRESS_INCOMPLETE
-DELIVERY_ADDRESS_LOOKUP_UNAVAILABLE
 KITCHEN_PICKUP_ADDRESS_INCOMPLETE
+DELIVERY_ROUTE_COORDINATES_INVALID
+DELIVERY_ROUTE_UNAVAILABLE
+PRICING_QUOTE_REQUIRED
+PRICING_QUOTE_NOT_FOUND
+PRICING_QUOTE_STALE
+CART_EMPTY
 ```
 
-No serviceability radius is evaluated by this module. The radius used for nearby browsing is not treated as an order-delivery rule.
+`PRICING_QUOTE_STALE` means the quote expired, was already consumed, the cart changed, the selected address changed, or the chef pickup coordinates changed. Customer web automatically requests a fresh quote in this case.
 
-## Address verification flow
+## Address and route integrity
+
+Both addresses must have valid latitude/longitude. Order Service will not fall back to straight-line/Haversine distance for pricing. If Azure Maps cannot return a driving route, the quote fails closed with `DELIVERY_ROUTE_UNAVAILABLE`; Craves does not guess a fee and does not allow payment with an unverified route.
+
+The existing launch-policy serviceability radius remains separate from pricing. A larger market-price curve does not automatically make an address serviceable if launch policy rejects the delivery area.
+
+## Immutable quote and audit data
+
+Flyway `V14__dynamic_checkout_pricing.sql` adds:
 
 ```text
-Customer submits deliveryAddressId
-    ↓
-Order Service reads authenticated customer identityId from the JWT
-    ↓
-Order Service calls User-Chef internal address endpoint
-    ↓
-User-Chef verifies identity ownership and active status
-    ↓
-Order Service validates required delivery fields and coordinates
-    ↓
-Order Service refreshes active menu and kitchen data from Catalog
-    ↓
-One parent checkout and one order per kitchen are written transactionally
+order_schema.checkout_pricing_quote
+order_schema.checkout_pricing_quote_kitchen
 ```
 
-Internal User-Chef request:
+The quote stores:
 
-```http
-GET /internal/v1/customer-addresses/{addressId}?identityId={identityId}
-X-Craves-Internal-Secret: <shared internal secret>
-```
+- customer identity and selected address;
+- SHA-256 cart fingerprint;
+- food/platform/tax/delivery/grand totals;
+- active platform policy ID;
+- delivery-pricing version;
+- tax-profile version;
+- drop-off coordinates;
+- per-kitchen pickup coordinates;
+- road distance in metres;
+- traffic-aware duration;
+- base distance/base fee;
+- extra distance/rate/fee;
+- quote expiry and one-time consumption timestamps.
 
-The internal secret is service-to-service only. It must never be sent by the mobile app, web app, or API test dashboard.
+The checkout and customer-order tables also snapshot the quote ID, route metrics, pricing/tax versions, and tax breakdown. This allows later finance/support investigation without recalculating a historical order against newer rules.
 
-## Immutable address snapshots
+## Redis route cache
 
-The saved-address UUID is retained for traceability, but delivery execution must use the snapshot stored with the order.
+`AzureMapsRouteClient` uses `StringRedisTemplate` as a best-effort optimization. Cache keys use pickup/drop-off coordinates rounded to five decimal places and route API version. Default TTL is five minutes.
 
-Customer drop-off snapshot fields:
+If Redis is unavailable, pricing continues by calling Azure Maps directly. Redis failure must not become a checkout failure.
+
+## Azure Maps authentication
+
+No Azure Maps subscription key is stored in source or sent to customer web. Order Service obtains a Microsoft Entra access token through the Container App/App Service managed identity endpoint and sends:
 
 ```text
-delivery_address_id
-dropoff_recipient_name
-dropoff_contact_phone
-dropoff_address_line1
-dropoff_address_line2
-dropoff_landmark
-dropoff_area_name
-dropoff_city
-dropoff_state
-dropoff_postal_code
-dropoff_latitude
-dropoff_longitude
+Authorization: Bearer <managed identity token>
+x-ms-client-id: <Azure Maps account client ID>
 ```
 
-Kitchen pickup snapshot fields:
+Required runtime value:
 
 ```text
-kitchen_id
-kitchen_name_snapshot
-pickup_phone_number
-pickup_email
-pickup_address_line1
-pickup_address_line2
-pickup_landmark
-pickup_area_name
-pickup_city
-pickup_state
-pickup_postal_code
-pickup_latitude
-pickup_longitude
+AZURE_MAPS_CLIENT_ID
 ```
 
-For a multi-kitchen checkout:
+The managed identity must have an Azure Maps data-plane role that permits route calls on the target Maps account.
 
-```text
-One customer-selected delivery address
-    ├── copied to Kitchen Order A
-    ├── copied to Kitchen Order B
-    └── copied to Kitchen Order C
+## Package and fulfilment snapshots
 
-Each kitchen order also stores its own kitchen pickup snapshot.
-```
-
-Changing or deleting the original saved customer address later does not change an existing order. Changing the kitchen profile later also does not change an existing order's pickup details.
-
-Legacy orders created before Flyway V4 retain null address snapshots. The migration does not invent or backfill historical address data.
-
-## Dynamic package calculation
-
-Catalog Service supplies the packaged weight and thermobox decision for each menu item. Order Service snapshots those values so later menu edits cannot change an existing order.
+Catalog Service supplies packaged weight and thermobox requirements for every item. Order Service stores:
 
 ```text
 order_item.unit_package_weight_grams_snapshot
 order_item.thermobox_required_snapshot
+customer_order.total_package_weight_grams
+customer_order.thermobox_required
 ```
 
-For each chef-specific order:
-
-```text
-total_package_weight_grams =
-    sum(unit_package_weight_grams_snapshot x quantity)
-
-thermobox_required =
-    true when any order item requires a thermobox
-```
-
-Weights remain in grams inside Craves. Each external delivery-provider adapter converts grams into that provider's required unit.
-
-## Chef acceptance and ready time
-
-The acceptance request must include a positive preparation time:
-
-```json
-{
-  "prepTimeMinutes": 35,
-  "note": "Order confirmed"
-}
-```
-
-Order Service persists:
-
-```text
-ready_at = database current time + prepTimeMinutes
-```
-
-Integration Service will schedule delivery close to `ready_at`; delivery must not be created immediately after payment.
-
-## V1 charge model
-
-Default seeded policy:
-
-```text
-food_subtotal = sum(item price x quantity)
-platform_fee = 0
-tax_amount = 0
-delivery_fee = 0
-grand_total = food_subtotal
-```
-
-Checkout always reads the currently active row from `order_schema.charge_policy`. Final finance, tax, commission, and legal rules remain Product/Finance/Legal decisions.
-
-Admin endpoints:
-
-```http
-GET  /api/v1/admin/charge-policy/current
-POST /api/v1/admin/charge-policy
-```
+Delivery-provider creation remains the Integration Service responsibility after the relevant order lifecycle event. Dynamic customer delivery pricing does not move provider integration into Order Service.
 
 ## Main endpoints
 
@@ -220,6 +313,7 @@ POST   /api/v1/cart/validate
 ### Checkout and orders
 
 ```http
+POST /api/v1/checkout/quote
 POST /api/v1/checkout
 GET  /api/v1/checkout/{checkoutId}
 GET  /api/v1/orders
@@ -236,95 +330,91 @@ POST /api/v1/chef/orders/{orderId}/reject
 POST /api/v1/chef/orders/{orderId}/ready-for-pickup
 ```
 
-## Database migration
-
-This module adds:
-
-```text
-src/main/resources/db/migration/V4__checkout_address_snapshots.sql
-```
-
-The migration:
-
-- adds nullable snapshot columns so historical rows remain readable;
-- adds `NOT VALID` completeness and coordinate constraints for new/updated data;
-- adds partial indexes on `delivery_address_id`;
-- does not create a cross-service database foreign key;
-- does not backfill guessed address values.
-
 ## Environment variables
+
+Core existing values:
 
 ```text
 SPRING_DATASOURCE_URL
 SPRING_DATASOURCE_USERNAME
 SPRING_DATASOURCE_PASSWORD
+SPRING_DATA_REDIS_URL
 CRAVES_JWT_VERIFICATION_PEM_BASE64
 CRAVES_JWT_ISSUER
 CRAVES_JWT_AUDIENCE
 CRAVES_CATALOG_BASE_URL
 CRAVES_USER_CHEF_INTERNAL_BASE_URL
 CRAVES_INTERNAL_SERVICE_SECRET
-CRAVES_NOTIFICATION_INTERNAL_BASE_URL
-CRAVES_NOTIFICATION_INTERNAL_KEY
-CRAVES_NOTIFICATION_DIRECT_DISPATCH_ENABLED
-CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_ENABLED
 ```
 
-Local example:
+Dynamic-pricing values:
 
 ```text
-CRAVES_USER_CHEF_INTERNAL_BASE_URL=http://localhost:8081
+AZURE_MAPS_CLIENT_ID
+AZURE_MAPS_ENDPOINT=https://atlas.microsoft.com
+CRAVES_CHECKOUT_QUOTE_TTL_MINUTES=10
+CRAVES_DELIVERY_BASE_DISTANCE_KM=5.0
+CRAVES_DELIVERY_BASE_FEE=75.00
+CRAVES_DELIVERY_EXTRA_PER_KM=8.00
+CRAVES_RESTAURANT_GST_PERCENT=5.00
+CRAVES_FEE_INCLUSIVE_GST_PERCENT=18.00
 ```
 
-Azure uses the existing User-Chef Container App FQDN. The value must point to the service root, not `/api/v1` and not the public APIM address.
-
-`CRAVES_INTERNAL_SERVICE_SECRET` must match the value configured on User-Chef Service. Store it in Azure Container Apps secrets or Azure Key Vault-backed deployment configuration; never commit or paste the value into documentation or chat.
+Never paste database passwords, internal service secrets, Redis credentials, or Azure credentials into chat/source control. Use the existing Azure/DevOps secret path.
 
 ## Local run
 
-Start User-Chef Service first, then Order Service:
+Prerequisites:
 
-```bash
-cd services/user-chef-service
-mvn spring-boot:run -Dspring-boot.run.profiles=local
-```
+- Java 21;
+- Maven;
+- PostgreSQL business database;
+- User-Chef Service;
+- Catalog Service;
+- Redis optional for route caching;
+- local Azure Maps authentication is not automatically available through Azure managed identity environment variables.
 
-```bash
-cd services/order-service
-mvn spring-boot:run -Dspring-boot.run.profiles=local
-```
-
-Run Order tests:
+Run tests:
 
 ```bash
 cd services/order-service
 mvn -B clean test
 ```
 
-## Deployment
+Customer-web checkout tests/build:
 
-Use the existing Azure DevOps pipeline:
-
-```text
-azure-pipelines-order-service.yml
+```bash
+cd apps/customer-web-next
+npm install --ignore-scripts
+npm run typecheck
+npm run test
+npm run build
 ```
 
-Before testing checkout, confirm the Order Container App has both internal-address settings and that the new revision is healthy. The pipeline currently uses `az containerapp update --no-wait`, so pipeline completion can occur before the revision finishes starting.
+For an end-to-end route quote, use an Azure-hosted Order Service revision with managed identity or provide an approved local authentication mechanism rather than committing a Maps key.
+
+## Deployment order
+
+1. Review/merge code.
+2. Run Order Service tests.
+3. Deploy Order Service so Flyway V14 runs.
+4. Verify the new revision is healthy.
+5. Configure/verify Azure Maps managed-identity permission and `AZURE_MAPS_CLIENT_ID`.
+6. Confirm production Redis binding remains healthy.
+7. Run `scripts/apim/configure-customer-checkout-apim.sh` to add `POST /quote` to the existing checkout API.
+8. Deploy customer web.
+9. Run authenticated quote -> checkout -> Cashfree sandbox end-to-end verification.
+10. Complete Finance/CA tax sign-off before production payment activation.
 
 ## Manual steps required
 
-- Confirm `CRAVES_USER_CHEF_INTERNAL_BASE_URL` on the Order Container App.
-- Confirm the existing shared internal service secret is exposed to Order Service as `CRAVES_INTERNAL_SERVICE_SECRET`.
-- Do not paste the secret into chat or source control.
-- Run the Order Service pipeline after merge.
-- Confirm Flyway V4 succeeded and the newest revision is healthy.
-- Use a real active saved-address UUID belonging to the Firebase test customer for the checkout test.
+- **Azure Maps / Azure Portal:** confirm the existing Maps account and Order Service managed identity, then grant the appropriate Azure Maps data-plane role if not already present.
+- **Container App configuration:** set `AZURE_MAPS_CLIENT_ID` to the Maps account client ID. It is not a secret.
+- **Redis:** confirm the existing `SPRING_DATA_REDIS_URL` secret remains bound to Order Service. No new Redis resource is required.
+- **APIM:** run the checkout APIM configuration after the backend revision is healthy so `POST /api/v1/checkout/quote` routes to Order Service.
+- **Finance/CA:** approve the final GST treatment/rates and invoice presentation for food, Craves platform fee, and Craves delivery fee.
+- **Testing:** run the backend and customer-web pipelines and then a real saved-address checkout in Cashfree sandbox.
 
-No new Azure resource or paid SKU is required.
+## Billing note
 
-## Important production notes
-
-- Cashfree payment intent creation remains outside this checkout snapshot module.
-- Delivery creation remains outside Order Service.
-- The transactional `CHEF_ACCEPTED_ORDER` domain outbox and managed-identity Service Bus publisher are the next Order/Integration step.
-- Browsing radius, delivery serviceability, delivery pricing, commissions, GST, and compliance rules are intentionally not defined here.
+This module does not require a new Azure Maps resource if Craves continues to use its existing Maps account, but Route Directions requests are Azure Maps transactions and can increase usage/cost. Redis caching is intentionally included to reduce repeated route calls for the same chef/customer coordinate pair.

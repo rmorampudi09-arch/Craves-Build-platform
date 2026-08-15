@@ -6,6 +6,7 @@ set -euo pipefail
 : "${CRAVES_RESOURCE_GROUP:=rg-craves-prodlow-centralindia}"
 : "${CRAVES_CUSTOMER_WEB_APP:=ca-craves-web-prodlow}"
 : "${CRAVES_USER_CHEF_APP:=ca-craves-user-chef-service-prod}"
+: "${CRAVES_ORDER_APP:=ca-craves-order-service-prodlow}"
 : "${CRAVES_AZURE_MAPS_ACCOUNT:=maps-craves-prodlow-l3ing6}"
 : "${CRAVES_AZURE_MAPS_LOCATION:=global}"
 
@@ -69,6 +70,7 @@ ensure_system_identity() {
 
 WEB_PRINCIPAL_ID="$(ensure_system_identity "$CRAVES_CUSTOMER_WEB_APP")"
 USER_CHEF_PRINCIPAL_ID="$(ensure_system_identity "$CRAVES_USER_CHEF_APP")"
+ORDER_PRINCIPAL_ID="$(ensure_system_identity "$CRAVES_ORDER_APP")"
 
 if az maps account show \
   --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
@@ -161,6 +163,7 @@ grant_maps_reader() {
 
 grant_maps_reader "$WEB_PRINCIPAL_ID" "$CRAVES_CUSTOMER_WEB_APP"
 grant_maps_reader "$USER_CHEF_PRINCIPAL_ID" "$CRAVES_USER_CHEF_APP"
+grant_maps_reader "$ORDER_PRINCIPAL_ID" "$CRAVES_ORDER_APP"
 
 bind_maps_config() {
   local app_name="$1"
@@ -199,6 +202,7 @@ bind_maps_config() {
 
 bind_maps_config "$CRAVES_CUSTOMER_WEB_APP"
 bind_maps_config "$CRAVES_USER_CHEF_APP"
+bind_maps_config "$CRAVES_ORDER_APP"
 
 LOCAL_AUTH_DISABLED="$(az maps account show \
   --subscription "$CRAVES_EXPECTED_SUBSCRIPTION_ID" \
@@ -215,6 +219,9 @@ Maps kind/SKU: Gen2/G2
 Shared-key auth: disabled
 Customer web managed identity: $WEB_PRINCIPAL_ID
 User-Chef managed identity: $USER_CHEF_PRINCIPAL_ID
+Order Service managed identity: $ORDER_PRINCIPAL_ID
 Role: Azure Maps Data Reader
+Order Service AZURE_MAPS_CLIENT_ID: configured
+Order Service AZURE_MAPS_ENDPOINT: configured
 Browser/mobile-exposed map credential: none
 EOF

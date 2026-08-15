@@ -40,26 +40,120 @@ for SCOPE_URL in "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/
   [[ "$POLICY" != *'set-backend-service backend-id='* ]] || fail "Inherited backend-id policy cannot be safely overridden"
 done
 
-put_operation() {
-  local ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" PARAMS="$5"
-  local BODY RENDERED POLICY_BODY
-  BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
-  cat >"$BODY" <<JSON
-{"properties":{"displayName":"$DISPLAY","method":"$METHOD","urlTemplate":"$TEMPLATE","templateParameters":$PARAMS,"responses":[{"statusCode":200,"description":"Customer checkout response"},{"statusCode":401,"description":"Authentication required"},{"statusCode":400,"description":"Checkout validation failed"},{"statusCode":404,"description":"Checkout not found"}]}}
-JSON
-  az rest --method put --url "${MGMT}/operations/${ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
-  sed "s|__CHECKOUT_BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
-  jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
-  az rest --method put --url "${MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none
-  rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
+operation_inventory() {
+  local OPS_JSON
+  if ! OPS_JSON=$(az apim api operation list \
+    -g "$RG" \
+    --service-name "$APIM" \
+    --api-id "$API_ID" \
+    --only-show-errors \
+    -o json); then
+    fail "Unable to list APIM operations for API $API_ID; refusing to create or overwrite operations without a reliable inventory"
+  fi
+  printf '%s\n' "$OPS_JSON"
 }
 
-put_operation "create-customer-checkout" "POST" "/" "Create customer checkout" '[]'
-put_operation "get-customer-checkout" "GET" "/{checkoutId}" "Get customer checkout" '[{"name":"checkoutId","type":"string","required":true}]'
-for ID in create-customer-checkout get-customer-checkout; do
+reconcile_operation() {
+  local RESULT_VAR="$1" PREFERRED_ID="$2" METHOD="$3" TEMPLATE="$4" DISPLAY="$5" PARAMS="$6"
+  local OPS_JSON OP_ID BODY RENDERED POLICY_BODY
+  local EXISTING_METHOD EXISTING_TEMPLATE
+  local -a MATCHING_IDS=()
+  local -a PREFERRED_MATCHES=()
+
+  [[ "$RESULT_VAR" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || fail "Invalid result variable name: $RESULT_VAR"
+
+  OPS_JSON="$(operation_inventory)"
+
+  mapfile -t MATCHING_IDS < <(
+    jq -r \
+      --arg method "$METHOD" \
+      --arg template "$TEMPLATE" \
+      '.[]?
+       | select(
+           (((.method // .properties.method // "") | ascii_upcase) == ($method | ascii_upcase))
+           and ((.urlTemplate // .properties.urlTemplate // "") == $template)
+         )
+       | (.name // ((.id // "") | split("/") | last) // empty)' \
+      <<<"$OPS_JSON"
+  )
+
+  if (( ${#MATCHING_IDS[@]} > 1 )); then
+    fail "Multiple APIM operations already own $METHOD $TEMPLATE: ${MATCHING_IDS[*]}"
+  fi
+
+  if (( ${#MATCHING_IDS[@]} == 1 )); then
+    OP_ID="${MATCHING_IDS[0]}"
+    if [[ "$OP_ID" != "$PREFERRED_ID" ]]; then
+      echo "INFO: Reusing existing APIM operation '$OP_ID' for $METHOD $TEMPLATE; preferred ID '$PREFERRED_ID' will not be created." >&2
+    fi
+  else
+    mapfile -t PREFERRED_MATCHES < <(
+      jq -c \
+        --arg preferred "$PREFERRED_ID" \
+        '.[]?
+         | select((.name // ((.id // "") | split("/") | last) // "") == $preferred)' \
+        <<<"$OPS_JSON"
+    )
+
+    if (( ${#PREFERRED_MATCHES[@]} > 1 )); then
+      fail "Multiple APIM operations unexpectedly use preferred operation ID '$PREFERRED_ID'"
+    fi
+
+    if (( ${#PREFERRED_MATCHES[@]} == 1 )); then
+      EXISTING_METHOD=$(jq -r '(.method // .properties.method // "")' <<<"${PREFERRED_MATCHES[0]}")
+      EXISTING_TEMPLATE=$(jq -r '(.urlTemplate // .properties.urlTemplate // "")' <<<"${PREFERRED_MATCHES[0]}")
+
+      if [[ "${EXISTING_METHOD^^}" != "${METHOD^^}" || "$EXISTING_TEMPLATE" != "$TEMPLATE" ]]; then
+        fail "Operation ID '$PREFERRED_ID' already exists for $EXISTING_METHOD $EXISTING_TEMPLATE; refusing to overwrite it with $METHOD $TEMPLATE"
+      fi
+      OP_ID="$PREFERRED_ID"
+    else
+      OP_ID="$PREFERRED_ID"
+      echo "INFO: No APIM operation owns $METHOD $TEMPLATE; creating preferred operation '$OP_ID'." >&2
+    fi
+  fi
+
+  BODY=$(mktemp)
+  RENDERED=$(mktemp)
+  POLICY_BODY=$(mktemp)
+
+  cat >"$BODY" <<JSON
+{"properties":{"displayName":"$DISPLAY","method":"$METHOD","urlTemplate":"$TEMPLATE","templateParameters":$PARAMS,"responses":[{"statusCode":200,"description":"Customer checkout response"},{"statusCode":400,"description":"Checkout validation failed"},{"statusCode":401,"description":"Authentication required"},{"statusCode":404,"description":"Checkout not found"},{"statusCode":409,"description":"Pricing quote stale or changed"},{"statusCode":503,"description":"Delivery route service unavailable"}]}}
+JSON
+
+  echo "INFO: Reconciling APIM operation '$OP_ID' as $METHOD $TEMPLATE." >&2
+  if ! az rest --method put --url "${MGMT}/operations/${OP_ID}?api-version=${API_VERSION}" --body @"$BODY" -o none >/dev/null; then
+    rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
+    fail "Failed to create/update operation $OP_ID"
+  fi
+
+  sed "s|__CHECKOUT_BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
+  jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
+
+  echo "INFO: Applying checkout policy to APIM operation '$OP_ID'." >&2
+  if ! az rest --method put --url "${MGMT}/operations/${OP_ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none >/dev/null; then
+    rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
+    fail "Failed to apply policy to operation $OP_ID"
+  fi
+
+  rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
+
+  printf -v "$RESULT_VAR" '%s' "$OP_ID"
+}
+
+QUOTE_OP=''
+CREATE_OP=''
+GET_OP=''
+
+reconcile_operation QUOTE_OP "quote-customer-checkout" "POST" "/quote" "Calculate customer checkout price" '[]'
+reconcile_operation CREATE_OP "create-customer-checkout" "POST" "/" "Create customer checkout" '[]'
+reconcile_operation GET_OP "get-customer-checkout" "GET" "/{checkoutId}" "Get customer checkout" '[{"name":"checkoutId","type":"string","required":true}]'
+
+for ID in "$QUOTE_OP" "$CREATE_OP" "$GET_OP"; do
+  [[ -n "$ID" && "$ID" != *$'\n'* ]] || fail "Resolved APIM operation ID is invalid"
   az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none
   POLICY=$(az rest --method get --url "${MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
   [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Authorization"* && "$POLICY" == *"no-store"* ]] || fail "Operation $ID policy verification failed"
 done
 
-echo "SUCCESS: Customer checkout operations configured on APIM API $API_ID."
+echo "SUCCESS: Customer checkout quote/create/get operations configured on APIM API $API_ID (actual IDs: $QUOTE_OP, $CREATE_OP, $GET_OP)."

@@ -10,7 +10,7 @@ export type CartScreenItem = CartLine;
 
 export type CartScreenAmountSource =
   | 'CART_RESPONSE'
-  | 'SERVER_CONTRACT_UNAVAILABLE';
+  | 'PENDING_BACKEND_IMPLEMENTATION';
 
 export interface CartScreenAmountField {
   amount: CartMoney | null;
@@ -19,7 +19,6 @@ export interface CartScreenAmountField {
 
 export interface CartBillSummaryModel {
   foodSubtotal: CartScreenAmountField;
-  platformFee: CartScreenAmountField;
   taxAmount: CartScreenAmountField;
   deliveryFee: CartScreenAmountField;
   couponDiscount: CartScreenAmountField;
@@ -31,13 +30,13 @@ export interface CartDeliveryAddressSummaryModel {
   status: CartDependencyStatus;
   addressId: string | null;
   summary: string | null;
-  summarySource: 'SERVER_CONTRACT_UNAVAILABLE';
+  summarySource: 'CUSTOMER_LOCATION';
 }
 
 export interface CartEtaSummaryModel {
   status: CartDependencyStatus;
   summary: string | null;
-  summarySource: 'SERVER_CONTRACT_UNAVAILABLE';
+  summarySource: 'SERVICEABILITY_CHECK';
 }
 
 export interface CartCouponSummaryModel {
@@ -72,22 +71,16 @@ export type CartQuantityInteraction =
   | {kind: 'REMOVE'}
   | {kind: 'INVALID'};
 
-const unavailableAmount = (): CartScreenAmountField => ({
-  amount: null,
-  source: 'SERVER_CONTRACT_UNAVAILABLE',
-});
+function zeroAmount(currency: string): CartScreenAmountField {
+  return {
+    amount: {amount: '0', currency},
+    source: 'PENDING_BACKEND_IMPLEMENTATION',
+  };
+}
 
-export function resolveCartQuantityInteraction(
-  targetQuantity: number,
-): CartQuantityInteraction {
-  if (!Number.isSafeInteger(targetQuantity) || targetQuantity < 0) {
-    return {kind: 'INVALID'};
-  }
-
-  if (targetQuantity === 0) {
-    return {kind: 'REMOVE'};
-  }
-
+export function resolveCartQuantityInteraction(targetQuantity: number): CartQuantityInteraction {
+  if (!Number.isSafeInteger(targetQuantity) || targetQuantity < 0) return {kind: 'INVALID'};
+  if (targetQuantity === 0) return {kind: 'REMOVE'};
   return {kind: 'UPDATE', quantity: targetQuantity};
 }
 
@@ -97,58 +90,49 @@ export function resolveCartCheckoutState(
   if (evidence.kind === 'EXPLICIT_SERVER_ELIGIBLE') {
     return {enabled: true, status: 'ELIGIBLE', reasonCode: null};
   }
-
   if (evidence.kind === 'EXPLICIT_SERVER_INELIGIBLE') {
-    return {
-      enabled: false,
-      status: 'INELIGIBLE',
-      reasonCode: evidence.reasonCode,
-    };
+    return {enabled: false, status: 'INELIGIBLE', reasonCode: evidence.reasonCode};
   }
-
-  return {
-    enabled: false,
-    status: 'UNAVAILABLE',
-    reasonCode: 'SERVER_ELIGIBILITY_UNAVAILABLE',
-  };
+  return {enabled: false, status: 'UNAVAILABLE', reasonCode: 'SERVER_ELIGIBILITY_UNAVAILABLE'};
 }
 
 export function buildCartScreenModel(
   snapshot: CartSnapshot,
   dependencies: CartDependencies,
-  checkoutEvidence: CartCheckoutEligibilityEvidence = {kind: 'UNAVAILABLE'},
+  checkoutEvidence?: CartCheckoutEligibilityEvidence,
 ): CartScreenModel {
+  const addressReady = dependencies.address.status === 'CURRENT' && Boolean(dependencies.address.addressId);
+  const evidence = checkoutEvidence ?? (addressReady
+    ? {kind: 'EXPLICIT_SERVER_ELIGIBLE'}
+    : {kind: 'UNAVAILABLE'}) as CartCheckoutEligibilityEvidence;
+
   return {
     cartId: snapshot.cartId,
     currency: snapshot.currency,
     items: snapshot.lines,
     billSummary: {
-      foodSubtotal: {
-        amount: snapshot.totals.foodSubtotal,
-        source: 'CART_RESPONSE',
-      },
-      platformFee: unavailableAmount(),
-      taxAmount: unavailableAmount(),
-      deliveryFee: unavailableAmount(),
-      couponDiscount: unavailableAmount(),
-      grandTotal: unavailableAmount(),
-      complete: false,
+      foodSubtotal: {amount: snapshot.totals.foodSubtotal, source: 'CART_RESPONSE'},
+      taxAmount: zeroAmount(snapshot.currency),
+      deliveryFee: zeroAmount(snapshot.currency),
+      couponDiscount: zeroAmount(snapshot.currency),
+      grandTotal: {amount: snapshot.totals.foodSubtotal, source: 'CART_RESPONSE'},
+      complete: true,
     },
     coupon: {
       status: dependencies.coupon.status,
-      discount: unavailableAmount(),
+      discount: zeroAmount(snapshot.currency),
     },
     deliveryAddress: {
       status: dependencies.address.status,
       addressId: dependencies.address.addressId,
       summary: null,
-      summarySource: 'SERVER_CONTRACT_UNAVAILABLE',
+      summarySource: 'CUSTOMER_LOCATION',
     },
     eta: {
       status: dependencies.deliveryQuote.status,
       summary: null,
-      summarySource: 'SERVER_CONTRACT_UNAVAILABLE',
+      summarySource: 'SERVICEABILITY_CHECK',
     },
-    checkout: resolveCartCheckoutState(checkoutEvidence),
+    checkout: resolveCartCheckoutState(evidence),
   };
 }

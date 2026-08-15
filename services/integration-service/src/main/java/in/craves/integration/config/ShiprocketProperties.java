@@ -29,7 +29,6 @@ public class ShiprocketProperties {
     private String email = "";
     private String password = "";
     private String webhookToken = "";
-    private String pickupLocation = "";
     private String orderEmail = "";
     private BigDecimal packageLengthCm;
     private BigDecimal packageBreadthCm;
@@ -82,7 +81,6 @@ public class ShiprocketProperties {
                 );
             }
             requireText(webhookToken, "SHIPROCKET_WEBHOOK_TOKEN");
-            requireText(pickupLocation, "SHIPROCKET_PICKUP_LOCATION");
             requireText(orderEmail, "SHIPROCKET_ORDER_EMAIL");
             requirePositive(packageLengthCm, "SHIPROCKET_PACKAGE_LENGTH_CM");
             requirePositive(packageBreadthCm, "SHIPROCKET_PACKAGE_BREADTH_CM");
@@ -111,7 +109,6 @@ public class ShiprocketProperties {
             && "PRODUCTION".equals(executionMode())
             && productionActivationApproved
             && StringUtils.hasText(webhookToken)
-            && StringUtils.hasText(pickupLocation)
             && StringUtils.hasText(orderEmail)
             && positive(packageLengthCm)
             && positive(packageBreadthCm)
@@ -121,6 +118,12 @@ public class ShiprocketProperties {
 
     public boolean productionCreateReady() {
         return createEnabled && createPrerequisitesReady();
+    }
+
+    public boolean packageDimensionsReady() {
+        return positive(packageLengthCm)
+            && positive(packageBreadthCm)
+            && positive(packageHeightCm);
     }
 
     public String normalizedBaseUrl() {
@@ -183,8 +186,6 @@ public class ShiprocketProperties {
     public void setPassword(String password) { this.password = password; }
     public String getWebhookToken() { return webhookToken; }
     public void setWebhookToken(String webhookToken) { this.webhookToken = webhookToken; }
-    public String getPickupLocation() { return pickupLocation; }
-    public void setPickupLocation(String pickupLocation) { this.pickupLocation = pickupLocation; }
     public String getOrderEmail() { return orderEmail; }
     public void setOrderEmail(String orderEmail) { this.orderEmail = orderEmail; }
     public BigDecimal getPackageLengthCm() { return packageLengthCm; }

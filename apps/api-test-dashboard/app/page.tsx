@@ -52,7 +52,7 @@ type LogItem = {
 };
 
 const CONFIG_STORAGE_KEY = "craves.firebase.web.config.v2";
-const DEFAULT_APIM_BASE_URL = "https://apim-craves-prodlow-l3ing6.azure-api.net";
+const DEFAULT_APIM_BASE_URL = "https://api.craves.in";
 const DEFAULT_PROFILE_PAYLOAD = `{
   "displayName": "Raviteja Test Customer",
   "email": "raviteja.test@example.com"

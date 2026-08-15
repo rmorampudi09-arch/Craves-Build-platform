@@ -35,7 +35,7 @@ craves:
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
   catalog:
-    base-url: ${CRAVES_CATALOG_BASE_URL:https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog}
+    base-url: ${CRAVES_CATALOG_BASE_URL:https://api.craves.in/api/v1/catalog}
   launch-policy:
     enforcement-enabled: ${CRAVES_LAUNCH_POLICY_ENFORCEMENT_ENABLED:false}
   notification:

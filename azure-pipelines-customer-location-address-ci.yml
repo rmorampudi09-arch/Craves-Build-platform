@@ -37,7 +37,7 @@ steps:
       npm run build
     displayName: Verify customer web location experience
     env:
-      CRAVES_API_BASE_URL: https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
+      CRAVES_API_BASE_URL: https://api.craves.in/api/v1
       AZURE_MAPS_CLIENT_ID: 00000000-0000-0000-0000-000000000000
       AZURE_MAPS_ENDPOINT: https://atlas.microsoft.com
       NEXT_PUBLIC_FIREBASE_API_KEY: ci-placeholder

@@ -19,7 +19,7 @@ parameters:
     default: $(Build.BuildId)
   - name: apiBaseUrl
     type: string
-    default: https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
+    default: https://api.craves.in/api/v1
   - name: cashfreeMode
     type: string
     default: sandbox

@@ -48,7 +48,7 @@ steps:
         for secret in "$key_id" "$key_secret" "$webhook_secret"; do
           grep -qx "$secret" <<<"$secrets" || { echo "Missing Container App secret reference $secret." >&2; exit 2; }
         done
-        webhook_url='https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/payments/webhooks/razorpay'
+        webhook_url='https://api.craves.in/api/v1/payments/webhooks/razorpay'
         az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
           --remove-env-vars PAYMENT_PROVIDER_CLIENT_ID PAYMENT_PROVIDER_CLIENT_KEY \
           --set-env-vars \

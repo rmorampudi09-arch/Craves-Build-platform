@@ -85,7 +85,7 @@ Node 24 Alpine, port 3000, non-root `nextjs` user.
 ## 17. API configuration
 
 ```text
-CRAVES_API_BASE_URL=https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
+CRAVES_API_BASE_URL=https://api.craves.in/api/v1
 ```
 
 ## 18. UUID validation

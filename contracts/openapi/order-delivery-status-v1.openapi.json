@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://apim-craves-prodlow-l3ing6.azure-api.net"
+      "url": "https://api.craves.in"
     }
   ],
   "paths": {

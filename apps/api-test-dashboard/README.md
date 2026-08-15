@@ -25,7 +25,7 @@ This module is deployed as a container image to the existing Craves web Azure Co
 Resource group: rg-craves-prodlow-centralindia
 Container App: ca-craves-web-prodlow
 ACR: cravesprodlowacr82121
-APIM gateway: https://apim-craves-prodlow-l3ing6.azure-api.net
+APIM gateway: https://api.craves.in
 Dashboard URL: https://ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
 ```
 
@@ -42,7 +42,7 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
-NEXT_PUBLIC_APIM_BASE_URL=https://apim-craves-prodlow-l3ing6.azure-api.net
+NEXT_PUBLIC_APIM_BASE_URL=https://api.craves.in
 ```
 
 Then run:

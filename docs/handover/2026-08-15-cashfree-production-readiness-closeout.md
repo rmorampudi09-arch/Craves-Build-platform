@@ -469,7 +469,7 @@ The operator should use the same registered business name and support contact pu
 
 Register the final production callback:
 
-`https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/payments/webhooks/cashfree`
+`https://api.craves.in/api/v1/payments/webhooks/cashfree`
 
 unless the production APIM custom domain is intentionally changed and the activation parameter is updated to the exact final HTTPS URL.
 

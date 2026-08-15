@@ -19,7 +19,7 @@ variables:
   modulePath: apps/api-test-dashboard
   imageRepository: craves/api-test-dashboard
   azureServiceConnection: $(AZURE_SERVICE_CONNECTION)
-  apimBaseUrl: https://apim-craves-prodlow-l3ing6.azure-api.net
+  apimBaseUrl: https://api.craves.in
 
 pool:
   vmImage: ubuntu-latest

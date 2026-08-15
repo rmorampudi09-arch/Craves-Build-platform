@@ -45,7 +45,7 @@ steps:
     workingDirectory: $(appPath)
     displayName: Verify Razorpay customer web
     env:
-      CRAVES_API_BASE_URL: https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1
+      CRAVES_API_BASE_URL: https://api.craves.in/api/v1
       NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: $(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: $(NEXT_PUBLIC_FIREBASE_PROJECT_ID)

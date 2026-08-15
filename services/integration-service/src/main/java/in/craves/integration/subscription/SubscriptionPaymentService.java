@@ -5,12 +5,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import in.craves.integration.config.PaymentProviderProperties;
+import in.craves.integration.config.PaymentRoutingProperties;
 import in.craves.integration.payment.CashfreeRequestSafety;
+import in.craves.integration.payment.RazorpayPaymentClient;
+import in.craves.integration.payment.RazorpayRequestSafety;
 import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
 import in.craves.integration.subscription.SubscriptionPaymentModels.EventEnvelope;
 import in.craves.integration.subscription.SubscriptionPaymentModels.PaymentRequestedData;
 import in.craves.integration.subscription.SubscriptionPaymentModels.StatusChangedData;
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
+import in.craves.integration.subscription.SubscriptionPaymentModels.VerifySubscriptionPaymentRequest;
 import in.craves.integration.subscription.SubscriptionPaymentRepository.PaymentIntent;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -40,6 +44,8 @@ public class SubscriptionPaymentService {
     private final SubscriptionPaymentRepository repository;
     private final SubscriptionPaymentProperties properties;
     private final PaymentProviderProperties provider;
+    private final PaymentRoutingProperties routing;
+    private final RazorpayPaymentClient razorpayClient;
     private final ObjectMapper objectMapper;
     private final RestClient providerClient;
     private final RestClient subscriptionClient;
@@ -48,12 +54,16 @@ public class SubscriptionPaymentService {
         SubscriptionPaymentRepository repository,
         SubscriptionPaymentProperties properties,
         PaymentProviderProperties provider,
+        PaymentRoutingProperties routing,
+        RazorpayPaymentClient razorpayClient,
         ObjectMapper objectMapper,
         RestClient.Builder builder
     ) {
         this.repository = repository;
         this.properties = properties;
         this.provider = provider;
+        this.routing = routing;
+        this.razorpayClient = razorpayClient;
         this.objectMapper = objectMapper;
         this.providerClient = builder.clone().baseUrl(provider.baseUrl()).build();
         this.subscriptionClient = StringUtils.hasText(properties.getSubscriptionServiceBaseUrl())
@@ -105,10 +115,13 @@ public class SubscriptionPaymentService {
         }
         if (
             "FAILED".equals(intent.status())
-                && StringUtils.hasText(intent.cashfreeOrderId())
-                && StringUtils.hasText(intent.paymentSessionId())
+                && routing.provider().equalsIgnoreCase(intent.provider())
+                && StringUtils.hasText(intent.providerOrderId())
         ) {
             return repository.response(intent);
+        }
+        if (routing.razorpay()) {
+            return createRazorpayOrder(intent);
         }
         if (!provider.paymentExecutionAllowed()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Cashfree production payment execution is not enabled");
@@ -159,6 +172,63 @@ public class SubscriptionPaymentService {
         return repository.response(stored);
     }
 
+    public SubscriptionPaymentResponse verifyRazorpay(
+        String authorization,
+        UUID invoiceId,
+        VerifySubscriptionPaymentRequest request
+    ) {
+        PaymentIntent intent = owned(authorization, invoiceId);
+        if (!"RAZORPAY".equalsIgnoreCase(intent.provider()) || request == null
+            || !StringUtils.hasText(intent.providerOrderId())
+            || !intent.providerOrderId().equals(request.providerOrderId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay verification details are invalid");
+        }
+        if ("PAID".equals(intent.status())) return repository.response(intent);
+        RazorpayPaymentClient.VerifiedPayment verified = razorpayClient.verifyCheckout(
+            intent.providerOrderId(), request.providerPaymentId(), request.providerSignature(),
+            intent.amount(), intent.currency()
+        );
+        applyStatusEvent(intent, "PAID", verified.providerStatus(), verified.paymentId());
+        return repository.response(repository.findByInvoice(invoiceId).orElse(intent));
+    }
+
+    public boolean handlesRazorpayOrder(String providerOrderId) {
+        return StringUtils.hasText(providerOrderId) && providerOrderId.startsWith("order_")
+            && repository.findByProviderOrder("RAZORPAY", providerOrderId).isPresent();
+    }
+
+    public void applyRazorpayWebhook(JsonNode payment, String eventType) {
+        String orderId = text(payment, "order_id");
+        String paymentId = text(payment, "id");
+        String providerStatus = text(payment, "status");
+        PaymentIntent intent = repository.findByProviderOrder("RAZORPAY", orderId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Subscription payment intent was not found"));
+        if ("captured".equalsIgnoreCase(providerStatus)
+            || "payment.captured".equalsIgnoreCase(eventType)
+            || "order.paid".equalsIgnoreCase(eventType)) {
+            RazorpayRequestSafety.requireMoney(
+                intent.amount(), intent.currency(), longValue(payment, "amount"), text(payment, "currency"),
+                "Subscription Razorpay payment"
+            );
+            applyStatusEvent(intent, "PAID", providerStatus, paymentId);
+        } else if ("failed".equalsIgnoreCase(providerStatus)) {
+            applyStatusEvent(intent, "FAILED", providerStatus, paymentId);
+        }
+    }
+
+    private SubscriptionPaymentResponse createRazorpayOrder(PaymentIntent intent) {
+        String receipt = "CRVSUB_" + intent.invoiceId().toString().replace("-", "");
+        Map<String, String> notes = new LinkedHashMap<>();
+        notes.put("craves_invoice_id", intent.invoiceId().toString());
+        notes.put("craves_subscription_id", intent.subscriptionId().toString());
+        RazorpayPaymentClient.CreatedOrder created = razorpayClient.createOrder(
+            receipt, intent.amount(), intent.currency(), notes
+        );
+        return repository.response(repository.storeRazorpayOrder(
+            intent.id(), created.orderId(), created.checkoutKeyId(), created.providerStatus()
+        ));
+    }
+
     public boolean handlesWebhook(JsonNode payload) {
         String orderId = firstText(payload, "/data/order/order_id", "/order/order_id", "/order_id");
         return StringUtils.hasText(orderId) && orderId.startsWith("CRVSUB_");
@@ -182,7 +252,8 @@ public class SubscriptionPaymentService {
     }
 
     private PaymentIntent reconcilePending(PaymentIntent intent) {
-        if (!"PAYMENT_PENDING".equals(intent.status()) || !StringUtils.hasText(intent.cashfreeOrderId())) {
+        if (!"CASHFREE".equalsIgnoreCase(intent.provider())
+            || !"PAYMENT_PENDING".equals(intent.status()) || !StringUtils.hasText(intent.cashfreeOrderId())) {
             return intent;
         }
         if (
@@ -375,6 +446,14 @@ public class SubscriptionPaymentService {
         } catch (NumberFormatException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cashfree payment amount is invalid");
         }
+    }
+
+    private static long longValue(JsonNode node, String field) {
+        JsonNode value = node == null ? null : node.get(field);
+        if (value == null || !value.canConvertToLong()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay payment amount is invalid");
+        }
+        return value.longValue();
     }
 
     private static String safeLog(Throwable error) {

@@ -67,13 +67,13 @@ public class RefundRequestService {
                     id, payment_order_id, refund_ref, amount, currency,
                     status, reason, provider_payload, created_at, updated_at,
                     checkout_id, chef_sub_order_id, customer_identity_id,
-                    cashfree_order_id, idempotency_key, request_event_id,
+                    provider, provider_order_id, provider_payment_id, cashfree_order_id, idempotency_key, request_event_id,
                     request_event_payload, requested_at, next_attempt_at
                 ) VALUES (
                     ?, ?, ?, ?, ?,
                     'REQUESTED', ?, '{}'::jsonb, now(), now(),
                     ?, ?, ?,
-                    ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?,
                     CAST(? AS jsonb), ?, now()
                 )
                 ON CONFLICT DO NOTHING
@@ -87,7 +87,10 @@ public class RefundRequestService {
             data.checkoutId(),
             data.chefSubOrderId(),
             data.customerIdentityId(),
-            paymentOrder.cashfreeOrderId(),
+            paymentOrder.provider(),
+            paymentOrder.providerOrderId(),
+            paymentOrder.providerPaymentId(),
+            "CASHFREE".equals(paymentOrder.provider()) ? paymentOrder.providerOrderId() : null,
             idempotencyKey,
             event.eventId(),
             rawPayload,
@@ -125,7 +128,7 @@ public class RefundRequestService {
     private PaymentOrder lockPaidPaymentOrder(UUID checkoutId) {
         return jdbcTemplate.query(
             """
-                SELECT id, amount, currency, status, cashfree_order_id
+                SELECT id, amount, currency, status, provider, provider_order_id, provider_payment_id
                 FROM payment_schema.payment_order
                 WHERE checkout_id = ?
                 ORDER BY created_at DESC
@@ -137,7 +140,9 @@ public class RefundRequestService {
                 resultSet.getBigDecimal("amount"),
                 resultSet.getString("currency"),
                 resultSet.getString("status"),
-                resultSet.getString("cashfree_order_id")
+                resultSet.getString("provider"),
+                resultSet.getString("provider_order_id"),
+                resultSet.getString("provider_payment_id")
             ),
             checkoutId
         ).stream().findFirst().orElseThrow(() -> new RefundRetryableException(
@@ -153,8 +158,11 @@ public class RefundRequestService {
         if (!"PAID".equals(paymentOrder.status())) {
             throw new RefundNonRetryableException("Only a paid checkout can be refunded");
         }
-        if (!StringUtils.hasText(paymentOrder.cashfreeOrderId())) {
-            throw new RefundRetryableException("Cashfree order identifier is not available");
+        if (!StringUtils.hasText(paymentOrder.providerOrderId())) {
+            throw new RefundRetryableException("Payment provider order identifier is not available");
+        }
+        if ("RAZORPAY".equals(paymentOrder.provider()) && !StringUtils.hasText(paymentOrder.providerPaymentId())) {
+            throw new RefundRetryableException("Razorpay captured payment identifier is not available");
         }
         if (!data.currency().equals(paymentOrder.currency())) {
             throw new RefundNonRetryableException("Refund currency does not match the payment currency");
@@ -189,7 +197,9 @@ public class RefundRequestService {
         BigDecimal amount,
         String currency,
         String status,
-        String cashfreeOrderId
+        String provider,
+        String providerOrderId,
+        String providerPaymentId
     ) {
     }
 

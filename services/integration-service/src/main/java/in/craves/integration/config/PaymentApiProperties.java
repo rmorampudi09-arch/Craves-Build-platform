@@ -8,14 +8,17 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 public class PaymentApiProperties {
     private final boolean orderExecutionEnabled;
-    private final boolean webhookIngressEnabled;
+    private final boolean cashfreeWebhookIngressEnabled;
+    private final boolean razorpayWebhookIngressEnabled;
 
     public PaymentApiProperties(
         @Value("${CRAVES_PAYMENT_ORDER_API_ENABLED:false}") boolean orderExecutionEnabled,
-        @Value("${CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED:false}") boolean webhookIngressEnabled
+        @Value("${CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED:false}") boolean cashfreeWebhookIngressEnabled,
+        @Value("${CRAVES_RAZORPAY_WEBHOOK_INGRESS_ENABLED:false}") boolean razorpayWebhookIngressEnabled
     ) {
         this.orderExecutionEnabled = orderExecutionEnabled;
-        this.webhookIngressEnabled = webhookIngressEnabled;
+        this.cashfreeWebhookIngressEnabled = cashfreeWebhookIngressEnabled;
+        this.razorpayWebhookIngressEnabled = razorpayWebhookIngressEnabled;
     }
 
     public boolean orderExecutionEnabled() {
@@ -23,7 +26,7 @@ public class PaymentApiProperties {
     }
 
     public boolean webhookIngressEnabled() {
-        return webhookIngressEnabled;
+        return cashfreeWebhookIngressEnabled || razorpayWebhookIngressEnabled;
     }
 
     public void requireOrderExecutionEnabled() {
@@ -35,11 +38,20 @@ public class PaymentApiProperties {
         }
     }
 
-    public void requireWebhookIngressEnabled() {
-        if (!webhookIngressEnabled) {
+    public void requireCashfreeWebhookIngressEnabled() {
+        if (!cashfreeWebhookIngressEnabled) {
             throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Cashfree webhook ingress is not enabled"
+            );
+        }
+    }
+
+    public void requireRazorpayWebhookIngressEnabled() {
+        if (!razorpayWebhookIngressEnabled) {
+            throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Razorpay webhook ingress is not enabled"
             );
         }
     }

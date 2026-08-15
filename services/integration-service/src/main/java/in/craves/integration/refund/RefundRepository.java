@@ -43,7 +43,9 @@ public class RefundRepository {
                       AND customer_identity_id IS NOT NULL
                       AND request_event_id IS NOT NULL
                       AND idempotency_key IS NOT NULL
-                      AND cashfree_order_id IS NOT NULL
+                      AND provider IN ('CASHFREE', 'RAZORPAY')
+                      AND provider_order_id IS NOT NULL
+                      AND (provider <> 'RAZORPAY' OR provider_payment_id IS NOT NULL)
                       AND (
                           (? AND status IN ('REQUESTED', 'RETRY') AND next_attempt_at <= now())
                           OR (? AND status IN ('PENDING', 'ONHOLD') AND next_attempt_at <= now())
@@ -51,8 +53,8 @@ public class RefundRepository {
                               status = 'PROCESSING'
                               AND locked_at < now() - (? * INTERVAL '1 second')
                               AND (
-                                  (? AND cf_refund_id IS NULL)
-                                  OR (? AND cf_refund_id IS NOT NULL)
+                                  (? AND provider_refund_id IS NULL)
+                                  OR (? AND provider_refund_id IS NOT NULL)
                               )
                           )
                       )
@@ -97,6 +99,7 @@ public class RefundRepository {
                 SET status = ?,
                     provider_status = ?,
                     cf_refund_id = COALESCE(?, cf_refund_id),
+                    provider_refund_id = COALESCE(?, provider_refund_id),
                     provider_payload = CAST(? AS jsonb),
                     next_attempt_at = ?,
                     processed_at = CASE WHEN ? IN ('SUCCESS', 'FAILED', 'CANCELLED') THEN ? ELSE processed_at END,
@@ -110,6 +113,7 @@ public class RefundRepository {
                 """,
             databaseStatus,
             providerResult.providerStatus(),
+            providerResult.cfRefundId(),
             providerResult.cfRefundId(),
             providerResult.providerPayload(),
             Timestamp.from(nextAttemptAt),
@@ -304,7 +308,11 @@ public class RefundRepository {
             resultSet.getString("provider_status"),
             resultSet.getString("cf_refund_id"),
             resultSet.getInt("attempt_count"),
-            resultSet.getObject("lock_token", UUID.class)
+            resultSet.getObject("lock_token", UUID.class),
+            resultSet.getString("provider"),
+            resultSet.getString("provider_order_id"),
+            resultSet.getString("provider_payment_id"),
+            resultSet.getString("provider_refund_id")
         );
     }
 

@@ -24,13 +24,13 @@ export default function PrivacyPage() {
 
       <PolicySection title="Payments">
         <p>
-          Craves uses Cashfree for hosted payment processing. Craves stores payment and refund references and verified financial status needed for orders and reconciliation, but the Craves application does not require customers to provide card CVVs or UPI PINs to Craves.
+          Craves uses Razorpay for hosted payment processing. Craves stores payment and refund references and verified financial status needed for orders and reconciliation, but the Craves application does not require customers to provide card CVVs or UPI PINs to Craves.
         </p>
       </PolicySection>
 
       <PolicySection title="Service providers">
         <p>
-          Craves shares only the information needed for a service provider to perform its role. Current platform integrations include Firebase for phone authentication, Cashfree for payments and refunds, supported delivery providers for fulfilment, Microsoft Azure for application infrastructure, and communication services for transactional messages.
+          Craves shares only the information needed for a service provider to perform its role. Current platform integrations include Firebase for phone authentication, Razorpay for payments and refunds, supported delivery providers for fulfilment, Microsoft Azure for application infrastructure, and communication services for transactional messages.
         </p>
       </PolicySection>
 

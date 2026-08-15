@@ -11,6 +11,10 @@ const valid = {
   amount: 1499,
   currency: "INR",
   status: "PAYMENT_REQUESTED",
+  provider: "CASHFREE",
+  providerOrderId: null,
+  providerPaymentId: null,
+  checkoutKeyId: null,
   paymentSessionId: null,
   providerStatus: null,
   createdAt: "2026-08-12T06:30:00Z",
@@ -31,6 +35,18 @@ test("accepts a sandbox Cashfree payment session", () => {
   });
   assert.ok(parsed);
   assert.equal(parsed.paymentSessionId, "session_123");
+});
+
+test("accepts a Razorpay checkout order", () => {
+  const parsed = parseSubscriptionPayment({
+    ...valid,
+    status: "PAYMENT_PENDING",
+    provider: "RAZORPAY",
+    providerOrderId: "order_test_123",
+    checkoutKeyId: "rzp_test_123",
+  });
+  assert.ok(parsed);
+  assert.equal(parsed.provider, "RAZORPAY");
 });
 
 test("rejects unsupported statuses and invalid amounts", () => {

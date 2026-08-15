@@ -15,7 +15,7 @@ describe("backend boundary contracts", () => {
 
   it("rejects a payment session without a backend-issued hosted session id", () => {
     expect(parsePaymentSession({ paymentOrderId: id, checkoutId: id2, amount: 250, currency: "INR", status: "CREATED", createdAt: "2026-08-02T08:00:00Z" })).toBeNull();
-    expect(parsePaymentSession({ paymentOrderId: id, checkoutId: id2, paymentSessionId: "session_from_cashfree", amount: 250, currency: "INR", status: "CREATED", createdAt: "2026-08-02T08:00:00Z" }))
+    expect(parsePaymentSession({ paymentOrderId: id, checkoutId: id2, provider: "CASHFREE", providerOrderId: "order_123", paymentSessionId: "session_from_cashfree", amount: 250, currency: "INR", status: "CREATED", createdAt: "2026-08-02T08:00:00Z" }))
       .toMatchObject({ paymentOrderId: id, checkoutId: id2, currency: "INR" });
   });
 

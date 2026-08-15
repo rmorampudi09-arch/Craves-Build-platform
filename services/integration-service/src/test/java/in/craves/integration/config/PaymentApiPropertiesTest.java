@@ -10,24 +10,27 @@ import org.springframework.web.server.ResponseStatusException;
 class PaymentApiPropertiesTest {
     @Test
     void defaultsCanBeRepresentedAsFullyFailClosed() {
-        PaymentApiProperties properties = new PaymentApiProperties(false, false);
+        PaymentApiProperties properties = new PaymentApiProperties(false, false, false);
 
         assertThat(properties.orderExecutionEnabled()).isFalse();
         assertThat(properties.webhookIngressEnabled()).isFalse();
         assertThatThrownBy(properties::requireOrderExecutionEnabled)
             .isInstanceOfSatisfying(ResponseStatusException.class, error ->
                 assertThat(error.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
-        assertThatThrownBy(properties::requireWebhookIngressEnabled)
+        assertThatThrownBy(properties::requireCashfreeWebhookIngressEnabled)
+            .isInstanceOfSatisfying(ResponseStatusException.class, error ->
+                assertThat(error.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+        assertThatThrownBy(properties::requireRazorpayWebhookIngressEnabled)
             .isInstanceOfSatisfying(ResponseStatusException.class, error ->
                 assertThat(error.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
     }
 
     @Test
     void explicitActivationAllowsTheCorrespondingBoundary() {
-        PaymentApiProperties properties = new PaymentApiProperties(true, true);
+        PaymentApiProperties properties = new PaymentApiProperties(true, false, true);
 
         properties.requireOrderExecutionEnabled();
-        properties.requireWebhookIngressEnabled();
+        properties.requireRazorpayWebhookIngressEnabled();
         assertThat(properties.orderExecutionEnabled()).isTrue();
         assertThat(properties.webhookIngressEnabled()).isTrue();
     }

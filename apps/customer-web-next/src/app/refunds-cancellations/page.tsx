@@ -44,9 +44,9 @@ export default function RefundsCancellationsPage() {
 
       <PolicySection title="How the refund is processed">
         <PolicyList>
-          <li>Craves sends eligible refunds to Cashfree using the standard refund flow and a duplicate-safe refund reference.</li>
+          <li>Craves sends eligible refunds to Razorpay using the standard refund flow and a duplicate-safe refund reference.</li>
           <li>Craves prevents cumulative refunds from exceeding the captured payment amount.</li>
-          <li>The final credit timing depends on Cashfree, the payment method, and the customer’s bank or issuer. Craves tracks provider status instead of treating a request as completed before confirmation.</li>
+          <li>The final credit timing depends on Razorpay, the payment method, and the customer’s bank or issuer. Craves tracks provider status instead of treating a request as completed before confirmation.</li>
           <li>If the provider reports a refund failure, the refund remains an operational exception for retry or review rather than being silently marked complete.</li>
         </PolicyList>
       </PolicySection>

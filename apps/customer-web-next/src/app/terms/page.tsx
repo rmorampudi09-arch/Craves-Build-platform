@@ -38,7 +38,7 @@ export default function TermsPage() {
 
       <PolicySection title="4. Payments">
         <PolicyList>
-          <li>Online payments are processed through Cashfree using its hosted payment experience.</li>
+          <li>Online payments are processed through Razorpay using its hosted payment experience.</li>
           <li>Craves does not ask customers to send card numbers, CVVs, UPI PINs, or banking passwords to Craves support.</li>
           <li>A browser success screen alone does not establish final payment status. Craves relies on verified server-side payment-provider status and signed provider events.</li>
           <li>Cash on delivery is not part of the current Craves launch payment flow.</li>

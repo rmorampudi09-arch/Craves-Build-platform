@@ -77,6 +77,15 @@ public class SubscriptionPaymentRepository {
         ).stream().findFirst();
     }
 
+    public Optional<PaymentIntent> findByProviderOrder(String provider, String providerOrderId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM payment_schema.subscription_payment_intent WHERE provider = ? AND provider_order_id = ?",
+            this::mapIntent,
+            provider,
+            providerOrderId
+        ).stream().findFirst();
+    }
+
     @Transactional
     public PaymentIntent storeProviderOrder(
         UUID intentId,
@@ -88,14 +97,32 @@ public class SubscriptionPaymentRepository {
         JsonNode response
     ) {
         int updated = jdbcTemplate.update(
-            "UPDATE payment_schema.subscription_payment_intent SET cashfree_order_id = ?, cashfree_cf_order_id = ?, " +
+            "UPDATE payment_schema.subscription_payment_intent SET provider = 'CASHFREE', provider_order_id = ?, " +
+                "provider_payment_id = ?, cashfree_order_id = ?, cashfree_cf_order_id = ?, " +
                 "payment_session_id = ?, provider_status = ?, status = 'PAYMENT_PENDING', attempt_count = attempt_count + 1, " +
                 "last_error = NULL, updated_at = now() WHERE id = ? AND status IN ('PAYMENT_REQUESTED', 'FAILED')",
-            cashfreeOrderId, cfOrderId, paymentSessionId, providerStatus, intentId
+            cashfreeOrderId, cfOrderId, cashfreeOrderId, cfOrderId, paymentSessionId, providerStatus, intentId
         );
         if (updated != 1) {
             return findById(intentId).orElseThrow();
         }
+        return findById(intentId).orElseThrow();
+    }
+
+    @Transactional
+    public PaymentIntent storeRazorpayOrder(
+        UUID intentId,
+        String providerOrderId,
+        String checkoutKeyId,
+        String providerStatus
+    ) {
+        int updated = jdbcTemplate.update(
+            "UPDATE payment_schema.subscription_payment_intent SET provider = 'RAZORPAY', provider_order_id = ?, " +
+                "checkout_key_id = ?, provider_status = ?, status = 'PAYMENT_PENDING', " +
+                "attempt_count = attempt_count + 1, last_error = NULL, updated_at = now() " +
+                "WHERE id = ? AND status IN ('PAYMENT_REQUESTED', 'FAILED')",
+            providerOrderId, checkoutKeyId, providerStatus, intentId
+        );
         return findById(intentId).orElseThrow();
     }
 
@@ -115,9 +142,9 @@ public class SubscriptionPaymentRepository {
             return false;
         }
         int updated = jdbcTemplate.update(
-            "UPDATE payment_schema.subscription_payment_intent SET status = ?, provider_status = ?, " +
+            "UPDATE payment_schema.subscription_payment_intent SET status = ?, provider_status = ?, provider_payment_id = COALESCE(?, provider_payment_id), " +
                 "paid_at = CASE WHEN ? = 'PAID' THEN now() ELSE paid_at END, updated_at = now() WHERE id = ? AND status <> 'PAID'",
-            normalizedStatus, providerStatus, normalizedStatus, intent.id()
+            normalizedStatus, providerStatus, providerPaymentId, normalizedStatus, intent.id()
         );
         if (updated != 1) {
             return false;
@@ -192,7 +219,8 @@ public class SubscriptionPaymentRepository {
         return new SubscriptionPaymentResponse(
             intent.id(), intent.invoiceId(), intent.subscriptionId(), intent.cycleStart(), intent.cycleEnd(),
             intent.amount(), intent.currency(), intent.status(), intent.paymentSessionId(), intent.providerStatus(),
-            intent.createdAt(), intent.updatedAt(), intent.paidAt()
+            intent.createdAt(), intent.updatedAt(), intent.paidAt(), intent.provider(), intent.providerOrderId(),
+            intent.providerPaymentId(), intent.checkoutKeyId()
         );
     }
 
@@ -213,7 +241,9 @@ public class SubscriptionPaymentRepository {
             rs.getBigDecimal("amount"), rs.getString("currency"), rs.getString("status"),
             rs.getString("cashfree_order_id"), rs.getString("cashfree_cf_order_id"),
             rs.getString("payment_session_id"), rs.getString("provider_status"),
-            instant(rs, "created_at"), instant(rs, "updated_at"), instant(rs, "paid_at")
+            instant(rs, "created_at"), instant(rs, "updated_at"), instant(rs, "paid_at"),
+            rs.getString("provider"), rs.getString("provider_order_id"),
+            rs.getString("provider_payment_id"), rs.getString("checkout_key_id")
         );
     }
 
@@ -250,8 +280,24 @@ public class SubscriptionPaymentRepository {
         String providerStatus,
         Instant createdAt,
         Instant updatedAt,
-        Instant paidAt
+        Instant paidAt,
+        String provider,
+        String providerOrderId,
+        String providerPaymentId,
+        String checkoutKeyId
     ) {
+        public PaymentIntent(
+            UUID id, UUID invoiceId, UUID subscriptionId, UUID planId, UUID customerIdentityId,
+            UUID chefIdentityId, LocalDate cycleStart, LocalDate cycleEnd, BigDecimal amount,
+            String currency, String status, String cashfreeOrderId, String cashfreeCfOrderId,
+            String paymentSessionId, String providerStatus, Instant createdAt, Instant updatedAt,
+            Instant paidAt
+        ) {
+            this(id, invoiceId, subscriptionId, planId, customerIdentityId, chefIdentityId,
+                cycleStart, cycleEnd, amount, currency, status, cashfreeOrderId, cashfreeCfOrderId,
+                paymentSessionId, providerStatus, createdAt, updatedAt, paidAt,
+                "CASHFREE", cashfreeOrderId, cashfreeCfOrderId, null);
+        }
     }
 
     public record OutboxRecord(

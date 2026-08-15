@@ -4,12 +4,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.OrderClientProperties;
 import in.craves.integration.config.PaymentProviderProperties;
+import in.craves.integration.config.PaymentRoutingProperties;
 import in.craves.integration.payment.CashfreeRequestSafety;
+import in.craves.integration.payment.RazorpayPaymentClient;
+import in.craves.integration.payment.RazorpayRequestSafety;
+import in.craves.integration.subscription.SubscriptionPaymentService;
 import in.craves.integration.web.PaymentDtos.CreatePaymentOrderRequest;
 import in.craves.integration.web.PaymentDtos.CreatePaymentOrderResponse;
 import in.craves.integration.web.PaymentDtos.PaymentOrderResponse;
 import in.craves.integration.web.PaymentDtos.PaymentOrderStatus;
 import in.craves.integration.web.PaymentDtos.VerifyPaymentResponse;
+import in.craves.integration.web.PaymentDtos.VerifyPaymentRequest;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -37,6 +42,9 @@ public class PaymentService {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final PaymentProviderProperties provider;
+    private final PaymentRoutingProperties routing;
+    private final RazorpayPaymentClient razorpayClient;
+    private final SubscriptionPaymentService subscriptionPayments;
     private final OrderClientProperties orderClientProperties;
     private final RestClient providerClient;
     private final RestClient orderClient;
@@ -46,12 +54,18 @@ public class PaymentService {
         JdbcTemplate jdbcTemplate,
         ObjectMapper objectMapper,
         PaymentProviderProperties provider,
+        PaymentRoutingProperties routing,
+        RazorpayPaymentClient razorpayClient,
+        SubscriptionPaymentService subscriptionPayments,
         OrderClientProperties orderClientProperties,
         RestClient.Builder builder
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.provider = provider;
+        this.routing = routing;
+        this.razorpayClient = razorpayClient;
+        this.subscriptionPayments = subscriptionPayments;
         this.orderClientProperties = orderClientProperties;
         this.providerClient = builder.clone().baseUrl(provider.baseUrl()).build();
         this.orderClient = builder.clone().baseUrl(orderClientProperties.baseUrl()).build();
@@ -66,7 +80,10 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Checkout was not valid for payment");
         }
         Optional<PaymentOrderResponse> existing = findByCheckout(checkout.id());
-        if (existing.isPresent()) {
+        if (existing.isPresent() && (
+            existing.get().status() == PaymentOrderStatus.PAID
+                || routing.provider().equalsIgnoreCase(existing.get().provider())
+        )) {
             requireMatchingCustomer(existing.get().customerIdentityId(), checkout);
             return toCreateResponse(existing.get());
         }
@@ -82,16 +99,23 @@ public class PaymentService {
     }
 
     @Transactional
-    public VerifyPaymentResponse verifyPayment(String authorizationHeader, UUID paymentOrderId) {
+    public VerifyPaymentResponse verifyPayment(
+        String authorizationHeader,
+        UUID paymentOrderId,
+        VerifyPaymentRequest request
+    ) {
         PaymentOrderResponse existing = getPaymentOrder(authorizationHeader, paymentOrderId);
+        if ("RAZORPAY".equalsIgnoreCase(existing.provider())) {
+            return verifyRazorpayPayment(existing, request);
+        }
         JsonNode response = providerClient.get()
-            .uri("/pg/orders/{orderId}", existing.cashfreeOrderId())
+            .uri("/pg/orders/{orderId}", existing.providerOrderId())
             .header("x-client-id", provider.clientId())
             .header("x-client-" + "secret", provider.clientKey())
             .header("x-api-version", provider.apiVersion())
             .retrieve()
             .body(JsonNode.class);
-        if (response == null || !existing.cashfreeOrderId().equals(text(response, "order_id"))) {
+        if (response == null || !existing.providerOrderId().equals(text(response, "order_id"))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cashfree order verification identity does not match Craves");
         }
         CashfreeRequestSafety.requireMoney(
@@ -114,7 +138,127 @@ public class PaymentService {
         if (paidTransition) {
             notifyOrderPaid(existing.checkoutId(), existing, null);
         }
-        return new VerifyPaymentResponse(paymentOrderId, status, providerStatus);
+        return new VerifyPaymentResponse(paymentOrderId, status, providerStatus, existing.providerPaymentId());
+    }
+
+    private VerifyPaymentResponse verifyRazorpayPayment(
+        PaymentOrderResponse existing,
+        VerifyPaymentRequest request
+    ) {
+        if (request == null
+            || !existing.providerOrderId().equals(request.providerOrderId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay verification details are required");
+        }
+        RazorpayPaymentClient.VerifiedPayment verified = razorpayClient.verifyCheckout(
+            existing.providerOrderId(),
+            request.providerPaymentId(),
+            request.providerSignature(),
+            existing.amount(),
+            existing.currency()
+        );
+        int transitioned = jdbcTemplate.update(
+            "UPDATE payment_schema.payment_order SET status = ?, provider_status = ?, provider_payment_id = ?, response_payload = ?::jsonb, updated_at = now() WHERE id = ? AND status <> ?",
+            PaymentOrderStatus.PAID.name(), verified.providerStatus(), verified.paymentId(),
+            json(verified.response()), existing.paymentOrderId(), PaymentOrderStatus.PAID.name()
+        );
+        if (transitioned > 0) {
+            notifyOrderPaid(existing.checkoutId(), existing, verified.paymentId());
+        }
+        return new VerifyPaymentResponse(
+            existing.paymentOrderId(), PaymentOrderStatus.PAID, verified.providerStatus(), verified.paymentId()
+        );
+    }
+
+    @Transactional
+    public void handleRazorpayWebhook(String signature, String eventId, String rawBody) {
+        UUID inboxId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO payment_schema.webhook_inbox (id, provider, signature_hash, event_identity, processing_status, raw_payload, received_at) VALUES (?, 'RAZORPAY', ?, ?, 'RECEIVED', ?, now())",
+            inboxId, hash(signature), eventId, rawBody
+        );
+        if (!razorpayClient.verifyWebhook(rawBody, signature)) {
+            jdbcTemplate.update(
+                "UPDATE payment_schema.webhook_inbox SET processing_status = 'REJECTED', error_message = 'Invalid signature', processed_at = now() WHERE id = ?",
+                inboxId
+            );
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Razorpay webhook signature");
+        }
+        try {
+            JsonNode payload = objectMapper.readTree(rawBody);
+            String eventType = text(payload, "event");
+            JsonNode payment = payload.at("/payload/payment/entity");
+            String paymentId = text(payment, "id");
+            String orderId = text(payment, "order_id");
+            String status = text(payment, "status");
+            if (!StringUtils.hasText(eventType) || !StringUtils.hasText(paymentId) || !StringUtils.hasText(orderId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay webhook payload is incomplete");
+            }
+            if (subscriptionPayments.handlesRazorpayOrder(orderId)) {
+                subscriptionPayments.applyRazorpayWebhook(payment, eventType);
+                String identity = StringUtils.hasText(eventId) ? eventId : paymentId + ":" + eventType;
+                jdbcTemplate.update(
+                    "UPDATE payment_schema.webhook_inbox SET event_identity = ?, processing_status = 'PROCESSED', processed_at = now() WHERE id = ?",
+                    identity, inboxId
+                );
+                return;
+            }
+            PaymentOrderResponse order = findByProviderOrderId("RAZORPAY", orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order was not found"));
+            if ("payment.captured".equalsIgnoreCase(eventType) || "order.paid".equalsIgnoreCase(eventType)) {
+                RazorpayRequestSafety.requireMoney(
+                    order.amount(), order.currency(), longValue(payment, "amount"), text(payment, "currency"),
+                    "Razorpay success webhook"
+                );
+            }
+            String identity = StringUtils.hasText(eventId) ? eventId : paymentId + ":" + eventType;
+            try {
+                jdbcTemplate.update(
+                    "INSERT INTO payment_schema.payment_event (id, payment_order_id, provider_event_id, event_type, payment_status, raw_payload, created_at) VALUES (?, ?, ?, ?, ?, ?::jsonb, now())",
+                    UUID.randomUUID(), order.paymentOrderId(), identity, eventType, status, rawBody
+                );
+            } catch (DuplicateKeyException duplicate) {
+                jdbcTemplate.update(
+                    "UPDATE payment_schema.webhook_inbox SET processing_status = 'DUPLICATE', processed_at = now() WHERE id = ?",
+                    inboxId
+                );
+                return;
+            }
+            jdbcTemplate.update(
+                "INSERT INTO payment_schema.payment_attempt (id, payment_order_id, provider, provider_payment_id, cf_payment_id, payment_status, payment_amount, payment_currency, raw_payload, created_at) VALUES (?, ?, 'RAZORPAY', ?, ?, ?, ?, ?, ?::jsonb, now())",
+                UUID.randomUUID(), order.paymentOrderId(), paymentId, paymentId, status,
+                RazorpayRequestSafety.fromSubunits(longValue(payment, "amount")), text(payment, "currency"), rawBody
+            );
+            if ("captured".equalsIgnoreCase(status)
+                || "payment.captured".equalsIgnoreCase(eventType)
+                || "order.paid".equalsIgnoreCase(eventType)) {
+                int transitioned = jdbcTemplate.update(
+                    "UPDATE payment_schema.payment_order SET status = 'PAID', provider_status = ?, provider_payment_id = ?, updated_at = now() WHERE id = ? AND status <> 'PAID'",
+                    status, paymentId, order.paymentOrderId()
+                );
+                if (transitioned > 0) notifyOrderPaid(order.checkoutId(), order, paymentId);
+            } else {
+                jdbcTemplate.update(
+                    "UPDATE payment_schema.payment_order SET provider_status = ?, provider_payment_id = ?, updated_at = now() WHERE id = ?",
+                    status, paymentId, order.paymentOrderId()
+                );
+            }
+            jdbcTemplate.update(
+                "UPDATE payment_schema.webhook_inbox SET event_identity = ?, processing_status = 'PROCESSED', processed_at = now() WHERE id = ?",
+                identity, inboxId
+            );
+        } catch (ResponseStatusException exception) {
+            jdbcTemplate.update(
+                "UPDATE payment_schema.webhook_inbox SET processing_status = 'FAILED', error_message = ?, processed_at = now() WHERE id = ?",
+                safe(exception.getReason()), inboxId
+            );
+            throw exception;
+        } catch (Exception exception) {
+            jdbcTemplate.update(
+                "UPDATE payment_schema.webhook_inbox SET processing_status = 'FAILED', error_message = ?, processed_at = now() WHERE id = ?",
+                safe(exception.getMessage()), inboxId
+            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay webhook processing failed");
+        }
     }
 
     @Transactional
@@ -240,6 +384,37 @@ public class PaymentService {
     }
 
     private CreatePaymentOrderResponse createProviderOrder(CheckoutResponse checkout, CreatePaymentOrderRequest request) {
+        if (routing.razorpay()) {
+            return createRazorpayOrder(checkout, request);
+        }
+        return createCashfreeOrder(checkout, request);
+    }
+
+    private CreatePaymentOrderResponse createRazorpayOrder(CheckoutResponse checkout, CreatePaymentOrderRequest request) {
+        UUID paymentOrderId = UUID.randomUUID();
+        String orderRef = "CRV_" + checkout.id().toString().replace("-", "") + "_RZP";
+        Map<String, String> notes = new LinkedHashMap<>();
+        notes.put("craves_checkout_id", checkout.id().toString());
+        notes.put("craves_customer_identity_id", checkout.customerIdentityId().toString());
+        if (StringUtils.hasText(request.customerName())) notes.put("customer_name", request.customerName().trim());
+        RazorpayPaymentClient.CreatedOrder created = razorpayClient.createOrder(
+            orderRef, checkout.grandTotal(), checkout.currency(), notes
+        );
+        jdbcTemplate.update(
+            "INSERT INTO payment_schema.payment_order (id, checkout_id, customer_identity_id, craves_payment_order_ref, provider, provider_order_id, checkout_key_id, amount, currency, status, provider_status, request_payload, response_payload, created_at, updated_at) VALUES (?, ?, ?, ?, 'RAZORPAY', ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, now(), now())",
+            paymentOrderId, checkout.id(), checkout.customerIdentityId(), orderRef, created.orderId(),
+            created.checkoutKeyId(), checkout.grandTotal(), checkout.currency(),
+            PaymentOrderStatus.PAYMENT_PENDING.name(), created.providerStatus(),
+            json(created.request()), json(created.response())
+        );
+        return new CreatePaymentOrderResponse(
+            paymentOrderId, checkout.id(), orderRef, "RAZORPAY", created.orderId(), null,
+            created.checkoutKeyId(), null, checkout.grandTotal(), checkout.currency(),
+            PaymentOrderStatus.PAYMENT_PENDING, Instant.now()
+        );
+    }
+
+    private CreatePaymentOrderResponse createCashfreeOrder(CheckoutResponse checkout, CreatePaymentOrderRequest request) {
         UUID paymentOrderId = UUID.randomUUID();
         String orderRef = "CRV_" + checkout.id().toString().replace("-", "");
         Map<String, Object> customer = new LinkedHashMap<>();
@@ -281,13 +456,14 @@ public class PaymentService {
         String cashfreeOrderId = text(response, "order_id");
         String providerStatus = text(response, "order_status");
         jdbcTemplate.update(
-            "INSERT INTO payment_schema.payment_order (id, checkout_id, customer_identity_id, craves_payment_order_ref, cashfree_order_id, cashfree_cf_order_id, payment_session_id, amount, currency, status, provider_status, request_payload, response_payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, now(), now())",
+            "INSERT INTO payment_schema.payment_order (id, checkout_id, customer_identity_id, craves_payment_order_ref, provider, provider_order_id, provider_payment_id, cashfree_order_id, cashfree_cf_order_id, payment_session_id, amount, currency, status, provider_status, request_payload, response_payload, created_at, updated_at) VALUES (?, ?, ?, ?, 'CASHFREE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, now(), now())",
             paymentOrderId, checkout.id(), checkout.customerIdentityId(), orderRef, cashfreeOrderId, cfOrderId,
+            cashfreeOrderId, cfOrderId,
             paymentSessionId, checkout.grandTotal(), checkout.currency(), PaymentOrderStatus.PAYMENT_PENDING.name(),
             providerStatus, json(body), json(response)
         );
         return new CreatePaymentOrderResponse(
-            paymentOrderId, checkout.id(), orderRef, cashfreeOrderId, cfOrderId, paymentSessionId,
+            paymentOrderId, checkout.id(), orderRef, "CASHFREE", cashfreeOrderId, cfOrderId, null, paymentSessionId,
             checkout.grandTotal(), checkout.currency(), PaymentOrderStatus.PAYMENT_PENDING, Instant.now()
         );
     }
@@ -300,8 +476,9 @@ public class PaymentService {
                 rs.getObject("checkout_id", UUID.class),
                 rs.getObject("customer_identity_id", UUID.class),
                 rs.getString("craves_payment_order_ref"),
-                rs.getString("cashfree_order_id"),
-                rs.getString("cashfree_cf_order_id"),
+                rs.getString("provider"),
+                rs.getString("provider_order_id"),
+                rs.getString("provider_payment_id"),
                 rs.getBigDecimal("amount"),
                 rs.getString("currency"),
                 PaymentOrderStatus.valueOf(rs.getString("status")),
@@ -322,11 +499,15 @@ public class PaymentService {
         ).stream().findFirst().map(this::loadPaymentOrder);
     }
 
-    private Optional<PaymentOrderResponse> findByProviderOrderId(String orderId) {
+    private Optional<PaymentOrderResponse> findByProviderOrderId(String providerName, String orderId) {
         return jdbcTemplate.query(
-            "SELECT id FROM payment_schema.payment_order WHERE cashfree_order_id = ? OR craves_payment_order_ref = ?",
-            (rs, rowNum) -> rs.getObject("id", UUID.class), orderId, orderId
+            "SELECT id FROM payment_schema.payment_order WHERE (provider = ? AND provider_order_id = ?) OR craves_payment_order_ref = ?",
+            (rs, rowNum) -> rs.getObject("id", UUID.class), providerName, orderId, orderId
         ).stream().findFirst().map(this::loadPaymentOrder);
+    }
+
+    private Optional<PaymentOrderResponse> findByProviderOrderId(String orderId) {
+        return findByProviderOrderId("CASHFREE", orderId);
     }
 
     private CreatePaymentOrderResponse toCreateResponse(PaymentOrderResponse existing) {
@@ -334,9 +515,14 @@ public class PaymentService {
             "SELECT payment_session_id FROM payment_schema.payment_order WHERE id = ?",
             (rs, rowNum) -> rs.getString("payment_session_id"), existing.paymentOrderId()
         ).stream().findFirst().orElse(null);
+        String checkoutKeyId = jdbcTemplate.query(
+            "SELECT checkout_key_id FROM payment_schema.payment_order WHERE id = ?",
+            (rs, rowNum) -> rs.getString("checkout_key_id"), existing.paymentOrderId()
+        ).stream().findFirst().orElse(null);
         return new CreatePaymentOrderResponse(
             existing.paymentOrderId(), existing.checkoutId(), existing.cravesPaymentOrderRef(),
-            existing.cashfreeOrderId(), existing.cfOrderId(), paymentSessionId, existing.amount(),
+            existing.provider(), existing.providerOrderId(), existing.providerPaymentId(), checkoutKeyId,
+            paymentSessionId, existing.amount(),
             existing.currency(), existing.status(), existing.createdAt()
         );
     }
@@ -344,7 +530,8 @@ public class PaymentService {
     private void notifyOrderPaid(UUID checkoutId, PaymentOrderResponse order, String cfPaymentId) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("paymentOrderId", order.paymentOrderId());
-        body.put("providerOrderId", order.cashfreeOrderId());
+        body.put("provider", order.provider());
+        body.put("providerOrderId", order.providerOrderId());
         body.put("providerPaymentId", cfPaymentId);
         internalOrderClient.post()
             .uri("/payments/checkout/{checkoutId}/paid", checkoutId)
@@ -407,6 +594,14 @@ public class PaymentService {
         } catch (Exception ex) {
             return null;
         }
+    }
+
+    private static long longValue(JsonNode node, String field) {
+        JsonNode value = node == null ? null : node.get(field);
+        if (value == null || !value.canConvertToLong()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay webhook is missing " + field);
+        }
+        return value.longValue();
     }
 
     private static String hash(String value) {

@@ -331,7 +331,7 @@ export default function CheckoutPage() {
 
               <p className="flex items-start gap-2 rounded-xl border border-border bg-white p-4 text-xs leading-5 text-muted-foreground">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
-                Payment details are collected only inside Cashfree hosted checkout. Craves never asks for a card number, CVV or UPI PIN.
+                Payment details are collected only inside Razorpay hosted checkout. Craves never asks for a card number, CVV or UPI PIN.
               </p>
             </aside>
           </div>

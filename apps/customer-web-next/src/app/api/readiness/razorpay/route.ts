@@ -12,13 +12,13 @@ function businessNameConfigured(): boolean {
 }
 
 export function GET() {
-  const cashfreeMode = process.env.NEXT_PUBLIC_CASHFREE_MODE ?? "unset";
+  const razorpayMode = process.env.NEXT_PUBLIC_RAZORPAY_MODE ?? "unset";
   const supportPhoneReady = supportPhoneConfigured();
   const businessNameReady = businessNameConfigured();
   const response = {
     service: "craves-customer-web",
-    cashfreeMode,
-    productionEligible: cashfreeMode === "production" && supportPhoneReady && businessNameReady,
+    razorpayMode,
+    productionEligible: razorpayMode === "production" && supportPhoneReady && businessNameReady,
     legalVersion: "2026-08-15",
     legalPages: {
       contact: "/contact",

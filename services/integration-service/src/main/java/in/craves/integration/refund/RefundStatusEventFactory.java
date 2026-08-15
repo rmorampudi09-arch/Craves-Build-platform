@@ -42,8 +42,10 @@ public class RefundStatusEventFactory {
         data.put("currency", workItem.currency());
         data.put("reason", workItem.reason());
         data.put("status", normalizedStatus);
+        data.put("provider", workItem.provider());
         data.put("providerStatus", providerResult.providerStatus());
-        data.put("cfRefundId", providerResult.cfRefundId());
+        data.put("providerRefundId", providerResult.cfRefundId());
+        data.put("cfRefundId", "CASHFREE".equalsIgnoreCase(workItem.provider()) ? providerResult.cfRefundId() : null);
         data.put("updatedAt", occurredAt);
 
         Map<String, Object> envelope = new LinkedHashMap<>();

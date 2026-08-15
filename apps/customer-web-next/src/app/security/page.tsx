@@ -24,7 +24,7 @@ export default function SecurityPage() {
 
       <PolicySection title="Payment verification">
         <p>
-          Payment checkout is hosted by Cashfree. Craves treats payment as final only after server-side provider verification or a verified signed provider event; a browser redirect by itself is not trusted as proof of payment.
+          Payment checkout is hosted by Razorpay. Craves treats payment as final only after server-side provider verification or a verified signed provider event; a browser redirect by itself is not trusted as proof of payment.
         </p>
       </PolicySection>
 

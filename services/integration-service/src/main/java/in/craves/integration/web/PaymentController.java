@@ -7,6 +7,7 @@ import in.craves.integration.web.PaymentDtos.CreatePaymentOrderRequest;
 import in.craves.integration.web.PaymentDtos.CreatePaymentOrderResponse;
 import in.craves.integration.web.PaymentDtos.PaymentOrderResponse;
 import in.craves.integration.web.PaymentDtos.VerifyPaymentResponse;
+import in.craves.integration.web.PaymentDtos.VerifyPaymentRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
@@ -56,10 +57,11 @@ public class PaymentController {
     @PostMapping("/orders/{paymentOrderId}/verify")
     public VerifyPaymentResponse verifyPayment(
         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
-        @PathVariable UUID paymentOrderId
+        @PathVariable UUID paymentOrderId,
+        @RequestBody(required = false) VerifyPaymentRequest request
     ) {
         apiProperties.requireOrderExecutionEnabled();
-        return paymentService.verifyPayment(authorization, paymentOrderId);
+        return paymentService.verifyPayment(authorization, paymentOrderId, request);
     }
 
     @PostMapping("/webhooks/cashfree")
@@ -70,8 +72,19 @@ public class PaymentController {
         @RequestHeader(name = "x-idempotency-key", required = false) String idempotencyKey,
         @RequestBody String rawBody
     ) {
-        apiProperties.requireWebhookIngressEnabled();
+        apiProperties.requireCashfreeWebhookIngressEnabled();
         cashfreeWebhookInboxService.accept(timestamp, signature, version, idempotencyKey, rawBody);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/webhooks/razorpay")
+    public ResponseEntity<Void> razorpayWebhook(
+        @RequestHeader(name = "X-Razorpay-Signature", required = false) String signature,
+        @RequestHeader(name = "X-Razorpay-Event-Id", required = false) String eventId,
+        @RequestBody String rawBody
+    ) {
+        apiProperties.requireRazorpayWebhookIngressEnabled();
+        paymentService.handleRazorpayWebhook(signature, eventId, rawBody);
         return ResponseEntity.ok().build();
     }
 }

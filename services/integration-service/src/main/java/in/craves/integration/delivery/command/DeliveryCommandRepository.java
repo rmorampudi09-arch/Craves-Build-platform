@@ -52,7 +52,8 @@ public class DeliveryCommandRepository {
             SELECT id, chef_sub_order_id, order_id, status, attempt_count, payload,
                    scheduled_sequence_number, service_bus_message_id,
                    reconciliation_provider_id, reconciliation_client_reference,
-                   reconciliation_started_at, reconciliation_attempt_count
+                   reconciliation_started_at, reconciliation_attempt_count,
+                   provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at
             FROM delivery_schema.delivery_command
             WHERE chef_sub_order_id = ?
             """, chefSubOrderId);
@@ -63,7 +64,8 @@ public class DeliveryCommandRepository {
             SELECT id, chef_sub_order_id, order_id, status, attempt_count, payload,
                    scheduled_sequence_number, service_bus_message_id,
                    reconciliation_provider_id, reconciliation_client_reference,
-                   reconciliation_started_at, reconciliation_attempt_count
+                   reconciliation_started_at, reconciliation_attempt_count,
+                   provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at
             FROM delivery_schema.delivery_command
             WHERE id = ?
             """, commandId);
@@ -82,21 +84,51 @@ public class DeliveryCommandRepository {
         List<CommandRecord> rows = jdbc.query("""
             UPDATE delivery_schema.delivery_command
             SET status = 'PROCESSING',
-                attempt_count = attempt_count + 1,
+                attempt_count = attempt_count
+                    + CASE WHEN status = 'WAITING_FOR_PROVIDER' THEN 0 ELSE 1 END,
                 processing_started_at = now(),
                 updated_at = now()
             WHERE id = ?
-              AND attempt_count < ?
               AND (
-                    status IN ('SCHEDULED', 'FAILED')
-                    OR (status = 'PROCESSING' AND processing_started_at < now() - interval '10 minutes')
+                    (status IN ('SCHEDULED', 'FAILED') AND attempt_count < ?)
+                    OR (
+                        status = 'WAITING_FOR_PROVIDER'
+                        AND next_provider_retry_at IS NOT NULL
+                        AND next_provider_retry_at <= now()
+                    )
+                    OR (
+                        status = 'PROCESSING'
+                        AND attempt_count < ?
+                        AND processing_started_at < now() - interval '10 minutes'
+                    )
                   )
             RETURNING id, chef_sub_order_id, order_id, status, attempt_count, payload,
                       scheduled_sequence_number, service_bus_message_id,
                       reconciliation_provider_id, reconciliation_client_reference,
-                      reconciliation_started_at, reconciliation_attempt_count
-            """, this::mapRow, commandId, maximumAttempts);
+                      reconciliation_started_at, reconciliation_attempt_count,
+                      provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at
+            """, this::mapRow, commandId, maximumAttempts, maximumAttempts);
         return rows.stream().findFirst();
+    }
+
+    public boolean markProviderWait(UUID commandId,
+                                    Instant nextRetryAt,
+                                    String safeError) {
+        return jdbc.update("""
+            UPDATE delivery_schema.delivery_command
+            SET status = 'WAITING_FOR_PROVIDER',
+                processing_started_at = NULL,
+                provider_wait_attempt_count = provider_wait_attempt_count + 1,
+                provider_wait_started_at = COALESCE(provider_wait_started_at, now()),
+                next_provider_retry_at = ?,
+                last_error = ?,
+                updated_at = now()
+            WHERE id = ? AND status = 'PROCESSING'
+            """,
+            toDatabaseTimestamp(nextRetryAt),
+            truncate(safeError, 2000),
+            commandId
+        ) == 1;
     }
 
     public boolean markReconciliationPending(UUID commandId,
@@ -114,6 +146,7 @@ public class DeliveryCommandRepository {
                 reconciliation_attempt_count = 0,
                 reconciliation_processing_started_at = NULL,
                 next_reconciliation_at = now(),
+                next_provider_retry_at = NULL,
                 last_error = ?,
                 updated_at = now()
             WHERE id = ? AND status = 'PROCESSING'
@@ -158,7 +191,10 @@ public class DeliveryCommandRepository {
                       command.reconciliation_provider_id,
                       command.reconciliation_client_reference,
                       command.reconciliation_started_at,
-                      command.reconciliation_attempt_count
+                      command.reconciliation_attempt_count,
+                      command.provider_wait_attempt_count,
+                      command.provider_wait_started_at,
+                      command.next_provider_retry_at
             """, this::mapRow, maximumAttempts, staleMinutes, limit);
     }
 
@@ -194,6 +230,7 @@ public class DeliveryCommandRepository {
                 processing_started_at = NULL,
                 reconciliation_processing_started_at = NULL,
                 next_reconciliation_at = NULL,
+                next_provider_retry_at = NULL,
                 last_error = NULL,
                 updated_at = now()
             WHERE id = ?
@@ -203,7 +240,11 @@ public class DeliveryCommandRepository {
     public void markFailed(UUID commandId, String safeError) {
         jdbc.update("""
             UPDATE delivery_schema.delivery_command
-            SET status = 'FAILED', processing_started_at = NULL, last_error = ?, updated_at = now()
+            SET status = 'FAILED',
+                processing_started_at = NULL,
+                next_provider_retry_at = NULL,
+                last_error = ?,
+                updated_at = now()
             WHERE id = ? AND status = 'PROCESSING'
             """, truncate(safeError, 2000), commandId);
     }
@@ -214,6 +255,7 @@ public class DeliveryCommandRepository {
             SET status = 'DEAD_LETTER',
                 processing_started_at = NULL,
                 reconciliation_processing_started_at = NULL,
+                next_provider_retry_at = NULL,
                 last_error = ?,
                 updated_at = now()
             WHERE id = ?
@@ -244,7 +286,10 @@ public class DeliveryCommandRepository {
                 rs.getString("reconciliation_provider_id"),
                 rs.getString("reconciliation_client_reference"),
                 instantOrNull(rs, "reconciliation_started_at"),
-                rs.getInt("reconciliation_attempt_count")
+                rs.getInt("reconciliation_attempt_count"),
+                rs.getInt("provider_wait_attempt_count"),
+                instantOrNull(rs, "provider_wait_started_at"),
+                instantOrNull(rs, "next_provider_retry_at")
             );
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Stored delivery command payload is invalid", ex);
@@ -283,6 +328,9 @@ public class DeliveryCommandRepository {
         String reconciliationProviderId,
         String reconciliationClientReference,
         Instant reconciliationStartedAt,
-        int reconciliationAttemptCount
+        int reconciliationAttemptCount,
+        int providerWaitAttemptCount,
+        Instant providerWaitStartedAt,
+        Instant nextProviderRetryAt
     ) {}
 }

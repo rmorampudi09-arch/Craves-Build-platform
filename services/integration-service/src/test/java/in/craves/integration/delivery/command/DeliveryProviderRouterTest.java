@@ -21,6 +21,7 @@ import in.craves.integration.delivery.DeliveryIntelligenceService;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
+import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
@@ -78,6 +79,24 @@ class DeliveryProviderRouterTest {
         assertThat(request.getValue().area()).isEqualTo("Madhapur");
         assertThat(request.getValue().distanceKm()).isEqualTo(4.6);
         assertThat(request.getValue().candidates()).hasSize(2);
+
+        router.closeExecutor();
+    }
+
+    @Test
+    void treatsZeroActiveProvidersAsTemporaryProviderOutage() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        DeliveryAssignmentRepository assignments = mock(DeliveryAssignmentRepository.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of());
+
+        DeliveryProviderRouter router = new DeliveryProviderRouter(
+            List.of(), catalog, intelligence, assignments, new DeliveryCommandProperties()
+        );
+
+        assertThatThrownBy(() -> router.route(command()))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class)
+            .hasMessage("No active delivery providers are configured");
 
         router.closeExecutor();
     }
@@ -145,7 +164,10 @@ class DeliveryProviderRouterTest {
             "borzo",
             "CRV-1234567890123456789012345678",
             Instant.parse("2026-07-24T02:00:00Z"),
-            1
+            1,
+            0,
+            null,
+            null
         );
 
         var result = router.reconcile(pending);

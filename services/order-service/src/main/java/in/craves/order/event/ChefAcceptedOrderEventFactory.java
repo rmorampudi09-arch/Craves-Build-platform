@@ -120,7 +120,8 @@ public class ChefAcceptedOrderEventFactory {
                 dropoff,
                 items,
                 source.declaredGoodsValue(),
-                source.paymentCollectionMode()
+                source.paymentCollectionMode(),
+                source.pickupLocationReference()
             )
         );
 

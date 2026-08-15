@@ -18,6 +18,7 @@ public class ChefAcceptedOrderEventFactory {
     public static final String EVENT_TYPE = "CHEF_ACCEPTED_ORDER";
     public static final String EVENT_VERSION = "1.0";
     public static final String SOURCE = "order-service";
+    private static final String DEFAULT_COUNTRY = "India";
 
     private final ObjectMapper objectMapper;
 
@@ -53,7 +54,15 @@ public class ChefAcceptedOrderEventFactory {
             source.pickupLongitude(),
             null,
             null,
-            null
+            null,
+            source.pickupAddressLine1(),
+            source.pickupAddressLine2(),
+            source.pickupLandmark(),
+            source.pickupAreaName(),
+            source.pickupCity(),
+            source.pickupState(),
+            source.pickupPostalCode(),
+            DEFAULT_COUNTRY
         );
 
         DeliveryStopData dropoff = new DeliveryStopData(
@@ -72,7 +81,15 @@ public class ChefAcceptedOrderEventFactory {
             source.dropoffLongitude(),
             null,
             null,
-            null
+            null,
+            source.dropoffAddressLine1(),
+            source.dropoffAddressLine2(),
+            source.dropoffLandmark(),
+            source.dropoffAreaName(),
+            source.dropoffCity(),
+            source.dropoffState(),
+            source.dropoffPostalCode(),
+            DEFAULT_COUNTRY
         );
 
         ChefAcceptedOrderEventData data = new ChefAcceptedOrderEventData(
@@ -152,9 +169,15 @@ public class ChefAcceptedOrderEventFactory {
         requireText(source.pickupPhoneNumber(), "pickupPhoneNumber");
         requireText(source.pickupAddressLine1(), "pickupAddressLine1");
         requireText(source.pickupAreaName(), "pickupAreaName");
+        requireText(source.pickupCity(), "pickupCity");
+        requireText(source.pickupState(), "pickupState");
+        requireText(source.pickupPostalCode(), "pickupPostalCode");
         requireText(source.dropoffRecipientName(), "dropoffRecipientName");
         requireText(source.dropoffPhoneNumber(), "dropoffPhoneNumber");
         requireText(source.dropoffAddressLine1(), "dropoffAddressLine1");
+        requireText(source.dropoffCity(), "dropoffCity");
+        requireText(source.dropoffState(), "dropoffState");
+        requireText(source.dropoffPostalCode(), "dropoffPostalCode");
     }
 
     private static void requireText(String value, String field) {

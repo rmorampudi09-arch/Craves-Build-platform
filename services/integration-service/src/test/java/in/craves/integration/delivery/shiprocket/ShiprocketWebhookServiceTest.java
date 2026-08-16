@@ -31,7 +31,24 @@ class ShiprocketWebhookServiceTest {
     }
 
     @Test
-    void rejectsMissingOrIncorrectApiKeyBeforePersistence() {
+    void acknowledgesNonTrackingValidationProbesWithoutPersistence() {
+        ShiprocketWebhookService.WebhookReceipt emptyBody = service.accept(null, null);
+        ShiprocketWebhookService.WebhookReceipt emptyObject = service.accept("{}", null);
+        ShiprocketWebhookService.WebhookReceipt malformedBody = service.accept("not-json", "wrong-token");
+        ShiprocketWebhookService.WebhookReceipt partialBody = service.accept(
+            "{\"awb\":\"VALIDATION-PROBE\"}",
+            null
+        );
+
+        assertThat(emptyBody.validationProbe()).isTrue();
+        assertThat(emptyObject.validationProbe()).isTrue();
+        assertThat(malformedBody.validationProbe()).isTrue();
+        assertThat(partialBody.validationProbe()).isTrue();
+        Mockito.verifyNoInteractions(inboxRepository);
+    }
+
+    @Test
+    void rejectsMissingOrIncorrectApiKeyForRealTrackingEventBeforePersistence() {
         String payload = validPayload();
 
         assertThatThrownBy(() -> service.accept(payload, null))
@@ -54,6 +71,7 @@ class ShiprocketWebhookServiceTest {
             "expected-webhook-token"
         );
 
+        assertThat(receipt.validationProbe()).isFalse();
         assertThat(receipt.awb()).isEqualTo("14326480716236");
         assertThat(receipt.duplicate()).isFalse();
         assertThat(receipt.providerEventId()).hasSize(64);
@@ -78,6 +96,7 @@ class ShiprocketWebhookServiceTest {
             "expected-webhook-token"
         );
 
+        assertThat(receipt.validationProbe()).isFalse();
         assertThat(receipt.duplicate()).isTrue();
     }
 

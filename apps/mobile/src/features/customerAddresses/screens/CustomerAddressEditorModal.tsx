@@ -86,7 +86,7 @@ export function CustomerAddressEditorModal({mode, address, addresses, onClose}: 
     ]);
   }, [draft, onClose, original]);
 
-  const useCurrentLocation = useCallback(async () => {
+  const handleUseCurrentLocation = useCallback(async () => {
     if (locating) return;
     setLocating(true);
     setFormError(null);
@@ -205,7 +205,7 @@ export function CustomerAddressEditorModal({mode, address, addresses, onClose}: 
                 label="Use current location"
                 leftIcon="location"
                 loading={locating}
-                onPress={() => useCurrentLocation().catch(() => undefined)}
+                onPress={() => handleUseCurrentLocation().catch(() => undefined)}
                 style={styles.locationButton}
                 variant="outline"
               />

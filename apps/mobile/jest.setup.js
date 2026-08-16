@@ -84,6 +84,14 @@ jest.mock('react-native-razorpay', () => ({
   },
 }));
 
+// The production Material Design icon package imports its bundled .ttf at
+// module load time. Jest does not need the native font renderer to validate
+// application behavior, so keep that native asset boundary mocked in tests.
+jest.mock('@react-native-vector-icons/material-design-icons', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
 jest.mock('react-native-reanimated', () => {
   const Reanimated = require('react-native-reanimated/mock');
   Reanimated.default.call = () => {};

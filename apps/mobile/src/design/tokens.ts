@@ -6,8 +6,8 @@ export const colors = {
    */
   flameRedAccessible: '#D92714',
   flameRedSoft: '#FF5548',
-  /** Soft flame-red tint sampled from the approved icon-background reference. */
-  iconSurface: '#FEF3F3',
+  /** Shared icon-tile background across customer and Chef experiences. */
+  iconSurface: '#F1F5F9',
   espresso: '#261A15',
   espressoBrown: '#261A15',
   cream: '#FFF5E9',

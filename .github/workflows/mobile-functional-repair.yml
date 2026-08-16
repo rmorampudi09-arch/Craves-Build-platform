@@ -1,0 +1,75 @@
+name: CRAVES Mobile Functional Repair
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/mobile-functional-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+          fetch-depth: 0
+      - name: Apply exact source repairs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'Expected text not found in {path}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_exact(
+              'apps/mobile/src/features/chefSubscription/screens/ChefSubscriptionPlanScreen.tsx',
+              "  ActivityIndicator,\n  Alert,\n  Pressable,",
+              "  ActivityIndicator,\n  Pressable,",
+          )
+
+          replace_exact(
+              'apps/mobile/src/features/customerOrders/screens/CustomerOrdersScreen.tsx',
+              "        onPressNotifications={() =>\n          setCapabilityMessage(\n            'The notification inbox route is not part of the current authorized phase. Your unread badge is still live from the existing notification summary.',\n          )\n        }",
+              "        onPressNotifications={() => {\n          const parent = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();\n          parent?.navigate('Profile', {screen: 'CustomerNotifications'});\n        }}",
+          )
+
+          contract_path = 'apps/mobile/src/features/chefBusinessInformation/domain/chefBusinessInformationContract.ts'
+          replace_exact(
+              contract_path,
+              "    'Supported proof types are AADHAAR_CARD and PAN_CARD.',",
+              "    'Supported proof types are APPLICANT_PHOTO, GOVERNMENT_ID_FRONT, GOVERNMENT_ID_BACK, TAX_ID_CARD, AADHAAR_CARD, and PAN_CARD.',",
+          )
+          replace_exact(
+              contract_path,
+              "    'POST /api/v1/chef/application/proof-files accepts multipart documentType + file, supports AADHAAR_CARD/PAN_CARD, and replaces the same document type before approval.',",
+              "    'POST /api/v1/chef/application/proof-files accepts multipart documentType + file for the six authoritative KYC evidence types and replaces the same document type before approval.',",
+          )
+          replace_exact(
+              contract_path,
+              "    purpose: 'Existing onboarding proof upload/replacement for AADHAAR_CARD or PAN_CARD.',",
+              "    purpose: 'Existing onboarding proof upload/replacement for the six authoritative KYC evidence types.',",
+          )
+
+          dish_path = 'apps/mobile/src/features/dishDetail/api/dishDetailApi.ts'
+          replace_exact(
+              dish_path,
+              "  {\n    capability: 'FAVORITES',\n    reason:\n      'The current branch has no authoritative customer dish favorite read or mutation contract.',\n  },\n",
+              "",
+          )
+          PY
+      - name: Commit repair
+        run: |
+          git config user.name 'craves-mobile-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add apps/mobile/src
+          git commit -m 'Finish notification and contract reconciliation'
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

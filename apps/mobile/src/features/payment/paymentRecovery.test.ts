@@ -1,25 +1,30 @@
-import {AppApiError} from '../../core/http/apiError';
 import type {CheckoutSession} from '../checkout/domain/checkoutTypes';
 import {parsePaymentVerificationResult} from './api/paymentApi';
 import {
-  CASHFREE_NATIVE_PROVIDER_CALLBACK_BLOCKER,
   createPaymentRecoveryCoordinator,
   paymentRecoveryCapability,
   reconcilePaymentRecovery,
-  requireNativeCashfreeCallbackAdapter,
 } from './domain/paymentRecoveryCoordinator';
 import type {
-  CashfreeHostedHandoff,
+  PaymentOrderSnapshot,
   PaymentVerificationResult,
+  RazorpayHostedHandoff,
+  RazorpayVerificationProof,
 } from './domain/paymentTypes';
 
-const handoff: CashfreeHostedHandoff = {
-  provider: 'CASHFREE',
+const handoff: RazorpayHostedHandoff = {
+  provider: 'RAZORPAY',
   paymentOrderId: '55555555-5555-4555-8555-555555555555',
   checkoutId: '11111111-1111-4111-8111-111111111111',
-  cashfreeOrderId: 'CRV_11111111111141118111111111111111',
-  paymentSessionId: 'session_kept_in_memory_only',
+  providerOrderId: 'order_Razorpay123',
+  checkoutKeyId: 'rzp_test_public_key',
   amount: {amount: '130.00', currency: 'INR'},
+};
+
+const proof: RazorpayVerificationProof = {
+  providerOrderId: handoff.providerOrderId,
+  providerPaymentId: 'pay_Razorpay456',
+  providerSignature: 'signed_payload_proof',
 };
 
 const pendingCheckout: CheckoutSession = {
@@ -35,7 +40,7 @@ const pendingCheckout: CheckoutSession = {
   chargePolicyId: '33333333-3333-4333-8333-333333333333',
   deliveryAddressId: '44444444-4444-4444-8444-444444444444',
   orders: [],
-  createdAt: '2026-08-08T10:00:00Z',
+  createdAt: '2026-08-16T10:00:00Z',
 };
 
 const paidCheckout: CheckoutSession = {
@@ -54,59 +59,79 @@ function verification(status: PaymentVerificationResult['status']): PaymentVerif
   return {
     paymentOrderId: handoff.paymentOrderId,
     status,
-    providerStatus: status === 'PAID' ? 'PAID' : 'ACTIVE',
+    providerStatus: status === 'PAID' ? 'captured' : 'created',
+    providerPaymentId: status === 'PAID' ? proof.providerPaymentId : null,
   };
 }
 
-describe('P51 payment success/failure/cancel recovery', () => {
-  it('parses the exact backend verification response', () => {
+function snapshot(status: PaymentOrderSnapshot['status']): PaymentOrderSnapshot {
+  return {
+    paymentOrderId: handoff.paymentOrderId,
+    checkoutId: handoff.checkoutId,
+    customerIdentityId: pendingCheckout.customerIdentityId,
+    cravesPaymentOrderRef: 'CRV_55555555555545558555555555555555',
+    provider: 'RAZORPAY',
+    providerOrderId: handoff.providerOrderId,
+    providerPaymentId: status === 'PAID' ? proof.providerPaymentId : null,
+    amount: handoff.amount,
+    status,
+    providerStatus: status === 'PAID' ? 'captured' : 'created',
+    createdAt: '2026-08-16T10:01:00Z',
+    updatedAt: '2026-08-16T10:02:00Z',
+  };
+}
+
+describe('production Razorpay payment success/failure/cancel recovery', () => {
+  it('parses the current backend verification response including provider payment id', () => {
     expect(
       parsePaymentVerificationResult({
         paymentOrderId: handoff.paymentOrderId,
         status: 'PAID',
-        providerStatus: 'PAID',
+        providerStatus: 'captured',
+        providerPaymentId: proof.providerPaymentId,
       }),
     ).toEqual(verification('PAID'));
-
-    expect(
-      parsePaymentVerificationResult({
-        paymentOrderId: handoff.paymentOrderId,
-        status: 'PAID',
-        providerStatus: {unsafe: true},
-      }),
-    ).toBeNull();
   });
 
-  it('declares success only after backend verification and checkout reconciliation agree', () => {
-    const result = reconcilePaymentRecovery(
-      handoff,
-      {kind: 'CASHFREE_VERIFY_CALLBACK', cashfreeOrderId: handoff.cashfreeOrderId},
-      verification('PAID'),
-      paidCheckout,
-    );
-
-    expect(result.outcome).toBe('SUCCEEDED');
-    expect(result.retryVerificationAllowed).toBe(false);
-  });
-
-  it('does not trust a provider error when the backend verifies payment as paid', async () => {
+  it('declares success only after signed backend verification and checkout reconciliation agree', async () => {
     const verifyPaymentOrder = jest.fn(async () => verification('PAID'));
+    const readPaymentOrder = jest.fn(async () => snapshot('PAYMENT_PENDING'));
     const readCheckoutSession = jest.fn(async () => paidCheckout);
     const coordinator = createPaymentRecoveryCoordinator(
       verifyPaymentOrder,
+      readPaymentOrder,
       readCheckoutSession,
+    );
+
+    await expect(
+      coordinator.recover(handoff, {kind: 'RAZORPAY_SUCCESS', proof}),
+    ).resolves.toMatchObject({outcome: 'SUCCEEDED'});
+    expect(verifyPaymentOrder).toHaveBeenCalledWith(handoff.paymentOrderId, proof);
+    expect(readPaymentOrder).not.toHaveBeenCalled();
+  });
+
+  it('never trusts provider error as payment failure when backend status is paid', async () => {
+    const verifyPaymentOrder = jest.fn(async () => verification('PAID'));
+    const readPaymentOrder = jest.fn(async () => snapshot('PAID'));
+    const coordinator = createPaymentRecoveryCoordinator(
+      verifyPaymentOrder,
+      readPaymentOrder,
+      async () => paidCheckout,
     );
 
     await expect(
       coordinator.recover(handoff, {kind: 'PROVIDER_ERROR'}),
     ).resolves.toMatchObject({outcome: 'SUCCEEDED'});
-    expect(verifyPaymentOrder).toHaveBeenCalledWith(handoff.paymentOrderId);
-    expect(readCheckoutSession).toHaveBeenCalledWith(handoff.checkoutId);
+    expect(verifyPaymentOrder).not.toHaveBeenCalled();
+    expect(readPaymentOrder).toHaveBeenCalledWith(handoff.paymentOrderId);
   });
 
-  it('keeps cancellation recoverable while the backend still reports payment pending', async () => {
+  it('uses GET recovery rather than signature verification after cancellation', async () => {
+    const verifyPaymentOrder = jest.fn(async () => verification('PAID'));
+    const readPaymentOrder = jest.fn(async () => snapshot('PAYMENT_PENDING'));
     const coordinator = createPaymentRecoveryCoordinator(
-      async () => verification('PAYMENT_PENDING'),
+      verifyPaymentOrder,
+      readPaymentOrder,
       async () => pendingCheckout,
     );
 
@@ -117,9 +142,28 @@ describe('P51 payment success/failure/cancel recovery', () => {
       retryVerificationAllowed: true,
       newPaymentAttemptAllowed: false,
     });
+    expect(verifyPaymentOrder).not.toHaveBeenCalled();
+    expect(readPaymentOrder).toHaveBeenCalledTimes(1);
   });
 
-  it('returns terminal failure only from an authoritative backend status', () => {
+  it('rejects signed success for a different Razorpay order before backend verification', async () => {
+    const verifyPaymentOrder = jest.fn(async () => verification('PAID'));
+    const coordinator = createPaymentRecoveryCoordinator(
+      verifyPaymentOrder,
+      async () => snapshot('PAYMENT_PENDING'),
+      async () => paidCheckout,
+    );
+
+    await expect(
+      coordinator.recover(handoff, {
+        kind: 'RAZORPAY_SUCCESS',
+        proof: {...proof, providerOrderId: 'order_different'},
+      }),
+    ).rejects.toThrow('different payment');
+    expect(verifyPaymentOrder).not.toHaveBeenCalled();
+  });
+
+  it('returns terminal failure only from authoritative backend state', () => {
     expect(
       reconcilePaymentRecovery(
         handoff,
@@ -141,62 +185,34 @@ describe('P51 payment success/failure/cancel recovery', () => {
     ).toMatchObject({outcome: 'RECONCILING', retryVerificationAllowed: true});
   });
 
-  it('rejects a Cashfree verify callback for a different provider order', async () => {
-    const verifyPaymentOrder = jest.fn(async () => verification('PAID'));
-    const coordinator = createPaymentRecoveryCoordinator(
-      verifyPaymentOrder,
-      async () => paidCheckout,
-    );
-
-    await expect(
-      coordinator.recover(handoff, {
-        kind: 'CASHFREE_VERIFY_CALLBACK',
-        cashfreeOrderId: 'different-provider-order',
-      }),
-    ).rejects.toThrow('different payment');
-    expect(verifyPaymentOrder).not.toHaveBeenCalled();
-  });
-
-  it('coalesces concurrent verification for the same payment order', async () => {
-    let resolveVerification:
-      | ((value: PaymentVerificationResult) => void)
-      | undefined;
-    const verifyPaymentOrder = jest.fn(
+  it('coalesces concurrent recovery for the same payment order', async () => {
+    let resolvePayment: ((value: PaymentOrderSnapshot) => void) | undefined;
+    const readPaymentOrder = jest.fn(
       () =>
-        new Promise<PaymentVerificationResult>(resolve => {
-          resolveVerification = resolve;
+        new Promise<PaymentOrderSnapshot>(resolve => {
+          resolvePayment = resolve;
         }),
     );
     const readCheckoutSession = jest.fn(async () => paidCheckout);
     const coordinator = createPaymentRecoveryCoordinator(
-      verifyPaymentOrder,
+      async () => verification('PAID'),
+      readPaymentOrder,
       readCheckoutSession,
     );
 
     const first = coordinator.recover(handoff, {kind: 'APP_RESUME'});
     const second = coordinator.recover(handoff, {kind: 'MANUAL_RETRY'});
 
-    expect(verifyPaymentOrder).toHaveBeenCalledTimes(1);
-    resolveVerification?.(verification('PAID'));
+    expect(readPaymentOrder).toHaveBeenCalledTimes(1);
+    resolvePayment?.(snapshot('PAID'));
     await expect(first).resolves.toMatchObject({outcome: 'SUCCEEDED'});
     await expect(second).resolves.toMatchObject({outcome: 'SUCCEEDED'});
     expect(readCheckoutSession).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps unsupported native callback wiring and terminal retry fail-closed', () => {
-    expect(paymentRecoveryCapability.nativeCashfreeCallbackAdapterSupported).toBe(false);
-    expect(paymentRecoveryCapability.newPaymentAttemptAfterTerminalFailureSupported).toBe(
-      false,
-    );
-
-    try {
-      requireNativeCashfreeCallbackAdapter();
-      throw new Error('Expected native provider callback adapter to fail closed');
-    } catch (error) {
-      expect(error).toBeInstanceOf(AppApiError);
-      expect((error as AppApiError).code).toBe(
-        CASHFREE_NATIVE_PROVIDER_CALLBACK_BLOCKER,
-      );
-    }
+  it('keeps provider signals non-authoritative and terminal retries fail-closed', () => {
+    expect(paymentRecoveryCapability.providerSignalCanDeclareSuccess).toBe(false);
+    expect(paymentRecoveryCapability.nativeRazorpayCallbackAdapterSupported).toBe(true);
+    expect(paymentRecoveryCapability.newPaymentAttemptAfterTerminalFailureSupported).toBe(false);
   });
 });

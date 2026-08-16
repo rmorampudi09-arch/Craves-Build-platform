@@ -1,0 +1,40 @@
+name: CRAVES Mobile Image Picker Lock Repair
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/mobile-image-picker-lock-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Install SDK-compatible image picker into lockfile
+        working-directory: apps/mobile
+        run: |
+          npm ci
+          npx expo install expo-image-picker --npm
+      - name: Commit generated package metadata
+        run: |
+          if git diff --quiet -- apps/mobile/package.json apps/mobile/package-lock.json; then
+            echo 'No dependency metadata changes were needed.'
+            exit 0
+          fi
+          git config user.name 'craves-mobile-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add apps/mobile/package.json apps/mobile/package-lock.json
+          git commit -m 'Add SDK-compatible Expo image picker'
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

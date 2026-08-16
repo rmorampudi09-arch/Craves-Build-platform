@@ -81,10 +81,12 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          changed="$(git diff --name-only 0f4e166edaba8c115853441bf362f2226da87903...HEAD)"
+          # Immutable production-sync boundary captured before any Aug 16 mobile parity work.
+          baseline="06747a43628d70ff5927732118108c4526c17bf0"
+          changed="$(git diff --name-only "${baseline}"...HEAD)"
           printf '%s\n' "$changed"
           if printf '%s\n' "$changed" | grep -E '^(services/|openapi/|infra/|apps/api/)'; then
-            echo 'Backend/APIM/infrastructure source changed since the pre-Razorpay mobile baseline.' >&2
+            echo 'Backend/APIM/infrastructure source changed since the immutable pre-production-sync mobile baseline.' >&2
             exit 1
           fi
           echo 'Backend/APIM/infrastructure source guard passed.'

@@ -13,6 +13,7 @@ import type {
 const checkoutId = '11111111-1111-4111-8111-111111111111';
 const customerIdentityId = '22222222-2222-4222-8222-222222222222';
 const chargePolicyId = '33333333-3333-4333-8333-333333333333';
+const seededChargePolicyId = '20000000-0000-0000-0000-000000000001';
 const deliveryAddressId = '44444444-4444-4444-8444-444444444444';
 const orderId = '55555555-5555-4555-8555-555555555555';
 const cartId = '66666666-6666-4666-8666-666666666666';
@@ -73,6 +74,24 @@ describe('P49 checkout session creation', () => {
       orders: [{orderId, checkoutId, status: 'PAYMENT_PENDING'}],
       createdAt: '2026-08-08T12:00:00Z',
     });
+  });
+
+  it('accepts the seeded PostgreSQL charge-policy UUID used by the live backend', () => {
+    expect(
+      parseCheckoutSession({
+        ...apiResponse,
+        chargePolicyId: seededChargePolicyId,
+      }),
+    ).toMatchObject({chargePolicyId: seededChargePolicyId});
+  });
+
+  it('still rejects malformed charge-policy identifiers', () => {
+    expect(
+      parseCheckoutSession({
+        ...apiResponse,
+        chargePolicyId: 'not-a-uuid',
+      }),
+    ).toBeNull();
   });
 
   it('rejects a response whose order does not belong to the returned checkout', () => {

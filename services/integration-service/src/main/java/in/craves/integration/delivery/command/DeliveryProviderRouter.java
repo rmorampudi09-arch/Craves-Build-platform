@@ -312,13 +312,14 @@ public class DeliveryProviderRouter {
                 QuoteOutcome outcome = future.get(remainingNanos, TimeUnit.NANOSECONDS);
                 outcomes.add(outcome);
                 ProviderQuote quote = outcome.quote();
+                Double pickupEta = quote == null ? null : pickupEtaMinutes(quote);
                 quoteAudit.add(new QuoteAudit(
                     outcome.providerId(),
                     quote != null,
                     quote != null && quote.available(),
-                    quote == null ? null : quote.deliveryFeeAmount(),
-                    quote == null ? null : quote.currency(),
-                    quote == null ? null : quote.providerMetadata(),
+                    quote == null ? null : pickupDistanceKm(quote),
+                    pickupEta == null ? null : (int) Math.round(pickupEta),
+                    quote,
                     outcome.error()
                 ));
             } catch (InterruptedException ex) {

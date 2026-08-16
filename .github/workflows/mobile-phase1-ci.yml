@@ -63,10 +63,12 @@ jobs:
       - name: Verify backend source remains unchanged
         run: |
           set -euo pipefail
-          changed="$(git diff --name-only 8a2444cde508ea2fb20cb9822397e55c29bd8c5f...HEAD)"
+          # Immutable production-sync boundary captured before any Aug 16 mobile parity work.
+          baseline="06747a43628d70ff5927732118108c4526c17bf0"
+          changed="$(git diff --name-only "${baseline}"...HEAD)"
           printf '%s\n' "$changed"
           if printf '%s\n' "$changed" | grep -E '^(services/|openapi/|infra/|apps/api/)'; then
-            echo 'Backend/APIM/infrastructure source changed during the mobile rebuild.' >&2
+            echo 'Backend/APIM/infrastructure source changed since the immutable pre-production-sync mobile baseline.' >&2
             exit 1
           fi
           echo 'Backend/APIM/infrastructure source guard passed.'

@@ -41,15 +41,14 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class DeliveryProviderRouterTest {
-    private static final Clock FIXED_CLOCK = Clock.fixed(
-        Instant.parse("2026-07-24T02:00:00Z"),
+    private final ExecutorService quoteExecutor = Executors.newFixedThreadPool(2);
+    private final Clock clock = Clock.fixed(
+        Instant.parse("2026-08-16T00:00:00Z"),
         ZoneOffset.UTC
     );
 
-    private final ExecutorService quoteExecutor = Executors.newFixedThreadPool(2);
-
     @AfterEach
-    void shutdownQuoteExecutor() {
+    void shutDownQuoteExecutor() {
         quoteExecutor.shutdownNow();
     }
 
@@ -72,13 +71,8 @@ class DeliveryProviderRouterTest {
         when(intelligence.assign(any())).thenReturn(assignment);
 
         DeliveryProviderRouter router = new DeliveryProviderRouter(
-            List.of(fast, backup),
-            catalog,
-            intelligence,
-            assignments,
-            properties,
-            quoteExecutor,
-            FIXED_CLOCK
+            List.of(fast, backup), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
         );
 
         var result = router.route(command());
@@ -111,13 +105,8 @@ class DeliveryProviderRouterTest {
         when(catalog.activeProviderIds()).thenReturn(List.of());
 
         DeliveryProviderRouter router = new DeliveryProviderRouter(
-            List.of(),
-            catalog,
-            intelligence,
-            assignments,
-            new DeliveryCommandProperties(),
-            quoteExecutor,
-            FIXED_CLOCK
+            List.of(), catalog, intelligence, assignments, new DeliveryCommandProperties(),
+            quoteExecutor, clock
         );
 
         assertThatThrownBy(() -> router.route(command()))
@@ -142,13 +131,8 @@ class DeliveryProviderRouterTest {
         when(intelligence.assign(any())).thenReturn(assignment);
 
         DeliveryProviderRouter router = new DeliveryProviderRouter(
-            List.of(fast, backup),
-            catalog,
-            intelligence,
-            assignments,
-            properties,
-            quoteExecutor,
-            FIXED_CLOCK
+            List.of(fast, backup), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
         );
 
         assertThatThrownBy(() -> router.route(command()))
@@ -175,17 +159,12 @@ class DeliveryProviderRouterTest {
         AssignmentResponse assignment = singleProviderAssignment(
             message.chefSubOrderId(), message.orderId(), borzoCandidateId
         );
-        when(assignments.findByChefSubOrderId(message.chefSubOrderId()))
+        when(assignments.findResponseByChefSubOrderId(message.chefSubOrderId()))
             .thenReturn(Optional.of(assignment));
 
         DeliveryProviderRouter router = new DeliveryProviderRouter(
-            List.of(borzo),
-            catalog,
-            intelligence,
-            assignments,
-            properties,
-            quoteExecutor,
-            FIXED_CLOCK
+            List.of(borzo), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
         );
         CommandRecord pending = new CommandRecord(
             message.commandId(),

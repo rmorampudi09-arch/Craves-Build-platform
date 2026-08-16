@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import {Controller, useForm} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
+import * as ImagePicker from 'expo-image-picker';
 import {usePreventRemove} from '@react-navigation/native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -34,6 +35,7 @@ import {ChefMenuCategorySelector} from '../components/ChefMenuCategorySelector';
 import {
   CHEF_MENU_FOOD_TYPES,
   CHEF_MENU_SPICE_LEVELS,
+  chefMenuApi,
   type ChefMenuItem,
 } from '../api/chefMenuApi';
 import {
@@ -147,12 +149,17 @@ function ToggleRow({
 function ChefEditMenuItemForm({
   item,
   navigation,
+  refreshMenu,
 }: {
   item: ChefMenuItem;
   navigation: Props['navigation'];
+  refreshMenu: () => Promise<void>;
 }) {
   const model = useChefEditMenuItemModel();
   const [allowExit, setAllowExit] = React.useState(false);
+  const [photo, setPhoto] = React.useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [photoBusy, setPhotoBusy] = React.useState(false);
+  const [photoError, setPhotoError] = React.useState<string | null>(null);
   const {
     control,
     handleSubmit,
@@ -165,10 +172,12 @@ function ChefEditMenuItemForm({
     mode: 'onBlur',
   });
   const description = watch('description');
-  const submitting = model.submitState === 'submitting' || isSubmitting;
+  const submitting = model.submitState === 'submitting' || isSubmitting || photoBusy;
   const imageUrl = getChefMenuPrimaryImageUrl(item);
+  const displayedImageUrl = photo?.uri ?? imageUrl;
+  const hasPendingChanges = isDirty || photo !== null;
 
-  usePreventRemove(isDirty && !allowExit, ({data}) => {
+  usePreventRemove(hasPendingChanges && !allowExit, ({data}) => {
     Alert.alert(
       'Discard unsaved changes?',
       'Your menu item changes have not been saved.',
@@ -189,13 +198,78 @@ function ChefEditMenuItemForm({
     }
   }, [allowExit, navigation]);
 
+  const pickPhoto = React.useCallback(async () => {
+    if (submitting) return;
+    setPhotoError(null);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Photo permission required',
+          'Allow photo access so you can choose a new primary dish image.',
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.9,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      if (asset.mimeType && !['image/jpeg', 'image/png', 'image/webp'].includes(asset.mimeType)) {
+        setPhotoError('Choose a JPEG, PNG or WebP image.');
+        return;
+      }
+      setPhoto(asset);
+    } catch {
+      setPhotoError('The photo library could not be opened. Please try again.');
+    }
+  }, [submitting]);
+
+  const uploadPhoto = React.useCallback(async () => {
+    if (!photo) return true;
+    setPhotoBusy(true);
+    setPhotoError(null);
+    try {
+      const formData = new FormData();
+      formData.append(
+        'file',
+        {
+          uri: photo.uri,
+          name: photo.fileName?.trim() || `craves-dish-${item.id}.jpg`,
+          type: photo.mimeType || 'image/jpeg',
+        } as unknown as Blob,
+      );
+      await chefMenuApi.uploadImage(item.id, formData, true);
+      return true;
+    } catch {
+      setPhotoError('The new photo could not be uploaded. Your text changes were saved; retry the photo before leaving.');
+      return false;
+    } finally {
+      setPhotoBusy(false);
+    }
+  }, [item.id, photo]);
+
   const saveChanges = handleSubmit(async values => {
     model.clearError();
-    const updated = await model.submit(values, item);
-    if (updated) {
-      reset(chefMenuItemToFormValues(updated));
-      setAllowExit(true);
+    setPhotoError(null);
+    let updated = item;
+    if (isDirty) {
+      const submitted = await model.submit(values, item);
+      if (!submitted) return;
+      updated = submitted;
     }
+    if (photo && !(await uploadPhoto())) {
+      reset(chefMenuItemToFormValues(updated));
+      await refreshMenu().catch(() => undefined);
+      return;
+    }
+    setPhoto(null);
+    reset(chefMenuItemToFormValues(updated));
+    await refreshMenu().catch(() => undefined);
+    setAllowExit(true);
   });
 
   return (
@@ -238,13 +312,13 @@ function ChefEditMenuItemForm({
 
           <Section
             title="Food photo"
-            description="Existing media is read-only in this phase because the exact service exposes upload but not replacement/delete/reorder semantics.">
-            {imageUrl ? (
+            description="Choose a new primary image. JPEG, PNG and WebP are accepted by the live catalog service.">
+            {displayedImageUrl ? (
               <Image
                 accessibilityIgnoresInvertColors
-                accessibilityLabel={`${item.itemName} current image`}
+                accessibilityLabel={`${item.itemName} ${photo ? 'selected replacement' : 'current'} image`}
                 resizeMode="cover"
-                source={{uri: imageUrl}}
+                source={{uri: displayedImageUrl}}
                 style={styles.currentImage}
               />
             ) : (
@@ -253,12 +327,30 @@ function ChefEditMenuItemForm({
                 <Text style={styles.mediaFallbackText}>No current image</Text>
               </View>
             )}
-            <View style={styles.mediaBoundary}>
-              <Text style={styles.mediaBoundaryTitle}>Image replacement unavailable</Text>
-              <Text style={styles.mediaBoundaryText}>
-                The app has no approved native picker, and the backend has no exact replace/delete route. No fake replacement action is shown.
-              </Text>
+            <View style={styles.mediaActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={photo ? 'Choose a different dish photo' : 'Choose a new dish photo'}
+                disabled={submitting}
+                onPress={pickPhoto}
+                style={({pressed}) => [styles.mediaAction, (pressed || submitting) && styles.pressed]}>
+                <Icon color={colors.flameRed} name="chef" size={20} />
+                <Text style={styles.mediaActionText}>{photo ? 'Choose another' : imageUrl ? 'Replace photo' : 'Add photo'}</Text>
+              </Pressable>
+              {photo ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Discard selected replacement photo"
+                  disabled={submitting}
+                  onPress={() => { setPhoto(null); setPhotoError(null); }}
+                  style={({pressed}) => [styles.mediaAction, (pressed || submitting) && styles.pressed]}>
+                  <Icon color={colors.espressoBrown} name="trash" size={20} />
+                  <Text style={styles.mediaActionText}>Discard</Text>
+                </Pressable>
+              ) : null}
             </View>
+            {photo ? <Text style={styles.mediaHint}>The selected image will become the primary image when you save.</Text> : null}
+            {photoError ? <Text accessibilityLiveRegion="assertive" style={styles.fieldError}>{photoError}</Text> : null}
           </Section>
 
           <Section title="Basic details">
@@ -481,11 +573,11 @@ function ChefEditMenuItemForm({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Save menu item changes"
-            disabled={submitting || !isDirty}
+            disabled={submitting || !hasPendingChanges}
             onPress={saveChanges}
             style={({pressed}) => [
               styles.primaryAction,
-              (pressed || submitting || !isDirty) && styles.actionDisabled,
+              (pressed || submitting || !hasPendingChanges) && styles.actionDisabled,
             ]}>
             {submitting ? (
               <ActivityIndicator color={colors.white} size="small" />
@@ -557,7 +649,7 @@ export function ChefEditMenuItemScreen({navigation, route}: Props) {
     );
   }
 
-  return <ChefEditMenuItemForm item={item} navigation={navigation} />;
+  return <ChefEditMenuItemForm item={item} navigation={navigation} refreshMenu={menu.refresh} />;
 }
 
 const styles = StyleSheet.create({
@@ -575,6 +667,7 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     alignItems: 'center',
+    backgroundColor: colors.iconSurface,
     borderRadius: radius.pill,
     height: touchTarget.minimum,
     justifyContent: 'center',
@@ -626,7 +719,7 @@ const styles = StyleSheet.create({
   currentImage: {borderRadius: radius.md, height: 180, width: '100%'},
   mediaFallback: {
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.iconSurface,
     borderRadius: radius.md,
     height: 150,
     justifyContent: 'center',
@@ -636,25 +729,19 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     marginTop: spacing.xs,
   },
-  mediaBoundary: {
-    backgroundColor: colors.white,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderStyle: 'dashed',
-    borderWidth: 1,
-    marginTop: spacing.sm,
-    padding: spacing.sm,
+  mediaActions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm},
+  mediaAction: {
+    minHeight: touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.iconSurface,
   },
-  mediaBoundaryTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-  },
-  mediaBoundaryText: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xxs,
-  },
+  mediaActionText: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.semibold},
+  mediaHint: {color: colors.textSecondary, fontSize: typography.tiny, marginTop: spacing.xs},
   fieldBlock: {marginBottom: spacing.md},
   fieldLabel: {
     color: colors.textPrimary,

@@ -138,10 +138,34 @@ describe('production Razorpay payment eligibility and provider handoff', () => {
     await expect(second).resolves.toMatchObject({paymentOrderId: paymentOrder.paymentOrderId});
   });
 
+  it('does not reuse a stale client handoff across sequential payment attempts', async () => {
+    const secondPaymentOrder: PaymentOrderHandoffSession = {
+      ...paymentOrder,
+      paymentOrderId: '77777777-7777-4777-8777-777777777777',
+      cravesPaymentOrderRef: 'CRV_77777777777747778777777777777777',
+      providerOrderId: 'order_Razorpay456',
+      createdAt: '2026-08-16T10:02:00Z',
+    };
+    const createPaymentOrder = jest
+      .fn<Promise<PaymentOrderHandoffSession>, [string]>()
+      .mockResolvedValueOnce(paymentOrder)
+      .mockResolvedValueOnce(secondPaymentOrder);
+    const coordinator = createPaymentHandoffCoordinator(createPaymentOrder);
+
+    await expect(coordinator.prepare(checkout)).resolves.toMatchObject({
+      paymentOrderId: paymentOrder.paymentOrderId,
+    });
+    await expect(coordinator.prepare(checkout)).resolves.toMatchObject({
+      paymentOrderId: secondPaymentOrder.paymentOrderId,
+    });
+    expect(createPaymentOrder).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps raw credentials disallowed while native Razorpay launch is enabled', () => {
     expect(paymentHandoffCapability.rawPaymentCredentialCollectionAllowed).toBe(false);
     expect(paymentHandoffCapability.tokenizedPaymentMethodContractSupported).toBe(false);
     expect(paymentHandoffCapability.nativeRazorpayLaunchSupported).toBe(true);
     expect(paymentHandoffCapability.backendVerificationRequiredForSuccess).toBe(true);
+    expect(paymentHandoffCapability.longLivedClientHandoffCacheAllowed).toBe(false);
   });
 });

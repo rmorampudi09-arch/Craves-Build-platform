@@ -52,7 +52,10 @@ import {
   createPaymentRecoveryCoordinator,
   paymentRecoveryCapability,
 } from '../../src/features/payment/domain/paymentRecoveryCoordinator';
-import type {PaymentOrderHandoffSession} from '../../src/features/payment/domain/paymentTypes';
+import type {
+  PaymentOrderHandoffSession,
+  PaymentOrderSnapshot,
+} from '../../src/features/payment/domain/paymentTypes';
 
 jest.mock('../../src/features/cart/api/cartApi', () => ({
   cartApi: {
@@ -133,9 +136,11 @@ const paymentOrder: PaymentOrderHandoffSession = {
   paymentOrderId: PAYMENT_ORDER_ID,
   checkoutId: CHECKOUT_ID,
   cravesPaymentOrderRef: 'CRAVES-P123-1',
-  cashfreeOrderId: 'cashfree-p123-1',
-  cfOrderId: 'cf-p123-1',
-  paymentSessionId: 'payment-session-p123-1',
+  provider: 'RAZORPAY',
+  providerOrderId: 'order_p123_1',
+  providerPaymentId: null,
+  checkoutKeyId: 'rzp_test_p123_public_key',
+  paymentSessionId: null,
   amount: {amount: '270.00', currency: 'INR'},
   status: 'PAYMENT_PENDING',
   createdAt: '2026-08-10T09:06:00.000Z',
@@ -278,9 +283,10 @@ describe('P123 critical E2E journeys', () => {
       created,
     );
     expect(handoff).toMatchObject({
-      provider: 'CASHFREE',
+      provider: 'RAZORPAY',
       paymentOrderId: PAYMENT_ORDER_ID,
       checkoutId: CHECKOUT_ID,
+      providerOrderId: paymentOrder.providerOrderId,
       amount: {amount: '270.00', currency: 'INR'},
     });
 
@@ -289,12 +295,28 @@ describe('P123 critical E2E journeys', () => {
       status: 'PAID',
       orders: created.orders.map(order => ({...order, status: 'PAID'})),
     };
+    const paidPaymentOrder: PaymentOrderSnapshot = {
+      paymentOrderId: PAYMENT_ORDER_ID,
+      checkoutId: CHECKOUT_ID,
+      customerIdentityId: CUSTOMER_ID,
+      cravesPaymentOrderRef: paymentOrder.cravesPaymentOrderRef,
+      provider: 'RAZORPAY',
+      providerOrderId: paymentOrder.providerOrderId,
+      providerPaymentId: 'pay_p123_1',
+      amount: paymentOrder.amount,
+      status: 'PAID',
+      providerStatus: 'captured',
+      createdAt: paymentOrder.createdAt,
+      updatedAt: '2026-08-10T09:07:00.000Z',
+    };
     const recover = createPaymentRecoveryCoordinator(
       jest.fn(async () => ({
         paymentOrderId: PAYMENT_ORDER_ID,
         status: 'PAID' as const,
-        providerStatus: 'SUCCESS',
+        providerStatus: 'captured',
+        providerPaymentId: 'pay_p123_1',
       })),
+      jest.fn(async () => paidPaymentOrder),
       jest.fn(async () => paidCheckout),
     );
     const recovery = await recover.recover(handoff, {kind: 'APP_RESUME'});
@@ -394,10 +416,12 @@ describe('P123 critical E2E journeys', () => {
     });
   });
 
-  it('records payment, payout, and Chef subscription environment/contract blockers instead of masking them', () => {
+  it('records payment capability and remaining contract blockers instead of masking them', () => {
     expect(checkoutSessionCapability.serverIdempotencySupported).toBe(false);
-    expect(paymentHandoffCapability.nativeCashfreeLaunchSupported).toBe(false);
-    expect(paymentRecoveryCapability.nativeCashfreeCallbackAdapterSupported).toBe(false);
+    expect(paymentHandoffCapability.nativeRazorpayLaunchSupported).toBe(true);
+    expect(paymentHandoffCapability.tokenizedPaymentMethodContractSupported).toBe(false);
+    expect(paymentRecoveryCapability.nativeRazorpayCallbackAdapterSupported).toBe(true);
+    expect(paymentRecoveryCapability.newPaymentAttemptAfterTerminalFailureSupported).toBe(false);
 
     expect(CHEF_PAYOUT_CONTRACT_MODEL.status).toBe('blocked');
     expect(hasCompleteChefPayoutContract()).toBe(false);

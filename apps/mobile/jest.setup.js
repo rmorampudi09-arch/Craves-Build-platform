@@ -68,6 +68,21 @@ jest.mock('expo-location', () => ({
   })),
 }));
 
+// Chef menu screens use Expo Image Picker only as a native UI boundary. Keep
+// Jest deterministic without loading expo-modules-core's native EventEmitter.
+jest.mock('expo-image-picker', () => ({
+  requestMediaLibraryPermissionsAsync: jest.fn(async () => ({
+    status: 'granted',
+    granted: true,
+    canAskAgain: true,
+    expires: 'never',
+  })),
+  launchImageLibraryAsync: jest.fn(async () => ({
+    canceled: true,
+    assets: [],
+  })),
+}));
+
 jest.mock('@react-native-firebase/auth', () => ({
   getAuth: jest.fn(() => ({})),
   getIdToken: jest.fn(),

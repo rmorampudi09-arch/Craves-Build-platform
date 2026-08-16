@@ -54,11 +54,19 @@ export interface RazorpayVerificationProof {
   providerSignature: string;
 }
 
-export interface RazorpayHostedHandoff {
-  provider: 'RAZORPAY';
+/**
+ * The minimum non-secret data needed to reconcile an interrupted payment.
+ * This is safe to persist locally because it contains only Craves/provider
+ * identifiers and the public amount/currency already shown at checkout.
+ */
+export interface PaymentRecoveryReference {
   paymentOrderId: string;
   checkoutId: string;
   providerOrderId: string;
-  checkoutKeyId: string;
   amount: PaymentMoney;
+}
+
+export interface RazorpayHostedHandoff extends PaymentRecoveryReference {
+  provider: 'RAZORPAY';
+  checkoutKeyId: string;
 }

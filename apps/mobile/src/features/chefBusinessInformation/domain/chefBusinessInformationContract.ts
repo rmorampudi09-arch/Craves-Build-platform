@@ -71,13 +71,13 @@ export const CHEF_BUSINESS_INFORMATION_CAPABILITIES = {
   ]),
   documentMetadata: supported('chefApplication', [
     'The application response contains the current proof-document metadata list.',
-    'Supported proof types are AADHAAR_CARD and PAN_CARD.',
+    'Supported proof types are APPLICANT_PHOTO, GOVERNMENT_ID_FRONT, GOVERNMENT_ID_BACK, TAX_ID_CARD, AADHAAR_CARD, and PAN_CARD.',
     'The current persisted document status is only UPLOADED; no client-side validity state is inferred.',
     'Mobile parsing deliberately excludes blob container/name and reviewer identity identifiers from the Business Information model.',
   ]),
   documentUploadUpdate: unavailable(
     'The existing proof-file endpoint is an onboarding/KYC upload boundary, not a complete approved-Chef business-document maintenance contract. The service rejects document changes after the application is APPROVED, so it cannot satisfy Reference 49 upload/update/resubmission behavior for an approved Chef.',
-    'POST /api/v1/chef/application/proof-files accepts multipart documentType + file, supports AADHAAR_CARD/PAN_CARD, and replaces the same document type before approval.',
+    'POST /api/v1/chef/application/proof-files accepts multipart documentType + file for the six authoritative KYC evidence types and replaces the same document type before approval.',
   ),
   documentValidityLifecycle: unavailable(
     'No exact Chef-facing contract exposes per-document verification, rejection reason, expiry date, renewal state, or resubmission lifecycle. The current database contract permits only the document status UPLOADED.',
@@ -142,7 +142,7 @@ export const CHEF_BUSINESS_INFORMATION_SOURCES = {
     path: '/api/v1/chef/application/proof-files',
     request: 'multipart/form-data: documentType + file',
     response: 'KycDocumentResponse',
-    purpose: 'Existing onboarding proof upload/replacement for AADHAAR_CARD or PAN_CARD.',
+    purpose: 'Existing onboarding proof upload/replacement for the six authoritative KYC evidence types.',
     limitations: [
       'Requires an existing Chef application.',
       'APPROVED applications cannot change documents through this endpoint.',

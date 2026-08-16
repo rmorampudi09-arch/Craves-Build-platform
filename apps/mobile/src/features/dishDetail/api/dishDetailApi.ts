@@ -124,11 +124,6 @@ export const CUSTOMER_DISH_DETAIL_CONTRACT_GAPS = [
     reason:
       'The current branch has no authoritative customer dish review or aggregate-rating contract.',
   },
-  {
-    capability: 'FAVORITES',
-    reason:
-      'The current branch has no authoritative customer dish favorite read or mutation contract.',
-  },
 ] as const;
 
 function normalizeMenuItemId(value: string): string {

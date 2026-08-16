@@ -138,11 +138,10 @@ export function CustomerOrdersScreen() {
     <View>
       <CustomerHeader
         onPressLocation={() => setLocationSelectorVisible(true)}
-        onPressNotifications={() =>
-          setCapabilityMessage(
-            'The notification inbox route is not part of the current authorized phase. Your unread badge is still live from the existing notification summary.',
-          )
-        }
+        onPressNotifications={() => {
+          const parent = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
+          parent?.navigate('Profile', {screen: 'CustomerNotifications'});
+        }}
       />
       <View style={styles.titleArea}>
         <Text accessibilityRole="header" style={styles.title}>

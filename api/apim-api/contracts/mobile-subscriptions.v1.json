@@ -4,7 +4,7 @@
   "boundary": {
     "client": "apps/mobile",
     "publicGateway": "Azure API Management",
-    "rule": "Mobile subscription and Chef meal-plan code may call only the published /api/v1 operations listed here through the centralized HTTP transport."
+    "rule": "Mobile subscription, Chef meal-plan, capacity and account-favorites code may call only the published /api/v1 operations listed here through the centralized HTTP transport."
   },
   "actions": [
     {"id":"customerSubscriptions.listPlans","source":"src/features/customerSubscription/api/customerSubscriptionApi.ts","method":"GET","path":"/api/v1/subscriptions/plans","auth":"bearer","requestModel":"none","responseModel":"PublicSubscriptionPlan[]","requestValidator":"not-applicable","responseValidator":"publicSubscriptionPlanSchema[]"},
@@ -26,7 +26,11 @@
     {"id":"chefSubscriptions.submit","source":"src/features/chefSubscription/api/chefSubscriptionApi.ts","method":"POST","path":"/api/v1/chef/subscription-plans/{planId}/submit","auth":"bearer","requestModel":"{ note? }","responseModel":"ChefMealPlan","requestValidator":"owned editable plan","responseValidator":"chefMealPlanSchema"},
     {"id":"chefSubscriptions.updatePlan","source":"src/features/chefSubscription/api/chefSubscriptionApi.ts","method":"PUT","path":"/api/v1/chef/subscription-plans/{planId}","auth":"bearer","requestModel":"ChefMealPlanInput","responseModel":"ChefMealPlan","requestValidator":"owned editable plan + validated form","responseValidator":"chefMealPlanSchema"},
     {"id":"chefSubscriptions.putSchedule","source":"src/features/chefSubscription/api/chefSubscriptionApi.ts","method":"PUT","path":"/api/v1/chef/subscription-plans/{planId}/schedule","auth":"bearer","requestModel":"PutChefScheduleRequest","responseModel":"ChefMealSchedule","requestValidator":"active menu items + recurrence/day/time constraints","responseValidator":"chefMealScheduleSchema"},
-    {"id":"chefSubscriptions.putSlotCapacity","source":"src/features/chefSubscription/api/chefSubscriptionApi.ts","method":"PUT","path":"/api/v1/chef/subscription-capacity/rules/slots","auth":"bearer","requestModel":"PutSlotRuleRequest","responseModel":"SlotRuleResponse","requestValidator":"weekday/slot/capacity integer constraints","responseValidator":"follow-up getCapacity reconciliation"}
+    {"id":"chefSubscriptions.putSlotCapacity","source":"src/features/chefSubscription/api/chefSubscriptionApi.ts","method":"PUT","path":"/api/v1/chef/subscription-capacity/rules/slots","auth":"bearer","requestModel":"PutSlotRuleRequest","responseModel":"SlotRuleResponse","requestValidator":"weekday/slot/capacity integer constraints","responseValidator":"follow-up getCapacity reconciliation"},
+
+    {"id":"customerFavorites.list","source":"src/features/favorites/api/customerFavoritesApi.ts","method":"GET","path":"/api/v1/customer/favorites","auth":"bearer","requestModel":"none","responseModel":"CustomerFavorite[]","requestValidator":"authenticated CUSTOMER","responseValidator":"favoriteSchema[] max 200"},
+    {"id":"customerFavorites.save","source":"src/features/favorites/api/customerFavoritesApi.ts","method":"PUT","path":"/api/v1/customer/favorites/{menuItemId}","auth":"bearer","requestModel":"none","responseModel":"CustomerFavorite","requestValidator":"UUID menuItemId","responseValidator":"favoriteSchema"},
+    {"id":"customerFavorites.remove","source":"src/features/favorites/api/customerFavoritesApi.ts","method":"DELETE","path":"/api/v1/customer/favorites/{menuItemId}","auth":"bearer","requestModel":"none","responseModel":"204 no content","requestValidator":"UUID menuItemId","responseValidator":"void"}
   ],
   "quarantined": []
 }

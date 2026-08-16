@@ -55,4 +55,12 @@ public class CartController {
     public CartResponse validateCart(@AuthenticationPrincipal CravesPrincipal principal) {
         return orderService.validateCart(principal);
     }
+
+    @PostMapping("/reorder/{orderId}")
+    public CartResponse reorder(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @PathVariable UUID orderId
+    ) {
+        return orderService.replaceCartFromOrder(principal, orderId);
+    }
 }

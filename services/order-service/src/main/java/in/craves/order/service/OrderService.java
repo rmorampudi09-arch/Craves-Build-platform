@@ -124,6 +124,53 @@ public class OrderService {
     }
 
     @Transactional
+    public CartResponse replaceCartFromOrder(CravesPrincipal principal, UUID orderId) {
+        requireCustomer(principal);
+        if (orderId == null) {
+            throw OrderApiException.badRequest("ORDER_ID_REQUIRED", "Order id is required to reorder.");
+        }
+
+        OrderResponse historicalOrder = getOrderForCustomer(principal, orderId);
+        if (historicalOrder.items() == null || historicalOrder.items().isEmpty()) {
+            throw OrderApiException.badRequest("ORDER_HAS_NO_ITEMS", "This order has no items to reorder.");
+        }
+
+        // Resolve and validate every historical menu item before touching the existing cart.
+        // Any unavailable item fails the transaction with the current cart unchanged.
+        record ReorderResolvedItem(CatalogMenuItem item, CatalogKitchen kitchen, int quantity) {}
+        List<ReorderResolvedItem> resolved = new ArrayList<>();
+        for (OrderItemResponse historicalItem : historicalOrder.items()) {
+            if (historicalItem.menuItemId() == null || historicalItem.quantity() < 1) {
+                throw OrderApiException.badRequest("ORDER_ITEM_INVALID", "This historical order cannot be reordered.");
+            }
+            CatalogMenuItem currentItem = catalogClient.getActiveMenuItem(historicalItem.menuItemId());
+            CatalogKitchen currentKitchen = catalogClient.getKitchen(currentItem.kitchenId());
+            resolved.add(new ReorderResolvedItem(currentItem, currentKitchen, historicalItem.quantity()));
+        }
+
+        UUID cartId = getOrCreateCartId(principal.identityId());
+        jdbcTemplate.update("DELETE FROM order_schema.cart_item WHERE cart_id = ?", cartId);
+        for (ReorderResolvedItem replacement : resolved) {
+            CatalogMenuItem item = replacement.item();
+            jdbcTemplate.update(
+                "INSERT INTO order_schema.cart_item (id, cart_id, menu_item_id, kitchen_id, item_name_snapshot, kitchen_name_snapshot, unit_price_snapshot, currency_snapshot, quantity, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())",
+                UUID.randomUUID(),
+                cartId,
+                item.id(),
+                item.kitchenId(),
+                item.itemName(),
+                displayKitchenName(replacement.kitchen()),
+                item.price(),
+                currency(item.currency()),
+                replacement.quantity()
+            );
+        }
+        touchCart(cartId);
+        return mapCart(cartId, principal.identityId());
+    }
+
+    @Transactional
     public CartResponse validateCart(CravesPrincipal principal) {
         requireCustomer(principal);
         UUID cartId = getOrCreateCartId(principal.identityId());

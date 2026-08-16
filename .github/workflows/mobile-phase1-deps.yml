@@ -1,4 +1,4 @@
-name: CRAVES Mobile Dependency Lock Repair
+name: CRAVES Mobile Phase 1 Dependency Resolution
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  repair:
+  resolve:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -26,15 +26,17 @@ jobs:
         with:
           node-version: 22.13.0
 
-      - name: Install required Reanimated worklets peer
+      - name: Install and synchronize current dependencies
         working-directory: apps/mobile
-        run: npm install react-native-worklets@0.8.3 --save-exact --ignore-scripts
+        run: npm install --ignore-scripts
 
-      - name: Prove clean install from synchronized lockfile
+      - name: Align Expo SDK 56 package versions
         working-directory: apps/mobile
-        run: |
-          rm -rf node_modules
-          npm ci --ignore-scripts
+        run: npx expo install --fix
+
+      - name: Resolve Expo modules core for SecureStore
+        working-directory: apps/mobile
+        run: npx expo install expo-modules-core
 
       - name: Guard backend source
         run: |
@@ -44,15 +46,15 @@ jobs:
             exit 1
           fi
 
-      - name: Commit synchronized dependency graph
+      - name: Commit resolved mobile dependency set
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add apps/mobile/package.json apps/mobile/package-lock.json
           if git diff --cached --quiet; then
-            echo 'Mobile dependency graph is already synchronized.'
+            echo 'Mobile dependency lockfile is already synchronized.'
             exit 0
           fi
-          git commit -m 'Synchronize Razorpay mobile dependency graph'
+          git commit -m 'Synchronize mobile dependency lockfile'
           git push origin HEAD:mobile-ui-rebuild-from-scratch

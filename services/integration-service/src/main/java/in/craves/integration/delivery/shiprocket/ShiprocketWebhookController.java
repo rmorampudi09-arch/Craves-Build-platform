@@ -19,15 +19,22 @@ public class ShiprocketWebhookController {
 
     /**
      * Neutral public path is intentional. Shiprocket's webhook setup guidance rejects callback
-     * URLs containing provider-identifying terms. Authentication is performed with x-api-key by
+     * URLs containing provider-identifying terms. Non-event URL-validation probes are acknowledged
+     * with HTTP 200 without persistence; real tracking events are authenticated with x-api-key by
      * ShiprocketWebhookService before any payload is persisted.
      */
     @PostMapping("/p4")
     public ResponseEntity<Map<String, Object>> accept(
-        @RequestBody String rawBody,
+        @RequestBody(required = false) String rawBody,
         @RequestHeader(value = "x-api-key", required = false) String apiKey
     ) {
         ShiprocketWebhookService.WebhookReceipt receipt = webhookService.accept(rawBody, apiKey);
+        if (receipt.validationProbe()) {
+            return ResponseEntity.ok(Map.of(
+                "accepted", true,
+                "validationProbe", true
+            ));
+        }
         return ResponseEntity.ok(Map.of(
             "accepted", true,
             "duplicate", receipt.duplicate(),

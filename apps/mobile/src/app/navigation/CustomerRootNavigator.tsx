@@ -84,16 +84,16 @@ interface TabIconProps {
 }
 
 function HomeTabIcon({color, size}: TabIconProps) {
-  return <Icon name={homeTab.icon} color={color} size={size} />;
+  return <Icon name={homeTab.icon} color={color} size={size} surface={false} />;
 }
 function ChefsTabIcon({color, size}: TabIconProps) {
-  return <Icon name={chefsTab.icon} color={color} size={size} />;
+  return <Icon name={chefsTab.icon} color={color} size={size} surface={false} />;
 }
 function OrdersTabIcon({color, size}: TabIconProps) {
-  return <Icon name={ordersTab.icon} color={color} size={size} />;
+  return <Icon name={ordersTab.icon} color={color} size={size} surface={false} />;
 }
 function ProfileTabIcon({color, size}: TabIconProps) {
-  return <Icon name={profileTab.icon} color={color} size={size} />;
+  return <Icon name={profileTab.icon} color={color} size={size} surface={false} />;
 }
 
 const tabScreenOptions = {

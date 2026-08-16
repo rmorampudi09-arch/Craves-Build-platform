@@ -71,23 +71,23 @@ interface TabIconProps {
 }
 
 function DashboardTabIcon({color, size}: TabIconProps) {
-  return <Icon name={dashboardTab.icon} color={color} size={size} />;
+  return <Icon name={dashboardTab.icon} color={color} size={size} surface={false} />;
 }
 
 function OrdersTabIcon({color, size}: TabIconProps) {
-  return <Icon name={ordersTab.icon} color={color} size={size} />;
+  return <Icon name={ordersTab.icon} color={color} size={size} surface={false} />;
 }
 
 function MenuTabIcon({color, size}: TabIconProps) {
-  return <Icon name={menuTab.icon} color={color} size={size} />;
+  return <Icon name={menuTab.icon} color={color} size={size} surface={false} />;
 }
 
 function AnalyticsTabIcon({color, size}: TabIconProps) {
-  return <Icon name={analyticsTab.icon} color={color} size={size} />;
+  return <Icon name={analyticsTab.icon} color={color} size={size} surface={false} />;
 }
 
 function ProfileTabIcon({color, size}: TabIconProps) {
-  return <Icon name={profileTab.icon} color={color} size={size} />;
+  return <Icon name={profileTab.icon} color={color} size={size} surface={false} />;
 }
 
 const tabScreenOptions = {

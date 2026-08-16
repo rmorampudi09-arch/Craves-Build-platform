@@ -48,11 +48,57 @@ steps:
           return
         fi
 
-        if ! grep -R -Fq "$route" services/integration-service/src/main/java; then
-          echo "ERROR: $provider webhook route $route is not implemented in the Integration Service source. Refusing to expose a dead APIM route." >&2
-          exit 2
-        fi
-        echo "PASS: $provider backend route exists: $route"
+        python3 - "$provider" "$route" <<'PY'
+      import pathlib
+      import re
+      import sys
+
+      provider = sys.argv[1]
+      route = sys.argv[2]
+      source_root = pathlib.Path("services/integration-service/src/main/java")
+
+      java_files = list(source_root.rglob("*.java"))
+      if not java_files:
+          print("ERROR: Integration Service Java source is unavailable.", file=sys.stderr)
+          raise SystemExit(2)
+
+      # Accept either a single full-route annotation/literal or a Spring MVC route
+      # composed in one controller from a class-level @RequestMapping and a
+      # method-level @PostMapping. The latter is how the neutral /p4 webhook is
+      # intentionally implemented.
+      for path in java_files:
+          text = path.read_text(encoding="utf-8")
+          if route in text:
+              print(f"PASS: {provider} backend route exists: {route} ({path})")
+              raise SystemExit(0)
+
+      base, leaf = route.rsplit("/", 1)
+      leaf = "/" + leaf
+
+      request_mapping = re.compile(
+          r'@RequestMapping\s*\(\s*(?:value\s*=\s*)?["\']'
+          + re.escape(base)
+          + r'["\']'
+      )
+      post_mapping = re.compile(
+          r'@PostMapping\s*\(\s*(?:value\s*=\s*)?["\']'
+          + re.escape(leaf)
+          + r'["\']'
+      )
+
+      for path in java_files:
+          text = path.read_text(encoding="utf-8")
+          if request_mapping.search(text) and post_mapping.search(text):
+              print(f"PASS: {provider} composed Spring backend route exists: {route} ({path})")
+              raise SystemExit(0)
+
+      print(
+          f"ERROR: {provider} webhook route {route} is not implemented in the Integration Service source. "
+          "Refusing to expose a dead APIM route.",
+          file=sys.stderr,
+      )
+      raise SystemExit(2)
+      PY
       }
 
       validate_route '${{ parameters.enableBorzoRoute }}' 'Borzo' '/api/v1/webhooks/delivery/borzo'

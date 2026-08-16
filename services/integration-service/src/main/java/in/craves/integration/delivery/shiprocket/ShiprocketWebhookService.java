@@ -30,6 +30,18 @@ public class ShiprocketWebhookService {
 
     @Transactional
     public WebhookReceipt accept(String rawBody, String suppliedApiKey) {
+        JsonNode payload = parseObjectOrNull(rawBody);
+
+        /*
+         * Shiprocket validates a webhook URL while it is being saved and requires the callback
+         * URL to answer HTTP 200. That validation request is not guaranteed to contain a real
+         * tracking event. Acknowledge non-event probes without persisting or mutating anything.
+         * Real tracking events still require the configured x-api-key before persistence.
+         */
+        if (!isTrackingEvent(payload)) {
+            return WebhookReceipt.validationProbe();
+        }
+
         if (!StringUtils.hasText(properties.getWebhookToken())) {
             throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
@@ -40,16 +52,7 @@ public class ShiprocketWebhookService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid delivery callback credential");
         }
 
-        JsonNode payload = parsePayload(rawBody);
-        String awb = requiredText(payload, "awb");
-        if (!StringUtils.hasText(payload.path("shipment_status").asText(null))
-            && !payload.path("shipment_status_id").canConvertToInt()) {
-            throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Delivery callback is missing shipment status"
-            );
-        }
-
+        String awb = payload.path("awb").asText().trim();
         ObjectNode storedPayload = payload.deepCopy();
         storedPayload.put("_craves_received_at", Instant.now().toString());
         String providerEventId = deriveEventId(payload, rawBody);
@@ -58,42 +61,29 @@ public class ShiprocketWebhookService {
             sha256Hex(suppliedApiKey),
             storedPayload
         );
-        return new WebhookReceipt(providerEventId, awb, !inserted);
+        return WebhookReceipt.trackingEvent(providerEventId, awb, !inserted);
     }
 
-    private JsonNode parsePayload(String rawBody) {
+    private JsonNode parseObjectOrNull(String rawBody) {
         if (!StringUtils.hasText(rawBody)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delivery callback body is empty");
+            return null;
         }
         try {
             JsonNode payload = objectMapper.readTree(rawBody);
-            if (!payload.isObject()) {
-                throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Delivery callback body must be a JSON object"
-                );
-            }
-            return payload;
-        } catch (ResponseStatusException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Delivery callback body is not valid JSON",
-                ex
-            );
+            return payload != null && payload.isObject() ? payload : null;
+        } catch (Exception ignored) {
+            return null;
         }
     }
 
-    private static String requiredText(JsonNode payload, String field) {
-        String value = payload.path(field).asText(null);
-        if (!StringUtils.hasText(value)) {
-            throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Delivery callback is missing " + field
-            );
+    private static boolean isTrackingEvent(JsonNode payload) {
+        if (payload == null || !payload.isObject()) {
+            return false;
         }
-        return value.trim();
+        String awb = payload.path("awb").asText(null);
+        boolean hasShipmentStatus = StringUtils.hasText(payload.path("shipment_status").asText(null))
+            || payload.path("shipment_status_id").canConvertToInt();
+        return StringUtils.hasText(awb) && hasShipmentStatus;
     }
 
     private static String deriveEventId(JsonNode payload, String rawBody) {
@@ -132,5 +122,18 @@ public class ShiprocketWebhookService {
         }
     }
 
-    public record WebhookReceipt(String providerEventId, String awb, boolean duplicate) {}
+    public record WebhookReceipt(
+        String providerEventId,
+        String awb,
+        boolean duplicate,
+        boolean validationProbe
+    ) {
+        static WebhookReceipt validationProbe() {
+            return new WebhookReceipt("", "", false, true);
+        }
+
+        static WebhookReceipt trackingEvent(String providerEventId, String awb, boolean duplicate) {
+            return new WebhookReceipt(providerEventId, awb, duplicate, false);
+        }
+    }
 }

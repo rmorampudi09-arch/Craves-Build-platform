@@ -43,17 +43,17 @@ describe('navigationPolicy', () => {
     }
   });
 
-  it('keeps customer bottom navigation on Cart but suppresses View Cart', () => {
-    expect(isCurrentImmersiveRoute('CustomerCart')).toBe(false);
+  it('keeps Cart immersive and suppresses View Cart', () => {
+    expect(isCurrentImmersiveRoute('CustomerCart')).toBe(true);
     expect(resolveRouteChromePolicy('Customer', 'CustomerCart')).toEqual({
-      bottomNavigationVisible: true,
+      bottomNavigationVisible: false,
       viewCartEligible: false,
-      immersive: false,
+      immersive: true,
     });
     expect(resolveRouteChromePolicy('Transactional', 'CustomerCart')).toEqual({
-      bottomNavigationVisible: true,
+      bottomNavigationVisible: false,
       viewCartEligible: false,
-      immersive: false,
+      immersive: true,
     });
   });
 

@@ -39,7 +39,7 @@ public class ShiprocketWebhookService {
          * Real tracking events still require the configured x-api-key before persistence.
          */
         if (!isTrackingEvent(payload)) {
-            return WebhookReceipt.validationProbe();
+            return WebhookReceipt.forValidationProbe();
         }
 
         if (!StringUtils.hasText(properties.getWebhookToken())) {
@@ -61,7 +61,7 @@ public class ShiprocketWebhookService {
             sha256Hex(suppliedApiKey),
             storedPayload
         );
-        return WebhookReceipt.trackingEvent(providerEventId, awb, !inserted);
+        return WebhookReceipt.forTrackingEvent(providerEventId, awb, !inserted);
     }
 
     private JsonNode parseObjectOrNull(String rawBody) {
@@ -128,11 +128,11 @@ public class ShiprocketWebhookService {
         boolean duplicate,
         boolean validationProbe
     ) {
-        static WebhookReceipt validationProbe() {
+        static WebhookReceipt forValidationProbe() {
             return new WebhookReceipt("", "", false, true);
         }
 
-        static WebhookReceipt trackingEvent(String providerEventId, String awb, boolean duplicate) {
+        static WebhookReceipt forTrackingEvent(String providerEventId, String awb, boolean duplicate) {
             return new WebhookReceipt(providerEventId, awb, duplicate, false);
         }
     }

@@ -19,15 +19,12 @@ public class CatalogClient {
 
     public CatalogMenuItem getActiveMenuItem(UUID menuItemId) {
         try {
-            CatalogMenuItem item = restClient.get()
-                .uri("/menu-items/{menuItemId}", menuItemId)
-                .retrieve()
-                .body(CatalogMenuItem.class);
+            CatalogMenuItem item = restClient.get().uri("/menu-items/{menuItemId}", menuItemId)
+                .retrieve().body(CatalogMenuItem.class);
             if (item == null || item.id() == null || item.kitchenId() == null || item.price() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Catalog item response is incomplete");
             }
-            if (item.unitPackageWeightGrams() == null || item.unitPackageWeightGrams() <= 0
-                || item.thermoboxRequired() == null) {
+            if (item.unitPackageWeightGrams() == null || item.unitPackageWeightGrams() <= 0 || item.thermoboxRequired() == null) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Menu item delivery metadata is incomplete");
             }
             return item;
@@ -38,10 +35,8 @@ public class CatalogClient {
 
     public CatalogKitchen getKitchen(UUID kitchenId) {
         try {
-            CatalogKitchen kitchen = restClient.get()
-                .uri("/kitchens/{kitchenId}", kitchenId)
-                .retrieve()
-                .body(CatalogKitchen.class);
+            CatalogKitchen kitchen = restClient.get().uri("/kitchens/{kitchenId}", kitchenId)
+                .retrieve().body(CatalogKitchen.class);
             if (kitchen == null || kitchen.id() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Catalog kitchen response is incomplete");
             }
@@ -51,21 +46,39 @@ public class CatalogClient {
         }
     }
 
+    public UUID resolvePickupLocation(UUID kitchenId, PickupLocationSnapshot snapshot) {
+        PickupLocationResolveResponse response = restClient.post()
+            .uri("/kitchens/{kitchenId}/pickup-location/resolve", kitchenId)
+            .body(snapshot)
+            .retrieve()
+            .body(PickupLocationResolveResponse.class);
+        if (response == null || response.pickupLocationId() == null) {
+            return kitchenId;
+        }
+        return response.pickupLocationId();
+    }
+
+    public record PickupLocationSnapshot(
+        String kitchenName,
+        String contactPhone,
+        String contactEmail,
+        String addressLine1,
+        String addressLine2,
+        String landmark,
+        String areaName,
+        String city,
+        String state,
+        String postalCode,
+        BigDecimal latitude,
+        BigDecimal longitude
+    ) {}
+
+    public record PickupLocationResolveResponse(UUID pickupLocationId) {}
+
     public record CatalogMenuItem(
-        UUID id,
-        UUID kitchenId,
-        String itemName,
-        String description,
-        String category,
-        String foodType,
-        BigDecimal price,
-        String currency,
-        Integer servesCount,
-        Integer preparationTimeMinutes,
-        String spiceLevel,
-        Integer unitPackageWeightGrams,
-        Boolean thermoboxRequired,
-        boolean available,
+        UUID id, UUID kitchenId, String itemName, String description, String category, String foodType,
+        BigDecimal price, String currency, Integer servesCount, Integer preparationTimeMinutes,
+        String spiceLevel, Integer unitPackageWeightGrams, Boolean thermoboxRequired, boolean available,
         String status
     ) {
         public CatalogMenuItem(
@@ -79,54 +92,17 @@ public class CatalogClient {
     }
 
     public record CatalogKitchen(
-        UUID id,
-        UUID currentPickupLocationId,
-        UUID identityId,
-        String kitchenName,
-        String displayName,
-        String description,
-        String phoneNumber,
-        String email,
-        String addressLine1,
-        String addressLine2,
-        String landmark,
-        String areaName,
-        String city,
-        String state,
-        String postalCode,
-        BigDecimal latitude,
-        BigDecimal longitude,
-        String status
+        UUID id, UUID currentPickupLocationId, UUID identityId, String kitchenName, String displayName,
+        String description, String phoneNumber, String email, String addressLine1, String addressLine2,
+        String landmark, String areaName, String city, String state, String postalCode,
+        BigDecimal latitude, BigDecimal longitude, String status
     ) {
         public CatalogKitchen(
-            UUID id,
-            UUID identityId,
-            String kitchenName,
-            String displayName,
-            String areaName,
-            String city,
-            String status
+            UUID id, UUID identityId, String kitchenName, String displayName,
+            String areaName, String city, String status
         ) {
-            this(
-                id,
-                id,
-                identityId,
-                kitchenName,
-                displayName,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                areaName,
-                city,
-                null,
-                null,
-                null,
-                null,
-                status
-            );
+            this(id, id, identityId, kitchenName, displayName, null, null, null, null, null, null,
+                areaName, city, null, null, null, null, status);
         }
     }
 }

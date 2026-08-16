@@ -17,6 +17,7 @@ export const paymentHandoffCapability = {
   checkoutOwnershipAndAmountRevalidationOwnedByServer: true,
   clientCheckoutAmountCrossCheckSupported: true,
   clientDuplicateTapCoalescing: true,
+  longLivedClientHandoffCacheAllowed: false,
   rawPaymentCredentialCollectionAllowed: false,
   tokenizedPaymentMethodContractSupported: false,
   nativeRazorpayLaunchSupported: true,
@@ -117,15 +118,11 @@ export function createPaymentHandoffCoordinator(
   createPaymentOrder: CreatePaymentOrder = paymentApi.createOrder,
 ): PaymentHandoffCoordinator {
   let active: ActivePaymentPreparation | null = null;
-  let successful: RazorpayHostedHandoff | null = null;
 
   return {
     prepare(checkout) {
       requireEligibleCheckout(checkout);
 
-      if (successful?.checkoutId === checkout.checkoutId) {
-        return Promise.resolve(successful);
-      }
       if (active) {
         if (active.checkoutId === checkout.checkoutId) return active.promise;
         return Promise.reject(
@@ -139,10 +136,6 @@ export function createPaymentHandoffCoordinator(
       let preparation: Promise<RazorpayHostedHandoff>;
       preparation = createPaymentOrder(checkout.checkoutId)
         .then(paymentOrder => prepareRazorpayHostedHandoff(checkout, paymentOrder))
-        .then(handoff => {
-          successful = handoff;
-          return handoff;
-        })
         .finally(() => {
           if (active?.promise === preparation) active = null;
         });

@@ -8,11 +8,16 @@ on:
       - .github/workflows/mobile-p127-readiness.yml
       - .github/scripts/mobile-p127-readiness-check.mjs
       - .github/scripts/mobile-p127-dependency-audit-check.mjs
-      - apps/mobile/android/app/build.gradle
+      - apps/mobile/android/**
+      - apps/mobile/ios/CravesMobile/Info.plist
       - apps/mobile/jest.setup.js
       - apps/mobile/__tests__/LifecyclePrimitives.test.tsx
+      - apps/mobile/src/features/cart/screens/CustomerCartScreen.tsx
+      - apps/mobile/src/features/payment/**
+      - apps/mobile/src/types/react-native-razorpay.d.ts
       - apps/mobile/package.json
       - apps/mobile/package-lock.json
+      - api/apim-api/contracts/mobile-production.v1.json
   workflow_dispatch:
 
 permissions:
@@ -21,7 +26,7 @@ permissions:
 jobs:
   production-readiness:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
 
     steps:
       - name: Checkout P127 branch
@@ -77,6 +82,43 @@ jobs:
             exit 1
           fi
           echo 'Backend/APIM/infrastructure source guard passed.'
+
+      - name: Razorpay production runtime static gate
+        id: paymentruntime
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const pkg = require('./apps/mobile/package.json');
+          const deps = pkg.dependencies || {};
+          if (deps['react-native-razorpay'] !== '3.0.0') {
+            throw new Error('react-native-razorpay must stay exactly pinned to 3.0.0 for this validated phase.');
+          }
+          for (const legacy of ['cashfree-pg-api-contract', 'react-native-cashfree-pg-sdk']) {
+            if (deps[legacy]) throw new Error(`Legacy Cashfree dependency remains: ${legacy}`);
+          }
+          NODE
+          if grep -RniE 'cashfree-pg-api-contract|react-native-cashfree-pg-sdk|CFPaymentGatewayService|CFSession' \
+            apps/mobile/src apps/mobile/package.json; then
+            echo 'Legacy Cashfree runtime code remains in production mobile source.' >&2
+            exit 1
+          fi
+          grep -q "react-native-razorpay" apps/mobile/src/features/payment/gateway/razorpayGateway.ts
+          grep -q "providerSignature" apps/mobile/src/features/payment/api/paymentApi.ts
+          grep -q "pendingPaymentAttemptStore" apps/mobile/src/features/cart/screens/CustomerCartScreen.tsx
+          echo 'Razorpay runtime static gate passed.'
+
+      - name: iOS Razorpay UPI intent configuration gate
+        id: iosrazorpay
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          plist=apps/mobile/ios/CravesMobile/Info.plist
+          grep -q '<key>LSApplicationQueriesSchemes</key>' "$plist"
+          for scheme in tez phonepe paytmmp bhim amazonpay; do
+            grep -q "<string>${scheme}</string>" "$plist"
+          done
+          echo 'iOS Razorpay UPI intent configuration is present.'
 
       - name: TypeScript strict check
         id: typecheck
@@ -169,6 +211,37 @@ jobs:
           cd android
           ./gradlew :app:signingReport --no-daemon
 
+      - name: Android native debug assembly with Razorpay autolinking
+        id: androidnative
+        continue-on-error: true
+        working-directory: apps/mobile
+        env:
+          NODE_ENV: production
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          cat > android/app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "100000000000",
+              "project_id": "craves-p127-native-ci",
+              "storage_bucket": "craves-p127-native-ci.invalid"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:100000000000:android:0000000000000000",
+                "android_client_info": {"package_name": "com.cravesapp"}
+              },
+              "api_key": [{"current_key": "p127-ci-placeholder-not-a-runtime-key"}]
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+          trap 'rm -f .env android/app/google-services.json' EXIT
+          cd android
+          ./gradlew :app:assembleDebug --no-daemon
+          test -s app/build/outputs/apk/debug/app-debug.apk
+
       - name: Final P127 automated readiness gate
         if: always()
         env:
@@ -180,15 +253,18 @@ jobs:
           P119: ${{ steps.p119.outcome }}
           P120: ${{ steps.p120.outcome }}
           P127_STATIC: ${{ steps.p127static.outcome }}
+          PAYMENT_RUNTIME: ${{ steps.paymentruntime.outcome }}
+          IOS_RAZORPAY: ${{ steps.iosrazorpay.outcome }}
           BUNDLE: ${{ steps.bundle.outcome }}
           ANDROID_CONFIG: ${{ steps.androidconfig.outcome }}
+          ANDROID_NATIVE: ${{ steps.androidnative.outcome }}
           BACKEND_GUARD: ${{ steps.backendguard.outcome }}
           DEPENDENCY_AUDIT_CLASSIFICATION: ${{ steps.auditclassification.outcome }}
           RAW_DEPENDENCY_AUDIT: ${{ steps.audit.outcome }}
         run: |
           set -euo pipefail
           failures=0
-          for gate in TYPECHECK LINT JEST INTEGRATION E2E P119 P120 P127_STATIC BUNDLE ANDROID_CONFIG BACKEND_GUARD DEPENDENCY_AUDIT_CLASSIFICATION; do
+          for gate in TYPECHECK LINT JEST INTEGRATION E2E P119 P120 P127_STATIC PAYMENT_RUNTIME IOS_RAZORPAY BUNDLE ANDROID_CONFIG ANDROID_NATIVE BACKEND_GUARD DEPENDENCY_AUDIT_CLASSIFICATION; do
             result="${!gate}"
             printf '%-32s %s\n' "$gate" "$result"
             if [ "$result" != 'success' ]; then

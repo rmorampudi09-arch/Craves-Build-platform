@@ -1,4 +1,4 @@
-import React, {useMemo} from 'react';
+import React, {useMemo, type ReactNode} from 'react';
 import {
   Image,
   Pressable,
@@ -12,7 +12,14 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {CustomerHomeStackParamList} from '../../../app/navigation/types';
-import {colors, elevation, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {
+  colors,
+  elevation,
+  fontWeight,
+  radius,
+  spacing,
+  typography,
+} from '../../../design/tokens';
 import type {NearbyKitchen} from '../../chefDiscovery/api/nearbyChefDiscoveryApi';
 import {
   flattenNearbyKitchenPages,
@@ -26,27 +33,78 @@ const HOME_RADIUS_METERS = 10_000;
 const TOP_KITCHEN_PAGE_SIZE = 12;
 const MAX_TOP_KITCHENS = 8;
 
-const PROMO_BANNERS: readonly ImageSourcePropType[] = [
-  require('../../../assets/home/home-banner-1.jpg'),
-  require('../../../assets/home/home-banner-2.jpg'),
-  require('../../../assets/home/home-banner-3.jpg'),
+const PROMOS: readonly {
+  eyebrow: string;
+  title: string;
+  accent: string;
+  caption: string;
+  art: ImageSourcePropType;
+}[] = [
+  {
+    eyebrow: 'HOME-COOKED',
+    title: 'Made with love.',
+    accent: 'Up to 30% off',
+    caption: 'Fresh meals from trusted home kitchens',
+    art: require('../../../assets/categories/curry.jpg'),
+  },
+  {
+    eyebrow: 'REAL FOOD',
+    title: 'Real people.',
+    accent: 'Fresh today',
+    caption: 'Comfort food cooked close to home',
+    art: require('../../../assets/categories/biriyani.jpg'),
+  },
+  {
+    eyebrow: 'GOOD FOOD',
+    title: 'Great moments.',
+    accent: 'Made nearby',
+    caption: 'Simple meals, warm kitchens, happy plates',
+    art: require('../../../assets/categories/tiffin.jpg'),
+  },
 ];
 
-const KITCHEN_AVATARS: readonly ImageSourcePropType[] = [
-  require('../../../assets/home/kitchen-avatar-1.jpg'),
-  require('../../../assets/home/kitchen-avatar-2.jpg'),
-  require('../../../assets/home/kitchen-avatar-3.jpg'),
-  require('../../../assets/home/kitchen-avatar-4.jpg'),
-  require('../../../assets/home/kitchen-avatar-5.jpg'),
-  require('../../../assets/home/kitchen-avatar-6.jpg'),
-];
+function avatarUrl(kitchenId: string): string {
+  return `https://api.dicebear.com/9.x/adventurer/png?seed=${encodeURIComponent(
+    `craves-${kitchenId}`,
+  )}&backgroundColor=f1f5f9&radius=12`;
+}
 
-function stableAvatarIndex(kitchenId: string): number {
-  let hash = 0;
-  for (let index = 0; index < kitchenId.length; index += 1) {
-    hash = (hash * 31 + kitchenId.charCodeAt(index)) >>> 0;
-  }
-  return hash % KITCHEN_AVATARS.length;
+function PromoCard({
+  promo,
+  width,
+}: {
+  promo: (typeof PROMOS)[number];
+  width: number;
+}) {
+  return (
+    <View style={[styles.banner, {width}]}>
+      <View style={styles.bannerCopy}>
+        <Text style={styles.bannerEyebrow}>{promo.eyebrow}</Text>
+        <Text style={styles.bannerTitle}>{promo.title}</Text>
+        <Text numberOfLines={2} style={styles.bannerCaption}>
+          {promo.caption}
+        </Text>
+        <View style={styles.offerPill}>
+          <Text style={styles.offerPillText}>{promo.accent}</Text>
+        </View>
+      </View>
+      <View style={styles.bannerArtPanel}>
+        <View pointerEvents="none" style={styles.steamGroup}>
+          <View style={[styles.steam, styles.steamOne]} />
+          <View style={[styles.steam, styles.steamTwo]} />
+          <View style={[styles.steam, styles.steamThree]} />
+        </View>
+        <View style={styles.bowlFrame}>
+          <Image
+            accessibilityIgnoresInvertColors
+            source={promo.art}
+            resizeMode="cover"
+            style={styles.bannerArt}
+          />
+        </View>
+      </View>
+    </View>
+  );
 }
 
 function KitchenPreviewCard({
@@ -58,7 +116,6 @@ function KitchenPreviewCard({
 }) {
   const title = kitchen.displayName ?? kitchen.kitchenName;
   const location = [kitchen.areaName, kitchen.city].filter(Boolean).join(', ');
-  const avatar = KITCHEN_AVATARS[stableAvatarIndex(kitchen.id)];
 
   return (
     <Pressable
@@ -69,7 +126,7 @@ function KitchenPreviewCard({
       style={({pressed}) => [styles.kitchenCard, pressed && styles.pressed]}>
       <Image
         accessibilityIgnoresInvertColors
-        source={avatar}
+        source={{uri: avatarUrl(kitchen.id)}}
         resizeMode="cover"
         style={styles.kitchenImage}
       />
@@ -86,7 +143,8 @@ function KitchenPreviewCard({
           </Text>
           <Text style={styles.metaDot}>•</Text>
           <Text numberOfLines={1} style={styles.kitchenMeta}>
-            {kitchen.activeMenuItemCount} {kitchen.activeMenuItemCount === 1 ? 'dish' : 'dishes'}
+            {kitchen.activeMenuItemCount}{' '}
+            {kitchen.activeMenuItemCount === 1 ? 'dish' : 'dishes'}
           </Text>
         </View>
       </View>
@@ -94,7 +152,7 @@ function KitchenPreviewCard({
   );
 }
 
-export function HomePromoAndKitchens() {
+export function HomePromoAndKitchens({children}: {children: ReactNode}) {
   const navigation = useNavigation<
     NativeStackNavigationProp<CustomerHomeStackParamList, 'CustomerHomeRoot'>
   >();
@@ -104,7 +162,11 @@ export function HomePromoAndKitchens() {
     size: TOP_KITCHEN_PAGE_SIZE,
   });
   const kitchens = useMemo(
-    () => flattenNearbyKitchenPages(discovery.data?.pages).slice(0, MAX_TOP_KITCHENS),
+    () =>
+      flattenNearbyKitchenPages(discovery.data?.pages).slice(
+        0,
+        MAX_TOP_KITCHENS,
+      ),
     [discovery.data?.pages],
   );
   const bannerWidth = Math.max(280, width - spacing.md * 2);
@@ -118,18 +180,12 @@ export function HomePromoAndKitchens() {
       <ScrollView
         horizontal
         decelerationRate="fast"
-        pagingEnabled
+        snapToAlignment="start"
+        snapToInterval={bannerWidth + spacing.sm}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.bannerRow}>
-        {PROMO_BANNERS.map((source, index) => (
-          <Image
-            key={`home-promo-${index + 1}`}
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`Craves home food offer ${index + 1}`}
-            source={source}
-            resizeMode="cover"
-            style={[styles.banner, {width: bannerWidth}]}
-          />
+        {PROMOS.map((promo, index) => (
+          <PromoCard key={`${promo.eyebrow}-${index}`} promo={promo} width={bannerWidth} />
         ))}
       </ScrollView>
 
@@ -138,6 +194,8 @@ export function HomePromoAndKitchens() {
           What&apos;s on your mind
         </Text>
       </View>
+
+      {children}
 
       {kitchens.length > 0 ? (
         <View style={styles.kitchensSection}>
@@ -172,10 +230,98 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   banner: {
-    aspectRatio: 900 / 390,
+    minHeight: 174,
+    flexDirection: 'row',
+    overflow: 'hidden',
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: '#FFF7F2',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
+  bannerCopy: {
+    width: '54%',
+    zIndex: 2,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  bannerEyebrow: {
+    color: colors.espressoBrown,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.extrabold,
+    letterSpacing: 0.7,
+  },
+  bannerTitle: {
+    marginTop: 2,
+    color: colors.flameRed,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.extrabold,
+  },
+  bannerCaption: {
+    marginTop: spacing.xs,
+    color: colors.espressoBrown,
+    fontSize: typography.tiny,
+    lineHeight: 17,
+  },
+  offerPill: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    backgroundColor: colors.flameRed,
+  },
+  offerPillText: {
+    color: colors.white,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
+  },
+  bannerArtPanel: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: '52%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.flameRed,
+  },
+  bowlFrame: {
+    width: 132,
+    height: 132,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 66,
+    padding: 8,
+    backgroundColor: colors.espressoBrown,
+    ...elevation.card,
+  },
+  bannerArt: {
+    width: 116,
+    height: 116,
+    borderRadius: 58,
+  },
+  steamGroup: {
+    position: 'absolute',
+    top: 10,
+    left: 26,
+    right: 26,
+    height: 42,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    opacity: 0.34,
+  },
+  steam: {
+    width: 5,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: colors.white,
+    transform: [{rotate: '10deg'}],
+  },
+  steamOne: {height: 30, marginTop: 8},
+  steamTwo: {height: 40},
+  steamThree: {height: 28, marginTop: 10},
   categoryHeadingWrap: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
@@ -191,10 +337,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxs,
   },
   kitchensSection: {
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
   },
   kitchenRow: {
     gap: spacing.sm,
+    marginHorizontal: -spacing.md,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,

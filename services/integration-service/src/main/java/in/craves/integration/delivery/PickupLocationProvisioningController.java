@@ -4,6 +4,7 @@ import in.craves.integration.delivery.shiprocket.ShiprocketPickupProvisioningSer
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@ConditionalOnProperty(prefix = "craves.providers.shiprocket", name = "enabled", havingValue = "true")
 @RequestMapping("/internal/v1/delivery-pickup-locations")
 public class PickupLocationProvisioningController {
     private final InternalRequestAuthorizer internalRequestAuthorizer;

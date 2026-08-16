@@ -13,21 +13,10 @@ public final class ApiDtos {
     private ApiDtos() {
     }
 
-    public enum KitchenStatus {
-        DRAFT, ACTIVE, INACTIVE, SUSPENDED
-    }
-
-    public enum MenuItemStatus {
-        DRAFT, ACTIVE, INACTIVE
-    }
-
-    public enum FoodType {
-        VEG, NON_VEG, EGG
-    }
-
-    public enum SpiceLevel {
-        MILD, MEDIUM, SPICY
-    }
+    public enum KitchenStatus { DRAFT, ACTIVE, INACTIVE, SUSPENDED }
+    public enum MenuItemStatus { DRAFT, ACTIVE, INACTIVE }
+    public enum FoodType { VEG, NON_VEG, EGG }
+    public enum SpiceLevel { MILD, MEDIUM, SPICY }
 
     public record KitchenProfileRequest(
         @NotBlank String kitchenName,
@@ -45,10 +34,31 @@ public final class ApiDtos {
         BigDecimal latitude,
         BigDecimal longitude,
         KitchenStatus status
-    ) {
-    }
+    ) {}
 
     public record KitchenProfileResponse(
+        UUID id,
+        UUID identityId,
+        String kitchenName,
+        String displayName,
+        String description,
+        String phoneNumber,
+        String email,
+        String addressLine1,
+        String addressLine2,
+        String landmark,
+        String areaName,
+        String city,
+        String state,
+        String postalCode,
+        BigDecimal latitude,
+        BigDecimal longitude,
+        KitchenStatus status,
+        Instant createdAt,
+        Instant updatedAt
+    ) {}
+
+    public record PublicKitchenDetailResponse(
         UUID id,
         UUID currentPickupLocationId,
         UUID identityId,
@@ -70,6 +80,15 @@ public final class ApiDtos {
         Instant createdAt,
         Instant updatedAt
     ) {
+        public static PublicKitchenDetailResponse from(KitchenProfileResponse kitchen, UUID pickupLocationId) {
+            return new PublicKitchenDetailResponse(
+                kitchen.id(), pickupLocationId, kitchen.identityId(), kitchen.kitchenName(), kitchen.displayName(),
+                kitchen.description(), kitchen.phoneNumber(), kitchen.email(), kitchen.addressLine1(),
+                kitchen.addressLine2(), kitchen.landmark(), kitchen.areaName(), kitchen.city(), kitchen.state(),
+                kitchen.postalCode(), kitchen.latitude(), kitchen.longitude(), kitchen.status(),
+                kitchen.createdAt(), kitchen.updatedAt()
+            );
+        }
     }
 
     public record MenuItemRequest(
@@ -86,8 +105,7 @@ public final class ApiDtos {
         @NotNull Boolean thermoboxRequired,
         Boolean available,
         MenuItemStatus status
-    ) {
-    }
+    ) {}
 
     public record MenuItemResponse(
         UUID id,
@@ -108,8 +126,7 @@ public final class ApiDtos {
         List<MenuItemImageResponse> images,
         Instant createdAt,
         Instant updatedAt
-    ) {
-    }
+    ) {}
 
     public record MenuItemImageResponse(
         UUID id,
@@ -122,14 +139,9 @@ public final class ApiDtos {
         int sortOrder,
         boolean primary,
         Instant createdAt
-    ) {
-    }
+    ) {}
 
-    public record AvailabilityRequest(
-        boolean available,
-        String reason
-    ) {
-    }
+    public record AvailabilityRequest(boolean available, String reason) {}
 
     public record PublicKitchenSummaryResponse(
         UUID id,
@@ -142,20 +154,17 @@ public final class ApiDtos {
         BigDecimal longitude,
         BigDecimal distanceKm,
         long activeMenuItemCount
-    ) {
-    }
+    ) {}
 
     public record DiscoveryRadiusResponse(
         String city,
         String areaName,
         BigDecimal radiusKm,
         BigDecimal maxRadiusKm
-    ) {
-    }
+    ) {}
 
     public record PublicKitchenDiscoveryResponse(
         DiscoveryRadiusResponse radius,
         List<PublicKitchenSummaryResponse> kitchens
-    ) {
-    }
+    ) {}
 }

@@ -9,7 +9,6 @@ import in.craves.integration.delivery.command.DeliveryProviderRouter;
 import java.time.Clock;
 import java.util.concurrent.ExecutorService;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -58,14 +57,6 @@ class DeliverySchedulingConfigurationTest {
         @Bean
         DeliveryAssignmentRepository deliveryAssignmentRepository() {
             return mock(DeliveryAssignmentRepository.class);
-        }
-
-        @Bean
-        @Qualifier("deliveryQuoteExecutor")
-        ExecutorService deliveryQuoteExecutorAlias(
-            @Qualifier("deliveryQuoteExecutor") ExecutorService deliveryQuoteExecutor
-        ) {
-            return deliveryQuoteExecutor;
         }
     }
 }

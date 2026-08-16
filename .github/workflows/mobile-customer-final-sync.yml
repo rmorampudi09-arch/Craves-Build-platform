@@ -1,0 +1,176 @@
+name: CRAVES Mobile Customer Final Sync
+
+on:
+  push:
+    branches: [mobile-ui-rebuild-from-scratch]
+    paths: [.github/workflows/mobile-customer-final-sync.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+          fetch-depth: 0
+      - name: Apply favorite, support and icon-surface repairs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'Expected block not found in {path}: {old[:180]}')
+              p.write_text(text.replace(old, new, count))
+
+          # Home: account-backed heart on every dish card.
+          path = 'apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx'
+          replace(path,
+              "import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';\nimport {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';",
+              "import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';\nimport {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';\nimport {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';\nimport {\n  isFavoriteMenuItem,\n  useCustomerFavoritesQuery,\n  useToggleCustomerFavorite,\n} from '../../favorites/query/customerFavoritesQueries';")
+          replace(path,
+              "  changingQuantity: boolean;\n  onAdd: (dishId: string) => void;",
+              "  changingQuantity: boolean;\n  favorite: boolean;\n  favoritePending: boolean;\n  favoriteDisabled: boolean;\n  onFavoriteToggle: (dishId: string, favorite: boolean) => void;\n  onAdd: (dishId: string) => void;")
+          replace(path,
+              "  changingQuantity,\n  onAdd,",
+              "  changingQuantity,\n  favorite,\n  favoritePending,\n  favoriteDisabled,\n  onFavoriteToggle,\n  onAdd,")
+          replace(path,
+              "      </Pressable>\n\n      <View style={styles.dishBody}>",
+              "      </Pressable>\n      <CustomerFavoriteHeartButton\n        favorite={favorite}\n        pending={favoritePending}\n        disabled={favoriteDisabled}\n        itemLabel={dish.itemName}\n        onToggle={() => onFavoriteToggle(dish.id, favorite)}\n        style={styles.favoriteButton}\n      />\n\n      <View style={styles.dishBody}>", 1)
+          replace(path,
+              "  const header = useCustomerHeaderState();\n  const bottomNavScroll = useCustomerBottomNavScroll();",
+              "  const header = useCustomerHeaderState();\n  const favorites = useCustomerFavoritesQuery();\n  const toggleFavorite = useToggleCustomerFavorite();\n  const bottomNavScroll = useCustomerBottomNavScroll();")
+          replace(path,
+              "  const handleAdd = (dishId: string) => {",
+              "  const handleFavoriteToggle = useCallback(\n    (menuItemId: string, favorite: boolean) => {\n      if (favorites.sessionRequired || toggleFavorite.isPending) return;\n      setMutationError(null);\n      toggleFavorite.mutate(\n        {menuItemId, favorite},\n        {onError: () => setMutationError('Favorite could not be updated. Please try again.')},\n      );\n    },\n    [favorites.sessionRequired, toggleFavorite],\n  );\n\n  const handleAdd = (dishId: string) => {")
+          replace(path,
+              "        onPressNotifications={() => {\n          header.refreshNotifications();\n        }}",
+              "        onPressNotifications={header.openNotifications}")
+          replace(path,
+              "              changingQuantity={\n                cartLine\n                  ? cartMutations[`line:${cartLine.lineId}`]?.status === 'PENDING'\n                  : false\n              }\n              onAdd={handleAdd}",
+              "              changingQuantity={\n                cartLine\n                  ? cartMutations[`line:${cartLine.lineId}`]?.status === 'PENDING'\n                  : false\n              }\n              favorite={isFavoriteMenuItem(favorites.data, item.id)}\n              favoritePending={toggleFavorite.isPending}\n              favoriteDisabled={favorites.sessionRequired}\n              onFavoriteToggle={handleFavoriteToggle}\n              onAdd={handleAdd}")
+          # insert style just before dishBody if present
+          replace(path,
+              "  dishBody: {",
+              "  favoriteButton: {position: 'absolute', top: spacing.sm, right: spacing.sm, zIndex: 4},\n  dishBody: {")
+
+          # Kitchen profile preview hearts and remove the fake kitchen-level Save action.
+          path = 'apps/mobile/src/features/kitchenProfile/screens/CustomerKitchenProfileScreen.tsx'
+          replace(path,
+              "import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';",
+              "import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';\nimport {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';\nimport {\n  isFavoriteMenuItem,\n  useCustomerFavoritesQuery,\n  useToggleCustomerFavorite,\n} from '../../favorites/query/customerFavoritesQueries';")
+          replace(path,
+              "  busy: boolean;\n  onOpen: (menuItemId: string) => void;",
+              "  busy: boolean;\n  favorite: boolean;\n  favoritePending: boolean;\n  favoriteDisabled: boolean;\n  onFavoriteToggle: (menuItemId: string, favorite: boolean) => void;\n  onOpen: (menuItemId: string) => void;")
+          replace(path,
+              "  busy,\n  onOpen,",
+              "  busy,\n  favorite,\n  favoritePending,\n  favoriteDisabled,\n  onFavoriteToggle,\n  onOpen,")
+          replace(path,
+              "      </Pressable>\n\n      {cartLine ? (",
+              "      </Pressable>\n      <CustomerFavoriteHeartButton\n        favorite={favorite}\n        pending={favoritePending}\n        disabled={favoriteDisabled}\n        itemLabel={item.itemName}\n        onToggle={() => onFavoriteToggle(item.id, favorite)}\n        style={styles.favoriteButton}\n      />\n\n      {cartLine ? (", 1)
+          replace(path,
+              "  const profileQuery = useCustomerKitchenProfileQuery(route.params.kitchenId);\n  const cartSnapshot = useAppSelector(state => state.cart.snapshot);",
+              "  const profileQuery = useCustomerKitchenProfileQuery(route.params.kitchenId);\n  const favorites = useCustomerFavoritesQuery();\n  const toggleFavorite = useToggleCustomerFavorite();\n  const cartSnapshot = useAppSelector(state => state.cart.snapshot);")
+          replace(path,
+              "  const openDish = useCallback(",
+              "  const handleFavoriteToggle = useCallback(\n    (menuItemId: string, favorite: boolean) => {\n      if (favorites.sessionRequired || toggleFavorite.isPending) return;\n      setInteractionNotice(null);\n      toggleFavorite.mutate(\n        {menuItemId, favorite},\n        {onError: () => setInteractionNotice('Favorite could not be updated. Please try again.')},\n      );\n    },\n    [favorites.sessionRequired, toggleFavorite],\n  );\n\n  const openDish = useCallback(")
+          replace(path,
+              "              <Pressable\n                accessibilityHint=\"Saving kitchens is not available yet\"\n                accessibilityLabel=\"Save kitchen\"\n                accessibilityRole=\"button\"\n                onPress={() => setInteractionNotice('Saving kitchens is not available yet.')}\n                style={({pressed}) => [styles.secondaryAction, pressed && styles.pressed]}>\n                <Text style={styles.secondaryActionText}>Save</Text>\n              </Pressable>\n",
+              "")
+          replace(path,
+              "                        busy={busy}\n                        onOpen={openDish}",
+              "                        busy={busy}\n                        favorite={isFavoriteMenuItem(favorites.data, item.id)}\n                        favoritePending={toggleFavorite.isPending}\n                        favoriteDisabled={favorites.sessionRequired}\n                        onFavoriteToggle={handleFavoriteToggle}\n                        onOpen={openDish}")
+          replace(path,
+              "  menuCard: {",
+              "  favoriteButton: {position: 'absolute', top: spacing.sm, right: spacing.sm, zIndex: 4},\n  menuCard: {")
+
+          # All dishes: same account-backed heart.
+          path = 'apps/mobile/src/features/kitchenProfile/screens/CustomerKitchenDishesScreen.tsx'
+          replace(path,
+              "import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';",
+              "import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';\nimport {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';\nimport {\n  isFavoriteMenuItem,\n  useCustomerFavoritesQuery,\n  useToggleCustomerFavorite,\n} from '../../favorites/query/customerFavoritesQueries';")
+          replace(path,
+              "  busy: boolean;\n  onOpen: (menuItemId: string) => void;",
+              "  busy: boolean;\n  favorite: boolean;\n  favoritePending: boolean;\n  favoriteDisabled: boolean;\n  onFavoriteToggle: (menuItemId: string, favorite: boolean) => void;\n  onOpen: (menuItemId: string) => void;")
+          replace(path,
+              "  busy,\n  onOpen,",
+              "  busy,\n  favorite,\n  favoritePending,\n  favoriteDisabled,\n  onFavoriteToggle,\n  onOpen,")
+          replace(path,
+              "      </Pressable>\n\n      {cartLine ? (",
+              "      </Pressable>\n      <CustomerFavoriteHeartButton\n        favorite={favorite}\n        pending={favoritePending}\n        disabled={favoriteDisabled}\n        itemLabel={item.itemName}\n        onToggle={() => onFavoriteToggle(item.id, favorite)}\n        style={styles.favoriteButton}\n      />\n\n      {cartLine ? (", 1)
+          replace(path,
+              "  const profileQuery = useCustomerKitchenProfileQuery(route.params.kitchenId);\n  const cartSnapshot = useAppSelector(state => state.cart.snapshot);",
+              "  const profileQuery = useCustomerKitchenProfileQuery(route.params.kitchenId);\n  const favorites = useCustomerFavoritesQuery();\n  const toggleFavorite = useToggleCustomerFavorite();\n  const cartSnapshot = useAppSelector(state => state.cart.snapshot);")
+          replace(path,
+              "  const openDish = useCallback(",
+              "  const handleFavoriteToggle = useCallback(\n    (menuItemId: string, favorite: boolean) => {\n      if (favorites.sessionRequired || toggleFavorite.isPending) return;\n      setInteractionNotice(null);\n      toggleFavorite.mutate(\n        {menuItemId, favorite},\n        {onError: () => setInteractionNotice('Favorite could not be updated. Please try again.')},\n      );\n    },\n    [favorites.sessionRequired, toggleFavorite],\n  );\n\n  const openDish = useCallback(")
+          replace(path,
+              "          busy={busy}\n          onOpen={openDish}",
+              "          busy={busy}\n          favorite={isFavoriteMenuItem(favorites.data, item.id)}\n          favoritePending={toggleFavorite.isPending}\n          favoriteDisabled={favorites.sessionRequired}\n          onFavoriteToggle={handleFavoriteToggle}\n          onOpen={openDish}")
+          replace(path,
+              "      openDish,\n      revalidatingItemId,",
+              "      openDish,\n      favorites.data,\n      favorites.sessionRequired,\n      handleFavoriteToggle,\n      toggleFavorite.isPending,\n      revalidatingItemId,")
+          replace(path,
+              "  dishCard: {",
+              "  favoriteButton: {position: 'absolute', top: spacing.sm, right: spacing.sm, zIndex: 4},\n  dishCard: {")
+
+          # Favorites capability metadata now matches the merged backend.
+          Path('apps/mobile/src/features/favorites/domain/customerFavoritesContract.ts').write_text("""export type CustomerFavoritesServerCapability =\n  | 'list'\n  | 'add-favorite'\n  | 'remove-favorite'\n  | 'favorite-membership-sync'\n  | 'paginated-list'\n  | 'search'\n  | 'category-counts';\n\nexport type CustomerFavoritesCapabilityAvailability = 'supported' | 'unsupported';\n\nexport const CUSTOMER_FAVORITES_SERVER_CAPABILITIES = {\n  list: 'supported',\n  'add-favorite': 'supported',\n  'remove-favorite': 'supported',\n  'favorite-membership-sync': 'supported',\n  'paginated-list': 'unsupported',\n  search: 'unsupported',\n  'category-counts': 'unsupported',\n} as const satisfies Record<CustomerFavoritesServerCapability, CustomerFavoritesCapabilityAvailability>;\n\nexport const CUSTOMER_FAVORITES_CONTRACT_BLOCKER_REASON =\n  'favorites-advanced-query-contract-partial' as const;\n\nexport const CUSTOMER_FAVORITES_CONTRACT_BLOCKER_MESSAGE =\n  'Favorites are persisted by the server for the signed-in customer. Pagination, server-side search, and category-count aggregation are not exposed yet, so those advanced query capabilities remain fail-closed.';\n\nexport const CUSTOMER_FAVORITES_USER_BLOCKER_COPY =\n  'Your saved dishes sync with your Craves account. Search and category counts are applied only when authoritative data is available.';\n\nexport function getUnsupportedCustomerFavoritesCapabilities(): CustomerFavoritesServerCapability[] {\n  return (Object.keys(CUSTOMER_FAVORITES_SERVER_CAPABILITIES) as CustomerFavoritesServerCapability[])\n    .filter(capability => CUSTOMER_FAVORITES_SERVER_CAPABILITIES[capability] === 'unsupported');\n}\n""")
+          Path('apps/mobile/src/features/favorites/customerFavoritesContract.test.ts').write_text("""import {\n  CUSTOMER_FAVORITES_CONTRACT_BLOCKER_MESSAGE,\n  CUSTOMER_FAVORITES_SERVER_CAPABILITIES,\n  getUnsupportedCustomerFavoritesCapabilities,\n} from './domain/customerFavoritesContract';\n\ndescribe('customerFavoritesContract', () => {\n  it('records the server-backed favorite capabilities now available to mobile', () => {\n    expect(CUSTOMER_FAVORITES_SERVER_CAPABILITIES).toMatchObject({\n      list: 'supported',\n      'add-favorite': 'supported',\n      'remove-favorite': 'supported',\n      'favorite-membership-sync': 'supported',\n    });\n    expect(getUnsupportedCustomerFavoritesCapabilities()).toEqual([\n      'paginated-list',\n      'search',\n      'category-counts',\n    ]);\n  });\n\n  it('keeps only advanced unsupported querying fail-closed', () => {\n    expect(CUSTOMER_FAVORITES_CONTRACT_BLOCKER_MESSAGE).toContain('persisted by the server');\n    expect(CUSTOMER_FAVORITES_CONTRACT_BLOCKER_MESSAGE).toContain('Pagination');\n  });\n});\n""")
+
+          # Customer support: official support email is a real action.
+          path = 'apps/mobile/src/features/customerSupport/screens/CustomerHelpSupportScreen.tsx'
+          replace(path,
+              "import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';",
+              "import {Linking, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';")
+          replace(path,
+              "function DisabledSupportAction({icon, title, detail, testID}: DisabledSupportActionProps) {",
+              "function EnabledSupportAction({icon, title, detail, testID, onPress}: DisabledSupportActionProps & {onPress: () => void}) {\n  return (\n    <Pressable accessibilityRole=\"button\" accessibilityLabel={title} accessibilityHint={detail} onPress={onPress} testID={testID} style={({pressed}) => [styles.supportAction, pressed && styles.actionPressed]}>\n      <View style={styles.actionIcon}><Icon name={icon} size={iconSize.sm} color={colors.flameRed} /></View>\n      <View style={styles.actionCopy}><Text style={styles.actionTitle}>{title}</Text><Text style={styles.actionDetail}>{detail}</Text></View>\n      <Icon name=\"chevron-right\" size={iconSize.xs} color={colors.espressoBrown} />\n    </Pressable>\n  );\n}\n\nfunction DisabledSupportAction({icon, title, detail, testID}: DisabledSupportActionProps) {")
+          replace(path,
+              "  const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);",
+              "  const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);\n  const [supportMessage, setSupportMessage] = useState<string | null>(null);\n  const emailSupport = async () => {\n    setSupportMessage(null);\n    try {\n      await Linking.openURL('mailto:support@craves.in?subject=Craves%20support');\n    } catch {\n      setSupportMessage('Email could not be opened. Contact support@craves.in from your email app.');\n    }\n  };")
+          replace(path,
+              "              <DisabledSupportAction\n                icon=\"mail\"\n                title=\"Email Us\"\n                detail=\"Email support is temporarily unavailable.\"\n                testID={`support-blocker-${configuration.blocker}-email`}\n              />",
+              "              <EnabledSupportAction\n                icon=\"mail\"\n                title=\"Email Us\"\n                detail=\"Email support@craves.in for order, payment, refund, account or delivery help.\"\n                testID=\"support-email\"\n                onPress={() => { emailSupport().catch(() => undefined); }}\n              />")
+          replace(path,
+              "            <View style={styles.reassuranceBanner}>",
+              "            {supportMessage ? <Text accessibilityLiveRegion=\"assertive\" style={styles.supportMessage}>{supportMessage}</Text> : null}\n            <View style={styles.reassuranceBanner}>")
+          replace(path,
+              "                Support contact options are temporarily unavailable. Nothing will be sent unless you choose an enabled support option.",
+              "                Email support is available. Phone, chat and ticket actions remain disabled until Craves publishes their production configuration.")
+          replace(path,
+              "  root: {",
+              "  actionPressed: {opacity: 0.7},\n  supportMessage: {color: colors.error, fontSize: typography.small},\n  root: {")
+
+          # Shared icon buttons get the requested #F1F5F9 icon surface by default.
+          path = 'apps/mobile/src/shared/components/IconButton.tsx'
+          replace(path,
+              "    justifyContent: 'center',\n  },\n  surface: {\n    backgroundColor: colors.surfaceBase,",
+              "    justifyContent: 'center',\n    backgroundColor: colors.iconSurface,\n  },\n  surface: {\n    backgroundColor: colors.iconSurface,")
+
+          # Chef header icon controls (menu glyph and bell) also use iconSurface; menu bar itself is untouched.
+          path = 'apps/mobile/src/features/chefShell/components/ChefHeader.tsx'
+          replace(path,
+              "    alignItems: 'center',\n    justifyContent: 'center',\n  },\n  menuGlyph:",
+              "    alignItems: 'center',\n    justifyContent: 'center',\n    backgroundColor: colors.iconSurface,\n  },\n  menuGlyph:")
+          PY
+      - name: TypeScript lint and targeted tests
+        working-directory: apps/mobile
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+          npx jest src/features/favorites/customerFavoritesContract.test.ts --runInBand
+      - name: Commit source and remove one-shot workflow
+        run: |
+          git config user.name 'craves-mobile-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm .github/workflows/mobile-customer-final-sync.yml
+          git add apps/mobile/src
+          git commit -m 'Complete dish favorites and customer support actions'
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

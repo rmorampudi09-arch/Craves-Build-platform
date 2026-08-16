@@ -1,0 +1,31 @@
+name: CRAVES Mobile Completion Audit
+
+on:
+  push:
+    branches: [mobile-ui-rebuild-from-scratch]
+    paths: [.github/workflows/mobile-completion-audit.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+      - name: Audit stale and disabled mobile actions
+        run: |
+          echo '=== UNAVAILABLE / NOT AVAILABLE / TODO ==='
+          rg -n -i "unavailable right now|not available yet|not available right now|not implemented|TODO|placeholder" apps/mobile/src || true
+          echo '=== REORDER ==='
+          rg -n -i "reorder|order again" apps/mobile/src || true
+          echo '=== NOTIFICATION HANDLERS ==='
+          rg -n "onPressNotifications|notification.*unavailable|bell" apps/mobile/src || true
+          echo '=== SUPPORT ==='
+          rg -n -i "support|help center|contact us" apps/mobile/src/features/customerSettings apps/mobile/src/features/customerSupport apps/mobile/src/features/customerProfile || true
+          echo '=== DISABLED PRESSABLE/BUTTON (CONTEXT) ==='
+          rg -n "disabled=\{|disabled=|accessibilityState=.*disabled" apps/mobile/src/features | head -n 250 || true
+          echo '=== ICON BACKGROUND WHITE ==='
+          rg -n -U "(icon|Icon|badge|Badge|headerButton|Action)[A-Za-z0-9_]*:\s*\{[^}]{0,240}backgroundColor:\s*colors\.white" apps/mobile/src || true

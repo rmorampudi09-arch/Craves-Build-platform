@@ -7,7 +7,13 @@ import {
   type ViewStyle,
 } from 'react-native';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {colors, radius, spacing, touchTarget} from '../../../design/tokens';
+import {
+  colors,
+  elevation,
+  radius,
+  spacing,
+  touchTarget,
+} from '../../../design/tokens';
 
 interface Props {
   favorite: boolean;
@@ -18,7 +24,7 @@ interface Props {
   style?: StyleProp<ViewStyle>;
 }
 
-/** Filled-heart favorite control used on every customer dish card. */
+/** Clean floating favorite control used on customer dish cards. */
 export function CustomerFavoriteHeartButton({
   favorite,
   pending = false,
@@ -41,18 +47,19 @@ export function CustomerFavoriteHeartButton({
       accessibilityRole="button"
       accessibilityState={{disabled: blocked, busy: pending, selected: favorite}}
       disabled={blocked}
-      hitSlop={spacing.xxs}
+      hitSlop={spacing.xs}
       onPress={handlePress}
       style={({pressed}) => [
         styles.button,
+        favorite && styles.buttonFavorite,
         style,
         (pressed || pending) && styles.pressed,
         disabled && styles.disabled,
       ]}>
       <MaterialDesignIcons
-        name="heart"
-        size={23}
-        color={favorite ? colors.flameRed : colors.textSecondary}
+        name={favorite ? 'heart' : 'heart-outline'}
+        size={22}
+        color={favorite ? colors.flameRed : colors.espressoBrown}
       />
     </Pressable>
   );
@@ -65,8 +72,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.iconSurface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    ...elevation.card,
   },
-  pressed: {opacity: 0.62},
+  buttonFavorite: {
+    borderColor: colors.flameRed,
+  },
+  pressed: {
+    opacity: 0.78,
+    transform: [{scale: 0.96}],
+  },
   disabled: {opacity: 0.45},
 });

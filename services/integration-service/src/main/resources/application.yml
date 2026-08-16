@@ -132,6 +132,25 @@ craves:
       reconciliation-page-size: ${BORZO_RECONCILIATION_PAGE_SIZE:50}
       reconciliation-max-pages: ${BORZO_RECONCILIATION_MAX_PAGES:5}
       reconciliation-lookback-seconds: ${BORZO_RECONCILIATION_LOOKBACK_SECONDS:120}
+    shiprocket:
+      enabled: ${SHIPROCKET_API_ENABLED:false}
+      create-enabled: ${SHIPROCKET_CREATE_ENABLED:false}
+      environment: ${SHIPROCKET_API_ENVIRONMENT:READ_ONLY}
+      production-activation-approved: ${SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED:false}
+      attribution-approved: ${SHIPROCKET_ATTRIBUTION_APPROVED:false}
+      base-url: ${SHIPROCKET_API_BASE_URL:https://apiv2.shiprocket.in/v1/external}
+      email: ${SHIPROCKET_API_EMAIL:}
+      password: ${SHIPROCKET_API_PASSWORD:}
+      webhook-token: ${SHIPROCKET_WEBHOOK_TOKEN:}
+      order-email: ${SHIPROCKET_ORDER_EMAIL:}
+      package-length-cm: ${SHIPROCKET_PACKAGE_LENGTH_CM:}
+      package-breadth-cm: ${SHIPROCKET_PACKAGE_BREADTH_CM:}
+      package-height-cm: ${SHIPROCKET_PACKAGE_HEIGHT_CM:}
+      connect-timeout-seconds: ${SHIPROCKET_CONNECT_TIMEOUT_SECONDS:5}
+      read-timeout-seconds: ${SHIPROCKET_READ_TIMEOUT_SECONDS:20}
+      read-retry-attempts: ${SHIPROCKET_READ_RETRY_ATTEMPTS:3}
+      auth-refresh-skew-minutes: ${SHIPROCKET_AUTH_REFRESH_SKEW_MINUTES:60}
+      maximum-accepted-eta-minutes: ${SHIPROCKET_MAX_ACCEPTED_ETA_MINUTES:60}
 
 management:
   endpoints:

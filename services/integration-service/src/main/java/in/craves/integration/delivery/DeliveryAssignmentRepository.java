@@ -30,6 +30,14 @@ public class DeliveryAssignmentRepository {
             (rs, rowNum) -> mapAssignment(rs), chefSubOrderId).stream().findFirst();
     }
 
+    /**
+     * Compatibility alias for the delivery command router. The canonical repository method remains
+     * findByChefSubOrderId so existing intelligence callers are unchanged.
+     */
+    public Optional<AssignmentResponse> findResponseByChefSubOrderId(UUID chefSubOrderId) {
+        return findByChefSubOrderId(chefSubOrderId);
+    }
+
     public Optional<AssignmentResponse> find(UUID assignmentId) {
         return jdbc.query("SELECT * FROM delivery_schema.delivery_assignment WHERE id = ?",
             (rs, rowNum) -> mapAssignment(rs), assignmentId).stream().findFirst();

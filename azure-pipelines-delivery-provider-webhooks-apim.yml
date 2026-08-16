@@ -56,7 +56,7 @@ steps:
       }
 
       validate_route '${{ parameters.enableBorzoRoute }}' 'Borzo' '/api/v1/webhooks/delivery/borzo'
-      validate_route '${{ parameters.enableShiprocketRoute }}' 'Shiprocket' '/api/v1/webhooks/delivery/shiprocket'
+      validate_route '${{ parameters.enableShiprocketRoute }}' 'Provider P4' '/api/v1/webhooks/delivery/p4'
       validate_route '${{ parameters.enableDelhiveryRoute }}' 'Delhivery' '/api/v1/webhooks/delivery/delhivery'
     displayName: Validate webhook backend routes before APIM exposure
 
@@ -180,7 +180,7 @@ steps:
               fi
             fi
 
-            local policy_xml policy_body
+            local policy_xml policy_body saved_policy
             policy_xml="<policies><inbound><base /></inbound><backend><base /></backend><outbound><base /><set-header name=\"Cache-Control\" exists-action=\"override\"><value>no-store</value></set-header><set-header name=\"X-Content-Type-Options\" exists-action=\"override\"><value>nosniff</value></set-header></outbound><on-error><base /></on-error></policies>"
             policy_body="$(jq -n --arg value "$policy_xml" '{properties:{format:"rawxml",value:$value}}')"
             az rest --method put \
@@ -195,7 +195,7 @@ steps:
           }
 
           ensure_operation "$BORZO" 'Borzo' 'delivery-webhook-borzo' '/borzo'
-          ensure_operation "$SHIPROCKET" 'Shiprocket' 'delivery-webhook-shiprocket' '/shiprocket'
+          ensure_operation "$SHIPROCKET" 'Provider P4' 'delivery-webhook-provider-p4' '/p4'
           ensure_operation "$DELHIVERY" 'Delhivery' 'delivery-webhook-delhivery' '/delhivery'
 
           GATEWAY_URL="$(az apim show -g "$RG" -n "$APIM" --query gatewayUrl -o tsv --only-show-errors)"
@@ -206,7 +206,7 @@ steps:
           echo "API ID: $API_ID"
           echo "Backend: $BACKEND_ROOT"
           [[ "$BORZO" == 'true' ]] && echo "Borzo callback: ${GATEWAY_URL}/${API_PATH}/borzo"
-          [[ "$SHIPROCKET" == 'true' ]] && echo "Shiprocket callback: ${GATEWAY_URL}/${API_PATH}/shiprocket"
+          [[ "$SHIPROCKET" == 'true' ]] && echo "Provider P4 callback: ${GATEWAY_URL}/${API_PATH}/p4"
           [[ "$DELHIVERY" == 'true' ]] && echo "Delhivery callback: ${GATEWAY_URL}/${API_PATH}/delhivery"
           echo 'Raw webhook body transformation: DISABLED'
           echo '============================================================'

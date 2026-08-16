@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Provider-neutral contract used by the Integration Service delivery worker.
@@ -59,6 +60,11 @@ public interface DeliveryProviderAdapter {
         UNSUPPORTED
     }
 
+    /**
+     * Canonical delivery stop. The original free-form address remains authoritative for providers
+     * that accept it directly (for example Borzo). The additive structured fields preserve address
+     * data that Order Service already owns and are required by providers such as Shiprocket.
+     */
     record Stop(
         String address,
         String contactName,
@@ -67,7 +73,51 @@ public interface DeliveryProviderAdapter {
         BigDecimal longitude,
         OffsetDateTime requiredStart,
         OffsetDateTime requiredFinish,
-        String note
+        String note,
+        String addressLine1,
+        String addressLine2,
+        String landmark,
+        String area,
+        String city,
+        String state,
+        String postalCode,
+        String country
+    ) {
+        public Stop(String address,
+                    String contactName,
+                    String contactPhone,
+                    BigDecimal latitude,
+                    BigDecimal longitude,
+                    OffsetDateTime requiredStart,
+                    OffsetDateTime requiredFinish,
+                    String note) {
+            this(
+                address,
+                contactName,
+                contactPhone,
+                latitude,
+                longitude,
+                requiredStart,
+                requiredFinish,
+                note,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            );
+        }
+    }
+
+    record ShipmentItem(
+        UUID menuItemId,
+        String itemName,
+        BigDecimal unitPrice,
+        int quantity,
+        BigDecimal lineTotal
     ) {}
 
     record QuoteRequest(
@@ -75,13 +125,45 @@ public interface DeliveryProviderAdapter {
         int totalWeightGrams,
         boolean thermoboxRequired,
         Stop pickup,
-        Stop dropoff
-    ) {}
+        Stop dropoff,
+        List<ShipmentItem> items,
+        BigDecimal declaredGoodsValue,
+        String paymentCollectionMode,
+        UUID pickupLocationReference
+    ) {
+        public QuoteRequest(String matter,
+                            int totalWeightGrams,
+                            boolean thermoboxRequired,
+                            Stop pickup,
+                            Stop dropoff) {
+            this(
+                matter,
+                totalWeightGrams,
+                thermoboxRequired,
+                pickup,
+                dropoff,
+                List.of(),
+                null,
+                null,
+                null
+            );
+        }
+    }
 
+    /**
+     * The selected quote is carried into create so an adapter can deterministically book the same
+     * courier/service option that delivery intelligence ranked. The legacy constructor remains for
+     * existing providers that do not require quote metadata during create.
+     */
     record CreateDeliveryRequest(
         String clientReference,
-        QuoteRequest quoteRequest
-    ) {}
+        QuoteRequest quoteRequest,
+        ProviderQuote selectedQuote
+    ) {
+        public CreateDeliveryRequest(String clientReference, QuoteRequest quoteRequest) {
+            this(clientReference, quoteRequest, null);
+        }
+    }
 
     record ProviderQuote(
         String providerId,
@@ -186,9 +268,7 @@ public interface DeliveryProviderAdapter {
             }
         }
 
-        public static CreateReconciliationResult found(
-            ProviderDelivery delivery
-        ) {
+        public static CreateReconciliationResult found(ProviderDelivery delivery) {
             return new CreateReconciliationResult(
                 CreateReconciliationStatus.FOUND,
                 Objects.requireNonNull(delivery, "delivery is required"),
@@ -239,30 +319,13 @@ public interface DeliveryProviderAdapter {
                 "Provider create outcome is uncertain and requires reconciliation",
                 cause
             );
-            this.providerId = Objects.requireNonNull(
-                providerId,
-                "providerId is required"
-            );
-            this.clientReference = Objects.requireNonNull(
-                clientReference,
-                "clientReference is required"
-            );
-            this.attemptedAt = Objects.requireNonNull(
-                attemptedAt,
-                "attemptedAt is required"
-            );
+            this.providerId = Objects.requireNonNull(providerId, "providerId is required");
+            this.clientReference = Objects.requireNonNull(clientReference, "clientReference is required");
+            this.attemptedAt = Objects.requireNonNull(attemptedAt, "attemptedAt is required");
         }
 
-        public String providerId() {
-            return providerId;
-        }
-
-        public String clientReference() {
-            return clientReference;
-        }
-
-        public Instant attemptedAt() {
-            return attemptedAt;
-        }
+        public String providerId() { return providerId; }
+        public String clientReference() { return clientReference; }
+        public Instant attemptedAt() { return attemptedAt; }
     }
 }

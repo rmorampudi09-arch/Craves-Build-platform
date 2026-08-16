@@ -27,15 +27,30 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateRec
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class DeliveryProviderRouterTest {
+    private final ExecutorService quoteExecutor = Executors.newFixedThreadPool(2);
+    private final Clock clock = Clock.fixed(
+        Instant.parse("2026-08-16T00:00:00Z"),
+        ZoneOffset.UTC
+    );
+
+    @AfterEach
+    void shutDownQuoteExecutor() {
+        quoteExecutor.shutdownNow();
+    }
 
     @Test
     void usesIntelligentSelectionThenFallsBackWithoutRequoting() {
@@ -56,7 +71,8 @@ class DeliveryProviderRouterTest {
         when(intelligence.assign(any())).thenReturn(assignment);
 
         DeliveryProviderRouter router = new DeliveryProviderRouter(
-            List.of(fast, backup), catalog, intelligence, assignments, properties
+            List.of(fast, backup), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
         );
 
         var result = router.route(command());
@@ -79,8 +95,6 @@ class DeliveryProviderRouterTest {
         assertThat(request.getValue().area()).isEqualTo("Madhapur");
         assertThat(request.getValue().distanceKm()).isEqualTo(4.6);
         assertThat(request.getValue().candidates()).hasSize(2);
-
-        router.closeExecutor();
     }
 
     @Test
@@ -91,14 +105,13 @@ class DeliveryProviderRouterTest {
         when(catalog.activeProviderIds()).thenReturn(List.of());
 
         DeliveryProviderRouter router = new DeliveryProviderRouter(
-            List.of(), catalog, intelligence, assignments, new DeliveryCommandProperties()
+            List.of(), catalog, intelligence, assignments, new DeliveryCommandProperties(),
+            quoteExecutor, clock
         );
 
         assertThatThrownBy(() -> router.route(command()))
             .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class)
             .hasMessage("No active delivery providers are configured");
-
-        router.closeExecutor();
     }
 
     @Test
@@ -118,7 +131,8 @@ class DeliveryProviderRouterTest {
         when(intelligence.assign(any())).thenReturn(assignment);
 
         DeliveryProviderRouter router = new DeliveryProviderRouter(
-            List.of(fast, backup), catalog, intelligence, assignments, properties
+            List.of(fast, backup), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
         );
 
         assertThatThrownBy(() -> router.route(command()))
@@ -127,7 +141,6 @@ class DeliveryProviderRouterTest {
 
         assertThat(fast.createCalls()).isEqualTo(1);
         assertThat(backup.createCalls()).isZero();
-        router.closeExecutor();
     }
 
     @Test
@@ -146,11 +159,12 @@ class DeliveryProviderRouterTest {
         AssignmentResponse assignment = singleProviderAssignment(
             message.chefSubOrderId(), message.orderId(), borzoCandidateId
         );
-        when(assignments.findByChefSubOrderId(message.chefSubOrderId()))
+        when(assignments.findResponseByChefSubOrderId(message.chefSubOrderId()))
             .thenReturn(Optional.of(assignment));
 
         DeliveryProviderRouter router = new DeliveryProviderRouter(
-            List.of(borzo), catalog, intelligence, assignments, properties
+            List.of(borzo), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
         );
         CommandRecord pending = new CommandRecord(
             message.commandId(),
@@ -177,7 +191,6 @@ class DeliveryProviderRouterTest {
         assertThat(result.executedCandidateId()).isEqualTo(borzoCandidateId);
         assertThat(borzo.createCalls()).isZero();
         assertThat(borzo.reconcileCalls()).isEqualTo(1);
-        router.closeExecutor();
     }
 
     private static AssignmentResponse assignment(UUID fastCandidateId, UUID backupCandidateId) {
@@ -296,7 +309,7 @@ class DeliveryProviderRouterTest {
         public ProviderQuote quote(QuoteRequest request) {
             quoteCalls.incrementAndGet();
             JsonNode metadata = objectMapper.createObjectNode()
-                .put("provider_quote_id", providerId + "-quote")
+                .put("quote_id", providerId + "-quote")
                 .put("pickup_eta_minutes", pickupEtaMinutes);
             return new ProviderQuote(
                 providerId, true, fee, fee, "INR", List.of(), metadata, Instant.now()

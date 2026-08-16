@@ -3,9 +3,11 @@ package in.craves.order.event;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryItemData;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryRequestData;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryStopData;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -18,6 +20,7 @@ public class ChefAcceptedOrderEventFactory {
     public static final String EVENT_TYPE = "CHEF_ACCEPTED_ORDER";
     public static final String EVENT_VERSION = "1.0";
     public static final String SOURCE = "order-service";
+    private static final String DEFAULT_COUNTRY = "India";
 
     private final ObjectMapper objectMapper;
 
@@ -53,7 +56,15 @@ public class ChefAcceptedOrderEventFactory {
             source.pickupLongitude(),
             null,
             null,
-            null
+            null,
+            source.pickupAddressLine1(),
+            source.pickupAddressLine2(),
+            source.pickupLandmark(),
+            source.pickupAreaName(),
+            source.pickupCity(),
+            source.pickupState(),
+            source.pickupPostalCode(),
+            DEFAULT_COUNTRY
         );
 
         DeliveryStopData dropoff = new DeliveryStopData(
@@ -72,8 +83,28 @@ public class ChefAcceptedOrderEventFactory {
             source.dropoffLongitude(),
             null,
             null,
-            null
+            null,
+            source.dropoffAddressLine1(),
+            source.dropoffAddressLine2(),
+            source.dropoffLandmark(),
+            source.dropoffAreaName(),
+            source.dropoffCity(),
+            source.dropoffState(),
+            source.dropoffPostalCode(),
+            DEFAULT_COUNTRY
         );
+
+        List<DeliveryItemData> items = source.deliveryItems() == null
+            ? List.of()
+            : source.deliveryItems().stream()
+                .map(item -> new DeliveryItemData(
+                    item.menuItemId(),
+                    item.itemName(),
+                    item.unitPrice(),
+                    item.quantity(),
+                    item.lineTotal()
+                ))
+                .toList();
 
         ChefAcceptedOrderEventData data = new ChefAcceptedOrderEventData(
             source.checkoutId(),
@@ -86,7 +117,11 @@ public class ChefAcceptedOrderEventFactory {
                 source.totalPackageWeightGrams(),
                 source.thermoboxRequired(),
                 pickup,
-                dropoff
+                dropoff,
+                items,
+                source.declaredGoodsValue(),
+                source.paymentCollectionMode(),
+                source.pickupLocationReference()
             )
         );
 

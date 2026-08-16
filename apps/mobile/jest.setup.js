@@ -77,6 +77,13 @@ jest.mock('@react-native-firebase/auth', () => ({
   signOut: jest.fn(),
 }));
 
+jest.mock('react-native-razorpay', () => ({
+  __esModule: true,
+  default: {
+    open: jest.fn(() => Promise.reject(new Error('Razorpay native checkout is mocked in Jest.'))),
+  },
+}));
+
 jest.mock('react-native-reanimated', () => {
   const Reanimated = require('react-native-reanimated/mock');
   Reanimated.default.call = () => {};

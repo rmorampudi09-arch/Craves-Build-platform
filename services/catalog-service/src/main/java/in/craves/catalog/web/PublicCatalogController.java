@@ -4,13 +4,17 @@ import in.craves.catalog.service.CatalogService;
 import in.craves.catalog.service.KitchenPickupLocationService;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemResponse;
+import in.craves.catalog.web.ApiDtos.PickupLocationResolveRequest;
 import in.craves.catalog.web.ApiDtos.PublicKitchenDetailResponse;
 import in.craves.catalog.web.ApiDtos.PublicKitchenDiscoveryResponse;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -47,6 +51,15 @@ public class PublicCatalogController {
             kitchen,
             pickupLocationService.currentPickupLocationId(kitchenId)
         );
+    }
+
+    @PostMapping("/kitchens/{kitchenId}/pickup-location/resolve")
+    public Map<String, UUID> resolvePickupLocation(
+        @PathVariable UUID kitchenId,
+        @RequestBody PickupLocationResolveRequest request
+    ) {
+        catalogService.getPublicKitchen(kitchenId);
+        return Map.of("pickupLocationId", pickupLocationService.resolveSnapshot(kitchenId, request));
     }
 
     @GetMapping("/kitchens/{kitchenId}/menu-items")

@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Image,
   Pressable,
   RefreshControl,
@@ -45,8 +46,13 @@ import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeade
 import {checkoutApi} from '../../checkout/api/checkoutApi';
 import type {CheckoutSession} from '../../checkout/domain/checkoutTypes';
 import {paymentHandoffCoordinator} from '../../payment/domain/paymentHandoffCoordinator';
+import {
+  clearPersistedPaymentIfTerminal,
+  recoverPersistedPaymentAttempt,
+} from '../../payment/domain/persistedPaymentRecovery';
 import {paymentRecoveryCoordinator} from '../../payment/domain/paymentRecoveryCoordinator';
 import {razorpayGateway} from '../../payment/gateway/razorpayGateway';
+import {pendingPaymentAttemptStore} from '../../payment/storage/pendingPaymentAttemptStore';
 import {
   checkCartServiceability,
   type CartDiscoveryDish,
@@ -300,7 +306,11 @@ export function CustomerCartScreen() {
     Record<string, CartDiscoveryDish>
   >({});
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [paymentAttemptLocked, setPaymentAttemptLocked] = useState(false);
   const activeCheckoutRef = useRef<CheckoutSession | null>(null);
+  const persistedRecoveryRef = useRef<
+    ReturnType<typeof recoverPersistedPaymentAttempt> | null
+  >(null);
 
   const sections = useMemo(
     () => groupCartItemsByKitchen(model?.items ?? []),
@@ -317,9 +327,77 @@ export function CustomerCartScreen() {
     if (outcome.status === 'FAILED') setRefreshError(outcome.error.message);
   }, [dispatch]);
 
+  const reconcileInterruptedPayment = useCallback(
+    (showSuccessAlert: boolean) => {
+      if (persistedRecoveryRef.current) return persistedRecoveryRef.current;
+
+      const task = (async () => {
+        try {
+          const recovery = await recoverPersistedPaymentAttempt();
+          if (!recovery) {
+            setPaymentAttemptLocked(false);
+            return null;
+          }
+
+          const active =
+            recovery.outcome === 'PENDING' || recovery.outcome === 'RECONCILING';
+          setPaymentAttemptLocked(active);
+          activeCheckoutRef.current =
+            recovery.outcome === 'PENDING' ? recovery.checkout : null;
+
+          if (recovery.outcome === 'SUCCEEDED') {
+            if (showSuccessAlert) {
+              Alert.alert(
+                'Payment successful',
+                'Your interrupted payment was verified by Craves.',
+              );
+            }
+            await refreshCart();
+          } else if (recovery.outcome === 'RECONCILING') {
+            setInteractionError(
+              'A previous payment is still being reconciled by Craves. Do not pay again until confirmation finishes.',
+            );
+          } else if (recovery.outcome === 'PENDING') {
+            setInteractionError(
+              'A previous payment is still pending. Craves will reuse the same payment if you continue.',
+            );
+          }
+          return recovery;
+        } catch (error) {
+          setPaymentAttemptLocked(true);
+          setInteractionError(
+            'Craves could not verify your previous payment yet. Do not start another payment until verification succeeds.',
+          );
+          throw error;
+        }
+      })();
+
+      persistedRecoveryRef.current = task;
+      void task
+        .finally(() => {
+          if (persistedRecoveryRef.current === task) persistedRecoveryRef.current = null;
+        })
+        .catch(() => undefined);
+      return task;
+    },
+    [refreshCart],
+  );
+
   useEffect(() => {
     if (snapshotStatus === 'UNINITIALIZED') refreshCart();
   }, [refreshCart, snapshotStatus]);
+
+  useEffect(() => {
+    if (!checkoutBusy) {
+      void reconcileInterruptedPayment(true).catch(() => undefined);
+    }
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active' && !checkoutBusy) {
+        void reconcileInterruptedPayment(true).catch(() => undefined);
+      }
+    });
+    return () => subscription.remove();
+  }, [checkoutBusy, reconcileInterruptedPayment]);
 
   const verifyServiceability = useCallback(async () => {
     const location = header.selectedLocation;
@@ -370,6 +448,12 @@ export function CustomerCartScreen() {
 
   const updateQuantity = useCallback(
     (item: CartScreenItem, targetQuantity: number) => {
+      if (paymentAttemptLocked) {
+        setInteractionError(
+          'Your current payment must finish or fail before the cart can be changed.',
+        );
+        return;
+      }
       const interaction = resolveCartQuantityInteraction(targetQuantity);
       setInteractionError(null);
       activeCheckoutRef.current = null;
@@ -399,7 +483,7 @@ export function CustomerCartScreen() {
         setCartItemQuantity({lineId: item.lineId, quantity: interaction.quantity}),
       ).then(handleMutationOutcome);
     },
-    [dispatch, handleMutationOutcome],
+    [dispatch, handleMutationOutcome, paymentAttemptLocked],
   );
 
   const handleCheckout = useCallback(async () => {
@@ -408,6 +492,29 @@ export function CustomerCartScreen() {
     setInteractionError(null);
     setCheckoutBusy(true);
     try {
+      const interrupted = await reconcileInterruptedPayment(false);
+      if (interrupted?.outcome === 'SUCCEEDED') return;
+      if (interrupted?.outcome === 'RECONCILING') {
+        setInteractionError(
+          'Your previous payment is still being reconciled. Do not create another payment yet.',
+        );
+        return;
+      }
+
+      let checkout =
+        interrupted?.outcome === 'PENDING'
+          ? interrupted.checkout
+          : activeCheckoutRef.current;
+      if (
+        checkout?.status === 'PAYMENT_PENDING' &&
+        checkout.deliveryAddressId !== addressId
+      ) {
+        setInteractionError(
+          'A payment is still pending for your previous delivery address. Keep that address until the payment finishes or fails.',
+        );
+        return;
+      }
+
       const serviceable = await verifyServiceability();
       if (!serviceable) {
         setInteractionError(
@@ -416,27 +523,29 @@ export function CustomerCartScreen() {
         return;
       }
 
-      let checkout = activeCheckoutRef.current;
-      if (
-        !checkout ||
-        checkout.deliveryAddressId !== addressId ||
-        checkout.status !== 'PAYMENT_PENDING'
-      ) {
+      if (!checkout || checkout.status !== 'PAYMENT_PENDING') {
         checkout = await checkoutApi.createSession({deliveryAddressId: addressId});
         activeCheckoutRef.current = checkout;
       }
 
       const handoff = await paymentHandoffCoordinator.prepare(checkout);
+      await pendingPaymentAttemptStore.save(handoff);
+      setPaymentAttemptLocked(true);
+
       try {
         const proof = await razorpayGateway.open(handoff, {phone: authPhone});
         const recovery = await paymentRecoveryCoordinator.recover(handoff, {
           kind: 'RAZORPAY_SUCCESS',
           proof,
         });
-        activeCheckoutRef.current = recovery.checkout;
+        await clearPersistedPaymentIfTerminal(recovery);
+        activeCheckoutRef.current =
+          recovery.outcome === 'PENDING' ? recovery.checkout : null;
+        setPaymentAttemptLocked(
+          recovery.outcome === 'PENDING' || recovery.outcome === 'RECONCILING',
+        );
 
         if (recovery.outcome === 'SUCCEEDED') {
-          activeCheckoutRef.current = null;
           Alert.alert('Payment successful', 'Your payment was verified by Craves.');
           await refreshCart();
           return;
@@ -449,20 +558,24 @@ export function CustomerCartScreen() {
         }
         if (recovery.outcome === 'PENDING') {
           setInteractionError(
-            'Payment is still pending. Do not start another payment until Craves finishes checking this one.',
+            'Payment is still pending. Continuing later will reuse this payment instead of creating a duplicate.',
           );
           return;
         }
-        setInteractionError('Payment did not complete. You can safely retry this payment.');
+        setInteractionError('Payment did not complete. You can safely try checkout again.');
       } catch (paymentError) {
         const recovery = await paymentRecoveryCoordinator
           .recover(handoff, {kind: 'PROVIDER_ERROR'})
           .catch(() => null);
 
         if (recovery) {
-          activeCheckoutRef.current = recovery.checkout;
+          await clearPersistedPaymentIfTerminal(recovery);
+          activeCheckoutRef.current =
+            recovery.outcome === 'PENDING' ? recovery.checkout : null;
+          setPaymentAttemptLocked(
+            recovery.outcome === 'PENDING' || recovery.outcome === 'RECONCILING',
+          );
           if (recovery.outcome === 'SUCCEEDED') {
-            activeCheckoutRef.current = null;
             Alert.alert('Payment successful', 'Your payment was verified by Craves.');
             await refreshCart();
             return;
@@ -476,6 +589,18 @@ export function CustomerCartScreen() {
             );
             return;
           }
+          if (recovery.outcome === 'PENDING') {
+            setInteractionError(
+              'Payment is still pending. Try checkout again to reopen the same payment safely.',
+            );
+            return;
+          }
+        } else {
+          setPaymentAttemptLocked(true);
+          setInteractionError(
+            'The payment provider closed, but Craves could not verify the payment state. Do not pay again until verification succeeds.',
+          );
+          return;
         }
         throw paymentError;
       }
@@ -491,6 +616,7 @@ export function CustomerCartScreen() {
     checkoutBusy,
     header.selectedLocation,
     model,
+    reconcileInterruptedPayment,
     refreshCart,
     verifyServiceability,
   ]);
@@ -534,7 +660,15 @@ export function CustomerCartScreen() {
           address={header.selectedLocation?.displayName ?? null}
           serviceability={serviceability}
           estimatedMinutes={estimatedMinutes}
-          onChange={() => setLocationSelectorVisible(true)}
+          onChange={() => {
+            if (paymentAttemptLocked) {
+              setInteractionError(
+                'Finish the current payment before changing the delivery address.',
+              );
+              return;
+            }
+            setLocationSelectorVisible(true);
+          }}
         />
       ) : null}
     </View>
@@ -562,7 +696,11 @@ export function CustomerCartScreen() {
     <CartLineCard
       item={item}
       discovery={discoveryByMenuItem[item.menuItemId]}
-      pending={mutations[`line:${item.lineId}`]?.status === 'PENDING'}
+      pending={
+        paymentAttemptLocked ||
+        checkoutBusy ||
+        mutations[`line:${item.lineId}`]?.status === 'PENDING'
+      }
       onDecrease={line => updateQuantity(line, line.quantity - 1)}
       onIncrease={line => updateQuantity(line, line.quantity + 1)}
       onRemove={line => updateQuantity(line, 0)}
@@ -634,7 +772,15 @@ export function CustomerCartScreen() {
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-cart">
       <CustomerHeader
         variant="compact"
-        onPressLocation={() => setLocationSelectorVisible(true)}
+        onPressLocation={() => {
+          if (paymentAttemptLocked) {
+            setInteractionError(
+              'Finish the current payment before changing the delivery address.',
+            );
+            return;
+          }
+          setLocationSelectorVisible(true);
+        }}
         onPressNotifications={() => header.refreshNotifications()}
       />
       <View style={styles.content}>{content}</View>

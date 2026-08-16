@@ -8,13 +8,19 @@ on:
       - .github/workflows/mobile-p127-readiness.yml
       - .github/scripts/mobile-p127-readiness-check.mjs
       - .github/scripts/mobile-p127-dependency-audit-check.mjs
+      - apps/mobile/tsconfig.json
       - apps/mobile/android/**
       - apps/mobile/ios/CravesMobile/Info.plist
       - apps/mobile/jest.setup.js
+      - apps/mobile/__tests__/App.test.tsx
+      - apps/mobile/__tests__/e2e/**
       - apps/mobile/__tests__/LifecyclePrimitives.test.tsx
+      - apps/mobile/src/app/navigation/**
       - apps/mobile/src/features/cart/screens/CustomerCartScreen.tsx
+      - apps/mobile/src/features/customerAddresses/**
       - apps/mobile/src/features/payment/**
       - apps/mobile/src/types/react-native-razorpay.d.ts
+      - apps/mobile/scripts/p119-apim-contract-coverage-check.mjs
       - apps/mobile/package.json
       - apps/mobile/package-lock.json
       - api/apim-api/contracts/mobile-production.v1.json
@@ -75,10 +81,10 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          changed="$(git diff --name-only 8a2444cde508ea2fb20cb9822397e55c29bd8c5f...HEAD)"
+          changed="$(git diff --name-only 0f4e166edaba8c115853441bf362f2226da87903...HEAD)"
           printf '%s\n' "$changed"
           if printf '%s\n' "$changed" | grep -E '^(services/|openapi/|infra/|apps/api/)'; then
-            echo 'Backend/APIM/infrastructure source changed during the mobile rebuild.' >&2
+            echo 'Backend/APIM/infrastructure source changed since the pre-Razorpay mobile baseline.' >&2
             exit 1
           fi
           echo 'Backend/APIM/infrastructure source guard passed.'

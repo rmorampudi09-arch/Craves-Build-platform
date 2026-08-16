@@ -1,16 +1,13 @@
-const mockRazorpayOpen = jest.fn();
+jest.mock('react-native-razorpay', () => ({
+  __esModule: true,
+  default: {open: jest.fn()},
+}));
 
-jest.mock(
-  'react-native-razorpay',
-  () => ({
-    __esModule: true,
-    default: {open: mockRazorpayOpen},
-  }),
-  {virtual: true},
-);
-
+import RazorpayCheckout from 'react-native-razorpay';
 import {openRazorpayCheckout} from './gateway/razorpayGateway';
 import type {RazorpayHostedHandoff} from './domain/paymentTypes';
+
+const mockRazorpayOpen = RazorpayCheckout.open as jest.Mock;
 
 const handoff: RazorpayHostedHandoff = {
   provider: 'RAZORPAY',

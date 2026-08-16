@@ -2,6 +2,11 @@
  * @format
  */
 
+jest.mock('react-native-razorpay', () => ({
+  __esModule: true,
+  default: {open: jest.fn()},
+}));
+
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import App from '../App';

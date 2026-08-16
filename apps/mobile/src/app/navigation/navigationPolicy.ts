@@ -61,7 +61,6 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'CustomerDishIngredients',
   'CustomerKitchenProfile',
   'CustomerKitchenDishes',
-  'CustomerCart',
   'CustomerSettings',
   'CustomerSettingsNotifications',
   'CustomerSettingsPrivacySecurity',
@@ -82,10 +81,19 @@ const IMMERSIVE_POLICY: RouteChromePolicy = {
   immersive: true,
 };
 
+const CUSTOMER_CART_POLICY: RouteChromePolicy = {
+  bottomNavigationVisible: true,
+  viewCartEligible: false,
+  immersive: false,
+};
+
 export function resolveRouteChromePolicy(
   domain: NavigationDomain,
   routeName?: RegisteredRouteName,
 ): RouteChromePolicy {
+  if (routeName === 'CustomerCart') {
+    return CUSTOMER_CART_POLICY;
+  }
   if (routeName && CURRENT_IMMERSIVE_ROUTES.has(routeName)) {
     return IMMERSIVE_POLICY;
   }

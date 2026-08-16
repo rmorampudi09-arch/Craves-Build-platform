@@ -17,7 +17,7 @@ class ShiprocketWebhookControllerTest {
     void validationProbeReturnsHttp200WithoutEventIdentity() {
         ShiprocketWebhookService webhookService = Mockito.mock(ShiprocketWebhookService.class);
         when(webhookService.accept(null, null))
-            .thenReturn(ShiprocketWebhookService.WebhookReceipt.validationProbe());
+            .thenReturn(ShiprocketWebhookService.WebhookReceipt.forValidationProbe());
 
         ShiprocketWebhookController controller = new ShiprocketWebhookController(webhookService);
         ResponseEntity<Map<String, Object>> response = controller.accept(null, null);

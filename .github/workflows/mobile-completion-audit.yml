@@ -6,7 +6,7 @@ on:
     paths: [.github/workflows/mobile-completion-audit.yml]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   audit:
@@ -15,17 +15,60 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: mobile-ui-rebuild-from-scratch
+          fetch-depth: 0
       - name: Audit stale and disabled mobile actions
         run: |
-          echo '=== UNAVAILABLE / NOT AVAILABLE / TODO ==='
-          rg -n -i "unavailable right now|not available yet|not available right now|not implemented|TODO|placeholder" apps/mobile/src || true
-          echo '=== REORDER ==='
-          rg -n -i "reorder|order again" apps/mobile/src || true
-          echo '=== NOTIFICATION HANDLERS ==='
-          rg -n "onPressNotifications|notification.*unavailable|bell" apps/mobile/src || true
-          echo '=== SUPPORT ==='
-          rg -n -i "support|help center|contact us" apps/mobile/src/features/customerSettings apps/mobile/src/features/customerSupport apps/mobile/src/features/customerProfile || true
-          echo '=== DISABLED PRESSABLE/BUTTON (CONTEXT) ==='
-          rg -n "disabled=\{|disabled=|accessibilityState=.*disabled" apps/mobile/src/features | head -n 250 || true
-          echo '=== ICON BACKGROUND WHITE ==='
-          rg -n -U "(icon|Icon|badge|Badge|headerButton|Action)[A-Za-z0-9_]*:\s*\{[^}]{0,240}backgroundColor:\s*colors\.white" apps/mobile/src || true
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('apps/mobile/src')
+          files = sorted([*root.rglob('*.ts'), *root.rglob('*.tsx')])
+          groups = {
+              'STALE_COPY': re.compile(r'unavailable right now|not available yet|not available right now|not implemented|placeholder|\bTODO\b', re.I),
+              'REORDER': re.compile(r'reorder|order again', re.I),
+              'NOTIFICATIONS': re.compile(r'onPressNotifications|notification.*unavailable|\bbell\b', re.I),
+              'SUPPORT': re.compile(r'support|help center|contact us', re.I),
+              'DISABLED': re.compile(r'disabled=|accessibilityState=.*disabled', re.I),
+          }
+          for label, pattern in groups.items():
+              print(f'=== {label} ===')
+              count = 0
+              for path in files:
+                  try:
+                      lines = path.read_text().splitlines()
+                  except UnicodeDecodeError:
+                      continue
+                  for number, line in enumerate(lines, 1):
+                      if pattern.search(line):
+                          print(f'{path}:{number}:{line.strip()}')
+                          count += 1
+                          if label == 'DISABLED' and count >= 250:
+                              break
+                  if label == 'DISABLED' and count >= 250:
+                      break
+              print(f'COUNT={count}')
+
+          print('=== ICON_CONTAINERS_USING_WHITE ===')
+          style_name = re.compile(r'^\s*([A-Za-z0-9_]*(?:icon|Icon|badge|Badge|headerButton|Action)[A-Za-z0-9_]*)\s*:\s*\{')
+          white = re.compile(r'backgroundColor:\s*colors\.white')
+          count = 0
+          for path in files:
+              lines = path.read_text().splitlines()
+              for i, line in enumerate(lines):
+                  match = style_name.search(line)
+                  if not match:
+                      continue
+                  block = '\n'.join(lines[i:i+18])
+                  if white.search(block):
+                      print(f'{path}:{i+1}:{match.group(1)}')
+                      count += 1
+          print(f'COUNT={count}')
+          PY
+      - name: Remove audit workflow
+        run: |
+          git config user.name 'craves-mobile-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm .github/workflows/mobile-completion-audit.yml
+          git commit -m 'Remove temporary mobile completion audit'
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

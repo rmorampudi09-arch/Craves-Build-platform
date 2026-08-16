@@ -9,7 +9,13 @@ import type {
   CheckoutStatus,
 } from '../domain/checkoutTypes';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const RESOURCE_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// PostgreSQL accepts the full UUID text shape. Craves intentionally seeds
+// backend-owned policy identifiers such as 20000000-0000-0000-0000-000000000001,
+// whose version/variant nibbles are not RFC-generated resource UUIDs.
+const POSTGRES_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 const DECIMAL_PATTERN = /^\d+(?:\.\d+)?$/;
 const CHECKOUT_STATUSES = new Set<CheckoutStatus>([
@@ -47,9 +53,14 @@ function boundedString(value: unknown, maxLength: number): string | null {
   return normalized && normalized.length <= maxLength ? normalized : null;
 }
 
-function parseUuid(value: unknown): string | null {
+function parseResourceUuid(value: unknown): string | null {
   const candidate = boundedString(value, 64);
-  return candidate && UUID_PATTERN.test(candidate) ? candidate : null;
+  return candidate && RESOURCE_UUID_PATTERN.test(candidate) ? candidate : null;
+}
+
+function parsePostgresUuid(value: unknown): string | null {
+  const candidate = boundedString(value, 64);
+  return candidate && POSTGRES_UUID_PATTERN.test(candidate) ? candidate : null;
 }
 
 function parseCurrency(value: unknown): string | null {
@@ -104,8 +115,8 @@ function parseOrderReference(
     return null;
   }
 
-  const orderId = parseUuid(order.id);
-  const checkoutId = parseUuid(order.checkoutId);
+  const orderId = parseResourceUuid(order.id);
+  const checkoutId = parseResourceUuid(order.checkoutId);
   const status = parseOrderStatus(order.status);
   if (!orderId || checkoutId !== expectedCheckoutId || !status) {
     return null;
@@ -120,12 +131,12 @@ export function parseCheckoutSession(value: unknown): CheckoutSession | null {
     return null;
   }
 
-  const checkoutId = parseUuid(checkout.id);
-  const customerIdentityId = parseUuid(checkout.customerIdentityId);
+  const checkoutId = parseResourceUuid(checkout.id);
+  const customerIdentityId = parseResourceUuid(checkout.customerIdentityId);
   const status = parseCheckoutStatus(checkout.status);
   const currency = parseCurrency(checkout.currency);
-  const chargePolicyId = parseUuid(checkout.chargePolicyId);
-  const deliveryAddressId = parseUuid(checkout.deliveryAddressId);
+  const chargePolicyId = parsePostgresUuid(checkout.chargePolicyId);
+  const deliveryAddressId = parseResourceUuid(checkout.deliveryAddressId);
   const createdAt = parseTimestamp(checkout.createdAt);
 
   if (
@@ -176,7 +187,7 @@ export function parseCheckoutSession(value: unknown): CheckoutSession | null {
 }
 
 function requireUuid(value: string, code: string, message: string): void {
-  if (!UUID_PATTERN.test(value)) {
+  if (!RESOURCE_UUID_PATTERN.test(value)) {
     throw new AppApiError(code, message);
   }
 }

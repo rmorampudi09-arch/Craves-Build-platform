@@ -5,8 +5,8 @@ import {paymentApi} from '../api/paymentApi';
 import {samePaymentMoney} from './paymentHandoffCoordinator';
 import type {
   PaymentOrderSnapshot,
+  PaymentRecoveryReference,
   PaymentVerificationResult,
-  RazorpayHostedHandoff,
   RazorpayVerificationProof,
 } from './paymentTypes';
 
@@ -22,6 +22,7 @@ export const paymentRecoveryCapability = {
   manualStatusRetrySupported: true,
   automaticVerificationPollingSupported: false,
   nativeRazorpayCallbackAdapterSupported: true,
+  persistedProcessRecoverySupported: true,
   newPaymentAttemptAfterTerminalFailureSupported: false,
   blockerCodes: [PAYMENT_TERMINAL_RETRY_CONTRACT_BLOCKER],
 } as const;
@@ -64,7 +65,7 @@ interface ActivePaymentRecovery {
 }
 
 function validateRazorpaySuccess(
-  handoff: RazorpayHostedHandoff,
+  handoff: PaymentRecoveryReference,
   proof: RazorpayVerificationProof,
 ): void {
   if (proof.providerOrderId !== handoff.providerOrderId) {
@@ -85,7 +86,7 @@ function snapshotAsVerification(snapshot: PaymentOrderSnapshot): PaymentVerifica
 }
 
 function deriveOutcome(
-  handoff: RazorpayHostedHandoff,
+  handoff: PaymentRecoveryReference,
   verification: PaymentVerificationResult,
   checkout: CheckoutSession,
 ): PaymentRecoveryOutcome {
@@ -108,7 +109,7 @@ function deriveOutcome(
 }
 
 export function reconcilePaymentRecovery(
-  handoff: RazorpayHostedHandoff,
+  handoff: PaymentRecoveryReference,
   trigger: PaymentRecoveryTrigger,
   verification: PaymentVerificationResult,
   checkout: CheckoutSession,
@@ -126,7 +127,7 @@ export function reconcilePaymentRecovery(
 
 export interface PaymentRecoveryCoordinator {
   recover(
-    handoff: RazorpayHostedHandoff,
+    handoff: PaymentRecoveryReference,
     trigger: PaymentRecoveryTrigger,
   ): Promise<PaymentRecoveryResult>;
 }

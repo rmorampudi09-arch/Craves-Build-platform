@@ -7,8 +7,8 @@ export {
   CustomerSettingsAboutScreen,
   CustomerSettingsShareScreen,
   CustomerSettingsReferralScreen,
-  CustomerSettingsSupportScreen,
   CustomerSettingsLegalScreen,
 } from './CustomerSettingsLegacyScreens';
 
 export {CustomerMealPlansScreen as CustomerSettingsSubscriptionScreen} from '../../customerSubscription/screens/CustomerMealPlansScreen';
+export {CustomerHelpSupportScreen as CustomerSettingsSupportScreen} from '../../customerSupport/screens/CustomerHelpSupportScreen';

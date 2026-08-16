@@ -44,6 +44,12 @@ import {
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
+import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
+import {
+  isFavoriteMenuItem,
+  useCustomerFavoritesQuery,
+  useToggleCustomerFavorite,
+} from '../../favorites/query/customerFavoritesQueries';
 import type {CustomerKitchenMenuItemSummary} from '../api/kitchenProfileApi';
 import {
   formatCustomerKitchenJoinedLabel,
@@ -94,6 +100,10 @@ interface MenuPreviewCardProps {
   item: CustomerKitchenMenuItemSummary;
   cartLine: CartLine | null;
   busy: boolean;
+  favorite: boolean;
+  favoritePending: boolean;
+  favoriteDisabled: boolean;
+  onFavoriteToggle: (menuItemId: string, favorite: boolean) => void;
   onOpen: (menuItemId: string) => void;
   onIncrease: (item: CustomerKitchenMenuItemSummary) => void;
   onDecrease: (line: CartLine) => void;
@@ -103,6 +113,10 @@ function MenuPreviewCard({
   item,
   cartLine,
   busy,
+  favorite,
+  favoritePending,
+  favoriteDisabled,
+  onFavoriteToggle,
   onOpen,
   onIncrease,
   onDecrease,
@@ -147,6 +161,14 @@ function MenuPreviewCard({
           </Text>
         </View>
       </Pressable>
+      <CustomerFavoriteHeartButton
+        favorite={favorite}
+        pending={favoritePending}
+        disabled={favoriteDisabled}
+        itemLabel={item.itemName}
+        onToggle={() => onFavoriteToggle(item.id, favorite)}
+        style={styles.favoriteButton}
+      />
 
       {cartLine ? (
         <View style={styles.quantityControl}>
@@ -202,6 +224,8 @@ export function CustomerKitchenProfileScreen() {
   const route = useRoute<KitchenProfileRoute>();
   const dispatch = useAppDispatch();
   const profileQuery = useCustomerKitchenProfileQuery(route.params.kitchenId);
+  const favorites = useCustomerFavoritesQuery();
+  const toggleFavorite = useToggleCustomerFavorite();
   const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const cartMutations = useAppSelector(state => state.cart.mutations);
   const scrollRef = useRef<ScrollView>(null);
@@ -310,6 +334,18 @@ export function CustomerKitchenProfileScreen() {
           );
     handleCartOutcome(outcome);
   };
+
+  const handleFavoriteToggle = useCallback(
+    (menuItemId: string, favorite: boolean) => {
+      if (favorites.sessionRequired || toggleFavorite.isPending) return;
+      setInteractionNotice(null);
+      toggleFavorite.mutate(
+        {menuItemId, favorite},
+        {onError: () => setInteractionNotice('Favorite could not be updated. Please try again.')},
+      );
+    },
+    [favorites.sessionRequired, toggleFavorite],
+  );
 
   const openDish = useCallback(
     (menuItemId: string) => {
@@ -448,14 +484,6 @@ export function CustomerKitchenProfileScreen() {
                 style={({pressed}) => [styles.primaryAction, pressed && styles.pressed]}>
                 <Text style={styles.primaryActionText}>Menu</Text>
               </Pressable>
-              <Pressable
-                accessibilityHint="Saving kitchens is not available yet"
-                accessibilityLabel="Save kitchen"
-                accessibilityRole="button"
-                onPress={() => setInteractionNotice('Saving kitchens is not available yet.')}
-                style={({pressed}) => [styles.secondaryAction, pressed && styles.pressed]}>
-                <Text style={styles.secondaryActionText}>Save</Text>
-              </Pressable>
             </View>
           </View>
 
@@ -574,6 +602,10 @@ export function CustomerKitchenProfileScreen() {
                         item={item}
                         cartLine={cartLine}
                         busy={busy}
+                        favorite={isFavoriteMenuItem(favorites.data, item.id)}
+                        favoritePending={toggleFavorite.isPending}
+                        favoriteDisabled={favorites.sessionRequired}
+                        onFavoriteToggle={handleFavoriteToggle}
                         onOpen={openDish}
                         onIncrease={increaseOrAdd}
                         onDecrease={decreaseQuantity}
@@ -855,6 +887,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
   },
+  favoriteButton: {position: 'absolute', top: spacing.sm, right: spacing.sm, zIndex: 4},
   menuCard: {
     borderWidth: 1,
     borderColor: colors.border,

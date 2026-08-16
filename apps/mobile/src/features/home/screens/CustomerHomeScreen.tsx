@@ -50,6 +50,12 @@ import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmpt
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
+import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
+import {
+  isFavoriteMenuItem,
+  useCustomerFavoritesQuery,
+  useToggleCustomerFavorite,
+} from '../../favorites/query/customerFavoritesQueries';
 import {applyHomeDiscoveryFilters} from '../../discoveryFilters/discoveryFilterApplication';
 import {
   discoveryFilterActions,
@@ -95,6 +101,10 @@ interface DishCardProps {
   adding: boolean;
   cartLine: CartLine | null;
   changingQuantity: boolean;
+  favorite: boolean;
+  favoritePending: boolean;
+  favoriteDisabled: boolean;
+  onFavoriteToggle: (dishId: string, favorite: boolean) => void;
   onAdd: (dishId: string) => void;
   onDecrease: (line: CartLine) => void;
   onIncrease: (line: CartLine) => void;
@@ -106,6 +116,10 @@ function DishCard({
   adding,
   cartLine,
   changingQuantity,
+  favorite,
+  favoritePending,
+  favoriteDisabled,
+  onFavoriteToggle,
   onAdd,
   onDecrease,
   onIncrease,
@@ -150,6 +164,14 @@ function DishCard({
           </View>
         )}
       </Pressable>
+      <CustomerFavoriteHeartButton
+        favorite={favorite}
+        pending={favoritePending}
+        disabled={favoriteDisabled}
+        itemLabel={dish.itemName}
+        onToggle={() => onFavoriteToggle(dish.id, favorite)}
+        style={styles.favoriteButton}
+      />
 
       <View style={styles.dishBody}>
         <Pressable
@@ -256,6 +278,8 @@ export function CustomerHomeScreen() {
   const cartMutations = useAppSelector(state => state.cart.mutations);
   const storedFilters = useAppSelector(state => state.discoveryFilters.sessions.HOME);
   const header = useCustomerHeaderState();
+  const favorites = useCustomerFavoritesQuery();
+  const toggleFavorite = useToggleCustomerFavorite();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const insets = useSafeAreaInsets();
   const {width, fontScale} = useWindowDimensions();
@@ -394,6 +418,18 @@ export function CustomerHomeScreen() {
       setMutationError(outcome.error.message);
     }
   };
+
+  const handleFavoriteToggle = useCallback(
+    (menuItemId: string, favorite: boolean) => {
+      if (favorites.sessionRequired || toggleFavorite.isPending) return;
+      setMutationError(null);
+      toggleFavorite.mutate(
+        {menuItemId, favorite},
+        {onError: () => setMutationError('Favorite could not be updated. Please try again.')},
+      );
+    },
+    [favorites.sessionRequired, toggleFavorite],
+  );
 
   const handleAdd = (dishId: string) => {
     setMutationError(null);
@@ -546,9 +582,7 @@ export function CustomerHomeScreen() {
     <View>
       <CustomerHeader
         onPressLocation={() => setLocationSelectorVisible(true)}
-        onPressNotifications={() => {
-          header.refreshNotifications();
-        }}
+        onPressNotifications={header.openNotifications}
       />
       <View style={[styles.heroCopy, compactLayout && styles.heroCopyCompact]}>
         <Text style={styles.greeting}>{greeting}</Text>
@@ -660,6 +694,10 @@ export function CustomerHomeScreen() {
                   ? cartMutations[`line:${cartLine.lineId}`]?.status === 'PENDING'
                   : false
               }
+              favorite={isFavoriteMenuItem(favorites.data, item.id)}
+              favoritePending={toggleFavorite.isPending}
+              favoriteDisabled={favorites.sessionRequired}
+              onFavoriteToggle={handleFavoriteToggle}
               onAdd={handleAdd}
               onDecrease={handleDecrease}
               onIncrease={handleIncrease}
@@ -797,6 +835,7 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
   },
+  favoriteButton: {position: 'absolute', top: spacing.sm, right: spacing.sm, zIndex: 4},
   dishBody: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,

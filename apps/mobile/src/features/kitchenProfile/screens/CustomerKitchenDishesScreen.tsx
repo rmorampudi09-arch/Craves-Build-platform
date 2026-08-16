@@ -45,6 +45,12 @@ import {
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
+import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
+import {
+  isFavoriteMenuItem,
+  useCustomerFavoritesQuery,
+  useToggleCustomerFavorite,
+} from '../../favorites/query/customerFavoritesQueries';
 import type {CustomerKitchenMenuItemSummary} from '../api/kitchenProfileApi';
 import {
   ALL_KITCHEN_DISHES_CATEGORY,
@@ -87,6 +93,10 @@ interface KitchenDishRowProps {
   item: CustomerKitchenMenuItemSummary;
   cartLine: CartLine | null;
   busy: boolean;
+  favorite: boolean;
+  favoritePending: boolean;
+  favoriteDisabled: boolean;
+  onFavoriteToggle: (menuItemId: string, favorite: boolean) => void;
   onOpen: (menuItemId: string) => void;
   onIncrease: (item: CustomerKitchenMenuItemSummary) => void;
   onDecrease: (line: CartLine) => void;
@@ -96,6 +106,10 @@ function KitchenDishRow({
   item,
   cartLine,
   busy,
+  favorite,
+  favoritePending,
+  favoriteDisabled,
+  onFavoriteToggle,
   onOpen,
   onIncrease,
   onDecrease,
@@ -148,6 +162,14 @@ function KitchenDishRow({
           </Text>
         </View>
       </Pressable>
+      <CustomerFavoriteHeartButton
+        favorite={favorite}
+        pending={favoritePending}
+        disabled={favoriteDisabled}
+        itemLabel={item.itemName}
+        onToggle={() => onFavoriteToggle(item.id, favorite)}
+        style={styles.favoriteButton}
+      />
 
       {cartLine ? (
         <View style={styles.quantityControl}>
@@ -209,6 +231,8 @@ export function CustomerKitchenDishesScreen() {
   const route = useRoute<KitchenDishesRoute>();
   const dispatch = useAppDispatch();
   const profileQuery = useCustomerKitchenProfileQuery(route.params.kitchenId);
+  const favorites = useCustomerFavoritesQuery();
+  const toggleFavorite = useToggleCustomerFavorite();
   const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const cartMutations = useAppSelector(state => state.cart.mutations);
   const listRef = useRef<FlatList<CustomerKitchenMenuItemSummary>>(null);
@@ -345,6 +369,18 @@ export function CustomerKitchenDishesScreen() {
     [dispatch, handleCartOutcome],
   );
 
+  const handleFavoriteToggle = useCallback(
+    (menuItemId: string, favorite: boolean) => {
+      if (favorites.sessionRequired || toggleFavorite.isPending) return;
+      setInteractionNotice(null);
+      toggleFavorite.mutate(
+        {menuItemId, favorite},
+        {onError: () => setInteractionNotice('Favorite could not be updated. Please try again.')},
+      );
+    },
+    [favorites.sessionRequired, toggleFavorite],
+  );
+
   const openDish = useCallback(
     (menuItemId: string) => {
       navigation.navigate('CustomerDishDetail', {menuItemId});
@@ -377,6 +413,10 @@ export function CustomerKitchenDishesScreen() {
           item={item}
           cartLine={cartLine}
           busy={busy}
+          favorite={isFavoriteMenuItem(favorites.data, item.id)}
+          favoritePending={toggleFavorite.isPending}
+          favoriteDisabled={favorites.sessionRequired}
+          onFavoriteToggle={handleFavoriteToggle}
           onOpen={openDish}
           onIncrease={increaseOrAdd}
           onDecrease={decreaseQuantity}
@@ -389,6 +429,10 @@ export function CustomerKitchenDishesScreen() {
       decreaseQuantity,
       increaseOrAdd,
       openDish,
+      favorites.data,
+      favorites.sessionRequired,
+      handleFavoriteToggle,
+      toggleFavorite.isPending,
       revalidatingItemId,
     ],
   );
@@ -672,6 +716,7 @@ const styles = StyleSheet.create({
   separator: {
     height: spacing.sm,
   },
+  favoriteButton: {position: 'absolute', top: spacing.sm, right: spacing.sm, zIndex: 4},
   dishCard: {
     borderRadius: radius.lg,
     borderWidth: 1,

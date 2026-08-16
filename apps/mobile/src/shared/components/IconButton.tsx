@@ -73,9 +73,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.iconSurface,
   },
   surface: {
-    backgroundColor: colors.surfaceBase,
+    backgroundColor: colors.iconSurface,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
   },

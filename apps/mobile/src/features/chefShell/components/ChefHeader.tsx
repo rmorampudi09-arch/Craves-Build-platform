@@ -288,6 +288,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.iconSurface,
   },
   menuGlyph: {width: 22, gap: 4},
   menuLine: {height: 2, borderRadius: radius.pill, backgroundColor: colors.espressoBrown},

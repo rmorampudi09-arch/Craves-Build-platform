@@ -1,34 +1,34 @@
-export const CUSTOMER_FAVORITES_CONTRACT_BLOCKER_REASON =
-  'favorites-api-contract-not-available' as const;
-
 export type CustomerFavoritesServerCapability =
+  | 'list'
+  | 'add-favorite'
+  | 'remove-favorite'
+  | 'favorite-membership-sync'
   | 'paginated-list'
   | 'search'
-  | 'category-counts'
-  | 'remove-favorite'
-  | 'favorite-membership-sync';
+  | 'category-counts';
 
-export type CustomerFavoritesCapabilityAvailability = 'unsupported';
+export type CustomerFavoritesCapabilityAvailability = 'supported' | 'unsupported';
 
 export const CUSTOMER_FAVORITES_SERVER_CAPABILITIES = {
+  list: 'supported',
+  'add-favorite': 'supported',
+  'remove-favorite': 'supported',
+  'favorite-membership-sync': 'supported',
   'paginated-list': 'unsupported',
   search: 'unsupported',
   'category-counts': 'unsupported',
-  'remove-favorite': 'unsupported',
-  'favorite-membership-sync': 'unsupported',
-} as const satisfies Record<
-  CustomerFavoritesServerCapability,
-  CustomerFavoritesCapabilityAvailability
->;
+} as const satisfies Record<CustomerFavoritesServerCapability, CustomerFavoritesCapabilityAvailability>;
+
+export const CUSTOMER_FAVORITES_CONTRACT_BLOCKER_REASON =
+  'favorites-advanced-query-contract-partial' as const;
 
 export const CUSTOMER_FAVORITES_CONTRACT_BLOCKER_MESSAGE =
-  'The current approved mobile/backend contract does not expose a Favorites list, search/count contract, or favorite mutation operation. The mobile app must not fabricate saved dishes or use local-only favorite state as account truth.';
+  'Favorites are persisted by the server for the signed-in customer. Pagination, server-side search, and category-count aggregation are not exposed yet, so those advanced query capabilities remain fail-closed.';
 
 export const CUSTOMER_FAVORITES_USER_BLOCKER_COPY =
-  'Favorites syncing is not available in this build yet. We will not show a local-only list that could differ from your account. Your existing saved data is not changed by this screen.';
+  'Your saved dishes sync with your Craves account. Search and category counts are applied only when authoritative data is available.';
 
 export function getUnsupportedCustomerFavoritesCapabilities(): CustomerFavoritesServerCapability[] {
-  return Object.keys(
-    CUSTOMER_FAVORITES_SERVER_CAPABILITIES,
-  ) as CustomerFavoritesServerCapability[];
+  return (Object.keys(CUSTOMER_FAVORITES_SERVER_CAPABILITIES) as CustomerFavoritesServerCapability[])
+    .filter(capability => CUSTOMER_FAVORITES_SERVER_CAPABILITIES[capability] === 'unsupported');
 }

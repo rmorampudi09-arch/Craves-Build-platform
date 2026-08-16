@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Linking, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
@@ -54,6 +54,16 @@ interface DisabledSupportActionProps {
   testID: string;
 }
 
+function EnabledSupportAction({icon, title, detail, testID, onPress}: DisabledSupportActionProps & {onPress: () => void}) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityHint={detail} onPress={onPress} testID={testID} style={({pressed}) => [styles.supportAction, pressed && styles.actionPressed]}>
+      <View style={styles.actionIcon}><Icon name={icon} size={iconSize.sm} color={colors.flameRed} /></View>
+      <View style={styles.actionCopy}><Text style={styles.actionTitle}>{title}</Text><Text style={styles.actionDetail}>{detail}</Text></View>
+      <Icon name="chevron-right" size={iconSize.xs} color={colors.espressoBrown} />
+    </Pressable>
+  );
+}
+
 function DisabledSupportAction({icon, title, detail, testID}: DisabledSupportActionProps) {
   return (
     <Pressable
@@ -82,6 +92,15 @@ export function CustomerHelpSupportScreen() {
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
+  const [supportMessage, setSupportMessage] = useState<string | null>(null);
+  const emailSupport = async () => {
+    setSupportMessage(null);
+    try {
+      await Linking.openURL('mailto:support@craves.in?subject=Craves%20support');
+    } catch {
+      setSupportMessage('Email could not be opened. Contact support@craves.in from your email app.');
+    }
+  };
 
   const configuration = customerSupportIntegrationBoundary.supportConfiguration;
   const helpContent = customerSupportIntegrationBoundary.helpContent;
@@ -170,11 +189,12 @@ export function CustomerHelpSupportScreen() {
                 testID={`support-blocker-${configuration.blocker}-call`}
               />
               <View style={styles.divider} />
-              <DisabledSupportAction
+              <EnabledSupportAction
                 icon="mail"
                 title="Email Us"
-                detail="Email support is temporarily unavailable."
-                testID={`support-blocker-${configuration.blocker}-email`}
+                detail="Email support@craves.in for order, payment, refund, account or delivery help."
+                testID="support-email"
+                onPress={() => { emailSupport().catch(() => undefined); }}
               />
               <View style={styles.divider} />
               <DisabledSupportAction
@@ -192,10 +212,11 @@ export function CustomerHelpSupportScreen() {
               />
             </View>
 
+            {supportMessage ? <Text accessibilityLiveRegion="assertive" style={styles.supportMessage}>{supportMessage}</Text> : null}
             <View style={styles.reassuranceBanner}>
               <Icon name="shield" size={iconSize.sm} color={colors.espressoBrown} />
               <Text style={styles.reassuranceText}>
-                Support contact options are temporarily unavailable. Nothing will be sent unless you choose an enabled support option.
+                Email support is available. Phone, chat and ticket actions remain disabled until Craves publishes their production configuration.
               </Text>
             </View>
           </View>
@@ -211,6 +232,8 @@ export function CustomerHelpSupportScreen() {
 }
 
 const styles = StyleSheet.create({
+  actionPressed: {opacity: 0.7},
+  supportMessage: {color: colors.error, fontSize: typography.small},
   root: {
     flex: 1,
     backgroundColor: colors.white,

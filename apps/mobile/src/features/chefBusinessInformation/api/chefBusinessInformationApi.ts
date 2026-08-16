@@ -10,7 +10,14 @@ export type ChefBusinessVerificationStatus =
   | 'APPROVED'
   | 'REJECTED';
 
-export type ChefBusinessDocumentType = 'AADHAAR_CARD' | 'PAN_CARD';
+/** Mirrors the authoritative KycDocumentType enum in User-Chef Service. */
+export type ChefBusinessDocumentType =
+  | 'APPLICANT_PHOTO'
+  | 'GOVERNMENT_ID_FRONT'
+  | 'GOVERNMENT_ID_BACK'
+  | 'TAX_ID_CARD'
+  | 'AADHAAR_CARD'
+  | 'PAN_CARD';
 export type ChefBusinessDocumentStatus = 'UPLOADED';
 export type ChefBusinessDocumentContentType =
   | 'application/pdf'
@@ -30,12 +37,8 @@ export interface ChefBusinessProofDocument {
 
 /**
  * Safe mobile view of the exact User-Chef Service application response used as
- * the current verification/document source for Guide Reference 49.
- *
- * Storage locators (blobContainer/blobName), identity IDs and reviewer identity
- * IDs are validated when present in the server contract but deliberately not
- * exposed through this mobile model because the Business Information surface
- * does not require them.
+ * the current verification/document source for Business Information.
+ * Storage locators and reviewer identity IDs are validated but never exposed.
  */
 export interface ChefBusinessVerificationRecord {
   id: string | null;
@@ -65,6 +68,10 @@ const VERIFICATION_STATUSES = new Set<ChefBusinessVerificationStatus>([
   'REJECTED',
 ]);
 const DOCUMENT_TYPES = new Set<ChefBusinessDocumentType>([
+  'APPLICANT_PHOTO',
+  'GOVERNMENT_ID_FRONT',
+  'GOVERNMENT_ID_BACK',
+  'TAX_ID_CARD',
   'AADHAAR_CARD',
   'PAN_CARD',
 ]);
@@ -82,9 +89,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function requiredString(value: unknown, maxLength: number): string | null {
-  if (typeof value !== 'string') {
-    return null;
-  }
+  if (typeof value !== 'string') return null;
   const normalized = value.trim();
   return normalized && normalized.length <= maxLength ? normalized : null;
 }
@@ -93,20 +98,14 @@ function optionalString(
   value: unknown,
   maxLength: number,
 ): string | null | undefined {
-  if (value == null || value === '') {
-    return null;
-  }
-  if (typeof value !== 'string') {
-    return undefined;
-  }
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string') return undefined;
   const normalized = value.trim();
   return normalized.length <= maxLength ? normalized || null : undefined;
 }
 
 function timestamp(value: unknown): string | null | undefined {
-  if (value == null || value === '') {
-    return null;
-  }
+  if (value == null || value === '') return null;
   return typeof value === 'string' && !Number.isNaN(Date.parse(value))
     ? value
     : undefined;
@@ -117,9 +116,7 @@ function coordinate(
   minimum: number,
   maximum: number,
 ): number | null | undefined {
-  if (value == null || value === '') {
-    return null;
-  }
+  if (value == null || value === '') return null;
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum
     ? parsed
@@ -130,9 +127,7 @@ export function parseChefBusinessProofDocument(
   value: unknown,
 ): ChefBusinessProofDocument | null {
   const raw = asRecord(value);
-  if (!raw) {
-    return null;
-  }
+  if (!raw) return null;
 
   const id = requiredString(raw.id, 64);
   const documentType = requiredString(
@@ -191,9 +186,7 @@ export function parseChefBusinessVerificationRecord(
   value: unknown,
 ): ChefBusinessVerificationRecord | null {
   const raw = asRecord(value);
-  if (!raw) {
-    return null;
-  }
+  if (!raw) return null;
 
   const identityId = requiredString(raw.identityId, 64);
   const reviewedByIdentityId = optionalString(raw.reviewedByIdentityId, 64);
@@ -249,9 +242,7 @@ export function parseChefBusinessVerificationRecord(
   }
 
   const documents = raw.documents.map(parseChefBusinessProofDocument);
-  if (documents.some(document => document === null)) {
-    return null;
-  }
+  if (documents.some(document => document === null)) return null;
 
   const typedDocuments = documents as ChefBusinessProofDocument[];
   if (

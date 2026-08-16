@@ -18,6 +18,10 @@ export interface RemoveCartItemCommand {
   lineId: string;
 }
 
+export interface ReorderCartCommand {
+  orderId: string;
+}
+
 export type CartMutationOutcome =
   | {status: 'APPLIED'; snapshot: CartSnapshot}
   | {status: 'SKIPPED_DUPLICATE'}
@@ -121,6 +125,25 @@ function markMutationSucceeded(
   dispatch(cartActions.snapshotAccepted(snapshot));
   dispatch(cartActions.mutationSucceeded({key, requestId}));
   return {status: 'APPLIED', snapshot};
+}
+
+export function reorderCart(command: ReorderCartCommand): CartMutationThunk {
+  return async (dispatch, getState) => {
+    const key = 'cart:reorder';
+    if (isPendingMutation(getState(), key)) {
+      return {status: 'SKIPPED_DUPLICATE'};
+    }
+    const requestId = nextRequestId();
+    dispatch(cartActions.mutationStarted({key, requestId, scope: 'CART'}));
+    return enqueueMutation(async () => {
+      try {
+        const snapshot = await cartApi.reorder(command.orderId);
+        return markMutationSucceeded(dispatch, key, requestId, snapshot);
+      } catch (error) {
+        return markMutationFailed(dispatch, key, requestId, toAppApiError(error));
+      }
+    });
+  };
 }
 
 export function addCartItem(command: AddCartItemCommand): CartMutationThunk {

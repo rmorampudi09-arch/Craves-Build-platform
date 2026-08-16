@@ -168,4 +168,10 @@ export const cartApi = {
     requireUuid(cartItemId, 'CART_INVALID_LINE_ID', 'This cart item could not be removed.');
     return requireCartSnapshot(await httpClient.delete<unknown>(`/api/v1/cart/items/${cartItemId}`));
   },
+  async reorder(orderId: string): Promise<CartSnapshot> {
+    requireUuid(orderId, 'CART_INVALID_ORDER_ID', 'This order could not be reordered.');
+    return requireCartSnapshot(
+      await httpClient.post<unknown>(`/api/v1/cart/reorder/${encodeURIComponent(orderId)}`),
+    );
+  },
 };

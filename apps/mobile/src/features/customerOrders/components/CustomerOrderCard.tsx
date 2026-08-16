@@ -12,7 +12,6 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
-import {getProductionCustomerOrderMutationDecision} from '../domain/customerOrderActionEligibility';
 import type {CustomerOrder} from '../domain/customerOrderTypes';
 import {
   formatCustomerOrderCreatedAt,
@@ -25,12 +24,8 @@ import {
 
 interface Props {
   order: CustomerOrder;
-}
-
-interface UnavailableActionProps {
-  label: string;
-  primary?: boolean;
-  hint: string;
+  onReorder: (order: CustomerOrder) => void;
+  reorderPending?: boolean;
 }
 
 interface CardActionProps {
@@ -57,29 +52,6 @@ function CardAction({label, primary = false, onPress}: CardActionProps) {
   );
 }
 
-function UnavailableAction({
-  label,
-  primary = false,
-  hint,
-}: UnavailableActionProps) {
-  return (
-    <View
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={hint}
-      accessibilityState={{disabled: true}}
-      style={[
-        styles.action,
-        styles.unavailableAction,
-        primary && styles.actionPrimary,
-      ]}>
-      <Text style={[styles.actionText, primary && styles.actionTextPrimary]}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 function statusToneStyle(tone: CustomerOrderStatusTone) {
   switch (tone) {
     case 'success':
@@ -95,7 +67,7 @@ function statusToneStyle(tone: CustomerOrderStatusTone) {
   }
 }
 
-export function CustomerOrderCard({order}: Props) {
+export function CustomerOrderCard({order, onReorder, reorderPending = false}: Props) {
   const navigation = useNavigation<NavigationProp<CustomerOrdersStackParamList>>();
   const onPressDetails = () =>
     navigation.navigate('CustomerOrderDetail', {orderId: order.id});
@@ -103,11 +75,6 @@ export function CustomerOrderCard({order}: Props) {
     navigation.navigate('CustomerOrderTracking', {orderId: order.id});
   const status = getCustomerOrderStatusPresentation(order.status);
   const referenceAction = getCustomerOrderReferenceAction(order.status);
-  const reorderDecision = getProductionCustomerOrderMutationDecision('REORDER');
-  const reorderUnavailableMessage =
-    reorderDecision.kind === 'BLOCKED'
-      ? reorderDecision.message
-      : 'Reorder requires authoritative revalidation before cart mutation.';
   const visibleItems = order.items.slice(0, 3);
   const remainingItems = Math.max(order.items.length - visibleItems.length, 0);
 
@@ -172,16 +139,13 @@ export function CustomerOrderCard({order}: Props) {
           <CardAction label="Track Order" primary onPress={onPressTrack} />
         ) : null}
         {referenceAction === 'REORDER' ? (
-          <UnavailableAction
-            label="Reorder"
-            hint={reorderUnavailableMessage}
+          <CardAction
+            label={reorderPending ? 'Preparing…' : 'Reorder'}
+            onPress={() => { if (!reorderPending) onReorder(order); }}
           />
         ) : null}
       </View>
 
-      {referenceAction === 'REORDER' ? (
-        <Text style={styles.capabilityNote}>{reorderUnavailableMessage}</Text>
-      ) : null}
     </Pressable>
   );
 }
@@ -317,7 +281,6 @@ const styles = StyleSheet.create({
   },
   actionPrimary: {backgroundColor: colors.flameRed},
   actionPressed: {opacity: 0.82},
-  unavailableAction: {opacity: 0.48},
   actionText: {
     color: colors.flameRed,
     fontSize: typography.small,
@@ -325,10 +288,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   actionTextPrimary: {color: colors.white},
-  capabilityNote: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    textAlign: 'center',
-  },
 });

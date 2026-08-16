@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -14,6 +15,7 @@ import {useNavigation} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
+import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import type {
   CustomerOrdersStackParamList,
   CustomerTabParamList,
@@ -33,6 +35,7 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {reorderCart} from '../../cart/state/cartMutations';
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
 import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
@@ -80,11 +83,14 @@ export function CustomerOrdersScreen() {
         'CustomerOrdersRoot'
       >
     >();
+  const dispatch = useAppDispatch();
+  const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const bottomNavScroll = useCustomerBottomNavScroll();
   const ordersQuery = useCustomerOrdersQuery();
   const [selectedTab, setSelectedTab] = useState<CustomerOrdersTabKey>('ALL');
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [capabilityMessage, setCapabilityMessage] = useState<string | null>(null);
+  const [reorderingOrderId, setReorderingOrderId] = useState<string | null>(null);
   const listRef = useRef<FlatList<CustomerOrder>>(null);
   const offsetsRef = useRef<Record<CustomerOrdersTabKey, number>>({...initialOffsets});
 
@@ -128,6 +134,39 @@ export function CustomerOrdersScreen() {
     setCapabilityMessage(null);
     ordersQuery.refetch();
   }, [ordersQuery]);
+
+  const reorder = useCallback(async (order: CustomerOrder) => {
+    if (reorderingOrderId) return;
+    setCapabilityMessage(null);
+    setReorderingOrderId(order.id);
+    try {
+      const outcome = await dispatch(reorderCart({orderId: order.id}));
+      if (outcome.status === 'FAILED') {
+        setCapabilityMessage(outcome.error.message);
+        return;
+      }
+      if (outcome.status === 'APPLIED') {
+        navigation.navigate('CustomerCart');
+      }
+    } finally {
+      setReorderingOrderId(null);
+    }
+  }, [dispatch, navigation, reorderingOrderId]);
+
+  const confirmReorder = useCallback((order: CustomerOrder) => {
+    if (cartSnapshot?.lines.length) {
+      Alert.alert(
+        'Replace current cart?',
+        'Reorder will replace your current cart after Craves verifies every dish is still available.',
+        [
+          {text: 'Keep cart', style: 'cancel'},
+          {text: 'Replace & reorder', style: 'destructive', onPress: () => { reorder(order).catch(() => undefined); }},
+        ],
+      );
+      return;
+    }
+    reorder(order).catch(() => undefined);
+  }, [cartSnapshot?.lines.length, reorder]);
 
   const openDiscovery = useCallback(() => {
     const parent = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
@@ -271,7 +310,13 @@ export function CustomerOrdersScreen() {
         ref={listRef}
         data={visibleOrders}
         keyExtractor={order => order.id}
-        renderItem={({item}) => <CustomerOrderCard order={item} />}
+        renderItem={({item}) => (
+          <CustomerOrderCard
+            order={item}
+            onReorder={confirmReorder}
+            reorderPending={reorderingOrderId === item.id}
+          />
+        )}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={emptyState}
         contentContainerStyle={styles.content}

@@ -10,8 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 public final class ApiDtos {
-    private ApiDtos() {
-    }
+    private ApiDtos() {}
 
     public enum KitchenStatus { DRAFT, ACTIVE, INACTIVE, SUSPENDED }
     public enum MenuItemStatus { DRAFT, ACTIVE, INACTIVE }
@@ -19,66 +18,25 @@ public final class ApiDtos {
     public enum SpiceLevel { MILD, MEDIUM, SPICY }
 
     public record KitchenProfileRequest(
-        @NotBlank String kitchenName,
-        String displayName,
-        String description,
-        String phoneNumber,
-        String email,
-        @NotBlank String addressLine1,
-        String addressLine2,
-        String landmark,
-        String areaName,
-        @NotBlank String city,
-        @NotBlank String state,
-        String postalCode,
-        BigDecimal latitude,
-        BigDecimal longitude,
-        KitchenStatus status
+        @NotBlank String kitchenName, String displayName, String description, String phoneNumber,
+        String email, @NotBlank String addressLine1, String addressLine2, String landmark,
+        String areaName, @NotBlank String city, @NotBlank String state, String postalCode,
+        BigDecimal latitude, BigDecimal longitude, KitchenStatus status
     ) {}
 
     public record KitchenProfileResponse(
-        UUID id,
-        UUID identityId,
-        String kitchenName,
-        String displayName,
-        String description,
-        String phoneNumber,
-        String email,
-        String addressLine1,
-        String addressLine2,
-        String landmark,
-        String areaName,
-        String city,
-        String state,
-        String postalCode,
-        BigDecimal latitude,
-        BigDecimal longitude,
-        KitchenStatus status,
-        Instant createdAt,
-        Instant updatedAt
+        UUID id, UUID identityId, String kitchenName, String displayName, String description,
+        String phoneNumber, String email, String addressLine1, String addressLine2, String landmark,
+        String areaName, String city, String state, String postalCode, BigDecimal latitude,
+        BigDecimal longitude, KitchenStatus status, Instant createdAt, Instant updatedAt
     ) {}
 
     public record PublicKitchenDetailResponse(
-        UUID id,
-        UUID currentPickupLocationId,
-        UUID identityId,
-        String kitchenName,
-        String displayName,
-        String description,
-        String phoneNumber,
-        String email,
-        String addressLine1,
-        String addressLine2,
-        String landmark,
-        String areaName,
-        String city,
-        String state,
-        String postalCode,
-        BigDecimal latitude,
-        BigDecimal longitude,
-        KitchenStatus status,
-        Instant createdAt,
-        Instant updatedAt
+        UUID id, UUID currentPickupLocationId, UUID identityId, String kitchenName,
+        String displayName, String description, String phoneNumber, String email,
+        String addressLine1, String addressLine2, String landmark, String areaName, String city,
+        String state, String postalCode, BigDecimal latitude, BigDecimal longitude,
+        KitchenStatus status, Instant createdAt, Instant updatedAt
     ) {
         public static PublicKitchenDetailResponse from(KitchenProfileResponse kitchen, UUID pickupLocationId) {
             return new PublicKitchenDetailResponse(
@@ -91,80 +49,55 @@ public final class ApiDtos {
         }
     }
 
+    public record PickupLocationResolveRequest(
+        String kitchenName,
+        String contactPhone,
+        String contactEmail,
+        String addressLine1,
+        String addressLine2,
+        String landmark,
+        String areaName,
+        String city,
+        String state,
+        String postalCode,
+        BigDecimal latitude,
+        BigDecimal longitude
+    ) {}
+
     public record MenuItemRequest(
-        @NotBlank String itemName,
-        String description,
-        @NotBlank String category,
-        @NotNull FoodType foodType,
-        @NotNull @DecimalMin("0.01") BigDecimal price,
-        String currency,
-        @Positive Integer servesCount,
-        @Positive Integer preparationTimeMinutes,
-        SpiceLevel spiceLevel,
-        @NotNull @Positive Integer unitPackageWeightGrams,
-        @NotNull Boolean thermoboxRequired,
-        Boolean available,
-        MenuItemStatus status
+        @NotBlank String itemName, String description, @NotBlank String category,
+        @NotNull FoodType foodType, @NotNull @DecimalMin("0.01") BigDecimal price, String currency,
+        @Positive Integer servesCount, @Positive Integer preparationTimeMinutes, SpiceLevel spiceLevel,
+        @NotNull @Positive Integer unitPackageWeightGrams, @NotNull Boolean thermoboxRequired,
+        Boolean available, MenuItemStatus status
     ) {}
 
     public record MenuItemResponse(
-        UUID id,
-        UUID kitchenId,
-        String itemName,
-        String description,
-        String category,
-        FoodType foodType,
-        BigDecimal price,
-        String currency,
-        Integer servesCount,
-        Integer preparationTimeMinutes,
-        SpiceLevel spiceLevel,
-        Integer unitPackageWeightGrams,
-        Boolean thermoboxRequired,
-        boolean available,
-        MenuItemStatus status,
-        List<MenuItemImageResponse> images,
-        Instant createdAt,
-        Instant updatedAt
+        UUID id, UUID kitchenId, String itemName, String description, String category, FoodType foodType,
+        BigDecimal price, String currency, Integer servesCount, Integer preparationTimeMinutes,
+        SpiceLevel spiceLevel, Integer unitPackageWeightGrams, Boolean thermoboxRequired,
+        boolean available, MenuItemStatus status, List<MenuItemImageResponse> images,
+        Instant createdAt, Instant updatedAt
     ) {}
 
     public record MenuItemImageResponse(
-        UUID id,
-        UUID menuItemId,
-        String blobContainer,
-        String blobName,
-        String contentType,
-        long fileSizeBytes,
-        String publicUrl,
-        int sortOrder,
-        boolean primary,
-        Instant createdAt
+        UUID id, UUID menuItemId, String blobContainer, String blobName, String contentType,
+        long fileSizeBytes, String publicUrl, int sortOrder, boolean primary, Instant createdAt
     ) {}
 
     public record AvailabilityRequest(boolean available, String reason) {}
 
     public record PublicKitchenSummaryResponse(
-        UUID id,
-        String kitchenName,
-        String displayName,
-        String description,
-        String areaName,
-        String city,
-        BigDecimal latitude,
-        BigDecimal longitude,
-        BigDecimal distanceKm,
+        UUID id, String kitchenName, String displayName, String description, String areaName,
+        String city, BigDecimal latitude, BigDecimal longitude, BigDecimal distanceKm,
         long activeMenuItemCount
     ) {}
 
     public record DiscoveryRadiusResponse(
-        String city,
-        String areaName,
-        BigDecimal radiusKm,
-        BigDecimal maxRadiusKm
+        String city, String areaName, BigDecimal radiusKm, BigDecimal maxRadiusKm
     ) {}
 
     public record PublicKitchenDiscoveryResponse(
-        DiscoveryRadiusResponse radius,
-        List<PublicKitchenSummaryResponse> kitchens
+        DiscoveryRadiusResponse radius, List<PublicKitchenSummaryResponse> kitchens
     ) {}
 }

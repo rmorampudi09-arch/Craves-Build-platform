@@ -79,7 +79,20 @@ export function getChefBusinessVerificationPresentation(
 export function chefBusinessDocumentTypeLabel(
   type: ChefBusinessDocumentType,
 ): string {
-  return type === 'AADHAAR_CARD' ? 'Aadhaar card' : 'PAN card';
+  switch (type) {
+    case 'APPLICANT_PHOTO':
+      return 'Applicant photo';
+    case 'GOVERNMENT_ID_FRONT':
+      return 'Government ID · front';
+    case 'GOVERNMENT_ID_BACK':
+      return 'Government ID · back';
+    case 'TAX_ID_CARD':
+      return 'Tax ID card';
+    case 'AADHAAR_CARD':
+      return 'Aadhaar card';
+    case 'PAN_CARD':
+      return 'PAN card';
+  }
 }
 
 export function chefKitchenStatusLabel(status: ChefKitchenStatus): string {
@@ -96,21 +109,15 @@ export function chefKitchenStatusLabel(status: ChefKitchenStatus): string {
 }
 
 export function formatChefBusinessFileSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  }
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   const megabytes = bytes / (1024 * 1024);
   return `${megabytes >= 10 ? Math.round(megabytes) : megabytes.toFixed(1)} MB`;
 }
 
 export function formatChefBusinessDate(timestamp: string): string {
   const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return 'Date unavailable';
-  }
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
   const day = String(date.getUTCDate()).padStart(2, '0');
   return `${day} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 }

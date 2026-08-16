@@ -152,23 +152,21 @@ export function createPaymentRecoveryCoordinator(
       }
 
       let recovery: Promise<PaymentRecoveryResult>;
-      recovery = Promise.resolve()
-        .then(async () => {
-          let verification: PaymentVerificationResult;
-          if (trigger.kind === 'RAZORPAY_SUCCESS') {
-            validateRazorpaySuccess(handoff, trigger.proof);
-            verification = await verifyPaymentOrder(handoff.paymentOrderId, trigger.proof);
-          } else {
-            verification = snapshotAsVerification(
-              await readPaymentOrder(handoff.paymentOrderId),
-            );
-          }
-          const checkout = await readCheckoutSession(handoff.checkoutId);
-          return reconcilePaymentRecovery(handoff, trigger, verification, checkout);
-        })
-        .finally(() => {
-          if (active?.promise === recovery) active = null;
-        });
+      recovery = (async () => {
+        let verification: PaymentVerificationResult;
+        if (trigger.kind === 'RAZORPAY_SUCCESS') {
+          validateRazorpaySuccess(handoff, trigger.proof);
+          verification = await verifyPaymentOrder(handoff.paymentOrderId, trigger.proof);
+        } else {
+          verification = snapshotAsVerification(
+            await readPaymentOrder(handoff.paymentOrderId),
+          );
+        }
+        const checkout = await readCheckoutSession(handoff.checkoutId);
+        return reconcilePaymentRecovery(handoff, trigger, verification, checkout);
+      })().finally(() => {
+        if (active?.promise === recovery) active = null;
+      });
 
       active = {paymentOrderId: handoff.paymentOrderId, promise: recovery};
       return recovery;

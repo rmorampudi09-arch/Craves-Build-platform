@@ -1,0 +1,95 @@
+name: CRAVES Mobile Chef Image Edit Repair
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/mobile-chef-image-edit-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+          fetch-depth: 0
+      - name: Patch Chef edit image picker
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('apps/mobile/src/features/chefMenu/screens/ChefEditMenuItemScreen.tsx')
+          text = p.read_text()
+
+          def once(old, new):
+              global text
+              if old not in text:
+                  raise SystemExit('expected source block not found:\n' + old[:240])
+              text = text.replace(old, new, 1)
+
+          once(
+              "import {zodResolver} from '@hookform/resolvers/zod';\nimport {usePreventRemove} from '@react-navigation/native';",
+              "import {zodResolver} from '@hookform/resolvers/zod';\nimport * as ImagePicker from 'expo-image-picker';\nimport {usePreventRemove} from '@react-navigation/native';",
+          )
+          once(
+              "  CHEF_MENU_FOOD_TYPES,\n  CHEF_MENU_SPICE_LEVELS,\n  type ChefMenuItem,",
+              "  CHEF_MENU_FOOD_TYPES,\n  CHEF_MENU_SPICE_LEVELS,\n  chefMenuApi,\n  type ChefMenuItem,",
+          )
+          once(
+              "function ChefEditMenuItemForm({\n  item,\n  navigation,\n}: {\n  item: ChefMenuItem;\n  navigation: Props['navigation'];\n}) {\n  const model = useChefEditMenuItemModel();\n  const [allowExit, setAllowExit] = React.useState(false);",
+              "function ChefEditMenuItemForm({\n  item,\n  navigation,\n  refreshMenu,\n}: {\n  item: ChefMenuItem;\n  navigation: Props['navigation'];\n  refreshMenu: () => Promise<void>;\n}) {\n  const model = useChefEditMenuItemModel();\n  const [allowExit, setAllowExit] = React.useState(false);\n  const [photo, setPhoto] = React.useState<ImagePicker.ImagePickerAsset | null>(null);\n  const [photoBusy, setPhotoBusy] = React.useState(false);\n  const [photoError, setPhotoError] = React.useState<string | null>(null);",
+          )
+          once(
+              "  const submitting = model.submitState === 'submitting' || isSubmitting;\n  const imageUrl = getChefMenuPrimaryImageUrl(item);\n\n  usePreventRemove(isDirty && !allowExit, ({data}) => {",
+              "  const submitting = model.submitState === 'submitting' || isSubmitting || photoBusy;\n  const imageUrl = getChefMenuPrimaryImageUrl(item);\n  const displayedImageUrl = photo?.uri ?? imageUrl;\n  const hasPendingChanges = isDirty || photo !== null;\n\n  usePreventRemove(hasPendingChanges && !allowExit, ({data}) => {",
+          )
+          once(
+              "  const saveChanges = handleSubmit(async values => {\n    model.clearError();\n    const updated = await model.submit(values, item);\n    if (updated) {\n      reset(chefMenuItemToFormValues(updated));\n      setAllowExit(true);\n    }\n  });",
+              "  const pickPhoto = React.useCallback(async () => {\n    if (submitting) return;\n    setPhotoError(null);\n    try {\n      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();\n      if (!permission.granted) {\n        Alert.alert(\n          'Photo permission required',\n          'Allow photo access so you can choose a new primary dish image.',\n        );\n        return;\n      }\n      const result = await ImagePicker.launchImageLibraryAsync({\n        mediaTypes: ['images'],\n        allowsEditing: true,\n        aspect: [4, 3],\n        quality: 0.9,\n      });\n      if (result.canceled || !result.assets[0]) return;\n      const asset = result.assets[0];\n      if (asset.mimeType && !['image/jpeg', 'image/png', 'image/webp'].includes(asset.mimeType)) {\n        setPhotoError('Choose a JPEG, PNG or WebP image.');\n        return;\n      }\n      setPhoto(asset);\n    } catch {\n      setPhotoError('The photo library could not be opened. Please try again.');\n    }\n  }, [submitting]);\n\n  const uploadPhoto = React.useCallback(async () => {\n    if (!photo) return true;\n    setPhotoBusy(true);\n    setPhotoError(null);\n    try {\n      const formData = new FormData();\n      formData.append(\n        'file',\n        {\n          uri: photo.uri,\n          name: photo.fileName?.trim() || `craves-dish-${item.id}.jpg`,\n          type: photo.mimeType || 'image/jpeg',\n        } as unknown as Blob,\n      );\n      await chefMenuApi.uploadImage(item.id, formData, true);\n      return true;\n    } catch {\n      setPhotoError('The new photo could not be uploaded. Your text changes were saved; retry the photo before leaving.');\n      return false;\n    } finally {\n      setPhotoBusy(false);\n    }\n  }, [item.id, photo]);\n\n  const saveChanges = handleSubmit(async values => {\n    model.clearError();\n    setPhotoError(null);\n    let updated = item;\n    if (isDirty) {\n      const submitted = await model.submit(values, item);\n      if (!submitted) return;\n      updated = submitted;\n    }\n    if (photo && !(await uploadPhoto())) {\n      reset(chefMenuItemToFormValues(updated));\n      await refreshMenu().catch(() => undefined);\n      return;\n    }\n    setPhoto(null);\n    reset(chefMenuItemToFormValues(updated));\n    await refreshMenu().catch(() => undefined);\n    setAllowExit(true);\n  });",
+          )
+          once(
+              "          <Section\n            title=\"Food photo\"\n            description=\"Existing media is read-only in this phase because the exact service exposes upload but not replacement/delete/reorder semantics.\">\n            {imageUrl ? (\n              <Image\n                accessibilityIgnoresInvertColors\n                accessibilityLabel={`${item.itemName} current image`}\n                resizeMode=\"cover\"\n                source={{uri: imageUrl}}\n                style={styles.currentImage}\n              />\n            ) : (\n              <View style={styles.mediaFallback}>\n                <Icon color={colors.flameRed} name=\"chef\" size={34} />\n                <Text style={styles.mediaFallbackText}>No current image</Text>\n              </View>\n            )}\n            <View style={styles.mediaBoundary}>\n              <Text style={styles.mediaBoundaryTitle}>Image replacement unavailable</Text>\n              <Text style={styles.mediaBoundaryText}>\n                The app has no approved native picker, and the backend has no exact replace/delete route. No fake replacement action is shown.\n              </Text>\n            </View>\n          </Section>",
+              "          <Section\n            title=\"Food photo\"\n            description=\"Choose a new primary image. JPEG, PNG and WebP are accepted by the live catalog service.\">\n            {displayedImageUrl ? (\n              <Image\n                accessibilityIgnoresInvertColors\n                accessibilityLabel={`${item.itemName} ${photo ? 'selected replacement' : 'current'} image`}\n                resizeMode=\"cover\"\n                source={{uri: displayedImageUrl}}\n                style={styles.currentImage}\n              />\n            ) : (\n              <View style={styles.mediaFallback}>\n                <Icon color={colors.flameRed} name=\"chef\" size={34} />\n                <Text style={styles.mediaFallbackText}>No current image</Text>\n              </View>\n            )}\n            <View style={styles.mediaActions}>\n              <Pressable\n                accessibilityRole=\"button\"\n                accessibilityLabel={photo ? 'Choose a different dish photo' : 'Choose a new dish photo'}\n                disabled={submitting}\n                onPress={pickPhoto}\n                style={({pressed}) => [styles.mediaAction, (pressed || submitting) && styles.pressed]}>\n                <Icon color={colors.flameRed} name=\"camera\" size={20} />\n                <Text style={styles.mediaActionText}>{photo ? 'Choose another' : imageUrl ? 'Replace photo' : 'Add photo'}</Text>\n              </Pressable>\n              {photo ? (\n                <Pressable\n                  accessibilityRole=\"button\"\n                  accessibilityLabel=\"Discard selected replacement photo\"\n                  disabled={submitting}\n                  onPress={() => { setPhoto(null); setPhotoError(null); }}\n                  style={({pressed}) => [styles.mediaAction, (pressed || submitting) && styles.pressed]}>\n                  <Icon color={colors.espressoBrown} name=\"close\" size={20} />\n                  <Text style={styles.mediaActionText}>Discard</Text>\n                </Pressable>\n              ) : null}\n            </View>\n            {photo ? <Text style={styles.mediaHint}>The selected image will become the primary image when you save.</Text> : null}\n            {photoError ? <Text accessibilityLiveRegion=\"assertive\" style={styles.fieldError}>{photoError}</Text> : null}\n          </Section>",
+          )
+          once(
+              "            disabled={submitting || !isDirty}\n            onPress={saveChanges}\n            style={({pressed}) => [\n              styles.primaryAction,\n              (pressed || submitting || !isDirty) && styles.actionDisabled,",
+              "            disabled={submitting || !hasPendingChanges}\n            onPress={saveChanges}\n            style={({pressed}) => [\n              styles.primaryAction,\n              (pressed || submitting || !hasPendingChanges) && styles.actionDisabled,",
+          )
+          once(
+              "  return <ChefEditMenuItemForm item={item} navigation={navigation} />;",
+              "  return <ChefEditMenuItemForm item={item} navigation={navigation} refreshMenu={menu.refresh} />;",
+          )
+          once(
+              "  headerButton: {\n    alignItems: 'center',\n    borderRadius: radius.pill,\n    height: touchTarget.minimum,\n    justifyContent: 'center',\n    width: touchTarget.minimum,\n  },",
+              "  headerButton: {\n    alignItems: 'center',\n    backgroundColor: colors.iconSurface,\n    borderRadius: radius.pill,\n    height: touchTarget.minimum,\n    justifyContent: 'center',\n    width: touchTarget.minimum,\n  },",
+          )
+          once(
+              "  mediaFallback: {\n    alignItems: 'center',\n    backgroundColor: colors.white,",
+              "  mediaFallback: {\n    alignItems: 'center',\n    backgroundColor: colors.iconSurface,",
+          )
+          once(
+              "  mediaBoundary: {\n    backgroundColor: colors.white,\n    borderColor: colors.border,\n    borderRadius: radius.md,\n    borderStyle: 'dashed',\n    borderWidth: 1,\n    marginTop: spacing.sm,\n    padding: spacing.sm,\n  },\n  mediaBoundaryTitle: {\n    color: colors.espressoBrown,\n    fontSize: typography.small,\n    fontWeight: fontWeight.bold,\n  },\n  mediaBoundaryText: {\n    color: colors.textSecondary,\n    fontSize: typography.small,\n    marginTop: spacing.xxs,\n  },",
+              "  mediaActions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm},\n  mediaAction: {\n    minHeight: touchTarget.minimum,\n    flexDirection: 'row',\n    alignItems: 'center',\n    justifyContent: 'center',\n    gap: spacing.xs,\n    paddingHorizontal: spacing.md,\n    borderRadius: radius.pill,\n    backgroundColor: colors.iconSurface,\n  },\n  mediaActionText: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.semibold},\n  mediaHint: {color: colors.textSecondary, fontSize: typography.tiny, marginTop: spacing.xs},",
+          )
+
+          p.write_text(text)
+          PY
+      - name: Verify TypeScript and lint
+        working-directory: apps/mobile
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+      - name: Commit source and remove one-shot workflow
+        run: |
+          git config user.name 'craves-mobile-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm .github/workflows/mobile-chef-image-edit-repair.yml
+          git add apps/mobile/src/features/chefMenu/screens/ChefEditMenuItemScreen.tsx
+          git commit -m 'Complete Chef menu primary image replacement'
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

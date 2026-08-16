@@ -133,7 +133,7 @@ describe('P39 dish detail API contract', () => {
     expect(detail.images.map(image => image.sortOrder)).toEqual([2, 0, 1]);
   });
 
-  it('keeps optional catalog values null and marks unsupported Reference 13 capabilities explicitly', () => {
+  it('keeps optional catalog values null and marks remaining unsupported capabilities explicitly', () => {
     const detail = mapCustomerDishDetail(
       {
         ...menuItem,
@@ -188,7 +188,6 @@ describe('P39 dish detail API contract', () => {
       'INGREDIENTS',
       'ALLERGENS',
       'REVIEWS',
-      'FAVORITES',
     ]);
   });
 

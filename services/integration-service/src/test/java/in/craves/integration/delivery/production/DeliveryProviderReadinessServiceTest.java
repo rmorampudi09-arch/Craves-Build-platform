@@ -6,11 +6,14 @@ import static org.mockito.Mockito.when;
 
 import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.config.ShiprocketProperties;
+import in.craves.integration.delivery.DeliveryIntelligenceModels.ProviderResponse;
 import in.craves.integration.delivery.DeliveryProviderRepository;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderPickupLocationRepository;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -169,22 +172,17 @@ class DeliveryProviderReadinessServiceTest {
         return adapter;
     }
 
-    private static in.craves.integration.delivery.DeliveryProviderRepository.ProviderRecord providerRecord(
-        String providerId,
-        boolean active
-    ) {
-        return new in.craves.integration.delivery.DeliveryProviderRepository.ProviderRecord(
+    private static ProviderResponse providerRecord(String providerId, boolean active) {
+        Instant now = Instant.parse("2026-08-16T10:00:00Z");
+        return new ProviderResponse(
             providerId,
             providerId,
+            "EXTERNAL",
             active,
-            1.0d,
-            1.0d,
-            1.0d,
-            0.0d,
-            0.0d,
-            0.0d,
-            0.0d,
-            0.0d
+            List.of("HYDERABAD"),
+            Map.of("delivery", true),
+            now,
+            now
         );
     }
 

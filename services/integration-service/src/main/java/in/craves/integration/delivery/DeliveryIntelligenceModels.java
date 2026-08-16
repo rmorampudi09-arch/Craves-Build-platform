@@ -55,6 +55,51 @@ public final class DeliveryIntelligenceModels {
         JsonNode providerMetadata
     ) {}
 
+    /**
+     * Provider quote snapshot used by the delivery command router. The scoring engine remains
+     * provider-neutral and consumes CandidateInput; this snapshot preserves the richer quote data
+     * at the router boundary without changing the established intelligence calculations.
+     */
+    public record ProviderQuoteSnapshot(
+        BigDecimal paymentAmount,
+        BigDecimal deliveryFeeAmount,
+        String currency,
+        List<String> warnings,
+        JsonNode providerMetadata,
+        Instant quotedAt
+    ) {}
+
+    /**
+     * Compatibility input for the command router. Provider success probability is retained for
+     * audit/transport compatibility, while DeliveryIntelligenceService continues to calculate its
+     * own prediction from stored/live provider metrics.
+     */
+    public record AssignmentCandidateInput(
+        @NotBlank String providerId,
+        String providerQuoteId,
+        String agentId,
+        @DecimalMin("0.0") Double pickupDistanceKm,
+        @DecimalMin("0.0") Double pickupEtaMinutes,
+        @DecimalMin("0.0") BigDecimal quotedCost,
+        String currency,
+        Double predictedSuccessProbability,
+        ProviderQuoteSnapshot quoteSnapshot
+    ) {
+        CandidateInput toCandidateInput() {
+            return new CandidateInput(
+                providerId,
+                providerQuoteId,
+                agentId,
+                pickupDistanceKm,
+                pickupEtaMinutes,
+                quotedCost,
+                currency,
+                true,
+                quoteSnapshot == null ? null : quoteSnapshot.providerMetadata()
+            );
+        }
+    }
+
     public record AssignmentRequest(
         @NotNull UUID chefSubOrderId,
         @NotNull UUID orderId,
@@ -64,7 +109,31 @@ public final class DeliveryIntelligenceModels {
         @NotBlank String area,
         AssignmentStrategy strategy,
         @NotEmpty List<@Valid CandidateInput> candidates
-    ) {}
+    ) {
+        /**
+         * Router-oriented constructor kept separate from the canonical REST/service constructor.
+         */
+        public AssignmentRequest(UUID chefSubOrderId,
+                                 UUID orderId,
+                                 String area,
+                                 double distanceKm,
+                                 int orderHour,
+                                 int dayOfWeek,
+                                 List<AssignmentCandidateInput> candidates) {
+            this(
+                chefSubOrderId,
+                orderId,
+                distanceKm,
+                orderHour,
+                dayOfWeek,
+                area,
+                null,
+                candidates == null
+                    ? List.of()
+                    : candidates.stream().map(AssignmentCandidateInput::toCandidateInput).toList()
+            );
+        }
+    }
 
     public record PartnerMetrics(
         String providerId,
@@ -103,7 +172,11 @@ public final class DeliveryIntelligenceModels {
         double finalScore,
         CandidateStatus status,
         JsonNode providerMetadata
-    ) {}
+    ) {
+        public int candidateRank() {
+            return rank;
+        }
+    }
 
     public record AssignmentResponse(
         UUID assignmentId,
@@ -117,7 +190,11 @@ public final class DeliveryIntelligenceModels {
         String selectedAgentId,
         List<CandidateScore> candidates,
         Instant createdAt
-    ) {}
+    ) {
+        public List<CandidateScore> rankedCandidates() {
+            return candidates;
+        }
+    }
 
     public record DeliveryOutcomeRequest(
         @NotNull UUID deliveryId,

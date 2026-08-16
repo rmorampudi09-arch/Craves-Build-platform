@@ -1,7 +1,6 @@
 import {createCustomerOrdersSnapshot} from './domain/customerOrdersModel';
 import type {CustomerOrder} from './domain/customerOrderTypes';
 import {
-  CUSTOMER_ORDERS_LIFECYCLE_BUCKET_BLOCKER,
   formatCustomerOrderMoney,
   getCustomerOrderDisplayReference,
   getCustomerOrderReferenceAction,
@@ -10,9 +9,9 @@ import {
   selectCustomerOrdersTab,
 } from './presentation/customerOrdersPresentation';
 
-function order(status: CustomerOrder['status']): CustomerOrder {
+function order(status: CustomerOrder['status'], id = '12345678-1111-4111-8111-111111111111'): CustomerOrder {
   return {
-    id: '12345678-1111-4111-8111-111111111111',
+    id,
     checkoutId: '22222222-2222-4222-8222-222222222222',
     kitchenId: '44444444-4444-4444-8444-444444444444',
     kitchenName: 'Home Kitchen',
@@ -32,22 +31,21 @@ function order(status: CustomerOrder['status']): CustomerOrder {
   };
 }
 
-describe('P53 customer orders presentation', () => {
-  it('keeps only All Orders authoritative until lifecycle bucket mapping exists', () => {
+describe('customer orders lifecycle tabs', () => {
+  it('maps exact backend statuses into all four authoritative tabs', () => {
     const preparing = order('PREPARING');
-    const delivered = {...order('DELIVERED'), id: '87654321-1111-4111-8111-111111111111'};
-    const snapshot = createCustomerOrdersSnapshot([preparing, delivered]);
+    const delivered = order('DELIVERED', '87654321-1111-4111-8111-111111111111');
+    const cancelled = order('CANCELLED', 'aaaaaaaa-1111-4111-8111-111111111111');
+    const refunded = order('REFUNDED', 'bbbbbbbb-1111-4111-8111-111111111111');
+    const snapshot = createCustomerOrdersSnapshot([preparing, delivered, cancelled, refunded]);
 
     expect(isCustomerOrdersTabAuthoritative('ALL')).toBe(true);
-    expect(isCustomerOrdersTabAuthoritative('UPCOMING')).toBe(false);
-    expect(selectCustomerOrdersTab(snapshot, 'ALL')).toEqual([
-      preparing,
-      delivered,
-    ]);
-    expect(selectCustomerOrdersTab(snapshot, 'COMPLETED')).toEqual([]);
-    expect(CUSTOMER_ORDERS_LIFECYCLE_BUCKET_BLOCKER).toBe(
-      'CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE',
-    );
+    expect(isCustomerOrdersTabAuthoritative('UPCOMING')).toBe(true);
+    expect(isCustomerOrdersTabAuthoritative('COMPLETED')).toBe(true);
+    expect(isCustomerOrdersTabAuthoritative('CANCELLED')).toBe(true);
+    expect(selectCustomerOrdersTab(snapshot, 'UPCOMING')).toEqual([preparing]);
+    expect(selectCustomerOrdersTab(snapshot, 'COMPLETED')).toEqual([delivered]);
+    expect(selectCustomerOrdersTab(snapshot, 'CANCELLED')).toEqual([cancelled, refunded]);
   });
 
   it('centralizes exact backend status labels without changing raw state', () => {
@@ -61,23 +59,15 @@ describe('P53 customer orders presentation', () => {
     });
   });
 
-  it('keeps reference actions visual-only and fail-closed for later contracts', () => {
+  it('keeps only server-supported reference actions visible', () => {
     expect(getCustomerOrderReferenceAction('PREPARING')).toBe('TRACK');
     expect(getCustomerOrderReferenceAction('DELIVERED')).toBe('REORDER');
     expect(getCustomerOrderReferenceAction('CANCELLED')).toBeNull();
   });
 
   it('formats authoritative money and an unambiguous display reference', () => {
-    expect(formatCustomerOrderMoney({amount: '320', currency: 'INR'})).toBe(
-      '₹320',
-    );
-    expect(formatCustomerOrderMoney({amount: '12.50', currency: 'USD'})).toBe(
-      'USD 12.50',
-    );
-    expect(
-      getCustomerOrderDisplayReference(
-        '12345678-1111-4111-8111-111111111111',
-      ),
-    ).toBe('12345678');
+    expect(formatCustomerOrderMoney({amount: '320', currency: 'INR'})).toBe('₹320');
+    expect(formatCustomerOrderMoney({amount: '12.50', currency: 'USD'})).toBe('USD 12.50');
+    expect(getCustomerOrderDisplayReference('12345678-1111-4111-8111-111111111111')).toBe('12345678');
   });
 });

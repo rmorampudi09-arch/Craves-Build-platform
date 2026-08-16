@@ -23,9 +23,6 @@ export const CUSTOMER_ORDERS_TABS: readonly CustomerOrdersTabDefinition[] = [
   {key: 'CANCELLED', label: 'Cancelled'},
 ] as const;
 
-export const CUSTOMER_ORDERS_LIFECYCLE_BUCKET_BLOCKER =
-  'CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_UNAVAILABLE';
-
 export type CustomerOrderStatusTone =
   | 'accent'
   | 'success'
@@ -40,10 +37,35 @@ export interface CustomerOrderStatusPresentation {
 
 export type CustomerOrderReferenceAction = 'TRACK' | 'REORDER' | null;
 
+const UPCOMING_STATUSES = new Set<CustomerOrderStatus>([
+  'PAYMENT_PENDING',
+  'PAID',
+  'CHEF_ACCEPTANCE_PENDING',
+  'CHEF_ACCEPTED',
+  'PREPARING',
+  'READY_FOR_PICKUP',
+  'OUT_FOR_DELIVERY',
+]);
+
+const COMPLETED_STATUSES = new Set<CustomerOrderStatus>(['DELIVERED']);
+
+const CANCELLED_STATUSES = new Set<CustomerOrderStatus>([
+  'CHEF_REJECTED',
+  'CANCELLED',
+  'REFUND_PENDING',
+  'REFUNDED',
+  'REFUND_FAILED',
+]);
+
+/**
+ * Every tab is now derived from the exact Order Service lifecycle statuses.
+ * No order is dropped: terminal refund/rejection states stay visible under the
+ * Cancelled bucket while Delivered is the only Completed state.
+ */
 export function isCustomerOrdersTabAuthoritative(
-  tab: CustomerOrdersTabKey,
+  _tab: CustomerOrdersTabKey,
 ): boolean {
-  return tab === 'ALL';
+  return true;
 }
 
 export function selectCustomerOrdersTab(
@@ -54,11 +76,13 @@ export function selectCustomerOrdersTab(
     return snapshot.orders;
   }
 
-  // The current backend exposes exact raw statuses but no approved mapping from
-  // them into the guide's Upcoming/Completed/Cancelled lifecycle buckets.
-  // Returning an empty blocked view is safer than silently inventing product
-  // semantics that could hide or misclassify a real customer order.
-  return [];
+  const allowed =
+    tab === 'UPCOMING'
+      ? UPCOMING_STATUSES
+      : tab === 'COMPLETED'
+        ? COMPLETED_STATUSES
+        : CANCELLED_STATUSES;
+  return snapshot.orders.filter(order => allowed.has(order.status));
 }
 
 export function getCustomerOrderStatusPresentation(
@@ -94,11 +118,6 @@ export function getCustomerOrderStatusPresentation(
   }
 }
 
-/**
- * Mirrors only the visible reference-action label. P55 wires TRACK to the exact
- * owned-order delivery-status route. REORDER still does not grant eligibility;
- * P56 owns the authoritative reorder validation and cart-conflict policy.
- */
 export function getCustomerOrderReferenceAction(
   status: CustomerOrderStatus,
 ): CustomerOrderReferenceAction {

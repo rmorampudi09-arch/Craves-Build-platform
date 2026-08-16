@@ -1,0 +1,47 @@
+name: CRAVES Mobile Payment Recovery Migration
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/mobile-payment-recovery-migrate.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+
+      - name: Apply guarded Cart payment recovery migration
+        working-directory: apps/mobile
+        run: node scripts/apply-persisted-payment-recovery.mjs
+
+      - name: Guard scope
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          echo "$changed"
+          test "$changed" = "apps/mobile/src/features/cart/screens/CustomerCartScreen.tsx"
+
+      - name: Commit Cart recovery integration
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/mobile/src/features/cart/screens/CustomerCartScreen.tsx
+          git commit -m 'Recover interrupted Razorpay payments in Cart'
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

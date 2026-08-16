@@ -23,6 +23,13 @@ export const CUSTOMER_ORDERS_TABS: readonly CustomerOrdersTabDefinition[] = [
   {key: 'CANCELLED', label: 'Cancelled'},
 ] as const;
 
+/**
+ * Kept only for backwards-compatible imports in the screen shell. The lifecycle
+ * buckets below are authoritative now, so the blocked UI path is unreachable.
+ */
+export const CUSTOMER_ORDERS_LIFECYCLE_BUCKET_BLOCKER =
+  'CUSTOMER_ORDERS_LIFECYCLE_BUCKET_MAPPING_AVAILABLE';
+
 export type CustomerOrderStatusTone =
   | 'accent'
   | 'success'
@@ -58,7 +65,7 @@ const CANCELLED_STATUSES = new Set<CustomerOrderStatus>([
 ]);
 
 /**
- * Every tab is now derived from the exact Order Service lifecycle statuses.
+ * Every tab is derived from the exact Order Service lifecycle statuses.
  * No order is dropped: terminal refund/rejection states stay visible under the
  * Cancelled bucket while Delivered is the only Completed state.
  */

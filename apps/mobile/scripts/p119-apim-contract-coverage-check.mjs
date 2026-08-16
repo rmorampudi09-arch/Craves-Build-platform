@@ -5,10 +5,10 @@ import {fileURLToPath} from 'node:url';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const mobileRoot = path.resolve(scriptDir, '..');
 const srcRoot = path.join(mobileRoot, 'src');
-const manifestPath = path.resolve(
-  mobileRoot,
-  '../../api/apim-api/contracts/mobile-production.v1.json',
-);
+const manifestPaths = [
+  path.resolve(mobileRoot, '../../api/apim-api/contracts/mobile-production.v1.json'),
+  path.resolve(mobileRoot, '../../api/apim-api/contracts/mobile-subscriptions.v1.json'),
+];
 
 const fail = message => {
   console.error(`[P119] ${message}`);
@@ -23,18 +23,12 @@ function listProductionSourceFiles(root) {
     for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === '__tests__' || entry.name === '__mocks__') {
-          continue;
-        }
+        if (entry.name === '__tests__' || entry.name === '__mocks__') continue;
         visit(absolute);
         continue;
       }
-      if (!/\.(?:ts|tsx)$/.test(entry.name)) {
-        continue;
-      }
-      if (/\.(?:test|spec)\.(?:ts|tsx)$/.test(entry.name)) {
-        continue;
-      }
+      if (!/\.(?:ts|tsx)$/.test(entry.name)) continue;
+      if (/\.(?:test|spec)\.(?:ts|tsx)$/.test(entry.name)) continue;
       files.push(absolute);
     }
   };
@@ -42,25 +36,32 @@ function listProductionSourceFiles(root) {
   return files;
 }
 
-if (!fs.existsSync(manifestPath)) {
-  fail(`Missing published contract manifest: ${manifestPath}`);
-  process.exit();
+const manifests = [];
+for (const manifestPath of manifestPaths) {
+  if (!fs.existsSync(manifestPath)) {
+    fail(`Missing published contract manifest: ${manifestPath}`);
+    continue;
+  }
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (manifest.schemaVersion !== 1 || manifest.phase !== 'P119') {
+    fail(`Contract manifest schemaVersion/phase is not the P119 v1 contract: ${manifestPath}`);
+  }
+  if (!Array.isArray(manifest.actions) || manifest.actions.length === 0) {
+    fail(`Contract manifest contains no production actions: ${manifestPath}`);
+  }
+  manifests.push(manifest);
 }
 
-const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-if (manifest.schemaVersion !== 1 || manifest.phase !== 'P119') {
-  fail('Contract manifest schemaVersion/phase is not the P119 v1 contract.');
-}
-if (!Array.isArray(manifest.actions) || manifest.actions.length === 0) {
-  fail('Contract manifest contains no production actions.');
-}
+if (!manifests.length) process.exit();
 
+const actions = manifests.flatMap(manifest => manifest.actions ?? []);
+const quarantined = manifests.flatMap(manifest => manifest.quarantined ?? []);
 const validMethods = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const validAuth = new Set(['public', 'bearer']);
 const ids = new Set();
 const expectedBySource = new Map();
 
-for (const action of manifest.actions ?? []) {
+for (const action of actions) {
   for (const field of [
     'id',
     'source',
@@ -77,23 +78,13 @@ for (const action of manifest.actions ?? []) {
     }
   }
 
-  if (ids.has(action.id)) {
-    fail(`Duplicate contract action id: ${action.id}`);
-  }
+  if (ids.has(action.id)) fail(`Duplicate contract action id: ${action.id}`);
   ids.add(action.id);
 
-  if (!validMethods.has(action.method)) {
-    fail(`${action.id} has unsupported method ${action.method}.`);
-  }
-  if (!validAuth.has(action.auth)) {
-    fail(`${action.id} has unsupported auth mode ${action.auth}.`);
-  }
-  if (!action.path.startsWith('/api/v1/')) {
-    fail(`${action.id} is not an APIM /api/v1 route: ${action.path}`);
-  }
-  if (/^https?:\/\//i.test(action.path)) {
-    fail(`${action.id} contains an absolute endpoint URL.`);
-  }
+  if (!validMethods.has(action.method)) fail(`${action.id} has unsupported method ${action.method}.`);
+  if (!validAuth.has(action.auth)) fail(`${action.id} has unsupported auth mode ${action.auth}.`);
+  if (!action.path.startsWith('/api/v1/')) fail(`${action.id} is not an APIM /api/v1 route: ${action.path}`);
+  if (/^https?:\/\//i.test(action.path)) fail(`${action.id} contains an absolute endpoint URL.`);
 
   const sourcePath = path.join(mobileRoot, action.source);
   if (!fs.existsSync(sourcePath)) {
@@ -134,9 +125,7 @@ for (const absolute of productionFiles) {
     const key = `${auth}:${method}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  if (counts.size > 0) {
-    actualBySource.set(relative, counts);
-  }
+  if (counts.size > 0) actualBySource.set(relative, counts);
 }
 
 const allSources = new Set([...actualBySource.keys(), ...expectedBySource.keys()]);
@@ -148,14 +137,12 @@ for (const source of allSources) {
     const actualCount = actual.get(key) ?? 0;
     const expectedCount = expected.get(key) ?? 0;
     if (actualCount !== expectedCount) {
-      fail(
-        `${source} ${key} call count is ${actualCount}; published contract manifest expects ${expectedCount}.`,
-      );
+      fail(`${source} ${key} call count is ${actualCount}; published contract manifests expect ${expectedCount}.`);
     }
   }
 }
 
-for (const item of manifest.quarantined ?? []) {
+for (const item of quarantined) {
   if (typeof item.path !== 'string' || !item.path.startsWith('/api/v1/')) {
     fail(`Invalid quarantined route entry: ${JSON.stringify(item)}`);
     continue;
@@ -169,7 +156,5 @@ for (const item of manifest.quarantined ?? []) {
 }
 
 if (!process.exitCode) {
-  console.log(
-    `[P119] PASS: ${manifest.actions.length} production mobile HTTP actions are mapped to published APIM contracts; ${callBearingSources.size} call-bearing source files audited.`,
-  );
+  console.log(`[P119] PASS: ${actions.length} production mobile HTTP actions across ${manifests.length} published manifests are mapped; ${callBearingSources.size} call-bearing source files audited.`);
 }

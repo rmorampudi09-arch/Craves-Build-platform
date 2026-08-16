@@ -1,8 +1,10 @@
 package in.craves.catalog.web;
 
 import in.craves.catalog.service.CatalogService;
+import in.craves.catalog.service.KitchenPickupLocationService;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemResponse;
+import in.craves.catalog.web.ApiDtos.PublicKitchenDetailResponse;
 import in.craves.catalog.web.ApiDtos.PublicKitchenDiscoveryResponse;
 import java.math.BigDecimal;
 import java.util.List;
@@ -17,9 +19,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/catalog")
 public class PublicCatalogController {
     private final CatalogService catalogService;
+    private final KitchenPickupLocationService pickupLocationService;
 
-    public PublicCatalogController(CatalogService catalogService) {
+    public PublicCatalogController(
+        CatalogService catalogService,
+        KitchenPickupLocationService pickupLocationService
+    ) {
         this.catalogService = catalogService;
+        this.pickupLocationService = pickupLocationService;
     }
 
     @GetMapping("/kitchens")
@@ -34,8 +41,12 @@ public class PublicCatalogController {
     }
 
     @GetMapping("/kitchens/{kitchenId}")
-    public KitchenProfileResponse getKitchen(@PathVariable UUID kitchenId) {
-        return catalogService.getPublicKitchen(kitchenId);
+    public PublicKitchenDetailResponse getKitchen(@PathVariable UUID kitchenId) {
+        KitchenProfileResponse kitchen = catalogService.getPublicKitchen(kitchenId);
+        return PublicKitchenDetailResponse.from(
+            kitchen,
+            pickupLocationService.currentPickupLocationId(kitchenId)
+        );
     }
 
     @GetMapping("/kitchens/{kitchenId}/menu-items")

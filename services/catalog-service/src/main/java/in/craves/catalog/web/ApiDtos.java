@@ -50,6 +50,7 @@ public final class ApiDtos {
 
     public record KitchenProfileResponse(
         UUID id,
+        UUID currentPickupLocationId,
         UUID identityId,
         String kitchenName,
         String displayName,

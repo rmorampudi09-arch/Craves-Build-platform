@@ -28,10 +28,7 @@ public class CatalogClient {
             }
             if (item.unitPackageWeightGrams() == null || item.unitPackageWeightGrams() <= 0
                 || item.thermoboxRequired() == null) {
-                throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Menu item delivery metadata is incomplete"
-                );
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Menu item delivery metadata is incomplete");
             }
             return item;
         } catch (HttpClientErrorException.NotFound ex) {
@@ -72,42 +69,18 @@ public class CatalogClient {
         String status
     ) {
         public CatalogMenuItem(
-            UUID id,
-            UUID kitchenId,
-            String itemName,
-            String description,
-            String category,
-            String foodType,
-            BigDecimal price,
-            String currency,
-            Integer servesCount,
-            Integer preparationTimeMinutes,
-            String spiceLevel,
-            boolean available,
-            String status
+            UUID id, UUID kitchenId, String itemName, String description, String category,
+            String foodType, BigDecimal price, String currency, Integer servesCount,
+            Integer preparationTimeMinutes, String spiceLevel, boolean available, String status
         ) {
-            this(
-                id,
-                kitchenId,
-                itemName,
-                description,
-                category,
-                foodType,
-                price,
-                currency,
-                servesCount,
-                preparationTimeMinutes,
-                spiceLevel,
-                null,
-                null,
-                available,
-                status
-            );
+            this(id, kitchenId, itemName, description, category, foodType, price, currency,
+                servesCount, preparationTimeMinutes, spiceLevel, null, null, available, status);
         }
     }
 
     public record CatalogKitchen(
         UUID id,
+        UUID currentPickupLocationId,
         UUID identityId,
         String kitchenName,
         String displayName,
@@ -135,6 +108,7 @@ public class CatalogClient {
             String status
         ) {
             this(
+                id,
                 id,
                 identityId,
                 kitchenName,

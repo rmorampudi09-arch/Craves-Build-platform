@@ -12,6 +12,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Objects;
 import java.util.StringJoiner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -27,12 +28,24 @@ public class ShiprocketTransport {
     public ShiprocketTransport(ShiprocketProperties properties,
                                ShiprocketAuthClient authClient,
                                ObjectMapper objectMapper) {
-        this.properties = properties;
-        this.authClient = authClient;
-        this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(properties.getConnectTimeoutSeconds()))
-            .build();
+        this(
+            properties,
+            authClient,
+            objectMapper,
+            HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(properties.getConnectTimeoutSeconds()))
+                .build()
+        );
+    }
+
+    ShiprocketTransport(ShiprocketProperties properties,
+                        ShiprocketAuthClient authClient,
+                        ObjectMapper objectMapper,
+                        HttpClient httpClient) {
+        this.properties = Objects.requireNonNull(properties, "properties is required");
+        this.authClient = Objects.requireNonNull(authClient, "authClient is required");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper is required");
+        this.httpClient = Objects.requireNonNull(httpClient, "httpClient is required");
     }
 
     public JsonNode get(String path, Map<String, String> query) {
@@ -84,19 +97,30 @@ public class ShiprocketTransport {
     }
 
     /**
-     * Sends a mutating API request exactly once. Network failures and provider 5xx responses are
-     * classified as uncertain because the remote side may have committed before the response was
-     * lost. Callers must reconcile before retry/fallback.
+     * Sends a mutating API request without blind retries. The only automatic retry is a single
+     * refresh after an explicit HTTP 401, because that response proves the provider rejected the
+     * request before accepting it. Network failures, rate limits and 5xx responses remain
+     * uncertain and must be reconciled before any retry or provider fallback.
      */
     public JsonNode mutate(String path, JsonNode body) {
         try {
+            URI requestUri = uri(path, Map.of());
             HttpResponse<String> response = send(
                 "POST",
-                uri(path, Map.of()),
+                requestUri,
                 body,
                 authClient.bearerToken()
             );
-            boolean uncertain = response.statusCode() >= 500;
+            if (response.statusCode() == 401) {
+                authClient.invalidate();
+                response = send(
+                    "POST",
+                    requestUri,
+                    body,
+                    authClient.bearerToken()
+                );
+            }
+            boolean uncertain = response.statusCode() >= 500 || response.statusCode() == 429;
             return requireSuccess(response, uncertain);
         } catch (ShiprocketApiException ex) {
             throw ex;

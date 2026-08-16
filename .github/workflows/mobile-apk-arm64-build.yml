@@ -1,6 +1,6 @@
 name: CRAVES Mobile ARM64 APK Build
 
-# ARM64 testing build for customer home refinement: 2026-08-16
+# ARM64 testing build after checkout payment policy UUID fix: 2026-08-17
 on:
   push:
     branches:

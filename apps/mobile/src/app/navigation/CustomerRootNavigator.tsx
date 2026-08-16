@@ -6,7 +6,7 @@ import * as Location from 'expo-location';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {colors, fontWeight, typography} from '../../design/tokens';
+import {fontWeight, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
 import {customerAddressesApi} from '../../features/customerAddresses/api/customerAddressesApi';

@@ -29,7 +29,7 @@ jobs:
       - name: Pin patched nanoid across the mobile dependency graph
         working-directory: apps/mobile
         run: |
-          npm pkg set overrides.nanoid=3.3.17
+          npm pkg set overrides.nanoid=3.3.18
           npm install --ignore-scripts
 
       - name: Prove clean reproducible install

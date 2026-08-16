@@ -1,0 +1,27 @@
+name: Backend Reorder PR Cleanup
+
+on:
+  push:
+    branches: [backend-customer-reorder-20260816]
+    paths: [.github/workflows/backend-reorder-pr-cleanup.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: backend-customer-reorder-20260816
+          fetch-depth: 0
+      - name: Remove generated Maven output from the branch
+        run: git rm -r services/order-service/target
+      - name: Commit cleanup and remove this workflow
+        run: |
+          git config user.name 'craves-backend-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm .github/workflows/backend-reorder-pr-cleanup.yml
+          git commit -m 'Remove generated Maven output from reorder PR'
+          git push origin HEAD:backend-customer-reorder-20260816

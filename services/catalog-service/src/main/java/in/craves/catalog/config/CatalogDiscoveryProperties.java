@@ -6,8 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "craves.discovery")
 public class CatalogDiscoveryProperties {
     private BigDecimal defaultRadiusKm = BigDecimal.valueOf(10);
-    private BigDecimal maxRadiusKm = BigDecimal.valueOf(15);
-    private int maxQueryRadiusMeters = 50_000;
+    private BigDecimal maxRadiusKm = BigDecimal.valueOf(10);
+    private int maxQueryRadiusMeters = 10_000;
     private int maxPageSize = 100;
 
     public BigDecimal getDefaultRadiusKm() {

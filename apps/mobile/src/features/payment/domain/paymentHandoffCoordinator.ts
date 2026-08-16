@@ -2,15 +2,15 @@ import {AppApiError} from '../../../core/http/apiError';
 import type {CheckoutSession} from '../../checkout/domain/checkoutTypes';
 import {paymentApi} from '../api/paymentApi';
 import type {
-  CashfreeHostedHandoff,
   PaymentMoney,
   PaymentOrderHandoffSession,
+  RazorpayHostedHandoff,
 } from './paymentTypes';
 
 export const PAYMENT_METHOD_TOKEN_CONTRACT_BLOCKER =
   'PAYMENT_METHOD_TOKEN_CONTRACT_UNAVAILABLE';
-export const CASHFREE_NATIVE_PROVIDER_LAUNCH_BLOCKER =
-  'CASHFREE_NATIVE_PROVIDER_SDK_UNAVAILABLE';
+export const PAYMENT_TERMINAL_RETRY_CONTRACT_BLOCKER =
+  'PAYMENT_TERMINAL_RETRY_CONTRACT_UNAVAILABLE';
 
 export const paymentHandoffCapability = {
   authoritativePaymentOrderCreationSupported: true,
@@ -19,11 +19,12 @@ export const paymentHandoffCapability = {
   clientDuplicateTapCoalescing: true,
   rawPaymentCredentialCollectionAllowed: false,
   tokenizedPaymentMethodContractSupported: false,
-  nativeCashfreeLaunchSupported: false,
-  paymentVerificationOwnedByNextPhase: false,
+  nativeRazorpayLaunchSupported: true,
+  backendVerificationRequiredForSuccess: true,
+  newPaymentAttemptAfterTerminalFailureSupported: false,
   blockerCodes: [
     PAYMENT_METHOD_TOKEN_CONTRACT_BLOCKER,
-    CASHFREE_NATIVE_PROVIDER_LAUNCH_BLOCKER,
+    PAYMENT_TERMINAL_RETRY_CONTRACT_BLOCKER,
   ],
 } as const;
 
@@ -33,13 +34,11 @@ export type CreatePaymentOrder = (
 
 interface ActivePaymentPreparation {
   checkoutId: string;
-  promise: Promise<CashfreeHostedHandoff>;
+  promise: Promise<RazorpayHostedHandoff>;
 }
 
 function canonicalDecimal(value: string): string | null {
-  if (!/^\d+(?:\.\d+)?$/.test(value)) {
-    return null;
-  }
+  if (!/^\d+(?:\.\d+)?$/.test(value)) return null;
   const [wholeRaw, fractionalRaw = ''] = value.split('.');
   const whole = wholeRaw.replace(/^0+(?=\d)/, '') || '0';
   const fractional = fractionalRaw.replace(/0+$/, '');
@@ -63,10 +62,10 @@ function requireEligibleCheckout(checkout: CheckoutSession): void {
   }
 }
 
-export function prepareCashfreeHostedHandoff(
+export function prepareRazorpayHostedHandoff(
   checkout: CheckoutSession,
   paymentOrder: PaymentOrderHandoffSession,
-): CashfreeHostedHandoff {
+): RazorpayHostedHandoff {
   requireEligibleCheckout(checkout);
 
   if (paymentOrder.checkoutId !== checkout.checkoutId) {
@@ -81,7 +80,19 @@ export function prepareCashfreeHostedHandoff(
       'The payment amount changed. Refresh checkout before continuing.',
     );
   }
-  if (paymentOrder.status !== 'PAYMENT_PENDING') {
+  if (paymentOrder.provider !== 'RAZORPAY') {
+    throw new AppApiError(
+      'PAYMENT_PROVIDER_UNSUPPORTED',
+      'This mobile build cannot securely open the payment provider returned by Craves.',
+    );
+  }
+  if (!paymentOrder.checkoutKeyId || !paymentOrder.providerOrderId) {
+    throw new AppApiError(
+      'PAYMENT_PROVIDER_SESSION_INCOMPLETE',
+      'Secure payment information is incomplete. Please refresh and try again.',
+    );
+  }
+  if (paymentOrder.status !== 'CREATED' && paymentOrder.status !== 'PAYMENT_PENDING') {
     throw new AppApiError(
       'PAYMENT_ORDER_NOT_LAUNCHABLE',
       'This payment is no longer ready for provider authorization.',
@@ -89,24 +100,24 @@ export function prepareCashfreeHostedHandoff(
   }
 
   return {
-    provider: 'CASHFREE',
+    provider: 'RAZORPAY',
     paymentOrderId: paymentOrder.paymentOrderId,
     checkoutId: paymentOrder.checkoutId,
-    cashfreeOrderId: paymentOrder.cashfreeOrderId,
-    paymentSessionId: paymentOrder.paymentSessionId,
+    providerOrderId: paymentOrder.providerOrderId,
+    checkoutKeyId: paymentOrder.checkoutKeyId,
     amount: paymentOrder.amount,
   };
 }
 
 export interface PaymentHandoffCoordinator {
-  prepare(checkout: CheckoutSession): Promise<CashfreeHostedHandoff>;
+  prepare(checkout: CheckoutSession): Promise<RazorpayHostedHandoff>;
 }
 
 export function createPaymentHandoffCoordinator(
   createPaymentOrder: CreatePaymentOrder = paymentApi.createOrder,
 ): PaymentHandoffCoordinator {
   let active: ActivePaymentPreparation | null = null;
-  let successful: CashfreeHostedHandoff | null = null;
+  let successful: RazorpayHostedHandoff | null = null;
 
   return {
     prepare(checkout) {
@@ -116,9 +127,7 @@ export function createPaymentHandoffCoordinator(
         return Promise.resolve(successful);
       }
       if (active) {
-        if (active.checkoutId === checkout.checkoutId) {
-          return active.promise;
-        }
+        if (active.checkoutId === checkout.checkoutId) return active.promise;
         return Promise.reject(
           new AppApiError(
             'PAYMENT_PREPARATION_IN_PROGRESS',
@@ -127,29 +136,20 @@ export function createPaymentHandoffCoordinator(
         );
       }
 
-      let preparation: Promise<CashfreeHostedHandoff>;
+      let preparation: Promise<RazorpayHostedHandoff>;
       preparation = createPaymentOrder(checkout.checkoutId)
-        .then(paymentOrder => prepareCashfreeHostedHandoff(checkout, paymentOrder))
+        .then(paymentOrder => prepareRazorpayHostedHandoff(checkout, paymentOrder))
         .then(handoff => {
           successful = handoff;
           return handoff;
         })
         .finally(() => {
-          if (active?.promise === preparation) {
-            active = null;
-          }
+          if (active?.promise === preparation) active = null;
         });
       active = {checkoutId: checkout.checkoutId, promise: preparation};
       return preparation;
     },
   };
-}
-
-export function requireNativeCashfreeProviderLaunch(): never {
-  throw new AppApiError(
-    CASHFREE_NATIVE_PROVIDER_LAUNCH_BLOCKER,
-    'Secure payment authorization is not available in this mobile build yet.',
-  );
 }
 
 export const paymentHandoffCoordinator = createPaymentHandoffCoordinator();

@@ -123,7 +123,7 @@ public class ShiprocketApiClient implements DeliveryProviderAdapter {
             warnings.add("Shiprocket selected courier did not contain a courier id");
             return unavailableQuote(warnings, selected);
         }
-        BigDecimal rate = decimalField(selected, "rate", "freight_charge", "charge_weight");
+        BigDecimal rate = decimalField(selected, "rate", "freight_charge");
         if (rate == null || rate.signum() < 0) {
             warnings.add("Shiprocket selected courier did not contain a usable delivery rate");
             return unavailableQuote(warnings, selected);

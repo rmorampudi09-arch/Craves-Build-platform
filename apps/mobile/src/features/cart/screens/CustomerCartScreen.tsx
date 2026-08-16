@@ -14,11 +14,6 @@ import {useNavigation} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NavigationProp} from '@react-navigation/native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {CFEnvironment, CFSession} from 'cashfree-pg-api-contract';
-import {
-  CFPaymentGatewayService,
-  type CFErrorResponse,
-} from 'react-native-cashfree-pg-sdk';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
 import type {
   CustomerCartStackParamList,
@@ -48,10 +43,10 @@ import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
 import {checkoutApi} from '../../checkout/api/checkoutApi';
-import {
-  paymentApi,
-  type MobilePaymentSession,
-} from '../../checkout/api/paymentApi';
+import type {CheckoutSession} from '../../checkout/domain/checkoutTypes';
+import {paymentHandoffCoordinator} from '../../payment/domain/paymentHandoffCoordinator';
+import {paymentRecoveryCoordinator} from '../../payment/domain/paymentRecoveryCoordinator';
+import {razorpayGateway} from '../../payment/gateway/razorpayGateway';
 import {
   checkCartServiceability,
   type CartDiscoveryDish,
@@ -305,7 +300,7 @@ export function CustomerCartScreen() {
     Record<string, CartDiscoveryDish>
   >({});
   const [checkoutBusy, setCheckoutBusy] = useState(false);
-  const paymentRef = useRef<MobilePaymentSession | null>(null);
+  const activeCheckoutRef = useRef<CheckoutSession | null>(null);
 
   const sections = useMemo(
     () => groupCartItemsByKitchen(model?.items ?? []),
@@ -363,49 +358,6 @@ export function CustomerCartScreen() {
     verifyServiceability();
   }, [verifyServiceability]);
 
-  useEffect(() => {
-    CFPaymentGatewayService.setCallback({
-      onVerify: (cashfreeOrderId: string) => {
-        const current = paymentRef.current;
-        if (!current || current.cashfreeOrderId !== cashfreeOrderId) {
-          setInteractionError(
-            'Cashfree returned an unexpected order reference. Payment was not accepted.',
-          );
-          return;
-        }
-        setCheckoutBusy(true);
-        paymentApi
-          .verify(current.paymentOrderId)
-          .then(result => {
-            if (result.status === 'PAID') {
-              Alert.alert('Payment successful', 'Your payment was verified by Craves.');
-              paymentRef.current = null;
-              refreshCart();
-            } else {
-              setInteractionError(
-                'Payment is not verified as paid yet. Please try verification again.',
-              );
-            }
-          })
-          .catch(() =>
-            setInteractionError(
-              'Payment verification failed. No payment has been marked successful.',
-            ),
-          )
-          .finally(() => setCheckoutBusy(false));
-      },
-      onError: (_error: CFErrorResponse, cashfreeOrderId: string) => {
-        const current = paymentRef.current;
-        setInteractionError(
-          current?.cashfreeOrderId === cashfreeOrderId
-            ? 'Cashfree checkout did not complete. No payment was marked successful.'
-            : 'Cashfree returned an unexpected order reference.',
-        );
-      },
-    });
-    return () => CFPaymentGatewayService.removeCallback();
-  }, [refreshCart]);
-
   const browseMeals = useCallback(() => {
     const tabs = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
     if (tabs) tabs.navigate('Home');
@@ -420,6 +372,7 @@ export function CustomerCartScreen() {
     (item: CartScreenItem, targetQuantity: number) => {
       const interaction = resolveCartQuantityInteraction(targetQuantity);
       setInteractionError(null);
+      activeCheckoutRef.current = null;
       if (interaction.kind === 'INVALID') {
         setInteractionError('Choose a valid cart quantity.');
         return;
@@ -450,7 +403,8 @@ export function CustomerCartScreen() {
   );
 
   const handleCheckout = useCallback(async () => {
-    if (!model || !header.selectedLocation?.addressId || checkoutBusy) return;
+    const addressId = header.selectedLocation?.addressId;
+    if (!model || !addressId || checkoutBusy) return;
     setInteractionError(null);
     setCheckoutBusy(true);
     try {
@@ -461,17 +415,70 @@ export function CustomerCartScreen() {
         );
         return;
       }
-      const checkout = await checkoutApi.createSession({
-        deliveryAddressId: header.selectedLocation.addressId,
-      });
-      const payment = await paymentApi.createSession(checkout.checkoutId, authPhone);
-      paymentRef.current = payment;
-      const session = new CFSession(
-        payment.paymentSessionId,
-        payment.cashfreeOrderId,
-        CFEnvironment.SANDBOX,
-      );
-      CFPaymentGatewayService.doWebPayment(session);
+
+      let checkout = activeCheckoutRef.current;
+      if (
+        !checkout ||
+        checkout.deliveryAddressId !== addressId ||
+        checkout.status !== 'PAYMENT_PENDING'
+      ) {
+        checkout = await checkoutApi.createSession({deliveryAddressId: addressId});
+        activeCheckoutRef.current = checkout;
+      }
+
+      const handoff = await paymentHandoffCoordinator.prepare(checkout);
+      try {
+        const proof = await razorpayGateway.open(handoff, {phone: authPhone});
+        const recovery = await paymentRecoveryCoordinator.recover(handoff, {
+          kind: 'RAZORPAY_SUCCESS',
+          proof,
+        });
+        activeCheckoutRef.current = recovery.checkout;
+
+        if (recovery.outcome === 'SUCCEEDED') {
+          activeCheckoutRef.current = null;
+          Alert.alert('Payment successful', 'Your payment was verified by Craves.');
+          await refreshCart();
+          return;
+        }
+        if (recovery.outcome === 'RECONCILING') {
+          setInteractionError(
+            'Your payment is being confirmed by Craves. Do not pay again. Check Orders shortly.',
+          );
+          return;
+        }
+        if (recovery.outcome === 'PENDING') {
+          setInteractionError(
+            'Payment is still pending. Do not start another payment until Craves finishes checking this one.',
+          );
+          return;
+        }
+        setInteractionError('Payment did not complete. You can safely retry this payment.');
+      } catch (paymentError) {
+        const recovery = await paymentRecoveryCoordinator
+          .recover(handoff, {kind: 'PROVIDER_ERROR'})
+          .catch(() => null);
+
+        if (recovery) {
+          activeCheckoutRef.current = recovery.checkout;
+          if (recovery.outcome === 'SUCCEEDED') {
+            activeCheckoutRef.current = null;
+            Alert.alert('Payment successful', 'Your payment was verified by Craves.');
+            await refreshCart();
+            return;
+          }
+          if (
+            recovery.verification.status === 'PAID' ||
+            recovery.outcome === 'RECONCILING'
+          ) {
+            setInteractionError(
+              'Craves has received the payment signal and is reconciling your order. Do not pay again.',
+            );
+            return;
+          }
+        }
+        throw paymentError;
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Checkout could not be started.';
@@ -484,6 +491,7 @@ export function CustomerCartScreen() {
     checkoutBusy,
     header.selectedLocation,
     model,
+    refreshCart,
     verifyServiceability,
   ]);
 

@@ -69,7 +69,7 @@ function MethodCard({
       <View style={styles.methodHeadingRow}>
         <View style={styles.methodIcon}>
           <Icon
-            name={option.id === 'CASHFREE_ONLINE' ? 'shield' : 'orders'}
+            name={option.id === 'RAZORPAY_ONLINE' ? 'shield' : 'orders'}
             size={iconSize.md}
             color={disabled ? colors.placeholder : colors.flameRed}
           />
@@ -250,7 +250,7 @@ export function CustomerPaymentMethodsScreen() {
             <View style={styles.safetyCopy}>
               <Text style={styles.safetyTitle}>Secure provider handoff</Text>
               <Text style={styles.safetyText}>
-                Online payment uses the existing Cashfree order and verification boundary. Payment success is accepted only after backend verification.
+                Online payment uses the backend-issued Razorpay order. Payment success is accepted only after signed backend verification and checkout reconciliation.
               </Text>
             </View>
           </View>

@@ -82,9 +82,9 @@ const IMMERSIVE_POLICY: RouteChromePolicy = {
 };
 
 const CUSTOMER_CART_POLICY: RouteChromePolicy = {
-  bottomNavigationVisible: true,
+  bottomNavigationVisible: false,
   viewCartEligible: false,
-  immersive: false,
+  immersive: true,
 };
 
 export function resolveRouteChromePolicy(

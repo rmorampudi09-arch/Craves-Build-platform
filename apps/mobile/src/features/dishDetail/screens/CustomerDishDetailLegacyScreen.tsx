@@ -656,21 +656,6 @@ export function CustomerDishDetailScreen() {
                 }
               />
             )}
-            <Button
-              label="Buy Now"
-              accessibilityHint="A dedicated single-dish checkout is not available yet"
-              onPress={() =>
-                setPurchaseMessage(
-                  'Buy Now is unavailable right now. Add this dish to your cart to continue.',
-                )
-              }
-              variant="outline"
-              style={
-                stackPurchaseActions
-                  ? styles.purchaseActionStacked
-                  : styles.purchaseAction
-              }
-            />
           </View>
         </View>
       </View>

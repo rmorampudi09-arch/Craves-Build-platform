@@ -13,10 +13,14 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
+import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
-import type {CustomerHomeStackParamList} from '../../../app/navigation/types';
+import type {
+  CustomerHomeStackParamList,
+  CustomerTabParamList,
+} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {classifyResponsiveWidth, responsiveLayout} from '../../../design/responsive';
@@ -32,6 +36,7 @@ import {
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
+import {HomePromoAndKitchens} from '../components/HomePromoAndKitchens';
 import {
   OfflineNotice,
   RecoverableErrorBanner,
@@ -80,6 +85,12 @@ import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 
 const HOME_RADIUS_METERS = 10_000;
 const HOME_PAGE_SIZE = 20;
+
+type HomeFeedListItem =
+  | {kind: 'categories'; key: 'categories'}
+  | {kind: 'popular-header'; key: 'popular-header'}
+  | {kind: 'empty'; key: 'empty'}
+  | {kind: 'dish'; key: string; dish: NearbyDish};
 
 function HomeFeedSkeleton() {
   return (
@@ -293,7 +304,7 @@ export function CustomerHomeScreen() {
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const listRef = useRef<FlatList<NearbyDish>>(null);
+  const listRef = useRef<FlatList<HomeFeedListItem>>(null);
 
   const feed = useHomeNearbyDishesQuery({
     radiusMeters: HOME_RADIUS_METERS,
@@ -323,6 +334,25 @@ export function CustomerHomeScreen() {
     () => filterHomeDishes(filteredAndSortedDishes, search.query, selectedCategory),
     [filteredAndSortedDishes, search.query, selectedCategory],
   );
+  const listData = useMemo<HomeFeedListItem[]>(() => {
+    const items: HomeFeedListItem[] = [];
+    if (categories.length > 0) {
+      items.push({kind: 'categories', key: 'categories'});
+    }
+    items.push({kind: 'popular-header', key: 'popular-header'});
+    if (visibleDishes.length === 0) {
+      items.push({kind: 'empty', key: 'empty'});
+    } else {
+      items.push(
+        ...visibleDishes.map(dish => ({
+          kind: 'dish' as const,
+          key: `dish:${dish.id}`,
+          dish,
+        })),
+      );
+    }
+    return items;
+  }, [categories.length, visibleDishes]);
   const activeDiscoveryFilterCount = getActiveDiscoveryFilterCount(appliedFilters);
   const cartLinesByMenuItemId = useMemo(() => {
     const lines = new Map<string, CartLine>();
@@ -467,6 +497,11 @@ export function CustomerHomeScreen() {
     [navigation],
   );
 
+  const openSubscription = useCallback(() => {
+    const tabs = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
+    tabs?.navigate('Profile', {screen: 'CustomerSettingsSubscription'});
+  }, [navigation]);
+
   const openFilters = () => {
     navigation.navigate('CustomerFilterSort', {origin: 'HOME'});
   };
@@ -583,6 +618,7 @@ export function CustomerHomeScreen() {
       <CustomerHeader
         onPressLocation={() => setLocationSelectorVisible(true)}
         onPressNotifications={header.openNotifications}
+        onPressSubscription={openSubscription}
       />
       <View style={[styles.heroCopy, compactLayout && styles.heroCopyCompact]}>
         <Text style={styles.greeting}>{greeting}</Text>
@@ -619,34 +655,14 @@ export function CustomerHomeScreen() {
           </Text>
         </Pressable>
       </View>
-      {categories.length > 0 ? (
-        <HomeCategoryRail
-          selectedCategory={selectedCategory}
-          onSelect={setSelectedCategory}
-        />
-      ) : null}
-      <View style={styles.sectionHeadingRow}>
-        <Text style={styles.sectionTitle}>Popular near you</Text>
-        <Text style={styles.sectionCaption}>Available meals ordered by distance</Text>
+
+      <HomePromoAndKitchens />
+
+      <View style={styles.mindHeadingRow}>
+        <Text accessibilityRole="header" style={styles.sectionTitle}>
+          What's on your mind
+        </Text>
       </View>
-      {mutationError ? (
-        <RecoverableErrorBanner message={mutationError} style={styles.inlineNotice} />
-      ) : null}
-      {queryError && dishes.length > 0 ? (
-        offline ? (
-          <OfflineNotice
-            message={queryError.message}
-            onRetry={retryFeed}
-            style={styles.inlineNotice}
-          />
-        ) : (
-          <RecoverableErrorBanner
-            message={queryError.message}
-            onRetry={retryFeed}
-            style={styles.inlineNotice}
-          />
-        )
-      ) : null}
     </View>
   );
 
@@ -654,10 +670,9 @@ export function CustomerHomeScreen() {
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-home">
       <FlatList
         ref={listRef}
-        data={visibleDishes}
-        keyExtractor={item => item.id}
+        data={listData}
+        keyExtractor={item => item.key}
         keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={emptyState}
         ListFooterComponent={
           feed.isFetchingNextPage ? (
             <ActivityIndicator
@@ -683,18 +698,67 @@ export function CustomerHomeScreen() {
           />
         }
         renderItem={({item}) => {
-          const cartLine = cartLinesByMenuItemId.get(item.id) ?? null;
+          if (item.kind === 'categories') {
+            return (
+              <View style={styles.stickyCategoryWrap}>
+                <HomeCategoryRail
+                  selectedCategory={selectedCategory}
+                  onSelect={setSelectedCategory}
+                />
+              </View>
+            );
+          }
+
+          if (item.kind === 'popular-header') {
+            return (
+              <View>
+                <View style={styles.sectionHeadingRow}>
+                  <Text style={styles.sectionTitle}>Popular near you</Text>
+                  <Text style={styles.sectionCaption}>
+                    Available meals ordered by distance
+                  </Text>
+                </View>
+                {mutationError ? (
+                  <RecoverableErrorBanner
+                    message={mutationError}
+                    style={styles.inlineNotice}
+                  />
+                ) : null}
+                {queryError && dishes.length > 0 ? (
+                  offline ? (
+                    <OfflineNotice
+                      message={queryError.message}
+                      onRetry={retryFeed}
+                      style={styles.inlineNotice}
+                    />
+                  ) : (
+                    <RecoverableErrorBanner
+                      message={queryError.message}
+                      onRetry={retryFeed}
+                      style={styles.inlineNotice}
+                    />
+                  )
+                ) : null}
+              </View>
+            );
+          }
+
+          if (item.kind === 'empty') {
+            return emptyState;
+          }
+
+          const cartLine = cartLinesByMenuItemId.get(item.dish.id) ?? null;
           return (
             <DishCard
-              dish={item}
-              adding={cartMutations[`menu:${item.id}`]?.status === 'PENDING'}
+              dish={item.dish}
+              adding={cartMutations[`menu:${item.dish.id}`]?.status === 'PENDING'}
               cartLine={cartLine}
               changingQuantity={
                 cartLine
                   ? cartMutations[`line:${cartLine.lineId}`]?.status === 'PENDING'
                   : false
               }
-              favorite={isFavoriteMenuItem(favorites.data, item.id)}
+              favorite={isFavoriteMenuItem(favorites.data, item.dish.id)}
               favoritePending={toggleFavorite.isPending}
               favoriteDisabled={favorites.sessionRequired}
               onFavoriteToggle={handleFavoriteToggle}
@@ -707,6 +771,7 @@ export function CustomerHomeScreen() {
         }}
         scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={categories.length > 0 ? [1] : undefined}
         contentContainerStyle={[
           styles.listContent,
           {paddingBottom: listBottomPadding},
@@ -785,6 +850,15 @@ const styles = StyleSheet.create({
     color: colors.flameRedAccessible,
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
+  },
+  mindHeadingRow: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxs,
+  },
+  stickyCategoryWrap: {
+    backgroundColor: colors.surfaceBase,
+    zIndex: 10,
   },
   sectionHeadingRow: {
     paddingHorizontal: spacing.md,

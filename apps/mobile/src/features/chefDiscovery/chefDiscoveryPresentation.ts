@@ -28,7 +28,6 @@ export function filterLoadedNearbyKitchens(
   return kitchens.filter(kitchen =>
     [
       kitchen.kitchenName,
-      kitchen.displayName,
       kitchen.description,
       kitchen.areaName,
       kitchen.city,
@@ -54,7 +53,7 @@ export function formatKitchenLocation(kitchen: NearbyKitchen): string {
 }
 
 export function getKitchenInitials(kitchen: NearbyKitchen): string {
-  const name = (kitchen.displayName ?? kitchen.kitchenName).trim();
+  const name = kitchen.kitchenName.trim();
   const parts = name.split(/\s+/).filter(Boolean);
 
   if (parts.length === 0) {

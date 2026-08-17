@@ -6,9 +6,9 @@ import {
   FaSignOutAlt,
   FaUser,
 } from "react-icons/fa";
-import { FaCartShopping } from "react-icons/fa6";
 
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { CravesCartIcon } from "@/components/home/CravesCartIcon";
 import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import type { CravesUser } from "@/services/auth/cravesAuth";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
@@ -107,7 +107,7 @@ export function BrowseHeader({
               className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)]"
               aria-label={`Open cart${cartCount ? ` with ${cartCount} items` : ""}`}
             >
-              <FaCartShopping className="h-[1.08rem] w-[1.08rem]" aria-hidden="true" />
+              <CravesCartIcon className="h-[1.18rem] w-[1.18rem]" />
               {cartCount > 0 ? (
                 <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F62E18] px-1 text-[0.62rem] font-bold text-white">
                   {cartCount}

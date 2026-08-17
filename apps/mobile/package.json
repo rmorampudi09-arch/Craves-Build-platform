@@ -8,7 +8,7 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
-    "test:integration": "jest --runInBand --runTestsByPath __tests__/integration/P122CrossFeatureFlows.test.ts src/app/navigation/inboundRouting.test.ts src/app/navigation/processRestoration.test.ts src/features/auth/api/sessionManager.test.ts src/features/chefProfile/state/chefProfileRoleSwitch.test.ts src/features/cart/cartMutations.test.ts src/features/customerShell/customerCrossScreenReconciliation.test.ts src/features/notifications/customerNotificationsModel.test.ts src/features/chefOrders/domain/chefOrderDecision.test.ts src/features/chefOrders/domain/chefOrderEventReconciliation.test.ts",
+    "test:integration": "jest --runInBand --runTestsByPath __tests__/integration/P122CrossFeatureFlows.test.ts src/app/navigation/inboundRouting.test.ts src/app/navigation/processRestoration.test.ts src/features/auth/api/sessionManager.test.ts src/features/chefProfile/state/chefProfileRoleSwitch.test.ts src/features/customerProfile/state/customerProfileRoleSwitch.test.ts src/features/cart/cartMutations.test.ts src/features/customerShell/customerCrossScreenReconciliation.test.ts src/features/notifications/customerNotificationsModel.test.ts src/features/chefOrders/domain/chefOrderDecision.test.ts src/features/chefOrders/domain/chefOrderEventReconciliation.test.ts",
     "test:e2e": "jest --runInBand --runTestsByPath __tests__/e2e/P123CriticalE2EJourneys.test.ts",
     "check:p119": "node scripts/p119-apim-contract-coverage-check.mjs",
     "check:p120": "node scripts/p120-observability-audit-check.mjs"

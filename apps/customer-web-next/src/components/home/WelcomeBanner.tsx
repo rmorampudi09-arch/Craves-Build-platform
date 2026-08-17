@@ -1,6 +1,6 @@
-import { MapPinned, Sparkles, Utensils } from "lucide-react";
+import { Heart, MapPin, Sparkles, UtensilsCrossed } from "lucide-react";
 
-import heroFood from "@/assets/images/hero-food.jpg";
+import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 interface WelcomeBannerProps {
   firstName: string;
@@ -16,45 +16,59 @@ export function WelcomeBanner({
   hasAddress,
 }: WelcomeBannerProps) {
   return (
-    <section className="mx-auto max-w-7xl px-4 pt-6 md:px-6" aria-labelledby="discovery-heading">
-      <div className="relative min-h-[21rem] overflow-hidden rounded-[1.75rem] border border-[#F0E7E1] bg-[#FFF9F4] shadow-[0_16px_44px_rgba(51,36,30,0.08)] md:min-h-[24rem]">
+    <section
+      className={`${styles.fadeUp} mx-auto max-w-[88rem] px-4 pt-5 md:px-7 lg:px-10`}
+      aria-labelledby="discovery-heading"
+    >
+      <div className="relative min-h-[27rem] overflow-hidden rounded-[2rem] border border-[#EBDDD3] bg-[#F8E9D7] shadow-[0_22px_70px_rgba(74,47,35,0.10)] md:min-h-[31rem] lg:min-h-[34rem]">
         <img
-          src={heroFood.src}
-          alt="Homemade Indian food prepared in a warm home kitchen."
-          className="absolute inset-0 h-full w-full object-cover object-center opacity-90"
+          src="/home/reference/home-hero-reference.webp"
+          alt="A mother and child preparing vegetables together in a warm home kitchen."
+          className={`${styles.heroArtwork} absolute inset-0 h-full w-full object-cover object-[68%_50%] sm:object-center`}
+          fetchPriority="high"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#FFF9F4] via-[#FFF9F4]/95 to-[#FFF9F4]/20 md:via-[#FFF9F4]/82" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,248,238,0.98)_0%,rgba(255,248,238,0.94)_29%,rgba(255,248,238,0.60)_48%,rgba(255,248,238,0.08)_70%)] sm:bg-[linear-gradient(90deg,rgba(255,248,238,0.98)_0%,rgba(255,248,238,0.90)_31%,rgba(255,248,238,0.32)_55%,rgba(255,248,238,0)_74%)]" />
+        <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#F8E9D7]/55 to-transparent" />
 
-        <div className="relative z-10 flex min-h-[21rem] max-w-2xl flex-col justify-center px-6 py-10 md:min-h-[24rem] md:px-10 lg:px-12">
-          <p className="text-sm font-semibold text-ink">Welcome back, {firstName}</p>
+        <div className="relative z-10 flex min-h-[27rem] max-w-[43rem] flex-col justify-center px-6 py-10 sm:px-9 md:min-h-[31rem] md:px-12 lg:min-h-[34rem] lg:px-16">
+          <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-[#E8D2C2] bg-white/72 px-3.5 py-2 text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#7C5D50] backdrop-blur-sm">
+            <Heart className="h-3.5 w-3.5 fill-[#F62E18] text-[#F62E18]" aria-hidden="true" />
+            Welcome home, {firstName}
+          </div>
+
           <h1
             id="discovery-heading"
-            className="mt-2 font-display text-4xl font-bold leading-[1.02] tracking-[-0.045em] text-[#111111] sm:text-5xl"
+            className="max-w-[39rem] font-display text-[2.65rem] font-black leading-[0.98] tracking-[-0.055em] text-[#261A15] sm:text-5xl md:text-6xl lg:text-[4.35rem]"
           >
-            Welcome to <span className="text-[#F62E18]">Craves</span>
+            Eat for health.
+            <br />
+            Taste the <span className="text-[#F62E18]">comfort of home.</span>
           </h1>
-          <span className="mt-4 block h-1 w-16 rounded-full bg-[#F62E18]" aria-hidden="true" />
-          <p className="mt-5 max-w-xl text-xl font-bold leading-7 text-[#F62E18] md:text-2xl">
-            Eat for health, taste the comfort of home.
-          </p>
-          <p className="mt-3 max-w-lg text-sm leading-6 text-[#4F555A] md:text-base">
-            Discover homemade meals from nearby home kitchens, prepared fresh and delivered to your doorstep.
+
+          <p className="mt-5 max-w-lg text-sm font-medium leading-6 text-[#665047] sm:text-base sm:leading-7">
+            Fresh food from nearby home kitchens, made with familiar ingredients,
+            personal recipes and the kind of care that feels like home.
           </p>
 
-          <div className="mt-6 flex flex-wrap gap-2.5">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#EADDD6] bg-white/90 px-3 py-2 text-xs font-semibold text-[#383D42] shadow-sm">
-              <Utensils className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
+          <div className="mt-7 flex flex-wrap gap-2.5">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#E6D5C9] bg-white/82 px-3.5 py-2 text-xs font-bold text-[#49372F] backdrop-blur-sm">
+              <UtensilsCrossed className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
               {dishCount} live {dishCount === 1 ? "dish" : "dishes"}
             </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#EADDD6] bg-white/90 px-3 py-2 text-xs font-semibold text-[#383D42] shadow-sm">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#E6D5C9] bg-white/82 px-3.5 py-2 text-xs font-bold text-[#49372F] backdrop-blur-sm">
               {hasAddress ? (
-                <MapPinned className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
+                <MapPin className="h-4 w-4 fill-[#F62E18] text-[#F62E18]" strokeWidth={1.5} aria-hidden="true" />
               ) : (
                 <Sparkles className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
               )}
               {radiusLabel ?? "Choose delivery location"}
             </span>
           </div>
+        </div>
+
+        <div className="absolute bottom-5 right-5 z-10 hidden items-center gap-2 rounded-full bg-[#261A15]/88 px-4 py-2 text-xs font-bold text-white backdrop-blur-md md:flex">
+          <Heart className="h-3.5 w-3.5 fill-[#F62E18] text-[#F62E18]" aria-hidden="true" />
+          Homemade. Nearby. Made with care.
         </div>
       </div>
     </section>

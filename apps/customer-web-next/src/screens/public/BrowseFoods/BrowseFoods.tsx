@@ -12,8 +12,8 @@ import {
   type CravingCategory,
 } from "@/components/home/HomeCategoryRail";
 import { KitchensGrid } from "@/components/home/KitchensGrid";
+import { TodaysSpecial } from "@/components/home/TodaysSpecial";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
-import { FooterSection } from "@/components/sections/FooterSection";
 import {
   ALL_DISHES_CATEGORY,
   type DishCategory,
@@ -47,6 +47,7 @@ import {
   loadCart,
   subscribeCart,
 } from "@/services/api/cravesCart";
+import styles from "./HomeReference.module.css";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 const SAVED_ADDRESS_MATCH_RADIUS_METERS = 100;
@@ -253,7 +254,7 @@ function BrowseFoodsPage() {
   }, []);
 
   const openKitchen = useCallback(async (kitchen: NearbyKitchen) => {
-    const kitchenName = kitchen.displayName || kitchen.kitchenName;
+    const kitchenName = kitchen.kitchenName;
     setSelectedKitchen(kitchen);
     setMenuDishes([]);
     setCategory(ALL_DISHES_CATEGORY);
@@ -368,12 +369,25 @@ function BrowseFoodsPage() {
     if (!categories.includes(category)) setCategory(ALL_DISHES_CATEGORY);
   }, [categories, category]);
 
+  const categoryImages = useMemo<Partial<Record<CravingCategory, string>>>(() => {
+    const result: Partial<Record<CravingCategory, string>> = {};
+    for (const nextCategory of Object.keys(HOME_CATEGORY_KEYWORDS) as CravingCategory[]) {
+      const keywords = HOME_CATEGORY_KEYWORDS[nextCategory];
+      const matchingDish = nearbyDishes.find((dish) => {
+        if (dish.imageIsPlaceholder) return false;
+        const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
+        return keywords.some((keyword) => searchable.includes(keyword));
+      });
+      if (matchingDish) result[nextCategory] = matchingDish.img;
+    }
+    return result;
+  }, [nearbyDishes]);
+
   const filteredKitchens = useMemo(() => {
     const term = searchTerm.trim().toLocaleLowerCase("en-IN");
     if (!term) return kitchens;
     return kitchens.filter((kitchen) =>
       [
-        kitchen.displayName,
         kitchen.kitchenName,
         kitchen.description,
         kitchen.areaName,
@@ -413,16 +427,17 @@ function BrowseFoodsPage() {
 
   if (!user) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-sm font-medium text-muted-foreground" role="status">
-          Loading your Craves session…
-        </p>
+      <main className={`flex min-h-screen items-center justify-center ${styles.paperSurface}`}>
+        <div className="text-center" role="status">
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-[#E9D9CF] border-t-[#F62E18]" />
+          <p className="mt-4 text-sm font-bold text-[#806B62]">Opening your Craves home…</p>
+        </div>
       </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white pb-24 text-ink">
+    <div className={`${styles.paperSurface} min-h-screen pb-24 text-[#261A15]`}>
       <BrowseHeader
         user={user}
         locationLabel={locationLabel}
@@ -444,7 +459,7 @@ function BrowseFoodsPage() {
 
         {selectedKitchen ? (
           <>
-            <section className="mx-auto max-w-7xl px-4 pt-7 md:px-6" aria-label="Selected kitchen">
+            <section className="mx-auto max-w-[88rem] px-4 pt-9 md:px-7 lg:px-10" aria-label="Selected kitchen">
               <button
                 type="button"
                 onClick={() => {
@@ -455,24 +470,24 @@ function BrowseFoodsPage() {
                   setDiscoveryState("ready");
                   setCatalogMessage("Fresh homemade food available near your delivery location.");
                 }}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#F62E18]/35 px-4 text-sm font-semibold text-[#C92716] hover:bg-[#FFF3F0]"
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#E0C8BA] bg-white/70 px-4 text-xs font-black text-[#C92716] transition hover:-translate-y-0.5 hover:border-[#F62E18]"
               >
                 <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                 Back to home
               </button>
 
-              <div className="mt-4 rounded-2xl border border-[#ECEDEF] bg-white p-5 shadow-[0_8px_24px_rgba(17,17,17,0.05)] md:flex md:items-center md:justify-between md:gap-6">
+              <div className="mt-4 rounded-[2rem] border border-[#E8D8CE] bg-[#FFF8F1] p-6 shadow-[0_14px_40px_rgba(61,40,31,0.06)] md:flex md:items-center md:justify-between md:gap-6 md:p-7">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#F62E18]">Selected home kitchen</p>
-                  <h2 className="mt-1 font-display text-2xl font-bold tracking-[-0.035em] text-ink">
-                    {selectedKitchen.displayName || selectedKitchen.kitchenName}
+                  <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#F62E18]">Selected home kitchen</p>
+                  <h2 className="mt-1 font-display text-3xl font-black tracking-[-0.04em] text-[#261A15]">
+                    {selectedKitchen.kitchenName}
                   </h2>
-                  <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <MapPin className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
+                  <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-[#806B62]">
+                    <MapPin className="h-4 w-4 fill-[#F62E18] text-[#F62E18]" strokeWidth={1.5} aria-hidden="true" />
                     {[selectedKitchen.areaName, selectedKitchen.city].filter(Boolean).join(", ")}
                   </p>
                 </div>
-                <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#F1F3F5] px-3 py-2 text-sm font-semibold text-ink md:mt-0">
+                <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-2 text-sm font-black text-[#5F4B43] shadow-sm md:mt-0">
                   <Utensils className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
                   {selectedKitchen.activeMenuItemCount} active {selectedKitchen.activeMenuItemCount === 1 ? "dish" : "dishes"}
                 </div>
@@ -498,10 +513,12 @@ function BrowseFoodsPage() {
           <>
             <HomeCategoryRail
               selected={homeCategory}
+              images={categoryImages}
               onSelect={(nextCategory) =>
                 setHomeCategory((current) => (current === nextCategory ? null : nextCategory))
               }
             />
+            <TodaysSpecial dishes={nearbyDishes} />
             <DishesGrid
               dishes={filteredDishes}
               selectedCategory={homeCategory ?? ALL_DISHES_CATEGORY}
@@ -524,8 +541,6 @@ function BrowseFoodsPage() {
           </>
         )}
       </main>
-
-      {!selectedKitchen ? <FooterSection landingHrefPrefix="/" /> : null}
 
       <FloatingCartBar
         itemCount={cartItemCount}

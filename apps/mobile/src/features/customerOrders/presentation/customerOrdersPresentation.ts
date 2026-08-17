@@ -42,6 +42,12 @@ export interface CustomerOrderStatusPresentation {
   tone: CustomerOrderStatusTone;
 }
 
+export interface CustomerOrderProgressPresentation {
+  label: string;
+  tone: CustomerOrderStatusTone;
+  icon: 'clock' | 'check';
+}
+
 export type CustomerOrderReferenceAction = 'TRACK' | 'REORDER' | null;
 
 const UPCOMING_STATUSES = new Set<CustomerOrderStatus>([
@@ -99,7 +105,7 @@ export function getCustomerOrderStatusPresentation(
     case 'PAYMENT_PENDING':
       return {label: 'Payment pending', tone: 'warning'};
     case 'PAID':
-      return {label: 'Paid', tone: 'accent'};
+      return {label: 'Awaiting chef', tone: 'warning'};
     case 'CHEF_ACCEPTANCE_PENDING':
       return {label: 'Awaiting chef', tone: 'warning'};
     case 'CHEF_ACCEPTED':
@@ -107,9 +113,9 @@ export function getCustomerOrderStatusPresentation(
     case 'PREPARING':
       return {label: 'Preparing', tone: 'accent'};
     case 'READY_FOR_PICKUP':
-      return {label: 'Ready for pickup', tone: 'accent'};
+      return {label: 'Ready for pickup', tone: 'success'};
     case 'OUT_FOR_DELIVERY':
-      return {label: 'Out for delivery', tone: 'accent'};
+      return {label: 'Item picked up', tone: 'accent'};
     case 'DELIVERED':
       return {label: 'Delivered', tone: 'success'};
     case 'CHEF_REJECTED':
@@ -122,6 +128,82 @@ export function getCustomerOrderStatusPresentation(
       return {label: 'Refunded', tone: 'muted'};
     case 'REFUND_FAILED':
       return {label: 'Refund needs attention', tone: 'danger'};
+  }
+}
+
+function parseTimestamp(value: string): Date | null {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatClockTime(value: string): string {
+  const date = parseTimestamp(value);
+  if (!date) return value;
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatDayMonthTime(value: string): string {
+  const date = parseTimestamp(value);
+  if (!date) return value;
+  const day = date.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+  });
+  return `${day}, ${formatClockTime(value)}`;
+}
+
+export function getCustomerOrderProgressPresentation(
+  order: CustomerOrder,
+): CustomerOrderProgressPresentation {
+  switch (order.status) {
+    case 'DELIVERED':
+      return {
+        label: `Delivered on ${formatClockTime(order.updatedAt)}`,
+        tone: 'success',
+        icon: 'check',
+      };
+    case 'CANCELLED':
+    case 'CHEF_REJECTED':
+      return {
+        label: `Cancelled on ${formatDayMonthTime(order.updatedAt)}`,
+        tone: 'muted',
+        icon: 'clock',
+      };
+    case 'REFUND_PENDING':
+      return {label: 'Refund is being processed', tone: 'warning', icon: 'clock'};
+    case 'REFUNDED':
+      return {label: 'Refund completed', tone: 'muted', icon: 'check'};
+    case 'REFUND_FAILED':
+      return {label: 'Refund needs attention', tone: 'danger', icon: 'clock'};
+    case 'PAYMENT_PENDING':
+      return {
+        label: 'Estimated delivery after payment confirmation',
+        tone: 'muted',
+        icon: 'clock',
+      };
+    case 'PAID':
+    case 'CHEF_ACCEPTANCE_PENDING':
+      return {
+        label: 'Estimated delivery after chef confirmation',
+        tone: 'muted',
+        icon: 'clock',
+      };
+    case 'CHEF_ACCEPTED':
+    case 'PREPARING':
+      return {
+        label: order.prepTimeMinutes
+          ? `Estimated delivery • ${order.prepTimeMinutes} min preparation`
+          : 'Estimated delivery is being updated',
+        tone: 'accent',
+        icon: 'clock',
+      };
+    case 'READY_FOR_PICKUP':
+      return {label: 'Waiting for pickup', tone: 'success', icon: 'check'};
+    case 'OUT_FOR_DELIVERY':
+      return {label: 'Delivery in progress', tone: 'accent', icon: 'clock'};
   }
 }
 
@@ -157,16 +239,34 @@ export function getCustomerOrderDisplayReference(orderId: string): string {
   return orderId.replace(/-/g, '').slice(0, 8).toUpperCase();
 }
 
-export function formatCustomerOrderCreatedAt(createdAt: string): string {
-  const date = new Date(createdAt);
-  if (Number.isNaN(date.getTime())) {
+function isSameCalendarDay(left: Date, right: Date): boolean {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+export function formatCustomerOrderCreatedAt(
+  createdAt: string,
+  now: Date = new Date(),
+): string {
+  const date = parseTimestamp(createdAt);
+  if (!date) {
     return createdAt;
   }
 
-  return date.toLocaleString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+
+  const dayLabel = isSameCalendarDay(date, now)
+    ? 'Today'
+    : isSameCalendarDay(date, yesterday)
+      ? 'Yesterday'
+      : date.toLocaleDateString(undefined, {
+          day: 'numeric',
+          month: 'short',
+        });
+
+  return `${dayLabel}, ${formatClockTime(createdAt)}`;
 }

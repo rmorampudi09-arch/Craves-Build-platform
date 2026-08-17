@@ -52,10 +52,7 @@
 }
 
 .paperSurface {
-  background-color: #fffaf4;
-  background-image:
-    radial-gradient(circle at 14% 18%, rgba(246, 46, 24, 0.045), transparent 24%),
-    radial-gradient(circle at 87% 78%, rgba(38, 26, 21, 0.035), transparent 22%);
+  background: #ffffff;
 }
 
 @media (prefers-reduced-motion: reduce) {

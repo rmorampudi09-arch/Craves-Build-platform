@@ -17,12 +17,7 @@ function formatMoney(amount: number, currency: string): string {
   }).format(amount);
 }
 
-export function FloatingCartBar({
-  itemCount,
-  total,
-  currency,
-  onViewCart,
-}: FloatingCartBarProps) {
+export function FloatingCartBar({ itemCount, total, currency, onViewCart }: FloatingCartBarProps) {
   if (itemCount <= 0) return null;
 
   return (
@@ -30,7 +25,7 @@ export function FloatingCartBar({
       <button
         type="button"
         onClick={onViewCart}
-        className="group pointer-events-auto mx-auto flex min-h-[4.6rem] w-full max-w-[58rem] items-center gap-4 rounded-[1.35rem] border border-white/20 bg-[#1C9B66] px-[1.125rem] text-left text-white shadow-[0_20px_50px_rgba(28,155,102,0.32)] transition duration-300 hover:-translate-y-1 hover:bg-[#17875A] sm:px-6"
+        className="group pointer-events-auto mx-auto flex min-h-[4.6rem] w-full max-w-[58rem] items-center gap-4 rounded-[1.35rem] bg-[#F62E18] px-[1.125rem] text-left text-white shadow-[0_20px_50px_rgba(246,46,24,0.28)] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.01] sm:px-6"
         aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15">
@@ -40,11 +35,8 @@ export function FloatingCartBar({
           <span className="block truncate text-sm font-black sm:text-base">
             {itemCount} {itemCount === 1 ? "item" : "items"} · {formatMoney(total, currency)}
           </span>
-          <span className="mt-0.5 block text-[0.68rem] font-semibold text-white/80 sm:text-xs">
-            Extra charges may apply
-          </span>
+          <span className="mt-0.5 block text-[0.68rem] font-semibold text-white/80 sm:text-xs">Extra charges may apply</span>
         </span>
-
         <span className="inline-flex shrink-0 items-center gap-2 text-sm font-black sm:text-base">
           View Cart
           <ArrowRight className="h-[1.125rem] w-[1.125rem] transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />

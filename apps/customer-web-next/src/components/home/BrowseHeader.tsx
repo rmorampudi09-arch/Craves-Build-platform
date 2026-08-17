@@ -111,7 +111,7 @@ export function BrowseHeader({
             >
               <CravesCartIcon className="h-[1.18rem] w-[1.18rem]" />
               {cartCount > 0 ? (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F62E18] px-1 text-[0.62rem] font-bold text-white">
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#F62E18] bg-white px-1 text-[0.62rem] font-bold text-[#1A1A1A] shadow-[0_1px_3px_rgba(26,26,26,0.08)]">
                   {cartCount}
                 </span>
               ) : null}

@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { FaCheck } from "react-icons/fa6";
 
 export interface TrackingStep {
   key: string;
@@ -11,36 +11,42 @@ interface OrderTimelineProps {
   currentIndex: number;
 }
 
-/** Vertical connected-dot timeline showing each status step, done/active/upcoming. */
+/** Vertical connected timeline using only backend-provided order and delivery steps. */
 export function OrderTimeline({ steps, currentIndex }: OrderTimelineProps) {
   return (
-    <section className="mt-5 rounded-2xl border border-border bg-card p-5">
-      <ol className="relative space-y-6 pl-8">
-        <span className="absolute left-3 top-2 h-[calc(100%-16px)] w-0.5 bg-border" aria-hidden />
-        {steps.map((s, i) => {
-          const done = i <= currentIndex;
-          const active = i === currentIndex;
+    <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 sm:p-5">
+      <ol className="relative space-y-6 pl-9">
+        <span
+          className="absolute left-[15px] top-3 h-[calc(100%-24px)] w-px bg-[#E5E7EB]"
+          aria-hidden="true"
+        />
+        {steps.map((step, index) => {
+          const done = index <= currentIndex;
+          const active = index === currentIndex;
+
           return (
-            <li key={s.key} className="relative">
+            <li key={step.key} className="relative">
               <span
-                className={`absolute -left-8 flex h-6 w-6 items-center justify-center rounded-full border-2 ${
+                className={`absolute -left-9 flex h-7 w-7 items-center justify-center rounded-full ${
                   done
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-white text-muted-foreground"
+                    ? "bg-[#F62E18] text-white"
+                    : "bg-[#F1F3F5] text-[#6B6B6B]"
                 }`}
               >
                 {done ? (
-                  <Check className="h-3.5 w-3.5" />
+                  <FaCheck className="text-xs" aria-hidden="true" />
                 ) : (
-                  <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                  <span className="h-2 w-2 rounded-full bg-current" aria-hidden="true" />
                 )}
               </span>
               <p
-                className={`font-semibold ${active ? "text-primary" : done ? "text-ink" : "text-muted-foreground"}`}
+                className={`text-sm font-semibold ${
+                  active ? "text-[#F62E18]" : "text-[#1A1A1A]"
+                }`}
               >
-                {s.label}
+                {step.label}
               </p>
-              <p className="text-xs text-muted-foreground">{s.desc}</p>
+              <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">{step.desc}</p>
             </li>
           );
         })}

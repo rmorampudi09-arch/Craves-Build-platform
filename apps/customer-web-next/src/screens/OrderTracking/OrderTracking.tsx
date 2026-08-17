@@ -2,12 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import {
-  AlertTriangle,
-  ExternalLink,
-  RefreshCw,
-  Satellite,
-} from "lucide-react";
+import { AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
+import { FaArrowLeft, FaArrowsRotate } from "react-icons/fa6";
 import {
   formatOrderStatus,
   parseCustomerOrder,
@@ -190,121 +186,159 @@ export default function TrackingPage() {
       ];
 
   return (
-    <div className="min-h-screen bg-cream pb-20 text-ink">
-      <TrackingHeader orderId={id} onBack={() => navigate({ to: "/orders" })} />
-      <main className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
+    <div className="min-h-screen bg-white pb-16 text-[#1A1A1A]">
+      <TrackingHeader
+        orderId={id}
+        onBack={() => navigate({ to: "/orders" })}
+        onRefresh={() => void refresh(id, true)}
+        refreshing={busy}
+      />
+
+      <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">
         {loading ? (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]" aria-hidden="true">
+          <div
+            className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
+            aria-hidden="true"
+          >
             <div className="space-y-5">
-              <div className="h-44 animate-pulse rounded-2xl bg-grey-200" />
-              <div className="h-72 animate-pulse rounded-2xl bg-grey-200" />
+              <div className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+              <div className="h-72 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+              <div className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />
             </div>
-            <div className="h-64 animate-pulse rounded-2xl bg-grey-200" />
+            <div className="space-y-5">
+              <div className="h-72 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+              <div className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+            </div>
           </div>
         ) : !order ? (
-          <section className="rounded-2xl border border-error/20 bg-white p-8 text-center shadow-[var(--shadow-card)] md:p-12">
-            <AlertTriangle className="mx-auto h-10 w-10 text-error" aria-hidden="true" />
-            <h1 className="mt-4 font-display text-2xl font-bold text-ink">
+          <section className="rounded-2xl border border-[#F62E18]/25 bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-12">
+            <AlertTriangle
+              className="mx-auto h-10 w-10 text-[#F62E18]"
+              aria-hidden="true"
+            />
+            <h1 className="mt-4 text-2xl font-semibold text-[#1A1A1A]">
               Tracking unavailable
             </h1>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
               {error || "The order could not be loaded."}
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <button type="button" onClick={() => void refresh(id)} className="btn-primary">
-                <RefreshCw className="h-4 w-4" aria-hidden="true" /> Retry
+              <button
+                type="button"
+                onClick={() => void refresh(id)}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                Retry
               </button>
               <Link
                 to="/orders"
-                className="inline-flex min-h-11 items-center rounded-lg border border-border px-4 text-sm font-semibold text-ink hover:border-primary"
+                className="inline-flex min-h-11 items-center rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold !text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
               >
                 Back to orders
               </Link>
             </div>
           </section>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-            <div className="space-y-5">
-              <CurrentStatusCard
-                label={
-                  delivery
-                    ? deliveryPresentation.label
-                    : formatOrderStatus(order.status)
-                }
-                desc={
-                  delivery
-                    ? deliveryPresentation.description
-                    : "This is the current order status from Craves. Delivery tracking begins after a delivery job is created."
-                }
-              />
+          <div className="space-y-5">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+              <div className="space-y-5">
+                <CurrentStatusCard
+                  label={
+                    delivery
+                      ? deliveryPresentation.label
+                      : formatOrderStatus(order.status)
+                  }
+                  desc={
+                    delivery
+                      ? deliveryPresentation.description
+                      : "This is the current order status from Craves. Delivery tracking begins after a delivery job is created."
+                  }
+                />
 
-              <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="craves-overline text-primary">Live progress</p>
-                    <h2 className="mt-1 font-display text-xl font-bold text-ink">
-                      Order and delivery timeline
-                    </h2>
+                <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#F62E18]">
+                        Live progress
+                      </p>
+                      <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[#1A1A1A]">
+                        Order and delivery timeline
+                      </h2>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void refresh(id, true)}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <FaArrowsRotate
+                        className={`text-[#F62E18] ${busy ? "animate-spin" : ""}`}
+                        aria-hidden="true"
+                      />
+                      Refresh
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void refresh(id, true)}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-ink hover:border-primary disabled:opacity-50"
+                  <div className="mt-5">
+                    <OrderTimeline steps={steps} currentIndex={steps.length - 1} />
+                  </div>
+                </section>
+
+                {delivery?.trackingUrl && (
+                  <a
+                    href={delivery.trackingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#F62E18] shadow-[0_3px_10px_rgba(0,0,0,0.05)] transition-colors hover:bg-[#F1F3F5]"
                   >
-                    <RefreshCw
-                      className={`h-4 w-4 ${busy ? "animate-spin" : ""}`}
-                      aria-hidden="true"
-                    />
-                    Refresh
-                  </button>
-                </div>
-                <div className="mt-5">
-                  <OrderTimeline steps={steps} currentIndex={steps.length - 1} />
-                </div>
-              </section>
+                    Open delivery-provider tracking
+                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                  </a>
+                )}
 
-              {delivery?.trackingUrl && (
-                <a
-                  href={delivery.trackingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-primary bg-white px-4 text-sm font-bold text-contrast-red shadow-[var(--shadow-card)] hover:bg-secondary"
-                >
-                  Open delivery-provider tracking
-                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                </a>
-              )}
+                <DeliveryAddressCard address={address} />
+              </div>
 
-              <DeliveryAddressCard address={address} />
+              <aside className="space-y-5 lg:sticky lg:top-28">
+                <TrackingOrderSummaryCard order={order} />
+
+                <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_10px_rgba(0,0,0,0.05)]">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                      <FaArrowsRotate className="text-base" aria-hidden="true" />
+                    </span>
+                    <p className="text-sm font-semibold text-[#1A1A1A]">
+                      Tracking refresh
+                    </p>
+                  </div>
+                  <p role="status" className="mt-3 text-xs leading-5 text-[#6B6B6B]">
+                    {message}
+                    {lastUpdatedAt
+                      ? ` Last checked ${lastUpdatedAt.toLocaleTimeString("en-IN")}.`
+                      : ""}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-[#6B6B6B]">
+                    Active delivery states refresh every 30 seconds while this tab is visible. Terminal states stop polling.
+                  </p>
+                </section>
+              </aside>
             </div>
 
-            <aside className="space-y-5 lg:sticky lg:top-24">
-              <TrackingOrderSummaryCard order={order} />
-              <section className="rounded-2xl border border-border bg-white p-4 shadow-[var(--shadow-card)]">
-                <p className="flex items-center gap-2 text-sm font-semibold text-ink">
-                  <Satellite className="h-4 w-4 text-primary" aria-hidden="true" />
-                  Tracking refresh
-                </p>
-                <p role="status" className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {message}
-                  {lastUpdatedAt
-                    ? ` Last checked ${lastUpdatedAt.toLocaleTimeString("en-IN")}.`
-                    : ""}
-                </p>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Active delivery states refresh every 30 seconds while this tab is visible. Terminal states stop polling.
-                </p>
-              </section>
-              <Link to="/home" className="btn-primary inline-flex w-full">
-                Back to discovery
-              </Link>
-            </aside>
+            <Link
+              to="/home"
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold !text-[#1A1A1A] shadow-[0_3px_10px_rgba(0,0,0,0.04)] transition-colors hover:bg-[#F1F3F5]"
+            >
+              <FaArrowLeft className="text-sm" aria-hidden="true" />
+              Back to discovery
+            </Link>
           </div>
         )}
 
         {error && order && (
-          <p role="alert" className="mt-5 rounded-xl border border-error/20 bg-white p-3 text-sm font-medium text-error">
+          <p
+            role="alert"
+            className="mt-5 rounded-xl border border-[#F62E18]/25 bg-white p-3 text-sm font-medium text-[#C92716]"
+          >
             {error}
           </p>
         )}

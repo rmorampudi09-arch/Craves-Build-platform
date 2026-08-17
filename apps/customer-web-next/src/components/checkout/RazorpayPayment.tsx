@@ -10,7 +10,6 @@ import {
   LoaderCircle,
   RefreshCw,
   ShieldCheck,
-  XCircle,
 } from "lucide-react";
 import { parseCheckout, type CustomerCheckout } from "@/lib/checkout-contract";
 import {
@@ -300,20 +299,22 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
   const cancelled = checkout?.status === "CANCELLED" || status === "CANCELLED";
 
   return (
-    <div className="min-h-screen bg-cream text-ink">
+    <div className="min-h-screen bg-white text-ink">
       <CheckoutHeader
         onBack={() => window.history.back()}
         title="Secure payment"
         subtitle="Razorpay hosted checkout"
       />
-      <main className="mx-auto max-w-4xl px-4 py-8 md:px-6">
+
+      <main className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
         {loading ? (
-          <div className="mx-auto max-w-2xl space-y-4" aria-hidden="true">
-            <div className="h-56 animate-pulse rounded-2xl bg-grey-200" />
-            <div className="h-20 animate-pulse rounded-2xl bg-grey-200" />
+          <div className="space-y-4" aria-hidden="true">
+            <div className="h-[30rem] animate-pulse rounded-2xl bg-[#F1F3F5]" />
+            <div className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+            <div className="h-12 animate-pulse rounded-xl bg-[#F1F3F5]" />
           </div>
         ) : !checkout ? (
-          <section className="mx-auto max-w-xl rounded-2xl border border-error/20 bg-white p-8 text-center shadow-[var(--shadow-card)]">
+          <section className="rounded-2xl border border-error/20 bg-white p-8 text-center shadow-[var(--shadow-card)]">
             <AlertTriangle className="mx-auto h-10 w-10 text-error" aria-hidden="true" />
             <h1 className="mt-4 font-display text-2xl font-bold text-ink">
               Payment checkout unavailable
@@ -325,64 +326,61 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
               </button>
               <Link
                 to="/orders"
-                className="inline-flex min-h-11 items-center rounded-lg border border-border px-4 text-sm font-semibold text-ink hover:border-primary"
+                className="inline-flex min-h-11 items-center rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink transition-colors hover:border-primary"
               >
                 View orders
               </Link>
             </div>
           </section>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
-            <section className="rounded-2xl border border-border bg-white p-6 shadow-[var(--shadow-card)] md:p-8">
-              <div
-                className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
-                  paid
-                    ? "bg-success/10 text-success"
-                    : cancelled || status === "FAILED"
-                      ? "bg-error/10 text-error"
-                      : "bg-secondary text-primary"
-                }`}
-              >
-                {paid ? (
-                  <CheckCircle2 className="h-7 w-7" aria-hidden="true" />
-                ) : cancelled || status === "FAILED" ? (
-                  <XCircle className="h-7 w-7" aria-hidden="true" />
-                ) : (
-                  <ShieldCheck className="h-7 w-7" aria-hidden="true" />
-                )}
+          <div className="space-y-4">
+            <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] sm:p-6 md:p-7">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F1F3F5] text-[#F62E18]">
+                <ShieldCheck className="h-8 w-8" strokeWidth={2.5} aria-hidden="true" />
               </div>
-              <p className="craves-overline mt-5 text-primary">Checkout #{checkout.id.slice(-8).toUpperCase()}</p>
-              <h1 className="mt-2 font-display text-3xl font-bold tracking-[-0.04em] text-ink">
+
+              <p className="mt-5 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                Checkout #{checkout.id.slice(-8).toUpperCase()}
+              </p>
+              <h1 className="mt-2 font-display text-2xl font-bold tracking-[-0.035em] text-ink sm:text-3xl">
                 {paid
                   ? "Payment verified"
                   : cancelled
                     ? "Checkout cancelled"
                     : "Pay through Razorpay"}
               </h1>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
                 Craves creates the payment order on the backend. Razorpay collects card, UPI and banking details in its hosted checkout.
               </p>
 
-              <dl className="mt-6 space-y-3 rounded-2xl bg-cream p-5 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Food subtotal</dt>
-                  <dd className="font-semibold text-ink">{money(checkout.foodSubtotal, checkout.currency)}</dd>
+              <dl className="mt-6 space-y-3 rounded-2xl bg-[#F1F3F5] p-4 text-sm sm:p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-ink">Food subtotal</dt>
+                  <dd className="font-semibold text-ink">
+                    {money(checkout.foodSubtotal, checkout.currency)}
+                  </dd>
                 </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Platform fee</dt>
-                  <dd className="font-semibold text-ink">{money(checkout.platformFee, checkout.currency)}</dd>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-ink">Platform fee</dt>
+                  <dd className="font-semibold text-ink">
+                    {money(checkout.platformFee, checkout.currency)}
+                  </dd>
                 </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Tax</dt>
-                  <dd className="font-semibold text-ink">{money(checkout.taxAmount, checkout.currency)}</dd>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-ink">Tax</dt>
+                  <dd className="font-semibold text-ink">
+                    {money(checkout.taxAmount, checkout.currency)}
+                  </dd>
                 </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Delivery</dt>
-                  <dd className="font-semibold text-ink">{money(checkout.deliveryFee, checkout.currency)}</dd>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-ink">Delivery</dt>
+                  <dd className="font-semibold text-ink">
+                    {money(checkout.deliveryFee, checkout.currency)}
+                  </dd>
                 </div>
-                <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+                <div className="flex items-center justify-between gap-4 border-t border-[#D9DDE1] pt-4">
                   <dt className="font-display text-base font-bold text-ink">Grand total</dt>
-                  <dd className="font-display text-2xl font-bold text-ink">
+                  <dd className="font-display text-2xl font-bold tracking-[-0.03em] text-ink">
                     {money(checkout.grandTotal, checkout.currency)}
                   </dd>
                 </div>
@@ -405,20 +403,18 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
               )}
 
               {payment && !paid && !cancelled && (
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void refreshStatus()}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-ink hover:border-primary disabled:opacity-50 sm:col-span-2"
-                  >
-                    <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh status
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void refreshStatus()}
+                  className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink transition-colors hover:border-primary disabled:opacity-50"
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh status
+                </button>
               )}
 
               {message && (
-                <p role="status" className="mt-5 rounded-xl bg-secondary p-3 text-sm leading-6 text-muted-foreground">
+                <p role="status" className="mt-5 rounded-xl bg-[#F1F3F5] p-3 text-sm leading-6 text-muted-foreground">
                   {message}
                 </p>
               )}
@@ -435,23 +431,24 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
               )}
             </section>
 
-            <aside className="space-y-4 lg:sticky lg:top-24">
-              <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-                <p className="craves-overline text-primary">Payment state</p>
-                <p className="mt-2 font-display text-xl font-bold capitalize text-ink">
-                  {statusLabel(status ?? (checkout.status === "PAID" ? "PAID" : null))}
-                </p>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Only the Craves backend determines whether a payment is paid. Closing the Razorpay window does not by itself confirm payment.
-                </p>
-              </section>
-              <Link
-                to="/orders"
-                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink hover:border-primary"
-              >
-                <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to orders
-              </Link>
-            </aside>
+            <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] sm:p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                Payment state
+              </p>
+              <p className="mt-2 font-display text-xl font-bold capitalize text-ink sm:text-2xl">
+                {statusLabel(status ?? (checkout.status === "PAID" ? "PAID" : null))}
+              </p>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+                Only the Craves backend determines whether a payment is paid. Closing the Razorpay window does not by itself confirm payment.
+              </p>
+            </section>
+
+            <Link
+              to="/orders"
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#C9CDD2] bg-white px-4 text-sm font-semibold text-ink transition-colors hover:border-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/20"
+            >
+              <ArrowLeft className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" /> Back to orders
+            </Link>
           </div>
         )}
       </main>

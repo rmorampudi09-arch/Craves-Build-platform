@@ -109,13 +109,9 @@ export function CustomerOrderCard({
   const visibleItems = order.items.slice(0, 3);
   const remainingItems = Math.max(order.items.length - visibleItems.length, 0);
 
-  const menuItemsById = React.useMemo(() => {
-    const map = new Map<string, NonNullable<typeof kitchenProfile.data>['menuItems'][number]>();
-    for (const item of kitchenProfile.data?.menuItems ?? []) {
-      map.set(item.id, item);
-    }
-    return map;
-  }, [kitchenProfile.data]);
+  const menuItemsById = new Map(
+    (kitchenProfile.data?.menuItems ?? []).map(item => [item.id, item] as const),
+  );
 
   const description =
     kitchenProfile.data?.biography?.trim() ||

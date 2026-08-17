@@ -9,15 +9,6 @@
   }
 }
 
-@keyframes homeHeroDrift {
-  from {
-    transform: scale(1.015) translate3d(0, 0, 0);
-  }
-  to {
-    transform: scale(1.035) translate3d(-0.35%, -0.2%, 0);
-  }
-}
-
 @keyframes cartRise {
   from {
     opacity: 0;
@@ -42,9 +33,31 @@
 }
 
 .heroArtwork {
-  animation: homeHeroDrift 12s ease-in-out infinite alternate;
-  transform-origin: 70% 50%;
-  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  image-rendering: auto;
+}
+
+.searchInput,
+.searchInput:hover,
+.searchInput:focus,
+.searchInput:focus-visible {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  ring: 0 !important;
+}
+
+.categoryScroller {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.categoryScroller::-webkit-scrollbar {
+  display: none;
 }
 
 .cartEnter {
@@ -57,7 +70,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .fadeUp,
-  .heroArtwork,
   .cartEnter {
     animation: none;
   }

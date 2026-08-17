@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Heart, MapPin, Sparkles, UtensilsCrossed } from "lucide-react";
 
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
@@ -21,11 +22,14 @@ export function WelcomeBanner({
       aria-labelledby="discovery-heading"
     >
       <div className="relative min-h-[27rem] overflow-hidden rounded-[2rem] border border-[#E5E7EB] bg-white shadow-[0_22px_70px_rgba(26,26,26,0.08)] md:min-h-[31rem] lg:min-h-[34rem]">
-        <img
+        <Image
           src="/home/reference/home-hero-reference.webp"
           alt="A mother and child preparing vegetables together in a warm home kitchen."
-          className={`${styles.heroArtwork} absolute inset-0 h-full w-full object-cover object-[68%_50%] sm:object-center`}
-          fetchPriority="high"
+          fill
+          priority
+          unoptimized
+          sizes="(min-width: 1440px) 1344px, (min-width: 1024px) calc(100vw - 80px), (min-width: 768px) calc(100vw - 56px), calc(100vw - 32px)"
+          className={`${styles.heroArtwork} object-cover object-[68%_50%] sm:object-center`}
         />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.99)_0%,rgba(255,255,255,0.96)_29%,rgba(255,255,255,0.64)_48%,rgba(255,255,255,0.08)_70%)] sm:bg-[linear-gradient(90deg,rgba(255,255,255,0.99)_0%,rgba(255,255,255,0.92)_31%,rgba(255,255,255,0.34)_55%,rgba(255,255,255,0)_74%)]" />
         <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white/70 to-transparent" />

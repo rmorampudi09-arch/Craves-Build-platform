@@ -84,7 +84,6 @@ import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 
 const HOME_RADIUS_METERS = 10_000;
 const HOME_PAGE_SIZE = 20;
-const HOME_CATEGORY_STICKY_HEADER_INDEX = 1;
 
 type HomeFeedListItem =
   | {kind: 'categories'; key: 'categories'}
@@ -304,6 +303,8 @@ export function CustomerHomeScreen() {
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [homeHeaderHeight, setHomeHeaderHeight] = useState(0);
+  const [categoriesPinned, setCategoriesPinned] = useState(false);
   const listRef = useRef<FlatList<HomeFeedListItem>>(null);
 
   const feed = useHomeNearbyDishesQuery({
@@ -396,6 +397,7 @@ export function CustomerHomeScreen() {
 
   const resetSearchPosition = useCallback(() => {
     restorePendingRef.current = false;
+    setCategoriesPinned(false);
     listRef.current?.scrollToOffset({offset: 0, animated: false});
   }, []);
 
@@ -423,6 +425,16 @@ export function CustomerHomeScreen() {
       search.saveScrollOffset(event.nativeEvent.contentOffset.y);
     },
     [search],
+  );
+
+  const handleHomeScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      bottomNavScroll.onScroll(event);
+      const shouldPin =
+        homeHeaderHeight > 0 && event.nativeEvent.contentOffset.y >= homeHeaderHeight;
+      setCategoriesPinned(current => (current === shouldPin ? current : shouldPin));
+    },
+    [bottomNavScroll, homeHeaderHeight],
   );
 
   const restoreListOffset = useCallback(() => {
@@ -612,7 +624,13 @@ export function CustomerHomeScreen() {
   })();
 
   const headerContent = (
-    <View>
+    <View
+      onLayout={event => {
+        const nextHeight = event.nativeEvent.layout.height;
+        setHomeHeaderHeight(current =>
+          Math.abs(current - nextHeight) < 1 ? current : nextHeight,
+        );
+      }}>
       <View style={[styles.heroCopy, compactLayout && styles.heroCopyCompact]}>
         <Text style={styles.greeting}>{greeting}</Text>
         <Text accessibilityRole="header" style={styles.heading}>
@@ -668,118 +686,127 @@ export function CustomerHomeScreen() {
           onPressSubscription={openSubscription}
         />
       </View>
-      <FlatList
-        ref={listRef}
-        data={listData}
-        keyExtractor={item => item.key}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled
-        removeClippedSubviews={false}
-        style={styles.feedList}
-        ListFooterComponent={
-          feed.isFetchingNextPage ? (
-            <ActivityIndicator
-              accessibilityLabel="Loading more meals"
-              color={colors.flameRed}
-              style={styles.footerLoader}
-            />
-          ) : null
-        }
-        ListHeaderComponent={headerContent}
-        onContentSizeChange={restoreListOffset}
-        onEndReached={loadNextPage}
-        onEndReachedThreshold={0.6}
-        onMomentumScrollEnd={saveListOffset}
-        onScroll={bottomNavScroll.onScroll}
-        onScrollEndDrag={saveListOffset}
-        refreshControl={
-          <RefreshControl
-            colors={[colors.flameRed]}
-            onRefresh={retryFeed}
-            refreshing={feed.isRefetching && !feed.isFetchingNextPage}
-            tintColor={colors.flameRed}
-          />
-        }
-        renderItem={({item}) => {
-          if (item.kind === 'categories') {
-            return (
-              <View collapsable={false} style={styles.stickyCategoryWrap}>
-                <HomeCategoryRail
-                  selectedCategory={selectedCategory}
-                  onSelect={setSelectedCategory}
-                />
-              </View>
-            );
+      <View style={styles.feedContainer}>
+        <FlatList
+          ref={listRef}
+          data={listData}
+          keyExtractor={item => item.key}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          removeClippedSubviews={false}
+          style={styles.feedList}
+          ListFooterComponent={
+            feed.isFetchingNextPage ? (
+              <ActivityIndicator
+                accessibilityLabel="Loading more meals"
+                color={colors.flameRed}
+                style={styles.footerLoader}
+              />
+            ) : null
           }
-
-          if (item.kind === 'popular-header') {
-            return (
-              <View>
-                <View style={styles.sectionHeadingRow}>
-                  <Text style={styles.sectionTitle}>Popular near you</Text>
-                  <Text style={styles.sectionCaption}>
-                    Available meals ordered by distance
-                  </Text>
-                </View>
-                {mutationError ? (
-                  <RecoverableErrorBanner
-                    message={mutationError}
-                    style={styles.inlineNotice}
+          ListHeaderComponent={headerContent}
+          onContentSizeChange={restoreListOffset}
+          onEndReached={loadNextPage}
+          onEndReachedThreshold={0.6}
+          onMomentumScrollEnd={saveListOffset}
+          onScroll={handleHomeScroll}
+          onScrollEndDrag={saveListOffset}
+          refreshControl={
+            <RefreshControl
+              colors={[colors.flameRed]}
+              onRefresh={retryFeed}
+              refreshing={feed.isRefetching && !feed.isFetchingNextPage}
+              tintColor={colors.flameRed}
+            />
+          }
+          renderItem={({item}) => {
+            if (item.kind === 'categories') {
+              return (
+                <View style={styles.stickyCategoryWrap}>
+                  <HomeCategoryRail
+                    selectedCategory={selectedCategory}
+                    onSelect={setSelectedCategory}
                   />
-                ) : null}
-                {queryError && dishes.length > 0 ? (
-                  offline ? (
-                    <OfflineNotice
-                      message={queryError.message}
-                      onRetry={retryFeed}
-                      style={styles.inlineNotice}
-                    />
-                  ) : (
+                </View>
+              );
+            }
+
+            if (item.kind === 'popular-header') {
+              return (
+                <View>
+                  <View style={styles.sectionHeadingRow}>
+                    <Text style={styles.sectionTitle}>Popular near you</Text>
+                    <Text style={styles.sectionCaption}>
+                      Available meals ordered by distance
+                    </Text>
+                  </View>
+                  {mutationError ? (
                     <RecoverableErrorBanner
-                      message={queryError.message}
-                      onRetry={retryFeed}
+                      message={mutationError}
                       style={styles.inlineNotice}
                     />
-                  )
-                ) : null}
-              </View>
+                  ) : null}
+                  {queryError && dishes.length > 0 ? (
+                    offline ? (
+                      <OfflineNotice
+                        message={queryError.message}
+                        onRetry={retryFeed}
+                        style={styles.inlineNotice}
+                      />
+                    ) : (
+                      <RecoverableErrorBanner
+                        message={queryError.message}
+                        onRetry={retryFeed}
+                        style={styles.inlineNotice}
+                      />
+                    )
+                  ) : null}
+                </View>
+              );
+            }
+
+            if (item.kind === 'empty') {
+              return emptyState;
+            }
+
+            const cartLine = cartLinesByMenuItemId.get(item.dish.id) ?? null;
+            return (
+              <DishCard
+                dish={item.dish}
+                adding={cartMutations[`menu:${item.dish.id}`]?.status === 'PENDING'}
+                cartLine={cartLine}
+                changingQuantity={
+                  cartLine
+                    ? cartMutations[`line:${cartLine.lineId}`]?.status === 'PENDING'
+                    : false
+                }
+                favorite={isFavoriteMenuItem(favorites.data, item.dish.id)}
+                favoritePending={toggleFavorite.isPending}
+                favoriteDisabled={favorites.sessionRequired}
+                onFavoriteToggle={handleFavoriteToggle}
+                onAdd={handleAdd}
+                onDecrease={handleDecrease}
+                onIncrease={handleIncrease}
+                onOpen={openDishDetail}
+              />
             );
-          }
-
-          if (item.kind === 'empty') {
-            return emptyState;
-          }
-
-          const cartLine = cartLinesByMenuItemId.get(item.dish.id) ?? null;
-          return (
-            <DishCard
-              dish={item.dish}
-              adding={cartMutations[`menu:${item.dish.id}`]?.status === 'PENDING'}
-              cartLine={cartLine}
-              changingQuantity={
-                cartLine
-                  ? cartMutations[`line:${cartLine.lineId}`]?.status === 'PENDING'
-                  : false
-              }
-              favorite={isFavoriteMenuItem(favorites.data, item.dish.id)}
-              favoritePending={toggleFavorite.isPending}
-              favoriteDisabled={favorites.sessionRequired}
-              onFavoriteToggle={handleFavoriteToggle}
-              onAdd={handleAdd}
-              onDecrease={handleDecrease}
-              onIncrease={handleIncrease}
-              onOpen={openDishDetail}
+          }}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.listContent,
+            {paddingBottom: listBottomPadding},
+          ]}
+        />
+        {categoriesPinned ? (
+          <View style={styles.pinnedCategoryOverlay}>
+            <HomeCategoryRail
+              selectedCategory={selectedCategory}
+              onSelect={setSelectedCategory}
             />
-          );
-        }}
-        scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
-        showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[HOME_CATEGORY_STICKY_HEADER_INDEX]}
-        contentContainerStyle={[
-          styles.listContent,
-          {paddingBottom: listBottomPadding},
-        ]}
-      />
+          </View>
+        ) : null}
+      </View>
       <CustomerLocationSelector
         visible={locationSelectorVisible}
         onClose={() => setLocationSelectorVisible(false)}
@@ -792,8 +819,23 @@ const styles = StyleSheet.create({
   fixedHeader: {
     backgroundColor: colors.white,
   },
+  feedContainer: {
+    flex: 1,
+    position: 'relative',
+  },
   feedList: {
     flex: 1,
+  },
+  pinnedCategoryOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+    elevation: 8,
+    backgroundColor: colors.surfaceBase,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   listContent: {
     flexGrow: 1,
@@ -867,7 +909,6 @@ const styles = StyleSheet.create({
   },
   stickyCategoryWrap: {
     backgroundColor: colors.surfaceBase,
-    zIndex: 10,
   },
   sectionHeadingRow: {
     paddingHorizontal: spacing.md,

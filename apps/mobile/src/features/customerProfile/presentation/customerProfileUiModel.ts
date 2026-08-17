@@ -8,11 +8,12 @@ export type CustomerProfileMenuAction =
   | 'route-favorites'
   | 'route-payments'
   | 'route-orders'
+  | 'switch-chef'
   | 'contract-blocker'
   | 'logout';
 
 export interface CustomerProfileMenuRowModel {
-  id: 'favorites' | 'payments' | 'orders' | 'contact' | 'logout';
+  id: 'favorites' | 'payments' | 'orders' | 'contact' | 'switch-chef' | 'logout';
   title: string;
   subtitle: string;
   icon: IconName;
@@ -59,6 +60,13 @@ export const CUSTOMER_PROFILE_MENU_ROWS: readonly CustomerProfileMenuRowModel[] 
     action: 'route-orders',
   },
   blockedRow('contact', 'Contact us', 'Help and support', 'mail'),
+  {
+    id: 'switch-chef',
+    title: 'Switch to Chef',
+    subtitle: 'Use Craves as a chef',
+    icon: 'chef',
+    action: 'switch-chef',
+  },
   {
     id: 'logout',
     title: 'Logout',

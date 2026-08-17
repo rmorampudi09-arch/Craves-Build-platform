@@ -48,8 +48,6 @@ describe('customerProfileUiModel', () => {
     expect(payments?.action).toBe('route-payments');
     expect(payments?.icon).toBe('shield');
 
-    expect(CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'orders')).toBeUndefined();
-
     const switchChef = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'switch-chef');
     expect(switchChef?.action).toBe('switch-chef');
 

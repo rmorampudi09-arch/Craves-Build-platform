@@ -613,11 +613,6 @@ export function CustomerHomeScreen() {
 
   const headerContent = (
     <View>
-      <CustomerHeader
-        onPressLocation={() => setLocationSelectorVisible(true)}
-        onPressNotifications={header.openNotifications}
-        onPressSubscription={openSubscription}
-      />
       <View style={[styles.heroCopy, compactLayout && styles.heroCopyCompact]}>
         <Text style={styles.greeting}>{greeting}</Text>
         <Text accessibilityRole="header" style={styles.heading}>
@@ -666,11 +661,21 @@ export function CustomerHomeScreen() {
 
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-home">
+      <View style={styles.fixedHeader}>
+        <CustomerHeader
+          onPressLocation={() => setLocationSelectorVisible(true)}
+          onPressNotifications={header.openNotifications}
+          onPressSubscription={openSubscription}
+        />
+      </View>
       <FlatList
         ref={listRef}
         data={listData}
         keyExtractor={item => item.key}
         keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+        removeClippedSubviews={false}
+        style={styles.feedList}
         ListFooterComponent={
           feed.isFetchingNextPage ? (
             <ActivityIndicator
@@ -698,7 +703,7 @@ export function CustomerHomeScreen() {
         renderItem={({item}) => {
           if (item.kind === 'categories') {
             return (
-              <View style={styles.stickyCategoryWrap}>
+              <View collapsable={false} style={styles.stickyCategoryWrap}>
                 <HomeCategoryRail
                   selectedCategory={selectedCategory}
                   onSelect={setSelectedCategory}
@@ -784,6 +789,12 @@ export function CustomerHomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  fixedHeader: {
+    backgroundColor: colors.white,
+  },
+  feedList: {
+    flex: 1,
+  },
   listContent: {
     flexGrow: 1,
     backgroundColor: colors.surfaceBase,

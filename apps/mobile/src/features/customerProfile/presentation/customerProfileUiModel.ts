@@ -7,13 +7,12 @@ export const CUSTOMER_PROFILE_ROUTE_BLOCKER_REASON =
 export type CustomerProfileMenuAction =
   | 'route-favorites'
   | 'route-payments'
-  | 'route-orders'
   | 'switch-chef'
   | 'contract-blocker'
   | 'logout';
 
 export interface CustomerProfileMenuRowModel {
-  id: 'favorites' | 'payments' | 'orders' | 'contact' | 'switch-chef' | 'logout';
+  id: 'favorites' | 'payments' | 'contact' | 'switch-chef' | 'logout';
   title: string;
   subtitle: string;
   icon: IconName;
@@ -52,13 +51,6 @@ export const CUSTOMER_PROFILE_MENU_ROWS: readonly CustomerProfileMenuRowModel[] 
     icon: 'shield',
     action: 'route-payments',
   },
-  {
-    id: 'orders',
-    title: 'Order Status',
-    subtitle: 'Track active orders and view order history',
-    icon: 'orders',
-    action: 'route-orders',
-  },
   blockedRow('contact', 'Contact us', 'Help and support', 'mail'),
   {
     id: 'switch-chef',
@@ -81,9 +73,6 @@ export const CUSTOMER_PROFILE_EDIT_BLOCKER_MESSAGE =
 
 export const CUSTOMER_PROFILE_REWARDS_UNSUPPORTED_COPY =
   'Rewards balance and tier are not exposed by the approved profile contract yet.';
-
-export const CUSTOMER_PROFILE_ORDER_COUNTS_UNSUPPORTED_COPY =
-  'Order status counts are not exposed by the approved profile contract yet.';
 
 export function resolveCustomerProfileDisplayName(
   profile: CustomerProfileIdentity,

@@ -190,6 +190,7 @@ function BrowseFoodsPage() {
   const [discoveryState, setDiscoveryState] = useState<DiscoveryState>("loading");
   const [catalogMessage, setCatalogMessage] = useState("Detecting your current delivery location…");
   const [radiusLabel, setRadiusLabel] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
 
   const refreshDiscovery = useCallback(async (activeAddress: CravesAddress | null) => {
     setSelectedKitchen(null);
@@ -252,6 +253,26 @@ function BrowseFoodsPage() {
       setCatalogMessage("Fresh homemade food available near your delivery location.");
     }
   }, []);
+
+  const useCurrentLocation = useCallback(async () => {
+    setLocating(true);
+    setCatalogMessage("Detecting your current delivery location…");
+
+    try {
+      const activeLocation = await resolveLiveBrowsingLocation(address);
+      setAddress(activeLocation);
+      await refreshDiscovery(activeLocation);
+    } catch (error) {
+      setDiscoveryState("error");
+      setCatalogMessage(
+        error instanceof Error
+          ? error.message
+          : "Your current delivery location could not be detected.",
+      );
+    } finally {
+      setLocating(false);
+    }
+  }, [address, refreshDiscovery]);
 
   const openKitchen = useCallback(async (kitchen: NearbyKitchen) => {
     const kitchenName = kitchen.kitchenName;
@@ -455,6 +476,8 @@ function BrowseFoodsPage() {
           dishCount={selectedKitchen ? menuDishes.length : nearbyDishes.length}
           radiusLabel={radiusLabel}
           hasAddress={Boolean(address?.lat != null && address?.lng != null)}
+          locating={locating}
+          onUseCurrentLocation={() => void useCurrentLocation()}
         />
 
         {selectedKitchen ? (

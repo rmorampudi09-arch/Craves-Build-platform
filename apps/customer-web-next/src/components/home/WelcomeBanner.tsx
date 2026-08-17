@@ -1,5 +1,6 @@
 import Image from "next/image";
-import { Heart, MapPin, Sparkles, UtensilsCrossed } from "lucide-react";
+import { Heart } from "lucide-react";
+import { FaLocationCrosshairs, FaUtensils } from "react-icons/fa6";
 
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
@@ -8,6 +9,8 @@ interface WelcomeBannerProps {
   dishCount: number;
   radiusLabel: string | null;
   hasAddress: boolean;
+  locating: boolean;
+  onUseCurrentLocation: () => void;
 }
 
 export function WelcomeBanner({
@@ -15,6 +18,8 @@ export function WelcomeBanner({
   dishCount,
   radiusLabel,
   hasAddress,
+  locating,
+  onUseCurrentLocation,
 }: WelcomeBannerProps) {
   return (
     <section
@@ -44,9 +49,9 @@ export function WelcomeBanner({
             id="discovery-heading"
             className="max-w-[39rem] font-display text-[2.65rem] font-black leading-[0.98] tracking-[-0.055em] text-[#1A1A1A] sm:text-5xl md:text-6xl lg:text-[4.35rem]"
           >
-            Eat for health.
+            Eat for Health.
             <br />
-            <span className="text-[#F62E18]">Taste the comfort of home.</span>
+            <span className="text-[#F62E18]">Taste the Comfort of Home.</span>
           </h1>
 
           <p className="mt-5 max-w-lg text-sm font-medium leading-6 text-[#6B6B6B] sm:text-base sm:leading-7">
@@ -55,18 +60,32 @@ export function WelcomeBanner({
           </p>
 
           <div className="mt-7 flex flex-wrap gap-2.5">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white/92 px-3.5 py-2 text-xs font-bold text-[#1A1A1A] backdrop-blur-sm">
-              <UtensilsCrossed className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3.5 py-2 text-xs font-bold text-[#1A1A1A]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                <FaUtensils className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
               {dishCount} live {dishCount === 1 ? "dish" : "dishes"}
             </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white/92 px-3.5 py-2 text-xs font-bold text-[#1A1A1A] backdrop-blur-sm">
-              {hasAddress ? (
-                <MapPin className="h-4 w-4 fill-[#F62E18] text-[#F62E18]" strokeWidth={1.5} aria-hidden="true" />
-              ) : (
-                <Sparkles className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-              )}
-              {radiusLabel ?? "Choose delivery location"}
-            </span>
+
+            <button
+              type="button"
+              onClick={onUseCurrentLocation}
+              disabled={locating}
+              className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3.5 py-2 text-xs font-bold text-[#1A1A1A] transition-[transform,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_8px_20px_rgba(26,26,26,0.08)] disabled:cursor-wait disabled:opacity-70"
+              aria-label="Use current delivery location"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                <FaLocationCrosshairs
+                  className={`h-3.5 w-3.5 ${locating ? "animate-pulse" : ""}`}
+                  aria-hidden="true"
+                />
+              </span>
+              {locating
+                ? "Detecting Location…"
+                : hasAddress
+                  ? `Current Location${radiusLabel ? ` · ${radiusLabel}` : ""}`
+                  : "Use Current Location"}
+            </button>
           </div>
         </div>
       </div>

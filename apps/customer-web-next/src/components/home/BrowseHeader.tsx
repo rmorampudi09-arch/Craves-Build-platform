@@ -10,6 +10,7 @@ import {
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
 import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
+import { rememberReturnRoute } from "@/lib/return-navigation";
 import type { CravesUser } from "@/services/auth/cravesAuth";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
@@ -45,6 +46,11 @@ export function BrowseHeader({
     return () => window.removeEventListener(CATEGORY_SEARCH_EVENT, handleCategorySearch);
   }, [onSearchTermChange]);
 
+  const openLocation = () => {
+    rememberReturnRoute("/addresses", "/home");
+    onOpenLocation();
+  };
+
   return (
     <header className="sticky top-0 z-40 border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
       <div className="mx-auto max-w-[88rem] px-4 md:px-7 lg:px-10">
@@ -62,7 +68,7 @@ export function BrowseHeader({
 
           <button
             type="button"
-            onClick={onOpenLocation}
+            onClick={openLocation}
             className="hidden min-h-11 min-w-0 max-w-[15rem] items-center gap-2.5 rounded-full bg-[#F1F3F5] px-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(26,26,26,0.08)] md:flex"
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
@@ -141,7 +147,7 @@ export function BrowseHeader({
         <div className="flex min-w-0 items-center justify-between gap-3 pb-2.5">
           <button
             type="button"
-            onClick={onOpenLocation}
+            onClick={openLocation}
             className="flex min-w-0 max-w-[8rem] shrink items-center gap-2 text-left text-xs font-bold text-[#1A1A1A] sm:max-w-[12rem] md:hidden"
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">

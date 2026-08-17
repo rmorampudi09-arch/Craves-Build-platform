@@ -69,11 +69,6 @@ export function WelcomeBanner({
             </span>
           </div>
         </div>
-
-        <div className="absolute bottom-5 right-5 z-10 hidden items-center gap-2 rounded-full bg-[#1A1A1A]/90 px-4 py-2 text-xs font-bold text-white backdrop-blur-md md:flex">
-          <Heart className="h-3.5 w-3.5 fill-[#F62E18] text-[#F62E18]" aria-hidden="true" />
-          Homemade. Nearby. Made with care.
-        </div>
       </div>
     </section>
   );

@@ -94,12 +94,6 @@ function toneColor(tone: CustomerOrderStatusTone): string {
   }
 }
 
-function kitchenAvatarUrl(kitchenId: string): string {
-  return `https://api.dicebear.com/9.x/adventurer/png?seed=${encodeURIComponent(
-    `craves-${kitchenId}`,
-  )}&backgroundColor=f1f5f9&radius=50`;
-}
-
 export function CustomerOrderCard({
   order,
   onReorder,
@@ -109,8 +103,6 @@ export function CustomerOrderCard({
   const kitchenProfile = useCustomerKitchenProfileQuery(order.kitchenId);
   const onPressDetails = () =>
     navigation.navigate('CustomerOrderDetail', {orderId: order.id});
-  const onPressTrack = () =>
-    navigation.navigate('CustomerOrderTracking', {orderId: order.id});
   const status = getCustomerOrderStatusPresentation(order.status);
   const progress = getCustomerOrderProgressPresentation(order);
   const referenceAction = getCustomerOrderReferenceAction(order.status);
@@ -162,13 +154,6 @@ export function CustomerOrderCard({
         </View>
 
         <View style={styles.kitchenColumn}>
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`${order.kitchenName} avatar`}
-            source={{uri: kitchenAvatarUrl(order.kitchenId)}}
-            resizeMode="cover"
-            style={styles.kitchenAvatar}
-          />
           <View style={styles.kitchenCopy}>
             <Text numberOfLines={2} style={styles.kitchenName}>
               {order.kitchenName}
@@ -216,14 +201,6 @@ export function CustomerOrderCard({
 
         <View style={styles.actionsColumn}>
           <CardAction label="View Details" onPress={onPressDetails} />
-          {referenceAction === 'TRACK' ? (
-            <CardAction
-              label="Track Order"
-              variant="primary"
-              icon="location"
-              onPress={onPressTrack}
-            />
-          ) : null}
           {referenceAction === 'REORDER' ? (
             <CardAction
               label={reorderPending ? 'Preparing…' : 'Reorder'}
@@ -303,12 +280,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-  },
-  kitchenAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
   },
   kitchenCopy: {
     minWidth: 0,

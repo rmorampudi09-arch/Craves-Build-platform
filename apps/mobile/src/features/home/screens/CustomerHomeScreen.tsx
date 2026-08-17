@@ -79,12 +79,12 @@ import {
   flattenNearbyDishPages,
   formatDishPrice,
   formatDistance,
-  getHomeCategories,
 } from '../homePresentation';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 
 const HOME_RADIUS_METERS = 10_000;
 const HOME_PAGE_SIZE = 20;
+const HOME_CATEGORY_STICKY_HEADER_INDEX = 1;
 
 type HomeFeedListItem =
   | {kind: 'categories'; key: 'categories'}
@@ -325,7 +325,6 @@ export function CustomerHomeScreen() {
     () => flattenNearbyDishPages(feed.data?.pages),
     [feed.data?.pages],
   );
-  const categories = useMemo(() => getHomeCategories(dishes), [dishes]);
   const filteredAndSortedDishes = useMemo(
     () => applyHomeDiscoveryFilters(dishes, appliedFilters),
     [appliedFilters, dishes],
@@ -335,11 +334,10 @@ export function CustomerHomeScreen() {
     [filteredAndSortedDishes, search.query, selectedCategory],
   );
   const listData = useMemo<HomeFeedListItem[]>(() => {
-    const items: HomeFeedListItem[] = [];
-    if (categories.length > 0) {
-      items.push({kind: 'categories', key: 'categories'});
-    }
-    items.push({kind: 'popular-header', key: 'popular-header'});
+    const items: HomeFeedListItem[] = [
+      {kind: 'categories', key: 'categories'},
+      {kind: 'popular-header', key: 'popular-header'},
+    ];
     if (visibleDishes.length === 0) {
       items.push({kind: 'empty', key: 'empty'});
     } else {
@@ -352,7 +350,7 @@ export function CustomerHomeScreen() {
       );
     }
     return items;
-  }, [categories.length, visibleDishes]);
+  }, [visibleDishes]);
   const activeDiscoveryFilterCount = getActiveDiscoveryFilterCount(appliedFilters);
   const cartLinesByMenuItemId = useMemo(() => {
     const lines = new Map<string, CartLine>();
@@ -771,7 +769,7 @@ export function CustomerHomeScreen() {
         }}
         scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={categories.length > 0 ? [1] : undefined}
+        stickyHeaderIndices={[HOME_CATEGORY_STICKY_HEADER_INDEX]}
         contentContainerStyle={[
           styles.listContent,
           {paddingBottom: listBottomPadding},

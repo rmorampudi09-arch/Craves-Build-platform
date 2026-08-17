@@ -18,6 +18,7 @@ interface Props {
   title?: string;
   onPressLocation: () => void;
   onPressNotifications: () => void;
+  onPressSubscription?: () => void;
 }
 
 export function CustomerHeader({
@@ -25,6 +26,7 @@ export function CustomerHeader({
   title,
   onPressLocation,
   onPressNotifications,
+  onPressSubscription,
 }: Props) {
   const {locationDisplayName, badgeLabel} = useCustomerHeaderState();
   const compact = variant === 'compact';
@@ -58,6 +60,24 @@ export function CustomerHeader({
         <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
           {title}
         </Text>
+      ) : null}
+
+      {onPressSubscription ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Subscription"
+          accessibilityHint="Opens your Craves membership page"
+          hitSlop={spacing.xs}
+          onPress={onPressSubscription}
+          style={({pressed}) => [
+            styles.subscriptionButton,
+            pressed && styles.subscriptionPressed,
+          ]}>
+          <Icon name="ticket" size={16} color={colors.flameRedAccessible} />
+          <Text numberOfLines={1} style={styles.subscriptionText}>
+            Subscription
+          </Text>
+        </Pressable>
       ) : null}
 
       <Pressable
@@ -145,6 +165,26 @@ const styles = StyleSheet.create({
     maxWidth: '34%',
     color: colors.espressoBrown,
     fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  subscriptionButton: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  subscriptionPressed: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  subscriptionText: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.tiny,
     fontWeight: fontWeight.bold,
   },
   notificationButton: {

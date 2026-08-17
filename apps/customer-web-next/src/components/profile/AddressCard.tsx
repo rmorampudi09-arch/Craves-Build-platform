@@ -20,7 +20,7 @@ export function AddressCard({ addressLine, onEdit }: AddressCardProps) {
             id="profile-address-title"
             className="text-base font-semibold text-[#1A1A1A]"
           >
-            Default delivery address
+            Delivery address
           </h2>
           <p className="mt-1 text-sm leading-5 text-[#6B6B6B]">
             {addressLine}

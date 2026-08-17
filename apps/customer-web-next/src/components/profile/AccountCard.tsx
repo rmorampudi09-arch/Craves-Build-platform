@@ -46,7 +46,7 @@ export function AccountCard({
               <FaPhone className="text-sm text-[#1A1A1A]" aria-hidden="true" />
               <span>{phone}</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-[#F62E18]/25 bg-white px-2.5 py-1 text-xs font-semibold text-[#F62E18]">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-semibold text-[#1A1A1A]">
               <FaCircleCheck className="text-[#F62E18]" aria-hidden="true" />
               Verified
             </span>
@@ -93,7 +93,9 @@ export function AccountCard({
         </div>
         <div className="px-2">
           <dt className="text-xs text-[#6B6B6B]">Profile</dt>
-          <dd className="mt-1 text-sm font-semibold text-[#1A1A1A]">
+          <dd
+            className={`mt-1 text-sm font-semibold ${profile ? "text-[#1A1A1A]" : "text-[#F62E18]"}`}
+          >
             {profile ? "Complete" : "Action needed"}
           </dd>
         </div>

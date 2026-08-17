@@ -2,6 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { FaChevronRight } from "react-icons/fa6";
 import type { IconType } from "react-icons";
 
+import { rememberReturnRoute } from "@/lib/return-navigation";
+
 interface ProfileLinkCardProps {
   to: string;
   icon: IconType;
@@ -18,6 +20,7 @@ export function ProfileLinkCard({
   return (
     <Link
       to={to}
+      onClick={() => rememberReturnRoute(to, "/profile")}
       className="group flex min-h-[88px] items-center justify-between gap-4 rounded-2xl border border-[#D8DADD] bg-white p-4 shadow-[0_3px_10px_rgba(0,0,0,0.07)] transition-[border-color,box-shadow] duration-200 hover:border-[#C9CCD0] hover:shadow-[0_4px_14px_rgba(0,0,0,0.09)] focus-visible:border-[#C9CCD0]"
     >
       <div className="flex min-w-0 items-center gap-3.5">

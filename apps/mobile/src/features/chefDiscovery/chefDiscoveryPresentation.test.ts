@@ -44,16 +44,17 @@ describe('P35 chef discovery presentation', () => {
     ]);
   });
 
-  it('filters only the kitchens already loaded without inventing a server search contract', () => {
+  it('filters only kitchen-facing fields and does not use display name', () => {
     expect(filterLoadedNearbyKitchens([kitchen], 'andhra')).toEqual([kitchen]);
     expect(filterLoadedNearbyKitchens([kitchen], 'madhapur')).toEqual([kitchen]);
+    expect(filterLoadedNearbyKitchens([kitchen], 'lakshmi kitchen')).toEqual([]);
     expect(filterLoadedNearbyKitchens([kitchen], 'biryani')).toEqual([]);
   });
 
-  it('formats only authoritative nearby-kitchen fields', () => {
+  it('formats authoritative kitchen-facing fields', () => {
     expect(formatKitchenDistance(850)).toBe('850 m away');
     expect(formatKitchenDistance(1450)).toBe('1.4 km away');
     expect(formatKitchenLocation(kitchen)).toBe('Madhapur, Hyderabad, Telangana');
-    expect(getKitchenInitials(kitchen)).toBe('LK');
+    expect(getKitchenInitials(kitchen)).toBe('LH');
   });
 });

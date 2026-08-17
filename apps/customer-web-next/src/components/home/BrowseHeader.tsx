@@ -27,7 +27,6 @@ interface BrowseHeaderProps {
 const CATEGORY_SEARCH_EVENT = "craves:home-category-search";
 
 export function BrowseHeader({
-  user,
   locationLabel,
   onOpenLocation,
   cartCount,
@@ -36,8 +35,6 @@ export function BrowseHeader({
   searchTerm,
   onSearchTermChange,
 }: BrowseHeaderProps) {
-  const firstName = user.firstName || user.username.split(" ")[0] || "there";
-
   useEffect(() => {
     const handleCategorySearch = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
@@ -93,7 +90,6 @@ export function BrowseHeader({
           </label>
 
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
-            <span className="hidden text-sm font-bold text-[#1A1A1A] xl:inline">Hi, {firstName}</span>
             <Link
               to="/profile"
               className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)]"

@@ -39,6 +39,7 @@ export function HomeCategoryRail({
   return (
     <ScrollView
       horizontal
+      nestedScrollEnabled
       contentContainerStyle={styles.row}
       keyboardShouldPersistTaps="handled"
       showsHorizontalScrollIndicator={false}>

@@ -1,8 +1,10 @@
 import {createCustomerOrdersSnapshot} from './domain/customerOrdersModel';
 import type {CustomerOrder} from './domain/customerOrderTypes';
 import {
+  formatCustomerOrderCreatedAt,
   formatCustomerOrderMoney,
   getCustomerOrderDisplayReference,
+  getCustomerOrderProgressPresentation,
   getCustomerOrderReferenceAction,
   getCustomerOrderStatusPresentation,
   isCustomerOrdersTabAuthoritative,
@@ -48,15 +50,47 @@ describe('customer orders lifecycle tabs', () => {
     expect(selectCustomerOrdersTab(snapshot, 'CANCELLED')).toEqual([cancelled, refunded]);
   });
 
-  it('centralizes exact backend status labels without changing raw state', () => {
-    expect(getCustomerOrderStatusPresentation('PREPARING')).toEqual({
-      label: 'Preparing',
+  it('centralizes customer-facing lifecycle labels without changing raw state', () => {
+    expect(getCustomerOrderStatusPresentation('PAYMENT_PENDING')).toEqual({
+      label: 'Payment pending',
+      tone: 'warning',
+    });
+    expect(getCustomerOrderStatusPresentation('CHEF_ACCEPTANCE_PENDING')).toEqual({
+      label: 'Awaiting chef',
+      tone: 'warning',
+    });
+    expect(getCustomerOrderStatusPresentation('READY_FOR_PICKUP')).toEqual({
+      label: 'Ready for pickup',
+      tone: 'success',
+    });
+    expect(getCustomerOrderStatusPresentation('OUT_FOR_DELIVERY')).toEqual({
+      label: 'Item picked up',
       tone: 'accent',
+    });
+    expect(getCustomerOrderStatusPresentation('REFUND_PENDING')).toEqual({
+      label: 'Refund pending',
+      tone: 'warning',
     });
     expect(getCustomerOrderStatusPresentation('REFUND_FAILED')).toEqual({
       label: 'Refund needs attention',
       tone: 'danger',
     });
+  });
+
+  it('keeps estimated, delivered and cancelled supporting lines separate from the main status', () => {
+    const preparing = order('PREPARING');
+    const delivered = order('DELIVERED');
+    const cancelled = order('CANCELLED');
+
+    expect(getCustomerOrderProgressPresentation(preparing).label).toContain(
+      'Estimated delivery',
+    );
+    expect(getCustomerOrderProgressPresentation(delivered).label).toContain(
+      'Delivered on',
+    );
+    expect(getCustomerOrderProgressPresentation(cancelled).label).toContain(
+      'Cancelled on',
+    );
   });
 
   it('keeps only server-supported reference actions visible', () => {
@@ -65,9 +99,13 @@ describe('customer orders lifecycle tabs', () => {
     expect(getCustomerOrderReferenceAction('CANCELLED')).toBeNull();
   });
 
-  it('formats authoritative money and an unambiguous display reference', () => {
+  it('formats authoritative money, references and relative order dates', () => {
     expect(formatCustomerOrderMoney({amount: '320', currency: 'INR'})).toBe('₹320');
     expect(formatCustomerOrderMoney({amount: '12.50', currency: 'USD'})).toBe('USD 12.50');
     expect(getCustomerOrderDisplayReference('12345678-1111-4111-8111-111111111111')).toBe('12345678');
+
+    const now = new Date('2026-08-17T14:00:00Z');
+    expect(formatCustomerOrderCreatedAt('2026-08-17T12:00:00Z', now)).toContain('Today');
+    expect(formatCustomerOrderCreatedAt('2026-08-16T12:00:00Z', now)).toContain('Yesterday');
   });
 });

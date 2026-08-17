@@ -1,7 +1,6 @@
 import type {CustomerProfileIdentity} from './domain/customerProfileContract';
 import {
   CUSTOMER_PROFILE_MENU_ROWS,
-  CUSTOMER_PROFILE_ORDER_COUNTS_UNSUPPORTED_COPY,
   CUSTOMER_PROFILE_REWARDS_UNSUPPORTED_COPY,
   resolveCustomerProfileDisplayName,
   resolveCustomerProfileInitials,
@@ -32,12 +31,12 @@ function profile(
 }
 
 describe('customerProfileUiModel', () => {
-  it('keeps rows deterministic, routes registered destinations, and blocks only later routes', () => {
+  it('keeps rows deterministic and excludes duplicate order navigation', () => {
     expect(CUSTOMER_PROFILE_MENU_ROWS.map(row => row.id)).toEqual([
       'favorites',
       'payments',
-      'orders',
       'contact',
+      'switch-chef',
       'logout',
     ]);
 
@@ -49,8 +48,10 @@ describe('customerProfileUiModel', () => {
     expect(payments?.action).toBe('route-payments');
     expect(payments?.icon).toBe('shield');
 
-    const orders = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'orders');
-    expect(orders?.action).toBe('route-orders');
+    expect(CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'orders')).toBeUndefined();
+
+    const switchChef = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'switch-chef');
+    expect(switchChef?.action).toBe('switch-chef');
 
     const logout = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'logout');
     expect(logout?.action).toBe('logout');
@@ -88,11 +89,8 @@ describe('customerProfileUiModel', () => {
     expect(resolveCustomerProfilePhoneLabel(partial)).toContain('No registered phone');
   });
 
-  it('uses truthful unsupported copy instead of fabricated rewards or order counts', () => {
+  it('uses truthful unsupported copy instead of fabricated rewards', () => {
     expect(CUSTOMER_PROFILE_REWARDS_UNSUPPORTED_COPY).toContain(
-      'not exposed by the approved profile contract',
-    );
-    expect(CUSTOMER_PROFILE_ORDER_COUNTS_UNSUPPORTED_COPY).toContain(
       'not exposed by the approved profile contract',
     );
   });

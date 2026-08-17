@@ -46,7 +46,7 @@ export function WelcomeBanner({
           >
             Eat for health.
             <br />
-            Taste the <span className="text-[#F62E18]">comfort of home.</span>
+            <span className="text-[#F62E18]">Taste the comfort of home.</span>
           </h1>
 
           <p className="mt-5 max-w-lg text-sm font-medium leading-6 text-[#6B6B6B] sm:text-base sm:leading-7">

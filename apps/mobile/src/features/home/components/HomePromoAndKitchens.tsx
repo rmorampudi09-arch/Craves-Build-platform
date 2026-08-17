@@ -1,4 +1,4 @@
-import React, {useMemo, type ReactNode} from 'react';
+import React, {useMemo} from 'react';
 import {
   Image,
   Pressable,
@@ -114,7 +114,7 @@ function KitchenPreviewCard({
   kitchen: NearbyKitchen;
   onPress: (kitchen: NearbyKitchen) => void;
 }) {
-  const title = kitchen.displayName ?? kitchen.kitchenName;
+  const title = kitchen.kitchenName;
   const location = [kitchen.areaName, kitchen.city].filter(Boolean).join(', ');
 
   return (
@@ -152,7 +152,7 @@ function KitchenPreviewCard({
   );
 }
 
-export function HomePromoAndKitchens({children}: {children: ReactNode}) {
+export function HomePromoAndKitchens() {
   const navigation = useNavigation<
     NativeStackNavigationProp<CustomerHomeStackParamList, 'CustomerHomeRoot'>
   >();
@@ -189,18 +189,10 @@ export function HomePromoAndKitchens({children}: {children: ReactNode}) {
         ))}
       </ScrollView>
 
-      <View style={styles.categoryHeadingWrap}>
-        <Text accessibilityRole="header" style={styles.sectionTitle}>
-          What&apos;s on your mind
-        </Text>
-      </View>
-
-      {children}
-
       {kitchens.length > 0 ? (
         <View style={styles.kitchensSection}>
           <Text accessibilityRole="header" style={styles.sectionTitle}>
-            Top Kitchens near you
+            Top kitchens near you
           </Text>
           <Text style={styles.sectionCaption}>Active home kitchens closest to you</Text>
           <ScrollView
@@ -322,7 +314,7 @@ const styles = StyleSheet.create({
   steamOne: {height: 30, marginTop: 8},
   steamTwo: {height: 40},
   steamThree: {height: 28, marginTop: 10},
-  categoryHeadingWrap: {
+  kitchensSection: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
@@ -335,10 +327,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.tiny,
     marginTop: spacing.xxs,
-  },
-  kitchensSection: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
   },
   kitchenRow: {
     gap: spacing.sm,

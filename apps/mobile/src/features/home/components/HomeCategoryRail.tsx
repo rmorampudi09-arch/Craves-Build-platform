@@ -12,7 +12,6 @@ import {
   type CustomerMenuCategory,
 } from '../../../shared/catalog/menuCategories';
 import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
-import {HomePromoAndKitchens} from './HomePromoAndKitchens';
 
 declare const require: (path: string) => ImageSourcePropType;
 
@@ -38,41 +37,39 @@ export function HomeCategoryRail({
   onSelect,
 }: HomeCategoryRailProps) {
   return (
-    <HomePromoAndKitchens>
-      <ScrollView
-        horizontal
-        contentContainerStyle={styles.row}
-        keyboardShouldPersistTaps="handled"
-        showsHorizontalScrollIndicator={false}>
-        {CUSTOMER_MENU_CATEGORIES.map(category => {
-          const filterValue = category === 'All' ? null : category;
-          const selected = selectedCategory === filterValue;
+    <ScrollView
+      horizontal
+      contentContainerStyle={styles.row}
+      keyboardShouldPersistTaps="handled"
+      showsHorizontalScrollIndicator={false}>
+      {CUSTOMER_MENU_CATEGORIES.map(category => {
+        const filterValue = category === 'All' ? null : category;
+        const selected = selectedCategory === filterValue;
 
-          return (
-            <Pressable
-              key={category}
-              accessibilityLabel={`${category} category`}
-              accessibilityRole="button"
-              accessibilityState={{selected}}
-              hitSlop={spacing.xxs}
-              onPress={() => onSelect(filterValue)}
-              style={({pressed}) => [styles.item, pressed && styles.itemPressed]}>
-              <Image
-                accessibilityIgnoresInvertColors
-                resizeMode="cover"
-                source={CATEGORY_IMAGES[category]}
-                style={[styles.image, selected && styles.imageSelected]}
-              />
-              <Text
-                numberOfLines={2}
-                style={[styles.label, selected && styles.labelSelected]}>
-                {category}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </HomePromoAndKitchens>
+        return (
+          <Pressable
+            key={category}
+            accessibilityLabel={`${category} category`}
+            accessibilityRole="button"
+            accessibilityState={{selected}}
+            hitSlop={spacing.xxs}
+            onPress={() => onSelect(filterValue)}
+            style={({pressed}) => [styles.item, pressed && styles.itemPressed]}>
+            <Image
+              accessibilityIgnoresInvertColors
+              resizeMode="cover"
+              source={CATEGORY_IMAGES[category]}
+              style={[styles.image, selected && styles.imageSelected]}
+            />
+            <Text
+              numberOfLines={2}
+              style={[styles.label, selected && styles.labelSelected]}>
+              {category}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
   );
 }
 

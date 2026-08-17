@@ -1,11 +1,18 @@
 import { FaLocationDot, FaPen } from "react-icons/fa6";
 
+import { rememberReturnRoute } from "@/lib/return-navigation";
+
 interface AddressCardProps {
   addressLine: string;
   onEdit: () => void;
 }
 
 export function AddressCard({ addressLine, onEdit }: AddressCardProps) {
+  const editAddresses = () => {
+    rememberReturnRoute("/addresses", "/profile");
+    onEdit();
+  };
+
   return (
     <section
       aria-labelledby="profile-address-title"
@@ -29,7 +36,7 @@ export function AddressCard({ addressLine, onEdit }: AddressCardProps) {
       </div>
       <button
         type="button"
-        onClick={onEdit}
+        onClick={editAddresses}
         className="group inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-2.5 text-sm font-semibold !text-[#F62E18] transition-colors hover:!bg-[#F62E18] hover:!text-white"
         aria-label="Edit delivery addresses"
       >

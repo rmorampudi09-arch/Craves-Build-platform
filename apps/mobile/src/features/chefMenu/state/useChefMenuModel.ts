@@ -57,6 +57,10 @@ export function useChefMenuModel(): ChefMenuModel {
     queryFn: ({signal}) => chefMenuApi.listItems(signal),
     enabled: identityId !== null,
     staleTime: 30_000,
+    // Image upload is a separate multipart write after create/replace. Reconcile
+    // on mount so a freshly uploaded primary image cannot be hidden by the
+    // pre-upload menu item that is still fresh in the React Query cache.
+    refetchOnMount: 'always',
   });
 
   const setCachedItem = React.useCallback(

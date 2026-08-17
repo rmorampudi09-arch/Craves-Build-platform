@@ -113,10 +113,10 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
 
   return (
     <section
-      className={`${styles.fadeUp} ${styles.delayOne} mx-auto max-w-[88rem] px-4 pt-11 md:px-7 lg:px-10 lg:pt-14`}
+      className={`${styles.fadeUp} ${styles.delayOne} mx-auto max-w-[88rem] bg-white px-4 pt-11 md:px-7 lg:px-10 lg:pt-14`}
       aria-labelledby="craving-categories-heading"
     >
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3 bg-white">
         <div>
           <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">
             Find your comfort food
@@ -133,7 +133,7 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
         </p>
       </div>
 
-      <div className="relative mt-7">
+      <div className="relative mt-7 bg-white">
         <button
           type="button"
           onClick={() => scrollCategories(-1)}
@@ -153,7 +153,7 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
 
         <div
           ref={scrollerRef}
-          className={`${styles.categoryScroller} flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2 sm:gap-6 lg:gap-8`}
+          className={`${styles.categoryScroller} flex snap-x snap-mandatory gap-4 overflow-x-auto bg-white px-1 pb-2 sm:gap-6 lg:gap-8`}
         >
           {categories.map(({ label, value, fallbackImage, icon: Icon, ...category }) => {
             const active = visualSelected === label;
@@ -166,16 +166,19 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
                 type="button"
                 onClick={() => handleSelect(fullCategory)}
                 aria-pressed={active}
-                className="group flex w-[6.6rem] shrink-0 snap-start flex-col items-center gap-3 text-center sm:w-[7.25rem]"
+                style={{ backgroundColor: "#FFFFFF" }}
+                className="group flex w-[6.6rem] shrink-0 snap-start flex-col items-center gap-3 !bg-white text-center hover:!bg-white focus:!bg-white focus-visible:!bg-white active:!bg-white sm:w-[7.25rem]"
               >
                 <span
-                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center rounded-full bg-white transition-all duration-300 group-hover:-translate-y-1 sm:h-[7.25rem] sm:w-[7.25rem] ${
-                    active
-                      ? "scale-[1.02] shadow-[0_9px_26px_rgba(26,26,26,0.10)]"
-                      : "shadow-[0_7px_20px_rgba(26,26,26,0.07)] group-hover:scale-[1.04]"
+                  style={{ backgroundColor: "#FFFFFF" }}
+                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center rounded-full !bg-white transition-transform duration-300 group-hover:-translate-y-1 sm:h-[7.25rem] sm:w-[7.25rem] ${
+                    active ? "scale-[1.02]" : "group-hover:scale-[1.04]"
                   }`}
                 >
-                  <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-white">
+                  <span
+                    style={{ backgroundColor: "#FFFFFF" }}
+                    className="flex h-full w-full items-center justify-center overflow-hidden rounded-full !bg-white"
+                  >
                     {image ? (
                       <img
                         src={image}
@@ -184,13 +187,16 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
                         className="h-full w-full rounded-full object-cover transition-transform duration-500 group-hover:scale-[1.07]"
                       />
                     ) : (
-                      <span className="flex h-[72%] w-[72%] items-center justify-center rounded-full bg-white text-[#F62E18]">
+                      <span
+                        style={{ backgroundColor: "#FFFFFF" }}
+                        className="flex h-[72%] w-[72%] items-center justify-center rounded-full !bg-white text-[#F62E18]"
+                      >
                         <Icon className="h-7 w-7 sm:h-8 sm:w-8" aria-hidden="true" />
                       </span>
                     )}
                   </span>
                 </span>
-                <span className="text-sm font-bold text-[#1A1A1A] transition-colors group-hover:text-[#F62E18]">
+                <span className="text-sm font-bold text-[#1A1A1A] transition-colors group-hover:text-[#1A1A1A]">
                   {label}
                 </span>
               </button>

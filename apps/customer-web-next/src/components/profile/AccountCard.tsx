@@ -10,11 +10,6 @@ interface AccountCardProps {
   onEdit: () => void;
 }
 
-function initials(firstName: string | null, lastName: string | null) {
-  const value = `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.trim();
-  return value.toUpperCase() || "C";
-}
-
 export function AccountCard({
   user,
   profile,
@@ -32,56 +27,44 @@ export function AccountCard({
   return (
     <section
       aria-labelledby="customer-profile-name"
-      className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] sm:p-6"
+      className="overflow-hidden rounded-2xl border border-[#D8DADD] bg-white p-5 shadow-[0_4px_14px_rgba(0,0,0,0.08)] sm:p-6"
     >
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-4">
-          <div
-            aria-hidden="true"
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-xl font-bold text-white sm:h-[72px] sm:w-[72px] sm:text-2xl"
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6B6B6B]">
+            Customer account
+          </p>
+          <h1
+            id="customer-profile-name"
+            className="mt-2 truncate text-2xl font-semibold text-[#1A1A1A]"
           >
-            {initials(firstName, lastName)}
+            {displayName}
+          </h1>
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[#1A1A1A]">
+            <span className="inline-flex items-center gap-2">
+              <FaPhone className="text-sm text-[#1A1A1A]" aria-hidden="true" />
+              <span>{phone}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-[#F62E18]/25 bg-white px-2.5 py-1 text-xs font-semibold text-[#F62E18]">
+              <FaCircleCheck className="text-[#F62E18]" aria-hidden="true" />
+              Verified
+            </span>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6B6B6B]">
-              Customer account
+
+          {email && (
+            <p className="mt-2.5 flex min-w-0 items-center gap-2 text-sm text-[#1A1A1A]">
+              <FaEnvelope className="shrink-0 text-sm" aria-hidden="true" />
+              <span className="truncate">{email}</span>
             </p>
-            <h1
-              id="customer-profile-name"
-              className="mt-1.5 truncate text-2xl font-semibold text-[#1A1A1A]"
-            >
-              {displayName}
-            </h1>
+          )}
 
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[#6B6B6B]">
-              <span className="inline-flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                  <FaPhone className="text-xs" aria-hidden="true" />
-                </span>
-                <span>{phone}</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-semibold text-[#1A1A1A]">
-                <FaCircleCheck className="text-[#F62E18]" aria-hidden="true" />
-                Verified
-              </span>
-            </div>
-
-            {email && (
-              <p className="mt-2.5 flex min-w-0 items-center gap-2 text-sm text-[#6B6B6B]">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                  <FaEnvelope className="text-xs" aria-hidden="true" />
-                </span>
-                <span className="truncate">{email}</span>
-              </p>
-            )}
-
-            {!profile && (
-              <p className="mt-3 max-w-md text-sm leading-6 text-[#C92716]">
-                Add your first name, last name and optional email so checkout and
-                support use the correct details.
-              </p>
-            )}
-          </div>
+          {!profile && (
+            <p className="mt-3 max-w-md text-sm leading-6 text-[#C92716]">
+              Add your first name, last name and optional email so checkout and
+              support use the correct details.
+            </p>
+          )}
         </div>
 
         <button
@@ -90,9 +73,7 @@ export function AccountCard({
           className="group inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold !text-[#F62E18] transition-colors hover:!bg-[#F62E18] hover:!text-white"
           aria-label="Edit customer profile"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-colors group-hover:bg-white/20 group-hover:text-white">
-            <FaPen className="text-sm" aria-hidden="true" />
-          </span>
+          <FaPen className="text-sm" aria-hidden="true" />
           <span>Edit profile</span>
         </button>
       </div>

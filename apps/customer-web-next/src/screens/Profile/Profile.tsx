@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  FaAddressBook,
   FaBagShopping,
   FaBell,
   FaCalendarDays,
@@ -156,7 +155,7 @@ export default function ProfilePage() {
         <ProfileHeader />
         <main
           aria-busy="true"
-          className="mx-auto max-w-4xl space-y-3 px-4 py-6 md:px-6 md:py-8"
+          className="mx-auto max-w-4xl space-y-4 px-4 py-6 md:px-6 md:py-8"
         >
           <span className="sr-only">Loading profile</span>
           <div className="h-60 animate-pulse rounded-2xl bg-[#F1F3F5]" />
@@ -186,7 +185,7 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
       <ProfileHeader />
-      <main className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
+      <main className="mx-auto max-w-4xl px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
         <AccountCard
           user={user}
           profile={profile}
@@ -198,17 +197,17 @@ export default function ProfilePage() {
         {error ? (
           <p
             role="alert"
-            className="mt-4 rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm text-[#C92716]"
+            className="mt-5 rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm text-[#C92716]"
           >
             {error}
           </p>
         ) : (
-          <p role="status" className="mt-3 text-sm text-[#6B6B6B]">
+          <p role="status" className="mt-5 text-sm text-[#6B6B6B]">
             {message}
           </p>
         )}
 
-        <section aria-labelledby="account-actions" className="mt-7 space-y-3">
+        <section aria-labelledby="account-actions" className="mt-6 space-y-4">
           <h2 id="account-actions" className="sr-only">
             Account actions
           </h2>
@@ -221,12 +220,6 @@ export default function ProfilePage() {
           <AddressCard
             addressLine={addressLine}
             onEdit={() => navigate({ to: "/addresses" })}
-          />
-          <ProfileLinkCard
-            to="/addresses"
-            icon={FaAddressBook}
-            title="Delivery addresses"
-            subtitle={`${addresses.length} saved address${addresses.length === 1 ? "" : "es"}`}
           />
           <ProfileLinkCard
             to="/orders"
@@ -248,7 +241,7 @@ export default function ProfilePage() {
           />
         </section>
 
-        <div className="mt-8 flex justify-center">
+        <div className="mt-9 flex justify-center">
           <button
             type="button"
             onClick={() => void logout()}

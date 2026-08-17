@@ -62,13 +62,17 @@ export function PersistentCustomerServiceNav({
 
   if (!signedIn) return null;
 
+  const visibleLinks = serviceLinks.filter(
+    (link) => !(pathname === "/home" && link.href === "/home"),
+  );
+
   return (
     <nav
       className={`flex gap-2 overflow-x-auto pb-1 ${className}`.trim()}
       aria-label="Customer services"
       data-customer-service-navigation="embedded"
     >
-      {serviceLinks.map((link) => {
+      {visibleLinks.map((link) => {
         const active = isActiveRoute(pathname, link.href);
         return (
           <Link

@@ -169,10 +169,10 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
                 className="group flex w-[6.6rem] shrink-0 snap-start flex-col items-center gap-3 text-center sm:w-[7.25rem]"
               >
                 <span
-                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center rounded-full transition-all duration-300 group-hover:-translate-y-1 sm:h-[7.25rem] sm:w-[7.25rem] ${
+                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center rounded-full bg-white transition-all duration-300 group-hover:-translate-y-1 sm:h-[7.25rem] sm:w-[7.25rem] ${
                     active
-                      ? "border-[3px] border-[#F62E18] bg-[#F1F3F5] p-2 shadow-[0_8px_24px_rgba(26,26,26,0.08)]"
-                      : "bg-white shadow-[0_7px_20px_rgba(26,26,26,0.07)] group-hover:scale-[1.04]"
+                      ? "scale-[1.02] shadow-[0_9px_26px_rgba(26,26,26,0.10)]"
+                      : "shadow-[0_7px_20px_rgba(26,26,26,0.07)] group-hover:scale-[1.04]"
                   }`}
                 >
                   <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-white">
@@ -190,11 +190,7 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
                     )}
                   </span>
                 </span>
-                <span
-                  className={`text-sm font-bold transition-colors ${
-                    active ? "text-[#F62E18]" : "text-[#1A1A1A] group-hover:text-[#F62E18]"
-                  }`}
-                >
+                <span className="text-sm font-bold text-[#1A1A1A] transition-colors group-hover:text-[#F62E18]">
                   {label}
                 </span>
               </button>

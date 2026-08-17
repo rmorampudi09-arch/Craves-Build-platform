@@ -74,7 +74,7 @@ interface KitchenCardProps {
 }
 
 function KitchenCard({kitchen, onPress}: KitchenCardProps) {
-  const title = kitchen.displayName ?? kitchen.kitchenName;
+  const title = kitchen.kitchenName;
   const location = formatKitchenLocation(kitchen);
 
   return (
@@ -93,14 +93,9 @@ function KitchenCard({kitchen, onPress}: KitchenCardProps) {
             <Text numberOfLines={1} style={styles.kitchenTitle}>
               {title}
             </Text>
-            {kitchen.displayName && kitchen.displayName !== kitchen.kitchenName ? (
-              <Text numberOfLines={1} style={styles.kitchenOwner}>
-                {kitchen.kitchenName}
-              </Text>
-            ) : null}
           </View>
           <View style={styles.availableBadge}>
-            <Text style={styles.availableBadgeText}>Open menu</Text>
+            <Text style={styles.availableBadgeText}>Open</Text>
           </View>
         </View>
 
@@ -517,10 +512,11 @@ const styles = StyleSheet.create({
   },
   kitchenCard: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
     marginHorizontal: spacing.md,
     marginVertical: spacing.xs,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
@@ -532,9 +528,9 @@ const styles = StyleSheet.create({
     transform: [{scale: 0.99}],
   },
   avatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
@@ -562,11 +558,6 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },
-  kitchenOwner: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    marginTop: spacing.xxs,
-  },
   availableBadge: {
     borderRadius: radius.pill,
     backgroundColor: colors.successSoft,
@@ -581,19 +572,19 @@ const styles = StyleSheet.create({
   description: {
     color: colors.textPrimary,
     fontSize: typography.small,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   metadata: {
     color: colors.textSecondary,
     fontSize: typography.tiny,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   menuCount: {
     flex: 1,
@@ -642,7 +633,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   skeletonCard: {
-    height: 136,
+    height: 120,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceMuted,
   },

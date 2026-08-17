@@ -62,7 +62,7 @@ export const CUSTOMER_PROFILE_MENU_ROWS: readonly CustomerProfileMenuRowModel[] 
   blockedRow('contact', 'Contact us', 'Help and support', 'mail'),
   {
     id: 'switch-chef',
-    title: 'Switch to Chef',
+    title: 'Switch to Chef mode',
     subtitle: 'Use Craves as a chef',
     icon: 'chef',
     action: 'switch-chef',

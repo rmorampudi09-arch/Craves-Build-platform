@@ -5,7 +5,13 @@ import styles from "@/screens/public/LandingPage/LandingV2.module.css";
 
 const mutedItemClass = "text-sm leading-6 text-[#C7C9CC]";
 
-export function FooterSection() {
+interface FooterSectionProps {
+  landingHrefPrefix?: string;
+}
+
+export function FooterSection({ landingHrefPrefix = "" }: FooterSectionProps) {
+  const landingHref = (anchor: string) => `${landingHrefPrefix}#${anchor}`;
+
   return (
     <footer id="contact" className="relative overflow-hidden bg-[#111111] text-white">
       <svg aria-hidden="true" className="absolute inset-x-0 top-0 h-20 w-full md:h-24" viewBox="0 0 1440 100" preserveAspectRatio="none">
@@ -22,8 +28,8 @@ export function FooterSection() {
           <div>
             <FooterHeading>CRAVES</FooterHeading>
             <div className="mt-5 grid gap-2.5">
-              <a href="#why-craves" className={`${styles.footerLink} text-sm leading-6`}>About us</a>
-              <a href="#how-it-works" className={`${styles.footerLink} text-sm leading-6`}>How it works</a>
+              <a href={landingHref("why-craves")} className={`${styles.footerLink} text-sm leading-6`}>About us</a>
+              <a href={landingHref("how-it-works")} className={`${styles.footerLink} text-sm leading-6`}>How it works</a>
               <a href="/products-pricing" className={`${styles.footerLink} text-sm leading-6`}>Products &amp; pricing</a>
               <a href="/contact" className={`${styles.footerLink} text-sm leading-6`}>Contact us</a>
             </div>
@@ -42,7 +48,7 @@ export function FooterSection() {
           <div>
             <FooterHeading>FOR CHEFS</FooterHeading>
             <div className="mt-5 grid gap-2.5">
-              <a href="#become-a-chef" className={`${styles.footerLink} text-sm leading-6`}>Become a chef</a>
+              <a href={landingHref("become-a-chef")} className={`${styles.footerLink} text-sm leading-6`}>Become a chef</a>
               <span className={mutedItemClass}>Chef resources</span>
               <span className={mutedItemClass}>Guidelines</span>
               <span className={mutedItemClass}>Earnings</span>

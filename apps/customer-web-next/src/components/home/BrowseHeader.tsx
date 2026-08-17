@@ -6,6 +6,7 @@ import {
   ShoppingCart,
   UserCircle,
 } from "lucide-react";
+
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import type { CravesUser } from "@/services/auth/cravesAuth";
@@ -21,9 +22,6 @@ interface BrowseHeaderProps {
   onSearchTermChange: (value: string) => void;
 }
 
-const actionLinkClass =
-  "border-[#C92716] bg-[#C92716] text-black transition-colors hover:border-[#F62E18] hover:bg-[#F62E18] hover:font-bold hover:text-white focus-visible:border-[#F62E18] focus-visible:bg-[#F62E18] focus-visible:font-bold focus-visible:text-white";
-
 export function BrowseHeader({
   user,
   locationLabel,
@@ -37,55 +35,68 @@ export function BrowseHeader({
   const firstName = user.firstName || user.username.split(" ")[0] || "there";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-white/95 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-[#ECEDEF] bg-white/95 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 md:px-6">
-        <div className="flex min-h-18 items-center gap-3 py-3">
-          <Link to="/home" className="flex min-h-11 shrink-0 items-center gap-3 rounded-lg pr-2" aria-label="Craves discovery home">
+        <div className="flex min-h-[5.25rem] items-center gap-3 py-3 lg:gap-5">
+          <Link
+            to="/home"
+            className="flex shrink-0 items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+            aria-label="Craves home"
+          >
             <CravesLogo size="md" />
-            <span className="hidden leading-tight sm:block">
-              <span className="block font-display text-xl font-bold tracking-[-0.04em] text-ink">Craves</span>
-              <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Food from home</span>
-            </span>
           </Link>
 
           <button
             type="button"
             onClick={onOpenLocation}
-            className="hidden min-h-11 min-w-0 max-w-xs items-center gap-2 rounded-lg border px-3 text-left text-sm md:flex"
+            className="hidden min-h-12 min-w-0 max-w-[14rem] items-center gap-2 rounded-xl px-2 text-left sm:flex"
           >
-            <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <MapPin className="h-5 w-5 shrink-0 text-[#111111]" strokeWidth={2.1} aria-hidden="true" />
             <span className="min-w-0">
-              <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.08em]">Deliver to</span>
-              <span className="block truncate font-semibold">{locationLabel}</span>
+              <span className="block text-[0.68rem] font-semibold text-muted-foreground">Deliver to</span>
+              <span className="block truncate text-sm font-bold text-ink">{locationLabel}</span>
             </span>
           </button>
 
-          <div className="ml-auto flex items-center gap-2">
-            <span className="hidden text-sm font-semibold text-ink lg:inline">Hi, {firstName}</span>
+          <label className="ml-auto hidden min-h-12 min-w-0 flex-1 items-center gap-3 rounded-2xl border border-[#E5E7E9] bg-white px-4 shadow-[0_3px_14px_rgba(17,17,17,0.05)] focus-within:border-[#F62E18] lg:flex lg:max-w-xl">
+            <Search className="h-5 w-5 shrink-0 text-[#111111]" aria-hidden="true" />
+            <span className="sr-only">Search dishes or home kitchens</span>
+            <input
+              value={searchTerm}
+              onChange={(event) => onSearchTermChange(event.target.value)}
+              placeholder="Search for dishes or home kitchens..."
+              className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-[#93979B]"
+              type="search"
+              autoComplete="off"
+            />
+          </label>
+
+          <div className="ml-auto flex items-center gap-2 lg:ml-0">
+            <span className="hidden text-sm font-semibold text-ink xl:inline">Hi, {firstName}</span>
             <Link
               to="/profile"
-              className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${actionLinkClass}`}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E3E5E7] bg-white text-ink transition-colors hover:border-[#F62E18]/35 hover:bg-[#FFF7F5]"
+              aria-label="Open profile"
             >
-              <UserCircle className="h-5 w-5" aria-hidden="true" />
-              <span className="hidden sm:inline">Profile</span>
+              <UserCircle className="h-6 w-6" aria-hidden="true" />
             </Link>
             <button
               type="button"
               onClick={onOpenCart}
-              className="relative flex h-11 w-11 items-center justify-center rounded-lg border shadow-[var(--shadow-card)]"
+              className="relative flex h-11 w-11 items-center justify-center rounded-full border border-[#E3E5E7] bg-white text-ink transition-colors hover:border-[#F62E18]/35 hover:bg-[#FFF7F5]"
               aria-label={`Open cart${cartCount ? ` with ${cartCount} items` : ""}`}
             >
               <ShoppingCart className="h-5 w-5" aria-hidden="true" />
-              {cartCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#C92716] bg-white px-1 text-[0.62rem] font-bold text-black">
+              {cartCount > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F62E18] px-1 text-[0.62rem] font-bold text-white">
                   {cartCount}
                 </span>
-              )}
+              ) : null}
             </button>
             <button
               type="button"
               onClick={onLogout}
-              className="hidden h-11 w-11 items-center justify-center rounded-lg border lg:flex"
+              className="hidden h-11 w-11 items-center justify-center rounded-full border border-[#E3E5E7] bg-white text-ink transition-colors hover:border-[#F62E18]/35 hover:bg-[#FFF7F5] xl:flex"
               aria-label="Sign out"
             >
               <LogOut className="h-5 w-5" aria-hidden="true" />
@@ -93,29 +104,33 @@ export function BrowseHeader({
           </div>
         </div>
 
-        <div className="grid gap-3 pb-3 lg:grid-cols-[minmax(18rem,1fr)_auto] lg:items-center">
-          <label className="flex min-h-12 items-center gap-3 rounded-xl border border-border bg-white px-4 focus-within:border-[#F62E18]">
-            <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="sr-only">Search dishes or kitchens</span>
+        <div className="grid gap-3 pb-3 lg:hidden">
+          <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#E5E7E9] bg-white px-4 shadow-[0_3px_14px_rgba(17,17,17,0.04)] focus-within:border-[#F62E18]">
+            <Search className="h-5 w-5 shrink-0 text-[#111111]" aria-hidden="true" />
+            <span className="sr-only">Search dishes or home kitchens</span>
             <input
               value={searchTerm}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search dishes or home kitchens"
-              className="w-full bg-transparent text-base text-ink outline-none placeholder:text-[#9A9A95]"
+              className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-[#93979B]"
               type="search"
               autoComplete="off"
             />
           </label>
-          <PersistentCustomerServiceNav className="lg:justify-end lg:pb-0" />
+          <PersistentCustomerServiceNav className="pb-0" />
+        </div>
+
+        <div className="hidden pb-3 lg:block">
+          <PersistentCustomerServiceNav className="justify-end pb-0" />
         </div>
 
         <button
           type="button"
           onClick={onOpenLocation}
-          className="mb-3 flex min-h-11 w-full items-center gap-2 rounded-lg border px-3 text-left text-sm md:hidden"
+          className="mb-3 flex min-h-11 w-full items-center gap-2 rounded-xl bg-[#F1F3F5] px-3 text-left text-sm sm:hidden"
         >
           <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className="truncate">{locationLabel}</span>
+          <span className="truncate font-semibold">{locationLabel}</span>
         </button>
       </div>
     </header>

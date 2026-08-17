@@ -1,7 +1,8 @@
 import { AlertTriangle, MapPin, RefreshCw, SearchX } from "lucide-react";
+
 import { DishCard } from "@/components/home/DishCard";
-import type { Dish } from "@/services/api/dishes";
 import type { DishCategory } from "@/constants/dishCategories";
+import type { Dish } from "@/services/api/dishes";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
@@ -17,13 +18,13 @@ interface DishesGridProps {
 
 function DishSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-white" aria-hidden="true">
-      <div className="aspect-[4/3] animate-pulse bg-grey-200" />
+    <div className="overflow-hidden rounded-2xl border border-[#ECEDEF] bg-white" aria-hidden="true">
+      <div className="aspect-[4/3] animate-pulse bg-[#F1F3F5]" />
       <div className="space-y-3 p-4">
-        <div className="h-5 w-3/4 animate-pulse rounded bg-grey-200" />
-        <div className="h-4 w-1/2 animate-pulse rounded bg-grey-200" />
-        <div className="h-4 w-full animate-pulse rounded bg-grey-200" />
-        <div className="h-11 w-full animate-pulse rounded-lg bg-grey-200" />
+        <div className="h-5 w-3/4 animate-pulse rounded bg-[#F1F3F5]" />
+        <div className="h-4 w-1/2 animate-pulse rounded bg-[#F1F3F5]" />
+        <div className="h-4 w-full animate-pulse rounded bg-[#F1F3F5]" />
+        <div className="h-11 w-full animate-pulse rounded-lg bg-[#F1F3F5]" />
       </div>
     </div>
   );
@@ -46,42 +47,45 @@ export function DishesGrid({
       : `No active ${selectedCategory.toLowerCase()} dishes are available for this delivery location yet.`;
 
   return (
-    <section className="mx-auto max-w-7xl px-4 pb-24 pt-6 md:px-6" aria-labelledby="available-dishes-heading">
+    <section className="mx-auto max-w-7xl px-4 pb-8 pt-8 md:px-6" aria-labelledby="available-dishes-heading">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="craves-overline text-primary">Live catalog</p>
-          <h2 id="available-dishes-heading" className="mt-1 font-display text-2xl font-bold tracking-[-0.035em] text-ink md:text-3xl">
-            {selectedCategory === "All" ? "Homemade dishes near you" : selectedCategory}
+          <h2
+            id="available-dishes-heading"
+            className="font-display text-2xl font-bold tracking-[-0.035em] text-ink md:text-3xl"
+          >
+            {selectedCategory === "All" ? "Dishes near you" : selectedCategory}
           </h2>
+          <p className="mt-1 text-sm text-muted-foreground">Freshly prepared from nearby home kitchens.</p>
         </div>
-        {state === "ready" && (
-          <span className="rounded-full bg-secondary px-3 py-1.5 text-xs font-semibold text-muted-foreground" aria-live="polite">
+        {state === "ready" ? (
+          <span className="rounded-full bg-[#F1F3F5] px-3 py-1.5 text-xs font-semibold text-muted-foreground" aria-live="polite">
             {dishes.length} {dishes.length === 1 ? "dish" : "dishes"}
           </span>
-        )}
+        ) : null}
       </div>
 
-      {state === "loading" && (
+      {state === "loading" ? (
         <div>
           <p className="sr-only" role="status">Loading nearby dishes</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 8 }, (_, index) => <DishSkeleton key={index} />)}
           </div>
         </div>
-      )}
+      ) : null}
 
-      {state === "address-required" && (
-        <div className="rounded-2xl border border-border bg-white p-8 text-center shadow-[var(--shadow-card)] md:p-12">
-          <MapPin className="mx-auto h-10 w-10 text-primary" aria-hidden="true" />
-          <h3 className="mt-4 font-display text-xl font-bold text-ink">A mapped delivery address is required</h3>
+      {state === "address-required" ? (
+        <div className="rounded-2xl border border-[#ECEDEF] bg-white p-8 text-center shadow-[var(--shadow-card)] md:p-12">
+          <MapPin className="mx-auto h-10 w-10 text-[#F62E18]" aria-hidden="true" />
+          <h3 className="mt-4 font-display text-xl font-bold text-ink">Choose your delivery location</h3>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">{message}</p>
           <button type="button" onClick={onManageAddress} className="btn-primary mt-6">
             Manage delivery addresses
           </button>
         </div>
-      )}
+      ) : null}
 
-      {state === "error" && (
+      {state === "error" ? (
         <div className="rounded-2xl border border-error/20 bg-white p-8 text-center shadow-[var(--shadow-card)] md:p-12">
           <AlertTriangle className="mx-auto h-10 w-10 text-error" aria-hidden="true" />
           <h3 className="mt-4 font-display text-xl font-bold text-ink">Nearby dishes could not be loaded</h3>
@@ -90,26 +94,26 @@ export function DishesGrid({
             <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
           </button>
         </div>
-      )}
+      ) : null}
 
-      {state === "ready" && dishes.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-border bg-white p-8 text-center md:p-12">
-          <SearchX className="mx-auto h-10 w-10 text-muted-foreground" aria-hidden="true" />
-          <h3 className="mt-4 font-display text-xl font-bold text-ink">Nothing available for this view</h3>
+      {state === "ready" && dishes.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-[#D9DCDF] bg-[#FAFAFA] p-8 text-center md:p-10">
+          <SearchX className="mx-auto h-9 w-9 text-muted-foreground" aria-hidden="true" />
+          <h3 className="mt-4 font-display text-lg font-bold text-ink">Nothing available for this view</h3>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">{emptyMessage}</p>
-          {!normalizedSearch && (
-            <button type="button" onClick={onRetry} className="mt-5 min-h-11 rounded-lg border border-primary px-4 text-sm font-semibold text-contrast-red hover:bg-secondary">
+          {!normalizedSearch ? (
+            <button type="button" onClick={onRetry} className="mt-5 min-h-11 rounded-xl border border-[#F62E18] px-4 text-sm font-semibold text-[#C92716] hover:bg-[#FFF3F0]">
               Refresh live catalog
             </button>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
 
-      {state === "ready" && dishes.length > 0 && (
+      {state === "ready" && dishes.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {dishes.map((dish) => <DishCard key={dish.id} dish={dish} />)}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

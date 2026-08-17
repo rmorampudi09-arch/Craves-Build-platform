@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image,
   Pressable,
@@ -305,6 +306,7 @@ export function CustomerHomeScreen() {
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [homeHeaderHeight, setHomeHeaderHeight] = useState(0);
   const [categoriesPinned, setCategoriesPinned] = useState(false);
+  const pinnedOverlayProgress = useRef(new Animated.Value(0)).current;
   const listRef = useRef<FlatList<HomeFeedListItem>>(null);
 
   const feed = useHomeNearbyDishesQuery({
@@ -368,6 +370,14 @@ export function CustomerHomeScreen() {
     }
   }, [search.scrollOffset, searchScopeKey]);
 
+  useEffect(() => {
+    Animated.timing(pinnedOverlayProgress, {
+      toValue: categoriesPinned ? 1 : 0,
+      duration: categoriesPinned ? 110 : 80,
+      useNativeDriver: true,
+    }).start();
+  }, [categoriesPinned, pinnedOverlayProgress]);
+
   const firstName = identity?.displayName?.trim().split(/\s+/)[0] ?? null;
   const greeting = firstName ? `Hi ${firstName}` : 'Hello';
   const queryError = feed.error ? toAppApiError(feed.error) : null;
@@ -430,9 +440,15 @@ export function CustomerHomeScreen() {
   const handleHomeScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       bottomNavScroll.onScroll(event);
-      const shouldPin =
-        homeHeaderHeight > 0 && event.nativeEvent.contentOffset.y >= homeHeaderHeight;
-      setCategoriesPinned(current => (current === shouldPin ? current : shouldPin));
+      const offsetY = event.nativeEvent.contentOffset.y;
+      setCategoriesPinned(current => {
+        if (homeHeaderHeight <= 0) {
+          return false;
+        }
+        const pinAt = homeHeaderHeight + 1;
+        const releaseAt = homeHeaderHeight - 3;
+        return current ? offsetY >= releaseAt : offsetY >= pinAt;
+      });
     },
     [bottomNavScroll, homeHeaderHeight],
   );
@@ -798,14 +814,27 @@ export function CustomerHomeScreen() {
             {paddingBottom: listBottomPadding},
           ]}
         />
-        {categoriesPinned ? (
-          <View style={styles.pinnedCategoryOverlay}>
-            <HomeCategoryRail
-              selectedCategory={selectedCategory}
-              onSelect={setSelectedCategory}
-            />
-          </View>
-        ) : null}
+        <Animated.View
+          pointerEvents={categoriesPinned ? 'auto' : 'none'}
+          style={[
+            styles.pinnedCategoryOverlay,
+            {
+              opacity: pinnedOverlayProgress,
+              transform: [
+                {
+                  translateY: pinnedOverlayProgress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-4, 0],
+                  }),
+                },
+              ],
+            },
+          ]}>
+          <HomeCategoryRail
+            selectedCategory={selectedCategory}
+            onSelect={setSelectedCategory}
+          />
+        </Animated.View>
       </View>
       <CustomerLocationSelector
         visible={locationSelectorVisible}
@@ -832,10 +861,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 30,
-    elevation: 8,
     backgroundColor: colors.surfaceBase,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
   },
   listContent: {
     flexGrow: 1,

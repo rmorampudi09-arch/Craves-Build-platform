@@ -9,13 +9,9 @@ import {
   View,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
-import type {
-  CustomerProfileStackParamList,
-  CustomerTabParamList,
-} from '../../../app/navigation/types';
+import type {CustomerProfileStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {
   borderWidth,
@@ -25,7 +21,6 @@ import {
   iconSize,
   radius,
   spacing,
-  touchTarget,
   typography,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
@@ -40,7 +35,6 @@ import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeade
 import type {CustomerProfileHubContract} from '../domain/customerProfileContract';
 import {
   CUSTOMER_PROFILE_MENU_ROWS,
-  CUSTOMER_PROFILE_ORDER_COUNTS_UNSUPPORTED_COPY,
   CUSTOMER_PROFILE_REWARDS_UNSUPPORTED_COPY,
   resolveCustomerProfileDisplayName,
   resolveCustomerProfileInitials,
@@ -54,8 +48,6 @@ type ProfileNavigation = NativeStackNavigationProp<
   CustomerProfileStackParamList,
   'CustomerProfileRoot'
 >;
-
-type CustomerTabsNavigation = BottomTabNavigationProp<CustomerTabParamList>;
 
 interface ProfileMenuRowProps {
   row: CustomerProfileMenuRowModel;
@@ -134,7 +126,6 @@ function ProfileReadyContent({
 }) {
   const profile = data.profile;
   const rewardsUnsupported = data.rewards.availability === 'unsupported';
-  const orderCountsUnsupported = data.orderSummary.availability === 'unsupported';
 
   return (
     <View style={styles.content}>
@@ -178,34 +169,6 @@ function ProfileReadyContent({
             </Text>
           ) : null}
         </View>
-      </View>
-
-      <View style={styles.orderCard}>
-        <View style={styles.orderHeadingRow}>
-          <View>
-            <Text style={styles.sectionTitle}>Your orders</Text>
-            <Text style={styles.sectionCaption}>
-              {orderCountsUnsupported
-                ? CUSTOMER_PROFILE_ORDER_COUNTS_UNSUPPORTED_COPY
-                : 'Live order status'}
-            </Text>
-          </View>
-          <Icon name="orders" size={iconSize.lg} color={colors.espressoBrown} />
-        </View>
-        <Pressable
-          accessibilityLabel="Open Order Status"
-          accessibilityHint="Opens the Orders tab"
-          accessibilityRole="button"
-          onPress={() => {
-            const row = CUSTOMER_PROFILE_MENU_ROWS.find(item => item.id === 'orders');
-            if (row) {
-              onMenuPress(row);
-            }
-          }}
-          style={({pressed}) => [styles.orderAction, pressed && styles.menuRowPressed]}>
-          <Text style={styles.orderActionText}>View order status</Text>
-          <Icon name="chevron-right" size={iconSize.xs} color={colors.flameRed} />
-        </Pressable>
       </View>
 
       <View style={styles.menuCard}>
@@ -338,19 +301,6 @@ export function CustomerProfileScreen() {
 
       if (row.action === 'route-payments') {
         navigation.navigate('CustomerPaymentMethods');
-        return;
-      }
-
-      if (row.action === 'route-orders') {
-        const tabs = navigation.getParent<CustomerTabsNavigation>();
-        if (!tabs) {
-          showContractBlocker(
-            row.title,
-            'The customer Orders tab is not available from the current navigation parent.',
-          );
-          return;
-        }
-        tabs.navigate('Orders');
         return;
       }
 
@@ -574,47 +524,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.small,
     marginTop: spacing.xs,
-  },
-  orderCard: {
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-  },
-  orderHeadingRow: {
-    minHeight: 92,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  sectionTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  sectionCaption: {
-    maxWidth: 440,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xxs,
-  },
-  orderAction: {
-    minHeight: touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderTopWidth: borderWidth.standard,
-    borderTopColor: colors.border,
-  },
-  orderActionText: {
-    color: colors.flameRed,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
   },
   menuCard: {
     borderWidth: borderWidth.standard,

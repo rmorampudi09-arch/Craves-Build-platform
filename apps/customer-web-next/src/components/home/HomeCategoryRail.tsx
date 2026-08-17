@@ -171,7 +171,7 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
               >
                 <span
                   style={{ backgroundColor: "#FFFFFF" }}
-                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center rounded-full !bg-white transition-transform duration-300 group-hover:-translate-y-1 sm:h-[7.25rem] sm:w-[7.25rem] ${
+                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center rounded-full !bg-white transition-transform duration-300 sm:h-[7.25rem] sm:w-[7.25rem] ${
                     active ? "scale-[1.02]" : "group-hover:scale-[1.04]"
                   }`}
                 >

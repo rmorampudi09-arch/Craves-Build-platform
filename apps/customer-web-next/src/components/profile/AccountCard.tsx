@@ -1,4 +1,4 @@
-import { Mail, Pencil, Phone, ShieldCheck } from "lucide-react";
+import { FaCircleCheck, FaEnvelope, FaPen, FaPhone } from "react-icons/fa6";
 import type { CustomerProfile } from "@/lib/profile-contract";
 import type { CravesUser } from "@/services/auth/cravesAuth";
 
@@ -32,40 +32,51 @@ export function AccountCard({
   return (
     <section
       aria-labelledby="customer-profile-name"
-      className="craves-surface overflow-hidden p-6"
+      className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] sm:p-6"
     >
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-4">
           <div
             aria-hidden="true"
-            className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-flame-red font-display text-2xl font-bold text-white"
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-xl font-bold text-white sm:h-[72px] sm:w-[72px] sm:text-2xl"
           >
             {initials(firstName, lastName)}
           </div>
-          <div className="min-w-0">
-            <p className="craves-overline">Customer account</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6B6B6B]">
+              Customer account
+            </p>
             <h1
               id="customer-profile-name"
-              className="mt-1 truncate font-display text-2xl font-semibold text-ink"
+              className="mt-1.5 truncate text-2xl font-semibold text-[#1A1A1A]"
             >
               {displayName}
             </h1>
-            <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Phone className="h-4 w-4" aria-hidden="true" />
-              <span>{phone}</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-1 text-xs font-semibold text-ink">
-                <ShieldCheck className="h-3.5 w-3.5 text-success" aria-hidden="true" />
+
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[#6B6B6B]">
+              <span className="inline-flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                  <FaPhone className="text-xs" aria-hidden="true" />
+                </span>
+                <span>{phone}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-semibold text-[#1A1A1A]">
+                <FaCircleCheck className="text-[#F62E18]" aria-hidden="true" />
                 Verified
               </span>
-            </p>
+            </div>
+
             {email && (
-              <p className="mt-2 flex items-center gap-2 truncate text-sm text-muted-foreground">
-                <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <p className="mt-2.5 flex min-w-0 items-center gap-2 text-sm text-[#6B6B6B]">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                  <FaEnvelope className="text-xs" aria-hidden="true" />
+                </span>
                 <span className="truncate">{email}</span>
               </p>
             )}
+
             {!profile && (
-              <p className="mt-3 max-w-md text-sm leading-6 text-contrast-red">
+              <p className="mt-3 max-w-md text-sm leading-6 text-[#C92716]">
                 Add your first name, last name and optional email so checkout and
                 support use the correct details.
               </p>
@@ -76,30 +87,32 @@ export function AccountCard({
         <button
           type="button"
           onClick={onEdit}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-contrast-red bg-white px-4 text-sm font-semibold text-contrast-red transition-colors hover:bg-secondary"
+          className="group inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold !text-[#F62E18] transition-colors hover:!bg-[#F62E18] hover:!text-white"
           aria-label="Edit customer profile"
         >
-          <Pencil className="h-4 w-4" aria-hidden="true" />
-          Edit profile
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-colors group-hover:bg-white/20 group-hover:text-white">
+            <FaPen className="text-sm" aria-hidden="true" />
+          </span>
+          <span>Edit profile</span>
         </button>
       </div>
 
-      <dl className="mt-6 grid grid-cols-3 gap-4 border-t border-border pt-4">
-        <div>
-          <dt className="text-xs text-muted-foreground">Orders</dt>
-          <dd className="mt-1 font-display text-xl font-semibold text-ink">
+      <dl className="mt-6 grid grid-cols-3 divide-x divide-[#E5E7EB] border-t border-[#E5E7EB] pt-5 text-center">
+        <div className="px-2">
+          <dt className="text-xs text-[#6B6B6B]">Orders</dt>
+          <dd className="mt-1 text-xl font-semibold text-[#1A1A1A]">
             {orderCount}
           </dd>
         </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Addresses</dt>
-          <dd className="mt-1 font-display text-xl font-semibold text-ink">
+        <div className="px-2">
+          <dt className="text-xs text-[#6B6B6B]">Addresses</dt>
+          <dd className="mt-1 text-xl font-semibold text-[#1A1A1A]">
             {addressCount}
           </dd>
         </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Profile</dt>
-          <dd className="mt-1 text-sm font-semibold text-ink">
+        <div className="px-2">
+          <dt className="text-xs text-[#6B6B6B]">Profile</dt>
+          <dd className="mt-1 text-sm font-semibold text-[#1A1A1A]">
             {profile ? "Complete" : "Action needed"}
           </dd>
         </div>

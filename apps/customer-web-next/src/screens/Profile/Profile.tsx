@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  Bell,
-  CalendarRange,
-  ChefHat,
-  ClipboardList,
-  LogOut,
-  MapPinned,
-} from "lucide-react";
+  FaAddressBook,
+  FaBagShopping,
+  FaBell,
+  FaCalendarDays,
+  FaRightFromBracket,
+} from "react-icons/fa6";
+import { GiChefToque } from "react-icons/gi";
 import type { CustomerProfile } from "@/lib/profile-contract";
 import type { CustomerAddress } from "@/lib/address-contract";
 import type { CustomerOrder } from "@/lib/order-contract";
@@ -152,16 +152,16 @@ export default function ProfilePage() {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen bg-grey-50">
+      <div className="min-h-screen bg-white">
         <ProfileHeader />
         <main
           aria-busy="true"
-          className="mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6"
+          className="mx-auto max-w-4xl space-y-3 px-4 py-6 md:px-6 md:py-8"
         >
           <span className="sr-only">Loading profile</span>
-          <div className="h-56 animate-pulse rounded-xl bg-grey-200" />
-          <div className="h-24 animate-pulse rounded-xl bg-grey-200" />
-          <div className="h-24 animate-pulse rounded-xl bg-grey-200" />
+          <div className="h-60 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+          <div className="h-24 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+          <div className="h-24 animate-pulse rounded-2xl bg-[#F1F3F5]" />
         </main>
       </div>
     );
@@ -184,9 +184,9 @@ export default function ProfilePage() {
   const chef = chefLink(user, application);
 
   return (
-    <div className="min-h-screen bg-grey-50 pb-10">
+    <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
       <ProfileHeader />
-      <main className="mx-auto max-w-3xl px-4 py-6 md:px-6">
+      <main className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
         <AccountCard
           user={user}
           profile={profile}
@@ -198,23 +198,23 @@ export default function ProfilePage() {
         {error ? (
           <p
             role="alert"
-            className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive"
+            className="mt-4 rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm text-[#C92716]"
           >
             {error}
           </p>
         ) : (
-          <p role="status" className="mt-3 text-sm text-muted-foreground">
+          <p role="status" className="mt-3 text-sm text-[#6B6B6B]">
             {message}
           </p>
         )}
 
-        <section aria-labelledby="account-actions" className="mt-6 space-y-4">
+        <section aria-labelledby="account-actions" className="mt-7 space-y-3">
           <h2 id="account-actions" className="sr-only">
             Account actions
           </h2>
           <ProfileLinkCard
             to={chef.to}
-            icon={ChefHat}
+            icon={GiChefToque}
             title={chef.title}
             subtitle={chef.subtitle}
           />
@@ -224,38 +224,40 @@ export default function ProfilePage() {
           />
           <ProfileLinkCard
             to="/addresses"
-            icon={MapPinned}
+            icon={FaAddressBook}
             title="Delivery addresses"
             subtitle={`${addresses.length} saved address${addresses.length === 1 ? "" : "es"}`}
           />
           <ProfileLinkCard
             to="/orders"
-            icon={ClipboardList}
+            icon={FaBagShopping}
             title="My orders"
             subtitle={`${orderCount} order${orderCount === 1 ? "" : "s"} in your history`}
           />
           <ProfileLinkCard
             to="/notifications"
-            icon={Bell}
+            icon={FaBell}
             title="Notifications"
             subtitle="Order, delivery and account updates"
           />
           <ProfileLinkCard
             to="/subscriptions"
-            icon={CalendarRange}
+            icon={FaCalendarDays}
             title="Meal subscriptions"
             subtitle="View available plans and manage active subscriptions"
           />
         </section>
 
-        <button
-          type="button"
-          onClick={() => void logout()}
-          className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-contrast-red bg-white px-4 text-sm font-semibold text-contrast-red transition-colors hover:bg-secondary"
-        >
-          <LogOut className="h-4 w-4" aria-hidden="true" />
-          Sign out
-        </button>
+        <div className="mt-8 flex justify-center">
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold !text-[#1A1A1A] transition-colors"
+          >
+            <FaRightFromBracket className="text-base" aria-hidden="true" />
+            <span>Sign out</span>
+          </button>
+        </div>
       </main>
 
       <EditProfileModal

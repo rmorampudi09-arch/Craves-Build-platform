@@ -16,7 +16,7 @@ import type {
   CustomerProfileStackParamList,
   CustomerTabParamList,
 } from '../../../app/navigation/types';
-import {useAppDispatch} from '../../../app/store/hooks';
+import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {
   borderWidth,
   colors,
@@ -32,6 +32,7 @@ import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {authActions} from '../../auth/state/authSlice';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
@@ -47,6 +48,7 @@ import {
   type CustomerProfileMenuRowModel,
 } from '../presentation/customerProfileUiModel';
 import {useCustomerProfileQuery} from '../query/customerProfileQueries';
+import {switchCustomerToChefRole} from '../state/customerProfileRoleSwitch';
 
 type ProfileNavigation = NativeStackNavigationProp<
   CustomerProfileStackParamList,
@@ -120,11 +122,13 @@ function ProfileMenuRow({row, disabled = false, onPress}: ProfileMenuRowProps) {
 function ProfileReadyContent({
   data,
   loggingOut,
+  switchingRole,
   onEditProfile,
   onMenuPress,
 }: {
   data: CustomerProfileHubContract;
   loggingOut: boolean;
+  switchingRole: boolean;
   onEditProfile: () => void;
   onMenuPress: (row: CustomerProfileMenuRowModel) => void;
 }) {
@@ -210,7 +214,10 @@ function ProfileReadyContent({
             {index > 0 ? <View style={styles.divider} /> : null}
             <ProfileMenuRow
               row={row}
-              disabled={loggingOut && row.id === 'logout'}
+              disabled={
+                (loggingOut && row.id === 'logout') ||
+                (switchingRole && row.id === 'switch-chef')
+              }
               onPress={() => onMenuPress(row)}
             />
           </React.Fragment>
@@ -223,11 +230,13 @@ function ProfileReadyContent({
 export function CustomerProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
   const dispatch = useAppDispatch();
+  const identity = useAppSelector(state => state.auth.identity);
   const header = useCustomerHeaderState();
   const profileQuery = useCustomerProfileQuery();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [switchingRole, setSwitchingRole] = useState(false);
 
   const showContractBlocker = useCallback((title: string, message: string) => {
     Alert.alert(`${title} unavailable`, message, [{text: 'OK'}]);
@@ -238,7 +247,7 @@ export function CustomerProfileScreen() {
   }, [navigation]);
 
   const performLogout = useCallback(async () => {
-    if (loggingOut) {
+    if (loggingOut || switchingRole) {
       return;
     }
     setLoggingOut(true);
@@ -251,7 +260,7 @@ export function CustomerProfileScreen() {
         'Please try again. Your private session state was not intentionally retained by this screen.',
       );
     }
-  }, [dispatch, loggingOut]);
+  }, [dispatch, loggingOut, switchingRole]);
 
   const confirmLogout = useCallback(() => {
     Alert.alert('Logout?', 'You will need to sign in again to use your Craves account.', [
@@ -263,6 +272,62 @@ export function CustomerProfileScreen() {
       },
     ]);
   }, [performLogout]);
+
+  const openChefRegistration = useCallback(async () => {
+    if (loggingOut || switchingRole) {
+      return;
+    }
+    setSwitchingRole(true);
+    try {
+      await completeLogout(dispatch);
+      dispatch(authActions.roleSelected('CHEF'));
+    } catch {
+      setSwitchingRole(false);
+      Alert.alert(
+        'Could not open Chef registration',
+        'Please try again. Craves could not safely return to the Chef sign-in flow.',
+      );
+    }
+  }, [dispatch, loggingOut, switchingRole]);
+
+  const performRoleSwitch = useCallback(async () => {
+    if (switchingRole || loggingOut) {
+      return;
+    }
+    setSwitchingRole(true);
+    try {
+      await switchCustomerToChefRole(dispatch);
+    } catch {
+      setSwitchingRole(false);
+      Alert.alert(
+        'Could not switch roles',
+        'Customer-private data could not be isolated safely. Please try again before opening the Chef workspace.',
+      );
+    }
+  }, [dispatch, loggingOut, switchingRole]);
+
+  const confirmRoleSwitch = useCallback(() => {
+    if (!identity?.roles.includes('CHEF')) {
+      Alert.alert(
+        'Not registered as Chef',
+        "You're not registered as a chef. Want to register?",
+        [
+          {text: 'Back', style: 'cancel'},
+          {text: 'Register', onPress: openChefRegistration},
+        ],
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Switch to Chef?',
+      'Craves will leave the Customer workspace and reload your Chef account.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {text: 'Switch', onPress: performRoleSwitch},
+      ],
+    );
+  }, [identity?.roles, openChefRegistration, performRoleSwitch]);
 
   const handleMenuPress = useCallback(
     (row: CustomerProfileMenuRowModel) => {
@@ -289,6 +354,11 @@ export function CustomerProfileScreen() {
         return;
       }
 
+      if (row.action === 'switch-chef') {
+        confirmRoleSwitch();
+        return;
+      }
+
       if (row.action === 'logout') {
         confirmLogout();
         return;
@@ -300,7 +370,7 @@ export function CustomerProfileScreen() {
           'This destination is not registered in the approved mobile route contract yet.',
       );
     },
-    [confirmLogout, navigation, showContractBlocker],
+    [confirmLogout, confirmRoleSwitch, navigation, showContractBlocker],
   );
 
   const retryProfile = useCallback(() => {
@@ -325,6 +395,7 @@ export function CustomerProfileScreen() {
           <ProfileReadyContent
             data={profileQuery.contractState.data}
             loggingOut={loggingOut}
+            switchingRole={switchingRole}
             onEditProfile={handleEditProfile}
             onMenuPress={handleMenuPress}
           />

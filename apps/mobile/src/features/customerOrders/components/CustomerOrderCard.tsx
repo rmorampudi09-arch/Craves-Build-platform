@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import type {CustomerOrdersStackParamList} from '../../../app/navigation/types';
 import {
@@ -11,12 +11,14 @@ import {
   spacing,
   typography,
 } from '../../../design/tokens';
-import {Icon} from '../../../shared/components/Icon';
+import {Icon, type IconName} from '../../../shared/components/Icon';
+import {useCustomerKitchenProfileQuery} from '../../kitchenProfile/query/kitchenProfileQueries';
 import type {CustomerOrder} from '../domain/customerOrderTypes';
 import {
   formatCustomerOrderCreatedAt,
   formatCustomerOrderMoney,
   getCustomerOrderDisplayReference,
+  getCustomerOrderProgressPresentation,
   getCustomerOrderReferenceAction,
   getCustomerOrderStatusPresentation,
   type CustomerOrderStatusTone,
@@ -28,13 +30,24 @@ interface Props {
   reorderPending?: boolean;
 }
 
+type ActionVariant = 'outline' | 'primary' | 'neutral';
+
 interface CardActionProps {
   label: string;
-  primary?: boolean;
+  variant?: ActionVariant;
+  icon?: IconName;
   onPress: () => void;
 }
 
-function CardAction({label, primary = false, onPress}: CardActionProps) {
+function CardAction({
+  label,
+  variant = 'outline',
+  icon,
+  onPress,
+}: CardActionProps) {
+  const primary = variant === 'primary';
+  const neutral = variant === 'neutral';
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -43,87 +56,184 @@ function CardAction({label, primary = false, onPress}: CardActionProps) {
       style={({pressed}) => [
         styles.action,
         primary && styles.actionPrimary,
+        neutral && styles.actionNeutral,
         pressed && styles.actionPressed,
       ]}>
-      <Text style={[styles.actionText, primary && styles.actionTextPrimary]}>
+      {icon ? (
+        <Icon
+          name={icon}
+          size={17}
+          color={primary ? colors.white : neutral ? colors.espressoBrown : colors.flameRed}
+          surface={false}
+        />
+      ) : null}
+      <Text
+        style={[
+          styles.actionText,
+          primary && styles.actionTextPrimary,
+          neutral && styles.actionTextNeutral,
+        ]}>
         {label}
       </Text>
     </Pressable>
   );
 }
 
-function statusToneStyle(tone: CustomerOrderStatusTone) {
+function toneColor(tone: CustomerOrderStatusTone): string {
   switch (tone) {
     case 'success':
-      return styles.statusSuccess;
+      return colors.success;
     case 'warning':
-      return styles.statusWarning;
+      return colors.warning;
     case 'danger':
-      return styles.statusDanger;
+      return colors.error;
     case 'muted':
-      return styles.statusMuted;
+      return colors.textSecondary;
     case 'accent':
-      return styles.statusAccent;
+      return colors.flameRedAccessible;
   }
 }
 
-export function CustomerOrderCard({order, onReorder, reorderPending = false}: Props) {
+function kitchenAvatarUrl(kitchenId: string): string {
+  return `https://api.dicebear.com/9.x/adventurer/png?seed=${encodeURIComponent(
+    `craves-${kitchenId}`,
+  )}&backgroundColor=f1f5f9&radius=50`;
+}
+
+export function CustomerOrderCard({
+  order,
+  onReorder,
+  reorderPending = false,
+}: Props) {
   const navigation = useNavigation<NavigationProp<CustomerOrdersStackParamList>>();
+  const kitchenProfile = useCustomerKitchenProfileQuery(order.kitchenId);
   const onPressDetails = () =>
     navigation.navigate('CustomerOrderDetail', {orderId: order.id});
   const onPressTrack = () =>
     navigation.navigate('CustomerOrderTracking', {orderId: order.id});
   const status = getCustomerOrderStatusPresentation(order.status);
+  const progress = getCustomerOrderProgressPresentation(order);
   const referenceAction = getCustomerOrderReferenceAction(order.status);
   const visibleItems = order.items.slice(0, 3);
   const remainingItems = Math.max(order.items.length - visibleItems.length, 0);
+
+  const menuItemsById = React.useMemo(() => {
+    const map = new Map<string, NonNullable<typeof kitchenProfile.data>['menuItems'][number]>();
+    for (const item of kitchenProfile.data?.menuItems ?? []) {
+      map.set(item.id, item);
+    }
+    return map;
+  }, [kitchenProfile.data]);
+
+  const description =
+    kitchenProfile.data?.biography?.trim() ||
+    order.items[0]?.category ||
+    'Home-cooked meals';
 
   return (
     <Pressable
       accessible={false}
       onPress={onPressDetails}
       style={({pressed}) => [styles.card, pressed && styles.cardPressed]}>
-      <View style={styles.headerRow}>
-        <View style={styles.orderHeading}>
-          <Text style={styles.orderNumber}>
+      <View style={styles.topRow}>
+        <View style={styles.orderColumn}>
+          <Text numberOfLines={1} style={styles.orderNumber}>
             Order #{getCustomerOrderDisplayReference(order.id)}
           </Text>
           <Text style={styles.orderDate}>
             {formatCustomerOrderCreatedAt(order.createdAt)}
           </Text>
-        </View>
-        <View style={[styles.statusPill, statusToneStyle(status.tone)]}>
-          <Text style={styles.statusText}>{status.label}</Text>
-        </View>
-      </View>
-
-      <View style={styles.kitchenRow}>
-        <View style={styles.kitchenAvatar}>
-          <Icon name="chef" size={24} color={colors.flameRed} />
-        </View>
-        <View style={styles.kitchenCopy}>
-          <Text numberOfLines={1} style={styles.kitchenName}>
-            {order.kitchenName}
+          <Text style={[styles.statusText, {color: toneColor(status.tone)}]}>
+            {status.label}
           </Text>
-          <Text style={styles.kitchenMeta}>
-            {order.items.length} {order.items.length === 1 ? 'item' : 'items'}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.itemsRow}>
-        {visibleItems.map(item => (
-          <View key={item.id} style={styles.itemTile}>
-            <Text numberOfLines={2} style={styles.itemTileText}>
-              {item.itemName}
+          <View style={styles.progressRow}>
+            <Icon
+              name={progress.icon}
+              size={15}
+              color={toneColor(progress.tone)}
+              surface={false}
+            />
+            <Text
+              numberOfLines={2}
+              style={[styles.progressText, {color: toneColor(progress.tone)}]}>
+              {progress.label}
             </Text>
           </View>
-        ))}
-        {remainingItems > 0 ? (
-          <View style={styles.moreTile}>
-            <Text style={styles.moreTileText}>+{remainingItems}</Text>
+        </View>
+
+        <View style={styles.kitchenColumn}>
+          <Image
+            accessibilityIgnoresInvertColors
+            accessibilityLabel={`${order.kitchenName} avatar`}
+            source={{uri: kitchenAvatarUrl(order.kitchenId)}}
+            resizeMode="cover"
+            style={styles.kitchenAvatar}
+          />
+          <View style={styles.kitchenCopy}>
+            <Text numberOfLines={2} style={styles.kitchenName}>
+              {order.kitchenName}
+            </Text>
+            <Text numberOfLines={2} style={styles.kitchenDescription}>
+              {description}
+            </Text>
           </View>
-        ) : null}
+        </View>
+      </View>
+
+      <View style={styles.contentRow}>
+        <View style={styles.itemsColumn}>
+          <View style={styles.itemsRow}>
+            {visibleItems.map(item => {
+              const catalogItem = menuItemsById.get(item.menuItemId);
+              const primaryImage =
+                catalogItem?.images.find(image => image.primary) ??
+                catalogItem?.images[0];
+
+              return primaryImage ? (
+                <Image
+                  key={item.id}
+                  accessibilityIgnoresInvertColors
+                  accessibilityLabel={item.itemName}
+                  source={{uri: primaryImage.url}}
+                  resizeMode="cover"
+                  style={styles.itemImage}
+                />
+              ) : (
+                <View key={item.id} style={styles.itemFallback}>
+                  <Text numberOfLines={2} style={styles.itemFallbackText}>
+                    {item.itemName}
+                  </Text>
+                </View>
+              );
+            })}
+            {remainingItems > 0 ? (
+              <View style={styles.moreTile}>
+                <Text style={styles.moreTileText}>+{remainingItems}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.actionsColumn}>
+          <CardAction label="View Details" onPress={onPressDetails} />
+          {referenceAction === 'TRACK' ? (
+            <CardAction
+              label="Track Order"
+              variant="primary"
+              icon="location"
+              onPress={onPressTrack}
+            />
+          ) : null}
+          {referenceAction === 'REORDER' ? (
+            <CardAction
+              label={reorderPending ? 'Preparing…' : 'Reorder'}
+              variant="neutral"
+              onPress={() => {
+                if (!reorderPending) onReorder(order);
+              }}
+            />
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.totalRow}>
@@ -132,20 +242,6 @@ export function CustomerOrderCard({order, onReorder, reorderPending = false}: Pr
           {formatCustomerOrderMoney(order.grandTotal)}
         </Text>
       </View>
-
-      <View style={styles.actionsRow}>
-        <CardAction label="View Details" onPress={onPressDetails} />
-        {referenceAction === 'TRACK' ? (
-          <CardAction label="Track Order" primary onPress={onPressTrack} />
-        ) : null}
-        {referenceAction === 'REORDER' ? (
-          <CardAction
-            label={reorderPending ? 'Preparing…' : 'Reorder'}
-            onPress={() => { if (!reorderPending) onReorder(order); }}
-          />
-        ) : null}
-      </View>
-
     </Pressable>
   );
 }
@@ -153,22 +249,26 @@ export function CustomerOrderCard({order, onReorder, reorderPending = false}: Pr
 const styles = StyleSheet.create({
   card: {
     marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    padding: spacing.md,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
     borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
     backgroundColor: colors.white,
     ...elevation.card,
   },
-  cardPressed: {opacity: 0.94},
-  headerRow: {
+  cardPressed: {opacity: 0.96},
+  topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  orderHeading: {minWidth: 0, flex: 1},
+  orderColumn: {
+    minWidth: 0,
+    flex: 1,
+  },
   orderNumber: {
     color: colors.espressoBrown,
     fontSize: typography.body,
@@ -179,113 +279,151 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.small,
   },
-  statusPill: {
-    maxWidth: '46%',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-  },
-  statusAccent: {backgroundColor: colors.errorSoft},
-  statusSuccess: {backgroundColor: colors.successSoft},
-  statusWarning: {backgroundColor: colors.warningSoft},
-  statusDanger: {backgroundColor: colors.errorSoft},
-  statusMuted: {backgroundColor: colors.surfaceMuted},
   statusText: {
-    color: colors.espressoBrown,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
-    textAlign: 'center',
+    marginTop: spacing.xs,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
   },
-  kitchenRow: {
+  progressRow: {
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xxs,
+    marginTop: spacing.xs,
+  },
+  progressText: {
+    minWidth: 0,
+    flex: 1,
+    fontSize: typography.tiny,
+    lineHeight: 17,
+  },
+  kitchenColumn: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  kitchenAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+  },
+  kitchenCopy: {
+    minWidth: 0,
+    flex: 1,
+  },
+  kitchenName: {
+    color: colors.espressoBrown,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  kitchenDescription: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    lineHeight: 16,
+  },
+  contentRow: {
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: borderWidth.standard,
-    borderTopColor: colors.border,
   },
-  kitchenAvatar: {
+  itemsColumn: {
+    minWidth: 0,
+    flex: 1,
+  },
+  itemsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+  },
+  itemImage: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceMuted,
+  },
+  itemFallback: {
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.pill,
-    backgroundColor: colors.white,
+    padding: 3,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceMuted,
   },
-  kitchenCopy: {minWidth: 0, flex: 1},
-  kitchenName: {
+  itemFallbackText: {
     color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  kitchenMeta: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  itemsRow: {flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md},
-  itemTile: {
-    minWidth: 0,
-    flex: 1,
-    minHeight: 62,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xs,
-    borderRadius: radius.md,
-    backgroundColor: colors.white,
-  },
-  itemTileText: {
-    color: colors.espressoBrown,
-    fontSize: typography.tiny,
+    fontSize: 8,
     fontWeight: fontWeight.medium,
+    lineHeight: 10,
     textAlign: 'center',
   },
   moreTile: {
-    width: 48,
-    minHeight: 62,
+    width: 30,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     backgroundColor: colors.surfaceMuted,
   },
   moreTileText: {
     color: colors.espressoBrown,
-    fontSize: typography.small,
+    fontSize: typography.tiny,
     fontWeight: fontWeight.bold,
   },
-  totalRow: {
+  actionsColumn: {
+    width: 124,
+    gap: spacing.xs,
+  },
+  action: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.md,
-  },
-  totalLabel: {color: colors.textSecondary, fontSize: typography.small},
-  totalValue: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  actionsRow: {flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md},
-  action: {
-    minWidth: 0,
-    minHeight: 56,
-    flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.xs,
     borderRadius: radius.md,
     borderWidth: borderWidth.standard,
     borderColor: colors.flameRed,
     backgroundColor: colors.white,
   },
-  actionPrimary: {backgroundColor: colors.flameRed},
+  actionPrimary: {
+    borderColor: colors.flameRed,
+    backgroundColor: colors.flameRed,
+  },
+  actionNeutral: {
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.white,
+  },
   actionPressed: {opacity: 0.82},
   actionText: {
     color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
     textAlign: 'center',
   },
   actionTextPrimary: {color: colors.white},
+  actionTextNeutral: {color: colors.espressoBrown},
+  totalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  totalLabel: {
+    color: colors.espressoBrown,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
+  },
+  totalValue: {
+    color: colors.espressoBrown,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.extrabold,
+  },
 });

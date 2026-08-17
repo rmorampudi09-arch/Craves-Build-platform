@@ -30,13 +30,16 @@ export const routeMeta = {
 
 function CartSkeleton() {
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]" aria-hidden="true">
+    <div className="space-y-6" aria-hidden="true">
       <div className="space-y-4">
         {Array.from({ length: 2 }, (_, index) => (
-          <div key={index} className="h-40 animate-pulse rounded-2xl bg-grey-200" />
+          <div
+            key={index}
+            className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]"
+          />
         ))}
       </div>
-      <div className="h-52 animate-pulse rounded-2xl bg-grey-200" />
+      <div className="h-52 animate-pulse rounded-2xl bg-[#F1F3F5]" />
     </div>
   );
 }
@@ -137,16 +140,16 @@ function CartPage() {
   const currency = cartCurrency();
 
   return (
-    <div className="min-h-screen bg-white pb-32 text-ink">
+    <div className="min-h-screen bg-white pb-32 text-[#1A1A1A]">
       <CartHeader onBack={() => navigate({ to: "/home" })} />
-      <main className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
+      <main className="mx-auto max-w-4xl px-4 pb-8 pt-6 md:px-6 md:pb-10 md:pt-8">
         <div className="mb-6">
-          <p className="craves-overline text-primary">Review before checkout</p>
-          <h1 className="mt-1 font-display text-3xl font-bold tracking-[-0.04em] text-ink">
+          <p className="craves-overline text-[#6B6B6B]">Review before checkout</p>
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-[-0.035em] text-[#1A1A1A] md:text-3xl">
             Your selected dishes
           </h1>
           {!loading && items.length > 0 && (
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mt-2 text-sm text-[#6B6B6B]">
               {items.reduce((total, item) => total + item.qty, 0)} total items from the backend cart.
             </p>
           )}
@@ -155,35 +158,49 @@ function CartPage() {
         {loading ? (
           <>
             <CartSkeleton />
-            <p className="sr-only" role="status">Loading your Craves cart</p>
+            <p className="sr-only" role="status">
+              Loading your Craves cart
+            </p>
           </>
         ) : message && items.length === 0 ? (
           <div className="rounded-2xl border border-error/20 bg-white p-8 text-center shadow-[var(--shadow-card)] md:p-12">
-            <AlertTriangle className="mx-auto h-10 w-10 text-error" aria-hidden="true" />
-            <h2 className="mt-4 font-display text-xl font-bold text-ink">Cart unavailable</h2>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">{message}</p>
-            <button type="button" onClick={() => void refresh()} className="btn-primary mt-6">
+            <AlertTriangle
+              className="mx-auto h-10 w-10 text-error"
+              aria-hidden="true"
+            />
+            <h2 className="mt-4 font-display text-xl font-bold text-[#1A1A1A]">
+              Cart unavailable
+            </h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
+              {message}
+            </p>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="btn-primary mt-6"
+            >
               <RefreshCw className="h-4 w-4" aria-hidden="true" /> Retry
             </button>
           </div>
         ) : items.length === 0 ? (
           <EmptyCartState onBrowseMenu={() => navigate({ to: "/home" })} />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+          <div className="space-y-6">
             <CartItemList
               items={items}
               busyItemId={busyItemId}
               onRemove={(id) => void removeItem(id)}
               onSetQty={(id, quantity) => void changeQuantity(id, quantity)}
             />
-            <div className="lg:sticky lg:top-24">
-              <BillSummaryCard subtotal={subtotal} currency={currency} />
-            </div>
+            <BillSummaryCard subtotal={subtotal} currency={currency} />
           </div>
         )}
 
         {message && items.length > 0 && (
-          <p role="alert" className="mt-5 rounded-xl border border-error/20 bg-white p-3 text-sm font-medium text-error">
+          <p
+            role="alert"
+            className="mt-5 rounded-xl border border-error/20 bg-white p-3 text-sm font-medium text-error"
+          >
             {message}
           </p>
         )}

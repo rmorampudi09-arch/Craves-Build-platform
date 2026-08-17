@@ -171,7 +171,7 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   }
 });
 
-test("customer navigation stays inside customer page headers instead of above the website", () => {
+test("customer service navigation is visible only on the signed-in home page", () => {
   const navigation = source(
     "../components/navigation/PersistentCustomerServiceNav.tsx",
   );
@@ -189,24 +189,10 @@ test("customer navigation stays inside customer page headers instead of above th
   }
 
   assert.doesNotMatch(layout, /PersistentCustomerServiceNav/);
-  assert.match(homeHeader, /lg:grid-cols-\[minmax\(18rem,1fr\)_auto\]/);
   assert.match(homeHeader, /<PersistentCustomerServiceNav/);
-
-  for (const customerSurface of [
-    "../screens/OrderHistory/OrderHistory.tsx",
-    "../screens/Notifications/Notifications.tsx",
-    "../app/subscriptions/page.tsx",
-    "../components/profile/ProfileHeader.tsx",
-    "../components/cart/CartHeader.tsx",
-    "../components/checkout/CheckoutHeader.tsx",
-    "../components/tracking/TrackingHeader.tsx",
-    "../screens/public/FoodDetails/FoodDetails.tsx",
-    "../screens/public/ChefProfile/ChefProfile.tsx",
-    "../screens/OrderSuccess/OrderSuccess.tsx",
-  ]) {
-    assert.match(source(customerSurface), /PersistentCustomerServiceNav/, customerSurface);
-  }
-
+  assert.match(navigation, /pathname !== "\/home" \|\| !signedIn/);
+  assert.match(navigation, /serviceLinks\.map/);
+  assert.doesNotMatch(navigation, /visibleLinks/);
   assert.match(navigation, /data-customer-service-navigation="embedded"/);
   assert.match(navigation, /border-\[#F62E18\] bg-white/);
   assert.match(navigation, /text-black/);

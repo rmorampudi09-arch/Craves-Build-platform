@@ -218,7 +218,7 @@ function BrowseFoodsPage() {
 
     const [kitchenResult, dishResult] = await Promise.allSettled([
       discoverKitchens(activeAddress.lat, activeAddress.lng, 5_000),
-      discoverDishes(activeAddress.lat, activeAddress.lng, 5_000),
+      discoverDishes(activeAddress.lat, activeAddress.lng),
     ]);
 
     const loadedKitchens = kitchenResult.status === "fulfilled" ? kitchenResult.value.kitchens : [];

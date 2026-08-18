@@ -21,6 +21,11 @@ export interface ChefMenuSummary {
   inactive: number;
 }
 
+export function formatChefMenuCategory(value: string): string {
+  const normalized = value.trim();
+  return normalized.toLocaleLowerCase() === 'biriyani' ? 'Biryani' : normalized;
+}
+
 export function getChefMenuDisplayState(
   item: ChefMenuItem,
 ): ChefMenuDisplayState {
@@ -58,9 +63,9 @@ export function deriveChefMenuSummary(
 export function getChefMenuCategories(
   items: readonly ChefMenuItem[],
 ): string[] {
-  return Array.from(new Set(items.map(item => item.category))).sort((a, b) =>
-    a.localeCompare(b),
-  );
+  return Array.from(
+    new Set(items.map(item => formatChefMenuCategory(item.category))),
+  ).sort((a, b) => a.localeCompare(b));
 }
 
 export function filterChefMenuItems(
@@ -72,7 +77,8 @@ export function filterChefMenuItems(
   const normalizedQuery = query.trim().toLocaleLowerCase();
 
   return items.filter(item => {
-    if (category !== null && item.category !== category) {
+    const displayCategory = formatChefMenuCategory(item.category);
+    if (category !== null && displayCategory !== category) {
       return false;
     }
     if (
@@ -85,7 +91,7 @@ export function filterChefMenuItems(
       return true;
     }
 
-    return [item.itemName, item.description ?? '', item.category]
+    return [item.itemName, item.description ?? '', displayCategory]
       .join(' ')
       .toLocaleLowerCase()
       .includes(normalizedQuery);

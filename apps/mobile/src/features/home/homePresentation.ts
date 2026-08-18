@@ -1,5 +1,10 @@
 import type {NearbyDish, NearbyDishPage} from './api/homeFeedApi';
 
+function normalizeCategory(value: string): string {
+  const normalized = value.trim().toLocaleLowerCase();
+  return normalized === 'biriyani' ? 'biryani' : normalized;
+}
+
 export function flattenNearbyDishPages(
   pages: readonly NearbyDishPage[] | undefined,
 ): NearbyDish[] {
@@ -25,7 +30,7 @@ export function getHomeCategories(dishes: readonly NearbyDish[]): string[] {
   dishes.forEach(dish => {
     const category = dish.category.trim();
     if (category) {
-      categories.add(category);
+      categories.add(normalizeCategory(category) === 'biryani' ? 'Biryani' : category);
     }
   });
   return Array.from(categories).sort((left, right) => left.localeCompare(right));
@@ -37,8 +42,14 @@ export function filterHomeDishes(
   selectedCategory: string | null,
 ): NearbyDish[] {
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const normalizedSelectedCategory = selectedCategory
+    ? normalizeCategory(selectedCategory)
+    : null;
   return dishes.filter(dish => {
-    if (selectedCategory && dish.category !== selectedCategory) {
+    if (
+      normalizedSelectedCategory &&
+      normalizeCategory(dish.category) !== normalizedSelectedCategory
+    ) {
       return false;
     }
     if (!normalizedSearch) {

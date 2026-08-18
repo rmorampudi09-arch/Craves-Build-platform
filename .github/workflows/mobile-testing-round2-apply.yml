@@ -1,0 +1,55 @@
+name: CRAVES Mobile Testing Round 2 Apply
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/mobile-testing-round2-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout mobile branch
+        uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+          fetch-depth: 0
+
+      - name: Apply exact round-two patch
+        run: python3 scripts/apply_mobile_testing_round2.py
+
+      - name: Verify patch formatting
+        run: git diff --check
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: Type-check mobile app
+        working-directory: apps/mobile
+        run: npx tsc --noEmit --pretty false
+
+      - name: Run focused regression tests
+        working-directory: apps/mobile
+        run: npm test -- --runInBand src/shared/catalog/menuCategories.test.ts src/features/home/homePresentation.test.ts src/features/chefMenu/domain/chefMenuForm.test.ts
+
+      - name: Commit verified corrections
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/mobile/src apps/mobile/android/app/src/main/res
+          git commit -m "fix(mobile): complete testing round two corrections"
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

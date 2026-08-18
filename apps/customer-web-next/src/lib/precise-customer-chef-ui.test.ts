@@ -117,12 +117,15 @@ test("public landing keeps the approved semantic reference experience and wired 
   assert.doesNotMatch(landing, /min-h-screen bg-cream text-ink/);
 });
 
-test("welcome banner is solid contrast red with white copy", () => {
-  assert.match(welcome, /bg-\[#C92716\]/);
-  assert.match(welcome, /Welcome back, \{firstName\}/);
-  assert.match(welcome, /Fresh dishes available around your delivery address\./);
-  assert.match(welcome, /text-white/);
-  assert.doesNotMatch(welcome, /blur-|gradient|bg-primary\/25/);
+test("welcome banner keeps the rebuilt home reference hero and live location controls", () => {
+  assert.match(welcome, /src="\/home\/reference\/home-hero-reference\.webp"/);
+  assert.match(welcome, /styles\.heroArtwork/);
+  assert.match(welcome, /Welcome home, \{firstName\}/);
+  assert.match(welcome, /Eat for Health\./);
+  assert.match(welcome, /Taste the Comfort of Home\./);
+  assert.match(welcome, /Use current delivery location/);
+  assert.match(welcome, /Current Location/);
+  assert.match(welcome, /dishCount/);
 });
 
 test("meal plans keep their previous card layout and navigation flow", () => {

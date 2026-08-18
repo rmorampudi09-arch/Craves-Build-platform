@@ -322,7 +322,7 @@ export default function NotificationsPage() {
             ))}
 
             <p className="text-center text-sm text-[#6B6B6B]">
-              You've reached the end
+              You&apos;ve reached the end
             </p>
           </div>
         )}

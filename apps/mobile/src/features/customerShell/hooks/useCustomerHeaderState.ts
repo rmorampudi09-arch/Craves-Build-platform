@@ -2,7 +2,6 @@ import {useCallback} from 'react';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@react-navigation/native';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
-import type {CustomerTabParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {useCustomerNotificationsListQuery} from '../../notifications/query/customerNotificationQueries';
 import {customerShellApi, unreadNoticeCount} from '../api/customerShellApi';
@@ -26,12 +25,6 @@ export function useCustomerHeaderState() {
   const openNotifications = useCallback(() => {
     if (navigation.getState().routeNames.includes('CustomerNotifications')) {
       navigation.navigate('CustomerNotifications');
-      return;
-    }
-
-    const tabs = navigation.getParent<NavigationProp<CustomerTabParamList>>();
-    if (tabs) {
-      tabs.navigate('Profile', {screen: 'CustomerNotifications'});
       return;
     }
     notificationsQuery.refetch().catch(() => undefined);

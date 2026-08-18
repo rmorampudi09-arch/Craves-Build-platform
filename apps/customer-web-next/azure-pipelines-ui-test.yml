@@ -13,6 +13,7 @@ variables:
   subscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
   resourceGroup: rg-craves-prodlow-centralindia
   keyVaultName: kvcravesprodlowl3ing6
+  firebaseServiceAccountSecret: craves-auth-firebase-service-account-json-base64
   acrName: cravesprodlowacr82121
   containerAppName: ca-craves-web-ui-test
   productionContainerAppName: ca-craves-web-prodlow
@@ -35,7 +36,7 @@ steps:
       versionSpec: 24.x
 
   - task: AzureCLI@2
-    displayName: Load Web Next build values from Key Vault
+    displayName: Resolve Firebase Web config from Key Vault
     inputs:
       azureSubscription: $(azureServiceConnection)
       scriptType: bash
@@ -46,6 +47,7 @@ steps:
 
         EXPECTED_SUBSCRIPTION='$(subscriptionId)'
         VAULT='$(keyVaultName)'
+        SERVICE_ACCOUNT_SECRET='$(firebaseServiceAccountSecret)'
 
         az account set --subscription "$EXPECTED_SUBSCRIPTION"
         ACTIVE_SUBSCRIPTION=$(az account show --query id -o tsv --only-show-errors)
@@ -54,196 +56,147 @@ steps:
           exit 2
         }
 
-        mapfile -t SECRET_NAMES < <(
-          az keyvault secret list \
-            --vault-name "$VAULT" \
-            --query '[].name' \
-            -o tsv \
-            --only-show-errors
-        )
+        WORK_DIR=$(mktemp -d)
+        trap 'rm -rf "$WORK_DIR"' EXIT
 
-        [[ ${#SECRET_NAMES[@]} -gt 0 ]] || {
-          echo "ERROR: No secrets are visible in $VAULT." >&2
+        SA_VALUE=$(az keyvault secret show \
+          --vault-name "$VAULT" \
+          --name "$SERVICE_ACCOUNT_SECRET" \
+          --query value \
+          -o tsv \
+          --only-show-errors)
+
+        [[ -n "$SA_VALUE" ]] || {
+          echo "ERROR: $SERVICE_ACCOUNT_SECRET is empty in $VAULT." >&2
           exit 2
         }
 
-        normalize() {
-          printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]'
-        }
-
-        find_name_by_alias() {
-          local alias normalized_alias secret_name normalized_secret
-          local -a matches=()
-
-          for alias in "$@"; do
-            normalized_alias=$(normalize "$alias")
-            for secret_name in "${SECRET_NAMES[@]}"; do
-              normalized_secret=$(normalize "$secret_name")
-              if [[ "$normalized_secret" == "$normalized_alias" ||
-                    "$normalized_secret" == *"$normalized_alias"* ]]; then
-                matches+=("$secret_name")
-              fi
-            done
-          done
-
-          mapfile -t matches < <(printf '%s\n' "${matches[@]:-}" | sed '/^$/d' | sort -u)
-
-          if [[ ${#matches[@]} -eq 1 ]]; then
-            printf '%s' "${matches[0]}"
-            return 0
-          fi
-
-          return 1
-        }
-
-        secret_value() {
-          az keyvault secret show \
-            --vault-name "$VAULT" \
-            --name "$1" \
-            --query value \
-            -o tsv \
-            --only-show-errors
-        }
-
-        find_name_by_exact_value() {
-          local expected="$1"
-          local secret_name value
-          local -a matches=()
-
-          for secret_name in "${SECRET_NAMES[@]}"; do
-            value=$(secret_value "$secret_name")
-            if [[ "$value" == "$expected" ]]; then
-              matches+=("$secret_name")
-            fi
-          done
-
-          if [[ ${#matches[@]} -eq 1 ]]; then
-            printf '%s' "${matches[0]}"
-            return 0
-          fi
-
-          return 1
-        }
-
-        find_firebase_api_key() {
-          local secret_name value normalized_secret
-          local -a preferred=()
-          local -a candidates=()
-
-          for secret_name in "${SECRET_NAMES[@]}"; do
-            value=$(secret_value "$secret_name")
-            if [[ "$value" == AIza* ]]; then
-              candidates+=("$secret_name")
-              normalized_secret=$(normalize "$secret_name")
-              if [[ "$normalized_secret" == *firebase* || "$normalized_secret" == *web* ]]; then
-                preferred+=("$secret_name")
-              fi
-            fi
-          done
-
-          if [[ ${#preferred[@]} -eq 1 ]]; then
-            printf '%s' "${preferred[0]}"
-            return 0
-          fi
-
-          if [[ ${#candidates[@]} -eq 1 ]]; then
-            printf '%s' "${candidates[0]}"
-            return 0
-          fi
-
-          if [[ ${#candidates[@]} -gt 1 ]]; then
-            echo "ERROR: Multiple Google API-key secrets exist in $VAULT; unable to safely choose the Firebase Web API key." >&2
-            printf 'Candidate secret names: %s\n' "${candidates[*]}" >&2
-          fi
-          return 1
-        }
-
-        set_secret_pipeline_variable() {
-          local variable_name="$1"
-          local secret_name="$2"
-          local value
-
-          value=$(secret_value "$secret_name")
-          [[ -n "$value" ]] || {
-            echo "ERROR: Key Vault secret $secret_name for $variable_name is empty." >&2
-            exit 2
-          }
-
-          printf '##vso[task.setvariable variable=%s;issecret=true]%s\n' "$variable_name" "$value"
-          echo "Loaded $variable_name from Key Vault secret: $secret_name"
-        }
-
-        resolve_required() {
-          local variable_name="$1"
-          local expected_value="$2"
-          shift 2
-          local secret_name=''
-
-          secret_name=$(find_name_by_alias "$@" || true)
-
-          if [[ -z "$secret_name" && -n "$expected_value" ]]; then
-            secret_name=$(find_name_by_exact_value "$expected_value" || true)
-          fi
-
-          if [[ -z "$secret_name" && "$variable_name" == 'NEXT_PUBLIC_FIREBASE_API_KEY' ]]; then
-            secret_name=$(find_firebase_api_key || true)
-          fi
-
-          [[ -n "$secret_name" ]] || {
-            echo "ERROR: Could not safely resolve $variable_name from $VAULT." >&2
-            echo "Visible Key Vault secret names (values are not printed):" >&2
-            printf '  %s\n' "${SECRET_NAMES[@]}" >&2
-            exit 2
-          }
-
-          set_secret_pipeline_variable "$variable_name" "$secret_name"
-        }
-
-        resolve_required \
-          NEXT_PUBLIC_FIREBASE_API_KEY \
-          '' \
-          firebase-api-key firebase-web-api-key web-firebase-api-key google-api-key
-
-        resolve_required \
-          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN \
-          'cravesapp-dev.firebaseapp.com' \
-          firebase-auth-domain firebase-web-auth-domain
-
-        resolve_required \
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID \
-          'cravesapp-dev' \
-          firebase-project-id firebase-web-project-id
-
-        resolve_required \
-          NEXT_PUBLIC_FIREBASE_APP_ID \
-          '1:201887934076:web:2f20d18dc85894cc700bf9' \
-          firebase-app-id firebase-web-app-id
-
-        resolve_required \
-          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID \
-          '201887934076' \
-          firebase-messaging-sender-id firebase-sender-id
-
-        resolve_required \
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET \
-          'cravesapp-dev.firebasestorage.app' \
-          firebase-storage-bucket firebase-web-storage-bucket
-
-        SYNCFUSION_SECRET=$(find_name_by_alias syncfusion-license-key syncfusion-key || true)
-        if [[ -n "$SYNCFUSION_SECRET" ]]; then
-          set_secret_pipeline_variable NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY "$SYNCFUSION_SECRET"
+        SA_JSON="$WORK_DIR/firebase-service-account.json"
+        if printf '%s' "$SA_VALUE" | base64 --decode > "$SA_JSON" 2>/dev/null && jq -e . "$SA_JSON" >/dev/null 2>&1; then
+          :
         else
-          echo '##vso[task.setvariable variable=NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY;issecret=true]'
-          echo 'Syncfusion license secret not found by name; continuing without it.'
+          printf '%s' "$SA_VALUE" > "$SA_JSON"
+          jq -e . "$SA_JSON" >/dev/null 2>&1 || {
+            echo "ERROR: $SERVICE_ACCOUNT_SECRET is neither valid base64 JSON nor raw JSON." >&2
+            exit 2
+          }
+        fi
+        chmod 600 "$SA_JSON"
+
+        PROJECT_ID=$(jq -r '.project_id // empty' "$SA_JSON")
+        CLIENT_EMAIL=$(jq -r '.client_email // empty' "$SA_JSON")
+        PRIVATE_KEY=$(jq -r '.private_key // empty' "$SA_JSON")
+
+        [[ -n "$PROJECT_ID" && -n "$CLIENT_EMAIL" && -n "$PRIVATE_KEY" ]] || {
+          echo 'ERROR: Firebase service-account JSON is missing project_id, client_email, or private_key.' >&2
+          exit 2
+        }
+
+        PRIVATE_KEY_FILE="$WORK_DIR/firebase-private-key.pem"
+        printf '%s' "$PRIVATE_KEY" > "$PRIVATE_KEY_FILE"
+        chmod 600 "$PRIVATE_KEY_FILE"
+
+        b64url() {
+          openssl base64 -A | tr '+/' '-_' | tr -d '='
+        }
+
+        NOW=$(date +%s)
+        EXP=$((NOW + 3600))
+        JWT_HEADER=$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | b64url)
+        JWT_CLAIMS=$(jq -nc \
+          --arg iss "$CLIENT_EMAIL" \
+          --arg scope 'https://www.googleapis.com/auth/firebase.readonly' \
+          --arg aud 'https://oauth2.googleapis.com/token' \
+          --argjson iat "$NOW" \
+          --argjson exp "$EXP" \
+          '{iss:$iss,scope:$scope,aud:$aud,iat:$iat,exp:$exp}')
+        JWT_PAYLOAD=$(printf '%s' "$JWT_CLAIMS" | b64url)
+        JWT_UNSIGNED="$JWT_HEADER.$JWT_PAYLOAD"
+        JWT_SIGNATURE=$(printf '%s' "$JWT_UNSIGNED" | \
+          openssl dgst -sha256 -sign "$PRIVATE_KEY_FILE" -binary | b64url)
+        JWT_ASSERTION="$JWT_UNSIGNED.$JWT_SIGNATURE"
+
+        TOKEN_RESPONSE=$(curl -fsS \
+          -X POST \
+          -H 'Content-Type: application/x-www-form-urlencoded' \
+          --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer' \
+          --data-urlencode "assertion=$JWT_ASSERTION" \
+          'https://oauth2.googleapis.com/token')
+
+        ACCESS_TOKEN=$(jq -r '.access_token // empty' <<<"$TOKEN_RESPONSE")
+        [[ -n "$ACCESS_TOKEN" ]] || {
+          echo 'ERROR: Could not obtain a Google OAuth access token from the Firebase service account.' >&2
+          exit 2
+        }
+
+        WEB_APPS=$(curl -fsS \
+          -H "Authorization: Bearer $ACCESS_TOKEN" \
+          "https://firebase.googleapis.com/v1beta1/projects/$PROJECT_ID/webApps")
+
+        ACTIVE_COUNT=$(jq '[.apps // [] | .[] | select((.state // "ACTIVE") == "ACTIVE")] | length' <<<"$WEB_APPS")
+        WEB_APP_NAME=''
+
+        if [[ "$ACTIVE_COUNT" == '1' ]]; then
+          WEB_APP_NAME=$(jq -r '.apps[] | select((.state // "ACTIVE") == "ACTIVE") | .name' <<<"$WEB_APPS")
+        else
+          mapfile -t CRAVES_DOMAIN_MATCHES < <(
+            jq -r '[
+              .apps // []
+              | .[]
+              | select((.state // "ACTIVE") == "ACTIVE")
+              | select(any(.appUrls[]?; contains("craves.in")))
+              | .name
+            ] | unique | .[]' <<<"$WEB_APPS"
+          )
+
+          if [[ ${#CRAVES_DOMAIN_MATCHES[@]} -eq 1 ]]; then
+            WEB_APP_NAME="${CRAVES_DOMAIN_MATCHES[0]}"
+          fi
         fi
 
-        echo 'Required Web Next Key Vault values loaded as masked pipeline variables.'
+        if [[ -z "$WEB_APP_NAME" ]]; then
+          echo "ERROR: Could not safely choose one Firebase Web App for project $PROJECT_ID." >&2
+          echo 'Available active Web Apps:' >&2
+          jq -r '.apps[]? | select((.state // "ACTIVE") == "ACTIVE") | "  displayName=\(.displayName // "") appId=\(.appId // "") urls=\((.appUrls // []) | join(","))"' <<<"$WEB_APPS" >&2
+          exit 2
+        fi
+
+        FIREBASE_CONFIG=$(curl -fsS \
+          -H "Authorization: Bearer $ACCESS_TOKEN" \
+          "https://firebase.googleapis.com/v1beta1/$WEB_APP_NAME/config")
+
+        CONFIG_PROJECT_ID=$(jq -r '.projectId // empty' <<<"$FIREBASE_CONFIG")
+        [[ "$CONFIG_PROJECT_ID" == "$PROJECT_ID" ]] || {
+          echo "ERROR: Firebase Web config project mismatch. Expected $PROJECT_ID, got $CONFIG_PROJECT_ID." >&2
+          exit 2
+        }
+
+        export_config() {
+          local variable_name="$1"
+          local json_field="$2"
+          local value
+          value=$(jq -r ".${json_field} // empty" <<<"$FIREBASE_CONFIG")
+          [[ -n "$value" ]] || {
+            echo "ERROR: Firebase Web config is missing $json_field." >&2
+            exit 2
+          }
+          printf '##vso[task.setvariable variable=%s;issecret=true]%s\n' "$variable_name" "$value"
+        }
+
+        export_config NEXT_PUBLIC_FIREBASE_API_KEY apiKey
+        export_config NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN authDomain
+        export_config NEXT_PUBLIC_FIREBASE_PROJECT_ID projectId
+        export_config NEXT_PUBLIC_FIREBASE_APP_ID appId
+        export_config NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID messagingSenderId
+        export_config NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET storageBucket
+
+        echo "Firebase Web configuration resolved from existing Key Vault service account for project $PROJECT_ID."
 
   - bash: |
       set -euo pipefail
 
       [[ '$(Build.SourceBranch)' == 'refs/heads/web-ui-rebuild-from-scratch' ]] || {
-        echo "ERROR: This pipeline may only deploy web-ui-rebuild-from-scratch." >&2
+        echo 'ERROR: This pipeline may only deploy web-ui-rebuild-from-scratch.' >&2
         exit 2
       }
 
@@ -264,7 +217,6 @@ steps:
       NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
       NEXT_PUBLIC_RAZORPAY_MODE: sandbox
       NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK: 'false'
-      NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY: $(NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY)
 
   - task: AzureCLI@2
     displayName: Build image, configure test app, deploy and verify
@@ -352,7 +304,6 @@ steps:
           --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
           --build-arg NEXT_PUBLIC_RAZORPAY_MODE=sandbox \
           --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false \
-          --build-arg NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY="${NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY:-}" \
           --label org.opencontainers.image.revision='$(Build.SourceVersion)' \
           -t "$IMAGE" \
           "$APP_PATH"
@@ -462,7 +413,7 @@ steps:
           sleep 10
         done
 
-        echo "ERROR: UI test Container App did not become ready. Production was never targeted." >&2
+        echo 'ERROR: UI test Container App did not become ready. Production was never targeted.' >&2
         exit 2
     env:
       NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
@@ -471,4 +422,3 @@ steps:
       NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
       NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: $(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
       NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
-      NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY: $(NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY)

@@ -24,6 +24,9 @@ interface DiscoverySearchInputProps {
   value: string;
   onChangeText: (value: string) => void;
   onClear: () => void;
+  autoFocus?: boolean;
+  onFocus?: () => void;
+  showSoftInputOnFocus?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -33,6 +36,9 @@ export function DiscoverySearchInput({
   value,
   onChangeText,
   onClear,
+  autoFocus = false,
+  onFocus,
+  showSoftInputOnFocus = true,
   style,
 }: DiscoverySearchInputProps) {
   const clearVisible = value.length > 0;
@@ -47,10 +53,13 @@ export function DiscoverySearchInput({
         accessibilityRole="search"
         autoCapitalize="none"
         autoCorrect={false}
+        autoFocus={autoFocus}
         onChangeText={onChangeText}
+        onFocus={onFocus}
         placeholder={placeholder}
         placeholderTextColor={colors.placeholder}
         returnKeyType="search"
+        showSoftInputOnFocus={showSoftInputOnFocus}
         style={[styles.input, clearVisible && styles.inputWithClear]}
         value={value}
       />

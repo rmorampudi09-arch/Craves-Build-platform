@@ -37,6 +37,7 @@ import {CustomerHelpSupportRouteScreen} from '../../features/customerSupport/scr
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
+import {CustomerHomeSearchScreen} from '../../features/discoverySearch/screens/CustomerHomeSearchScreen';
 import {CustomerFavoritesRouteScreen} from '../../features/favorites/screens/CustomerFavoritesRouteScreen';
 import {CustomerHomeRouteScreen} from '../../features/home/screens/CustomerHomeRouteScreen';
 import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
@@ -44,7 +45,14 @@ import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screen
 import {CustomerNotificationsRouteScreen} from '../../features/notifications/screens/CustomerNotificationsRouteScreen';
 import {CustomerPaymentMethodsRouteScreen} from '../../features/payment/screens/CustomerPaymentMethodsRouteScreen';
 import {invalidateCustomerLocationDependentQueries} from '../../features/customerShell/query/customerLocationReconciliation';
-import {customerShellActions} from '../../features/customerShell/state/customerShellSlice';
+import {
+  loadPersistedCustomerLocation,
+  persistCustomerLocation,
+} from '../../features/customerShell/state/customerLocationPersistence';
+import {
+  customerShellActions,
+  type CustomerBrowsingLocation,
+} from '../../features/customerShell/state/customerShellSlice';
 import {Icon} from '../../shared/components/Icon';
 import {
   CustomerBottomNavVisibilityProvider,
@@ -182,6 +190,14 @@ function CustomerLaunchLocationResolver() {
     attemptedIdentity.current = identityId;
     let cancelled = false;
 
+    const applyLocation = async (location: CustomerBrowsingLocation) => {
+      if (cancelled) return false;
+      dispatch(customerShellActions.locationSelected(location));
+      await persistCustomerLocation(identityId, location).catch(() => undefined);
+      await invalidateCustomerLocationDependentQueries(queryClient);
+      return true;
+    };
+
     const selectSavedFallback = async () => {
       const addresses = await customerAddressesApi.list();
       const fallback =
@@ -189,19 +205,11 @@ function CustomerLaunchLocationResolver() {
           candidate => candidate.isDefault && isCustomerAddressDeliveryReady(candidate),
         ) ?? addresses.find(isCustomerAddressDeliveryReady);
       const savedLocation = fallback ? toCustomerBrowsingLocation(fallback) : null;
-      if (!cancelled && savedLocation) {
-        dispatch(customerShellActions.locationSelected(savedLocation));
-        await invalidateCustomerLocationDependentQueries(queryClient);
-      }
+      if (!savedLocation) return false;
+      return applyLocation(savedLocation);
     };
 
-    const resolveLocation = async () => {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== Location.PermissionStatus.GRANTED) {
-        await selectSavedFallback();
-        return;
-      }
-
+    const resolveGpsLocation = async () => {
       const current = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
@@ -221,9 +229,8 @@ function CustomerLaunchLocationResolver() {
         const savedLocation = toCustomerBrowsingLocation(
           recommendation.selectedSavedAddress,
         );
-        if (!cancelled && savedLocation) {
-          dispatch(customerShellActions.locationSelected(savedLocation));
-          await invalidateCustomerLocationDependentQueries(queryClient);
+        if (savedLocation) {
+          await applyLocation(savedLocation);
         }
         return;
       }
@@ -240,19 +247,48 @@ function CustomerLaunchLocationResolver() {
         // Discovery still works from the live coordinates if the written label is unavailable.
       }
 
-      if (!cancelled) {
-        dispatch(
-          customerShellActions.locationSelected({
-            kind: 'LIVE_GPS',
-            addressId: LIVE_LOCATION_ID,
-            label: 'Current location',
-            displayName,
-            latitude,
-            longitude,
-          }),
-        );
-        await invalidateCustomerLocationDependentQueries(queryClient);
+      await applyLocation({
+        kind: 'LIVE_GPS',
+        addressId: LIVE_LOCATION_ID,
+        label: 'Current location',
+        displayName,
+        latitude,
+        longitude,
+      });
+    };
+
+    const resolveLocation = async () => {
+      const persisted = await loadPersistedCustomerLocation(identityId);
+      if (cancelled) return;
+
+      if (persisted?.kind === 'SAVED_ADDRESS') {
+        await applyLocation(persisted);
+        return;
       }
+
+      let permission = await Location.getForegroundPermissionsAsync();
+
+      if (
+        persisted?.kind === 'LIVE_GPS' &&
+        permission.status === Location.PermissionStatus.GRANTED
+      ) {
+        await applyLocation(persisted);
+        return;
+      }
+
+      if (
+        permission.status === Location.PermissionStatus.UNDETERMINED &&
+        permission.canAskAgain
+      ) {
+        permission = await Location.requestForegroundPermissionsAsync();
+      }
+
+      if (permission.status !== Location.PermissionStatus.GRANTED) {
+        await selectSavedFallback();
+        return;
+      }
+
+      await resolveGpsLocation();
     };
 
     resolveLocation().catch(() => {
@@ -273,11 +309,15 @@ function CustomerHomeStackNavigator() {
   return (
     <HomeStack.Navigator screenOptions={stackScreenOptions}>
       <HomeStack.Screen name="CustomerHomeRoot" component={CustomerHomeRouteScreen} listeners={rootListeners} />
+      <HomeStack.Screen name="CustomerHomeSearch" component={CustomerHomeSearchScreen} />
+      <HomeStack.Screen name="CustomerNotifications" component={CustomerNotificationsRouteScreen} />
       <HomeStack.Screen name="CustomerFilterSort" component={CustomerFilterSortScreen} />
       <HomeStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <HomeStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <HomeStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
       <HomeStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
+      <HomeStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
+      <HomeStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
       <HomeStack.Screen name="CustomerCart" component={CustomerCartScreen} />
       <HomeStack.Screen name="CustomerPaymentMethods" component={CustomerPaymentMethodsRouteScreen} />
     </HomeStack.Navigator>

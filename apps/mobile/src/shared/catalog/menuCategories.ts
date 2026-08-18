@@ -1,5 +1,5 @@
 export const CHEF_MENU_CATEGORIES = [
-  'Biriyani',
+  'Biryani',
   'Curry',
   'Tiffin',
   'Snakes',

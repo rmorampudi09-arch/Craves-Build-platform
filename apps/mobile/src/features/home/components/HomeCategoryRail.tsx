@@ -1,8 +1,8 @@
 import React from 'react';
 import {
+  FlatList,
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   type ImageSourcePropType,
@@ -37,19 +37,22 @@ export function HomeCategoryRail({
   onSelect,
 }: HomeCategoryRailProps) {
   return (
-    <ScrollView
+    <FlatList
+      data={[...CUSTOMER_MENU_CATEGORIES]}
       horizontal
       nestedScrollEnabled
+      directionalLockEnabled
+      scrollEnabled
+      removeClippedSubviews={false}
       contentContainerStyle={styles.row}
       keyboardShouldPersistTaps="handled"
-      showsHorizontalScrollIndicator={false}>
-      {CUSTOMER_MENU_CATEGORIES.map(category => {
+      keyExtractor={category => category}
+      renderItem={({item: category}) => {
         const filterValue = category === 'All' ? null : category;
         const selected = selectedCategory === filterValue;
 
         return (
           <Pressable
-            key={category}
             accessibilityLabel={`${category} category`}
             accessibilityRole="button"
             accessibilityState={{selected}}
@@ -69,12 +72,17 @@ export function HomeCategoryRail({
             </Text>
           </Pressable>
         );
-      })}
-    </ScrollView>
+      }}
+      showsHorizontalScrollIndicator={false}
+      style={styles.rail}
+    />
   );
 }
 
 const styles = StyleSheet.create({
+  rail: {
+    flexGrow: 0,
+  },
   row: {
     gap: spacing.md,
     paddingLeft: spacing.md,

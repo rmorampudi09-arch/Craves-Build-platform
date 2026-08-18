@@ -66,9 +66,11 @@ function formatOrderDate(value: string): string {
 
 function itemSummary(order: CustomerOrder): string {
   if (order.items.length === 0) return "Order items unavailable";
-  return order.items
-    .map((item) => `${item.itemName} x ${item.quantity}`)
-    .join(", ");
+  return order.items.reduce(
+    (summary, item, index) =>
+      `${summary}${index === 0 ? "" : ", "}${item.itemName} x ${item.quantity}`,
+    "",
+  );
 }
 
 function statusClass(status: string): string {

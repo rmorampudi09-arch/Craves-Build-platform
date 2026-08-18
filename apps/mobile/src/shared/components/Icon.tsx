@@ -30,7 +30,16 @@ export type IconName =
   | 'heart'
   | 'clock'
   | 'trash'
-  | 'delivery';
+  | 'delivery'
+  | 'settings'
+  | 'wallet'
+  | 'crown'
+  | 'gift'
+  | 'headset'
+  | 'translate'
+  | 'theme'
+  | 'document'
+  | 'info';
 
 interface Props {
   name: IconName;
@@ -68,6 +77,15 @@ const GLYPHS: Record<IconName, string> = {
   clock: 'clock',
   trash: 'trash-can',
   delivery: 'truck-delivery',
+  settings: 'cog-outline',
+  wallet: 'wallet-outline',
+  crown: 'crown-outline',
+  gift: 'gift-outline',
+  headset: 'headset',
+  translate: 'translate',
+  theme: 'theme-light-dark',
+  document: 'file-document-outline',
+  info: 'information-outline',
 };
 
 export function Icon({

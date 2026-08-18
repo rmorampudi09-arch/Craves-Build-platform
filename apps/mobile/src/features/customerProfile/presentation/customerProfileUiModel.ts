@@ -7,33 +7,25 @@ export const CUSTOMER_PROFILE_ROUTE_BLOCKER_REASON =
 export type CustomerProfileMenuAction =
   | 'route-favorites'
   | 'route-payments'
+  | 'route-membership'
+  | 'route-referral'
+  | 'route-support'
   | 'switch-chef'
-  | 'contract-blocker'
   | 'logout';
 
 export interface CustomerProfileMenuRowModel {
-  id: 'favorites' | 'payments' | 'contact' | 'switch-chef' | 'logout';
+  id:
+    | 'favorites'
+    | 'payments'
+    | 'membership'
+    | 'referral'
+    | 'switch-chef'
+    | 'contact'
+    | 'logout';
   title: string;
   subtitle: string;
   icon: IconName;
   action: CustomerProfileMenuAction;
-  blockerMessage?: string;
-}
-
-function blockedRow(
-  id: Extract<CustomerProfileMenuRowModel['id'], 'contact'>,
-  title: string,
-  subtitle: string,
-  icon: IconName,
-): CustomerProfileMenuRowModel {
-  return {
-    id,
-    title,
-    subtitle,
-    icon,
-    action: 'contract-blocker',
-    blockerMessage: `${title} is not registered in the approved mobile route contract yet.`,
-  };
 }
 
 export const CUSTOMER_PROFILE_MENU_ROWS: readonly CustomerProfileMenuRowModel[] = [
@@ -48,16 +40,36 @@ export const CUSTOMER_PROFILE_MENU_ROWS: readonly CustomerProfileMenuRowModel[] 
     id: 'payments',
     title: 'Payments',
     subtitle: 'Payment methods and preferences',
-    icon: 'shield',
+    icon: 'wallet',
     action: 'route-payments',
   },
-  blockedRow('contact', 'Contact us', 'Help and support', 'mail'),
+  {
+    id: 'membership',
+    title: 'Membership',
+    subtitle: 'Subscription and benefits',
+    icon: 'crown',
+    action: 'route-membership',
+  },
+  {
+    id: 'referral',
+    title: 'Referral to friend',
+    subtitle: 'Invite friends and earn rewards',
+    icon: 'gift',
+    action: 'route-referral',
+  },
   {
     id: 'switch-chef',
     title: 'Switch to Chef mode',
     subtitle: 'Use Craves as a chef',
     icon: 'chef',
     action: 'switch-chef',
+  },
+  {
+    id: 'contact',
+    title: 'Contact us',
+    subtitle: 'Help and support',
+    icon: 'headset',
+    action: 'route-support',
   },
   {
     id: 'logout',

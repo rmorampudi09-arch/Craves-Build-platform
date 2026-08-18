@@ -21,15 +21,14 @@ import {
   iconSize,
   radius,
   spacing,
+  touchTarget,
   typography,
 } from '../../../design/tokens';
-import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {authActions} from '../../auth/state/authSlice';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
-import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
 import type {CustomerProfileHubContract} from '../domain/customerProfileContract';
@@ -61,16 +60,8 @@ function ProfileSkeleton() {
       accessibilityLabel="Loading customer profile"
       accessibilityRole="progressbar"
       style={styles.skeletonWrap}>
-      <View style={styles.skeletonIdentity}>
-        <View style={styles.skeletonAvatar} />
-        <View style={styles.skeletonCopy}>
-          <View style={styles.skeletonLineWide} />
-          <View style={styles.skeletonLine} />
-          <View style={styles.skeletonLineShort} />
-        </View>
-      </View>
+      <View style={styles.skeletonIdentity} />
       <View style={styles.skeletonRewards} />
-      <View style={styles.skeletonMenu} />
       <View style={styles.skeletonMenu} />
     </View>
   );
@@ -91,11 +82,12 @@ function ProfileMenuRow({row, disabled = false, onPress}: ProfileMenuRowProps) {
         pressed && !disabled && styles.menuRowPressed,
         disabled && styles.menuRowDisabled,
       ]}>
-      <View style={[styles.menuIcon, logout && styles.menuIconDanger]}>
+      <View style={styles.menuIcon}>
         <Icon
           name={row.icon}
-          size={iconSize.sm}
+          size={iconSize.md}
           color={logout ? colors.error : colors.flameRed}
+          surface={false}
         />
       </View>
       <View style={styles.menuCopy}>
@@ -104,9 +96,12 @@ function ProfileMenuRow({row, disabled = false, onPress}: ProfileMenuRowProps) {
         </Text>
         <Text style={styles.menuSubtitle}>{row.subtitle}</Text>
       </View>
-      {logout ? null : (
-        <Icon name="chevron-right" size={iconSize.xs} color={colors.placeholder} />
-      )}
+      <Icon
+        name="chevron-right"
+        size={iconSize.sm}
+        color={colors.placeholder}
+        surface={false}
+      />
     </Pressable>
   );
 }
@@ -126,49 +121,88 @@ function ProfileReadyContent({
 }) {
   const profile = data.profile;
   const rewardsUnsupported = data.rewards.availability === 'unsupported';
+  const profileReady = profile.completeness === 'full';
 
   return (
     <View style={styles.content}>
       <View style={styles.identityCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{resolveCustomerProfileInitials(profile)}</Text>
-        </View>
-        <View style={styles.identityCopy}>
-          <Text accessibilityRole="header" style={styles.profileName}>
-            {resolveCustomerProfileDisplayName(profile)}
-          </Text>
-          {profile.email ? <Text style={styles.identityMeta}>{profile.email}</Text> : null}
-          <Text style={styles.identityMeta}>{resolveCustomerProfilePhoneLabel(profile)}</Text>
-        </View>
-        <View style={styles.completenessPill}>
-          <Text style={styles.completenessText}>
-            {profile.completeness === 'full' ? 'Profile ready' : 'Profile incomplete'}
-          </Text>
-        </View>
-        <Button
-          accessibilityHint="Opens customer profile editing"
-          label="Edit Profile"
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open profile details"
           onPress={onEditProfile}
-          variant="outline"
-          style={styles.editButton}
-        />
+          style={({pressed}) => [styles.identityTopRow, pressed && styles.rowPressed]}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{resolveCustomerProfileInitials(profile)}</Text>
+          </View>
+          <View style={styles.identityCopy}>
+            <Text accessibilityRole="header" numberOfLines={1} style={styles.profileName}>
+              {resolveCustomerProfileDisplayName(profile)}
+            </Text>
+            {profile.email ? (
+              <Text numberOfLines={1} style={styles.identityMeta}>
+                {profile.email}
+              </Text>
+            ) : null}
+            <Text style={styles.identityMeta}>{resolveCustomerProfilePhoneLabel(profile)}</Text>
+            <View
+              style={[
+                styles.completenessPill,
+                profileReady ? styles.completenessPillReady : styles.completenessPillPending,
+              ]}>
+              <Icon
+                name={profileReady ? 'check' : 'account'}
+                size={14}
+                color={profileReady ? colors.successText : colors.textSecondary}
+                surface={false}
+              />
+              <Text
+                style={[
+                  styles.completenessText,
+                  profileReady && styles.completenessTextReady,
+                ]}>
+                {profileReady ? 'Profile ready' : 'Profile incomplete'}
+              </Text>
+            </View>
+          </View>
+          <Icon
+            name="chevron-right"
+            size={iconSize.md}
+            color={colors.flameRed}
+            surface={false}
+          />
+        </Pressable>
+
+        <Pressable
+          accessibilityHint="Opens customer profile editing"
+          accessibilityLabel="Edit Profile"
+          accessibilityRole="button"
+          onPress={onEditProfile}
+          style={({pressed}) => [styles.editButton, pressed && styles.editButtonPressed]}>
+          <Text style={styles.editButtonText}>Edit Profile</Text>
+        </Pressable>
       </View>
 
       <View style={styles.rewardsCard}>
         <View style={styles.rewardsIcon}>
-          <Icon name="shield" size={iconSize.lg} color={colors.flameRed} />
+          <Icon name="shield" size={iconSize.lg} color={colors.flameRed} surface={false} />
         </View>
         <View style={styles.rewardsCopy}>
           <Text style={styles.rewardsEyebrow}>CRAVES REWARDS</Text>
           <Text style={styles.rewardsTitle}>
             {rewardsUnsupported ? 'Rewards currently unavailable' : 'Craves Rewards'}
           </Text>
-          {rewardsUnsupported ? (
-            <Text style={styles.rewardsDescription}>
-              {CUSTOMER_PROFILE_REWARDS_UNSUPPORTED_COPY}
-            </Text>
-          ) : null}
+          <Text style={styles.rewardsDescription}>
+            {rewardsUnsupported
+              ? CUSTOMER_PROFILE_REWARDS_UNSUPPORTED_COPY
+              : 'Your available Craves rewards are linked to this account.'}
+          </Text>
         </View>
+        <Icon
+          name="chevron-right"
+          size={iconSize.sm}
+          color={colors.flameRed}
+          surface={false}
+        />
       </View>
 
       <View style={styles.menuCard}>
@@ -200,10 +234,6 @@ export function CustomerProfileScreen() {
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [switchingRole, setSwitchingRole] = useState(false);
-
-  const showContractBlocker = useCallback((title: string, message: string) => {
-    Alert.alert(`${title} unavailable`, message, [{text: 'OK'}]);
-  }, []);
 
   const handleEditProfile = useCallback(() => {
     navigation.navigate('CustomerProfileEdit');
@@ -294,33 +324,30 @@ export function CustomerProfileScreen() {
 
   const handleMenuPress = useCallback(
     (row: CustomerProfileMenuRowModel) => {
-      if (row.action === 'route-favorites') {
-        navigation.navigate('CustomerFavorites');
-        return;
+      switch (row.action) {
+        case 'route-favorites':
+          navigation.navigate('CustomerFavorites');
+          return;
+        case 'route-payments':
+          navigation.navigate('CustomerPaymentMethods');
+          return;
+        case 'route-membership':
+          navigation.navigate('CustomerSettingsSubscription');
+          return;
+        case 'route-referral':
+          navigation.navigate('CustomerSettingsReferral');
+          return;
+        case 'route-support':
+          navigation.navigate('CustomerSettingsSupport');
+          return;
+        case 'switch-chef':
+          confirmRoleSwitch();
+          return;
+        case 'logout':
+          confirmLogout();
       }
-
-      if (row.action === 'route-payments') {
-        navigation.navigate('CustomerPaymentMethods');
-        return;
-      }
-
-      if (row.action === 'switch-chef') {
-        confirmRoleSwitch();
-        return;
-      }
-
-      if (row.action === 'logout') {
-        confirmLogout();
-        return;
-      }
-
-      showContractBlocker(
-        row.title,
-        row.blockerMessage ??
-          'This destination is not registered in the approved mobile route contract yet.',
-      );
     },
-    [confirmLogout, confirmRoleSwitch, navigation, showContractBlocker],
+    [confirmLogout, confirmRoleSwitch, navigation],
   );
 
   const retryProfile = useCallback(() => {
@@ -387,10 +414,59 @@ export function CustomerProfileScreen() {
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-profile">
       <View style={styles.root}>
-        <CustomerHeader
-          onPressLocation={() => setLocationSelectorVisible(true)}
-          onPressNotifications={header.refreshNotifications}
-        />
+        <View style={styles.topHeader}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Location: ${header.locationDisplayName}`}
+            onPress={() => setLocationSelectorVisible(true)}
+            style={({pressed}) => [styles.locationButton, pressed && styles.rowPressed]}>
+            <View style={styles.locationIcon}>
+              <Icon name="location" size={22} color={colors.flameRed} surface={false} />
+            </View>
+            <View style={styles.locationCopy}>
+              <Text style={styles.locationEyebrow}>Delivering to</Text>
+              <View style={styles.locationValueRow}>
+                <Text numberOfLines={1} style={styles.locationValue}>
+                  {header.locationDisplayName}
+                </Text>
+                <View style={styles.locationChevron}>
+                  <Icon
+                    name="chevron-right"
+                    size={14}
+                    color={colors.espressoBrown}
+                    surface={false}
+                  />
+                </View>
+              </View>
+            </View>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+            onPress={() => navigation.navigate('CustomerSettings')}
+            style={({pressed}) => [styles.headerAction, pressed && styles.rowPressed]}>
+            <Icon name="settings" size={28} color={colors.espressoBrown} surface={false} />
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              header.badgeLabel
+                ? `Notifications, ${header.badgeLabel} unread`
+                : 'Notifications'
+            }
+            onPress={header.openNotifications}
+            style={({pressed}) => [styles.headerAction, pressed && styles.rowPressed]}>
+            <Icon name="bell" size={28} color={colors.espressoBrown} surface={false} />
+            {header.badgeLabel ? (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{header.badgeLabel}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
+
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           onScroll={bottomNavScroll.onScroll}
@@ -408,6 +484,7 @@ export function CustomerProfileScreen() {
           showsVerticalScrollIndicator={false}>
           {body}
         </ScrollView>
+
         <CustomerLocationSelector
           visible={locationSelectorVisible}
           onClose={() => setLocationSelectorVisible(false)}
@@ -422,11 +499,83 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.white,
   },
+  topHeader: {
+    minHeight: 78,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.white,
+  },
+  locationButton: {
+    minWidth: 0,
+    flex: 1,
+    minHeight: touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.md,
+  },
+  locationIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.errorSoft,
+  },
+  locationCopy: {minWidth: 0, flex: 1},
+  locationEyebrow: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.medium,
+  },
+  locationValueRow: {
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+  },
+  locationValue: {
+    minWidth: 0,
+    flexShrink: 1,
+    color: colors.espressoBrown,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
+  locationChevron: {transform: [{rotate: '90deg'}]},
+  headerAction: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 3,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.flameRed,
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+  notificationBadgeText: {
+    color: colors.white,
+    fontSize: 8,
+    fontWeight: fontWeight.bold,
+  },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xxl,
+    paddingBottom: 120,
     backgroundColor: colors.white,
   },
   content: {
@@ -436,28 +585,35 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   identityCard: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
     backgroundColor: colors.white,
     ...elevation.card,
   },
+  identityTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: radius.md,
+  },
   avatar: {
-    width: 64,
-    height: 64,
+    width: 84,
+    height: 84,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
-    marginBottom: spacing.sm,
+    backgroundColor: colors.errorSoft,
   },
   avatarText: {
     color: colors.flameRed,
-    fontSize: typography.hero,
+    fontSize: 32,
     fontWeight: fontWeight.extrabold,
   },
   identityCopy: {
+    minWidth: 0,
+    flex: 1,
     gap: spacing.xxs,
   },
   profileName: {
@@ -467,33 +623,51 @@ const styles = StyleSheet.create({
   },
   identityMeta: {
     color: colors.textSecondary,
-    fontSize: typography.small,
+    fontSize: typography.body,
   },
   completenessPill: {
     alignSelf: 'flex-start',
-    marginTop: spacing.sm,
+    minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    marginTop: spacing.xs,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
   },
+  completenessPillReady: {backgroundColor: colors.successSoft},
+  completenessPillPending: {backgroundColor: colors.surfaceMuted},
   completenessText: {
     color: colors.textSecondary,
-    fontSize: typography.tiny,
+    fontSize: typography.small,
     fontWeight: fontWeight.semibold,
   },
+  completenessTextReady: {color: colors.successText},
   editButton: {
-    marginTop: spacing.md,
+    minHeight: touchTarget.comfortable,
+    marginTop: spacing.lg,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.flameRed,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  editButtonPressed: {backgroundColor: colors.errorSoft},
+  editButtonText: {
+    color: colors.flameRed,
+    fontSize: typography.button,
+    fontWeight: fontWeight.bold,
   },
   rewardsCard: {
-    minHeight: 132,
+    minHeight: 128,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.lg,
     borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
-    borderColor: colors.creamDeep,
+    borderColor: colors.border,
     backgroundColor: colors.white,
   },
   rewardsIcon: {
@@ -504,131 +678,81 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.iconSurface,
   },
-  rewardsCopy: {
-    minWidth: 0,
-    flex: 1,
-  },
+  rewardsCopy: {minWidth: 0, flex: 1},
   rewardsEyebrow: {
     color: colors.flameRed,
     fontSize: typography.tiny,
     fontWeight: fontWeight.extrabold,
-    letterSpacing: 0.8,
+    letterSpacing: 1,
   },
   rewardsTitle: {
+    marginTop: spacing.xxs,
     color: colors.espressoBrown,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
-    marginTop: spacing.xxs,
   },
   rewardsDescription: {
+    marginTop: spacing.xxs,
     color: colors.textSecondary,
     fontSize: typography.small,
-    marginTop: spacing.xs,
   },
   menuCard: {
+    overflow: 'hidden',
+    borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
-    borderRadius: radius.lg,
     backgroundColor: colors.white,
-    overflow: 'hidden',
   },
   menuRow: {
-    minHeight: 72,
+    minHeight: 78,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  menuRowPressed: {
-    backgroundColor: colors.surfaceMuted,
-  },
-  menuRowDisabled: {
-    opacity: 0.55,
-  },
+  menuRowPressed: {backgroundColor: colors.surfaceMuted},
+  menuRowDisabled: {opacity: 0.5},
   menuIcon: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.iconSurface,
   },
-  menuIconDanger: {
-    backgroundColor: colors.iconSurface,
-  },
-  menuCopy: {
-    minWidth: 0,
-    flex: 1,
-  },
+  menuCopy: {minWidth: 0, flex: 1},
   menuTitle: {
     color: colors.espressoBrown,
     fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.bold,
   },
-  menuTitleDanger: {
-    color: colors.error,
-  },
+  menuTitleDanger: {color: colors.espressoBrown},
   menuSubtitle: {
+    marginTop: 2,
     color: colors.textSecondary,
     fontSize: typography.small,
-    marginTop: spacing.xxs,
   },
   divider: {
     height: borderWidth.standard,
-    marginLeft: 68,
+    marginLeft: 72,
     backgroundColor: colors.border,
   },
-  skeletonWrap: {
-    width: '100%',
-    maxWidth: 640,
-    alignSelf: 'center',
-    gap: spacing.md,
-  },
+  rowPressed: {opacity: 0.72},
+  skeletonWrap: {gap: spacing.md},
   skeletonIdentity: {
-    flexDirection: 'row',
-    gap: spacing.md,
+    height: 224,
     borderRadius: radius.lg,
-    padding: spacing.lg,
-    backgroundColor: colors.white,
-  },
-  skeletonAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-  },
-  skeletonCopy: {
-    flex: 1,
-    gap: spacing.xs,
-    paddingTop: spacing.xs,
-  },
-  skeletonLineWide: {
-    width: '70%',
-    height: 16,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceMuted,
-  },
-  skeletonLine: {
-    width: '55%',
-    height: 12,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceMuted,
-  },
-  skeletonLineShort: {
-    width: '42%',
-    height: 12,
-    borderRadius: radius.sm,
     backgroundColor: colors.surfaceMuted,
   },
   skeletonRewards: {
-    height: 132,
+    height: 128,
     borderRadius: radius.lg,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surfaceMuted,
   },
   skeletonMenu: {
-    height: 144,
+    height: 420,
     borderRadius: radius.lg,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surfaceMuted,
   },
 });

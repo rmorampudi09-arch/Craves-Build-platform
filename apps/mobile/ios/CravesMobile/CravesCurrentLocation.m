@@ -30,6 +30,12 @@ RCT_EXPORT_MODULE(CravesCurrentLocation)
   return @"denied";
 }
 
+RCT_REMAP_METHOD(getPermissionStatus, getPermissionStatusWithResolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    resolve([self currentPermissionStatus]);
+  });
+}
+
 RCT_REMAP_METHOD(requestPermission, requestPermissionWithResolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
   dispatch_async(dispatch_get_main_queue(), ^{
     NSString *status = [self currentPermissionStatus];

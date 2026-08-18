@@ -7,7 +7,7 @@ describe('menu category catalog', () => {
   it('keeps the approved customer category order including All', () => {
     expect(CUSTOMER_MENU_CATEGORIES).toEqual([
       'All',
-      'Biriyani',
+      'Biryani',
       'Curry',
       'Tiffin',
       'Snakes',
@@ -20,7 +20,7 @@ describe('menu category catalog', () => {
 
   it('keeps chef selection limited to the approved item categories', () => {
     expect(CHEF_MENU_CATEGORIES).toEqual([
-      'Biriyani',
+      'Biryani',
       'Curry',
       'Tiffin',
       'Snakes',

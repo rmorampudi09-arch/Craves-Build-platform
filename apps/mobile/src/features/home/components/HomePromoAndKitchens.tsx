@@ -26,6 +26,7 @@ import {
   formatKitchenDistance,
 } from '../../chefDiscovery/chefDiscoveryPresentation';
 import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefDiscoveryQueries';
+import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
 
 declare const require: (path: string) => ImageSourcePropType;
 
@@ -91,10 +92,15 @@ function KitchenPreviewCard({
       onPress={() => onPress(kitchen)}
       style={({pressed}) => [styles.kitchenCard, pressed && styles.pressed]}>
       <View style={styles.kitchenBody}>
-        <Text style={styles.kitchenEyebrow}>HOME KITCHEN</Text>
-        <Text numberOfLines={2} style={styles.kitchenTitle}>
-          {title}
-        </Text>
+        <View style={styles.kitchenHeader}>
+          <CustomerChefAvatar size={46} />
+          <View style={styles.kitchenHeaderCopy}>
+            <Text style={styles.kitchenEyebrow}>HOME KITCHEN</Text>
+            <Text numberOfLines={2} style={styles.kitchenTitle}>
+              {title}
+            </Text>
+          </View>
+        </View>
         <Text numberOfLines={2} style={styles.kitchenSubtitle}>
           {kitchen.description || location || 'Home-cooked meals'}
         </Text>
@@ -289,8 +295,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
   kitchenCard: {
-    width: 184,
-    minHeight: 124,
+    width: 208,
+    minHeight: 142,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -308,6 +314,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.md,
   },
+  kitchenHeader: {
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  kitchenHeaderCopy: {
+    minWidth: 0,
+    flex: 1,
+  },
   kitchenEyebrow: {
     color: colors.flameRedAccessible,
     fontSize: typography.tiny,
@@ -323,7 +339,7 @@ const styles = StyleSheet.create({
   kitchenSubtitle: {
     color: colors.textSecondary,
     fontSize: typography.tiny,
-    marginTop: spacing.xxs,
+    marginTop: spacing.sm,
   },
   kitchenMetaRow: {
     flexDirection: 'row',

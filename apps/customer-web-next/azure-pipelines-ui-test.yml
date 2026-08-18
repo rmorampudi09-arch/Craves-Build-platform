@@ -1,0 +1,388 @@
+trigger:
+  branches:
+    include:
+      - web-ui-rebuild-from-scratch
+  paths:
+    include:
+      - apps/customer-web-next/**
+
+pr: none
+
+variables:
+  azureServiceConnection: Craves-Dev-Service-Connection
+  subscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
+  resourceGroup: rg-craves-prodlow-centralindia
+  keyVaultName: kvcravesprodlowl3ing6
+  acrName: cravesprodlowacr82121
+  containerAppName: ca-craves-web-ui-test
+  productionContainerAppName: ca-craves-web-prodlow
+  appPath: apps/customer-web-next
+  imageRepository: craves/customer-web-next
+  apiBaseUrl: https://api.craves.in/api/v1
+  testFqdn: ca-craves-web-ui-test.happysand-aedc7165.centralindia.azurecontainerapps.io
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+
+  - task: NodeTool@0
+    displayName: Use Node.js 24
+    inputs:
+      versionSpec: 24.x
+
+  - task: AzureCLI@2
+    displayName: Load Web Next build values from Key Vault
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+
+        EXPECTED_SUBSCRIPTION='$(subscriptionId)'
+        VAULT='$(keyVaultName)'
+
+        az account set --subscription "$EXPECTED_SUBSCRIPTION"
+        ACTIVE_SUBSCRIPTION=$(az account show --query id -o tsv --only-show-errors)
+        [[ "$ACTIVE_SUBSCRIPTION" == "$EXPECTED_SUBSCRIPTION" ]] || {
+          echo "ERROR: Azure service connection is on unexpected subscription $ACTIVE_SUBSCRIPTION." >&2
+          exit 2
+        }
+
+        mapfile -t SECRET_NAMES < <(
+          az keyvault secret list \
+            --vault-name "$VAULT" \
+            --query '[].name' \
+            -o tsv \
+            --only-show-errors
+        )
+
+        normalize() {
+          printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]'
+        }
+
+        resolve_secret_name() {
+          local logical_name="$1"
+          shift
+          local candidate normalized_candidate secret_name normalized_secret
+          local -a matches=()
+
+          for secret_name in "${SECRET_NAMES[@]}"; do
+            normalized_secret=$(normalize "$secret_name")
+            for candidate in "$logical_name" "$@"; do
+              normalized_candidate=$(normalize "$candidate")
+              if [[ "$normalized_secret" == "$normalized_candidate" || "$normalized_secret" == *"$normalized_candidate" ]]; then
+                matches+=("$secret_name")
+                break
+              fi
+            done
+          done
+
+          if [[ ${#matches[@]} -eq 1 ]]; then
+            printf '%s' "${matches[0]}"
+            return 0
+          fi
+
+          if [[ ${#matches[@]} -eq 0 ]]; then
+            return 1
+          fi
+
+          echo "ERROR: More than one Key Vault secret matched $logical_name. Rename or narrow the matching secret names." >&2
+          return 2
+        }
+
+        export_required_secret() {
+          local variable_name="$1"
+          shift
+          local secret_name value
+
+          if ! secret_name=$(resolve_secret_name "$variable_name" "$@"); then
+            echo "ERROR: Required Key Vault value for $variable_name was not found in $VAULT." >&2
+            exit 2
+          fi
+
+          value=$(az keyvault secret show \
+            --vault-name "$VAULT" \
+            --name "$secret_name" \
+            --query value \
+            -o tsv \
+            --only-show-errors)
+
+          [[ -n "$value" ]] || {
+            echo "ERROR: Key Vault value for $variable_name is empty." >&2
+            exit 2
+          }
+
+          printf '##vso[task.setvariable variable=%s;issecret=true]%s\n' "$variable_name" "$value"
+        }
+
+        export_optional_secret() {
+          local variable_name="$1"
+          shift
+          local secret_name value
+
+          if ! secret_name=$(resolve_secret_name "$variable_name" "$@"); then
+            echo "Optional Key Vault value $variable_name was not found; continuing without it."
+            return 0
+          fi
+
+          value=$(az keyvault secret show \
+            --vault-name "$VAULT" \
+            --name "$secret_name" \
+            --query value \
+            -o tsv \
+            --only-show-errors)
+
+          if [[ -n "$value" ]]; then
+            printf '##vso[task.setvariable variable=%s;issecret=true]%s\n' "$variable_name" "$value"
+          fi
+        }
+
+        export_required_secret NEXT_PUBLIC_FIREBASE_API_KEY firebase-api-key firebase-web-api-key
+        export_required_secret NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN firebase-auth-domain
+        export_required_secret NEXT_PUBLIC_FIREBASE_PROJECT_ID firebase-project-id
+        export_required_secret NEXT_PUBLIC_FIREBASE_APP_ID firebase-app-id firebase-web-app-id
+        export_required_secret NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID firebase-messaging-sender-id firebase-sender-id
+        export_required_secret NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET firebase-storage-bucket
+        export_optional_secret NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY syncfusion-license-key syncfusion-key
+
+        echo 'Required Web Next Key Vault values loaded as secret pipeline variables.'
+
+  - bash: |
+      set -euo pipefail
+
+      [[ '$(Build.SourceBranch)' == 'refs/heads/web-ui-rebuild-from-scratch' ]] || {
+        echo "ERROR: This pipeline may only deploy web-ui-rebuild-from-scratch." >&2
+        exit 2
+      }
+
+      npm ci --no-audit --no-fund
+      npm run lint
+      npm run typecheck
+      npm run test
+      npm run build
+    displayName: Verify Web Next UI
+    workingDirectory: $(Build.SourcesDirectory)/$(appPath)
+    env:
+      CRAVES_API_BASE_URL: $(apiBaseUrl)
+      NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: $(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: $(NEXT_PUBLIC_FIREBASE_PROJECT_ID)
+      NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: $(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
+      NEXT_PUBLIC_RAZORPAY_MODE: sandbox
+      NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK: 'false'
+      NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY: $(NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY)
+
+  - task: AzureCLI@2
+    displayName: Build image, configure test app, deploy and verify
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+
+        EXPECTED_SUBSCRIPTION='$(subscriptionId)'
+        RG='$(resourceGroup)'
+        ACR='$(acrName)'
+        APP='$(containerAppName)'
+        PROD_APP='$(productionContainerAppName)'
+        APP_PATH='$(Build.SourcesDirectory)/$(appPath)'
+        IMAGE_REPOSITORY='$(imageRepository)'
+        API_BASE_URL='$(apiBaseUrl)'
+        EXPECTED_FQDN='$(testFqdn)'
+
+        [[ "$APP" == 'ca-craves-web-ui-test' ]] || {
+          echo "ERROR: Unexpected deployment target: $APP" >&2
+          exit 2
+        }
+        [[ "$APP" != "$PROD_APP" ]] || {
+          echo 'ERROR: Production Container App deployment is blocked by this pipeline.' >&2
+          exit 2
+        }
+        [[ '$(Build.SourceBranch)' == 'refs/heads/web-ui-rebuild-from-scratch' ]] || {
+          echo 'ERROR: Unexpected source branch.' >&2
+          exit 2
+        }
+
+        az account set --subscription "$EXPECTED_SUBSCRIPTION"
+        ACTIVE_SUBSCRIPTION=$(az account show --query id -o tsv --only-show-errors)
+        [[ "$ACTIVE_SUBSCRIPTION" == "$EXPECTED_SUBSCRIPTION" ]] || {
+          echo "ERROR: Unexpected Azure subscription $ACTIVE_SUBSCRIPTION." >&2
+          exit 2
+        }
+
+        az containerapp show \
+          --subscription "$EXPECTED_SUBSCRIPTION" \
+          --resource-group "$RG" \
+          --name "$APP" \
+          -o none \
+          --only-show-errors || {
+            echo "ERROR: Test Container App $APP does not exist. Production will not be used as a fallback." >&2
+            exit 2
+          }
+
+        CURRENT_FQDN=$(az containerapp show \
+          --subscription "$EXPECTED_SUBSCRIPTION" \
+          --resource-group "$RG" \
+          --name "$APP" \
+          --query properties.configuration.ingress.fqdn \
+          -o tsv \
+          --only-show-errors)
+
+        [[ "$CURRENT_FQDN" == "$EXPECTED_FQDN" ]] || {
+          echo "ERROR: Test Container App FQDN does not match the approved test target." >&2
+          exit 2
+        }
+
+        LOGIN_SERVER=$(az acr show \
+          --subscription "$EXPECTED_SUBSCRIPTION" \
+          --resource-group "$RG" \
+          --name "$ACR" \
+          --query loginServer \
+          -o tsv \
+          --only-show-errors)
+
+        TAG="ui-test-$(Build.BuildId)-$(Build.SourceVersion)"
+        IMAGE="$LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
+
+        echo "Building isolated Web Next test image: $IMAGE"
+        az acr login --name "$ACR" --only-show-errors
+
+        docker build \
+          --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="$NEXT_PUBLIC_FIREBASE_API_KEY" \
+          --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" \
+          --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="$NEXT_PUBLIC_FIREBASE_PROJECT_ID" \
+          --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="$NEXT_PUBLIC_FIREBASE_APP_ID" \
+          --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" \
+          --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
+          --build-arg NEXT_PUBLIC_RAZORPAY_MODE=sandbox \
+          --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false \
+          --build-arg NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY="${NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY:-}" \
+          --label org.opencontainers.image.revision='$(Build.SourceVersion)' \
+          -t "$IMAGE" \
+          "$APP_PATH"
+
+        docker push "$IMAGE"
+
+        # Give the isolated test Container App its own system identity if needed.
+        az containerapp identity assign \
+          --subscription "$EXPECTED_SUBSCRIPTION" \
+          --resource-group "$RG" \
+          --name "$APP" \
+          --system-assigned \
+          -o none \
+          --only-show-errors
+
+        PRINCIPAL_ID=$(az containerapp show \
+          --subscription "$EXPECTED_SUBSCRIPTION" \
+          --resource-group "$RG" \
+          --name "$APP" \
+          --query identity.principalId \
+          -o tsv \
+          --only-show-errors)
+
+        ACR_ID=$(az acr show \
+          --subscription "$EXPECTED_SUBSCRIPTION" \
+          --resource-group "$RG" \
+          --name "$ACR" \
+          --query id \
+          -o tsv \
+          --only-show-errors)
+
+        if ! az role assignment list \
+          --assignee "$PRINCIPAL_ID" \
+          --scope "$ACR_ID" \
+          --query "[?roleDefinitionName=='AcrPull'] | length(@)" \
+          -o tsv \
+          --only-show-errors | grep -q '^1$'; then
+          echo 'Granting AcrPull to the isolated test Container App identity.'
+          az role assignment create \
+            --assignee-object-id "$PRINCIPAL_ID" \
+            --assignee-principal-type ServicePrincipal \
+            --role AcrPull \
+            --scope "$ACR_ID" \
+            -o none \
+            --only-show-errors
+        fi
+
+        az containerapp registry set \
+          --subscription "$EXPECTED_SUBSCRIPTION" \
+          --resource-group "$RG" \
+          --name "$APP" \
+          --server "$LOGIN_SERVER" \
+          --identity system \
+          -o none \
+          --only-show-errors
+
+        # Read only non-secret Azure Maps runtime identifiers from production if present.
+        PROD_ENV_JSON=$(az containerapp show \
+          --subscription "$EXPECTED_SUBSCRIPTION" \
+          --resource-group "$RG" \
+          --name "$PROD_APP" \
+          --query properties.template.containers[0].env \
+          -o json \
+          --only-show-errors)
+
+        MAPS_CLIENT_ID=$(jq -r '[.[]? | select(.name=="AZURE_MAPS_CLIENT_ID") | .value][0] // empty' <<<"$PROD_ENV_JSON")
+        MAPS_ENDPOINT=$(jq -r '[.[]? | select(.name=="AZURE_MAPS_ENDPOINT") | .value][0] // empty' <<<"$PROD_ENV_JSON")
+
+        ENV_ARGS=(
+          "CRAVES_API_BASE_URL=$API_BASE_URL"
+          'NEXT_PUBLIC_RAZORPAY_MODE=sandbox'
+          'NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false'
+          "CRAVES_BUILD_SHA=$(Build.SourceVersion)"
+        )
+        [[ -n "$MAPS_CLIENT_ID" ]] && ENV_ARGS+=("AZURE_MAPS_CLIENT_ID=$MAPS_CLIENT_ID")
+        [[ -n "$MAPS_ENDPOINT" ]] && ENV_ARGS+=("AZURE_MAPS_ENDPOINT=$MAPS_ENDPOINT")
+
+        az containerapp ingress update \
+          --subscription "$EXPECTED_SUBSCRIPTION" \
+          --resource-group "$RG" \
+          --name "$APP" \
+          --type external \
+          --target-port 3000 \
+          --allow-insecure false \
+          -o none \
+          --only-show-errors
+
+        az containerapp update \
+          --subscription "$EXPECTED_SUBSCRIPTION" \
+          --resource-group "$RG" \
+          --name "$APP" \
+          --image "$IMAGE" \
+          --min-replicas 1 \
+          --max-replicas 1 \
+          --set-env-vars "${ENV_ARGS[@]}" \
+          -o none \
+          --only-show-errors
+
+        for ATTEMPT in $(seq 1 30); do
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "https://$EXPECTED_FQDN/" || true)
+          if [[ "$STATUS" =~ ^(200|301|302|307|308)$ ]]; then
+            echo "UI test deployment is live: https://$EXPECTED_FQDN/"
+            echo "Image: $IMAGE"
+            exit 0
+          fi
+          echo "Waiting for UI test revision readiness ($ATTEMPT/30, HTTP $STATUS)..."
+          sleep 10
+        done
+
+        echo "ERROR: UI test Container App did not become ready. Production was never targeted." >&2
+        exit 2
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: $(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: $(NEXT_PUBLIC_FIREBASE_PROJECT_ID)
+      NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: $(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
+      NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY: $(NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY)

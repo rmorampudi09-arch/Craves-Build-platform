@@ -135,7 +135,7 @@ function DishCard({
   onIncrease,
   onOpen,
 }: DishCardProps) {
-  const kitchenName = dish.kitchenDisplayName ?? dish.kitchenName;
+  const kitchenName = dish.kitchenDisplayName?.trim() || dish.kitchenName;
   const location = [dish.areaName, dish.city].filter(Boolean).join(', ');
   const quantity = cartLine?.quantity ?? 0;
   const foodTypeLabel =
@@ -193,7 +193,7 @@ function DishCard({
             {dish.itemName}
           </Text>
           <Text numberOfLines={1} style={styles.kitchenName}>
-            {kitchenName}
+            From {kitchenName}
           </Text>
         </Pressable>
 
@@ -333,6 +333,10 @@ export function CustomerHomeScreen() {
     [filteredAndSortedDishes, search.query, selectedCategory],
   );
   const listData = useMemo<HomeFeedListItem[]>(() => {
+    if (feed.locationRequired) {
+      return [{kind: 'empty', key: 'empty'}];
+    }
+
     const items: HomeFeedListItem[] = [
       {kind: 'categories', key: 'categories'},
       {kind: 'popular-header', key: 'popular-header'},
@@ -349,7 +353,7 @@ export function CustomerHomeScreen() {
       );
     }
     return items;
-  }, [visibleDishes]);
+  }, [feed.locationRequired, visibleDishes]);
   const activeDiscoveryFilterCount = getActiveDiscoveryFilterCount(appliedFilters);
   const cartLinesByMenuItemId = useMemo(() => {
     const lines = new Map<string, CartLine>();
@@ -416,6 +420,11 @@ export function CustomerHomeScreen() {
     resetSearchPosition();
     search.clear();
   }, [feed, resetSearchPosition, search]);
+
+  const openSearch = useCallback(() => {
+    handleClearSearch();
+    navigation.navigate('CustomerHomeSearch');
+  }, [handleClearSearch, navigation]);
 
   const saveListOffset = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -628,40 +637,53 @@ export function CustomerHomeScreen() {
           Fresh meals from active home kitchens around your selected location.
         </Text>
       </View>
-      <View style={[styles.searchRow, compactLayout && styles.searchRowCompact]}>
-        <DiscoverySearchInput
-          accessibilityLabel="Search nearby meals"
-          onChangeText={handleSearchChange}
-          onClear={handleClearSearch}
-          placeholder="Search nearby dishes or kitchens"
-          style={styles.searchField}
-          value={search.draft}
-        />
-        <Pressable
-          accessibilityHint="Open filter and sort options"
-          accessibilityLabel="Filters"
-          accessibilityRole="button"
-          onPress={openFilters}
-          style={({pressed}) => [
-            styles.filterButton,
-            activeDiscoveryFilterCount > 0 && styles.filterButtonActive,
-            pressed && styles.filterButtonPressed,
-          ]}>
-          <Text style={styles.filterButtonText}>
-            {activeDiscoveryFilterCount > 0
-              ? `Filters (${activeDiscoveryFilterCount})`
-              : 'Filters'}
-          </Text>
-        </Pressable>
-      </View>
 
-      <HomePromoAndKitchens />
+      {selectedLocation ? (
+        <>
+          <View style={[styles.searchRow, compactLayout && styles.searchRowCompact]}>
+            <DiscoverySearchInput
+              accessibilityLabel="Search nearby meals"
+              onChangeText={handleSearchChange}
+              onClear={handleClearSearch}
+              onFocus={openSearch}
+              placeholder="Search nearby dishes or kitchens"
+              showSoftInputOnFocus={false}
+              style={styles.searchField}
+              value=""
+            />
+            <Pressable
+              accessibilityHint="Open filter and sort options"
+              accessibilityLabel="Filters"
+              accessibilityRole="button"
+              onPress={openFilters}
+              style={({pressed}) => [
+                styles.filterButton,
+                activeDiscoveryFilterCount > 0 && styles.filterButtonActive,
+                pressed && styles.filterButtonPressed,
+              ]}>
+              <Icon
+                name="filter"
+                size={18}
+                color={colors.flameRedAccessible}
+                surface={false}
+              />
+              <Text style={styles.filterButtonText}>
+                {activeDiscoveryFilterCount > 0
+                  ? `Filters (${activeDiscoveryFilterCount})`
+                  : 'Filters'}
+              </Text>
+            </Pressable>
+          </View>
 
-      <View style={styles.mindHeadingRow}>
-        <Text accessibilityRole="header" style={styles.sectionTitle}>
-          What's on your mind
-        </Text>
-      </View>
+          <HomePromoAndKitchens />
+
+          <View style={styles.mindHeadingRow}>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>
+              What's on your mind
+            </Text>
+          </View>
+        </>
+      ) : null}
     </View>
   );
 
@@ -682,7 +704,7 @@ export function CustomerHomeScreen() {
           keyboardShouldPersistTaps="handled"
           nestedScrollEnabled
           removeClippedSubviews={false}
-          stickyHeaderIndices={[1]}
+          stickyHeaderIndices={feed.locationRequired ? undefined : [1]}
           style={styles.feedList}
           ListFooterComponent={
             feed.isFetchingNextPage ? (
@@ -849,7 +871,8 @@ const styles = StyleSheet.create({
   },
   filterButton: {
     minHeight: touchTarget.minimum,
-    minWidth: 78,
+    minWidth: 92,
+    flexDirection: 'row',
     paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -857,6 +880,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xxs,
   },
   filterButtonActive: {
     borderColor: colors.flameRed,
@@ -878,6 +902,7 @@ const styles = StyleSheet.create({
   },
   stickyCategoryWrap: {
     backgroundColor: colors.surfaceBase,
+    zIndex: 10,
   },
   sectionHeadingRow: {
     paddingHorizontal: spacing.md,
@@ -932,7 +957,7 @@ const styles = StyleSheet.create({
   dishBody: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
   dishName: {
     color: colors.espressoBrown,
@@ -980,7 +1005,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   priceGroup: {
     minWidth: 0,
@@ -989,7 +1014,7 @@ const styles = StyleSheet.create({
     gap: spacing.xxs,
   },
   price: {
-    color: colors.flameRedAccessible,
+    color: colors.espressoBrown,
     fontSize: typography.heading,
     fontWeight: fontWeight.extrabold,
   },

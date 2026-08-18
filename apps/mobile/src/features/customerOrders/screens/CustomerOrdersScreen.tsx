@@ -177,10 +177,7 @@ export function CustomerOrdersScreen() {
     <View>
       <CustomerHeader
         onPressLocation={() => setLocationSelectorVisible(true)}
-        onPressNotifications={() => {
-          const parent = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
-          parent?.navigate('Profile', {screen: 'CustomerNotifications'});
-        }}
+        onPressNotifications={() => navigation.navigate('CustomerNotifications')}
       />
       <View style={styles.titleArea}>
         <Text accessibilityRole="header" style={styles.title}>

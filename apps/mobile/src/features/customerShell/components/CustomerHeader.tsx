@@ -1,5 +1,6 @@
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {useNavigation, type NavigationProp, type ParamListBase} from '@react-navigation/native';
 import {
   colors,
   fontWeight,
@@ -28,11 +29,24 @@ export function CustomerHeader({
   onPressNotifications,
   onPressSubscription,
 }: Props) {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const {locationDisplayName, badgeLabel} = useCustomerHeaderState();
   const compact = variant === 'compact';
+  const showBack = Boolean(title && navigation.canGoBack());
 
   return (
     <View style={[styles.container, compact && styles.containerCompact]}>
+      {showBack ? (
+        <Pressable
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          hitSlop={spacing.xs}
+          onPress={() => navigation.goBack()}
+          style={({pressed}) => [styles.backButton, pressed && styles.backPressed]}>
+          <Icon name="arrow-left" size={20} color={colors.espressoBrown} surface={false} />
+        </Pressable>
+      ) : null}
+
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Location: ${locationDisplayName}`}
@@ -115,6 +129,17 @@ const styles = StyleSheet.create({
   containerCompact: {
     minHeight: 56,
     paddingVertical: spacing.xs,
+  },
+  backButton: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.white,
+  },
+  backPressed: {
+    backgroundColor: colors.surfaceMuted,
   },
   locationButton: {
     minHeight: touchTarget.minimum,

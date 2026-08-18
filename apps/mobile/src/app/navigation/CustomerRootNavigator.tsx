@@ -311,6 +311,7 @@ function CustomerHomeStackNavigator() {
       <HomeStack.Screen name="CustomerHomeRoot" component={CustomerHomeRouteScreen} listeners={rootListeners} />
       <HomeStack.Screen name="CustomerHomeSearch" component={CustomerHomeSearchScreen} />
       <HomeStack.Screen name="CustomerNotifications" component={CustomerNotificationsRouteScreen} />
+      <HomeStack.Screen name="CustomerSettingsSubscription" component={CustomerSettingsSubscriptionScreen} />
       <HomeStack.Screen name="CustomerFilterSort" component={CustomerFilterSortScreen} />
       <HomeStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <HomeStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
@@ -330,11 +331,14 @@ function CustomerChefsStackNavigator() {
   return (
     <ChefsStack.Navigator screenOptions={stackScreenOptions}>
       <ChefsStack.Screen name="CustomerChefsRoot" component={DiscoverHomeChefsRouteScreen} listeners={rootListeners} />
+      <ChefsStack.Screen name="CustomerNotifications" component={CustomerNotificationsRouteScreen} />
       <ChefsStack.Screen name="CustomerFilterSort" component={CustomerFilterSortScreen} />
       <ChefsStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <ChefsStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <ChefsStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
       <ChefsStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
+      <ChefsStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
+      <ChefsStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
       <ChefsStack.Screen name="CustomerCart" component={CustomerCartScreen} />
       <ChefsStack.Screen name="CustomerPaymentMethods" component={CustomerPaymentMethodsRouteScreen} />
     </ChefsStack.Navigator>
@@ -347,6 +351,11 @@ function CustomerOrdersStackNavigator() {
   return (
     <OrdersStack.Navigator screenOptions={stackScreenOptions}>
       <OrdersStack.Screen name="CustomerOrdersRoot" component={CustomerOrdersRouteScreen} listeners={rootListeners} />
+      <OrdersStack.Screen name="CustomerNotifications" component={CustomerNotificationsRouteScreen} />
+      <OrdersStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
+      <OrdersStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
+      <OrdersStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
+      <OrdersStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
       <OrdersStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <OrdersStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
       <OrdersStack.Screen name="CustomerCart" component={CustomerCartScreen} />

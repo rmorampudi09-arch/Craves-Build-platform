@@ -76,6 +76,7 @@ export type CustomerHomeStackParamList = {
   CustomerHomeRoot: undefined;
   CustomerHomeSearch: undefined;
   CustomerNotifications: undefined;
+  CustomerSettingsSubscription: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
 } & CustomerDishDetailStackParamList &
   CustomerOrderDetailStackParamList &
@@ -84,14 +85,18 @@ export type CustomerHomeStackParamList = {
 
 export type CustomerChefsStackParamList = {
   CustomerChefsRoot: undefined;
+  CustomerNotifications: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
 } & CustomerDishDetailStackParamList &
+  CustomerOrderDetailStackParamList &
   CustomerCartStackParamList &
   CustomerPaymentMethodsStackParamList;
 
 export type CustomerOrdersStackParamList = {
   CustomerOrdersRoot: undefined;
-} & CustomerOrderDetailStackParamList &
+  CustomerNotifications: undefined;
+} & CustomerDishDetailStackParamList &
+  CustomerOrderDetailStackParamList &
   CustomerCartStackParamList &
   CustomerPaymentMethodsStackParamList;
 

@@ -36,6 +36,8 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
+import {CustomerOrderMenuItemImage} from '../components/CustomerOrderMenuItemImage';
 import {getProductionCustomerOrderMutationDecision} from '../domain/customerOrderActionEligibility';
 import type {
   CustomerOrder,
@@ -57,9 +59,9 @@ type DetailNavigation = NavigationProp<CustomerOrdersStackParamList, 'CustomerOr
 type ProgressStep = {label: string; icon: IconName};
 
 const PROGRESS_STEPS: readonly ProgressStep[] = [
-  {label: 'Preparing', icon: 'orders'},
-  {label: 'On the way', icon: 'delivery'},
-  {label: 'Out for delivery', icon: 'delivery'},
+  {label: 'Awaiting chef', icon: 'clock'},
+  {label: 'Chef accepted', icon: 'chef'},
+  {label: 'Items picked up', icon: 'delivery'},
   {label: 'Delivered', icon: 'check'},
 ];
 
@@ -102,13 +104,13 @@ function progressStageForStatus(status: CustomerOrderStatus): number {
       return 3;
     case 'OUT_FOR_DELIVERY':
       return 2;
+    case 'CHEF_ACCEPTED':
+    case 'PREPARING':
     case 'READY_FOR_PICKUP':
       return 1;
     case 'PAYMENT_PENDING':
     case 'PAID':
     case 'CHEF_ACCEPTANCE_PENDING':
-    case 'CHEF_ACCEPTED':
-    case 'PREPARING':
       return 0;
     default:
       return -1;
@@ -143,6 +145,15 @@ function deliveryTimeCopy(order: CustomerOrder, canTrack: boolean): string {
   if (canTrack) return 'Live delivery updates available';
   if (order.prepTimeMinutes) return `Preparation estimate: ${order.prepTimeMinutes} min`;
   return 'Delivery estimate unavailable';
+}
+
+function compactDuration(minutes: number | null): string | null {
+  if (!minutes || minutes <= 0) return null;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  if (remainder === 0) return `${hours}h`;
+  return `${hours}h${remainder}m`;
 }
 
 function OrderProgress({stage}: {stage: number}) {
@@ -263,7 +274,9 @@ export function CustomerOrderDetailScreen() {
   const status = getCustomerOrderStatusPresentation(order.status);
   const canTrack = getCustomerOrderReferenceAction(order.status) === 'TRACK';
   const stage = progressStageForStatus(order.status);
+  const progressStatus = stage >= 0 ? PROGRESS_STEPS[stage] : null;
   const paymentStatus = paymentStatusForOrder(order);
+  const compactEstimate = compactDuration(order.prepTimeMinutes);
   const address = order.deliveryAddress;
   const addressLine = address
     ? [
@@ -360,17 +373,17 @@ export function CustomerOrderDetailScreen() {
                 </Text>
               </View>
               <View style={styles.kitchenIdentity}>
+                <CustomerChefAvatar size={48} />
                 <Text numberOfLines={2} style={styles.kitchenName}>
                   {order.kitchenName}
                 </Text>
-                <Text style={styles.kitchenCaption}>Home kitchen</Text>
               </View>
             </View>
 
             <View style={styles.currentStatusRow}>
               <View style={styles.statusIconCircle}>
                 <Icon
-                  name={stage === 3 ? 'check' : stage >= 2 ? 'delivery' : 'orders'}
+                  name={progressStatus?.icon ?? 'orders'}
                   size={21}
                   color={colors.flameRed}
                   surface={false}
@@ -378,14 +391,12 @@ export function CustomerOrderDetailScreen() {
               </View>
               <View style={styles.statusCopy}>
                 <Text accessibilityLiveRegion="polite" style={styles.statusTitle}>
-                  {status.label}
-                </Text>
-                <Text style={styles.statusDetail}>
-                  {order.prepTimeMinutes
-                    ? `Preparation estimate: ${order.prepTimeMinutes} min`
-                    : `Updated ${formatCustomerOrderCreatedAt(order.updatedAt)}`}
+                  {progressStatus?.label ?? status.label}
                 </Text>
               </View>
+              {compactEstimate ? (
+                <Text style={styles.kitchenEta}>{compactEstimate}</Text>
+              ) : null}
               {detail.isFetching ? (
                 <ActivityIndicator color={colors.flameRed} size="small" />
               ) : null}
@@ -412,9 +423,10 @@ export function CustomerOrderDetailScreen() {
                   styles.itemRow,
                   index === order.items.length - 1 && styles.itemRowLast,
                 ]}>
-                <View style={styles.itemThumb}>
-                  <Icon name="chef" size={24} color={colors.flameRed} surface={false} />
-                </View>
+                <CustomerOrderMenuItemImage
+                  menuItemId={item.menuItemId}
+                  size={68}
+                />
                 <View style={styles.itemCopy}>
                   <Text numberOfLines={2} style={styles.itemName}>
                     {item.itemName}
@@ -572,7 +584,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   orderIdentity: {minWidth: 0, flex: 1.15},
-  kitchenIdentity: {minWidth: 0, flex: 0.85, alignItems: 'flex-end'},
+  kitchenIdentity: {
+    minWidth: 0,
+    flex: 0.85,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
   orderNumber: {
     color: colors.espressoBrown,
     fontSize: typography.heading,
@@ -584,15 +603,11 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
   },
   kitchenName: {
+    minWidth: 0,
+    flex: 1,
     color: colors.espressoBrown,
     fontSize: typography.body,
     fontWeight: fontWeight.bold,
-    textAlign: 'right',
-  },
-  kitchenCaption: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
     textAlign: 'right',
   },
   currentStatusRow: {
@@ -615,10 +630,12 @@ const styles = StyleSheet.create({
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
   },
-  statusDetail: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
+  kitchenEta: {
+    flexShrink: 0,
+    color: colors.espressoBrown,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+    textAlign: 'right',
   },
   trackableProgress: {borderRadius: radius.md},
   progressWrap: {marginTop: spacing.lg},
@@ -687,14 +704,6 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   itemRowLast: {borderBottomWidth: 0},
-  itemThumb: {
-    width: 68,
-    height: 68,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-  },
   itemCopy: {minWidth: 0, flex: 1},
   itemName: {
     color: colors.espressoBrown,

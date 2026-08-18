@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-  FlatList,
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   type ImageSourcePropType,
@@ -17,7 +17,7 @@ declare const require: (path: string) => ImageSourcePropType;
 
 const CATEGORY_IMAGES: Record<CustomerMenuCategory, ImageSourcePropType> = {
   All: require('../../../assets/categories/all.jpg'),
-  Biriyani: require('../../../assets/categories/biriyani.jpg'),
+  Biryani: require('../../../assets/categories/biriyani.jpg'),
   Curry: require('../../../assets/categories/curry.jpg'),
   Tiffin: require('../../../assets/categories/tiffin.jpg'),
   Snakes: require('../../../assets/categories/snakes.jpg'),
@@ -37,22 +37,21 @@ export function HomeCategoryRail({
   onSelect,
 }: HomeCategoryRailProps) {
   return (
-    <FlatList
-      data={[...CUSTOMER_MENU_CATEGORIES]}
+    <ScrollView
       horizontal
       nestedScrollEnabled
       directionalLockEnabled
-      scrollEnabled
-      removeClippedSubviews={false}
-      contentContainerStyle={styles.row}
       keyboardShouldPersistTaps="handled"
-      keyExtractor={category => category}
-      renderItem={({item: category}) => {
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.row}
+      style={styles.rail}>
+      {CUSTOMER_MENU_CATEGORIES.map(category => {
         const filterValue = category === 'All' ? null : category;
         const selected = selectedCategory === filterValue;
 
         return (
           <Pressable
+            key={category}
             accessibilityLabel={`${category} category`}
             accessibilityRole="button"
             accessibilityState={{selected}}
@@ -72,10 +71,8 @@ export function HomeCategoryRail({
             </Text>
           </Pressable>
         );
-      }}
-      showsHorizontalScrollIndicator={false}
-      style={styles.rail}
-    />
+      })}
+    </ScrollView>
   );
 }
 

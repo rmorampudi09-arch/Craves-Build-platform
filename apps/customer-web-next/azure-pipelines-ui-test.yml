@@ -62,25 +62,59 @@ steps:
             --only-show-errors
         )
 
+        [[ ${#SECRET_NAMES[@]} -gt 0 ]] || {
+          echo "ERROR: No secrets are visible in $VAULT." >&2
+          exit 2
+        }
+
         normalize() {
           printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]'
         }
 
-        resolve_secret_name() {
-          local logical_name="$1"
-          shift
-          local candidate normalized_candidate secret_name normalized_secret
+        find_name_by_alias() {
+          local alias normalized_alias secret_name normalized_secret
+          local -a matches=()
+
+          for alias in "$@"; do
+            normalized_alias=$(normalize "$alias")
+            for secret_name in "${SECRET_NAMES[@]}"; do
+              normalized_secret=$(normalize "$secret_name")
+              if [[ "$normalized_secret" == "$normalized_alias" ||
+                    "$normalized_secret" == *"$normalized_alias"* ]]; then
+                matches+=("$secret_name")
+              fi
+            done
+          done
+
+          mapfile -t matches < <(printf '%s\n' "${matches[@]:-}" | sed '/^$/d' | sort -u)
+
+          if [[ ${#matches[@]} -eq 1 ]]; then
+            printf '%s' "${matches[0]}"
+            return 0
+          fi
+
+          return 1
+        }
+
+        secret_value() {
+          az keyvault secret show \
+            --vault-name "$VAULT" \
+            --name "$1" \
+            --query value \
+            -o tsv \
+            --only-show-errors
+        }
+
+        find_name_by_exact_value() {
+          local expected="$1"
+          local secret_name value
           local -a matches=()
 
           for secret_name in "${SECRET_NAMES[@]}"; do
-            normalized_secret=$(normalize "$secret_name")
-            for candidate in "$logical_name" "$@"; do
-              normalized_candidate=$(normalize "$candidate")
-              if [[ "$normalized_secret" == "$normalized_candidate" || "$normalized_secret" == *"$normalized_candidate" ]]; then
-                matches+=("$secret_name")
-                break
-              fi
-            done
+            value=$(secret_value "$secret_name")
+            if [[ "$value" == "$expected" ]]; then
+              matches+=("$secret_name")
+            fi
           done
 
           if [[ ${#matches[@]} -eq 1 ]]; then
@@ -88,70 +122,122 @@ steps:
             return 0
           fi
 
-          if [[ ${#matches[@]} -eq 0 ]]; then
-            return 1
-          fi
-
-          echo "ERROR: More than one Key Vault secret matched $logical_name. Rename or narrow the matching secret names." >&2
-          return 2
+          return 1
         }
 
-        export_required_secret() {
-          local variable_name="$1"
-          shift
-          local secret_name value
+        find_firebase_api_key() {
+          local secret_name value normalized_secret
+          local -a preferred=()
+          local -a candidates=()
 
-          if ! secret_name=$(resolve_secret_name "$variable_name" "$@"); then
-            echo "ERROR: Required Key Vault value for $variable_name was not found in $VAULT." >&2
-            exit 2
+          for secret_name in "${SECRET_NAMES[@]}"; do
+            value=$(secret_value "$secret_name")
+            if [[ "$value" == AIza* ]]; then
+              candidates+=("$secret_name")
+              normalized_secret=$(normalize "$secret_name")
+              if [[ "$normalized_secret" == *firebase* || "$normalized_secret" == *web* ]]; then
+                preferred+=("$secret_name")
+              fi
+            fi
+          done
+
+          if [[ ${#preferred[@]} -eq 1 ]]; then
+            printf '%s' "${preferred[0]}"
+            return 0
           fi
 
-          value=$(az keyvault secret show \
-            --vault-name "$VAULT" \
-            --name "$secret_name" \
-            --query value \
-            -o tsv \
-            --only-show-errors)
+          if [[ ${#candidates[@]} -eq 1 ]]; then
+            printf '%s' "${candidates[0]}"
+            return 0
+          fi
 
+          if [[ ${#candidates[@]} -gt 1 ]]; then
+            echo "ERROR: Multiple Google API-key secrets exist in $VAULT; unable to safely choose the Firebase Web API key." >&2
+            printf 'Candidate secret names: %s\n' "${candidates[*]}" >&2
+          fi
+          return 1
+        }
+
+        set_secret_pipeline_variable() {
+          local variable_name="$1"
+          local secret_name="$2"
+          local value
+
+          value=$(secret_value "$secret_name")
           [[ -n "$value" ]] || {
-            echo "ERROR: Key Vault value for $variable_name is empty." >&2
+            echo "ERROR: Key Vault secret $secret_name for $variable_name is empty." >&2
             exit 2
           }
 
           printf '##vso[task.setvariable variable=%s;issecret=true]%s\n' "$variable_name" "$value"
+          echo "Loaded $variable_name from Key Vault secret: $secret_name"
         }
 
-        export_optional_secret() {
+        resolve_required() {
           local variable_name="$1"
-          shift
-          local secret_name value
+          local expected_value="$2"
+          shift 2
+          local secret_name=''
 
-          if ! secret_name=$(resolve_secret_name "$variable_name" "$@"); then
-            echo "Optional Key Vault value $variable_name was not found; continuing without it."
-            return 0
+          secret_name=$(find_name_by_alias "$@" || true)
+
+          if [[ -z "$secret_name" && -n "$expected_value" ]]; then
+            secret_name=$(find_name_by_exact_value "$expected_value" || true)
           fi
 
-          value=$(az keyvault secret show \
-            --vault-name "$VAULT" \
-            --name "$secret_name" \
-            --query value \
-            -o tsv \
-            --only-show-errors)
-
-          if [[ -n "$value" ]]; then
-            printf '##vso[task.setvariable variable=%s;issecret=true]%s\n' "$variable_name" "$value"
+          if [[ -z "$secret_name" && "$variable_name" == 'NEXT_PUBLIC_FIREBASE_API_KEY' ]]; then
+            secret_name=$(find_firebase_api_key || true)
           fi
+
+          [[ -n "$secret_name" ]] || {
+            echo "ERROR: Could not safely resolve $variable_name from $VAULT." >&2
+            echo "Visible Key Vault secret names (values are not printed):" >&2
+            printf '  %s\n' "${SECRET_NAMES[@]}" >&2
+            exit 2
+          }
+
+          set_secret_pipeline_variable "$variable_name" "$secret_name"
         }
 
-        export_required_secret NEXT_PUBLIC_FIREBASE_API_KEY firebase-api-key firebase-web-api-key
-        export_required_secret NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN firebase-auth-domain
-        export_required_secret NEXT_PUBLIC_FIREBASE_PROJECT_ID firebase-project-id
-        export_required_secret NEXT_PUBLIC_FIREBASE_APP_ID firebase-app-id firebase-web-app-id
-        export_required_secret NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID firebase-messaging-sender-id firebase-sender-id
-        export_required_secret NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET firebase-storage-bucket
-        export_optional_secret NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY syncfusion-license-key syncfusion-key
+        resolve_required \
+          NEXT_PUBLIC_FIREBASE_API_KEY \
+          '' \
+          firebase-api-key firebase-web-api-key web-firebase-api-key google-api-key
 
-        echo 'Required Web Next Key Vault values loaded as secret pipeline variables.'
+        resolve_required \
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN \
+          'cravesapp-dev.firebaseapp.com' \
+          firebase-auth-domain firebase-web-auth-domain
+
+        resolve_required \
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID \
+          'cravesapp-dev' \
+          firebase-project-id firebase-web-project-id
+
+        resolve_required \
+          NEXT_PUBLIC_FIREBASE_APP_ID \
+          '1:201887934076:web:2f20d18dc85894cc700bf9' \
+          firebase-app-id firebase-web-app-id
+
+        resolve_required \
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID \
+          '201887934076' \
+          firebase-messaging-sender-id firebase-sender-id
+
+        resolve_required \
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET \
+          'cravesapp-dev.firebasestorage.app' \
+          firebase-storage-bucket firebase-web-storage-bucket
+
+        SYNCFUSION_SECRET=$(find_name_by_alias syncfusion-license-key syncfusion-key || true)
+        if [[ -n "$SYNCFUSION_SECRET" ]]; then
+          set_secret_pipeline_variable NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY "$SYNCFUSION_SECRET"
+        else
+          echo '##vso[task.setvariable variable=NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY;issecret=true]'
+          echo 'Syncfusion license secret not found by name; continuing without it.'
+        fi
+
+        echo 'Required Web Next Key Vault values loaded as masked pipeline variables.'
 
   - bash: |
       set -euo pipefail
@@ -273,7 +359,6 @@ steps:
 
         docker push "$IMAGE"
 
-        # Give the isolated test Container App its own system identity if needed.
         az containerapp identity assign \
           --subscription "$EXPECTED_SUBSCRIPTION" \
           --resource-group "$RG" \
@@ -298,12 +383,14 @@ steps:
           -o tsv \
           --only-show-errors)
 
-        if ! az role assignment list \
+        ACR_PULL_COUNT=$(az role assignment list \
           --assignee "$PRINCIPAL_ID" \
           --scope "$ACR_ID" \
           --query "[?roleDefinitionName=='AcrPull'] | length(@)" \
           -o tsv \
-          --only-show-errors | grep -q '^1$'; then
+          --only-show-errors || printf '0')
+
+        if [[ "$ACR_PULL_COUNT" == '0' ]]; then
           echo 'Granting AcrPull to the isolated test Container App identity.'
           az role assignment create \
             --assignee-object-id "$PRINCIPAL_ID" \
@@ -323,7 +410,6 @@ steps:
           -o none \
           --only-show-errors
 
-        # Read only non-secret Azure Maps runtime identifiers from production if present.
         PROD_ENV_JSON=$(az containerapp show \
           --subscription "$EXPECTED_SUBSCRIPTION" \
           --resource-group "$RG" \

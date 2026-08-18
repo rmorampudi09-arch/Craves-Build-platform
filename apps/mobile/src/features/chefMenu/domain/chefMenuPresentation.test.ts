@@ -2,6 +2,7 @@ import type {ChefMenuItem} from '../api/chefMenuApi';
 import {
   deriveChefMenuSummary,
   filterChefMenuItems,
+  formatChefMenuCategory,
   formatChefMenuPrice,
   getChefMenuCategories,
   getChefMenuDisplayState,
@@ -96,6 +97,20 @@ describe('chefMenuPresentation', () => {
       'Desserts',
       'Mains',
       'Soups',
+    ]);
+  });
+
+  it('presents legacy Biriyani values as Biryani for chef filters', () => {
+    const legacyBiryani = item({
+      id: '00000000-0000-4000-8000-000000000006',
+      itemName: 'Family Biryani',
+      category: 'Biriyani',
+    });
+
+    expect(formatChefMenuCategory(legacyBiryani.category)).toBe('Biryani');
+    expect(getChefMenuCategories([legacyBiryani])).toEqual(['Biryani']);
+    expect(filterChefMenuItems([legacyBiryani], '', 'Biryani', 'ALL')).toEqual([
+      legacyBiryani,
     ]);
   });
 

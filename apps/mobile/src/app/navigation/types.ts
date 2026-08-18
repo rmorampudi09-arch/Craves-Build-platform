@@ -74,8 +74,11 @@ export type CustomerPaymentMethodsStackParamList = {CustomerPaymentMethods: unde
 
 export type CustomerHomeStackParamList = {
   CustomerHomeRoot: undefined;
+  CustomerHomeSearch: undefined;
+  CustomerNotifications: undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
 } & CustomerDishDetailStackParamList &
+  CustomerOrderDetailStackParamList &
   CustomerCartStackParamList &
   CustomerPaymentMethodsStackParamList;
 

@@ -1,0 +1,98 @@
+name: CRAVES Mobile Sticky Category Fix
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/mobile-category-sticky-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mobile branch
+        uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+
+      - name: Apply focused home category fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx')
+          text = path.read_text()
+
+          text = text.replace(
+              "  type NativeScrollEvent,\n  type NativeSyntheticEvent,\n",
+              "  type LayoutChangeEvent,\n  type NativeScrollEvent,\n  type NativeSyntheticEvent,\n",
+              1,
+          )
+
+          old_state = """  const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);\n  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);\n  const [mutationError, setMutationError] = useState<string | null>(null);\n  const listRef = useRef<FlatList<HomeFeedListItem>>(null);\n"""
+          new_state = """  const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);\n  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);\n  const [categoryPinned, setCategoryPinned] = useState(false);\n  const [homeHeaderHeight, setHomeHeaderHeight] = useState(0);\n  const [mutationError, setMutationError] = useState<string | null>(null);\n  const categoryPinnedRef = useRef(false);\n  const listRef = useRef<FlatList<HomeFeedListItem>>(null);\n"""
+          if old_state not in text:
+              raise SystemExit('state anchor not found')
+          text = text.replace(old_state, new_state, 1)
+
+          old_category_handler = """  const handleCategorySelect = useCallback((category: string | null) => {\n    restorePendingRef.current = false;\n    listRef.current?.scrollToIndex({\n      index: 0,\n      animated: false,\n      viewPosition: 0,\n    });\n    setSelectedCategory(category);\n  }, []);\n\n"""
+          if old_category_handler not in text:
+              raise SystemExit('category reset handler anchor not found')
+          text = text.replace(old_category_handler, '', 1)
+
+          old_scroll = """  const handleHomeScroll = useCallback(\n    (event: NativeSyntheticEvent<NativeScrollEvent>) => {\n      bottomNavScroll.onScroll(event);\n    },\n    [bottomNavScroll],\n  );\n"""
+          new_scroll = """  const handleHeaderLayout = useCallback((event: LayoutChangeEvent) => {\n    setHomeHeaderHeight(event.nativeEvent.layout.height);\n  }, []);\n\n  const handleHomeScroll = useCallback(\n    (event: NativeSyntheticEvent<NativeScrollEvent>) => {\n      bottomNavScroll.onScroll(event);\n\n      const nextPinned =\n        !feed.locationRequired &&\n        homeHeaderHeight > 0 &&\n        event.nativeEvent.contentOffset.y >= homeHeaderHeight;\n\n      if (categoryPinnedRef.current !== nextPinned) {\n        categoryPinnedRef.current = nextPinned;\n        setCategoryPinned(nextPinned);\n      }\n    },\n    [bottomNavScroll, feed.locationRequired, homeHeaderHeight],\n  );\n"""
+          if old_scroll not in text:
+              raise SystemExit('home scroll anchor not found')
+          text = text.replace(old_scroll, new_scroll, 1)
+
+          old_header = """  const headerContent = (\n    <View>\n"""
+          new_header = """  const headerContent = (\n    <View onLayout={handleHeaderLayout}>\n"""
+          if old_header not in text:
+              raise SystemExit('header layout anchor not found')
+          text = text.replace(old_header, new_header, 1)
+
+          sticky_line = "          stickyHeaderIndices={feed.locationRequired ? undefined : [1]}\n"
+          if sticky_line not in text:
+              raise SystemExit('native sticky header anchor not found')
+          text = text.replace(sticky_line, '', 1)
+
+          old_select = "                    onSelect={handleCategorySelect}\n"
+          if old_select not in text:
+              raise SystemExit('category selection anchor not found')
+          text = text.replace(old_select, "                    onSelect={setSelectedCategory}\n", 1)
+
+          old_list_end = """        />\n      </View>\n      <CustomerLocationSelector\n"""
+          new_list_end = """        />\n        {categoryPinned && !feed.locationRequired ? (\n          <View pointerEvents=\"box-none\" style={styles.pinnedCategoryWrap}>\n            <HomeCategoryRail\n              selectedCategory={selectedCategory}\n              onSelect={setSelectedCategory}\n            />\n          </View>\n        ) : null}\n      </View>\n      <CustomerLocationSelector\n"""
+          if old_list_end not in text:
+              raise SystemExit('pinned category insertion anchor not found')
+          text = text.replace(old_list_end, new_list_end, 1)
+
+          old_style = """  stickyCategoryWrap: {\n    backgroundColor: colors.surfaceBase,\n    zIndex: 10,\n    elevation: 10,\n  },\n"""
+          new_style = """  stickyCategoryWrap: {\n    backgroundColor: colors.surfaceBase,\n  },\n  pinnedCategoryWrap: {\n    position: 'absolute',\n    top: 0,\n    left: 0,\n    right: 0,\n    zIndex: 30,\n    elevation: 30,\n    backgroundColor: colors.surfaceBase,\n  },\n"""
+          if old_style not in text:
+              raise SystemExit('sticky style anchor not found')
+          text = text.replace(old_style, new_style, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Verify focused behavior in source
+        run: |
+          grep -q 'onSelect={setSelectedCategory}' apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx
+          grep -q 'styles.pinnedCategoryWrap' apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx
+          ! grep -q 'scrollToIndex' apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx
+          ! grep -q 'stickyHeaderIndices' apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx
+
+      - name: Commit source fix and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/mobile-category-sticky-fix.yml
+          git add apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx
+          git commit -m "fix(mobile): keep sticky categories horizontally interactive"
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

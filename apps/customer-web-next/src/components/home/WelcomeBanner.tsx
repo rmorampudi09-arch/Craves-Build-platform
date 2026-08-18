@@ -1,6 +1,5 @@
-import Image from "next/image";
-import { Heart } from "lucide-react";
-import { FaLocationCrosshairs, FaUtensils } from "react-icons/fa6";
+import { ChefHat, MapPinned, Utensils } from "lucide-react";
+import { FaLocationCrosshairs } from "react-icons/fa6";
 
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
@@ -26,67 +25,60 @@ export function WelcomeBanner({
       className={`${styles.fadeUp} mx-auto max-w-[88rem] px-4 pt-5 md:px-7 lg:px-10`}
       aria-labelledby="discovery-heading"
     >
-      <div className="relative min-h-[27rem] overflow-hidden rounded-[2rem] border border-[#E5E7EB] bg-white shadow-[0_22px_70px_rgba(26,26,26,0.08)] md:min-h-[31rem] lg:min-h-[34rem]">
-        <Image
-          src="/home/reference/home-hero-reference.webp"
-          alt="A mother and child preparing vegetables together in a warm home kitchen."
-          fill
-          priority
-          unoptimized
-          sizes="(min-width: 1440px) 1344px, (min-width: 1024px) calc(100vw - 80px), (min-width: 768px) calc(100vw - 56px), calc(100vw - 32px)"
-          className={`${styles.heroArtwork} object-cover object-[68%_50%] sm:object-center`}
-        />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.99)_0%,rgba(255,255,255,0.96)_29%,rgba(255,255,255,0.64)_48%,rgba(255,255,255,0.08)_70%)] sm:bg-[linear-gradient(90deg,rgba(255,255,255,0.99)_0%,rgba(255,255,255,0.92)_31%,rgba(255,255,255,0.34)_55%,rgba(255,255,255,0)_74%)]" />
-        <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white/70 to-transparent" />
-
-        <div className="relative z-10 flex min-h-[27rem] max-w-[43rem] flex-col justify-center px-6 py-10 sm:px-9 md:min-h-[31rem] md:px-12 lg:min-h-[34rem] lg:px-16">
-          <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-[#E5E7EB] bg-white/90 px-3.5 py-2 text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#1A1A1A] backdrop-blur-sm">
-            <Heart className="h-3.5 w-3.5 fill-[#F62E18] text-[#F62E18]" aria-hidden="true" />
-            Welcome home, {firstName}
-          </div>
-
-          <h1
-            id="discovery-heading"
-            className="max-w-[39rem] font-display text-[2.65rem] font-black leading-[0.98] tracking-[-0.055em] text-[#1A1A1A] sm:text-5xl md:text-6xl lg:text-[4.35rem]"
-          >
-            Eat for Health.
-            <br />
-            <span className="text-[#F62E18]">Taste the Comfort of Home.</span>
-          </h1>
-
-          <p className="mt-5 max-w-lg text-sm font-medium leading-6 text-[#6B6B6B] sm:text-base sm:leading-7">
-            Fresh food from nearby home kitchens, made with familiar ingredients,
-            personal recipes and the kind of care that feels like home.
-          </p>
-
-          <div className="mt-7 flex flex-wrap gap-2.5">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3.5 py-2 text-xs font-bold text-[#1A1A1A]">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                <FaUtensils className="h-3.5 w-3.5" aria-hidden="true" />
-              </span>
-              {dishCount} live {dishCount === 1 ? "dish" : "dishes"}
-            </span>
-
+      <div className="rounded-2xl bg-[#C92716] px-6 py-8 text-white shadow-[var(--shadow-card)] md:px-8">
+        <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <p className="craves-overline text-white">Welcome back, {firstName}</p>
+            <h1
+              id="discovery-heading"
+              className="mt-3 max-w-3xl font-display text-3xl font-bold leading-tight tracking-[-0.04em] text-white md:text-4xl"
+            >
+              {hasAddress
+                ? dishCount > 0
+                  ? "Fresh dishes available around your delivery address."
+                  : "We’re checking nearby home kitchens for you."
+                : "Use your current location to discover nearby home food."}
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/85 md:text-base">
+              Kitchen names, dishes, availability and prices below are loaded from the live Craves catalog. Final delivery availability is confirmed during checkout.
+            </p>
             <button
               type="button"
               onClick={onUseCurrentLocation}
               disabled={locating}
-              className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3.5 py-2 text-xs font-bold text-[#1A1A1A] transition-[transform,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_8px_20px_rgba(26,26,26,0.08)] disabled:cursor-wait disabled:opacity-70"
+              className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 bg-white px-4 py-2 text-sm font-bold text-[#1A1A1A] disabled:cursor-wait disabled:opacity-70"
               aria-label="Use current delivery location"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                <FaLocationCrosshairs
-                  className={`h-3.5 w-3.5 ${locating ? "animate-pulse" : ""}`}
-                  aria-hidden="true"
-                />
-              </span>
-              {locating
-                ? "Detecting Location…"
-                : hasAddress
-                  ? `Current Location${radiusLabel ? ` · ${radiusLabel}` : ""}`
-                  : "Use Current Location"}
+              <FaLocationCrosshairs
+                className={`h-4 w-4 ${locating ? "animate-pulse" : ""}`}
+                aria-hidden="true"
+              />
+              {locating ? "Detecting Location…" : "Use Current Location"}
             </button>
           </div>
+
+          <dl className="grid grid-cols-2 gap-3 sm:min-w-[20rem]">
+            <div className="rounded-xl border border-white/30 bg-white/10 p-4">
+              <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-white/80">
+                <Utensils className="h-4 w-4 text-white" aria-hidden="true" />
+                Dishes
+              </dt>
+              <dd className="mt-2 font-display text-2xl font-bold text-white">{dishCount}</dd>
+            </div>
+            <div className="rounded-xl border border-white/30 bg-white/10 p-4">
+              <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-white/80">
+                {hasAddress ? (
+                  <MapPinned className="h-4 w-4 text-white" aria-hidden="true" />
+                ) : (
+                  <ChefHat className="h-4 w-4 text-white" aria-hidden="true" />
+                )}
+                Radius
+              </dt>
+              <dd className="mt-2 font-display text-lg font-bold text-white">
+                {radiusLabel ?? "Location needed"}
+              </dd>
+            </div>
+          </dl>
         </div>
       </div>
     </section>

@@ -45,11 +45,11 @@ type VisualCategory = {
 const CATEGORY_SEARCH_EVENT = "craves:home-category-search";
 
 const categories: readonly VisualCategory[] = [
-  { label: "Biryani", value: "Biryani", fallbackImage: biryaniImage.src, icon: FaUtensils },
-  { label: "Tiffins", value: "Tiffins", fallbackImage: tiffinImage.src, icon: FaUtensils },
+  { label: "Biryani", value: "Biryani", fallbackImage: biryaniImage, icon: FaUtensils },
+  { label: "Tiffins", value: "Tiffins", fallbackImage: tiffinImage, icon: FaUtensils },
   { label: "Pickles", value: "Pickles", icon: FaPepperHot },
-  { label: "Meals", value: "Meals", fallbackImage: mealsImage.src, icon: FaUtensils },
-  { label: "Snacks", searchTerm: "snack", fallbackImage: snacksImage.src, icon: FaCookieBite },
+  { label: "Meals", value: "Meals", fallbackImage: mealsImage, icon: FaUtensils },
+  { label: "Snacks", searchTerm: "snack", fallbackImage: snacksImage, icon: FaCookieBite },
   { label: "Desserts", value: "Sweets", icon: FaCandyCane },
   { label: "Cake", searchTerm: "cake", icon: FaBirthdayCake },
   { label: "Ice Cream", searchTerm: "ice cream", icon: FaIceCream },

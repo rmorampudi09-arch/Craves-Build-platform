@@ -33,59 +33,25 @@ const HOME_RADIUS_METERS = 10_000;
 const TOP_KITCHEN_PAGE_SIZE = 12;
 const MAX_TOP_KITCHENS = 8;
 
-const PROMOS: readonly {
-  eyebrow: string;
-  title: string;
-  accent: string;
-  caption: string;
-  art: ImageSourcePropType;
-}[] = [
-  {
-    eyebrow: 'HOME-COOKED',
-    title: 'Made with love.',
-    accent: 'Up to 30% off',
-    caption: 'Fresh meals from trusted home kitchens',
-    art: require('../../../assets/categories/curry.jpg'),
-  },
-  {
-    eyebrow: 'REAL FOOD',
-    title: 'Real people.',
-    accent: 'Fresh today',
-    caption: 'Comfort food cooked close to home',
-    art: require('../../../assets/categories/biriyani.jpg'),
-  },
-  {
-    eyebrow: 'GOOD FOOD',
-    title: 'Great moments.',
-    accent: 'Made nearby',
-    caption: 'Simple meals, warm kitchens, happy plates',
-    art: require('../../../assets/categories/tiffin.jpg'),
-  },
-];
+const HOME_PROMO = {
+  eyebrow: 'HOME-COOKED',
+  title: 'Made with love.',
+  accent: 'Up to 30% off',
+  caption: 'Fresh meals from trusted home kitchens',
+  art: require('../../../assets/categories/curry.jpg'),
+} as const;
 
-function avatarUrl(kitchenId: string): string {
-  return `https://api.dicebear.com/9.x/adventurer/png?seed=${encodeURIComponent(
-    `craves-${kitchenId}`,
-  )}&backgroundColor=f1f5f9&radius=12`;
-}
-
-function PromoCard({
-  promo,
-  width,
-}: {
-  promo: (typeof PROMOS)[number];
-  width: number;
-}) {
+function PromoCard({width}: {width: number}) {
   return (
     <View style={[styles.banner, {width}]}>
       <View style={styles.bannerCopy}>
-        <Text style={styles.bannerEyebrow}>{promo.eyebrow}</Text>
-        <Text style={styles.bannerTitle}>{promo.title}</Text>
+        <Text style={styles.bannerEyebrow}>{HOME_PROMO.eyebrow}</Text>
+        <Text style={styles.bannerTitle}>{HOME_PROMO.title}</Text>
         <Text numberOfLines={2} style={styles.bannerCaption}>
-          {promo.caption}
+          {HOME_PROMO.caption}
         </Text>
         <View style={styles.offerPill}>
-          <Text style={styles.offerPillText}>{promo.accent}</Text>
+          <Text style={styles.offerPillText}>{HOME_PROMO.accent}</Text>
         </View>
       </View>
       <View style={styles.bannerArtPanel}>
@@ -97,7 +63,7 @@ function PromoCard({
         <View style={styles.bowlFrame}>
           <Image
             accessibilityIgnoresInvertColors
-            source={promo.art}
+            source={HOME_PROMO.art}
             resizeMode="cover"
             style={styles.bannerArt}
           />
@@ -114,7 +80,7 @@ function KitchenPreviewCard({
   kitchen: NearbyKitchen;
   onPress: (kitchen: NearbyKitchen) => void;
 }) {
-  const title = kitchen.kitchenName;
+  const title = kitchen.displayName?.trim() || kitchen.kitchenName.trim();
   const location = [kitchen.areaName, kitchen.city].filter(Boolean).join(', ');
 
   return (
@@ -124,17 +90,12 @@ function KitchenPreviewCard({
       accessibilityRole="button"
       onPress={() => onPress(kitchen)}
       style={({pressed}) => [styles.kitchenCard, pressed && styles.pressed]}>
-      <Image
-        accessibilityIgnoresInvertColors
-        source={{uri: avatarUrl(kitchen.id)}}
-        resizeMode="cover"
-        style={styles.kitchenImage}
-      />
       <View style={styles.kitchenBody}>
-        <Text numberOfLines={1} style={styles.kitchenTitle}>
+        <Text style={styles.kitchenEyebrow}>HOME KITCHEN</Text>
+        <Text numberOfLines={2} style={styles.kitchenTitle}>
           {title}
         </Text>
-        <Text numberOfLines={1} style={styles.kitchenSubtitle}>
+        <Text numberOfLines={2} style={styles.kitchenSubtitle}>
           {kitchen.description || location || 'Home-cooked meals'}
         </Text>
         <View style={styles.kitchenMetaRow}>
@@ -177,17 +138,9 @@ export function HomePromoAndKitchens() {
 
   return (
     <View>
-      <ScrollView
-        horizontal
-        decelerationRate="fast"
-        snapToAlignment="start"
-        snapToInterval={bannerWidth + spacing.sm}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.bannerRow}>
-        {PROMOS.map((promo, index) => (
-          <PromoCard key={`${promo.eyebrow}-${index}`} promo={promo} width={bannerWidth} />
-        ))}
-      </ScrollView>
+      <View style={styles.bannerRow}>
+        <PromoCard width={bannerWidth} />
+      </View>
 
       {kitchens.length > 0 ? (
         <View style={styles.kitchensSection}>
@@ -197,6 +150,7 @@ export function HomePromoAndKitchens() {
           <Text style={styles.sectionCaption}>Active home kitchens closest to you</Text>
           <ScrollView
             horizontal
+            nestedScrollEnabled
             keyboardShouldPersistTaps="handled"
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.kitchenRow}>
@@ -216,7 +170,6 @@ export function HomePromoAndKitchens() {
 
 const styles = StyleSheet.create({
   bannerRow: {
-    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
@@ -337,6 +290,7 @@ const styles = StyleSheet.create({
   },
   kitchenCard: {
     width: 184,
+    minHeight: 124,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -348,17 +302,20 @@ const styles = StyleSheet.create({
     opacity: 0.88,
     transform: [{scale: 0.99}],
   },
-  kitchenImage: {
-    width: '100%',
-    height: 116,
-    backgroundColor: colors.surfaceMuted,
-  },
   kitchenBody: {
+    flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: spacing.sm,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  kitchenEyebrow: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
+    letterSpacing: 0.5,
   },
   kitchenTitle: {
+    marginTop: spacing.xxs,
     color: colors.espressoBrown,
     fontSize: typography.small,
     fontWeight: fontWeight.bold,

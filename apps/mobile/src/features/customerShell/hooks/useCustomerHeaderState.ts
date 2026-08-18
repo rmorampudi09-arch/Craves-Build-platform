@@ -7,6 +7,7 @@ import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {useCustomerNotificationsListQuery} from '../../notifications/query/customerNotificationQueries';
 import {customerShellApi, unreadNoticeCount} from '../api/customerShellApi';
 import {invalidateCustomerLocationDependentQueries} from '../query/customerLocationReconciliation';
+import {persistCustomerLocation} from '../state/customerLocationPersistence';
 import {
   customerShellActions,
   type CustomerBrowsingLocation,
@@ -23,6 +24,11 @@ export function useCustomerHeaderState() {
   const unreadCount = unreadNoticeCount(notificationsQuery.data ?? []);
 
   const openNotifications = useCallback(() => {
+    if (navigation.getState().routeNames.includes('CustomerNotifications')) {
+      navigation.navigate('CustomerNotifications');
+      return;
+    }
+
     const tabs = navigation.getParent<NavigationProp<CustomerTabParamList>>();
     if (tabs) {
       tabs.navigate('Profile', {screen: 'CustomerNotifications'});
@@ -79,6 +85,9 @@ export function useCustomerLocationOptions() {
       selectedLocation.longitude !== location.longitude;
 
     dispatch(customerShellActions.locationSelected(location));
+    if (identityId) {
+      persistCustomerLocation(identityId, location).catch(() => undefined);
+    }
 
     if (changed) {
       invalidateCustomerLocationDependentQueries(queryClient);

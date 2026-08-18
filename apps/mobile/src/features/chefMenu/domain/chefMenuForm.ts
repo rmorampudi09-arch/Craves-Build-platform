@@ -33,6 +33,11 @@ const optionalPositiveIntegerText = (invalidMessage: string) =>
     );
   }, invalidMessage);
 
+function normalizeMenuCategory(value: string): string {
+  const normalized = value.trim();
+  return normalized.toLocaleLowerCase() === 'biriyani' ? 'Biryani' : normalized;
+}
+
 export const chefMenuFormSchema = z.object({
   itemName: z.string().trim().min(1, 'Item name is required.'),
   description: z.string(),
@@ -83,7 +88,7 @@ function parsedRequestFields(values: ChefMenuFormValues) {
   return {
     itemName: parsed.itemName,
     description: description.length > 0 ? description : null,
-    category: parsed.category,
+    category: normalizeMenuCategory(parsed.category),
     foodType: parsed.foodType,
     price: Number(parsed.price),
     servesCount: optionalInteger(parsed.servesCount),
@@ -114,7 +119,7 @@ export function chefMenuItemToFormValues(item: ChefMenuItem): ChefMenuFormValues
   return {
     itemName: item.itemName,
     description: item.description ?? '',
-    category: item.category,
+    category: normalizeMenuCategory(item.category),
     foodType: item.foodType,
     price: String(item.price),
     servesCount: item.servesCount == null ? '' : String(item.servesCount),

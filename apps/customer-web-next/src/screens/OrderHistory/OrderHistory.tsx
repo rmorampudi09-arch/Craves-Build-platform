@@ -202,7 +202,7 @@ export default function OrdersPage() {
   }, [orders, view]);
 
   return (
-    <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
+    <div className="min-h-screen bg-white pb-20 text-ink">
       <header className="border-b border-[#E5E7EB] bg-white">
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-4 md:px-6 md:py-5">
           <Link

@@ -28,8 +28,13 @@ import {
   formatKitchenDistance,
 } from '../../chefDiscovery/chefDiscoveryPresentation';
 import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefDiscoveryQueries';
-import {filterHomeDishes, flattenNearbyDishPages, formatDishPrice, formatDistance} from '../../home/homePresentation';
 import type {NearbyDish} from '../../home/api/homeFeedApi';
+import {
+  filterHomeDishes,
+  flattenNearbyDishPages,
+  formatDishPrice,
+  formatDistance,
+} from '../../home/homePresentation';
 import {useHomeNearbyDishesQuery} from '../../home/query/homeFeedQueries';
 import {DiscoverySearchInput} from '../components/DiscoverySearchInput';
 
@@ -72,13 +77,19 @@ export function CustomerHomeSearchScreen() {
         : [],
     [dishes, normalizedQuery],
   );
-  const matchingKitchens = useMemo(
-    () =>
-      normalizedQuery
-        ? filterLoadedNearbyKitchens(kitchens, normalizedQuery).slice(0, 20)
-        : [],
-    [kitchens, normalizedQuery],
-  );
+  const matchingKitchens = useMemo(() => {
+    if (!normalizedQuery) return [];
+
+    const normalized = normalizedQuery.toLocaleLowerCase();
+    const baseMatches = filterLoadedNearbyKitchens(kitchens, normalizedQuery);
+    const matchedIds = new Set(baseMatches.map(kitchen => kitchen.id));
+    const displayNameMatches = kitchens.filter(
+      kitchen =>
+        !matchedIds.has(kitchen.id) &&
+        kitchen.displayName?.toLocaleLowerCase().includes(normalized),
+    );
+    return [...baseMatches, ...displayNameMatches].slice(0, 20);
+  }, [kitchens, normalizedQuery]);
 
   const rows = useMemo<SearchRow[]>(() => {
     const next: SearchRow[] = [];

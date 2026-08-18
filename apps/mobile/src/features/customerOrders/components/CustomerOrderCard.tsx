@@ -1,5 +1,5 @@
 import React from 'react';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import type {CustomerOrdersStackParamList} from '../../../app/navigation/types';
 import {
@@ -12,7 +12,6 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon, type IconName} from '../../../shared/components/Icon';
-import {useCustomerKitchenProfileQuery} from '../../kitchenProfile/query/kitchenProfileQueries';
 import type {CustomerOrder} from '../domain/customerOrderTypes';
 import {
   formatCustomerOrderCreatedAt,
@@ -100,7 +99,6 @@ export function CustomerOrderCard({
   reorderPending = false,
 }: Props) {
   const navigation = useNavigation<NavigationProp<CustomerOrdersStackParamList>>();
-  const kitchenProfile = useCustomerKitchenProfileQuery(order.kitchenId);
   const onPressDetails = () =>
     navigation.navigate('CustomerOrderDetail', {orderId: order.id});
   const status = getCustomerOrderStatusPresentation(order.status);
@@ -108,15 +106,7 @@ export function CustomerOrderCard({
   const referenceAction = getCustomerOrderReferenceAction(order.status);
   const visibleItems = order.items.slice(0, 3);
   const remainingItems = Math.max(order.items.length - visibleItems.length, 0);
-
-  const menuItemsById = new Map(
-    (kitchenProfile.data?.menuItems ?? []).map(item => [item.id, item] as const),
-  );
-
-  const description =
-    kitchenProfile.data?.biography?.trim() ||
-    order.items[0]?.category ||
-    'Home-cooked meals';
+  const description = order.items[0]?.category || 'Home-cooked meals';
 
   return (
     <Pressable
@@ -164,29 +154,13 @@ export function CustomerOrderCard({
       <View style={styles.contentRow}>
         <View style={styles.itemsColumn}>
           <View style={styles.itemsRow}>
-            {visibleItems.map(item => {
-              const catalogItem = menuItemsById.get(item.menuItemId);
-              const primaryImage =
-                catalogItem?.images.find(image => image.primary) ??
-                catalogItem?.images[0];
-
-              return primaryImage ? (
-                <Image
-                  key={item.id}
-                  accessibilityIgnoresInvertColors
-                  accessibilityLabel={item.itemName}
-                  source={{uri: primaryImage.url}}
-                  resizeMode="cover"
-                  style={styles.itemImage}
-                />
-              ) : (
-                <View key={item.id} style={styles.itemFallback}>
-                  <Text numberOfLines={2} style={styles.itemFallbackText}>
-                    {item.itemName}
-                  </Text>
-                </View>
-              );
-            })}
+            {visibleItems.map(item => (
+              <View key={item.id} style={styles.itemFallback}>
+                <Text numberOfLines={2} style={styles.itemFallbackText}>
+                  {item.itemName}
+                </Text>
+              </View>
+            ))}
             {remainingItems > 0 ? (
               <View style={styles.moreTile}>
                 <Text style={styles.moreTileText}>+{remainingItems}</Text>
@@ -307,12 +281,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
-  },
-  itemImage: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceMuted,
   },
   itemFallback: {
     width: 44,

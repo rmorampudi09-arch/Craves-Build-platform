@@ -76,6 +76,19 @@ describe('home presentation', () => {
     ).toEqual(['Bowls', 'Breakfast']);
   });
 
+  it('keeps legacy Biriyani data compatible with the corrected Biryani label', () => {
+    const legacyBiryani = dish({
+      id: '44444444-4444-4444-8444-444444444444',
+      itemName: 'Chicken Biryani',
+      category: 'Biriyani',
+    });
+
+    expect(getHomeCategories([legacyBiryani])).toEqual(['Biryani']);
+    expect(filterHomeDishes([legacyBiryani], '', 'Biryani')).toEqual([
+      legacyBiryani,
+    ]);
+  });
+
   it('filters only the already-loaded nearby result set', () => {
     const paneer = dish();
     const dosa = dish({

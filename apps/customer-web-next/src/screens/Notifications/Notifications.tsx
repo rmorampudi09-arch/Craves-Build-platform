@@ -160,7 +160,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
-      <header className="bg-white">
+      <header className="border-b border-border bg-white/95">
         <div className="relative mx-auto flex max-w-4xl items-start justify-center px-4 pb-5 pt-6 md:px-6 md:pb-6 md:pt-8">
           <Link
             to="/home"

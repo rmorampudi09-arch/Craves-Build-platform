@@ -477,7 +477,7 @@ function BrowseFoodsPage() {
           radiusLabel={radiusLabel}
           hasAddress={Boolean(address?.lat != null && address?.lng != null)}
           locating={locating}
-          onUseCurrentLocation={() => void useCurrentLocation()}
+          onUseCurrentLocation={useCurrentLocation}
         />
 
         {selectedKitchen ? (

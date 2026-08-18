@@ -9,6 +9,7 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
@@ -298,7 +299,10 @@ export function CustomerHomeScreen() {
   );
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryPinned, setCategoryPinned] = useState(false);
+  const [homeHeaderHeight, setHomeHeaderHeight] = useState(0);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const categoryPinnedRef = useRef(false);
   const listRef = useRef<FlatList<HomeFeedListItem>>(null);
 
   const feed = useHomeNearbyDishesQuery({
@@ -398,16 +402,6 @@ export function CustomerHomeScreen() {
     listRef.current?.scrollToOffset({offset: 0, animated: false});
   }, []);
 
-  const handleCategorySelect = useCallback((category: string | null) => {
-    restorePendingRef.current = false;
-    listRef.current?.scrollToIndex({
-      index: 0,
-      animated: false,
-      viewPosition: 0,
-    });
-    setSelectedCategory(category);
-  }, []);
-
   const handleSearchChange = useCallback(
     (value: string) => {
       if (feed.isFetchingNextPage) {
@@ -439,11 +433,25 @@ export function CustomerHomeScreen() {
     [search],
   );
 
+  const handleHeaderLayout = useCallback((event: LayoutChangeEvent) => {
+    setHomeHeaderHeight(event.nativeEvent.layout.height);
+  }, []);
+
   const handleHomeScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       bottomNavScroll.onScroll(event);
+
+      const nextPinned =
+        !feed.locationRequired &&
+        homeHeaderHeight > 0 &&
+        event.nativeEvent.contentOffset.y >= homeHeaderHeight;
+
+      if (categoryPinnedRef.current !== nextPinned) {
+        categoryPinnedRef.current = nextPinned;
+        setCategoryPinned(nextPinned);
+      }
     },
-    [bottomNavScroll],
+    [bottomNavScroll, feed.locationRequired, homeHeaderHeight],
   );
 
   const restoreListOffset = useCallback(() => {
@@ -632,7 +640,7 @@ export function CustomerHomeScreen() {
   })();
 
   const headerContent = (
-    <View>
+    <View onLayout={handleHeaderLayout}>
       <View style={[styles.heroCopy, compactLayout && styles.heroCopyCompact]}>
         <Text style={styles.greeting}>{greeting}</Text>
         <Text accessibilityRole="header" style={styles.heading}>
@@ -709,7 +717,6 @@ export function CustomerHomeScreen() {
           keyboardShouldPersistTaps="handled"
           nestedScrollEnabled
           removeClippedSubviews={false}
-          stickyHeaderIndices={feed.locationRequired ? undefined : [1]}
           style={styles.feedList}
           ListFooterComponent={
             feed.isFetchingNextPage ? (
@@ -741,7 +748,7 @@ export function CustomerHomeScreen() {
                 <View style={styles.stickyCategoryWrap}>
                   <HomeCategoryRail
                     selectedCategory={selectedCategory}
-                    onSelect={handleCategorySelect}
+                    onSelect={setSelectedCategory}
                   />
                 </View>
               );
@@ -818,6 +825,14 @@ export function CustomerHomeScreen() {
             {paddingBottom: listBottomPadding},
           ]}
         />
+        {categoryPinned && !feed.locationRequired ? (
+          <View pointerEvents="box-none" style={styles.pinnedCategoryWrap}>
+            <HomeCategoryRail
+              selectedCategory={selectedCategory}
+              onSelect={setSelectedCategory}
+            />
+          </View>
+        ) : null}
       </View>
       <CustomerLocationSelector
         visible={locationSelectorVisible}
@@ -911,8 +926,15 @@ const styles = StyleSheet.create({
   },
   stickyCategoryWrap: {
     backgroundColor: colors.surfaceBase,
-    zIndex: 10,
-    elevation: 10,
+  },
+  pinnedCategoryWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+    elevation: 30,
+    backgroundColor: colors.surfaceBase,
   },
   emptyResultSpace: {
     backgroundColor: colors.surfaceBase,

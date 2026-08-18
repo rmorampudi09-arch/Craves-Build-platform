@@ -13,14 +13,10 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
-import type {
-  CustomerHomeStackParamList,
-  CustomerTabParamList,
-} from '../../../app/navigation/types';
+import type {CustomerHomeStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {classifyResponsiveWidth, responsiveLayout} from '../../../design/responsive';
@@ -292,7 +288,7 @@ export function CustomerHomeScreen() {
   const toggleFavorite = useToggleCustomerFavorite();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const insets = useSafeAreaInsets();
-  const {width, fontScale} = useWindowDimensions();
+  const {width, height, fontScale} = useWindowDimensions();
   const compactLayout =
     classifyResponsiveWidth(width) === 'compact' ||
     fontScale >= responsiveLayout.enlargedFontScale;
@@ -400,6 +396,16 @@ export function CustomerHomeScreen() {
   const resetSearchPosition = useCallback(() => {
     restorePendingRef.current = false;
     listRef.current?.scrollToOffset({offset: 0, animated: false});
+  }, []);
+
+  const handleCategorySelect = useCallback((category: string | null) => {
+    restorePendingRef.current = false;
+    listRef.current?.scrollToIndex({
+      index: 0,
+      animated: false,
+      viewPosition: 0,
+    });
+    setSelectedCategory(category);
   }, []);
 
   const handleSearchChange = useCallback(
@@ -511,8 +517,7 @@ export function CustomerHomeScreen() {
   );
 
   const openSubscription = useCallback(() => {
-    const tabs = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
-    tabs?.navigate('Profile', {screen: 'CustomerSettingsSubscription'});
+    navigation.navigate('CustomerSettingsSubscription');
   }, [navigation]);
 
   const openFilters = () => {
@@ -736,7 +741,7 @@ export function CustomerHomeScreen() {
                 <View style={styles.stickyCategoryWrap}>
                   <HomeCategoryRail
                     selectedCategory={selectedCategory}
-                    onSelect={setSelectedCategory}
+                    onSelect={handleCategorySelect}
                   />
                 </View>
               );
@@ -777,7 +782,11 @@ export function CustomerHomeScreen() {
             }
 
             if (item.kind === 'empty') {
-              return emptyState;
+              return (
+                <View style={[styles.emptyResultSpace, {minHeight: height}]}>
+                  {emptyState}
+                </View>
+              );
             }
 
             const cartLine = cartLinesByMenuItemId.get(item.dish.id) ?? null;
@@ -903,6 +912,10 @@ const styles = StyleSheet.create({
   stickyCategoryWrap: {
     backgroundColor: colors.surfaceBase,
     zIndex: 10,
+    elevation: 10,
+  },
+  emptyResultSpace: {
+    backgroundColor: colors.surfaceBase,
   },
   sectionHeadingRow: {
     paddingHorizontal: spacing.md,

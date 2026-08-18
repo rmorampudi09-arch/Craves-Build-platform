@@ -12,6 +12,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon, type IconName} from '../../../shared/components/Icon';
+import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
 import type {CustomerOrder} from '../domain/customerOrderTypes';
 import {
   formatCustomerOrderCreatedAt,
@@ -22,6 +23,8 @@ import {
   getCustomerOrderStatusPresentation,
   type CustomerOrderStatusTone,
 } from '../presentation/customerOrdersPresentation';
+import {useCustomerOrderKitchenPresentationQuery} from '../query/customerOrderCatalogQueries';
+import {CustomerOrderMenuItemImage} from './CustomerOrderMenuItemImage';
 
 interface Props {
   order: CustomerOrder;
@@ -99,6 +102,7 @@ export function CustomerOrderCard({
   reorderPending = false,
 }: Props) {
   const navigation = useNavigation<NavigationProp<CustomerOrdersStackParamList>>();
+  const kitchen = useCustomerOrderKitchenPresentationQuery(order.kitchenId);
   const onPressDetails = () =>
     navigation.navigate('CustomerOrderDetail', {orderId: order.id});
   const status = getCustomerOrderStatusPresentation(order.status);
@@ -106,7 +110,8 @@ export function CustomerOrderCard({
   const referenceAction = getCustomerOrderReferenceAction(order.status);
   const visibleItems = order.items.slice(0, 3);
   const remainingItems = Math.max(order.items.length - visibleItems.length, 0);
-  const description = order.items[0]?.category || 'Home-cooked meals';
+  const kitchenDescription =
+    kitchen.data?.description?.trim() || 'Home kitchen';
 
   return (
     <Pressable
@@ -140,12 +145,13 @@ export function CustomerOrderCard({
         </View>
 
         <View style={styles.kitchenColumn}>
+          <CustomerChefAvatar size={46} />
           <View style={styles.kitchenCopy}>
             <Text numberOfLines={2} style={styles.kitchenName}>
               {order.kitchenName}
             </Text>
             <Text numberOfLines={2} style={styles.kitchenDescription}>
-              {description}
+              {kitchenDescription}
             </Text>
           </View>
         </View>
@@ -155,11 +161,11 @@ export function CustomerOrderCard({
         <View style={styles.itemsColumn}>
           <View style={styles.itemsRow}>
             {visibleItems.map(item => (
-              <View key={item.id} style={styles.itemFallback}>
-                <Text numberOfLines={2} style={styles.itemFallbackText}>
-                  {item.itemName}
-                </Text>
-              </View>
+              <CustomerOrderMenuItemImage
+                key={item.id}
+                menuItemId={item.menuItemId}
+                size={44}
+              />
             ))}
             {remainingItems > 0 ? (
               <View style={styles.moreTile}>
@@ -281,22 +287,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
-  },
-  itemFallback: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 3,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceMuted,
-  },
-  itemFallbackText: {
-    color: colors.espressoBrown,
-    fontSize: 8,
-    fontWeight: fontWeight.medium,
-    lineHeight: 10,
-    textAlign: 'center',
   },
   moreTile: {
     width: 30,

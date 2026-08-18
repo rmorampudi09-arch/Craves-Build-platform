@@ -11,6 +11,7 @@ export type IconName =
   | 'analytics'
   | 'cart'
   | 'search'
+  | 'filter'
   | 'wifi-off'
   | 'star'
   | 'ticket'
@@ -47,6 +48,7 @@ const GLYPHS: Record<IconName, string> = {
   analytics: 'chart-bar',
   cart: 'cart',
   search: 'magnify',
+  filter: 'tune-variant',
   'wifi-off': 'wifi-off',
   star: 'star',
   ticket: 'ticket-confirmation',

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,7 +15,10 @@ import {
   type NavigationProp,
   type RouteProp,
 } from '@react-navigation/native';
-import type {CustomerOrdersStackParamList} from '../../../app/navigation/types';
+import type {
+  CustomerOrdersStackParamList,
+  CustomerTabParamList,
+} from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
 import {
   borderWidth,
@@ -25,15 +29,19 @@ import {
   spacing,
   typography,
 } from '../../../design/tokens';
-import {Button} from '../../../shared/components/Button';
-import {Icon} from '../../../shared/components/Icon';
+import {Icon, type IconName} from '../../../shared/components/Icon';
 import {
   OfflineNotice,
   RecoverableErrorBanner,
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
-import type {CustomerOrderMoney} from '../domain/customerOrderTypes';
+import {getProductionCustomerOrderMutationDecision} from '../domain/customerOrderActionEligibility';
+import type {
+  CustomerOrder,
+  CustomerOrderMoney,
+  CustomerOrderStatus,
+} from '../domain/customerOrderTypes';
 import {
   formatCustomerOrderCreatedAt,
   formatCustomerOrderMoney,
@@ -44,22 +52,30 @@ import {
 import {useCustomerOrderDetailQuery} from '../query/customerOrdersQueries';
 
 type DetailRoute = RouteProp<CustomerOrdersStackParamList, 'CustomerOrderDetail'>;
-type DetailNavigation = NavigationProp<
-  CustomerOrdersStackParamList,
-  'CustomerOrderDetail'
->;
+type DetailNavigation = NavigationProp<CustomerOrdersStackParamList, 'CustomerOrderDetail'>;
 
-interface AmountRowProps {
+type ProgressStep = {label: string; icon: IconName};
+
+const PROGRESS_STEPS: readonly ProgressStep[] = [
+  {label: 'Preparing', icon: 'orders'},
+  {label: 'On the way', icon: 'delivery'},
+  {label: 'Out for delivery', icon: 'delivery'},
+  {label: 'Delivered', icon: 'check'},
+];
+
+function AmountRow({
+  label,
+  money,
+  strong = false,
+}: {
   label: string;
   money: CustomerOrderMoney;
   strong?: boolean;
-}
-
-function AmountRow({label, money, strong = false}: AmountRowProps) {
+}) {
   return (
-    <View style={styles.amountRow}>
+    <View style={[styles.amountRow, strong && styles.amountRowStrong]}>
       <Text style={[styles.amountLabel, strong && styles.amountStrong]}>{label}</Text>
-      <Text style={[styles.amountValue, strong && styles.amountStrong]}>
+      <Text style={[styles.amountValue, strong && styles.totalAmount]}>
         {formatCustomerOrderMoney(money)}
       </Text>
     </View>
@@ -76,6 +92,97 @@ function DetailSkeleton() {
       <View style={styles.skeletonCard} />
       <View style={styles.skeletonCard} />
       <View style={styles.skeletonCard} />
+    </View>
+  );
+}
+
+function progressStageForStatus(status: CustomerOrderStatus): number {
+  switch (status) {
+    case 'DELIVERED':
+      return 3;
+    case 'OUT_FOR_DELIVERY':
+      return 2;
+    case 'READY_FOR_PICKUP':
+      return 1;
+    case 'PAYMENT_PENDING':
+    case 'PAID':
+    case 'CHEF_ACCEPTANCE_PENDING':
+    case 'CHEF_ACCEPTED':
+    case 'PREPARING':
+      return 0;
+    default:
+      return -1;
+  }
+}
+
+function paymentStatusForOrder(order: CustomerOrder): {label: string; color: string} {
+  switch (order.status) {
+    case 'PAYMENT_PENDING':
+      return {label: 'Payment pending', color: colors.warning};
+    case 'REFUND_PENDING':
+      return {label: 'Refund pending', color: colors.warning};
+    case 'REFUNDED':
+      return {label: 'Refunded', color: colors.success};
+    case 'REFUND_FAILED':
+      return {label: 'Refund issue', color: colors.error};
+    case 'PAID':
+    case 'CHEF_ACCEPTANCE_PENDING':
+    case 'CHEF_ACCEPTED':
+    case 'PREPARING':
+    case 'READY_FOR_PICKUP':
+    case 'OUT_FOR_DELIVERY':
+    case 'DELIVERED':
+      return {label: 'Paid', color: colors.success};
+    default:
+      return {label: 'See order status', color: colors.textSecondary};
+  }
+}
+
+function deliveryTimeCopy(order: CustomerOrder, canTrack: boolean): string {
+  if (order.status === 'DELIVERED') return 'Delivered';
+  if (canTrack) return 'Live delivery updates available';
+  if (order.prepTimeMinutes) return `Preparation estimate: ${order.prepTimeMinutes} min`;
+  return 'Delivery estimate unavailable';
+}
+
+function OrderProgress({stage}: {stage: number}) {
+  return (
+    <View style={styles.progressWrap}>
+      <View style={styles.progressTrackRow}>
+        {PROGRESS_STEPS.map((step, index) => {
+          const active = stage >= index;
+          return (
+            <React.Fragment key={step.label}>
+              <View style={[styles.progressCircle, active && styles.progressCircleActive]}>
+                <Icon
+                  name={step.icon}
+                  size={18}
+                  color={active ? colors.white : colors.textSecondary}
+                  surface={false}
+                />
+              </View>
+              {index < PROGRESS_STEPS.length - 1 ? (
+                <View
+                  style={[
+                    styles.progressConnector,
+                    stage > index && styles.progressConnectorActive,
+                  ]}
+                />
+              ) : null}
+            </React.Fragment>
+          );
+        })}
+      </View>
+      <View style={styles.progressLabels}>
+        {PROGRESS_STEPS.map((step, index) => (
+          <Text
+            key={step.label}
+            numberOfLines={2}
+            style={[styles.progressLabel, stage >= index && styles.progressLabelActive]}>
+            {step.label}
+          </Text>
+        ))}
+      </View>
     </View>
   );
 }
@@ -155,22 +262,44 @@ export function CustomerOrderDetailScreen() {
 
   const status = getCustomerOrderStatusPresentation(order.status);
   const canTrack = getCustomerOrderReferenceAction(order.status) === 'TRACK';
+  const stage = progressStageForStatus(order.status);
+  const paymentStatus = paymentStatusForOrder(order);
   const address = order.deliveryAddress;
-  const addressLines = address
+  const addressLine = address
     ? [
         address.addressLine1,
         address.addressLine2,
         address.landmark,
         address.areaName,
-        `${address.city}, ${address.state} ${address.postalCode}`,
-      ].filter((value): value is string => Boolean(value))
-    : [];
+        address.city,
+        address.state,
+        address.postalCode,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .join(', ')
+    : 'Delivery address snapshot unavailable';
+
+  const openHelp = () => {
+    const tabs = navigation.getParent<NavigationProp<CustomerTabParamList>>();
+    tabs?.navigate('Profile', {screen: 'CustomerSettingsSupport'});
+  };
+
+  const showContactChefUnavailable = () => {
+    Alert.alert(
+      'Contact chef unavailable',
+      'Direct chef contact is not available for this order yet. Use Help for customer support.',
+    );
+  };
+
+  const showCancelUnavailable = () => {
+    const decision = getProductionCustomerOrderMutationDecision('CANCEL');
+    if (decision.kind === 'BLOCKED') {
+      Alert.alert('Cancellation unavailable', decision.message);
+    }
+  };
 
   return (
-    <ScreenShell
-      edges={['top', 'bottom']}
-      keyboardAvoiding={false}
-      testID="customer-order-detail">
+    <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-order-detail">
       <View style={styles.screen}>
         <View style={styles.header}>
           <Pressable
@@ -178,21 +307,19 @@ export function CustomerOrderDetailScreen() {
             accessibilityRole="button"
             onPress={() => navigation.goBack()}
             style={({pressed}) => [styles.headerAction, pressed && styles.pressed]}>
-            <Icon name="arrow-left" />
+            <Icon name="arrow-left" size={24} surface={false} />
           </Pressable>
-          <View style={styles.headerCopy}>
-            <Text accessibilityRole="header" style={styles.headerTitle}>
-              Order Details
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              #{getCustomerOrderDisplayReference(order.id)}
-            </Text>
-          </View>
-          {detail.isFetching ? (
-            <ActivityIndicator color={colors.flameRed} size="small" />
-          ) : (
-            <View style={styles.headerPlaceholder} />
-          )}
+          <Text accessibilityRole="header" style={styles.headerTitle}>
+            Order Details
+          </Text>
+          <Pressable
+            accessibilityLabel="Help"
+            accessibilityRole="button"
+            onPress={openHelp}
+            style={({pressed}) => [styles.helpAction, pressed && styles.pressed]}>
+            <Icon name="phone" size={20} color={colors.flameRed} surface={false} />
+            <Text style={styles.helpText}>Help</Text>
+          </Pressable>
         </View>
 
         <ScrollView
@@ -222,97 +349,165 @@ export function CustomerOrderDetailScreen() {
             )
           ) : null}
 
-          <View style={styles.heroCard}>
-            <View style={styles.heroRow}>
-              <View style={styles.heroCopy}>
-                <Text style={styles.kitchenName}>{order.kitchenName}</Text>
-                <Text style={styles.metaText}>
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryTopRow}>
+              <View style={styles.orderIdentity}>
+                <Text style={styles.orderNumber}>
+                  Order #{getCustomerOrderDisplayReference(order.id)}
+                </Text>
+                <Text style={styles.placedText}>
                   Placed {formatCustomerOrderCreatedAt(order.createdAt)}
                 </Text>
               </View>
-              <View style={styles.statusPill}>
-                <Text accessibilityLiveRegion="polite" style={styles.statusText}>
-                  {status.label}
+              <View style={styles.kitchenIdentity}>
+                <Text numberOfLines={2} style={styles.kitchenName}>
+                  {order.kitchenName}
                 </Text>
+                <Text style={styles.kitchenCaption}>Home kitchen</Text>
               </View>
             </View>
-            <Text style={styles.updatedText}>
-              Last updated {formatCustomerOrderCreatedAt(order.updatedAt)}
-            </Text>
-            {order.prepTimeMinutes ? (
-              <Text style={styles.updatedText}>
-                Chef preparation estimate: {order.prepTimeMinutes} min
-              </Text>
-            ) : null}
-            {canTrack ? (
-              <Button
-                label="Track Delivery"
-                onPress={() =>
-                  navigation.navigate('CustomerOrderTracking', {orderId: order.id})
-                }
-                style={styles.trackButton}
-              />
-            ) : null}
+
+            <View style={styles.currentStatusRow}>
+              <View style={styles.statusIconCircle}>
+                <Icon
+                  name={stage === 3 ? 'check' : stage >= 2 ? 'delivery' : 'orders'}
+                  size={21}
+                  color={colors.flameRed}
+                  surface={false}
+                />
+              </View>
+              <View style={styles.statusCopy}>
+                <Text accessibilityLiveRegion="polite" style={styles.statusTitle}>
+                  {status.label}
+                </Text>
+                <Text style={styles.statusDetail}>
+                  {order.prepTimeMinutes
+                    ? `Preparation estimate: ${order.prepTimeMinutes} min`
+                    : `Updated ${formatCustomerOrderCreatedAt(order.updatedAt)}`}
+                </Text>
+              </View>
+              {detail.isFetching ? (
+                <ActivityIndicator color={colors.flameRed} size="small" />
+              ) : null}
+            </View>
+
+            <Pressable
+              accessibilityRole={canTrack ? 'button' : undefined}
+              accessibilityLabel={canTrack ? 'Open live delivery tracking' : undefined}
+              disabled={!canTrack}
+              onPress={() =>
+                navigation.navigate('CustomerOrderTracking', {orderId: order.id})
+              }
+              style={canTrack ? styles.trackableProgress : undefined}>
+              <OrderProgress stage={stage} />
+            </Pressable>
           </View>
 
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Items</Text>
-            {order.items.map(item => (
-              <View key={item.id} style={styles.itemRow}>
-                <View style={styles.itemCopy}>
-                  <Text style={styles.itemName}>{item.itemName}</Text>
-                  <Text style={styles.metaText}>Qty {item.quantity}</Text>
+          <View style={styles.itemsCard}>
+            <Text style={styles.sectionTitle}>Order Items</Text>
+            {order.items.map((item, index) => (
+              <View
+                key={item.id}
+                style={[
+                  styles.itemRow,
+                  index === order.items.length - 1 && styles.itemRowLast,
+                ]}>
+                <View style={styles.itemThumb}>
+                  <Icon name="chef" size={24} color={colors.flameRed} surface={false} />
                 </View>
-                <Text style={styles.itemPrice}>
+                <View style={styles.itemCopy}>
+                  <Text numberOfLines={2} style={styles.itemName}>
+                    {item.itemName}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.itemMeta}>
+                    {item.category || item.foodType || 'Home-cooked dish'}
+                  </Text>
+                  <View style={styles.itemPriceLine}>
+                    <Text style={styles.unitPrice}>
+                      {formatCustomerOrderMoney(item.unitPrice)}
+                    </Text>
+                    <Text style={styles.quantityText}>× {item.quantity}</Text>
+                  </View>
+                </View>
+                <Text style={styles.itemTotal}>
                   {formatCustomerOrderMoney(item.lineTotal)}
                 </Text>
               </View>
             ))}
-          </View>
 
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Bill summary</Text>
-            <AmountRow label="Food subtotal" money={order.foodSubtotal} />
-            <AmountRow label="Platform fee" money={order.platformFee} />
+            <View style={styles.billDivider} />
+            <AmountRow label="Item Total" money={order.foodSubtotal} />
+            <AmountRow label="Delivery Fee" money={order.deliveryFee} />
+            <AmountRow label="Platform Fee" money={order.platformFee} />
             <AmountRow label="Tax" money={order.taxAmount} />
-            <AmountRow label="Delivery fee" money={order.deliveryFee} />
-            <View style={styles.amountDivider} />
-            <AmountRow label="Total" money={order.grandTotal} strong />
+            <AmountRow label="Total Amount" money={order.grandTotal} strong />
           </View>
 
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Delivery address</Text>
-            {address ? (
-              <>
-                <Text style={styles.addressName}>{address.recipientName}</Text>
-                {addressLines.map(line => (
-                  <Text key={line} style={styles.addressLine}>
-                    {line}
-                  </Text>
-                ))}
-              </>
-            ) : (
-              <Text style={styles.metaText}>
-                A customer-safe delivery address snapshot is not available for this order.
+          <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoIconCircle}>
+                <Icon name="location" size={22} color={colors.flameRed} surface={false} />
+              </View>
+              <View style={styles.infoCopy}>
+                <Text style={styles.infoTitle}>Delivery Address</Text>
+                <Text numberOfLines={3} style={styles.infoValue}>
+                  {addressLine}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.infoDivider} />
+
+            <View style={styles.infoRow}>
+              <View style={styles.infoIconCircle}>
+                <Icon name="clock" size={22} color={colors.flameRed} surface={false} />
+              </View>
+              <View style={styles.infoCopy}>
+                <Text style={styles.infoTitle}>Delivery Time</Text>
+                <Text style={styles.infoValue}>{deliveryTimeCopy(order, canTrack)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoDivider} />
+
+            <View style={styles.infoRow}>
+              <View style={styles.infoIconCircle}>
+                <Icon name="ticket" size={22} color={colors.flameRed} surface={false} />
+              </View>
+              <View style={styles.infoCopy}>
+                <Text style={styles.infoTitle}>Payment Status</Text>
+                <Text style={styles.infoValue}>Order payment</Text>
+              </View>
+              <Text style={[styles.paymentStatus, {color: paymentStatus.color}]}>
+                {paymentStatus.label}
               </Text>
-            )}
+            </View>
           </View>
 
           {order.chefResponseNote ? (
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Chef note</Text>
-              <Text style={styles.bodyText}>{order.chefResponseNote}</Text>
+            <View style={styles.noteCard}>
+              <Text style={styles.sectionTitle}>Chef Note</Text>
+              <Text style={styles.noteText}>{order.chefResponseNote}</Text>
             </View>
           ) : null}
 
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Order timeline</Text>
-            <Text style={styles.bodyText}>
-              Craves currently exposes the order's verified current status and timestamps here. Delivery status history is available from Track Delivery when delivery is active.
-            </Text>
-            <Text style={styles.timelineBlocker}>
-              Detailed order-status events are not available for this order yet, so Craves shows only verified status information rather than estimating missing events.
-            </Text>
+          <View style={styles.bottomActions}>
+            <Pressable
+              accessibilityLabel="Contact chef"
+              accessibilityRole="button"
+              onPress={showContactChefUnavailable}
+              style={({pressed}) => [styles.secondaryAction, pressed && styles.pressed]}>
+              <Icon name="phone" size={20} color={colors.flameRed} surface={false} />
+              <Text style={styles.secondaryActionText}>Contact Chef</Text>
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Cancel order"
+              accessibilityRole="button"
+              onPress={showCancelUnavailable}
+              style={({pressed}) => [styles.primaryAction, pressed && styles.pressed]}>
+              <Icon name="trash" size={20} color={colors.white} surface={false} />
+              <Text style={styles.primaryActionText}>Cancel Order</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </View>
@@ -323,13 +518,10 @@ export function CustomerOrderDetailScreen() {
 const styles = StyleSheet.create({
   screen: {flex: 1, backgroundColor: colors.white},
   header: {
-    minHeight: 64,
+    minHeight: 66,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
     backgroundColor: colors.white,
   },
   headerAction: {
@@ -339,60 +531,140 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.pill,
   },
-  headerCopy: {minWidth: 0, flex: 1},
   headerTitle: {
+    minWidth: 0,
+    flex: 1,
     color: colors.espressoBrown,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
   },
-  headerSubtitle: {
+  helpAction: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.pill,
+  },
+  helpText: {
+    color: colors.flameRed,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  pressed: {opacity: 0.72},
+  content: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xxl,
+  },
+  notice: {marginBottom: spacing.sm},
+  summaryCard: {
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    ...elevation.card,
+  },
+  summaryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  orderIdentity: {minWidth: 0, flex: 1.15},
+  kitchenIdentity: {minWidth: 0, flex: 0.85, alignItems: 'flex-end'},
+  orderNumber: {
+    color: colors.espressoBrown,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
+  placedText: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
+  kitchenName: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+    textAlign: 'right',
+  },
+  kitchenCaption: {
     marginTop: spacing.xxs,
     color: colors.textSecondary,
     fontSize: typography.tiny,
+    textAlign: 'right',
   },
-  headerPlaceholder: {width: 20, height: 20},
-  pressed: {opacity: 0.72},
-  content: {padding: spacing.md, paddingBottom: spacing.xl},
-  notice: {marginBottom: spacing.sm},
-  heroCard: {
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
+  currentStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
-  heroRow: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm},
-  heroCopy: {minWidth: 0, flex: 1},
-  kitchenName: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  statusPill: {
-    maxWidth: '48%',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+  statusIconCircle: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.pill,
     backgroundColor: colors.errorSoft,
   },
-  statusText: {
-    color: colors.espressoBrown,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
-    textAlign: 'center',
+  statusCopy: {minWidth: 0, flex: 1},
+  statusTitle: {
+    color: colors.flameRed,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
   },
-  metaText: {
+  statusDetail: {
     marginTop: spacing.xxs,
     color: colors.textSecondary,
     fontSize: typography.small,
   },
-  updatedText: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.small,
+  trackableProgress: {borderRadius: radius.md},
+  progressWrap: {marginTop: spacing.lg},
+  progressTrackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
   },
-  trackButton: {marginTop: spacing.md},
-  sectionCard: {
+  progressCircle: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.white,
+  },
+  progressCircleActive: {
+    borderColor: colors.flameRed,
+    backgroundColor: colors.flameRed,
+  },
+  progressConnector: {
+    flex: 1,
+    height: 2,
+    marginHorizontal: spacing.xxs,
+    backgroundColor: colors.border,
+  },
+  progressConnectorActive: {backgroundColor: colors.flameRed},
+  progressLabels: {flexDirection: 'row', marginTop: spacing.xs},
+  progressLabel: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    lineHeight: 16,
+    textAlign: 'center',
+  },
+  progressLabelActive: {
+    color: colors.espressoBrown,
+    fontWeight: fontWeight.semibold,
+  },
+  itemsCard: {
     marginTop: spacing.md,
-    padding: spacing.md,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xs,
     borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
@@ -406,7 +678,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   itemRow: {
-    minHeight: 52,
+    minHeight: 84,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -414,53 +686,175 @@ const styles = StyleSheet.create({
     borderBottomWidth: borderWidth.standard,
     borderBottomColor: colors.border,
   },
+  itemRowLast: {borderBottomWidth: 0},
+  itemThumb: {
+    width: 68,
+    height: 68,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+  },
   itemCopy: {minWidth: 0, flex: 1},
   itemName: {
     color: colors.espressoBrown,
     fontSize: typography.body,
-    fontWeight: fontWeight.medium,
+    fontWeight: fontWeight.bold,
   },
-  itemPrice: {
+  itemMeta: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
+  itemPriceLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  unitPrice: {
+    color: colors.espressoBrown,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
+  },
+  quantityText: {color: colors.espressoBrown, fontSize: typography.small},
+  itemTotal: {
     color: colors.espressoBrown,
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
   },
+  billDivider: {
+    height: borderWidth.standard,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    backgroundColor: colors.border,
+  },
   amountRow: {
-    minHeight: 40,
+    minHeight: 34,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  amountRowStrong: {
+    minHeight: 54,
+    marginTop: spacing.xs,
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
+    borderTopWidth: borderWidth.standard,
+    borderTopColor: colors.errorSoft,
+    backgroundColor: colors.errorSoft,
+  },
   amountLabel: {color: colors.textSecondary, fontSize: typography.small},
   amountValue: {color: colors.espressoBrown, fontSize: typography.small},
-  amountStrong: {fontWeight: fontWeight.bold, color: colors.espressoBrown},
-  amountDivider: {
-    height: borderWidth.standard,
-    marginVertical: spacing.xs,
-    backgroundColor: colors.border,
+  amountStrong: {
+    color: colors.flameRed,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
   },
-  addressName: {
+  totalAmount: {
+    color: colors.flameRed,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.extrabold,
+  },
+  infoCard: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    ...elevation.card,
+  },
+  infoRow: {
+    minHeight: 82,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  infoIconCircle: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.errorSoft,
+  },
+  infoCopy: {minWidth: 0, flex: 1},
+  infoTitle: {
     color: colors.espressoBrown,
     fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.bold,
   },
-  addressLine: {
+  infoValue: {
     marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    lineHeight: 19,
+  },
+  infoDivider: {
+    height: borderWidth.standard,
+    marginLeft: 56,
+    backgroundColor: colors.border,
+  },
+  paymentStatus: {
+    maxWidth: 90,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+    textAlign: 'right',
+  },
+  noteCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  noteText: {
     color: colors.textSecondary,
     fontSize: typography.small,
     lineHeight: 20,
   },
-  bodyText: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    lineHeight: 21,
+  bottomActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
-  timelineBlocker: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    lineHeight: 18,
+  secondaryAction: {
+    minHeight: 52,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.flameRed,
+    backgroundColor: colors.white,
+  },
+  secondaryActionText: {
+    color: colors.flameRed,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  primaryAction: {
+    minHeight: 52,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.flameRed,
+  },
+  primaryActionText: {
+    color: colors.white,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
   },
   skeletonWrap: {padding: spacing.md},
   skeletonHeader: {

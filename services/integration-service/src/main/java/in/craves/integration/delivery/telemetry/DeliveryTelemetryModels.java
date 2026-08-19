@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public final class DeliveryTelemetryModels {
     public static final String DELIVERY_TELEMETRY_UPDATED = "DELIVERY_TELEMETRY_UPDATED";
-    public static final String EVENT_VERSION = "1.0";
+    public static final String EVENT_VERSION = "1.1";
 
     private DeliveryTelemetryModels() {
     }
@@ -28,8 +28,10 @@ public final class DeliveryTelemetryModels {
         BigDecimal courierLatitude,
         BigDecimal courierLongitude,
         Instant locationObservedAt,
+        Instant estimatedPickupAt,
         Instant estimatedPickupStartAt,
         Instant estimatedPickupEndAt,
+        Instant estimatedDropoffAt,
         Instant estimatedDropoffStartAt,
         Instant estimatedDropoffEndAt,
         Instant observedAt,
@@ -37,8 +39,10 @@ public final class DeliveryTelemetryModels {
     ) {
         public boolean hasUsefulData() {
             return (courierLatitude != null && courierLongitude != null)
+                || estimatedPickupAt != null
                 || estimatedPickupStartAt != null
                 || estimatedPickupEndAt != null
+                || estimatedDropoffAt != null
                 || estimatedDropoffStartAt != null
                 || estimatedDropoffEndAt != null;
         }
@@ -54,8 +58,10 @@ public final class DeliveryTelemetryModels {
         BigDecimal courierLatitude,
         BigDecimal courierLongitude,
         Instant locationObservedAt,
+        Instant estimatedPickupAt,
         Instant estimatedPickupStartAt,
         Instant estimatedPickupEndAt,
+        Instant estimatedDropoffAt,
         Instant estimatedDropoffStartAt,
         Instant estimatedDropoffEndAt,
         Instant observedAt

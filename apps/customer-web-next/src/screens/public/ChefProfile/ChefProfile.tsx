@@ -7,7 +7,7 @@ import {
   getDishesByChef,
   type Chef,
 } from "@/services/api/chefs";
-import { discoverDishes } from "@/services/api/dishes";
+import { discoverDishes, loadKitchenMenu } from "@/services/api/dishes";
 import {
   loadSelectedAddress,
   loadSession,
@@ -56,7 +56,17 @@ function ChefProfilePage() {
         navigate({ to: "/" });
         return;
       }
+
       let resolved = getChef(id);
+      if (!resolved) {
+        try {
+          await loadKitchenMenu(id);
+          resolved = getChef(id);
+        } catch {
+          // Slug-based links and older URLs can still recover from location discovery.
+        }
+      }
+
       if (!resolved) {
         const address = await loadSelectedAddress();
         if (

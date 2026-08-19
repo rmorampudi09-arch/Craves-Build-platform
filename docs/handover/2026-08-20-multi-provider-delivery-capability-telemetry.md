@@ -80,23 +80,17 @@ Operational read:
 GET /api/v1/admin/operations/delivery-provider-contracts/capabilities
 ```
 
-## Borzo
+## Provider coverage
+
+### Borzo
 
 `BorzoDeliveryTelemetryExtractor` handles tracking and normalized webhook telemetry. The provider-neutral projection can retain courier coordinates, provider-native exact pickup/drop-off ETA and arrival start/end windows when supplied.
 
 POD/check-in/return/multi-stop provider features are represented as capabilities but are not automatically exposed as Craves business actions without approved product/privacy semantics.
 
-## Shiprocket
+### Shiprocket
 
-`ShiprocketDeliveryTelemetryExtractor` is first-class rather than a status-only fallback.
-
-It handles tracking responses and normalized webhook payloads and retains:
-
-```text
-latest valid GPS point from provider tracking scans
-GPS observation timestamp
-provider ETD as exact drop-off ETA
-```
+`ShiprocketDeliveryTelemetryExtractor` is first-class rather than a status-only fallback. It handles tracking responses and normalized webhook payloads and can retain the latest valid GPS point from provider tracking scans, the GPS observation timestamp and provider ETD as exact drop-off ETA.
 
 Safety:
 
@@ -111,19 +105,19 @@ latest valid scan wins
 
 Shiprocket NDR reattempt/RTO and return tracking are represented as supported but are not auto-triggered. Choosing reattempt versus return is a Craves product/operations decision.
 
-## Shadowfax
+### Shadowfax
 
 Public product capabilities can be represented, but the exact Craves partner transaction/auth/webhook contract is not present in the authoritative repository docs. Executable integration remains fail-closed as `PRIVATE_CONTRACT_REQUIRED` until verified.
 
-## Porter
+### Porter
 
 Public API capabilities include quote/serviceability, track, webhooks, live tracking link and optional delivery-code proof. Exact Craves partner credentials/contracts remain gated. The represented API product's one-pickup/one-drop limitation is recorded instead of inventing multi-stop support.
 
-## Delhivery Direct Intracity
+### Delhivery Direct Intracity
 
 The provider is represented as a peer. Craves does not substitute Delhivery B2C parcel APIs for Direct Intracity. Exact Direct Intracity executable contracts remain fail-closed until verified.
 
-## Telemetry contract
+## Telemetry contract and storage
 
 Producer:
 
@@ -131,12 +125,7 @@ Producer:
 DELIVERY_TELEMETRY_UPDATED 1.1
 ```
 
-Order consumer accepts:
-
-```text
-1.0
-1.1
-```
+Order consumer accepts both `1.0` and `1.1`.
 
 Version 1.1 adds exact provider ETA fields while preserving ETA windows:
 
@@ -151,27 +140,20 @@ estimatedDropoffEndAt
 
 Exact ETA is not converted into a fabricated zero-width window.
 
-## Database migrations
-
-Integration:
+Migrations:
 
 ```text
-V112__delivery_telemetry_projection.sql
-V113__delivery_provider_exact_eta.sql
-```
-
-Order:
-
-```text
-V17__delivery_telemetry_projection.sql
-V18__delivery_provider_exact_eta.sql
+Integration V112__delivery_telemetry_projection.sql
+Integration V113__delivery_provider_exact_eta.sql
+Order       V17__delivery_telemetry_projection.sql
+Order       V18__delivery_provider_exact_eta.sql
 ```
 
 Only the latest useful snapshot is projected. No unbounded GPS history table is created.
 
 ## Webhook telemetry safety
 
-Provider telemetry can update without a normalized status transition.
+Provider telemetry can update without a normalized status transition:
 
 ```text
 status changed -> status event + eligible telemetry
@@ -207,7 +189,7 @@ otherwise provider tracking URL -> PROVIDER_TRACKING_LINK
 otherwise -> STATUS_TIMELINE
 ```
 
-This selection describes the experience available for an already-selected provider. It does not rank or select providers.
+This describes the experience available for an already-selected provider; it does not rank or select providers.
 
 ## Privacy
 
@@ -232,9 +214,9 @@ raw provider POD image URL
 
 Terminal deliveries suppress live coordinates and live ETA fields.
 
-## Tests
+## Test coverage
 
-Integration coverage includes:
+Integration coverage:
 
 ```text
 DeliveryProviderCapabilityRegistryTest
@@ -245,7 +227,7 @@ DeliveryStatusUpdateServiceTest
 DeliveryTrackingReconciliationWorkerTest
 ```
 
-Order coverage includes:
+Order coverage:
 
 ```text
 DeliveryTelemetryEventValidatorTest
@@ -255,7 +237,7 @@ Coverage includes all five provider profiles, private-contract gating, Borzo exa
 
 ## Validation status
 
-GitHub **Backend completion CI run 396** completed successfully at multi-provider source/documentation head `33ab3c841538a123b17a9cd554aaffb68f0b9cd8`. Commits after that run only update this handover/validation wording and do not alter runtime Java, migrations, contracts or provider behavior.
+GitHub **Backend completion CI run 396** completed successfully at multi-provider runtime/documentation head `33ab3c841538a123b17a9cd554aaffb68f0b9cd8`. Subsequent commits only refine handover text and the Azure source gate; runtime Java/provider behavior is unchanged from that validated state.
 
 Passed:
 
@@ -270,7 +252,7 @@ Maven verify — Integration
 Maven verify — Notification
 ```
 
-A separate Admin dashboard workflow was also triggered. Its Order-service admin authorization job passed, while its unrelated Next.js admin test job failed. That web failure is not hidden and should be handled in the admin frontend workstream; it does not change the successful backend completion result for this module.
+A separate Admin dashboard workflow was also triggered. Its Order-service admin authorization job passed, while its unrelated Next.js admin test job failed. That web failure remains visible for the admin frontend workstream and is not misreported as green.
 
 ## Azure downstream CI source
 
@@ -278,21 +260,7 @@ A separate Admin dashboard workflow was also triggered. Its Order-service admin 
 azure-pipelines-delivery-status-downstream-ci.yml
 ```
 
-The source gate now verifies:
-
-```text
-Order + Integration + Notification builds
-V17/V18 and V112/V113
-provider capability registry
-Borzo extractor
-Shiprocket extractor
-telemetry event v1.1
-customer/chef trackingExperience contracts
-no-provider-ranking source guard
-private-contract fail-closed markers
-live-location fail-closed default
-runtime-preserving service deployment contracts
-```
+The source gate verifies Order + Integration + Notification builds, V17/V18 and V112/V113, capability registry, Borzo/Shiprocket extractors, event v1.1, customer/chef `trackingExperience`, no-provider-ranking marker, private-contract fail-closed states, live-location fail-closed default and runtime-preserving deployment contracts.
 
 The Azure pipeline itself has not been executed, by project plan.
 

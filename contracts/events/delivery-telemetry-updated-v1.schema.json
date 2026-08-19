@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.craves.in/events/delivery-telemetry-updated-v1.schema.json",
-  "title": "DELIVERY_TELEMETRY_UPDATED v1.0",
+  "title": "DELIVERY_TELEMETRY_UPDATED v1.x",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,7 +17,7 @@
   "properties": {
     "eventId": { "type": "string", "format": "uuid" },
     "eventType": { "const": "DELIVERY_TELEMETRY_UPDATED" },
-    "eventVersion": { "const": "1.0" },
+    "eventVersion": { "enum": ["1.0", "1.1"] },
     "occurredAt": { "type": "string", "format": "date-time" },
     "correlationId": { "type": "string", "format": "uuid" },
     "causationId": { "type": ["string", "null"], "format": "uuid" },
@@ -65,8 +65,10 @@
         "courierLatitude": { "type": ["number", "null"], "minimum": -90, "maximum": 90 },
         "courierLongitude": { "type": ["number", "null"], "minimum": -180, "maximum": 180 },
         "locationObservedAt": { "type": ["string", "null"], "format": "date-time" },
+        "estimatedPickupAt": { "type": ["string", "null"], "format": "date-time" },
         "estimatedPickupStartAt": { "type": ["string", "null"], "format": "date-time" },
         "estimatedPickupEndAt": { "type": ["string", "null"], "format": "date-time" },
+        "estimatedDropoffAt": { "type": ["string", "null"], "format": "date-time" },
         "estimatedDropoffStartAt": { "type": ["string", "null"], "format": "date-time" },
         "estimatedDropoffEndAt": { "type": ["string", "null"], "format": "date-time" },
         "observedAt": { "type": "string", "format": "date-time" }

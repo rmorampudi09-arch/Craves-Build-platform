@@ -1,17 +1,23 @@
 package in.craves.catalog.web;
 
 import in.craves.catalog.service.CatalogService;
+import in.craves.catalog.service.PublicMenuBatchResolveService;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemImageResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemResponse;
 import in.craves.catalog.web.ApiDtos.PublicKitchenDiscoveryResponse;
 import in.craves.catalog.web.ApiDtos.PublicKitchenProfileResponse;
 import in.craves.catalog.web.ApiDtos.PublicKitchenSummaryResponse;
+import in.craves.catalog.web.PublicCatalogBatchDtos.ResolveMenuItemsRequest;
+import in.craves.catalog.web.PublicCatalogBatchDtos.ResolvedMenuItemResponse;
+import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,9 +26,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/catalog")
 public class PublicCatalogController {
     private final CatalogService catalogService;
+    private final PublicMenuBatchResolveService publicMenuBatchResolveService;
 
-    public PublicCatalogController(CatalogService catalogService) {
+    public PublicCatalogController(
+        CatalogService catalogService,
+        PublicMenuBatchResolveService publicMenuBatchResolveService
+    ) {
         this.catalogService = catalogService;
+        this.publicMenuBatchResolveService = publicMenuBatchResolveService;
     }
 
     @GetMapping("/kitchens")
@@ -70,6 +81,13 @@ public class PublicCatalogController {
     @GetMapping("/menu-items/{menuItemId}")
     public MenuItemResponse getMenuItem(@PathVariable UUID menuItemId) {
         return sanitizeMenuItem(catalogService.getPublicMenuItem(menuItemId));
+    }
+
+    @PostMapping("/menu-items/resolve")
+    public List<ResolvedMenuItemResponse> resolveMenuItems(
+        @Valid @RequestBody ResolveMenuItemsRequest request
+    ) {
+        return publicMenuBatchResolveService.resolve(request);
     }
 
     private static PublicKitchenSummaryResponse sanitizeKitchenSummary(PublicKitchenSummaryResponse kitchen) {

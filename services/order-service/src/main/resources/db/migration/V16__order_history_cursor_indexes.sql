@@ -11,6 +11,22 @@ FROM catalog_schema.kitchen_profile kp
 WHERE o.chef_identity_id IS NULL
   AND kp.id = o.kitchen_id;
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM order_schema.customer_order
+        WHERE chef_identity_id IS NULL
+    ) THEN
+        RAISE EXCEPTION
+            'Order History v2 cannot backfill chef_identity_id for every historical order. Resolve orphan kitchen ownership before retrying Flyway V16.';
+    END IF;
+END
+$$;
+
+ALTER TABLE order_schema.customer_order
+    ALTER COLUMN chef_identity_id SET NOT NULL;
+
 CREATE OR REPLACE FUNCTION order_schema.resolve_customer_order_chef_identity()
 RETURNS trigger
 LANGUAGE plpgsql

@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { BrowseHeader } from "@/components/home/BrowseHeader";
+import { CustomerSignOutDialog } from "@/components/home/CustomerSignOutDialog";
 import { DishesGrid } from "@/components/home/DishesGrid";
 import { FloatingCartBar } from "@/components/home/FloatingCartBar";
 import { HomeBottomSections } from "@/components/home/HomeBottomSections";
@@ -21,11 +22,16 @@ import { TodaysSpecial } from "@/components/home/TodaysSpecial";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
 import { ALL_DISHES_CATEGORY } from "@/constants/dishCategories";
 import {
+  allDishes,
   discoverDishes,
   getDiscoveryRadiusMeters,
   type Dish,
 } from "@/services/api/dishes";
-import { discoverKitchens } from "@/services/api/kitchens";
+import {
+  allKitchens,
+  discoverKitchens,
+  getKitchenDiscoveryRadiusMeters,
+} from "@/services/api/kitchens";
 import { formatDiscoveryRadius } from "@/lib/catalog-discovery-policy";
 import { type NearbyKitchen } from "@/lib/discovery-contract";
 import {
@@ -41,6 +47,8 @@ import {
 } from "@/lib/home-return-state";
 import {
   clearSession,
+  getAddress,
+  getSession,
   loadSelectedAddress,
   loadSession,
   saveAddress,
@@ -211,22 +219,51 @@ function forceInstantWindowScroll(top: number): void {
 
 function BrowseFoodsPage() {
   const navigate = useNavigate();
-  const [user, setUser] = useState<CravesUser | null>(null);
-  const [address, setAddress] = useState<CravesAddress | null>(null);
+  const [initialCache] = useState(() => {
+    const cachedUser = getSession();
+    const cachedAddress = getAddress();
+    const canRestoreCatalog = Boolean(cachedUser && cachedAddress);
+    return {
+      user: cachedUser,
+      address: cachedAddress,
+      dishes: canRestoreCatalog ? allDishes() : [],
+      kitchens: canRestoreCatalog ? allKitchens() : [],
+    };
+  });
+  const hasInitialCatalog = initialCache.dishes.length > 0 || initialCache.kitchens.length > 0;
+
+  const [user, setUser] = useState<CravesUser | null>(initialCache.user);
+  const [address, setAddress] = useState<CravesAddress | null>(initialCache.address);
   const [homeCategory, setHomeCategory] = useState<CravingCategory | null>(null);
   const [dishSort, setDishSort] = useState<HomeDishSort>("recommended");
   const [foodPreference, setFoodPreference] = useState<HomeFoodPreference>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [cartItemCount, setCartItemCount] = useState(0);
-  const [cartSubtotal, setCartSubtotal] = useState(0);
-  const [cartCurrencyCode, setCartCurrencyCode] = useState("INR");
-  const [kitchens, setKitchens] = useState<NearbyKitchen[]>([]);
-  const [nearbyDishes, setNearbyDishes] = useState<Dish[]>([]);
-  const [discoveryState, setDiscoveryState] = useState<DiscoveryState>("loading");
-  const [catalogMessage, setCatalogMessage] = useState("Detecting your current delivery location…");
-  const [radiusLabel, setRadiusLabel] = useState<string | null>(null);
+  const [cartItemCount, setCartItemCount] = useState(() => cartCount());
+  const [cartSubtotal, setCartSubtotal] = useState(() => cartTotal());
+  const [cartCurrencyCode, setCartCurrencyCode] = useState(() => cartCurrency());
+  const [kitchens, setKitchens] = useState<NearbyKitchen[]>(initialCache.kitchens);
+  const [nearbyDishes, setNearbyDishes] = useState<Dish[]>(initialCache.dishes);
+  const [discoveryState, setDiscoveryState] = useState<DiscoveryState>(
+    hasInitialCatalog ? "ready" : "loading",
+  );
+  const [catalogMessage, setCatalogMessage] = useState(
+    hasInitialCatalog
+      ? "Fresh homemade food available near your delivery location."
+      : "Detecting your current delivery location…",
+  );
+  const [radiusLabel, setRadiusLabel] = useState<string | null>(() => {
+    if (initialCache.kitchens.length > 0) {
+      return formatDiscoveryRadius(getKitchenDiscoveryRadiusMeters());
+    }
+    if (initialCache.dishes.length > 0) {
+      return formatDiscoveryRadius(getDiscoveryRadiusMeters());
+    }
+    return null;
+  });
   const [locating, setLocating] = useState(false);
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const refreshDiscovery = useCallback(async (
     activeAddress: CravesAddress | null,
@@ -254,8 +291,12 @@ function BrowseFoodsPage() {
       return;
     }
 
-    setDiscoveryState("loading");
-    setCatalogMessage("Loading nearby home kitchens and fresh dishes…");
+    const preserveExisting =
+      !resetFilters && (allDishes().length > 0 || allKitchens().length > 0);
+    if (!preserveExisting) {
+      setDiscoveryState("loading");
+      setCatalogMessage("Loading nearby home kitchens and fresh dishes…");
+    }
 
     const [kitchenResult, dishResult] = await Promise.allSettled([
       discoverKitchens(activeAddress.lat, activeAddress.lng, 5_000),
@@ -265,18 +306,31 @@ function BrowseFoodsPage() {
     const loadedKitchens = kitchenResult.status === "fulfilled" ? kitchenResult.value.kitchens : [];
     const loadedDishes = dishResult.status === "fulfilled" ? dishResult.value : [];
 
-    setKitchens(loadedKitchens);
-    setNearbyDishes(loadedDishes);
+    if (kitchenResult.status === "fulfilled") {
+      setKitchens(loadedKitchens);
+    } else if (!preserveExisting) {
+      setKitchens([]);
+    }
+    if (dishResult.status === "fulfilled") {
+      setNearbyDishes(loadedDishes);
+    } else if (!preserveExisting) {
+      setNearbyDishes([]);
+    }
 
     if (kitchenResult.status === "fulfilled") {
       setRadiusLabel(formatDiscoveryRadius(kitchenResult.value.radiusMeters));
     } else if (dishResult.status === "fulfilled") {
       setRadiusLabel(formatDiscoveryRadius(getDiscoveryRadiusMeters()));
-    } else {
+    } else if (!preserveExisting) {
       setRadiusLabel(null);
     }
 
     if (kitchenResult.status === "rejected" && dishResult.status === "rejected") {
+      if (preserveExisting) {
+        setDiscoveryState("ready");
+        setCatalogMessage("Showing your recent nearby results while Craves refreshes in the background.");
+        return;
+      }
       setDiscoveryState("error");
       const reason = kitchenResult.reason ?? dishResult.reason;
       setCatalogMessage(
@@ -350,7 +404,11 @@ function BrowseFoodsPage() {
     if (!(target instanceof Element)) return;
     const anchor = target.closest("a[href]");
     const href = anchor?.getAttribute("href");
-    if (href?.startsWith("/dish/") || href?.startsWith("/chef/")) {
+    if (
+      href?.startsWith("/dish/") ||
+      href?.startsWith("/kitchen/") ||
+      href?.startsWith("/chef/")
+    ) {
       rememberHomeView();
     }
   }, [rememberHomeView]);
@@ -376,6 +434,10 @@ function BrowseFoodsPage() {
   }, [address, refreshDiscovery]);
 
   useEffect(() => {
+    restoreHomeView();
+  }, [restoreHomeView]);
+
+  useEffect(() => {
     let active = true;
 
     const syncCartSummary = () => {
@@ -398,27 +460,39 @@ function BrowseFoodsPage() {
         const savedFallback = await loadSelectedAddress();
         if (!active) return;
         setAddress(savedFallback);
-        setCatalogMessage(
-          savedFallback
-            ? "Checking whether you are still near your saved address…"
-            : "Detecting your current delivery location…",
-        );
+        if (!hasInitialCatalog) {
+          setCatalogMessage(
+            savedFallback
+              ? "Checking whether you are still near your saved address…"
+              : "Detecting your current delivery location…",
+          );
+        }
         const activeLocation = await resolveLiveBrowsingLocation(savedFallback);
         if (!active) return;
         setAddress(activeLocation);
         await refreshDiscovery(activeLocation, false);
-        if (active) restoreHomeView();
       } catch (error) {
         if (!active) return;
-        setAddress(null);
-        setKitchens([]);
-        setNearbyDishes([]);
-        setDiscoveryState("error");
-        setCatalogMessage(
-          error instanceof Error
-            ? error.message
-            : "Your delivery location could not be loaded.",
-        );
+        const cachedAddress = getAddress();
+        const cachedKitchens = allKitchens();
+        const cachedDishes = allDishes();
+        if (cachedAddress && (cachedKitchens.length > 0 || cachedDishes.length > 0)) {
+          setAddress(cachedAddress);
+          setKitchens(cachedKitchens);
+          setNearbyDishes(cachedDishes);
+          setDiscoveryState("ready");
+          setCatalogMessage("Showing your recent nearby results while location refresh is unavailable.");
+        } else {
+          setAddress(null);
+          setKitchens([]);
+          setNearbyDishes([]);
+          setDiscoveryState("error");
+          setCatalogMessage(
+            error instanceof Error
+              ? error.message
+              : "Your delivery location could not be loaded.",
+          );
+        }
       }
 
       try {
@@ -438,7 +512,7 @@ function BrowseFoodsPage() {
       active = false;
       unsubscribeCart();
     };
-  }, [navigate, refreshDiscovery, restoreHomeView]);
+  }, [hasInitialCatalog, navigate, refreshDiscovery]);
 
   const categoryImages = useMemo<Partial<Record<CravingCategory, string>>>(() => {
     const result: Partial<Record<CravingCategory, string>> = {};
@@ -502,8 +576,15 @@ function BrowseFoodsPage() {
   }, [dishSort, foodPreference, homeCategory, nearbyDishes, searchTerm]);
 
   const handleLogout = async () => {
-    await clearSession();
-    navigate({ to: "/" });
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await clearSession();
+      setSignOutOpen(false);
+      navigate({ to: "/" });
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   const locationLabel = address
@@ -532,7 +613,7 @@ function BrowseFoodsPage() {
         onOpenLocation={() => navigate({ to: "/addresses" })}
         cartCount={cartItemCount}
         onOpenCart={() => navigate({ to: "/cart" })}
-        onLogout={handleLogout}
+        onLogout={() => setSignOutOpen(true)}
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
         onSearchFocus={() => setSearchOpen(true)}
@@ -567,7 +648,7 @@ function BrowseFoodsPage() {
           message={catalogMessage}
           onSelectKitchen={(kitchen) => {
             rememberHomeView();
-            navigate({ to: "/chef/$id", params: { id: kitchen.id } });
+            navigate({ to: "/kitchen/$id", params: { id: kitchen.id } });
           }}
           onRetry={() => void refreshDiscovery(address, false)}
           onManageAddress={() => navigate({ to: "/addresses" })}
@@ -611,6 +692,13 @@ function BrowseFoodsPage() {
           onClose={() => setSearchOpen(false)}
         />
       ) : null}
+
+      <CustomerSignOutDialog
+        open={signOutOpen}
+        busy={signingOut}
+        onCancel={() => setSignOutOpen(false)}
+        onConfirm={() => void handleLogout()}
+      />
     </div>
   );
 }

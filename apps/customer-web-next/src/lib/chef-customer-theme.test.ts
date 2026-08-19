@@ -50,9 +50,10 @@ const deferredDashboardRoutes = [
 ] as const;
 
 test("every chef route inherits the responsive Craves workspace shell", () => {
-  assert.match(layout, /className="chef-panel-theme bg-white"/);
+  assert.match(layout, /className="chef-panel-theme[^"]*bg-white/);
   assert.match(layout, /ChefWorkspaceNavigation/);
-  assert.match(layout, /Customer mode/);
+  assert.match(layout, /href="\/home"/);
+  assert.match(layout, /Back to Craves/);
   assert.match(layout, /max-w-7xl/);
   for (const route of workspaceRoutes) {
     assert.match(navigation, new RegExp(route.replaceAll("/", "\\/")));

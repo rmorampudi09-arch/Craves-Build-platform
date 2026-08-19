@@ -19,32 +19,35 @@ The existing customer endpoint returns a fixed latest-50 list. The existing chef
 - Added chef paged order history endpoint.
 - Added optional existing-status filtering.
 - Added role and cursor validation before DB access.
-- Added customer/kitchen cursor indexes and status cursor indexes via Flyway V16.
-- Added a single read-only chef ownership join against Catalog's kitchen profile inside the shared Business DB.
+- Added `chef_identity_id` as an Order-owned chef ownership snapshot via Flyway V16.
+- Backfilled existing order ownership once from authoritative Catalog kitchen ownership.
+- Added an insert/update snapshot hook while Catalog and Order share the approved Business PostgreSQL database.
+- Added customer/chef cursor indexes and status cursor indexes via Flyway V16.
 - Added one batch query for all order items in a returned page, removing item N+1 behavior from the new endpoints.
 - Preserved existing customer/chef list and order-detail endpoints.
 - Added cursor and access-validation unit tests.
 
 ## Architecture note
 
-The chef history query is intentionally a read-only projection across `order_schema.customer_order` and `catalog_schema.kitchen_profile`, both hosted in the approved Business PostgreSQL database. Order Service does not write Catalog data, and Catalog does not write Order data. This projection removes the runtime HTTP N+1 and avoids inventing or duplicating chef ownership state in Order Service.
+The final history read path does not perform a runtime Catalog-schema join and does not call Catalog once per order. `OrderHistoryService` reads only `order_schema.customer_order`, including the Order-owned `chef_identity_id` snapshot.
 
-If the platform later separates these schemas into different physical databases, replace this join with an event-maintained Order read model containing the chef identity snapshot; the public cursor contract can remain unchanged.
+Because Catalog and Order currently share the approved Business PostgreSQL database, V16 uses Catalog kitchen ownership only for the one-time historical backfill and the database snapshot hook for new order inserts. If those services later move to separate physical databases, replace that same-database hook with an event-maintained ownership projection; the public history API and indexes can retain the same logical contract.
 
 ## Deployment requirements
 
 1. Run `mvn -B -ntp clean verify` in `services/order-service`.
-2. Verify Flyway through V16.
-3. Inspect PostgreSQL query plans for customer and chef page queries.
-4. Deploy through `azure-pipelines-order-service.yml` using `AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection`.
-5. Verify Container App health/readiness.
-6. Smoke-test customer and chef JWT isolation.
-7. Smoke-test page 1/page 2 while inserting a new order between requests.
-8. Expose new routes through the existing APIM order API before frontend adoption.
+2. Verify Flyway through V16, including historical `chef_identity_id` backfill.
+3. Confirm a new order insert receives a non-null chef ownership snapshot.
+4. Inspect PostgreSQL query plans for customer and chef page queries.
+5. Deploy through `azure-pipelines-order-service.yml` using `AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection`.
+6. Verify Container App health/readiness.
+7. Smoke-test customer and chef JWT isolation.
+8. Smoke-test page 1/page 2 while inserting a new order between requests.
+9. Run `scripts/apim/configure-order-history-v2-apim.sh` after the Order revision is healthy.
 
 ## Azure impact
 
-No new paid resource and no new secret are required. The only persistence change is the V16 index migration; monitor database CPU/IO during index creation.
+No new paid Azure resource and no new secret are required. V16 changes the existing Business DB schema and creates indexes; monitor database CPU/IO during migration and backfill.
 
 ## Product decisions untouched
 

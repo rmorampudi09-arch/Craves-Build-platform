@@ -1,0 +1,73 @@
+trigger: none
+pr: none
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    persistCredentials: false
+    fetchDepth: 0
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - bash: |
+      set -euo pipefail
+      cd services/catalog-service
+      mvn -B -ntp -DskipTests=false verify
+    displayName: Verify Catalog pickup lifecycle and outbox
+
+  - bash: |
+      set -euo pipefail
+      cd services/order-service
+      mvn -B -ntp -DskipTests=false verify
+    displayName: Verify Order immutable pickup reference
+
+  - bash: |
+      set -euo pipefail
+      cd services/integration-service
+      mvn -B -ntp -DskipTests=false verify
+    displayName: Verify Integration pickup provisioning and provider adapters
+
+  - bash: |
+      set -euo pipefail
+      catalog_v4=services/catalog-service/src/main/resources/db/migration/V4__versioned_delivery_pickup_locations.sql
+      catalog_v5=services/catalog-service/src/main/resources/db/migration/V5__harden_pickup_location_lifecycle.sql
+      order_ref=services/order-service/src/main/java/in/craves/order/delivery/PickupLocationReference.java
+      integration_service=services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket/ShiprocketPickupProvisioningService.java
+
+      test -f "$catalog_v4"
+      test -f "$catalog_v5"
+      test -f "$order_ref"
+      test -f "$integration_service"
+
+      grep -Fq 'pickup_location_provisioning_outbox' "$catalog_v4"
+      grep -Fq 'FOR UPDATE SKIP LOCKED' services/catalog-service/src/main/java/in/craves/catalog/service/PickupProvisioningOutboxWorker.java
+      grep -Fq 'enabled: ${CRAVES_PICKUP_PROVISIONING_ENABLED:false}' services/catalog-service/src/main/resources/application.yml
+      grep -Fq 'PickupLocationReference.fromSnapshot' services/order-service/src/main/java/in/craves/order/event/ChefAcceptedOrderEventFactory.java
+      grep -Fq 'Never retry' "$integration_service" || grep -Fq 'Never blindly retry' "$integration_service"
+      grep -Fq 'upsertVerified' services/integration-service/src/main/java/in/craves/integration/delivery/provider/DeliveryProviderPickupLocationRepository.java
+    displayName: Verify full-scale pickup safety invariants
+
+  - bash: |
+      set -euo pipefail
+      if grep -R -n -E '(PASSWORD|TOKEN|SECRET)[[:space:]]*[:=][[:space:]]*[A-Za-z0-9+/=_-]{24,}' \
+        services/catalog-service \
+        services/order-service \
+        services/integration-service \
+        azure-pipelines-delivery-pickup-provisioning-ci.yml; then
+        echo 'ERROR: Possible plaintext credential detected.' >&2
+        exit 2
+      fi
+
+      git diff --check origin/main...HEAD
+    displayName: Verify secrets and source hygiene

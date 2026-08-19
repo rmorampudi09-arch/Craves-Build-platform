@@ -3,6 +3,7 @@ package in.craves.order.event;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import in.craves.order.delivery.PickupLocationReference;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryItemData;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryRequestData;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryStopData;
@@ -106,6 +107,23 @@ public class ChefAcceptedOrderEventFactory {
                 ))
                 .toList();
 
+        // Production Chef acceptance supplies kitchen_id in pickupLocationReference. Convert it +
+        // the immutable pickup snapshot into the same stable UUID that Catalog V4 stores. Legacy
+        // test/caller constructors may still omit the reference; keep those source-compatible.
+        UUID pickupLocationReference = source.pickupLocationReference() == null
+            ? null
+            : PickupLocationReference.fromSnapshot(
+                source.pickupLocationReference(),
+                source.pickupPhoneNumber(),
+                source.pickupAddressLine1(),
+                source.pickupAddressLine2(),
+                source.pickupLandmark(),
+                source.pickupAreaName(),
+                source.pickupCity(),
+                source.pickupState(),
+                source.pickupPostalCode()
+            );
+
         ChefAcceptedOrderEventData data = new ChefAcceptedOrderEventData(
             source.checkoutId(),
             source.orderId(),
@@ -121,7 +139,7 @@ public class ChefAcceptedOrderEventFactory {
                 items,
                 source.declaredGoodsValue(),
                 source.paymentCollectionMode(),
-                source.pickupLocationReference()
+                pickupLocationReference
             )
         );
 

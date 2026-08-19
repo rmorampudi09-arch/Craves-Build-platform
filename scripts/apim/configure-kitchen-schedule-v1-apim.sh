@@ -88,7 +88,9 @@ put_operation "$CHEF_MGMT" "get-my-kitchen-schedule-override-v1" "GET" "/schedul
 put_operation "$CHEF_MGMT" "put-my-kitchen-schedule-override-v1" "PUT" "/schedule/overrides/{serviceDate}" "Create or replace my kitchen schedule override" '[{"name":"serviceDate","type":"string","required":true}]' "$CHEF_POLICY_TEMPLATE" '__CHEF_KITCHEN_BACKEND_URL__' "$CHEF_BACKEND"
 put_operation "$CHEF_MGMT" "delete-my-kitchen-schedule-override-v1" "DELETE" "/schedule/overrides/{serviceDate}" "Delete my kitchen schedule override" '[{"name":"serviceDate","type":"string","required":true}]' "$CHEF_POLICY_TEMPLATE" '__CHEF_KITCHEN_BACKEND_URL__' "$CHEF_BACKEND"
 
-PUBLIC_BACKEND="https://${FQDN}/api/v1/catalog/kitchens"
+# The Discovery API operation template already includes /kitchens/{kitchenId}/availability.
+# Keep the backend base at /api/v1/catalog so APIM appends the operation path exactly once.
+PUBLIC_BACKEND="https://${FQDN}/api/v1/catalog"
 put_operation "$DISCOVERY_MGMT" "get-kitchen-live-availability-v1" "GET" "/kitchens/{kitchenId}/availability" "Get kitchen live availability" '[{"name":"kitchenId","type":"string","required":true}]' "$PUBLIC_POLICY_TEMPLATE" '__KITCHEN_AVAILABILITY_BACKEND_URL__' "$PUBLIC_BACKEND"
 
 for ID in get-my-kitchen-schedule-v1 replace-my-kitchen-schedule-v1 get-my-kitchen-schedule-override-v1 put-my-kitchen-schedule-override-v1 delete-my-kitchen-schedule-override-v1; do

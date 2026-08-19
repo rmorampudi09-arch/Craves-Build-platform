@@ -51,6 +51,9 @@ public class RazorpayPaymentClient {
             if (!receipt.equals(text(response, "receipt"))) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay receipt identity does not match Craves");
             }
+            if (!"created".equalsIgnoreCase(text(response, "status"))) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay order was not created in the expected state");
+            }
             return new CreatedOrder(orderId, text(response, "status"), properties.keyId(), request, response);
         } catch (RestClientResponseException exception) {
             throw providerFailure("Razorpay order creation failed", exception);
@@ -70,35 +73,108 @@ public class RazorpayPaymentClient {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Razorpay payment signature");
         }
         JsonNode payment = fetchPayment(paymentId);
-        if (!expectedOrderId.equals(text(payment, "order_id"))) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay order identity does not match Craves");
-        }
-        RazorpayRequestSafety.requireMoney(
-            expectedAmount, expectedCurrency, longValue(payment, "amount"), text(payment, "currency"), "Razorpay payment"
-        );
+        requirePaymentIdentityAndMoney(payment, paymentId, expectedOrderId, expectedAmount, expectedCurrency);
         if ("authorized".equalsIgnoreCase(text(payment, "status")) && properties.autoCapture()) {
             payment = capture(paymentId, expectedAmount, expectedCurrency);
+            requirePaymentIdentityAndMoney(payment, paymentId, expectedOrderId, expectedAmount, expectedCurrency);
         }
-        String status = text(payment, "status");
-        if (!"captured".equalsIgnoreCase(status)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay payment is not captured");
-        }
-        return new VerifiedPayment(paymentId, status, payment);
+        return requireCapturedProviderState(payment, paymentId, expectedOrderId, expectedAmount, expectedCurrency);
+    }
+
+    public VerifiedPayment verifyCapturedProviderState(
+        String paymentId,
+        String expectedOrderId,
+        BigDecimal expectedAmount,
+        String expectedCurrency
+    ) {
+        requireCredentials();
+        JsonNode payment = fetchPayment(paymentId);
+        requirePaymentIdentityAndMoney(payment, paymentId, expectedOrderId, expectedAmount, expectedCurrency);
+        return requireCapturedProviderState(payment, paymentId, expectedOrderId, expectedAmount, expectedCurrency);
     }
 
     public JsonNode fetchPayment(String paymentId) {
+        requireCredentials();
+        if (!StringUtils.hasText(paymentId) || !paymentId.startsWith("pay_")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Razorpay payment identity");
+        }
         try {
-            return client.get().uri("/v1/payments/{paymentId}", paymentId)
+            JsonNode payment = client.get().uri("/v1/payments/{paymentId}", paymentId)
                 .headers(this::basicAuth).retrieve().body(JsonNode.class);
+            if (!paymentId.equals(text(payment, "id"))) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Razorpay payment identity does not match the requested payment");
+            }
+            return payment;
         } catch (RestClientResponseException exception) {
             throw providerFailure("Razorpay payment verification failed", exception);
+        }
+    }
+
+    public JsonNode fetchOrder(String orderId) {
+        requireCredentials();
+        if (!StringUtils.hasText(orderId) || !orderId.startsWith("order_")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Razorpay order identity");
+        }
+        try {
+            JsonNode order = client.get().uri("/v1/orders/{orderId}", orderId)
+                .headers(this::basicAuth).retrieve().body(JsonNode.class);
+            if (!orderId.equals(text(order, "id"))) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Razorpay order identity does not match the requested order");
+            }
+            return order;
+        } catch (RestClientResponseException exception) {
+            throw providerFailure("Razorpay order verification failed", exception);
         }
     }
 
     public boolean verifyWebhook(String rawBody, String signature) {
         return StringUtils.hasText(properties.webhookSecret())
             && StringUtils.hasText(signature)
+            && rawBody != null
             && verifyHex(rawBody, signature, properties.webhookSecret());
+    }
+
+    private VerifiedPayment requireCapturedProviderState(
+        JsonNode payment,
+        String paymentId,
+        String expectedOrderId,
+        BigDecimal expectedAmount,
+        String expectedCurrency
+    ) {
+        String status = text(payment, "status");
+        if (!"captured".equalsIgnoreCase(status)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay payment is not captured");
+        }
+        JsonNode order = fetchOrder(expectedOrderId);
+        RazorpayRequestSafety.requireMoney(
+            expectedAmount, expectedCurrency, longValue(order, "amount"), text(order, "currency"), "Razorpay paid order"
+        );
+        if (!"paid".equalsIgnoreCase(text(order, "status"))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay order is not paid");
+        }
+        if (longValue(order, "amount_paid") != RazorpayRequestSafety.toSubunits(expectedAmount)
+            || longValue(order, "amount_due") != 0L) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay order paid amount does not match Craves");
+        }
+        return new VerifiedPayment(paymentId, status, payment, order);
+    }
+
+    private void requirePaymentIdentityAndMoney(
+        JsonNode payment,
+        String expectedPaymentId,
+        String expectedOrderId,
+        BigDecimal expectedAmount,
+        String expectedCurrency
+    ) {
+        if (!expectedPaymentId.equals(text(payment, "id"))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay payment identity does not match Craves");
+        }
+        if (!expectedOrderId.equals(text(payment, "order_id"))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay order identity does not match Craves");
+        }
+        RazorpayRequestSafety.requireMoney(
+            expectedAmount, expectedCurrency, longValue(payment, "amount"), text(payment, "currency"), "Razorpay payment"
+        );
     }
 
     private JsonNode capture(String paymentId, BigDecimal amount, String currency) {
@@ -107,8 +183,15 @@ public class RazorpayPaymentClient {
             "currency", currency
         );
         try {
-            return client.post().uri("/v1/payments/{paymentId}/capture", paymentId)
+            JsonNode response = client.post().uri("/v1/payments/{paymentId}/capture", paymentId)
                 .headers(this::basicAuth).body(request).retrieve().body(JsonNode.class);
+            if (!paymentId.equals(text(response, "id")) || !"captured".equalsIgnoreCase(text(response, "status"))) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay capture did not return the expected captured payment");
+            }
+            RazorpayRequestSafety.requireMoney(
+                amount, currency, longValue(response, "amount"), text(response, "currency"), "Razorpay capture"
+            );
+            return response;
         } catch (RestClientResponseException exception) {
             throw providerFailure("Razorpay payment capture failed", exception);
         }
@@ -122,7 +205,7 @@ public class RazorpayPaymentClient {
         if (!properties.paymentExecutionAllowed()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Razorpay payment execution is not enabled");
         }
-        if (!StringUtils.hasText(properties.keyId()) || !StringUtils.hasText(properties.keySecret())) {
+        if (!properties.hasCredentials()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Razorpay credentials are not configured");
         }
     }
@@ -145,7 +228,9 @@ public class RazorpayPaymentClient {
 
     private static ResponseStatusException providerFailure(String prefix, RestClientResponseException exception) {
         int status = exception.getStatusCode().value();
-        HttpStatus mapped = status == 401 || status == 403 ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_GATEWAY;
+        HttpStatus mapped = status == 401 || status == 403 || status == 408 || status == 429 || status >= 500
+            ? HttpStatus.SERVICE_UNAVAILABLE
+            : HttpStatus.BAD_GATEWAY;
         return new ResponseStatusException(mapped, prefix + " with HTTP " + status);
     }
 
@@ -170,5 +255,12 @@ public class RazorpayPaymentClient {
         JsonNode response
     ) {}
 
-    public record VerifiedPayment(String paymentId, String providerStatus, JsonNode response) {}
+    public record VerifiedPayment(
+        String paymentId,
+        String providerStatus,
+        JsonNode paymentResponse,
+        JsonNode orderResponse
+    ) {
+        public JsonNode response() { return paymentResponse; }
+    }
 }

@@ -14,6 +14,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {
   useNavigation,
   useRoute,
@@ -49,6 +50,11 @@ import {
   setCartItemQuantity,
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
+import {
+  isFavoriteMenuItem,
+  useCustomerFavoritesQuery,
+  useToggleCustomerFavorite,
+} from '../../favorites/query/customerFavoritesQueries';
 import type {CustomerDishDetailImage} from '../api/dishDetailApi';
 import {
   evaluateDishCartRevalidation,
@@ -82,19 +88,13 @@ function DetailSkeleton() {
 }
 
 function foodTypeLabel(foodType: 'VEG' | 'NON_VEG' | 'EGG'): string {
-  if (foodType === 'NON_VEG') {
-    return 'Non-veg';
-  }
-  if (foodType === 'EGG') {
-    return 'Egg';
-  }
+  if (foodType === 'NON_VEG') return 'Non-veg';
+  if (foodType === 'EGG') return 'Egg';
   return 'Veg';
 }
 
 function spiceLabel(spiceLevel: 'MILD' | 'MEDIUM' | 'SPICY' | null): string | null {
-  if (!spiceLevel) {
-    return null;
-  }
+  if (!spiceLevel) return null;
   return spiceLevel.charAt(0) + spiceLevel.slice(1).toLowerCase();
 }
 
@@ -104,6 +104,8 @@ export function CustomerDishDetailScreen() {
   const dispatch = useAppDispatch();
   const {fontScale, width} = useWindowDimensions();
   const detail = useCustomerDishDetailQuery(route.params.menuItemId);
+  const favorites = useCustomerFavoritesQuery();
+  const toggleFavorite = useToggleCustomerFavorite();
   const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const cartMutations = useAppSelector(state => state.cart.mutations);
   const [galleryIndex, setGalleryIndex] = useState(0);
@@ -117,6 +119,7 @@ export function CustomerDishDetailScreen() {
   const stackPurchaseActions = shouldStackCriticalActions(width, fontScale);
 
   const dish = detail.data;
+  const favorite = isFavoriteMenuItem(favorites.data, route.params.menuItemId);
   const cartLine = useMemo<CartLine | null>(
     () =>
       cartSnapshot?.lines.find(line => line.menuItemId === route.params.menuItemId) ??
@@ -131,6 +134,7 @@ export function CustomerDishDetailScreen() {
     ? cartMutations[`line:${cartLine.lineId}`]?.status === 'PENDING'
     : false;
   const purchaseBusy = revalidating || addPending || quantityPending;
+  const favoriteBusy = favorites.sessionRequired || toggleFavorite.isPending;
 
   useEffect(() => {
     setGalleryIndex(0);
@@ -142,17 +146,13 @@ export function CustomerDishDetailScreen() {
 
   useEffect(() => {
     const nextImageUrl = dish?.images[galleryIndex + 1]?.url;
-    if (nextImageUrl) {
-      Image.prefetch(nextImageUrl).catch(() => undefined);
-    }
+    if (nextImageUrl) Image.prefetch(nextImageUrl).catch(() => undefined);
   }, [dish?.images, galleryIndex]);
 
   const handleGalleryScrollEnd = (
     event: NativeSyntheticEvent<NativeScrollEvent>,
   ) => {
-    const nextIndex = Math.round(
-      event.nativeEvent.contentOffset.x / galleryWidth,
-    );
+    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / galleryWidth);
     if (dish?.images.length) {
       setGalleryIndex(Math.max(0, Math.min(nextIndex, dish.images.length - 1)));
     }
@@ -166,10 +166,20 @@ export function CustomerDishDetailScreen() {
     });
   };
 
+  const handleFavorite = () => {
+    if (favoriteBusy) return;
+    setInteractionNotice(null);
+    toggleFavorite.mutate(
+      {menuItemId: route.params.menuItemId, favorite},
+      {
+        onError: () =>
+          setInteractionNotice('Favorite could not be updated. Please try again.'),
+      },
+    );
+  };
+
   const handleShare = async () => {
-    if (!dish || sharing) {
-      return;
-    }
+    if (!dish || sharing) return;
     setInteractionNotice(null);
     setSharing(true);
     try {
@@ -193,9 +203,7 @@ export function CustomerDishDetailScreen() {
       setPurchaseMessage(outcome.error.message);
       return;
     }
-    if (outcome.status !== 'APPLIED') {
-      return;
-    }
+    if (outcome.status !== 'APPLIED') return;
 
     const line = outcome.snapshot.lines.find(
       item => item.menuItemId === route.params.menuItemId,
@@ -210,9 +218,7 @@ export function CustomerDishDetailScreen() {
   };
 
   const revalidateAndIncrease = async () => {
-    if (!dish || purchaseBusy) {
-      return;
-    }
+    if (!dish || purchaseBusy) return;
 
     setPurchaseMessage(null);
     setRevalidating(true);
@@ -246,9 +252,7 @@ export function CustomerDishDetailScreen() {
   };
 
   const decreaseQuantity = async () => {
-    if (!cartLine || purchaseBusy) {
-      return;
-    }
+    if (!cartLine || purchaseBusy) return;
     setPurchaseMessage(null);
     const outcome =
       cartLine.quantity <= 1
@@ -259,9 +263,7 @@ export function CustomerDishDetailScreen() {
               quantity: cartLine.quantity - 1,
             }),
           );
-    if (outcome.status === 'FAILED') {
-      setPurchaseMessage(outcome.error.message);
-    }
+    if (outcome.status === 'FAILED') setPurchaseMessage(outcome.error.message);
   };
 
   if (detail.invalidMenuItemId) {
@@ -332,31 +334,7 @@ export function CustomerDishDetailScreen() {
             accessibilityRole="button"
             onPress={() => navigation.goBack()}
             style={({pressed}) => [styles.headerAction, pressed && styles.pressed]}>
-            <Icon name="arrow-left" />
-          </Pressable>
-          <View style={styles.headerSpacer} />
-          <Pressable
-            accessibilityHint="Saving dishes is unavailable until favorites support is available"
-            accessibilityLabel="Save dish"
-            accessibilityRole="button"
-            onPress={() =>
-              setInteractionNotice('Saving dishes is unavailable right now.')
-            }
-            style={({pressed}) => [styles.textAction, pressed && styles.pressed]}>
-            <Text style={styles.textActionLabel}>Save</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Share dish"
-            accessibilityRole="button"
-            accessibilityState={{busy: sharing}}
-            disabled={sharing}
-            onPress={handleShare}
-            style={({pressed}) => [
-              styles.textAction,
-              sharing && styles.disabled,
-              pressed && !sharing && styles.pressed,
-            ]}>
-            <Text style={styles.textActionLabel}>Share</Text>
+            <Icon name="arrow-left" surface={false} />
           </Pressable>
         </View>
 
@@ -372,80 +350,118 @@ export function CustomerDishDetailScreen() {
           }
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}>
-          {dish.images.length > 0 ? (
-            <View>
-              <FlatList
-                ref={galleryRef}
-                data={dish.images}
-                getItemLayout={(_, index) => ({
-                  length: galleryWidth,
-                  offset: galleryWidth * index,
-                  index,
-                })}
-                horizontal
-                initialNumToRender={1}
-                keyExtractor={image => image.id}
-                maxToRenderPerBatch={2}
-                onMomentumScrollEnd={handleGalleryScrollEnd}
-                pagingEnabled
-                renderItem={({item: image, index}) => (
-                  <Image
-                    accessibilityIgnoresInvertColors
-                    accessibilityLabel={`${dish.itemName} image ${index + 1}`}
-                    source={{uri: image.url}}
-                    resizeMethod="resize"
-                    resizeMode="cover"
-                    style={[styles.heroImage, {width: galleryWidth}]}
-                  />
-                )}
-                showsHorizontalScrollIndicator={false}
-                windowSize={3}
-              />
-              {dish.images.length > 1 ? (
+          <View style={styles.heroFrame}>
+            {dish.images.length > 0 ? (
+              <View>
                 <FlatList
-                  contentContainerStyle={styles.thumbnailRow}
+                  ref={galleryRef}
                   data={dish.images}
+                  getItemLayout={(_, index) => ({
+                    length: galleryWidth,
+                    offset: galleryWidth * index,
+                    index,
+                  })}
                   horizontal
-                  initialNumToRender={6}
+                  initialNumToRender={1}
                   keyExtractor={image => image.id}
-                  maxToRenderPerBatch={6}
+                  maxToRenderPerBatch={2}
+                  onMomentumScrollEnd={handleGalleryScrollEnd}
+                  pagingEnabled
                   renderItem={({item: image, index}) => (
-                    <Pressable
-                      accessibilityLabel={`Show image ${index + 1}`}
-                      accessibilityRole="button"
-                      accessibilityState={{selected: galleryIndex === index}}
-                      onPress={() => selectGalleryImage(index)}
-                      style={[
-                        styles.thumbnailFrame,
-                        galleryIndex === index && styles.thumbnailFrameSelected,
-                      ]}>
-                      <Image
-                        accessibilityIgnoresInvertColors
-                        source={{uri: image.url}}
-                        resizeMethod="resize"
-                        resizeMode="cover"
-                        style={styles.thumbnail}
-                      />
-                    </Pressable>
+                    <Image
+                      accessibilityIgnoresInvertColors
+                      accessibilityLabel={`${dish.itemName} image ${index + 1}`}
+                      source={{uri: image.url}}
+                      resizeMethod="resize"
+                      resizeMode="cover"
+                      style={[styles.heroImage, {width: galleryWidth}]}
+                    />
                   )}
                   showsHorizontalScrollIndicator={false}
-                  windowSize={5}
+                  windowSize={3}
                 />
-              ) : null}
+                {dish.images.length > 1 ? (
+                  <FlatList
+                    contentContainerStyle={styles.thumbnailRow}
+                    data={dish.images}
+                    horizontal
+                    initialNumToRender={6}
+                    keyExtractor={image => image.id}
+                    maxToRenderPerBatch={6}
+                    renderItem={({item: image, index}) => (
+                      <Pressable
+                        accessibilityLabel={`Show image ${index + 1}`}
+                        accessibilityRole="button"
+                        accessibilityState={{selected: galleryIndex === index}}
+                        onPress={() => selectGalleryImage(index)}
+                        style={[
+                          styles.thumbnailFrame,
+                          galleryIndex === index && styles.thumbnailFrameSelected,
+                        ]}>
+                        <Image
+                          accessibilityIgnoresInvertColors
+                          source={{uri: image.url}}
+                          resizeMethod="resize"
+                          resizeMode="cover"
+                          style={styles.thumbnail}
+                        />
+                      </Pressable>
+                    )}
+                    showsHorizontalScrollIndicator={false}
+                    windowSize={5}
+                  />
+                ) : null}
+              </View>
+            ) : (
+              <View style={styles.heroFallback}>
+                <Text style={styles.heroFallbackCategory}>{dish.category}</Text>
+                <Text style={styles.heroFallbackTitle}>{dish.itemName}</Text>
+              </View>
+            )}
+
+            <View style={styles.heroActions}>
+              <Pressable
+                accessibilityLabel={favorite ? 'Remove dish from favorites' : 'Save dish to favorites'}
+                accessibilityRole="button"
+                accessibilityState={{selected: favorite, disabled: favoriteBusy}}
+                disabled={favoriteBusy}
+                hitSlop={spacing.xs}
+                onPress={handleFavorite}
+                style={({pressed}) => [
+                  styles.heroActionButton,
+                  pressed && !favoriteBusy && styles.heroActionPressed,
+                  favoriteBusy && styles.disabled,
+                ]}>
+                <MaterialDesignIcons
+                  name={favorite ? 'heart' : 'heart-outline'}
+                  size={24}
+                  color={favorite ? colors.flameRed : colors.espressoBrown}
+                />
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Share dish"
+                accessibilityRole="button"
+                accessibilityState={{busy: sharing}}
+                disabled={sharing}
+                hitSlop={spacing.xs}
+                onPress={handleShare}
+                style={({pressed}) => [
+                  styles.heroActionButton,
+                  pressed && !sharing && styles.heroActionPressed,
+                  sharing && styles.disabled,
+                ]}>
+                <MaterialDesignIcons
+                  name="share-variant-outline"
+                  size={23}
+                  color={colors.espressoBrown}
+                />
+              </Pressable>
             </View>
-          ) : (
-            <View style={styles.heroFallback}>
-              <Text style={styles.heroFallbackCategory}>{dish.category}</Text>
-              <Text style={styles.heroFallbackTitle}>{dish.itemName}</Text>
-            </View>
-          )}
+          </View>
 
           <View style={styles.content}>
             {interactionNotice ? (
-              <RecoverableErrorBanner
-                message={interactionNotice}
-                style={styles.notice}
-              />
+              <RecoverableErrorBanner message={interactionNotice} style={styles.notice} />
             ) : null}
             {queryError ? (
               offline ? (
@@ -587,27 +603,16 @@ export function CustomerDishDetailScreen() {
           ) : null}
           <View
             style={[
-              styles.purchaseHeading,
-              stackPurchaseActions && styles.purchaseHeadingStacked,
+              styles.purchaseMain,
+              stackPurchaseActions && styles.purchaseMainStacked,
             ]}>
-            <View>
+            <View style={styles.purchaseCopy}>
               <Text style={styles.purchaseLabel}>Current price</Text>
               <Text style={styles.purchasePrice}>
                 {formatDishDetailPrice(dish.price.amount, dish.price.currency)}
               </Text>
             </View>
-            {revalidating ? (
-              <View style={styles.revalidatingRow}>
-                <ActivityIndicator color={colors.flameRed} size="small" />
-                <Text style={styles.revalidatingText}>Checking latest details…</Text>
-              </View>
-            ) : null}
-          </View>
-          <View
-            style={[
-              styles.purchaseActions,
-              stackPurchaseActions && styles.purchaseActionsStacked,
-            ]}>
+
             {cartLine ? (
               <View
                 accessibilityLabel={`${dish.itemName} quantity ${cartLine.quantity}`}
@@ -649,14 +654,19 @@ export function CustomerDishDetailScreen() {
                 accessibilityHint="Checks the latest availability and price before adding"
                 loading={purchaseBusy}
                 onPress={revalidateAndIncrease}
-                style={
-                  stackPurchaseActions
-                    ? styles.purchaseActionStacked
-                    : styles.purchaseAction
-                }
+                style={[
+                  styles.purchaseAction,
+                  stackPurchaseActions && styles.purchaseActionStacked,
+                ]}
               />
             )}
           </View>
+          {revalidating ? (
+            <View style={styles.revalidatingRow}>
+              <ActivityIndicator color={colors.flameRed} size="small" />
+              <Text style={styles.revalidatingText}>Checking latest details…</Text>
+            </View>
+          ) : null}
         </View>
       </View>
     </ScreenShell>
@@ -669,10 +679,7 @@ const styles = StyleSheet.create({
     minHeight: touchTarget.comfortable,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
     backgroundColor: colors.white,
   },
   headerAction: {
@@ -681,29 +688,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
-  },
-  headerSpacer: {flex: 1},
-  textAction: {
-    minHeight: touchTarget.minimum,
-    minWidth: touchTarget.minimum,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.white,
-  },
-  textActionLabel: {
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
   },
   pressed: {opacity: 0.72},
   disabled: {opacity: 0.45},
-  scrollContent: {paddingBottom: spacing.xl},
-  heroImage: {height: 300, backgroundColor: colors.surfaceMuted},
+  scrollContent: {paddingBottom: spacing.lg},
+  heroFrame: {position: 'relative'},
+  heroImage: {height: 280, backgroundColor: colors.surfaceMuted},
   heroFallback: {
-    minHeight: 260,
+    minHeight: 250,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
@@ -721,14 +713,34 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.extrabold,
     textAlign: 'center',
   },
+  heroActions: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.md,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    zIndex: 10,
+  },
+  heroActionButton: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.90)',
+  },
+  heroActionPressed: {
+    backgroundColor: colors.white,
+    transform: [{scale: 0.96}],
+  },
   thumbnailRow: {
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   thumbnailFrame: {
-    width: 64,
-    height: 64,
+    width: 58,
+    height: 58,
     borderRadius: radius.sm,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
@@ -747,10 +759,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingTop: spacing.md,
   },
-  titleRowStacked: {
-    flexDirection: 'column',
-    gap: spacing.xs,
-  },
+  titleRowStacked: {flexDirection: 'column', gap: spacing.xs},
   titleCopy: {flex: 1, minWidth: 0},
   titleCopyStacked: {flex: 0, width: '100%'},
   title: {
@@ -759,20 +768,20 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.extrabold,
   },
   categoryLine: {
-    marginTop: spacing.xs,
+    marginTop: spacing.xxs,
     color: colors.textSecondary,
     fontSize: typography.small,
   },
   inlinePrice: {
-    color: colors.flameRed,
+    color: colors.textPrimary,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
   },
   kitchenCard: {
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
+    gap: spacing.sm,
+    padding: spacing.sm,
     borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
@@ -785,7 +794,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
   },
   kitchenCopy: {flex: 1, minWidth: 0},
   kitchenLabel: {
@@ -805,16 +813,18 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
   },
   factGrid: {
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    columnGap: spacing.sm,
+    rowGap: spacing.xs,
   },
   factCard: {
     flexGrow: 1,
     flexBasis: '46%',
     minWidth: 132,
-    padding: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: radius.md,
     backgroundColor: colors.white,
   },
@@ -826,8 +836,8 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   section: {
-    marginTop: spacing.xl,
-    paddingTop: spacing.lg,
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
     borderTopWidth: borderWidth.standard,
     borderTopColor: colors.border,
   },
@@ -837,7 +847,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   bodyText: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     color: colors.textSecondary,
     fontSize: typography.body,
   },
@@ -854,8 +864,8 @@ const styles = StyleSheet.create({
   },
   purchaseBar: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
     borderTopWidth: borderWidth.standard,
     borderTopColor: colors.border,
     backgroundColor: colors.white,
@@ -866,16 +876,19 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: typography.small,
   },
-  purchaseHeading: {
+  purchaseMain: {
+    minHeight: touchTarget.comfortable,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
-  purchaseHeadingStacked: {
+  purchaseMainStacked: {
     flexDirection: 'column',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
+    gap: spacing.xs,
   },
+  purchaseCopy: {flexShrink: 0},
   purchaseLabel: {color: colors.textSecondary, fontSize: typography.tiny},
   purchasePrice: {
     marginTop: spacing.xxs,
@@ -883,28 +896,11 @@ const styles = StyleSheet.create({
     fontSize: typography.heading,
     fontWeight: fontWeight.extrabold,
   },
-  revalidatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  revalidatingText: {color: colors.textSecondary, fontSize: typography.tiny},
-  purchaseActions: {
-    marginTop: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  purchaseActionsStacked: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-  },
-  purchaseAction: {flex: 1, minWidth: 0},
-  purchaseActionStacked: {width: '100%'},
+  purchaseAction: {width: 190, maxWidth: '58%'},
+  purchaseActionStacked: {width: '100%', maxWidth: '100%'},
   quantitySelector: {
-    flex: 1,
-    minHeight: touchTarget.comfortable,
+    width: 190,
+    minHeight: touchTarget.minimum,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -914,17 +910,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.white,
   },
-  quantitySelectorStacked: {
-    flex: 0,
-    width: '100%',
-  },
+  quantitySelectorStacked: {width: '100%'},
   quantityButton: {
     width: touchTarget.minimum,
-    minHeight: touchTarget.comfortable,
+    minHeight: touchTarget.minimum,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quantityButtonPressed: {backgroundColor: colors.white},
+  quantityButtonPressed: {backgroundColor: colors.surfaceMuted},
   quantityButtonText: {
     color: colors.flameRed,
     fontSize: typography.heading,
@@ -937,9 +930,16 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },
+  revalidatingRow: {
+    marginTop: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  revalidatingText: {color: colors.textSecondary, fontSize: typography.tiny},
   skeletonWrap: {flex: 1, padding: spacing.md, gap: spacing.md},
   skeletonMedia: {
-    height: 300,
+    height: 280,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceMuted,
   },
@@ -956,7 +956,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   skeletonCard: {
-    height: 112,
+    height: 100,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceMuted,
   },

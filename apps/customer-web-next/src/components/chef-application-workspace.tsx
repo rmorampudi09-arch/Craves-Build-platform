@@ -58,7 +58,6 @@ const EMPTY: FormState = {
   longitude: "",
 };
 
-const DRAFT_KEY = "craves-chef-application-draft-v1";
 const PENDING_UPDATE_LABEL = "Update pending application";
 const INPUT_CLASS =
   "mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-base text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:bg-[#F1F3F5]";
@@ -104,32 +103,6 @@ function prefillNewApplication(
       form.longitude ||
       (typeof address?.longitude === "number" ? String(address.longitude) : ""),
   };
-}
-
-function readDraft(): Partial<FormState> {
-  try {
-    const raw = window.sessionStorage.getItem(DRAFT_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as unknown;
-    return parsed && typeof parsed === "object" ? (parsed as Partial<FormState>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function mergeDraft(base: FormState, draft: Partial<FormState>): FormState {
-  const next = { ...base };
-  for (const key of Object.keys(base) as Array<keyof FormState>) {
-    if (typeof draft[key] === "string") next[key] = draft[key] as string;
-  }
-  return next;
-}
-
-function responseMessage(
-  body: { message?: unknown } | null,
-  fallback: string,
-): string {
-  return typeof body?.message === "string" && body.message.trim() ? body.message : fallback;
 }
 
 function needsPhotoCorrection(application: ChefApplication): boolean {
@@ -232,7 +205,7 @@ export function ChefApplicationWorkspace() {
     setApplication(applicationBody);
     setProfile(nextProfile);
     if (applicationBody.status === "NOT_SUBMITTED") {
-      setForm(mergeDraft(prefillNewApplication(applicationBody, nextProfile, addresses), readDraft()));
+      setForm(prefillNewApplication(applicationBody, nextProfile, addresses));
       setStep("welcome");
     } else {
       setForm(fromApplication(applicationBody));
@@ -254,16 +227,7 @@ export function ChefApplicationWorkspace() {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
-  function persistDraft() {
-    try {
-      window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(form));
-    } catch {
-      // The application still works when browser storage is unavailable.
-    }
-  }
-
   function go(next: ApplicationStep) {
-    persistDraft();
     setMessage("");
     setStep(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -368,24 +332,16 @@ export function ChefApplicationWorkspace() {
           longitude: form.longitude === "" ? null : Number(form.longitude),
         }),
       });
-      const body = (await response.json().catch(() => null)) as (ChefApplication & { message?: unknown }) | null;
+      const body = (await response.json().catch(() => null)) as ChefApplication | null;
       if (!response.ok || !body) {
         throw new Error(
-          responseMessage(
-            body,
-            response.status === 400
-              ? "Please check the highlighted details and try again."
-              : "We couldn’t save your details. Please try again.",
-          ),
+          response.status === 400
+            ? "Please check your details and try again."
+            : "We couldn’t save your details. Please try again.",
         );
       }
       setApplication(body);
       setForm(fromApplication(body));
-      try {
-        window.sessionStorage.removeItem(DRAFT_KEY);
-      } catch {
-        // Nothing else is required when storage is unavailable.
-      }
       setMessage("");
       setStep(body.status === "APPROVED" ? "approved" : "documents-intro");
     } catch (error) {
@@ -417,17 +373,11 @@ export function ChefApplicationWorkspace() {
         <IconCircle><UserRound className="h-7 w-7" aria-hidden="true" /></IconCircle>
         <p className="mt-6 text-sm font-semibold text-[#F62E18]">Become a Craves chef</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A] md:text-4xl">Cook from home. We’ll guide you.</h1>
-        <p className="mt-4 text-base leading-7 text-[#6B6B6B]">
-          Tell us about you and your kitchen, then share a few clear photos. You’ll only see one simple task at a time.
-        </p>
+        <p className="mt-4 text-base leading-7 text-[#6B6B6B]">Tell us about you and your kitchen, then share a few clear photos. You’ll only see one simple task at a time.</p>
         <div className="mt-6 space-y-3 rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">
-          {["Your name and contact details", "Your kitchen address", "Your photo, ID and PAN card"].map((item) => (
-            <p key={item} className="flex items-center gap-3"><Check className="h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />{item}</p>
-          ))}
+          {["Your name and contact details", "Your kitchen address", "Your photo, ID and PAN card"].map((item) => <p key={item} className="flex items-center gap-3"><Check className="h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />{item}</p>)}
         </div>
-        <button type="button" onClick={() => go("about")} className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white">
-          Start my application <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </button>
+        <button type="button" onClick={() => go("about")} className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white">Start my application <ChevronRight className="h-4 w-4" aria-hidden="true" /></button>
       </section>
     );
   }
@@ -444,12 +394,7 @@ export function ChefApplicationWorkspace() {
           <label className="text-sm font-semibold text-[#1A1A1A]">Last name<input value={form.lastName} onChange={(event) => field("lastName", event.target.value)} className={INPUT_CLASS} autoComplete="family-name" /></label>
           <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Email<input type="email" value={form.email} onChange={(event) => field("email", event.target.value)} className={INPUT_CLASS} autoComplete="email" /></label>
         </div>
-        {profile?.registeredPhoneNumber ? (
-          <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">
-            <Phone className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
-            <span>Your Craves phone number is already saved: <strong className="text-[#1A1A1A]">{profile.registeredPhoneNumber}</strong></span>
-          </div>
-        ) : null}
+        {profile?.registeredPhoneNumber ? <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]"><Phone className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" /><span>Your Craves phone number is already saved: <strong className="text-[#1A1A1A]">{profile.registeredPhoneNumber}</strong></span></div> : null}
         {message ? <p role="alert" className="mt-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
         <button type="button" onClick={continueAbout} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
       </section>
@@ -463,15 +408,7 @@ export function ChefApplicationWorkspace() {
         <div className="mt-7"><IconCircle><MapPin className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Where do you cook?</h1>
         <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">This is the kitchen address used for food pickup.</p>
-        <button
-          type="button"
-          disabled={locating}
-          onClick={useCurrentLocation}
-          className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 font-semibold text-[#F62E18] disabled:opacity-50"
-        >
-          <MapPin className="h-4 w-4" aria-hidden="true" />
-          {locating ? "Finding my address…" : "Use my current location"}
-        </button>
+        <button type="button" disabled={locating} onClick={useCurrentLocation} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 font-semibold text-[#F62E18] disabled:opacity-50"><MapPin className="h-4 w-4" aria-hidden="true" />{locating ? "Finding my address…" : "Use my current location"}</button>
         {message ? <p role="status" className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p> : null}
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Flat / House / Building<input value={form.addressLine1} onChange={(event) => field("addressLine1", event.target.value)} className={INPUT_CLASS} autoComplete="address-line1" /></label>
@@ -492,34 +429,15 @@ export function ChefApplicationWorkspace() {
         <StepHeader part={1} label="Check your details" onBack={() => go("address")} />
         <div className="mt-7"><IconCircle><Check className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Does everything look right?</h1>
-        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">If something is wrong, change just that part. You won’t lose the rest.</p>
-        {calmCorrection ? (
-          <div className="mt-5 rounded-2xl bg-[#F1F3F5] p-4">
-            <p className="font-semibold text-[#1A1A1A]">We need one more thing</p>
-            <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">{calmCorrection}</p>
-          </div>
-        ) : null}
+        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">If something is wrong, change just that part. You won’t lose the rest that Craves already saved.</p>
+        {calmCorrection ? <div className="mt-5 rounded-2xl bg-[#F1F3F5] p-4"><p className="font-semibold text-[#1A1A1A]">We need one more thing</p><p className="mt-1 text-sm leading-6 text-[#6B6B6B]">{calmCorrection}</p></div> : null}
         <div className="mt-6 space-y-3">
-          <div className="rounded-2xl bg-[#F1F3F5] p-5">
-            <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[#6B6B6B]">Your name</p><p className="mt-1 font-semibold text-[#1A1A1A]">{form.firstName} {form.lastName}</p><p className="mt-1 text-sm text-[#6B6B6B]">{form.email}</p></div><button type="button" onClick={() => go("about")} className="text-sm font-semibold text-[#F62E18]">Change</button></div>
-          </div>
-          <div className="rounded-2xl bg-[#F1F3F5] p-5">
-            <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[#6B6B6B]">Kitchen address</p><p className="mt-1 text-sm leading-6 text-[#1A1A1A]">{addressSummary(form) || "Address not added"}</p></div><button type="button" onClick={() => go("address")} className="text-sm font-semibold text-[#F62E18]">Change</button></div>
-          </div>
+          <div className="rounded-2xl bg-[#F1F3F5] p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[#6B6B6B]">Your name</p><p className="mt-1 font-semibold text-[#1A1A1A]">{form.firstName} {form.lastName}</p><p className="mt-1 text-sm text-[#6B6B6B]">{form.email}</p></div><button type="button" onClick={() => go("about")} className="text-sm font-semibold text-[#F62E18]">Change</button></div></div>
+          <div className="rounded-2xl bg-[#F1F3F5] p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[#6B6B6B]">Kitchen address</p><p className="mt-1 text-sm leading-6 text-[#1A1A1A]">{addressSummary(form) || "Address not added"}</p></div><button type="button" onClick={() => go("address")} className="text-sm font-semibold text-[#F62E18]">Change</button></div></div>
         </div>
         {message ? <p role="alert" className="mt-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
-        <button
-          type="submit"
-          disabled={busy || locked}
-          aria-label={application?.status === "PENDING" ? PENDING_UPDATE_LABEL : undefined}
-          className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50"
-        >
-          {busy ? "Saving…" : "Save and continue"}
-          {!busy ? <ChevronRight className="h-4 w-4" aria-hidden="true" /> : null}
-        </button>
-        {application?.id ? (
-          <button type="button" onClick={() => go("documents-intro")} className="mt-3 min-h-11 w-full text-sm font-semibold text-[#6B6B6B] hover:text-[#1A1A1A]">Go to my photos</button>
-        ) : null}
+        <button type="submit" disabled={busy || locked} aria-label={application?.status === "PENDING" ? PENDING_UPDATE_LABEL : undefined} className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50">{busy ? "Saving…" : "Save and continue"}{!busy ? <ChevronRight className="h-4 w-4" aria-hidden="true" /> : null}</button>
+        {application?.id ? <button type="button" onClick={() => go("documents-intro")} className="mt-3 min-h-11 w-full text-sm font-semibold text-[#6B6B6B] hover:text-[#1A1A1A]">Go to my photos</button> : null}
       </form>
     );
   }
@@ -531,22 +449,14 @@ export function ChefApplicationWorkspace() {
         <div className="mt-7"><IconCircle><ShieldCheck className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Next, we need a few photos</h1>
         <p className="mt-3 text-base leading-7 text-[#6B6B6B]">We ask every chef for these so we know who is preparing food. Your ID photos are kept private.</p>
-        <div className="mt-6 space-y-3 rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">
-          {["A clear photo of you", "Front of your government ID", "Back of the same ID", "Your PAN card"].map((item) => (
-            <p key={item} className="flex items-center gap-3"><Camera className="h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />{item}</p>
-          ))}
-        </div>
+        <div className="mt-6 space-y-3 rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">{["A clear photo of you", "Front of your government ID", "Back of the same ID", "Your PAN card"].map((item) => <p key={item} className="flex items-center gap-3"><Camera className="h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />{item}</p>)}</div>
         <button type="button" onClick={() => go("documents")} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
       </section>
     );
   }
 
   if (step === "documents") {
-    return (
-      <div>
-        <ChefApplicationDocumentPanel onComplete={() => go("waiting")} />
-      </div>
-    );
+    return <ChefApplicationDocumentPanel onComplete={() => go("waiting")} />;
   }
 
   if (step === "waiting") {

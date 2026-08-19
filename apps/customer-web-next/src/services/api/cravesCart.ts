@@ -23,9 +23,9 @@ type PendingCheckoutCartDraft = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
-const PENDING_CHECKOUT_CART_KEY = "craves.pending-checkout-cart.v1";
 let cart: CustomerCart | null = null;
 let visualItems: CartItem[] = [];
+let pendingCheckoutCart: PendingCheckoutCartDraft | null = null;
 const listeners = new Set<() => void>();
 
 function mapItem(item: ServerCartItem): CartItem {
@@ -60,72 +60,6 @@ function reset() {
   notify();
 }
 
-function pendingCheckoutStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.sessionStorage;
-  } catch {
-    return null;
-  }
-}
-
-function readPendingCheckoutCart(): PendingCheckoutCartDraft | null {
-  const storage = pendingCheckoutStorage();
-  if (!storage) return null;
-  const raw = storage.getItem(PENDING_CHECKOUT_CART_KEY);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as {
-      items?: unknown;
-      restored?: unknown;
-    };
-    if (!Array.isArray(parsed.items)) return null;
-    const items: PendingCheckoutCartDraft["items"] = [];
-    for (const item of parsed.items) {
-      if (!item || typeof item !== "object") continue;
-      const candidate = item as { menuItemId?: unknown; quantity?: unknown };
-      if (
-        typeof candidate.menuItemId !== "string" ||
-        !UUID.test(candidate.menuItemId) ||
-        typeof candidate.quantity !== "number" ||
-        !Number.isInteger(candidate.quantity) ||
-        candidate.quantity < 1 ||
-        candidate.quantity > 50
-      ) {
-        continue;
-      }
-      items.push({
-        menuItemId: candidate.menuItemId,
-        quantity: candidate.quantity,
-      });
-    }
-    if (!items.length) return null;
-    return { items, restored: parsed.restored === true };
-  } catch {
-    return null;
-  }
-}
-
-function writePendingCheckoutCart(draft: PendingCheckoutCartDraft) {
-  const storage = pendingCheckoutStorage();
-  if (!storage) return;
-  try {
-    storage.setItem(PENDING_CHECKOUT_CART_KEY, JSON.stringify(draft));
-  } catch {
-    // Session storage is a resilience layer only; cart APIs remain the source of truth.
-  }
-}
-
-function clearPendingCheckoutCart() {
-  const storage = pendingCheckoutStorage();
-  if (!storage) return;
-  try {
-    storage.removeItem(PENDING_CHECKOUT_CART_KEY);
-  } catch {
-    // Ignore storage failures so cart API behavior remains available.
-  }
-}
-
 function cartDraftItems() {
   return visualItems.map((item) => ({
     menuItemId: item.menuItemId,
@@ -135,24 +69,22 @@ function cartDraftItems() {
 
 function rememberValidatedCart() {
   if (!visualItems.length) return;
-  const existing = readPendingCheckoutCart();
-  writePendingCheckoutCart({
+  pendingCheckoutCart = {
     items: cartDraftItems(),
-    restored: existing?.restored ?? false,
-  });
+    restored: false,
+  };
 }
 
 function syncPendingCheckoutCart() {
-  const existing = readPendingCheckoutCart();
-  if (!existing) return;
+  if (!pendingCheckoutCart) return;
   if (!visualItems.length) {
-    clearPendingCheckoutCart();
+    pendingCheckoutCart = null;
     return;
   }
-  writePendingCheckoutCart({
+  pendingCheckoutCart = {
     items: cartDraftItems(),
-    restored: existing.restored,
-  });
+    restored: pendingCheckoutCart.restored,
+  };
 }
 
 async function cartRequest(path: string, init?: RequestInit): Promise<CustomerCart> {
@@ -180,7 +112,7 @@ async function cartRequest(path: string, init?: RequestInit): Promise<CustomerCa
 }
 
 async function restorePendingCheckoutCart(): Promise<void> {
-  const draft = readPendingCheckoutCart();
+  const draft = pendingCheckoutCart;
   if (!draft || visualItems.length) return;
   for (const item of draft.items) {
     await cartRequest("/api/cart/items", {
@@ -191,7 +123,10 @@ async function restorePendingCheckoutCart(): Promise<void> {
       }),
     });
   }
-  writePendingCheckoutCart({ items: draft.items, restored: true });
+  pendingCheckoutCart = {
+    items: draft.items,
+    restored: true,
+  };
 }
 
 export async function loadCart(): Promise<CartItem[]> {
@@ -264,7 +199,7 @@ export async function removeFromCart(id: string): Promise<void> {
 
 export async function clearCart(): Promise<void> {
   await cartRequest("/api/cart", { method: "DELETE" });
-  clearPendingCheckoutCart();
+  pendingCheckoutCart = null;
 }
 
 export async function validateCart(): Promise<CustomerCart> {
@@ -274,8 +209,8 @@ export async function validateCart(): Promise<CustomerCart> {
 }
 
 export async function completePendingCheckoutCart(): Promise<void> {
-  const draft = readPendingCheckoutCart();
-  clearPendingCheckoutCart();
+  const draft = pendingCheckoutCart;
+  pendingCheckoutCart = null;
   if (!draft?.restored) {
     reset();
     return;

@@ -7,24 +7,29 @@ pool:
 steps:
   - checkout: self
     clean: true
+
   - task: JavaToolInstaller@0
     inputs:
       versionSpec: '21'
       jdkArchitectureOption: x64
       jdkSourceOption: PreInstalled
+
   - bash: |
       set -euo pipefail
       cd services/integration-service
       mvn -B -ntp clean verify
     displayName: Verify Razorpay backend, subscriptions, webhooks and refunds
+
   - bash: |
       set -euo pipefail
       cd services/order-service
       mvn -B -ntp clean verify
     displayName: Verify provider-neutral refund status consumption
+
   - task: NodeTool@0
     inputs:
       versionSpec: 24.x
+
   - bash: |
       set -euo pipefail
       cd apps/customer-web-next
@@ -34,16 +39,49 @@ steps:
       npm run test
       npm run build
     displayName: Verify Razorpay customer checkout
+
   - bash: |
       set -euo pipefail
-      test -f azure-pipelines-razorpay-environment.yml
-      test -f azure-pipelines-razorpay-production-rollback.yml
-      test -f azure-pipelines-razorpay-webhook-apim.yml
+
+      test -s azure-pipelines-razorpay-environment.yml
+      test -s azure-pipelines-razorpay-production-activation.yml
+      test -s azure-pipelines-razorpay-production-rollback.yml
+      test -s azure-pipelines-razorpay-webhook-apim.yml
+      test -s services/integration-service/src/main/resources/db/migration/V112__razorpay_webhook_delivery_guard.sql
+      test -s services/integration-service/src/main/java/in/craves/integration/payment/RazorpayWebhookInboxService.java
+      test -s services/integration-service/src/main/java/in/craves/integration/payment/RazorpayWebhookWorker.java
+      test -s services/integration-service/src/main/java/in/craves/integration/payment/RazorpayProductionReadinessService.java
+      test -s services/integration-service/src/main/java/in/craves/integration/admin/AdminRazorpayProductionReadinessController.java
+
       grep -Fq 'PAYMENT_PROVIDER_NAME=RAZORPAY' azure-pipelines-razorpay-environment.yml
       grep -Fq 'CASHFREE_API_ENABLED=false' azure-pipelines-razorpay-environment.yml
+      grep -Fq 'CASHFREE_TRAFFIC_ALLOWED=false' azure-pipelines-razorpay-environment.yml
+      grep -Fq 'CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED=false' azure-pipelines-razorpay-environment.yml
+      grep -Fq 'CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED=false' azure-pipelines-razorpay-environment.yml
+      grep -Fq 'CRAVES_RAZORPAY_WEBHOOK_WORKER_ENABLED=true' azure-pipelines-razorpay-environment.yml
+      grep -Fq 'RAZORPAY_PRODUCTION_PAYMENT_EXECUTION_ENABLED=false' azure-pipelines-razorpay-environment.yml
+
+      grep -Fq 'FOR UPDATE SKIP LOCKED' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayWebhookInboxService.java
+      grep -Fq 'X-Razorpay-Event-Id' services/integration-service/src/main/java/in/craves/integration/web/PaymentController.java
+      grep -Fq 'razorpayWebhookInboxService.accept' services/integration-service/src/main/java/in/craves/integration/web/PaymentController.java
+      grep -Fq 'verifyCapturedProviderState' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayWebhookWorker.java
+      grep -Fq 'queryParam("receipt", receipt)' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayPaymentClient.java
+      grep -Fq 'amount_paid' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayPaymentClient.java
+      grep -Fq 'amount_due' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayPaymentClient.java
+
+      grep -Fq 'X-Refund-Idempotency' services/integration-service/src/main/java/in/craves/integration/refund/RazorpayRefundClient.java
+      ! grep -Fq 'X-Razorpay-Idempotency-Key' services/integration-service/src/main/java/in/craves/integration/refund/RazorpayRefundClient.java
+
       grep -Fq 'X-Razorpay-Signature' infra/apim/customer-payments/razorpay-webhook-policy.xml
       ! grep -Fq 'validate-jwt' infra/apim/customer-payments/razorpay-webhook-policy.xml
       grep -Fq 'checkout.razorpay.com/v1/checkout.js' apps/customer-web-next/src/components/checkout/RazorpayPayment.tsx
       grep -Fq 'checkout.razorpay.com/v1/checkout.js' apps/customer-web-next/src/components/subscription-razorpay-payment.tsx
       ! rg -n 'sdk.cashfree.com' apps/customer-web-next/src/components/checkout apps/customer-web-next/src/components/subscription-razorpay-payment.tsx
-    displayName: Verify provider switch is Razorpay-only and fail-closed
+
+      grep -Fq 'CRAVES_PAYMENT_ORDER_API_ENABLED=false' azure-pipelines-razorpay-production-rollback.yml
+      grep -Fq 'CRAVES_RAZORPAY_WEBHOOK_INGRESS_ENABLED=true' azure-pipelines-razorpay-production-rollback.yml
+      grep -Fq 'CRAVES_RAZORPAY_WEBHOOK_WORKER_ENABLED=true' azure-pipelines-razorpay-production-rollback.yml
+      grep -Fq 'CASHFREE_TRAFFIC_ALLOWED=false' azure-pipelines-razorpay-production-rollback.yml
+
+      git diff --check origin/main...HEAD
+    displayName: Verify Razorpay production invariants and fail-closed routing

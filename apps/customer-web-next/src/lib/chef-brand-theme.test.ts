@@ -19,8 +19,10 @@ test("chef workspace uses the approved white, contrast-red and flame-red palette
   assert.doesNotMatch(theme, /#261a15/i);
   assert.match(pageHeader, /bg-white/);
   assert.match(pageHeader, /text-black/);
-  assert.match(dashboard, /text-primary/);
-  assert.match(dashboard, /bg-secondary/);
+  assert.match(dashboard, /#F62E18/i);
+  assert.match(dashboard, /#F1F3F5/i);
+  assert.match(dashboard, /#1A1A1A/i);
+  assert.match(dashboard, /#6B6B6B/i);
   assert.doesNotMatch(
     `${pageHeader}\n${dashboard}`,
     /#6930CA|#F6B545|bg-white\/5|text-slate-300/i,

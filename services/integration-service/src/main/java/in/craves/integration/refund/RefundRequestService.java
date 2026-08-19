@@ -1,5 +1,6 @@
 package in.craves.integration.refund;
 
+import in.craves.integration.config.PaymentRoutingProperties;
 import in.craves.integration.refund.RefundModels.EventEnvelope;
 import in.craves.integration.refund.RefundModels.RefundRequestedData;
 import java.math.BigDecimal;
@@ -16,15 +17,22 @@ import org.springframework.util.StringUtils;
 public class RefundRequestService {
     private final JdbcTemplate jdbcTemplate;
     private final RefundEventValidator validator;
+    private final PaymentRoutingProperties paymentRoutingProperties;
 
-    public RefundRequestService(JdbcTemplate jdbcTemplate, RefundEventValidator validator) {
+    public RefundRequestService(
+        JdbcTemplate jdbcTemplate,
+        RefundEventValidator validator,
+        PaymentRoutingProperties paymentRoutingProperties
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.validator = validator;
+        this.paymentRoutingProperties = paymentRoutingProperties;
     }
 
     @Transactional
     public boolean accept(EventEnvelope<RefundRequestedData> event, String rawPayload) {
         validator.validate(event);
+        requireRazorpayRouting();
 
         int inboxInserted = jdbcTemplate.update(
             """
@@ -73,7 +81,7 @@ public class RefundRequestService {
                     ?, ?, ?, ?, ?,
                     'REQUESTED', ?, '{}'::jsonb, now(), now(),
                     ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?,
+                    'RAZORPAY', ?, ?, NULL, ?, ?,
                     CAST(? AS jsonb), ?, now()
                 )
                 ON CONFLICT DO NOTHING
@@ -87,10 +95,8 @@ public class RefundRequestService {
             data.checkoutId(),
             data.chefSubOrderId(),
             data.customerIdentityId(),
-            paymentOrder.provider(),
             paymentOrder.providerOrderId(),
             paymentOrder.providerPaymentId(),
-            "CASHFREE".equals(paymentOrder.provider()) ? paymentOrder.providerOrderId() : null,
             idempotencyKey,
             event.eventId(),
             rawPayload,
@@ -107,6 +113,14 @@ public class RefundRequestService {
             event.eventId()
         );
         return true;
+    }
+
+    private void requireRazorpayRouting() {
+        if (!paymentRoutingProperties.razorpay() || !paymentRoutingProperties.razorpayEnabled()) {
+            throw new RefundNonRetryableException(
+                "Refund creation is fail-closed unless Razorpay is the active enabled payment provider"
+            );
+        }
     }
 
     private boolean refundExists(UUID chefSubOrderId) {
@@ -158,14 +172,22 @@ public class RefundRequestService {
         if (!"PAID".equals(paymentOrder.status())) {
             throw new RefundNonRetryableException("Only a paid checkout can be refunded");
         }
-        if (!StringUtils.hasText(paymentOrder.providerOrderId())) {
-            throw new RefundRetryableException("Payment provider order identifier is not available");
+        if (!"RAZORPAY".equals(paymentOrder.provider())) {
+            throw new RefundNonRetryableException(
+                "Automatic refunds are restricted to Razorpay payment orders"
+            );
         }
-        if ("RAZORPAY".equals(paymentOrder.provider()) && !StringUtils.hasText(paymentOrder.providerPaymentId())) {
+        if (!StringUtils.hasText(paymentOrder.providerOrderId()) || !paymentOrder.providerOrderId().startsWith("order_")) {
+            throw new RefundRetryableException("Razorpay order identifier is not available");
+        }
+        if (!StringUtils.hasText(paymentOrder.providerPaymentId()) || !paymentOrder.providerPaymentId().startsWith("pay_")) {
             throw new RefundRetryableException("Razorpay captured payment identifier is not available");
         }
         if (!data.currency().equals(paymentOrder.currency())) {
             throw new RefundNonRetryableException("Refund currency does not match the payment currency");
+        }
+        if (requestedAmount.signum() <= 0) {
+            throw new RefundNonRetryableException("Refund amount must be positive");
         }
         if (requestedAmount.compareTo(paymentOrder.amount()) > 0) {
             throw new RefundNonRetryableException("Refund amount exceeds the captured payment amount");

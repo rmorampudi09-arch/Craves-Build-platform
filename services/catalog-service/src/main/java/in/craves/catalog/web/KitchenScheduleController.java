@@ -1,5 +1,6 @@
 package in.craves.catalog.web;
 
+import in.craves.catalog.exception.ApiException;
 import in.craves.catalog.security.CravesPrincipal;
 import in.craves.catalog.service.KitchenScheduleService;
 import in.craves.catalog.web.KitchenScheduleDtos.KitchenDateOverrideRequest;
@@ -37,6 +38,7 @@ public class KitchenScheduleController {
         @AuthenticationPrincipal CravesPrincipal principal,
         @RequestBody KitchenScheduleUpdateRequest request
     ) {
+        rejectNullWeeklyWindows(request);
         return kitchenScheduleService.replaceMySchedule(principal, request);
     }
 
@@ -54,6 +56,7 @@ public class KitchenScheduleController {
         @PathVariable LocalDate serviceDate,
         @RequestBody KitchenDateOverrideRequest request
     ) {
+        rejectNullOverrideWindows(request);
         return kitchenScheduleService.putMyDateOverride(principal, serviceDate, request);
     }
 
@@ -64,5 +67,27 @@ public class KitchenScheduleController {
         @PathVariable LocalDate serviceDate
     ) {
         kitchenScheduleService.deleteMyDateOverride(principal, serviceDate);
+    }
+
+    private static void rejectNullWeeklyWindows(KitchenScheduleUpdateRequest request) {
+        if (request != null
+            && request.weeklyWindows() != null
+            && request.weeklyWindows().stream().anyMatch(java.util.Objects::isNull)) {
+            throw ApiException.badRequest(
+                "INVALID_SERVICE_WINDOW",
+                "weeklyWindows cannot contain null entries"
+            );
+        }
+    }
+
+    private static void rejectNullOverrideWindows(KitchenDateOverrideRequest request) {
+        if (request != null
+            && request.windows() != null
+            && request.windows().stream().anyMatch(java.util.Objects::isNull)) {
+            throw ApiException.badRequest(
+                "INVALID_SERVICE_WINDOW",
+                "windows cannot contain null entries"
+            );
+        }
     }
 }

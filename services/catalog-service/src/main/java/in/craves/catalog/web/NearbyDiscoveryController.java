@@ -1,5 +1,6 @@
 package in.craves.catalog.web;
 
+import in.craves.catalog.service.DiscoveryCacheService;
 import in.craves.catalog.service.DiscoveryCriteria;
 import in.craves.catalog.service.DiscoveryCriteria.KitchenSort;
 import in.craves.catalog.service.DiscoveryCriteria.MenuItemSort;
@@ -18,9 +19,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/discovery")
 public class NearbyDiscoveryController {
     private final NearbyDiscoveryService nearbyDiscoveryService;
+    private final DiscoveryCacheService discoveryCacheService;
 
-    public NearbyDiscoveryController(NearbyDiscoveryService nearbyDiscoveryService) {
+    public NearbyDiscoveryController(
+        NearbyDiscoveryService nearbyDiscoveryService,
+        DiscoveryCacheService discoveryCacheService
+    ) {
         this.nearbyDiscoveryService = nearbyDiscoveryService;
+        this.discoveryCacheService = discoveryCacheService;
     }
 
     @GetMapping("/kitchens")
@@ -39,22 +45,25 @@ public class NearbyDiscoveryController {
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size
     ) {
-        return nearbyDiscoveryService.discoverKitchens(
-            latitude,
-            longitude,
-            radiusMeters,
-            new DiscoveryCriteria(
-                query,
-                category,
-                foodType,
-                minPrice,
-                maxPrice,
-                maxPreparationTimeMinutes,
-                spiceLevel
-            ),
-            sort,
-            page,
-            size
+        DiscoveryCriteria criteria = new DiscoveryCriteria(
+            query,
+            category,
+            foodType,
+            minPrice,
+            maxPrice,
+            maxPreparationTimeMinutes,
+            spiceLevel
+        );
+        String cacheKey = key(
+            "kitchens", latitude, longitude, radiusMeters, query, category, foodType,
+            minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel, sort, page, size
+        );
+        return discoveryCacheService.getOrLoad(
+            cacheKey,
+            NearbyKitchenDiscoveryResponse.class,
+            () -> nearbyDiscoveryService.discoverKitchens(
+                latitude, longitude, radiusMeters, criteria, sort, page, size
+            )
         );
     }
 
@@ -74,22 +83,33 @@ public class NearbyDiscoveryController {
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size
     ) {
-        return nearbyDiscoveryService.discoverMenuItems(
-            latitude,
-            longitude,
-            radiusMeters,
-            new DiscoveryCriteria(
-                query,
-                category,
-                foodType,
-                minPrice,
-                maxPrice,
-                maxPreparationTimeMinutes,
-                spiceLevel
-            ),
-            sort,
-            page,
-            size
+        DiscoveryCriteria criteria = new DiscoveryCriteria(
+            query,
+            category,
+            foodType,
+            minPrice,
+            maxPrice,
+            maxPreparationTimeMinutes,
+            spiceLevel
         );
+        String cacheKey = key(
+            "menu-items", latitude, longitude, radiusMeters, query, category, foodType,
+            minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel, sort, page, size
+        );
+        return discoveryCacheService.getOrLoad(
+            cacheKey,
+            NearbyMenuItemDiscoveryResponse.class,
+            () -> nearbyDiscoveryService.discoverMenuItems(
+                latitude, longitude, radiusMeters, criteria, sort, page, size
+            )
+        );
+    }
+
+    private static String key(String resource, Object... values) {
+        StringBuilder builder = new StringBuilder(resource);
+        for (Object value : values) {
+            builder.append('|').append(value == null ? "" : value.toString());
+        }
+        return builder.toString();
     }
 }

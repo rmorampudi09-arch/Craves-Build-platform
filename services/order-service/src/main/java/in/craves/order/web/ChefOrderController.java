@@ -3,6 +3,7 @@ package in.craves.order.web;
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.service.ChefAcceptanceResolutionService;
 import in.craves.order.service.ChefAcceptanceService;
+import in.craves.order.service.ChefReadyForPickupService;
 import in.craves.order.service.OrderService;
 import in.craves.order.web.ApiDtos.ChefAcceptRequest;
 import in.craves.order.web.ApiDtos.ChefRejectRequest;
@@ -25,15 +26,18 @@ public class ChefOrderController {
     private final OrderService orderService;
     private final ChefAcceptanceService chefAcceptanceService;
     private final ChefAcceptanceResolutionService chefAcceptanceResolutionService;
+    private final ChefReadyForPickupService chefReadyForPickupService;
 
     public ChefOrderController(
         OrderService orderService,
         ChefAcceptanceService chefAcceptanceService,
-        ChefAcceptanceResolutionService chefAcceptanceResolutionService
+        ChefAcceptanceResolutionService chefAcceptanceResolutionService,
+        ChefReadyForPickupService chefReadyForPickupService
     ) {
         this.orderService = orderService;
         this.chefAcceptanceService = chefAcceptanceService;
         this.chefAcceptanceResolutionService = chefAcceptanceResolutionService;
+        this.chefReadyForPickupService = chefReadyForPickupService;
     }
 
     @GetMapping
@@ -76,6 +80,6 @@ public class ChefOrderController {
 
     @PostMapping("/{orderId}/ready-for-pickup")
     public OrderResponse readyForPickup(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID orderId) {
-        return orderService.markReadyForPickup(principal, orderId);
+        return chefReadyForPickupService.markReady(principal, orderId);
     }
 }

@@ -51,6 +51,7 @@ test("signed-in discovery keeps the rebuilt paper reference surface", () => {
   );
   assert.match(
     browse,
-    /\$\{styles\.paperSurface\} min-h-screen pb-24 text-\[#261A15\]/,
+    /\$\{styles\.paperSurface\} min-h-screen pb-24 text-\[#1A1A1A\]/,
   );
+  assert.doesNotMatch(browse, /text-\[#261A15\]/i);
 });

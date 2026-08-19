@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   BadgeIndianRupee,
   CalendarDays,
@@ -13,6 +14,11 @@ import {
   Store,
   Utensils,
 } from "lucide-react";
+import {
+  getSession,
+  subscribeSession,
+  type CravesUser,
+} from "@/services/auth/cravesAuth";
 
 const coreLinks = [
   { href: "/chef", label: "Home", icon: Home },
@@ -22,7 +28,7 @@ const coreLinks = [
   { href: "/chef/earnings", label: "What I've earned", icon: BadgeIndianRupee },
 ] as const;
 
-// These routes stay available for existing chefs and direct links, but they are
+// These routes stay available for approved chefs and direct links, but they are
 // intentionally not presented as equal-weight choices to a new chef.
 const extraLinks = [
   { href: "/chef/application", label: "Your details", icon: ClipboardCheck },
@@ -35,12 +41,29 @@ function isActive(pathname: string, href: string) {
   return pathname === href || (href !== "/chef" && pathname.startsWith(`${href}/`));
 }
 
+function hasChefRole(user: CravesUser | null): boolean {
+  return Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF"));
+}
+
 export function ChefWorkspaceNavigation() {
   const pathname = usePathname();
+  const [canUseChefWorkspace, setCanUseChefWorkspace] = useState(() =>
+    hasChefRole(getSession()),
+  );
+
+  useEffect(() => {
+    const syncAccess = () => setCanUseChefWorkspace(hasChefRole(getSession()));
+    syncAccess();
+    return subscribeSession(syncAccess);
+  }, []);
 
   // Application onboarding is intentionally linear: no tabs, no competing
   // destinations, and no dashboard navigation while a chef is applying.
-  if (pathname === "/chef/application" || pathname.startsWith("/chef/application/")) {
+  if (
+    pathname === "/chef/application" ||
+    pathname.startsWith("/chef/application/") ||
+    !canUseChefWorkspace
+  ) {
     return null;
   }
 

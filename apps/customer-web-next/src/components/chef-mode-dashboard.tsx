@@ -6,11 +6,13 @@ import {
   AlertTriangle,
   BadgeIndianRupee,
   ChefHat,
+  CheckCircle2,
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
   LogIn,
   RefreshCw,
+  ShieldCheck,
   Store,
   Utensils,
 } from "lucide-react";
@@ -29,9 +31,19 @@ import {
   parseChefEarnings,
   type ChefEarning,
 } from "@/lib/chef-earnings-contract";
-import { loadSession, type CravesUser } from "@/services/auth/cravesAuth";
+import {
+  loadSession,
+  synchronizeSessionRoles,
+  type CravesUser,
+} from "@/services/auth/cravesAuth";
 
-type DashboardState = "loading" | "signed-out" | "applicant" | "approved" | "error";
+type DashboardState =
+  | "loading"
+  | "signed-out"
+  | "applicant"
+  | "verification"
+  | "approved"
+  | "error";
 
 type Snapshot = {
   application: ChefApplication | null;
@@ -61,8 +73,19 @@ const EMPTY: Snapshot = {
   unavailable: [],
 };
 
-function hasChefRole(user: CravesUser): boolean {
-  return user.roles.some((role) => role.toUpperCase() === "CHEF");
+function hasChefRole(user: CravesUser | null): boolean {
+  return Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF"));
+}
+
+function hasRequiredEvidence(application: ChefApplication): boolean {
+  const types = new Set(application.documents.map((document) => document.documentType));
+  const modernEvidence =
+    types.has("APPLICANT_PHOTO") &&
+    types.has("GOVERNMENT_ID_FRONT") &&
+    types.has("GOVERNMENT_ID_BACK") &&
+    types.has("TAX_ID_CARD");
+  const legacyEvidence = types.has("AADHAAR_CARD") && types.has("PAN_CARD");
+  return modernEvidence || legacyEvidence;
 }
 
 async function responseBody(response: Response): Promise<unknown> {
@@ -98,22 +121,34 @@ function isThisWeek(value: string): boolean {
 function applicantCopy(application: ChefApplication | null) {
   if (!application || application.status === "NOT_SUBMITTED") {
     return {
+      eyebrow: "Become a Craves chef",
       title: "Cook from home with Craves",
       description:
         "Tell us who you are, where you cook, and share a few clear photos. We’ll guide you one thing at a time.",
-      action: "Start my application",
+      action: "Apply to become a chef",
+    };
+  }
+  if (application.status === "PENDING" && !hasRequiredEvidence(application)) {
+    return {
+      eyebrow: "Application in progress",
+      title: "Finish your chef application",
+      description:
+        "Your details are saved. Add the remaining photos so Craves can review your application.",
+      action: "Continue application",
     };
   }
   if (application.status === "PENDING") {
     return {
-      title: "We’re checking your details",
+      eyebrow: "Application status",
+      title: "Application under review",
       description:
-        "Your application is with Craves. You can come back anytime, and we’ll show you the next thing that needs attention.",
-      action: "View my application",
+        "Your details and photos are with Craves. There’s nothing else you need to do unless we ask for an update.",
+      action: "View application status",
     };
   }
   if (application.status === "REJECTED") {
     return {
+      eyebrow: "Application update",
       title: "We need one more thing",
       description:
         application.rejectionReason?.trim() ||
@@ -122,8 +157,9 @@ function applicantCopy(application: ChefApplication | null) {
     };
   }
   return {
+    eyebrow: "Chef Mode",
     title: "You’re approved",
-    description: "Your chef access is ready. Continue to set up your kitchen.",
+    description: "Your chef access is ready. Continue to Chef Mode.",
     action: "Continue",
   };
 }
@@ -134,38 +170,13 @@ export function ChefModeDashboard() {
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY);
   const [message, setMessage] = useState("Loading your kitchen…");
   const [refreshTick, setRefreshTick] = useState(0);
+  const [showApprovalNotice, setShowApprovalNotice] = useState(false);
+  const [approvalNoticeKey, setApprovalNoticeKey] = useState("");
 
   useEffect(() => {
     let active = true;
 
-    void (async () => {
-      const current = await loadSession();
-      if (!active) return;
-      setUser(current);
-      if (!current) {
-        setState("signed-out");
-        setMessage("Sign in to continue to Chef Mode.");
-        return;
-      }
-
-      if (!hasChefRole(current)) {
-        try {
-          const response = await fetch("/api/chef/application", {
-            cache: "no-store",
-            credentials: "same-origin",
-          });
-          const raw = await responseBody(response);
-          const application = response.ok ? parseChefApplication(raw) : null;
-          setSnapshot({ ...EMPTY, application });
-          setState("applicant");
-          setMessage("");
-        } catch {
-          setState("applicant");
-          setMessage("We couldn’t refresh your application right now.");
-        }
-        return;
-      }
-
+    async function loadApprovedSnapshot(current: CravesUser) {
       const requests = await Promise.allSettled([
         fetch("/api/chef/application", {
           cache: "no-store",
@@ -212,9 +223,82 @@ export function ChefModeDashboard() {
         if (index === 4) earnings = parseChefEarnings(raw) ?? [];
       }
 
+      if (!active) return;
+      setUser(current);
       setSnapshot({ application, kitchen, menu, orders, earnings, unavailable });
+      if (application?.status === "APPROVED") {
+        const noticeKey = `craves-chef-approved:${application.id ?? current.id}:${application.reviewedAt ?? "approved"}`;
+        setApprovalNoticeKey(noticeKey);
+        try {
+          if (!window.localStorage.getItem(noticeKey)) setShowApprovalNotice(true);
+        } catch {
+          setShowApprovalNotice(true);
+        }
+      }
       setState("approved");
       setMessage("");
+    }
+
+    void (async () => {
+      const current = await loadSession();
+      if (!active) return;
+      setUser(current);
+      if (!current) {
+        setState("signed-out");
+        setMessage("Sign in to continue to Chef Mode.");
+        return;
+      }
+
+      if (!hasChefRole(current)) {
+        const response = await fetch("/api/chef/application", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (!active) return;
+        if (!response.ok) {
+          if (response.status === 401) {
+            setState("signed-out");
+            setMessage("Your session expired. Sign in to continue to Chef Mode.");
+          } else {
+            setState("error");
+            setMessage("We couldn’t check your chef application right now.");
+          }
+          return;
+        }
+        const application = parseChefApplication(await responseBody(response));
+        if (!application) {
+          setState("error");
+          setMessage("Craves returned an invalid chef application response.");
+          return;
+        }
+        setSnapshot({ ...EMPTY, application });
+
+        if (application.status !== "APPROVED") {
+          setState("applicant");
+          setMessage("");
+          return;
+        }
+
+        setMessage("Activating your approved Chef access…");
+        const synchronized = await synchronizeSessionRoles();
+        if (!active) return;
+        if (!hasChefRole(synchronized)) {
+          setState("verification");
+          setMessage("Your chef application is approved. Verify your mobile number once so your secure Chef session can be refreshed.");
+          return;
+        }
+        await loadApprovedSnapshot(synchronized!);
+        return;
+      }
+
+      const synchronized = await synchronizeSessionRoles();
+      if (!active) return;
+      if (!hasChefRole(synchronized)) {
+        setState("verification");
+        setMessage("Verify your mobile number once to refresh secure Chef access.");
+        return;
+      }
+      await loadApprovedSnapshot(synchronized!);
     })().catch(() => {
       if (!active) return;
       setState("error");
@@ -248,6 +332,17 @@ export function ChefModeDashboard() {
     return { actionOrders, activeOrders, availableMenu, weekAmount, weekCurrency };
   }, [snapshot]);
 
+  function dismissApprovalNotice() {
+    if (approvalNoticeKey) {
+      try {
+        window.localStorage.setItem(approvalNoticeKey, "seen");
+      } catch {
+        // The notice can still close when browser storage is unavailable.
+      }
+    }
+    setShowApprovalNotice(false);
+  }
+
   if (state === "loading") {
     return (
       <div className="space-y-4" aria-hidden="true">
@@ -270,9 +365,31 @@ export function ChefModeDashboard() {
         </span>
         <h1 className="mt-5 text-3xl font-bold tracking-tight text-[#1A1A1A]">Sign in to Chef Mode</h1>
         <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#6B6B6B]">{message}</p>
-        <Link href="/" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">
+        <Link href="/sign-in?returnTo=/chef" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">
           Sign in
         </Link>
+        <div className="mt-3">
+          <Link href="/home" className="inline-flex min-h-11 items-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A]">Switch to Customer Mode</Link>
+        </div>
+      </section>
+    );
+  }
+
+  if (state === "verification") {
+    return (
+      <section className="mx-auto max-w-2xl rounded-3xl border border-[#E5E7EB] bg-white p-7 shadow-[0_6px_24px_rgba(0,0,0,0.08)] md:p-10">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
+          <ShieldCheck className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
+        </span>
+        <p className="mt-5 text-sm font-semibold text-[#F62E18]">Chef Mode</p>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">One quick verification</h1>
+        <p className="mt-3 max-w-xl text-base leading-7 text-[#6B6B6B]">{message}</p>
+        <Link href="/sign-in?returnTo=/chef" className="mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">
+          Verify and continue
+        </Link>
+        <div className="mt-3">
+          <Link href="/home" className="inline-flex min-h-11 items-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Switch to Customer Mode</Link>
+        </div>
       </section>
     );
   }
@@ -280,11 +397,11 @@ export function ChefModeDashboard() {
   if (state === "applicant") {
     const copy = applicantCopy(snapshot.application);
     return (
-      <section className="mx-auto max-w-2xl rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
+      <section className="mx-auto max-w-2xl rounded-3xl border border-[#E5E7EB] bg-white p-6 shadow-[0_2px_10px_rgba(0,0,0,0.06)] md:p-9">
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
           <ClipboardCheck className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
         </span>
-        <p className="mt-5 text-sm font-semibold text-[#F62E18]">Become a Craves chef</p>
+        <p className="mt-5 text-sm font-semibold text-[#F62E18]">{copy.eyebrow}</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">{copy.title}</h1>
         <p className="mt-3 text-base leading-7 text-[#6B6B6B]">{copy.description}</p>
         {message ? (
@@ -298,6 +415,9 @@ export function ChefModeDashboard() {
           {copy.action}
           <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </Link>
+        <div className="mt-3 text-center">
+          <Link href="/home" className="inline-flex min-h-11 items-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Switch to Customer Mode</Link>
+        </div>
       </section>
     );
   }
@@ -381,84 +501,119 @@ export function ChefModeDashboard() {
     : "Appears after your first earning";
 
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="text-sm font-semibold text-[#F62E18]">Chef Mode</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A] md:text-4xl">
-          Hello, {user?.firstName || user?.username || "Chef"}
-        </h1>
-        <p className="mt-2 text-sm text-[#6B6B6B]">Here’s the one thing that needs your attention now.</p>
-      </div>
-
-      {snapshot.unavailable.length > 0 ? (
-        <p role="status" className="rounded-2xl bg-[#F1F3F5] px-4 py-3 text-sm text-[#6B6B6B]">
-          Some information couldn’t refresh. You can still use the parts shown below.
-        </p>
-      ) : null}
-
-      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-8">
-        <div className="flex items-start gap-4">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5]">
-            <priority.icon className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-[#F62E18]">{priority.eyebrow}</p>
-            <h2 className="mt-1 text-2xl font-bold text-[#1A1A1A] md:text-3xl">{priority.title}</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B6B6B]">{priority.description}</p>
-          </div>
-        </div>
-        {priority.href ? (
-          <Link href={priority.href} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">
-            {priority.action}
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
-        ) : (
-          <button
-            type="button"
-            onClick={() => priority.refresh && setRefreshTick((value) => value + 1)}
-            className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto"
+    <>
+      {showApprovalNotice ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4" role="presentation">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="chef-approved-title"
+            className="w-full max-w-lg rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:p-9"
           >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            {priority.action}
-          </button>
-        )}
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-3" aria-label="Kitchen summary">
-        <Link href="/chef/kitchen" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
-            <Store className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-          </span>
-          <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your kitchen</p>
-          <p className="mt-1 font-bold text-[#1A1A1A]">{kitchenOpen ? "Open" : "Closed for now"}</p>
-        </Link>
-        <Link href="/chef/menu" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
-            <Utensils className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-          </span>
-          <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your menu</p>
-          <p className="mt-1 font-bold text-[#1A1A1A]">{menuSummary}</p>
-        </Link>
-        <Link href="/chef/earnings" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
-            <BadgeIndianRupee className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-          </span>
-          <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">This week</p>
-          <p className="mt-1 font-bold text-[#1A1A1A]">{earningsSummary}</p>
-        </Link>
-      </section>
-
-      {snapshot.orders.length > 0 ? (
-        <details className="rounded-2xl border border-[#E5E7EB] bg-white p-5">
-          <summary className="cursor-pointer font-semibold text-[#1A1A1A]">More options</summary>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            <Link href="/chef/application" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">Your details</Link>
-            <Link href="/chef/orders" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">Previous orders</Link>
-            <Link href="/chef/earnings" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">What you’ve earned</Link>
-          </div>
-        </details>
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F1F3F5]">
+              <CheckCircle2 className="h-8 w-8 text-[#F62E18]" aria-hidden="true" />
+            </span>
+            <p className="mt-5 text-sm font-semibold text-[#F62E18]">You’re approved</p>
+            <h2 id="chef-approved-title" className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">Congratulations! You’re now a Craves chef</h2>
+            <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">Your Chef Mode is ready. Add your first dish so customers can discover what you cook.</p>
+            <Link
+              href="/chef/menu"
+              onClick={dismissApprovalNotice}
+              className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white"
+            >
+              Add my first dish
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+            <button
+              type="button"
+              onClick={dismissApprovalNotice}
+              className="mt-3 min-h-11 w-full rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]"
+            >
+              Go to Chef home
+            </button>
+          </section>
+        </div>
       ) : null}
-    </div>
+
+      <div className="space-y-5">
+        <div>
+          <p className="text-sm font-semibold text-[#F62E18]">Chef Mode</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A] md:text-4xl">
+            Hello, {user?.firstName || user?.username || "Chef"}
+          </h1>
+          <p className="mt-2 text-sm text-[#6B6B6B]">Here’s the one thing that needs your attention now.</p>
+        </div>
+
+        {snapshot.unavailable.length > 0 ? (
+          <p role="status" className="rounded-2xl bg-[#F1F3F5] px-4 py-3 text-sm text-[#6B6B6B]">
+            Some information couldn’t refresh. You can still use the parts shown below.
+          </p>
+        ) : null}
+
+        <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-8">
+          <div className="flex items-start gap-4">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5]">
+              <priority.icon className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[#F62E18]">{priority.eyebrow}</p>
+              <h2 className="mt-1 text-2xl font-bold text-[#1A1A1A] md:text-3xl">{priority.title}</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B6B6B]">{priority.description}</p>
+            </div>
+          </div>
+          {priority.href ? (
+            <Link href={priority.href} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">
+              {priority.action}
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => priority.refresh && setRefreshTick((value) => value + 1)}
+              className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto"
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              {priority.action}
+            </button>
+          )}
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-3" aria-label="Kitchen summary">
+          <Link href="/chef/kitchen" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
+              <Store className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
+            </span>
+            <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your kitchen</p>
+            <p className="mt-1 font-bold text-[#1A1A1A]">{kitchenOpen ? "Open" : "Closed for now"}</p>
+          </Link>
+          <Link href="/chef/menu" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
+              <Utensils className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
+            </span>
+            <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your menu</p>
+            <p className="mt-1 font-bold text-[#1A1A1A]">{menuSummary}</p>
+          </Link>
+          <Link href="/chef/earnings" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
+              <BadgeIndianRupee className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
+            </span>
+            <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">This week</p>
+            <p className="mt-1 font-bold text-[#1A1A1A]">{earningsSummary}</p>
+          </Link>
+        </section>
+
+        {snapshot.orders.length > 0 ? (
+          <details className="rounded-2xl border border-[#E5E7EB] bg-white p-5">
+            <summary className="cursor-pointer font-semibold text-[#1A1A1A]">More options</summary>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <Link href="/chef/application" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">Your details</Link>
+              <Link href="/chef/orders" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">Previous orders</Link>
+              <Link href="/chef/earnings" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">What you’ve earned</Link>
+            </div>
+          </details>
+        ) : null}
+      </div>
+    </>
   );
 }
 

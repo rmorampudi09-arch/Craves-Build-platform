@@ -149,21 +149,12 @@ export function ChefApplicationEvidenceUploader({
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  function chooseFile(next: File | null) {
-    requestRef.current?.abort();
-    setFile(next);
-    if (!next || activeIndex >= REQUIREMENTS.length) {
-      setProgress(INITIAL_PROGRESS);
-      return;
-    }
-    const error = allowedFile(REQUIREMENTS[activeIndex]!.type, next);
-    setProgress(error ? { phase: "ERROR", message: error } : INITIAL_PROGRESS);
-  }
-
-  function upload() {
-    const requirement = REQUIREMENTS[activeIndex];
-    if (!requirement || !file || !applicationReady || locked) return;
-    const validation = allowedFile(requirement.type, file);
+  function uploadFile(
+    requirement: (typeof REQUIREMENTS)[number],
+    nextFile: File,
+  ) {
+    if (!applicationReady || locked) return;
+    const validation = allowedFile(requirement.type, nextFile);
     if (validation) {
       setProgress({ phase: "ERROR", message: validation });
       return;
@@ -171,7 +162,7 @@ export function ChefApplicationEvidenceUploader({
 
     const data = new FormData();
     data.set("documentType", requirement.type);
-    data.set("file", file);
+    data.set("file", nextFile);
 
     const xhr = new XMLHttpRequest();
     requestRef.current = xhr;
@@ -181,6 +172,7 @@ export function ChefApplicationEvidenceUploader({
     setProgress({ phase: "UPLOADING", message: "Saving this photo securely…" });
 
     xhr.onload = () => {
+      if (requestRef.current === xhr) requestRef.current = null;
       if (xhr.status >= 200 && xhr.status < 300) {
         const uploaded = parseUploadResponse(xhr.response);
         if (!uploaded) {
@@ -191,8 +183,7 @@ export function ChefApplicationEvidenceUploader({
           ...current.filter((document) => document.documentType !== requirement.type),
           uploaded,
         ]);
-        setFile(null);
-        setProgress({ phase: "DONE", message: "Looks good. This is saved." });
+        setProgress({ phase: "DONE", message: "Saved securely. You can continue or replace this image." });
         router.refresh();
         return;
       }
@@ -203,9 +194,35 @@ export function ChefApplicationEvidenceUploader({
           : "This photo couldn’t be uploaded. Please try again.";
       setProgress({ phase: "ERROR", message });
     };
-    xhr.onerror = () => setProgress({ phase: "ERROR", message: "The connection dropped while saving this photo. Please try again." });
-    xhr.onabort = () => setProgress(INITIAL_PROGRESS);
+    xhr.onerror = () => {
+      if (requestRef.current === xhr) requestRef.current = null;
+      setProgress({ phase: "ERROR", message: "The connection dropped while saving this photo. Please try again." });
+    };
+    xhr.onabort = () => {
+      if (requestRef.current !== xhr) return;
+      requestRef.current = null;
+      setProgress(INITIAL_PROGRESS);
+    };
     xhr.send(data);
+  }
+
+  function chooseFile(next: File | null) {
+    const previous = requestRef.current;
+    requestRef.current = null;
+    previous?.abort();
+    setFile(next);
+
+    const requirement = REQUIREMENTS[activeIndex];
+    if (!next || !requirement) {
+      setProgress(INITIAL_PROGRESS);
+      return;
+    }
+    const error = allowedFile(requirement.type, next);
+    if (error) {
+      setProgress({ phase: "ERROR", message: error });
+      return;
+    }
+    uploadFile(requirement, next);
   }
 
   function continueForward() {
@@ -225,6 +242,9 @@ export function ChefApplicationEvidenceUploader({
 
   function goBack() {
     if (activeIndex <= 0) return;
+    const previous = requestRef.current;
+    requestRef.current = null;
+    previous?.abort();
     setFile(null);
     setProgress(INITIAL_PROGRESS);
     setActiveIndex((current) => Math.max(0, current - 1));
@@ -261,13 +281,13 @@ export function ChefApplicationEvidenceUploader({
   const requirement = REQUIREMENTS[activeIndex]!;
   const uploaded = uploadedByType.get(requirement.type);
   const busy = progress.phase === "UPLOADING";
-  const saved = Boolean(uploaded) && !file;
+  const saved = Boolean(uploaded) && (!file || progress.phase === "DONE");
 
   return (
     <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
       <div className="flex min-h-11 items-center justify-between gap-3">
         {activeIndex > 0 ? (
-          <button type="button" onClick={goBack} className="min-h-11 rounded-full px-2 text-sm font-semibold text-[#1A1A1A] hover:bg-[#F1F3F5]">← Back</button>
+          <button type="button" onClick={goBack} disabled={busy} className="min-h-11 rounded-full px-2 text-sm font-semibold text-[#1A1A1A] hover:bg-[#F1F3F5] disabled:opacity-50">← Back</button>
         ) : <span />}
         <p className="text-sm font-semibold text-[#6B6B6B]">Part 2 of 3 · A few photos</p>
       </div>
@@ -286,7 +306,7 @@ export function ChefApplicationEvidenceUploader({
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-dashed border-[#E5E7EB] bg-[#F1F3F5]">
         {previewUrl ? (
-          <img src={previewUrl} alt="Selected preview" className="h-56 w-full object-contain bg-white" />
+          <img src={previewUrl} alt="Selected preview" className="h-56 w-full bg-white object-contain" />
         ) : saved ? (
           <div className="flex min-h-52 flex-col items-center justify-center px-6 text-center">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white"><Check className="h-6 w-6 text-[#F62E18]" aria-hidden="true" /></span>
@@ -299,7 +319,7 @@ export function ChefApplicationEvidenceUploader({
           <label className="flex min-h-52 cursor-pointer flex-col items-center justify-center px-6 text-center">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white"><ImagePlus className="h-6 w-6 text-[#F62E18]" aria-hidden="true" /></span>
             <p className="mt-3 font-semibold text-[#1A1A1A]">Take a photo or choose one</p>
-            <p className="mt-1 text-sm text-[#6B6B6B]">Make sure the important details are easy to read.</p>
+            <p className="mt-1 text-sm text-[#6B6B6B]">It saves automatically after you choose it.</p>
             <input
               type="file"
               accept={requirement.accept}
@@ -312,14 +332,14 @@ export function ChefApplicationEvidenceUploader({
         )}
       </div>
 
-      {file ? (
-        <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-[#F62E18]">
-          Choose a different photo
-          <input type="file" accept={requirement.accept} disabled={locked || busy} onChange={(event) => chooseFile(event.target.files?.[0] ?? null)} className="sr-only" />
-        </label>
-      ) : saved && !locked ? (
-        <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-[#F62E18]">
+      {saved && !locked ? (
+        <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center rounded-full bg-[#F1F3F5] px-4 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">
           Replace this photo
+          <input type="file" accept={requirement.accept} disabled={busy} onChange={(event) => chooseFile(event.target.files?.[0] ?? null)} className="sr-only" />
+        </label>
+      ) : file && progress.phase === "ERROR" && !locked ? (
+        <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center rounded-full bg-[#F1F3F5] px-4 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">
+          Choose a different photo
           <input type="file" accept={requirement.accept} disabled={busy} onChange={(event) => chooseFile(event.target.files?.[0] ?? null)} className="sr-only" />
         </label>
       ) : null}
@@ -334,11 +354,11 @@ export function ChefApplicationEvidenceUploader({
         <p className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">Your application is already approved, so these photos can’t be changed here.</p>
       ) : null}
 
-      {file ? (
-        <button type="button" disabled={busy || progress.phase === "ERROR"} onClick={upload} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50">
-          {busy ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
-          {busy ? "Saving…" : "Use this photo"}
-        </button>
+      {busy ? (
+        <div className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F1F3F5] px-6 font-semibold text-[#6B6B6B]" role="status">
+          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Saving…
+        </div>
       ) : saved ? (
         <button type="button" onClick={continueForward} className="mt-6 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
       ) : null}

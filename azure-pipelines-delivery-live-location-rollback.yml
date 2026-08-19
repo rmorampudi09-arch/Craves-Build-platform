@@ -1,0 +1,41 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: orderContainerAppName
+    type: string
+    default: ca-craves-order-service-prodlow
+  - name: confirmLiveLocationRollback
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - script: |
+      set -euo pipefail
+      [[ '${{ parameters.confirmLiveLocationRollback }}' == 'True' ]] || {
+        echo 'ERROR: set confirmLiveLocationRollback=true to disable exact courier coordinate exposure.' >&2
+        exit 1
+      }
+      bash -n scripts/release/rollback-order-delivery-live-location-v1.sh
+    displayName: Validate rollback confirmation and helper
+
+  - task: AzureCLI@2
+    displayName: Disable exact courier location exposure
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        export CONFIRM_LIVE_LOCATION_ROLLBACK=true
+        bash scripts/release/rollback-order-delivery-live-location-v1.sh \
+          '${{ parameters.resourceGroupName }}' \
+          '${{ parameters.orderContainerAppName }}'

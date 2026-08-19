@@ -78,6 +78,7 @@ public final class KitchenScheduleDtos {
         String timezoneId,
         LocalDate localDate,
         LocalTime localTime,
+        boolean kitchenActive,
         boolean scheduleConfigured,
         boolean acceptingOrders,
         boolean paused,

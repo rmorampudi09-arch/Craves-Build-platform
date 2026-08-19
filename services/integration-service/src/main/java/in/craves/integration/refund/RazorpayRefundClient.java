@@ -38,6 +38,7 @@ public class RazorpayRefundClient {
 
     public ProviderRefundResult createRefund(RefundWorkItem workItem) {
         requireConfiguration();
+        requireWorkItem(workItem);
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("amount", RazorpayRequestSafety.toSubunits(workItem.amount()));
         request.put("receipt", workItem.refundReference());
@@ -49,9 +50,9 @@ public class RazorpayRefundClient {
             JsonNode response = client.post()
                 .uri("/v1/payments/{paymentId}/refund", workItem.providerPaymentId())
                 .headers(this::basicAuth)
-                .header("X-Razorpay-Idempotency-Key", workItem.idempotencyKey().toString())
+                .header("X-Refund-Idempotency", workItem.idempotencyKey().toString())
                 .body(request).retrieve().body(JsonNode.class);
-            return map(response);
+            return mapAndValidate(response, workItem, true);
         } catch (RestClientResponseException exception) {
             throw providerException("Razorpay refund creation failed", exception);
         }
@@ -59,19 +60,40 @@ public class RazorpayRefundClient {
 
     public ProviderRefundResult getRefund(RefundWorkItem workItem) {
         requireConfiguration();
+        requireWorkItem(workItem);
+        if (!StringUtils.hasText(workItem.providerRefundId()) || !workItem.providerRefundId().startsWith("rfnd_")) {
+            throw new RefundProviderNonRetryableException("Razorpay refund identity is missing or invalid");
+        }
         try {
-            return map(client.get().uri("/v1/refunds/{refundId}", workItem.providerRefundId())
-                .headers(this::basicAuth).retrieve().body(JsonNode.class));
+            JsonNode response = client.get().uri("/v1/refunds/{refundId}", workItem.providerRefundId())
+                .headers(this::basicAuth).retrieve().body(JsonNode.class);
+            return mapAndValidate(response, workItem, false);
         } catch (RestClientResponseException exception) {
             throw providerException("Razorpay refund reconciliation failed", exception);
         }
     }
 
-    private ProviderRefundResult map(JsonNode response) {
+    private ProviderRefundResult mapAndValidate(JsonNode response, RefundWorkItem workItem, boolean creating) {
         String id = text(response, "id");
         String rawStatus = text(response, "status");
         if (!StringUtils.hasText(id) || !id.startsWith("rfnd_") || !StringUtils.hasText(rawStatus)) {
             throw new RefundProviderTransientException("Razorpay returned an incomplete refund response");
+        }
+        if (!workItem.providerPaymentId().equals(text(response, "payment_id"))) {
+            throw new RefundProviderNonRetryableException("Razorpay refund payment identity does not match Craves");
+        }
+        long providerAmount = longValue(response, "amount");
+        String providerCurrency = text(response, "currency");
+        try {
+            RazorpayRequestSafety.requireMoney(
+                workItem.amount(), workItem.currency(), providerAmount, providerCurrency, "Razorpay refund"
+            );
+        } catch (RuntimeException exception) {
+            throw new RefundProviderNonRetryableException("Razorpay refund amount or currency does not match Craves", exception);
+        }
+        if (creating && StringUtils.hasText(text(response, "receipt"))
+            && !workItem.refundReference().equals(text(response, "receipt"))) {
+            throw new RefundProviderNonRetryableException("Razorpay refund receipt identity does not match Craves");
         }
         String status = switch (rawStatus.toLowerCase(Locale.ROOT)) {
             case "processed" -> "SUCCESS";
@@ -82,9 +104,23 @@ public class RazorpayRefundClient {
         return new ProviderRefundResult(status, id, json(response));
     }
 
+    private void requireWorkItem(RefundWorkItem workItem) {
+        if (workItem == null || workItem.refundId() == null || workItem.idempotencyKey() == null
+            || !StringUtils.hasText(workItem.refundReference())
+            || !StringUtils.hasText(workItem.providerPaymentId())
+            || !workItem.providerPaymentId().startsWith("pay_")
+            || workItem.amount() == null || workItem.amount().signum() <= 0
+            || !StringUtils.hasText(workItem.currency())) {
+            throw new RefundProviderNonRetryableException("Razorpay refund work item is incomplete");
+        }
+        String key = workItem.idempotencyKey().toString();
+        if (key.length() < 10 || !key.matches("[A-Za-z0-9_-]+")) {
+            throw new RefundProviderNonRetryableException("Razorpay refund idempotency key is invalid");
+        }
+    }
+
     private void requireConfiguration() {
-        if (!properties.paymentExecutionAllowed() || !StringUtils.hasText(properties.keyId())
-            || !StringUtils.hasText(properties.keySecret())) {
+        if (!properties.paymentExecutionAllowed() || !properties.hasCredentials()) {
             throw new RefundProviderConfigurationException("Razorpay refund execution is not configured");
         }
     }
@@ -115,5 +151,13 @@ public class RazorpayRefundClient {
     private static String text(JsonNode node, String field) {
         JsonNode value = node == null ? null : node.get(field);
         return value == null || value.isNull() ? null : value.asText();
+    }
+
+    private static long longValue(JsonNode node, String field) {
+        JsonNode value = node == null ? null : node.get(field);
+        if (value == null || !value.canConvertToLong()) {
+            throw new RefundProviderTransientException("Razorpay refund response is missing " + field);
+        }
+        return value.longValue();
     }
 }

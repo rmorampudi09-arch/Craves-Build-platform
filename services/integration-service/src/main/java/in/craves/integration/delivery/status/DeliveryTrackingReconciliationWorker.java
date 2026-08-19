@@ -4,6 +4,7 @@ import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.TrackingWorkItem;
+import in.craves.integration.delivery.telemetry.DeliveryTelemetryPublisherService;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -31,6 +32,7 @@ public class DeliveryTrackingReconciliationWorker {
     private final DeliveryStatusRepository repository;
     private final DeliveryLeaseRecoveryRepository leaseRecovery;
     private final DeliveryStatusUpdateService statusService;
+    private final DeliveryTelemetryPublisherService telemetryPublisherService;
     private final DeliveryCommandProperties properties;
 
     public DeliveryTrackingReconciliationWorker(
@@ -38,12 +40,14 @@ public class DeliveryTrackingReconciliationWorker {
         DeliveryStatusRepository repository,
         DeliveryLeaseRecoveryRepository leaseRecovery,
         DeliveryStatusUpdateService statusService,
+        DeliveryTelemetryPublisherService telemetryPublisherService,
         DeliveryCommandProperties properties
     ) {
         this.adapters = indexAdapters(adapters);
         this.repository = repository;
         this.leaseRecovery = leaseRecovery;
         this.statusService = statusService;
+        this.telemetryPublisherService = telemetryPublisherService;
         this.properties = properties;
     }
 
@@ -86,15 +90,19 @@ public class DeliveryTrackingReconciliationWorker {
             TrackingSnapshot snapshot = adapter.track(
                 workItem.providerDeliveryId()
             );
-            DeliveryStatusUpdateService.ProcessingResult result =
+            DeliveryStatusUpdateService.ProcessingResult statusResult =
                 statusService.processTracking(workItem, snapshot);
+            DeliveryTelemetryPublisherService.CaptureResult telemetryResult =
+                telemetryPublisherService.capture(workItem, snapshot);
             log.info(
-                "Delivery tracking reconciled deliveryJobId={} provider={} applied={} duplicate={} result={}",
+                "Delivery tracking reconciled deliveryJobId={} provider={} statusApplied={} duplicate={} statusResult={} telemetryPublished={} telemetryResult={}",
                 workItem.deliveryJobId(),
                 workItem.providerId(),
-                result.applied(),
-                result.duplicate(),
-                result.result()
+                statusResult.applied(),
+                statusResult.duplicate(),
+                statusResult.result(),
+                telemetryResult.published(),
+                telemetryResult.outcome()
             );
         } catch (RuntimeException ex) {
             long delaySeconds = retryDelaySeconds(workItem.attemptCount());

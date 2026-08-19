@@ -1,32 +1,45 @@
 package in.craves.integration.web;
 
 import in.craves.integration.delivery.borzo.BorzoApiClient.BorzoApiException;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = BorzoInternalController.class)
 public class BorzoControllerAdvice {
+    private static final Logger log = LoggerFactory.getLogger(BorzoControllerAdvice.class);
 
     @ExceptionHandler(IllegalArgumentException.class)
-    ProblemDetail invalidRequest(IllegalArgumentException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-        problem.setTitle("Invalid Borzo delivery request");
-        return problem;
+    ResponseEntity<IntegrationApiErrorResponse> invalidRequest(IllegalArgumentException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(IntegrationApiErrorHandler.error(
+            400,
+            "INVALID_DELIVERY_REQUEST",
+            "Invalid delivery request",
+            List.of(),
+            request
+        ));
     }
 
     @ExceptionHandler(BorzoApiException.class)
-    ProblemDetail providerFailure(BorzoApiException ex) {
-        HttpStatus status = isConfigurationFailure(ex)
-            ? HttpStatus.SERVICE_UNAVAILABLE
-            : HttpStatus.BAD_GATEWAY;
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
-        problem.setTitle("Borzo provider operation failed");
-        if (ex.getProviderStatus() != null) {
-            problem.setProperty("providerHttpStatus", ex.getProviderStatus().value());
-        }
-        return problem;
+    ResponseEntity<IntegrationApiErrorResponse> providerFailure(BorzoApiException ex, HttpServletRequest request) {
+        HttpStatus status = isConfigurationFailure(ex) ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_GATEWAY;
+        log.warn(
+            "Borzo provider operation failed providerStatus={} message={}",
+            ex.getProviderStatus(),
+            ex.getMessage()
+        );
+        return ResponseEntity.status(status).body(IntegrationApiErrorHandler.error(
+            status.value(),
+            isConfigurationFailure(ex) ? "DELIVERY_PROVIDER_UNAVAILABLE" : "DELIVERY_PROVIDER_FAILURE",
+            "Delivery provider operation failed",
+            List.of(),
+            request
+        ));
     }
 
     private static boolean isConfigurationFailure(BorzoApiException ex) {

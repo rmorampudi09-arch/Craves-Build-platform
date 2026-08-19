@@ -49,6 +49,7 @@ steps:
       test -s azure-pipelines-razorpay-webhook-apim.yml
       test -s services/integration-service/modules/razorpay-production/README.md
       test -s docs/handover/2026-08-20-razorpay-full-scale-production.md
+      test -s docs/handover/2026-08-20-razorpay-production-handover-addendum.md
       test -s services/integration-service/src/main/resources/db/migration/V112__razorpay_webhook_delivery_guard.sql
       test -s services/integration-service/src/main/java/in/craves/integration/payment/RazorpayWebhookInboxService.java
       test -s services/integration-service/src/main/java/in/craves/integration/payment/RazorpayWebhookWorker.java
@@ -82,6 +83,8 @@ steps:
 
       grep -Fq 'X-Refund-Idempotency' services/integration-service/src/main/java/in/craves/integration/refund/RazorpayRefundClient.java
       ! grep -Fq 'X-Razorpay-Idempotency-Key' services/integration-service/src/main/java/in/craves/integration/refund/RazorpayRefundClient.java
+      grep -Fq 'requireMutationConfiguration' services/integration-service/src/main/java/in/craves/integration/refund/RazorpayRefundClient.java
+      grep -Fq 'requireReadConfiguration' services/integration-service/src/main/java/in/craves/integration/refund/RazorpayRefundClient.java
 
       grep -Fq 'X-Razorpay-Signature' infra/apim/customer-payments/razorpay-webhook-policy.xml
       ! grep -Fq 'validate-jwt' infra/apim/customer-payments/razorpay-webhook-policy.xml
@@ -93,11 +96,15 @@ steps:
       grep -Fq 'RAZORPAY_API_ENABLED=true' azure-pipelines-razorpay-production-rollback.yml
       grep -Fq 'CRAVES_RAZORPAY_WEBHOOK_INGRESS_ENABLED=true' azure-pipelines-razorpay-production-rollback.yml
       grep -Fq 'CRAVES_RAZORPAY_WEBHOOK_WORKER_ENABLED=true' azure-pipelines-razorpay-production-rollback.yml
+      grep -Fq 'CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED=false' azure-pipelines-razorpay-production-rollback.yml
+      grep -Fq 'CRAVES_REFUND_RECONCILIATION_ENABLED=true' azure-pipelines-razorpay-production-rollback.yml
+      grep -Fq 'CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED=true' azure-pipelines-razorpay-production-rollback.yml
       grep -Fq 'CASHFREE_TRAFFIC_ALLOWED=false' azure-pipelines-razorpay-production-rollback.yml
 
       grep -Fq 'controlled live-test window' services/integration-service/modules/razorpay-production/README.md
       grep -Fq 'ACTIVATE_RAZORPAY_LIVE_MONEY' services/integration-service/modules/razorpay-production/README.md
       grep -Fq 'STOP_RAZORPAY_LIVE_MONEY' services/integration-service/modules/razorpay-production/README.md
+      grep -Fq 'Authoritative production execution order' docs/handover/2026-08-20-razorpay-production-handover-addendum.md
 
       git diff --check origin/main...HEAD
     displayName: Verify Razorpay production invariants, documentation and fail-closed routing

@@ -1,5 +1,6 @@
 package in.craves.catalog.web;
 
+import in.craves.catalog.config.PublicCatalogPrivacyProperties;
 import in.craves.catalog.service.DiscoveryCacheService;
 import in.craves.catalog.service.DiscoveryCriteria;
 import in.craves.catalog.service.DiscoveryCriteria.KitchenSort;
@@ -22,13 +23,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class NearbyDiscoveryController {
     private final NearbyDiscoveryService nearbyDiscoveryService;
     private final DiscoveryCacheService discoveryCacheService;
+    private final PublicCatalogPrivacyProperties privacyProperties;
 
     public NearbyDiscoveryController(
         NearbyDiscoveryService nearbyDiscoveryService,
-        DiscoveryCacheService discoveryCacheService
+        DiscoveryCacheService discoveryCacheService,
+        PublicCatalogPrivacyProperties privacyProperties
     ) {
         this.nearbyDiscoveryService = nearbyDiscoveryService;
         this.discoveryCacheService = discoveryCacheService;
+        this.privacyProperties = privacyProperties;
     }
 
     @GetMapping("/kitchens")
@@ -50,16 +54,20 @@ public class NearbyDiscoveryController {
         DiscoveryCriteria criteria = new DiscoveryCriteria(
             query, category, foodType, minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel
         );
+        boolean privacyEnabled = privacyProperties.isPrivacyEnforcementEnabled();
         String cacheKey = key(
-            "kitchens", latitude, longitude, radiusMeters, query, category, foodType,
+            "kitchens", privacyEnabled, latitude, longitude, radiusMeters, query, category, foodType,
             minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel, sort, page, size
         );
         return discoveryCacheService.getOrLoad(
             cacheKey,
             NearbyKitchenDiscoveryResponse.class,
-            () -> sanitize(nearbyDiscoveryService.discoverKitchens(
-                latitude, longitude, radiusMeters, criteria, sort, page, size
-            ))
+            () -> applyPrivacy(
+                nearbyDiscoveryService.discoverKitchens(
+                    latitude, longitude, radiusMeters, criteria, sort, page, size
+                ),
+                privacyEnabled
+            )
         );
     }
 
@@ -82,17 +90,35 @@ public class NearbyDiscoveryController {
         DiscoveryCriteria criteria = new DiscoveryCriteria(
             query, category, foodType, minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel
         );
+        boolean privacyEnabled = privacyProperties.isPrivacyEnforcementEnabled();
         String cacheKey = key(
-            "menu-items", latitude, longitude, radiusMeters, query, category, foodType,
+            "menu-items", privacyEnabled, latitude, longitude, radiusMeters, query, category, foodType,
             minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel, sort, page, size
         );
         return discoveryCacheService.getOrLoad(
             cacheKey,
             NearbyMenuItemDiscoveryResponse.class,
-            () -> sanitize(nearbyDiscoveryService.discoverMenuItems(
-                latitude, longitude, radiusMeters, criteria, sort, page, size
-            ))
+            () -> applyPrivacy(
+                nearbyDiscoveryService.discoverMenuItems(
+                    latitude, longitude, radiusMeters, criteria, sort, page, size
+                ),
+                privacyEnabled
+            )
         );
+    }
+
+    private static NearbyKitchenDiscoveryResponse applyPrivacy(
+        NearbyKitchenDiscoveryResponse response,
+        boolean privacyEnabled
+    ) {
+        return privacyEnabled ? sanitize(response) : response;
+    }
+
+    private static NearbyMenuItemDiscoveryResponse applyPrivacy(
+        NearbyMenuItemDiscoveryResponse response,
+        boolean privacyEnabled
+    ) {
+        return privacyEnabled ? sanitize(response) : response;
     }
 
     private static NearbyKitchenDiscoveryResponse sanitize(NearbyKitchenDiscoveryResponse response) {

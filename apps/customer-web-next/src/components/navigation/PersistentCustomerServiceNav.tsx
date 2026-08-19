@@ -8,7 +8,6 @@ import {
   CalendarRange,
   ChefHat,
   ClipboardList,
-  Home,
 } from "lucide-react";
 import {
   getSession,
@@ -18,7 +17,6 @@ import {
 import { rememberReturnRoute } from "@/lib/return-navigation";
 
 const serviceLinks = [
-  { href: "/home", label: "Discover", icon: Home },
   { href: "/orders", label: "Orders", icon: ClipboardList },
   { href: "/subscriptions", label: "Meal plans", icon: CalendarRange },
   { href: "/notifications", label: "Updates", icon: Bell },
@@ -26,7 +24,7 @@ const serviceLinks = [
 ] as const;
 
 function isActiveRoute(pathname: string, href: string): boolean {
-  return pathname === href || (href !== "/home" && pathname.startsWith(`${href}/`));
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function PersistentCustomerServiceNav({

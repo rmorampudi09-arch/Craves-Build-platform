@@ -1,0 +1,49 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: serviceBusNamespace
+    type: string
+    default: sb-craves-prodlow-l3ing6
+  - name: topicName
+    type: string
+    default: craves-domain-events
+  - name: subscriptionName
+    type: string
+    default: order-service-delivery-status-changed
+  - name: confirmTelemetryFilterRollback
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - script: |
+      set -euo pipefail
+      [[ '${{ parameters.confirmTelemetryFilterRollback }}' == 'True' ]] || {
+        echo 'ERROR: set confirmTelemetryFilterRollback=true to stop telemetry events from reaching Order Service.' >&2
+        exit 1
+      }
+      bash -n scripts/release/rollback-order-delivery-stream-filter-v3.sh
+    displayName: Validate telemetry stream rollback confirmation
+
+  - task: AzureCLI@2
+    displayName: Return Order delivery stream to status-only filter
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        export CONFIRM_TELEMETRY_FILTER_ROLLBACK=true
+        bash scripts/release/rollback-order-delivery-stream-filter-v3.sh \
+          '${{ parameters.resourceGroupName }}' \
+          '${{ parameters.serviceBusNamespace }}' \
+          '${{ parameters.topicName }}' \
+          '${{ parameters.subscriptionName }}'

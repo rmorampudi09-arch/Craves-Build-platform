@@ -9,6 +9,7 @@ import org.springframework.util.StringUtils;
 
 @Component
 public class DeliveryTelemetryEventValidator {
+    private static final Set<String> EVENT_VERSIONS = Set.of("1.0", "1.1");
     private static final Set<String> STATUSES = Set.of(
         "PENDING",
         "SEARCHING",
@@ -33,7 +34,7 @@ public class DeliveryTelemetryEventValidator {
         if (!"DELIVERY_TELEMETRY_UPDATED".equals(event.eventType())) {
             throw new DeliveryTelemetryValidationException("Unexpected delivery telemetry event type");
         }
-        if (!"1.0".equals(event.eventVersion())) {
+        if (!EVENT_VERSIONS.contains(event.eventVersion())) {
             throw new DeliveryTelemetryValidationException("Unsupported delivery telemetry event version");
         }
         if (!"integration-service".equals(event.source())) {

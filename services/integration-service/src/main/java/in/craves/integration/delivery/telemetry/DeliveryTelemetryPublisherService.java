@@ -3,7 +3,9 @@ package in.craves.integration.delivery.telemetry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderStatusUpdate;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
+import in.craves.integration.delivery.status.DeliveryStatusRepository.DeliveryJobState;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.TrackingWorkItem;
 import in.craves.integration.delivery.telemetry.DeliveryTelemetryModels.DeliveryTelemetryUpdatedData;
 import in.craves.integration.delivery.telemetry.DeliveryTelemetryModels.EventEnvelope;
@@ -50,36 +52,80 @@ public class DeliveryTelemetryPublisherService {
         }
 
         TelemetrySnapshot telemetry = extractionService.extract(workItem.providerId(), trackingSnapshot);
-        if (telemetry == null || !telemetry.hasUsefulData()) {
-            return result("NO_PROVIDER_TELEMETRY", false, workItem.providerId());
-        }
-
-        DeliveryTelemetryRepository.StoredTelemetry current = repository.find(workItem.deliveryJobId())
-            .orElseThrow(() -> new IllegalStateException("Delivery job disappeared before telemetry capture"));
-        if (!workItem.providerId().equalsIgnoreCase(current.providerId())
-            || !workItem.providerDeliveryId().equals(current.providerDeliveryId())) {
-            throw new IllegalStateException("Telemetry provider identity does not match delivery job");
-        }
-        if (current.observedAt() != null && !telemetry.observedAt().isAfter(current.observedAt())) {
-            return result("STALE_TELEMETRY", false, workItem.providerId());
-        }
-        if (!changed(current, telemetry)) {
-            return result("NO_TELEMETRY_CHANGE", false, workItem.providerId());
-        }
-
-        repository.update(workItem.deliveryJobId(), telemetry);
-        DeliveryTelemetryUpdatedData data = new DeliveryTelemetryUpdatedData(
+        return publishIfChanged(
             workItem.deliveryJobId(),
             workItem.orderId(),
             workItem.chefSubOrderId(),
             workItem.providerId(),
             workItem.providerDeliveryId(),
-            trackingSnapshot.delivery().status().name(),
+            trackingSnapshot.delivery().status(),
+            telemetry
+        );
+    }
+
+    @Transactional
+    public CaptureResult captureWebhook(DeliveryJobState job, ProviderStatusUpdate update) {
+        Objects.requireNonNull(job, "delivery job is required");
+        Objects.requireNonNull(update, "provider status update is required");
+        if (update.status() == null) {
+            return result("NO_DELIVERY_STATE", false, job.providerId());
+        }
+        if (terminal(update.status())) {
+            return result("TERMINAL_STATE", false, job.providerId());
+        }
+        TelemetrySnapshot telemetry = extractionService.extractWebhook(job.providerId(), update);
+        return publishIfChanged(
+            job.id(),
+            job.orderId(),
+            job.chefSubOrderId(),
+            job.providerId(),
+            job.providerDeliveryId(),
+            update.status(),
+            telemetry
+        );
+    }
+
+    private CaptureResult publishIfChanged(
+        UUID deliveryJobId,
+        UUID orderId,
+        UUID chefSubOrderId,
+        String providerId,
+        String providerDeliveryId,
+        DeliveryStatus status,
+        TelemetrySnapshot telemetry
+    ) {
+        if (telemetry == null || !telemetry.hasUsefulData()) {
+            return result("NO_PROVIDER_TELEMETRY", false, providerId);
+        }
+
+        DeliveryTelemetryRepository.StoredTelemetry current = repository.find(deliveryJobId)
+            .orElseThrow(() -> new IllegalStateException("Delivery job disappeared before telemetry capture"));
+        if (!providerId.equalsIgnoreCase(current.providerId())
+            || !providerDeliveryId.equals(current.providerDeliveryId())) {
+            throw new IllegalStateException("Telemetry provider identity does not match delivery job");
+        }
+        if (current.observedAt() != null && !telemetry.observedAt().isAfter(current.observedAt())) {
+            return result("STALE_TELEMETRY", false, providerId);
+        }
+        if (!changed(current, telemetry)) {
+            return result("NO_TELEMETRY_CHANGE", false, providerId);
+        }
+
+        repository.update(deliveryJobId, telemetry);
+        DeliveryTelemetryUpdatedData data = new DeliveryTelemetryUpdatedData(
+            deliveryJobId,
+            orderId,
+            chefSubOrderId,
+            providerId,
+            providerDeliveryId,
+            status.name(),
             telemetry.courierLatitude(),
             telemetry.courierLongitude(),
             telemetry.locationObservedAt(),
+            telemetry.estimatedPickupAt(),
             telemetry.estimatedPickupStartAt(),
             telemetry.estimatedPickupEndAt(),
+            telemetry.estimatedDropoffAt(),
             telemetry.estimatedDropoffStartAt(),
             telemetry.estimatedDropoffEndAt(),
             telemetry.observedAt()
@@ -89,19 +135,19 @@ public class DeliveryTelemetryPublisherService {
             DeliveryTelemetryModels.DELIVERY_TELEMETRY_UPDATED,
             DeliveryTelemetryModels.EVENT_VERSION,
             Instant.now(),
-            workItem.orderId(),
+            orderId,
             null,
             "integration-service",
-            "delivery-job/" + workItem.deliveryJobId(),
+            "delivery-job/" + deliveryJobId,
             data
         );
         outboxRepository.enqueue(
             DeliveryTelemetryModels.DELIVERY_TELEMETRY_UPDATED,
-            workItem.deliveryJobId(),
-            workItem.orderId(),
+            deliveryJobId,
+            orderId,
             objectMapper.valueToTree(event)
         );
-        return result("PUBLISHED", true, workItem.providerId());
+        return result("PUBLISHED", true, providerId);
     }
 
     private CaptureResult result(String outcome, boolean published, String providerId) {
@@ -119,8 +165,10 @@ public class DeliveryTelemetryPublisherService {
     ) {
         return different(current.courierLatitude(), incoming.courierLatitude())
             || different(current.courierLongitude(), incoming.courierLongitude())
+            || different(current.estimatedPickupAt(), incoming.estimatedPickupAt())
             || different(current.estimatedPickupStartAt(), incoming.estimatedPickupStartAt())
             || different(current.estimatedPickupEndAt(), incoming.estimatedPickupEndAt())
+            || different(current.estimatedDropoffAt(), incoming.estimatedDropoffAt())
             || different(current.estimatedDropoffStartAt(), incoming.estimatedDropoffStartAt())
             || different(current.estimatedDropoffEndAt(), incoming.estimatedDropoffEndAt());
     }

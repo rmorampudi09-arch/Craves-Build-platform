@@ -2,6 +2,7 @@ package in.craves.catalog.web;
 
 import in.craves.catalog.security.CravesPrincipal;
 import in.craves.catalog.service.CatalogService;
+import in.craves.catalog.service.DiscoveryCacheService;
 import in.craves.catalog.web.ApiDtos.AvailabilityRequest;
 import in.craves.catalog.web.ApiDtos.KitchenProfileRequest;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
@@ -27,9 +28,11 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1/kitchens/me")
 public class KitchenController {
     private final CatalogService catalogService;
+    private final DiscoveryCacheService discoveryCacheService;
 
-    public KitchenController(CatalogService catalogService) {
+    public KitchenController(CatalogService catalogService, DiscoveryCacheService discoveryCacheService) {
         this.catalogService = catalogService;
+        this.discoveryCacheService = discoveryCacheService;
     }
 
     @GetMapping
@@ -42,7 +45,9 @@ public class KitchenController {
         @AuthenticationPrincipal CravesPrincipal principal,
         @Valid @RequestBody KitchenProfileRequest request
     ) {
-        return catalogService.upsertMyKitchen(principal, request);
+        KitchenProfileResponse response = catalogService.upsertMyKitchen(principal, request);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
     }
 
     @GetMapping("/menu-items")
@@ -55,7 +60,9 @@ public class KitchenController {
         @AuthenticationPrincipal CravesPrincipal principal,
         @Valid @RequestBody MenuItemRequest request
     ) {
-        return catalogService.createMenuItem(principal, request);
+        MenuItemResponse response = catalogService.createMenuItem(principal, request);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
     }
 
     @PutMapping("/menu-items/{menuItemId}")
@@ -64,7 +71,9 @@ public class KitchenController {
         @PathVariable UUID menuItemId,
         @Valid @RequestBody MenuItemRequest request
     ) {
-        return catalogService.updateMenuItem(principal, menuItemId, request);
+        MenuItemResponse response = catalogService.updateMenuItem(principal, menuItemId, request);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
     }
 
     @PatchMapping("/menu-items/{menuItemId}/availability")
@@ -73,7 +82,9 @@ public class KitchenController {
         @PathVariable UUID menuItemId,
         @Valid @RequestBody AvailabilityRequest request
     ) {
-        return catalogService.updateAvailability(principal, menuItemId, request);
+        MenuItemResponse response = catalogService.updateAvailability(principal, menuItemId, request);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
     }
 
     @PostMapping("/menu-items/{menuItemId}/images")
@@ -83,6 +94,8 @@ public class KitchenController {
         @RequestParam MultipartFile file,
         @RequestParam(defaultValue = "false") boolean primary
     ) {
-        return catalogService.uploadMenuItemImage(principal, menuItemId, file, primary);
+        MenuItemImageResponse response = catalogService.uploadMenuItemImage(principal, menuItemId, file, primary);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
     }
 }

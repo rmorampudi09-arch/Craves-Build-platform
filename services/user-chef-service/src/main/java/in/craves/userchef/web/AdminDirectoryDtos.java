@@ -9,6 +9,9 @@ public final class AdminDirectoryDtos {
     private AdminDirectoryDtos() {
     }
 
+    public record DirectorySearchRequest(String query) {
+    }
+
     public record DirectorySearchResponse(
         UUID correlationId,
         String queryType,

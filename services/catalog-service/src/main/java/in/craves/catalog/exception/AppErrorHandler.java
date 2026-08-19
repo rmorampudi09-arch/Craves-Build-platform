@@ -20,7 +20,7 @@ public class AppErrorHandler {
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiErrorResponse> handleApiException(ApiException ex, HttpServletRequest request) {
         return ResponseEntity.status(ex.getStatus())
-            .body(error(ex.getStatus().value(), ex.getCode(), ex.getMessage(), List.of(), request));
+            .body(error(ex.getStatus(), ex.getCode(), ex.getMessage(), List.of(), request));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

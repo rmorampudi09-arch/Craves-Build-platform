@@ -56,6 +56,7 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'ChefRegistration',
   'ChefAccountStatus',
   'StartupError',
+  'CustomerHomeSearch',
   'CustomerFilterSort',
   'CustomerDishDetail',
   'CustomerDishIngredients',

@@ -34,7 +34,7 @@ public class SupportCaseController {
         @AuthenticationPrincipal CurrentUser user,
         @RequestBody CreateSupportCaseRequest request
     ) {
-        return supportCaseService.create(user, request);
+        return RequesterSupportView.redact(supportCaseService.create(user, request));
     }
 
     @GetMapping
@@ -44,7 +44,7 @@ public class SupportCaseController {
         @RequestParam(required = false) String cursor,
         @RequestParam(required = false) SupportCaseStatus status
     ) {
-        return supportCaseService.listMine(user, limit, cursor, status);
+        return RequesterSupportView.redact(supportCaseService.listMine(user, limit, cursor, status));
     }
 
     @GetMapping("/{caseId}")
@@ -52,7 +52,7 @@ public class SupportCaseController {
         @AuthenticationPrincipal CurrentUser user,
         @PathVariable UUID caseId
     ) {
-        return supportCaseService.getMine(user, caseId);
+        return RequesterSupportView.redact(supportCaseService.getMine(user, caseId));
     }
 
     @PostMapping("/{caseId}/messages")
@@ -61,6 +61,6 @@ public class SupportCaseController {
         @PathVariable UUID caseId,
         @RequestBody AddSupportMessageRequest request
     ) {
-        return supportCaseService.addRequesterMessage(user, caseId, request);
+        return RequesterSupportView.redact(supportCaseService.addRequesterMessage(user, caseId, request));
     }
 }

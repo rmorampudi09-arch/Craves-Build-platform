@@ -2,15 +2,15 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Craves Chef Delivery Status API",
-    "version": "1.0.0",
-    "description": "Authenticated chef-owned read model for provider-neutral delivery status and latest privacy-controlled courier telemetry."
+    "version": "1.1.0",
+    "description": "Authenticated chef-owned read model for provider-neutral delivery status and latest privacy-controlled provider telemetry."
   },
   "servers": [{ "url": "https://api.craves.in" }],
   "paths": {
     "/api/v1/chef/orders/{orderId}/delivery-status": {
       "get": {
         "operationId": "getChefOrderDeliveryStatus",
-        "summary": "Get delivery status and latest telemetry for an owned chef-specific order",
+        "summary": "Get delivery status and best available tracking experience for an owned chef-specific order",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
@@ -22,7 +22,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Chef-owned order delivery state and latest telemetry.",
+            "description": "Chef-owned order delivery state and latest provider telemetry.",
             "headers": {
               "Cache-Control": {
                 "description": "Delivery state and courier telemetry must not be cached.",
@@ -50,13 +50,18 @@
       "DeliveryStatusResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["orderId", "history", "telemetry"],
+        "required": ["orderId", "trackingExperience", "history", "telemetry"],
         "properties": {
           "orderId": { "type": "string", "format": "uuid" },
           "deliveryJobId": { "type": "string", "format": "uuid", "nullable": true },
           "providerId": { "type": "string", "nullable": true },
           "status": { "type": "string", "nullable": true },
           "trackingUrl": { "type": "string", "format": "uri", "nullable": true },
+          "trackingExperience": {
+            "type": "string",
+            "enum": ["LIVE_MAP", "PROVIDER_TRACKING_LINK", "STATUS_TIMELINE"],
+            "description": "Best safe tracking UX currently available for this fulfilled order. It does not imply provider ranking."
+          },
           "observedAt": { "type": "string", "format": "date-time", "nullable": true },
           "history": {
             "type": "array",
@@ -70,13 +75,16 @@
         "type": "object",
         "additionalProperties": false,
         "required": ["liveLocationAvailable"],
+        "description": "Latest provider-neutral delivery telemetry. Exact provider ETA and ETA windows are kept semantically distinct.",
         "properties": {
           "liveLocationAvailable": { "type": "boolean" },
           "courierLatitude": { "type": "number", "format": "double", "minimum": -90, "maximum": 90, "nullable": true },
           "courierLongitude": { "type": "number", "format": "double", "minimum": -180, "maximum": 180, "nullable": true },
           "locationObservedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "estimatedPickupAt": { "type": "string", "format": "date-time", "nullable": true },
           "estimatedPickupStartAt": { "type": "string", "format": "date-time", "nullable": true },
           "estimatedPickupEndAt": { "type": "string", "format": "date-time", "nullable": true },
+          "estimatedDropoffAt": { "type": "string", "format": "date-time", "nullable": true },
           "estimatedDropoffStartAt": { "type": "string", "format": "date-time", "nullable": true },
           "estimatedDropoffEndAt": { "type": "string", "format": "date-time", "nullable": true },
           "telemetryObservedAt": { "type": "string", "format": "date-time", "nullable": true }

@@ -63,8 +63,10 @@ public class DeliveryTelemetryUpdateService {
                 "delivery_courier_latitude = COALESCE(?, delivery_courier_latitude), " +
                 "delivery_courier_longitude = COALESCE(?, delivery_courier_longitude), " +
                 "delivery_courier_location_observed_at = COALESCE(?, delivery_courier_location_observed_at), " +
+                "delivery_estimated_pickup_at = COALESCE(?, delivery_estimated_pickup_at), " +
                 "delivery_estimated_pickup_start_at = COALESCE(?, delivery_estimated_pickup_start_at), " +
                 "delivery_estimated_pickup_end_at = COALESCE(?, delivery_estimated_pickup_end_at), " +
+                "delivery_estimated_dropoff_at = COALESCE(?, delivery_estimated_dropoff_at), " +
                 "delivery_estimated_dropoff_start_at = COALESCE(?, delivery_estimated_dropoff_start_at), " +
                 "delivery_estimated_dropoff_end_at = COALESCE(?, delivery_estimated_dropoff_end_at), " +
                 "delivery_telemetry_observed_at = ?, delivery_telemetry_event_id = ?, updated_at = now() " +
@@ -72,8 +74,10 @@ public class DeliveryTelemetryUpdateService {
             data.courierLatitude(),
             data.courierLongitude(),
             timestamp(data.locationObservedAt()),
+            timestamp(data.estimatedPickupAt()),
             timestamp(data.estimatedPickupStartAt()),
             timestamp(data.estimatedPickupEndAt()),
+            timestamp(data.estimatedDropoffAt()),
             timestamp(data.estimatedDropoffStartAt()),
             timestamp(data.estimatedDropoffEndAt()),
             timestamp(data.observedAt()),

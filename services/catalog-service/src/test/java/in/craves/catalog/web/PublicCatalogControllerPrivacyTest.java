@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import in.craves.catalog.config.PublicCatalogPrivacyProperties;
 import in.craves.catalog.service.CatalogService;
 import in.craves.catalog.service.PublicMenuBatchResolveService;
 import in.craves.catalog.web.ApiDtos.DiscoveryRadiusResponse;
@@ -19,44 +20,52 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class PublicCatalogControllerPrivacyTest {
     private final CatalogService catalogService = mock(CatalogService.class);
     private final PublicMenuBatchResolveService batchResolveService = mock(PublicMenuBatchResolveService.class);
-    private final PublicCatalogController controller = new PublicCatalogController(catalogService, batchResolveService);
+    private PublicCatalogPrivacyProperties privacyProperties;
+    private PublicCatalogController controller;
+
+    @BeforeEach
+    void setUp() {
+        privacyProperties = new PublicCatalogPrivacyProperties();
+        privacyProperties.setPrivacyEnforcementEnabled(true);
+        controller = new PublicCatalogController(catalogService, batchResolveService, privacyProperties);
+    }
 
     @Test
-    void publicKitchenDetailExcludesIdentityContactAddressAndExactCoordinates() {
+    void publicKitchenDetailExcludesIdentityContactAddressAndExactCoordinatesWhenActivated() {
         UUID kitchenId = UUID.randomUUID();
-        when(catalogService.getPublicKitchen(kitchenId)).thenReturn(new KitchenProfileResponse(
-            kitchenId,
-            UUID.randomUUID(),
-            "Ravi Home Kitchen",
-            "Ravi Inti Vantalu",
-            "Telugu home food",
-            "+919999999999",
-            "chef@example.com",
-            "12-3-45 Private House",
-            "Private Lane",
-            "Private Landmark",
-            "Kukatpally",
-            "Hyderabad",
-            "Telangana",
-            "500072",
-            new BigDecimal("17.4948"),
-            new BigDecimal("78.3996"),
-            KitchenStatus.ACTIVE,
-            Instant.now(),
-            Instant.now()
-        ));
+        when(catalogService.getPublicKitchen(kitchenId)).thenReturn(kitchen(kitchenId));
 
         var response = controller.getKitchen(kitchenId);
 
         assertThat(response.id()).isEqualTo(kitchenId);
+        assertThat(response.identityId()).isNull();
         assertThat(response.areaName()).isEqualTo("Kukatpally");
         assertThat(response.city()).isEqualTo("Hyderabad");
-        assertThat(response.toString()).doesNotContain("9999999999", "Private House", "500072", "17.4948", "78.3996");
+        assertThat(response.phoneNumber()).isNull();
+        assertThat(response.addressLine1()).isNull();
+        assertThat(response.postalCode()).isNull();
+        assertThat(response.latitude()).isNull();
+        assertThat(response.longitude()).isNull();
+    }
+
+    @Test
+    void stagedDisabledModePreservesLegacyKitchenContractUntilOrderIsMigrated() {
+        UUID kitchenId = UUID.randomUUID();
+        KitchenProfileResponse legacy = kitchen(kitchenId);
+        when(catalogService.getPublicKitchen(kitchenId)).thenReturn(legacy);
+        privacyProperties.setPrivacyEnforcementEnabled(false);
+
+        var response = controller.getKitchen(kitchenId);
+
+        assertThat(response).isSameAs(legacy);
+        assertThat(response.phoneNumber()).isEqualTo("+919999999999");
+        assertThat(response.addressLine1()).isEqualTo("12-3-45 Private House");
     }
 
     @Test
@@ -107,5 +116,29 @@ class PublicCatalogControllerPrivacyTest {
         assertThat(response.images().getFirst().blobContainer()).isNull();
         assertThat(response.images().getFirst().blobName()).isNull();
         assertThat(response.images().getFirst().publicUrl()).isEqualTo("https://cdn.example/menu.jpg");
+    }
+
+    private static KitchenProfileResponse kitchen(UUID kitchenId) {
+        return new KitchenProfileResponse(
+            kitchenId,
+            UUID.randomUUID(),
+            "Ravi Home Kitchen",
+            "Ravi Inti Vantalu",
+            "Telugu home food",
+            "+919999999999",
+            "chef@example.com",
+            "12-3-45 Private House",
+            "Private Lane",
+            "Private Landmark",
+            "Kukatpally",
+            "Hyderabad",
+            "Telangana",
+            "500072",
+            new BigDecimal("17.4948"),
+            new BigDecimal("78.3996"),
+            KitchenStatus.ACTIVE,
+            Instant.now(),
+            Instant.now()
+        );
     }
 }

@@ -21,7 +21,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ApiError> handleApi(ApiException ex, HttpServletRequest request) {
         return ResponseEntity.status(ex.getStatus()).body(error(
-            ex.getStatus().value(), ex.getCode(), ex.getMessage(), request, List.of()
+            ex.getStatus(), ex.getCode(), ex.getMessage(), request, List.of()
         ));
     }
 
@@ -55,7 +55,7 @@ public class GlobalExceptionHandler {
             "INTERNAL_SERVER_ERROR",
             "INTERNAL_SERVER_ERROR",
             "Internal server error",
-            request.getRequestURI(),
+            request == null ? null : request.getRequestURI(),
             List.of(),
             correlationId
         ));
@@ -74,7 +74,7 @@ public class GlobalExceptionHandler {
             code,
             code,
             message,
-            request.getRequestURI(),
+            request == null ? null : request.getRequestURI(),
             details,
             RequestCorrelationFilter.current(request)
         );

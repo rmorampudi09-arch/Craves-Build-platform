@@ -32,7 +32,7 @@ export function TrackingOrderSummaryCard({ order }: { order: CustomerOrder }) {
         ))}
       </ul>
 
-      <div className="space-y-2 border-t border-[#E5E7EB] pt-4 text-xs text-[#6B6B6B]">
+      <div className="mt-4 space-y-3 rounded-xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">
         <p className="flex justify-between gap-4">
           <span>Food subtotal</span>
           <span>{money(order.foodSubtotal, order.currency)}</span>
@@ -49,7 +49,7 @@ export function TrackingOrderSummaryCard({ order }: { order: CustomerOrder }) {
           <span>Delivery</span>
           <span>{money(order.deliveryFee, order.currency)}</span>
         </p>
-        <p className="flex justify-between gap-4 border-t border-[#E5E7EB] pt-4 text-sm font-semibold text-[#1A1A1A]">
+        <p className="flex justify-between gap-4 border-t border-[#E5E7EB] pt-4 text-base font-semibold text-[#1A1A1A]">
           <span>Backend total</span>
           <span>{money(order.grandTotal, order.currency)}</span>
         </p>

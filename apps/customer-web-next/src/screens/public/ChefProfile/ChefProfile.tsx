@@ -37,7 +37,7 @@ export const routeMeta = {
   },
 };
 
-const routeApi = getRouteApi("/chef/$id");
+const routeApi = getRouteApi("/kitchen/$id");
 
 function ChefProfilePage() {
   const { id } = routeApi.useParams();
@@ -48,8 +48,15 @@ function ChefProfilePage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    const cachedChef = getChef(id);
+    if (cachedChef) {
+      setChef(cachedChef);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setMessage("");
+
     void (async () => {
       const session = await loadSession();
       if (!session) {
@@ -63,7 +70,7 @@ function ChefProfilePage() {
           await loadKitchenMenu(id);
           resolved = getChef(id);
         } catch {
-          // Slug-based links and older URLs can still recover from location discovery.
+          // Older customer links can still recover from location discovery.
         }
       }
 
@@ -129,7 +136,7 @@ function ChefProfilePage() {
           <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
             {message || "This kitchen is not currently available in the live Craves catalog."}
           </p>
-          <button type="button" onClick={handleBack} className="mt-6 inline-flex min-h-11 items-center rounded-full bg-[#F62E18] px-5 text-sm font-black text-white">
+          <button type="button" onClick={handleBack} className="!mt-6 !inline-flex !min-h-11 !items-center !rounded-full !bg-[#F62E18] !px-5 !text-sm !font-black !text-white">
             Back to Craves
           </button>
         </div>

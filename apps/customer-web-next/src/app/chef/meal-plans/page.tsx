@@ -18,11 +18,11 @@ export default function ChefMealPlansPage() {
         description="Build weekly or monthly plans using only dishes from your own available menu. Confirm your subscription capacity, then submit; Craves Admin only reviews and approves or requests changes before customers can see the plan."
         action={
           <div className="flex flex-wrap gap-2">
-            <Link href="/chef/menu" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/30 px-4 text-sm font-semibold text-white hover:bg-white/10">
+            <Link href="/chef/menu" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#F62E18] hover:text-[#F62E18]">
               <UtensilsCrossed className="h-4 w-4" aria-hidden="true" />
               Manage dishes
             </Link>
-            <Link href="/chef/capacity" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/30 px-4 text-sm font-semibold text-white hover:bg-white/10">
+            <Link href="/chef/capacity" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#F62E18] hover:text-[#F62E18]">
               <Gauge className="h-4 w-4" aria-hidden="true" />
               Capacity
             </Link>

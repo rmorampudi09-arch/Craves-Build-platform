@@ -5,10 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BadgeIndianRupee,
+  CalendarDays,
   ChefHat,
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
+  Gauge,
   ImageIcon,
   LogIn,
   MapPinned,
@@ -206,8 +208,8 @@ export function ChefModeDashboard() {
 
   if (state === "loading") {
     return (
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
-        {Array.from({ length: 6 }, (_, index) => (
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" aria-hidden="true">
+        {Array.from({ length: 8 }, (_, index) => (
           <div key={index} className="h-44 animate-pulse rounded-2xl bg-grey-200" />
         ))}
         <p className="sr-only" role="status">Loading chef workspace</p>
@@ -302,6 +304,20 @@ export function ChefModeDashboard() {
       icon: Utensils,
     },
     {
+      href: "/chef/meal-plans",
+      label: "Meal Plans",
+      title: "Create and manage subscription plans",
+      description: "Build plans from your available menu and submit them for review",
+      icon: CalendarDays,
+    },
+    {
+      href: "/chef/capacity",
+      label: "Capacity",
+      title: "Subscription availability",
+      description: "Set optional weekday, menu-item and date limits for meal plans",
+      icon: Gauge,
+    },
+    {
       href: "/chef/orders",
       label: "Orders",
       title: `${stats.actionOrders} require action`,
@@ -350,7 +366,7 @@ export function ChefModeDashboard() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
           <Link
             key={card.href}

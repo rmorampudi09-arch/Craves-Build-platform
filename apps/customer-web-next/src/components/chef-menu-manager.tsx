@@ -1,7 +1,7 @@
 "use client";
 
 import { ImagePlus, Plus, UtensilsCrossed } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChefMenuItem, ChefMenuItemInput, FoodType, MenuItemStatus, SpiceLevel } from "@/lib/chef-menu-contract";
 
 type FormState = {
@@ -99,7 +99,7 @@ export function ChefMenuManager() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  async function load(): Promise<ChefMenuItem[] | null> {
+  const load = useCallback(async (): Promise<ChefMenuItem[] | null> => {
     setLoading(true);
     try {
       const response = await fetch("/api/chef/menu", { cache: "no-store" });
@@ -116,11 +116,11 @@ export function ChefMenuManager() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   useEffect(() => {
     if (!imageFile) {

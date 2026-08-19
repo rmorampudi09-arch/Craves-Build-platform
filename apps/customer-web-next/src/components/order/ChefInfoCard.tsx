@@ -1,4 +1,4 @@
-import { ChefHat, Star, MapPin, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, ChefHat, MapPin, Star } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 interface ChefInfoCardProps {
@@ -47,7 +47,7 @@ export function ChefInfoCard({
 
   return chefId ? (
     <Link
-      to="/chef/$id"
+      to="/kitchen/$id"
       params={{ id: chefId }}
       className="mt-5 block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#F62E18]/35"
       aria-label={`View ${chefName} home kitchen`}

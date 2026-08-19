@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BadgeIndianRupee,
-  CheckCircle2,
   ChevronDown,
   RefreshCw,
 } from "lucide-react";

@@ -12,6 +12,17 @@ spring:
     table: flyway_schema_history
 
 craves:
+  http-client:
+    connect-timeout-seconds: ${CRAVES_INTEGRATION_HTTP_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${CRAVES_INTEGRATION_HTTP_READ_TIMEOUT_SECONDS:20}
+  provider-resilience:
+    enabled: ${CRAVES_PROVIDER_RESILIENCE_ENABLED:false}
+    sliding-window-size: ${CRAVES_PROVIDER_RESILIENCE_SLIDING_WINDOW_SIZE:20}
+    minimum-number-of-calls: ${CRAVES_PROVIDER_RESILIENCE_MINIMUM_CALLS:10}
+    failure-rate-threshold: ${CRAVES_PROVIDER_RESILIENCE_FAILURE_RATE_THRESHOLD:50.0}
+    open-state-seconds: ${CRAVES_PROVIDER_RESILIENCE_OPEN_STATE_SECONDS:30}
+    half-open-calls: ${CRAVES_PROVIDER_RESILIENCE_HALF_OPEN_CALLS:3}
+    max-concurrent-calls-per-provider: ${CRAVES_PROVIDER_RESILIENCE_MAX_CONCURRENT_CALLS:20}
   delivery-intelligence:
     enabled: ${CRAVES_DELIVERY_INTELLIGENCE_ENABLED:false}
     live-window-days: ${CRAVES_DELIVERY_LIVE_WINDOW_DAYS:7}

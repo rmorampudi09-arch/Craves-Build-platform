@@ -1,0 +1,30 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: action
+    type: string
+    default: ACTIVATE
+    values:
+      - ACTIVATE
+      - ROLLBACK
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - task: AzureCLI@2
+    displayName: Catalog public home-chef privacy ${{ parameters.action }}
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        if [[ '${{ parameters.action }}' == 'ACTIVATE' ]]; then
+          bash scripts/release/activate-catalog-public-privacy.sh
+        else
+          bash scripts/release/rollback-catalog-public-privacy.sh
+        fi

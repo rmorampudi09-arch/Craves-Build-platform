@@ -1,7 +1,6 @@
 package in.craves.order.service;
 
 import in.craves.order.security.CravesPrincipal;
-import in.craves.order.service.CatalogClient.CatalogKitchen;
 import in.craves.order.web.ApiDtos.OrderResponse;
 import in.craves.order.web.ApiDtos.OrderStatus;
 import java.util.List;
@@ -9,36 +8,44 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ChefReadyForPickupService {
     private final JdbcTemplate jdbcTemplate;
-    private final CatalogClient catalogClient;
     private final OrderService orderService;
+    private final TransactionTemplate transactionTemplate;
 
     public ChefReadyForPickupService(
         JdbcTemplate jdbcTemplate,
-        CatalogClient catalogClient,
-        OrderService orderService
+        OrderService orderService,
+        PlatformTransactionManager transactionManager
     ) {
         this.jdbcTemplate = jdbcTemplate;
-        this.catalogClient = catalogClient;
         this.orderService = orderService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    @Transactional
     public OrderResponse markReady(CravesPrincipal principal, UUID orderId) {
         requireChef(principal);
         if (orderId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order id is required");
         }
 
+        transactionTemplate.executeWithoutResult(status -> transitionUnderLock(principal, orderId));
+
+        // The authoritative response is fetched only after the row-lock transaction has
+        // committed, so no cross-service Catalog call is held open inside the DB lock.
+        return orderService.getOrderForChef(principal, orderId);
+    }
+
+    private void transitionUnderLock(CravesPrincipal principal, UUID orderId) {
         List<LockedOrder> rows = jdbcTemplate.query(
-            "SELECT kitchen_id, status FROM order_schema.customer_order WHERE id = ? FOR UPDATE",
+            "SELECT chef_identity_id, status FROM order_schema.customer_order WHERE id = ? FOR UPDATE",
             (rs, rowNum) -> new LockedOrder(
-                rs.getObject("kitchen_id", UUID.class),
+                rs.getObject("chef_identity_id", UUID.class),
                 OrderStatus.valueOf(rs.getString("status"))
             ),
             orderId
@@ -48,13 +55,12 @@ public class ChefReadyForPickupService {
         }
 
         LockedOrder locked = rows.getFirst();
-        CatalogKitchen kitchen = catalogClient.getKitchen(locked.kitchenId());
-        if (kitchen.identityId() == null || !kitchen.identityId().equals(principal.identityId())) {
+        if (locked.chefIdentityId() == null || !locked.chefIdentityId().equals(principal.identityId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chef cannot access this order");
         }
 
         if (locked.status() == OrderStatus.READY_FOR_PICKUP) {
-            return orderService.getOrderForChef(principal, orderId);
+            return;
         }
         if (locked.status() != OrderStatus.CHEF_ACCEPTED && locked.status() != OrderStatus.PREPARING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Order cannot be marked ready yet");
@@ -75,8 +81,6 @@ public class ChefReadyForPickupService {
             principal.identityId(),
             "Chef marked food ready"
         );
-
-        return orderService.getOrderForChef(principal, orderId);
     }
 
     private static void requireChef(CravesPrincipal principal) {
@@ -85,6 +89,6 @@ public class ChefReadyForPickupService {
         }
     }
 
-    private record LockedOrder(UUID kitchenId, OrderStatus status) {
+    private record LockedOrder(UUID chefIdentityId, OrderStatus status) {
     }
 }

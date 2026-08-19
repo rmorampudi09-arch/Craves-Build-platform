@@ -103,9 +103,11 @@ public class DeliveryStatusUpdateService {
             applyAndPublish(job, update, "WEBHOOK");
         }
 
-        // Telemetry is intentionally independent from status-state change. Providers can send
-        // multiple GPS/ETA updates while the normalized delivery status remains IN_TRANSIT.
-        telemetryPublisher.captureWebhook(job, update);
+        // A provider may send newer GPS/ETA while its normalized status stays unchanged.
+        // Stale, unknown or terminal-protected callbacks must never update live telemetry.
+        if (decision.applied() || "NO_STATE_CHANGE".equals(decision.reason())) {
+            telemetryPublisher.captureWebhook(job, update);
+        }
 
         repository.markWebhookProcessed(
             workItem.id(),

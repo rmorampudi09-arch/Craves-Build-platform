@@ -2,7 +2,9 @@ package in.craves.order.service;
 
 import in.craves.order.config.CatalogClientProperties;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
@@ -39,6 +41,18 @@ public class CatalogClient {
         }
     }
 
+    public List<ResolvedCatalogMenuItem> resolveActiveMenuItems(List<UUID> menuItemIds) {
+        if (menuItemIds == null || menuItemIds.isEmpty()) {
+            return List.of();
+        }
+        List<ResolvedCatalogMenuItem> items = restClient.post()
+            .uri("/menu-items/resolve")
+            .body(new ResolveMenuItemsRequest(menuItemIds))
+            .retrieve()
+            .body(new ParameterizedTypeReference<List<ResolvedCatalogMenuItem>>() { });
+        return items == null ? List.of() : List.copyOf(items);
+    }
+
     public CatalogKitchen getKitchen(UUID kitchenId) {
         try {
             CatalogKitchen kitchen = restClient.get()
@@ -52,6 +66,20 @@ public class CatalogClient {
         } catch (HttpClientErrorException.NotFound ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kitchen is not active");
         }
+    }
+
+    private record ResolveMenuItemsRequest(List<UUID> menuItemIds) {
+    }
+
+    public record ResolvedCatalogMenuItem(
+        UUID id,
+        UUID kitchenId,
+        String itemName,
+        BigDecimal price,
+        String currency,
+        Integer unitPackageWeightGrams,
+        Boolean thermoboxRequired
+    ) {
     }
 
     public record CatalogMenuItem(

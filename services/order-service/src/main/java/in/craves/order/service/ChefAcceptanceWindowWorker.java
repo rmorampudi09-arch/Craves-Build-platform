@@ -117,7 +117,7 @@ public class ChefAcceptanceWindowWorker {
                     "Chef acceptance {} reminder recorded for orderId={} chefIdentityId={}",
                     first ? "first" : "second",
                     candidate.orderId(),
-                    candidate.kitchenId()
+                    kitchen.identityId()
                 );
             }
         } catch (RuntimeException exception) {

@@ -1,5 +1,10 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import ChefProfilePage from "@/screens/public/ChefProfile/ChefProfile";
-
-export default ChefProfilePage;
+export default async function LegacyChefProfilePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  redirect(`/kitchen/${encodeURIComponent(id)}`);
+}

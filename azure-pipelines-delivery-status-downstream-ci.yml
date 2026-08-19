@@ -24,7 +24,7 @@ steps:
       set -euo pipefail
       cd services/integration-service
       mvn -B clean verify
-    displayName: Compile and test Integration delivery telemetry
+    displayName: Compile and test Integration multi-provider delivery capability
 
   - script: |
       set -euo pipefail
@@ -68,11 +68,25 @@ steps:
         services/order-service/src/main/java/in/craves/order/config/DeliveryTelemetryViewProperties.java
 
       test -f services/order-service/src/main/resources/db/migration/V17__delivery_telemetry_projection.sql
+      test -f services/order-service/src/main/resources/db/migration/V18__delivery_provider_exact_eta.sql
       test -f services/integration-service/src/main/resources/db/migration/V112__delivery_telemetry_projection.sql
+      test -f services/integration-service/src/main/resources/db/migration/V113__delivery_provider_exact_eta.sql
+
+      test -f services/integration-service/src/main/java/in/craves/integration/delivery/provider/DeliveryProviderCapabilityRegistry.java
+      test -f services/integration-service/src/main/java/in/craves/integration/delivery/borzo/BorzoDeliveryTelemetryExtractor.java
+      test -f services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket/ShiprocketDeliveryTelemetryExtractor.java
 
       grep -F 'DELIVERY_TELEMETRY_UPDATED' contracts/events/delivery-telemetry-updated-v1.schema.json
+      grep -F '"1.1"' contracts/events/delivery-telemetry-updated-v1.schema.json
+      grep -F 'trackingExperience' contracts/openapi/order-delivery-status-v1.openapi.json
+      grep -F 'trackingExperience' contracts/openapi/chef-delivery-status-v1.openapi.json
       grep -F 'DELIVERY_TELEMETRY_UPDATED' scripts/release/upgrade-order-delivery-stream-filter-v3.sh
       grep -F 'get-my-chef-order-delivery-status' scripts/apim/configure-chef-order-read-apim.sh
+
+      grep -F 'must never be used as a provider ranking table' \
+        services/integration-service/src/main/java/in/craves/integration/delivery/provider/DeliveryProviderCapabilityRegistry.java
+      grep -F 'PRIVATE_CONTRACT_REQUIRED' \
+        services/integration-service/src/main/java/in/craves/integration/delivery/provider/DeliveryProviderCapabilityRegistry.java
 
       grep -F 'scripts/release/deploy-single-service-preserve-runtime.sh' \
         azure-pipelines-order-service.yml
@@ -87,5 +101,5 @@ steps:
         exit 1
       fi
 
-      echo 'SUCCESS: Delivery status + telemetry defaults remain fail-closed and routine deployments preserve live runtime state.'
-    displayName: Verify fail-closed telemetry controls and runtime-preserving deployment contract
+      echo 'SUCCESS: Multi-provider delivery capability remains fail-closed where contracts are unverified and routine deployments preserve live runtime state.'
+    displayName: Verify provider-neutral capability, fail-closed contracts and runtime preservation

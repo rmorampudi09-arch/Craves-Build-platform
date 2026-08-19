@@ -62,7 +62,7 @@ public class RazorpayRefundClient {
         requireReadConfiguration();
         requireWorkItem(workItem);
         if (!StringUtils.hasText(workItem.providerRefundId()) || !workItem.providerRefundId().startsWith("rfnd_")) {
-            throw new RefundProviderNonRetryableException("Razorpay refund identity is missing or invalid");
+            throw nonRetryable("Razorpay refund identity is missing or invalid");
         }
         try {
             JsonNode response = client.get().uri("/v1/refunds/{refundId}", workItem.providerRefundId())
@@ -80,7 +80,7 @@ public class RazorpayRefundClient {
             throw new RefundProviderTransientException("Razorpay returned an incomplete refund response");
         }
         if (!workItem.providerPaymentId().equals(text(response, "payment_id"))) {
-            throw new RefundProviderNonRetryableException("Razorpay refund payment identity does not match Craves");
+            throw nonRetryable("Razorpay refund payment identity does not match Craves");
         }
         long providerAmount = longValue(response, "amount");
         String providerCurrency = text(response, "currency");
@@ -93,7 +93,7 @@ public class RazorpayRefundClient {
         }
         if (creating && StringUtils.hasText(text(response, "receipt"))
             && !workItem.refundReference().equals(text(response, "receipt"))) {
-            throw new RefundProviderNonRetryableException("Razorpay refund receipt identity does not match Craves");
+            throw nonRetryable("Razorpay refund receipt identity does not match Craves");
         }
         String status = switch (rawStatus.toLowerCase(Locale.ROOT)) {
             case "processed" -> "SUCCESS";
@@ -111,11 +111,11 @@ public class RazorpayRefundClient {
             || !workItem.providerPaymentId().startsWith("pay_")
             || workItem.amount() == null || workItem.amount().signum() <= 0
             || !StringUtils.hasText(workItem.currency())) {
-            throw new RefundProviderNonRetryableException("Razorpay refund work item is incomplete");
+            throw nonRetryable("Razorpay refund work item is incomplete");
         }
         String key = workItem.idempotencyKey().toString();
         if (key.length() < 10 || !key.matches("[A-Za-z0-9_-]+")) {
-            throw new RefundProviderNonRetryableException("Razorpay refund idempotency key is invalid");
+            throw nonRetryable("Razorpay refund idempotency key is invalid");
         }
     }
 
@@ -142,6 +142,10 @@ public class RazorpayRefundClient {
             return new RefundProviderTransientException(message, exception);
         }
         return new RefundProviderNonRetryableException(message, exception);
+    }
+
+    private static RefundProviderNonRetryableException nonRetryable(String message) {
+        return new RefundProviderNonRetryableException(message, null);
     }
 
     private String json(JsonNode value) {

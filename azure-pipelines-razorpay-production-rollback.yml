@@ -18,7 +18,7 @@ pool:
 steps:
   - checkout: none
   - task: AzureCLI@2
-    displayName: Stop new Razorpay charges and preserve in-flight reconciliation
+    displayName: Stop new Razorpay mutations and preserve in-flight reconciliation
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -46,9 +46,9 @@ steps:
           CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED=false \
           CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED=false \
           CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED=false \
-          CRAVES_REFUND_RECONCILIATION_ENABLED=false \
+          CRAVES_REFUND_RECONCILIATION_ENABLED=true \
           CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED=false \
-          CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED=false >/dev/null
+          CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED=true >/dev/null
 
         latest=$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.latestRevisionName -o tsv --only-show-errors)
         ready=''
@@ -70,9 +70,12 @@ steps:
         [[ "$(value CRAVES_PAYMENT_ORDER_API_ENABLED)" == false ]]
         [[ "$(value CRAVES_RAZORPAY_WEBHOOK_INGRESS_ENABLED)" == true ]]
         [[ "$(value CRAVES_RAZORPAY_WEBHOOK_WORKER_ENABLED)" == true ]]
+        [[ "$(value CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED)" == false ]]
+        [[ "$(value CRAVES_REFUND_RECONCILIATION_ENABLED)" == true ]]
+        [[ "$(value CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED)" == true ]]
         [[ "$(value CASHFREE_TRAFFIC_ALLOWED)" == false ]]
 
         echo 'RAZORPAY LIVE MONEY: STOPPED'
-        echo 'New payment orders and refunds are disabled.'
-        echo 'Razorpay webhook ingestion and read-side reconciliation remain active for transactions already in flight.'
+        echo 'New payment orders and new refund mutations are disabled.'
+        echo 'Razorpay payment webhooks and read-only refund reconciliation remain active for transactions already in flight.'
         echo 'Cashfree remains disabled and receives no traffic.'

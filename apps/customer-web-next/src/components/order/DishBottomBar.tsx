@@ -39,7 +39,7 @@ export function DishBottomBar({
             type="button"
             onClick={onDecrease}
             disabled={quantity <= 1 || disabled}
-            className="flex h-11 w-11 items-center justify-center rounded-l-full text-[#F62E18] transition-colors hover:bg-[#E5E7EB] disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-l-full !bg-transparent !text-[#F62E18] transition-colors hover:!bg-[#E5E7EB] hover:!text-[#F62E18] disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Decrease quantity"
           >
             <Minus className="h-4 w-4" aria-hidden="true" />
@@ -49,7 +49,7 @@ export function DishBottomBar({
             type="button"
             onClick={onIncrease}
             disabled={disabled}
-            className="flex h-11 w-11 items-center justify-center rounded-r-full text-[#F62E18] transition-colors hover:bg-[#E5E7EB] disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-r-full !bg-transparent !text-[#F62E18] transition-colors hover:!bg-[#E5E7EB] hover:!text-[#F62E18] disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Increase quantity"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -59,7 +59,7 @@ export function DishBottomBar({
           type="button"
           onClick={onAddToCart}
           disabled={disabled}
-          className="ml-auto inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 text-sm font-black text-white shadow-[0_8px_22px_rgba(246,46,24,0.18)] transition hover:shadow-[0_10px_26px_rgba(246,46,24,0.24)] sm:flex-none sm:px-8 disabled:cursor-wait disabled:opacity-60"
+          className="ml-auto inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full !bg-[#F62E18] px-6 text-sm font-black !text-white !shadow-[0_8px_22px_rgba(246,46,24,0.18)] transition hover:!bg-[#F62E18] hover:!text-white hover:!shadow-[0_10px_26px_rgba(246,46,24,0.24)] sm:flex-none sm:px-8 disabled:cursor-wait disabled:opacity-60"
         >
           {disabled ? (
             <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />

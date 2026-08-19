@@ -26,7 +26,7 @@ export function FloatingCartBar({ itemCount, total, currency, onViewCart }: Floa
       <button
         type="button"
         onClick={onViewCart}
-        className="group pointer-events-auto mx-auto flex min-h-[4.6rem] w-full max-w-[58rem] items-center gap-4 rounded-[1.35rem] border border-[#E5E7EB] bg-[#F1F3F5] px-[1.125rem] text-left text-[#1A1A1A] shadow-[0_18px_44px_rgba(26,26,26,0.14)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_48px_rgba(26,26,26,0.18)] sm:px-6"
+        className="group pointer-events-auto mx-auto flex min-h-[4.6rem] w-full max-w-[58rem] items-center gap-4 rounded-[1.35rem] !border-[#E5E7EB] !bg-[#F1F3F5] px-[1.125rem] text-left !text-[#1A1A1A] !shadow-[0_18px_44px_rgba(26,26,26,0.14)] transition-all duration-300 hover:!bg-[#F1F3F5] hover:!text-[#1A1A1A] hover:!shadow-[0_20px_48px_rgba(26,26,26,0.18)] sm:px-6"
         aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18] shadow-[0_3px_10px_rgba(26,26,26,0.08)]">

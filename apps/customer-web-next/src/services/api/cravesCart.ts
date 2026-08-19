@@ -16,8 +16,14 @@ export type CartItem = {
   lineTotal: number;
 };
 
+type PendingCheckoutCartDraft = {
+  items: Array<{ menuItemId: string; quantity: number }>;
+  restored: boolean;
+};
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
+const PENDING_CHECKOUT_CART_KEY = "craves.pending-checkout-cart.v1";
 let cart: CustomerCart | null = null;
 let visualItems: CartItem[] = [];
 const listeners = new Set<() => void>();
@@ -54,6 +60,101 @@ function reset() {
   notify();
 }
 
+function pendingCheckoutStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readPendingCheckoutCart(): PendingCheckoutCartDraft | null {
+  const storage = pendingCheckoutStorage();
+  if (!storage) return null;
+  const raw = storage.getItem(PENDING_CHECKOUT_CART_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as {
+      items?: unknown;
+      restored?: unknown;
+    };
+    if (!Array.isArray(parsed.items)) return null;
+    const items: PendingCheckoutCartDraft["items"] = [];
+    for (const item of parsed.items) {
+      if (!item || typeof item !== "object") continue;
+      const candidate = item as { menuItemId?: unknown; quantity?: unknown };
+      if (
+        typeof candidate.menuItemId !== "string" ||
+        !UUID.test(candidate.menuItemId) ||
+        typeof candidate.quantity !== "number" ||
+        !Number.isInteger(candidate.quantity) ||
+        candidate.quantity < 1 ||
+        candidate.quantity > 50
+      ) {
+        continue;
+      }
+      items.push({
+        menuItemId: candidate.menuItemId,
+        quantity: candidate.quantity,
+      });
+    }
+    if (!items.length) return null;
+    return { items, restored: parsed.restored === true };
+  } catch {
+    return null;
+  }
+}
+
+function writePendingCheckoutCart(draft: PendingCheckoutCartDraft) {
+  const storage = pendingCheckoutStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(PENDING_CHECKOUT_CART_KEY, JSON.stringify(draft));
+  } catch {
+    // Session storage is a resilience layer only; cart APIs remain the source of truth.
+  }
+}
+
+function clearPendingCheckoutCart() {
+  const storage = pendingCheckoutStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(PENDING_CHECKOUT_CART_KEY);
+  } catch {
+    // Ignore storage failures so cart API behavior remains available.
+  }
+}
+
+function cartDraftItems() {
+  return visualItems.map((item) => ({
+    menuItemId: item.menuItemId,
+    quantity: item.qty,
+  }));
+}
+
+function rememberValidatedCart() {
+  if (!visualItems.length) return;
+  const existing = readPendingCheckoutCart();
+  writePendingCheckoutCart({
+    items: cartDraftItems(),
+    restored: existing?.restored ?? false,
+  });
+}
+
+function syncPendingCheckoutCart() {
+  const existing = readPendingCheckoutCart();
+  if (!existing) return;
+  if (!visualItems.length) {
+    clearPendingCheckoutCart();
+    return;
+  }
+  writePendingCheckoutCart({
+    items: cartDraftItems(),
+    restored: existing.restored,
+  });
+}
+
 async function cartRequest(path: string, init?: RequestInit): Promise<CustomerCart> {
   const response = await fetch(path, {
     ...init,
@@ -78,9 +179,25 @@ async function cartRequest(path: string, init?: RequestInit): Promise<CustomerCa
   return body;
 }
 
+async function restorePendingCheckoutCart(): Promise<void> {
+  const draft = readPendingCheckoutCart();
+  if (!draft || visualItems.length) return;
+  for (const item of draft.items) {
+    await cartRequest("/api/cart/items", {
+      method: "POST",
+      body: JSON.stringify({
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+      }),
+    });
+  }
+  writePendingCheckoutCart({ items: draft.items, restored: true });
+}
+
 export async function loadCart(): Promise<CartItem[]> {
   try {
     await cartRequest("/api/cart", { cache: "no-store" });
+    if (!visualItems.length) await restorePendingCheckoutCart();
     return [...visualItems];
   } catch (error) {
     reset();
@@ -121,6 +238,7 @@ export async function addToCart(
     method: "POST",
     body: JSON.stringify({ menuItemId: item.id, quantity }),
   });
+  syncPendingCheckoutCart();
 }
 
 export async function setQty(id: string, quantity: number): Promise<void> {
@@ -133,6 +251,7 @@ export async function setQty(id: string, quantity: number): Promise<void> {
     method: "PUT",
     body: JSON.stringify({ quantity }),
   });
+  syncPendingCheckoutCart();
 }
 
 export async function removeFromCart(id: string): Promise<void> {
@@ -140,14 +259,32 @@ export async function removeFromCart(id: string): Promise<void> {
   await cartRequest(`/api/cart/items/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+  syncPendingCheckoutCart();
 }
 
 export async function clearCart(): Promise<void> {
   await cartRequest("/api/cart", { method: "DELETE" });
+  clearPendingCheckoutCart();
 }
 
 export async function validateCart(): Promise<CustomerCart> {
-  return cartRequest("/api/cart/validate", { method: "POST" });
+  const validated = await cartRequest("/api/cart/validate", { method: "POST" });
+  rememberValidatedCart();
+  return validated;
+}
+
+export async function completePendingCheckoutCart(): Promise<void> {
+  const draft = readPendingCheckoutCart();
+  clearPendingCheckoutCart();
+  if (!draft?.restored) {
+    reset();
+    return;
+  }
+  try {
+    await cartRequest("/api/cart", { method: "DELETE" });
+  } catch {
+    reset();
+  }
 }
 
 export function subscribeCart(listener: () => void): () => void {

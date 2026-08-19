@@ -20,6 +20,7 @@ import {
   type PaymentStatus,
 } from "@/lib/payment-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
+import { completePendingCheckoutCart } from "@/services/api/cravesCart";
 import { CheckoutHeader } from "@/components/checkout/CheckoutHeader";
 
 declare global {
@@ -135,6 +136,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       }
       const parsed = parseCheckout(raw);
       if (!parsed) throw new Error("Craves returned an invalid checkout response.");
+      if (parsed.status === "PAID") await completePendingCheckoutCart();
       setCheckout(parsed);
       setStatus(parsed.status === "PAID" ? "PAID" : null);
       setMessage(
@@ -207,6 +209,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       if (!verification) {
         throw new Error("Craves returned an invalid payment verification response.");
       }
+      if (verification.status === "PAID") await completePendingCheckoutCart();
       setStatus(verification.status);
       setMessage(
         verification.status === "PAID"
@@ -282,6 +285,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       }
       const parsed = parsePaymentStatus(raw);
       if (!parsed) throw new Error("Craves returned an invalid payment status response.");
+      if (parsed.status === "PAID") await completePendingCheckoutCart();
       setStatus(parsed.status);
       setMessage(`Current payment status: ${statusLabel(parsed.status)}.`);
     } catch (caught) {
@@ -391,7 +395,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
                   type="button"
                   disabled={busy || checkout.status !== "PAYMENT_PENDING"}
                   onClick={() => void openCheckout()}
-                  className="btn-primary mt-6 min-h-12 w-full disabled:cursor-wait disabled:opacity-60"
+                  className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#F62E18] px-5 text-sm font-bold text-white transition-colors hover:bg-[#DF2815] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F62E18] disabled:cursor-wait disabled:opacity-60"
                 >
                   {busy ? (
                     <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />

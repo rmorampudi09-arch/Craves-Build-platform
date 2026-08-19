@@ -6,12 +6,26 @@ on:
     paths:
       - apps/customer-web-next/**
       - services/order-service/**
+      - services/user-chef-service/**
+      - infra/apim/admin-dashboard/**
+      - infra/apim/admin-directory/**
+      - scripts/apim/configure-admin-dashboard-apim.sh
+      - scripts/apim/configure-admin-directory-apim.sh
+      - azure-pipelines-admin-dashboard*.yml
+      - azure-pipelines-admin-directory-apim.yml
       - .github/workflows/admin-dashboard-ci.yml
   push:
     branches: [main]
     paths:
       - apps/customer-web-next/**
       - services/order-service/**
+      - services/user-chef-service/**
+      - infra/apim/admin-dashboard/**
+      - infra/apim/admin-directory/**
+      - scripts/apim/configure-admin-dashboard-apim.sh
+      - scripts/apim/configure-admin-directory-apim.sh
+      - azure-pipelines-admin-dashboard*.yml
+      - azure-pipelines-admin-directory-apim.yml
       - .github/workflows/admin-dashboard-ci.yml
 
 permissions:
@@ -44,7 +58,7 @@ jobs:
           CRAVES_API_BASE_URL: https://example.invalid/api/v1
           NEXT_PUBLIC_CASHFREE_MODE: sandbox
 
-  backend:
+  order-service:
     name: Order-service admin authorization
     runs-on: ubuntu-latest
     defaults:
@@ -58,3 +72,26 @@ jobs:
           java-version: "21"
           cache: maven
       - run: mvn -B -ntp -Dtest=AdminDashboardControllerTest test
+
+  user-chef-service:
+    name: User/Chef admin directory checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/user-chef-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - run: mvn -B -ntp test
+
+  apim:
+    name: Admin APIM syntax checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n scripts/apim/configure-admin-dashboard-apim.sh
+      - run: bash -n scripts/apim/configure-admin-directory-apim.sh

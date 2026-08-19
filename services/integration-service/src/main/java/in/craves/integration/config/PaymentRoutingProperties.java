@@ -10,15 +10,18 @@ import org.springframework.stereotype.Component;
 public class PaymentRoutingProperties {
     private final String activeProvider;
     private final boolean cashfreeEnabled;
+    private final boolean cashfreeTrafficAllowed;
     private final boolean razorpayEnabled;
 
     public PaymentRoutingProperties(
         @Value("${PAYMENT_PROVIDER_NAME:RAZORPAY}") String activeProvider,
         @Value("${CASHFREE_API_ENABLED:false}") boolean cashfreeEnabled,
+        @Value("${CASHFREE_TRAFFIC_ALLOWED:false}") boolean cashfreeTrafficAllowed,
         @Value("${RAZORPAY_API_ENABLED:true}") boolean razorpayEnabled
     ) {
         this.activeProvider = activeProvider;
         this.cashfreeEnabled = cashfreeEnabled;
+        this.cashfreeTrafficAllowed = cashfreeTrafficAllowed;
         this.razorpayEnabled = razorpayEnabled;
     }
 
@@ -29,6 +32,9 @@ public class PaymentRoutingProperties {
         }
         if ("CASHFREE".equals(provider()) && !cashfreeEnabled) {
             throw new IllegalStateException("CASHFREE_API_ENABLED must be true when Cashfree is active");
+        }
+        if ("CASHFREE".equals(provider()) && !cashfreeTrafficAllowed) {
+            throw new IllegalStateException("CASHFREE_TRAFFIC_ALLOWED must be true before Cashfree can receive payment traffic");
         }
         if ("RAZORPAY".equals(provider()) && !razorpayEnabled) {
             throw new IllegalStateException("RAZORPAY_API_ENABLED must be true when Razorpay is active");
@@ -42,5 +48,6 @@ public class PaymentRoutingProperties {
     public boolean razorpay() { return "RAZORPAY".equals(provider()); }
     public boolean cashfree() { return "CASHFREE".equals(provider()); }
     public boolean cashfreeEnabled() { return cashfreeEnabled; }
+    public boolean cashfreeTrafficAllowed() { return cashfreeTrafficAllowed; }
     public boolean razorpayEnabled() { return razorpayEnabled; }
 }

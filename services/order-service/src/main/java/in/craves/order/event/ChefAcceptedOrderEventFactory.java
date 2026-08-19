@@ -107,21 +107,22 @@ public class ChefAcceptedOrderEventFactory {
                 ))
                 .toList();
 
-        // The current Order source supplies kitchen_id in pickupLocationReference. Convert that
-        // mutable kitchen identity + immutable pickup snapshot into the same stable UUID that
-        // Catalog V4 stores. Historical orders therefore keep their exact pickup identity even if
-        // the chef later changes address.
-        UUID pickupLocationReference = PickupLocationReference.fromSnapshot(
-            source.pickupLocationReference(),
-            source.pickupPhoneNumber(),
-            source.pickupAddressLine1(),
-            source.pickupAddressLine2(),
-            source.pickupLandmark(),
-            source.pickupAreaName(),
-            source.pickupCity(),
-            source.pickupState(),
-            source.pickupPostalCode()
-        );
+        // Production Chef acceptance supplies kitchen_id in pickupLocationReference. Convert it +
+        // the immutable pickup snapshot into the same stable UUID that Catalog V4 stores. Legacy
+        // test/caller constructors may still omit the reference; keep those source-compatible.
+        UUID pickupLocationReference = source.pickupLocationReference() == null
+            ? null
+            : PickupLocationReference.fromSnapshot(
+                source.pickupLocationReference(),
+                source.pickupPhoneNumber(),
+                source.pickupAddressLine1(),
+                source.pickupAddressLine2(),
+                source.pickupLandmark(),
+                source.pickupAreaName(),
+                source.pickupCity(),
+                source.pickupState(),
+                source.pickupPostalCode()
+            );
 
         ChefAcceptedOrderEventData data = new ChefAcceptedOrderEventData(
             source.checkoutId(),
@@ -193,7 +194,6 @@ public class ChefAcceptedOrderEventFactory {
         Objects.requireNonNull(source.checkoutId(), "checkoutId is required");
         Objects.requireNonNull(source.acceptedAt(), "acceptedAt is required");
         Objects.requireNonNull(source.readyAt(), "readyAt is required");
-        Objects.requireNonNull(source.pickupLocationReference(), "pickupLocationReference is required");
         Objects.requireNonNull(source.pickupLatitude(), "pickup latitude is required");
         Objects.requireNonNull(source.pickupLongitude(), "pickup longitude is required");
         Objects.requireNonNull(source.dropoffLatitude(), "dropoff latitude is required");

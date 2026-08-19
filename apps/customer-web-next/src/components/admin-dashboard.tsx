@@ -55,7 +55,7 @@ export function AdminDashboard() {
   const workbench = [
     { label: "Find customer or chef", note: "Mobile, email, UUID or exact name", href: "/admin/search", icon: Search, accent: "bg-[#6930ca] text-white" },
     { label: "Investigate order / payment", note: "Read-only evidence with audit reason", href: "/admin/operations", icon: SearchCheck, accent: "bg-[#0b1426] text-white" },
-    { label: "Review chef applications", note: `${metrics.chefAcceptancePending.toLocaleString("en-IN")} order acceptances currently waiting`, href: "/admin/chef-reviews", icon: ChefHat, accent: "bg-[#f6b545] text-[#0b1426]" },
+    { label: "Review chef applications", note: "Review onboarding evidence and recorded decisions", href: "/admin/chef-reviews", icon: ChefHat, accent: "bg-[#f6b545] text-[#0b1426]" },
     { label: "Recover notifications", note: "Inspect failed delivery and recovery controls", href: "/admin/notifications", icon: BellRing, accent: "bg-[#fff8ec] text-[#6930ca]" },
     { label: "Secure an account", note: "Controlled admin security actions", href: "/admin/accounts", icon: ShieldCheck, accent: "bg-[#e9f8ef] text-[#26724a]" }
   ];

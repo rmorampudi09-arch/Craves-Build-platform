@@ -5,11 +5,9 @@
 **Branch:** `chatgpt/backend-customer-chef-journey-20260819`  
 **Production execution:** deferred. No Azure DevOps deployment, Service Bus filter mutation, APIM activation or live-location activation was executed while building this module.
 
-## Executive handover
-
 Delivery is now modeled as a multi-provider capability system rather than a Borzo-centered implementation. Craves keeps one provider-neutral transaction/read model and uses provider-specific adapters to preserve each provider's verified capabilities.
 
-Providers represented:
+## Providers
 
 ```text
 Borzo
@@ -19,11 +17,7 @@ Porter
 Delhivery Direct Intracity
 ```
 
-Runtime-ready capabilities are separated from supported-but-not-yet-wired features and partner-contract-gated features. This capability state must never be used as a provider commercial ranking table.
-
-## Provider-neutral engineering boundary
-
-The existing Integration Service contract remains authoritative:
+## Provider-neutral boundary
 
 ```text
 DeliveryProviderAdapter.quote()
@@ -32,11 +26,9 @@ DeliveryProviderAdapter.cancel()
 DeliveryProviderAdapter.track()
 ```
 
-Provider-specific semantics stay inside Integration Service. Order Service receives normalized status and telemetry only.
+Provider-specific semantics stay inside Integration Service. Order Service receives normalized status and telemetry only. This module does not introduce provider priority/fallback, delivery fee, commission, refund consequences or delivery-radius rules.
 
-No provider priority/fallback, delivery fee, commission, refund consequence or delivery-radius rule is introduced here.
-
-## Capability vocabulary
+## Capability model
 
 ```text
 SERVICEABILITY
@@ -57,7 +49,7 @@ CREATE_RECONCILIATION
 MULTI_STOP
 ```
 
-Capability state:
+States:
 
 ```text
 AVAILABLE_NOW
@@ -80,42 +72,34 @@ Operational read:
 GET /api/v1/admin/operations/delivery-provider-contracts/capabilities
 ```
 
-## Provider coverage
+The capability matrix must never be used as a commercial provider-ranking table.
 
-### Borzo
+## Borzo
 
-`BorzoDeliveryTelemetryExtractor` handles tracking and normalized webhook telemetry. The provider-neutral projection can retain courier coordinates, provider-native exact pickup/drop-off ETA and arrival start/end windows when supplied.
+`BorzoDeliveryTelemetryExtractor` handles tracking and normalized webhook telemetry and can retain courier coordinates, exact pickup/drop-off ETA and provider arrival windows when supplied. POD/check-in/return/multi-stop provider features are represented but not automatically exposed as Craves business actions without approved product/privacy semantics.
 
-POD/check-in/return/multi-stop provider features are represented as capabilities but are not automatically exposed as Craves business actions without approved product/privacy semantics.
+## Shiprocket
 
-### Shiprocket
-
-`ShiprocketDeliveryTelemetryExtractor` is first-class rather than a status-only fallback. It handles tracking responses and normalized webhook payloads and can retain the latest valid GPS point from provider tracking scans, the GPS observation timestamp and provider ETD as exact drop-off ETA.
+`ShiprocketDeliveryTelemetryExtractor` is first-class rather than a status-only fallback. It handles tracking responses and normalized webhook payloads and can retain the latest valid GPS point from tracking scans, observation timestamp and provider ETD as exact drop-off ETA.
 
 Safety:
 
 ```text
-arbitrary top-level lat/lng is not treated as courier GPS
+arbitrary top-level lat/lng is not rider GPS
 only tracking scans are eligible
 coordinates must be paired and in range
-(0,0) is rejected
-future-skewed scans are rejected
+(0,0) rejected
+future-skewed scans rejected
 latest valid scan wins
 ```
 
-Shiprocket NDR reattempt/RTO and return tracking are represented as supported but are not auto-triggered. Choosing reattempt versus return is a Craves product/operations decision.
+Shiprocket NDR reattempt/RTO and return tracking are represented as supported but are not auto-triggered because choosing reattempt versus return is a Craves product/operations decision.
 
-### Shadowfax
+## Shadowfax, Porter and Delhivery Direct Intracity
 
-Public product capabilities can be represented, but the exact Craves partner transaction/auth/webhook contract is not present in the authoritative repository docs. Executable integration remains fail-closed as `PRIVATE_CONTRACT_REQUIRED` until verified.
+They are represented as peer providers, not ignored. Public feature surfaces are recorded in the capability model. Exact Craves partner transaction/auth/webhook contracts are not present in the authoritative repository docs, so executable calls stay `PRIVATE_CONTRACT_REQUIRED` rather than being guessed.
 
-### Porter
-
-Public API capabilities include quote/serviceability, track, webhooks, live tracking link and optional delivery-code proof. Exact Craves partner credentials/contracts remain gated. The represented API product's one-pickup/one-drop limitation is recorded instead of inventing multi-stop support.
-
-### Delhivery Direct Intracity
-
-The provider is represented as a peer. Craves does not substitute Delhivery B2C parcel APIs for Direct Intracity. Exact Direct Intracity executable contracts remain fail-closed until verified.
+Porter's represented API product's one-pickup/one-drop limitation is recorded instead of inventing multi-stop support. Delhivery Direct Intracity is not substituted with unrelated Delhivery B2C parcel APIs.
 
 ## Telemetry contract and storage
 
@@ -125,9 +109,9 @@ Producer:
 DELIVERY_TELEMETRY_UPDATED 1.1
 ```
 
-Order consumer accepts both `1.0` and `1.1`.
+Order accepts historical `1.0` and current `1.1`.
 
-Version 1.1 adds exact provider ETA fields while preserving ETA windows:
+Exact provider ETA and provider ETA windows stay semantically distinct:
 
 ```text
 estimatedPickupAt
@@ -138,8 +122,6 @@ estimatedDropoffStartAt
 estimatedDropoffEndAt
 ```
 
-Exact ETA is not converted into a fabricated zero-width window.
-
 Migrations:
 
 ```text
@@ -149,21 +131,19 @@ Order       V17__delivery_telemetry_projection.sql
 Order       V18__delivery_provider_exact_eta.sql
 ```
 
-Only the latest useful snapshot is projected. No unbounded GPS history table is created.
+Only the latest useful snapshot is projected; no unbounded GPS history is created.
 
-## Webhook telemetry safety
-
-Provider telemetry can update without a normalized status transition:
+## Webhook safety
 
 ```text
 status changed -> status event + eligible telemetry
-newer same normalized state -> telemetry may update without another status event
-stale/equal callback -> telemetry rejected
-unknown callback -> telemetry rejected
-terminal-protected regression -> telemetry rejected
+newer same state -> telemetry may update without another status event
+stale/equal -> no telemetry
+unknown -> no telemetry
+terminal-protected regression -> no telemetry
 ```
 
-A late non-terminal callback cannot resurrect live courier telemetry after the current delivery is terminal.
+A late non-terminal callback cannot resurrect live telemetry after the delivery is terminal.
 
 ## Customer and chef tracking experience
 
@@ -179,9 +159,7 @@ Chef:
 GET /api/v1/chef/orders/{orderId}/delivery-status
 ```
 
-Both remain ownership-scoped.
-
-The stable response exposes `trackingExperience`:
+Stable response:
 
 ```text
 fresh privacy-approved coordinates -> LIVE_MAP
@@ -189,34 +167,17 @@ otherwise provider tracking URL -> PROVIDER_TRACKING_LINK
 otherwise -> STATUS_TIMELINE
 ```
 
-This describes the experience available for an already-selected provider; it does not rank or select providers.
+This describes the best experience for an already-selected provider; it does not select the provider.
 
 ## Privacy
-
-Exact live courier coordinates remain OFF by default:
 
 ```text
 CRAVES_DELIVERY_LIVE_LOCATION_EXPOSURE_ENABLED=false
 ```
 
-Coordinates require explicit activation, non-terminal delivery, paired coordinates, freshness and acceptable provider clock skew.
-
-Never publicly exposed by this projection:
-
-```text
-courier phone/name/photo
-raw provider payload
-provider credentials
-chef private address
-customer delivery address
-raw provider POD image URL
-```
-
-Terminal deliveries suppress live coordinates and live ETA fields.
+Exact live coordinates require explicit activation, active delivery, paired/fresh coordinates and acceptable clock skew. Courier phone/name/photo, raw provider payload, credentials, chef private address, customer delivery address and raw provider POD URLs are not exposed by this projection. Terminal deliveries suppress live coordinates and live ETA fields.
 
 ## Test coverage
-
-Integration coverage:
 
 ```text
 DeliveryProviderCapabilityRegistryTest
@@ -225,19 +186,14 @@ ShiprocketDeliveryTelemetryExtractorTest
 DeliveryTelemetryPublisherServiceTest
 DeliveryStatusUpdateServiceTest
 DeliveryTrackingReconciliationWorkerTest
-```
-
-Order coverage:
-
-```text
 DeliveryTelemetryEventValidatorTest
 ```
 
-Coverage includes all five provider profiles, private-contract gating, Borzo exact ETA/windows, Borzo webhook telemetry, Shiprocket GPS/ETD, rejection of non-scan destination coordinates, same-state telemetry refresh, stale/terminal rejection and v1.0/v1.1 compatibility.
+Coverage includes all five provider profiles, private-contract gating, Borzo ETA/windows/webhook telemetry, Shiprocket GPS/ETD and destination-coordinate rejection, same-state telemetry refresh, stale/terminal rejection and telemetry v1.0/v1.1 compatibility.
 
-## Validation status
+## Validation
 
-GitHub **Backend completion CI run 396** completed successfully at multi-provider runtime/documentation head `33ab3c841538a123b17a9cd554aaffb68f0b9cd8`. Subsequent commits only refine handover text and the Azure source gate; runtime Java/provider behavior is unchanged from that validated state.
+GitHub **Backend completion CI run 396** completed successfully at multi-provider runtime/documentation head `33ab3c841538a123b17a9cd554aaffb68f0b9cd8`. Subsequent commits only refine handover text and Azure CI source; runtime provider behavior is unchanged from that validated state.
 
 Passed:
 
@@ -252,84 +208,60 @@ Maven verify — Integration
 Maven verify — Notification
 ```
 
-A separate Admin dashboard workflow was also triggered. Its Order-service admin authorization job passed, while its unrelated Next.js admin test job failed. That web failure remains visible for the admin frontend workstream and is not misreported as green.
+The separate Admin dashboard workflow had a passing Order-service admin authorization job and an unrelated failing Next.js admin test job. That frontend failure remains visible for the admin-web workstream.
 
-## Azure downstream CI source
+## Azure downstream CI
 
 ```text
 azure-pipelines-delivery-status-downstream-ci.yml
 ```
 
-The source gate verifies Order + Integration + Notification builds, V17/V18 and V112/V113, capability registry, Borzo/Shiprocket extractors, event v1.1, customer/chef `trackingExperience`, no-provider-ranking marker, private-contract fail-closed states, live-location fail-closed default and runtime-preserving deployment contracts.
+The source gate checks Order/Integration/Notification builds, V17/V18/V112/V113, capability registry, Borzo/Shiprocket extractors, telemetry v1.1, customer/chef `trackingExperience`, no-ranking/private-contract guards, live-location fail-closed default and runtime-preserving deployment contracts.
 
 The Azure pipeline itself has not been executed, by project plan.
 
-## Azure deployment later
-
-When all backend modules are complete:
+## Deployment later
 
 ```text
-1. run unified Azure backend CI
-2. run delivery downstream CI
-3. deploy Order and verify V17/V18
-4. deploy Integration and verify V112/V113
+1. unified Azure backend CI
+2. delivery downstream CI
+3. deploy Order; verify V17/V18
+4. deploy Integration; verify V112/V113
 5. keep exact live location OFF
-6. broaden the existing Service Bus delivery filter
-7. run controlled Borzo sandbox telemetry evidence
-8. run controlled Shiprocket sandbox telemetry evidence
-9. verify provider capability/readiness admin surfaces
-10. configure chef delivery-status APIM operation
-11. review privacy/accuracy evidence
-12. only then activate exact courier coordinates if approved
+6. broaden existing Service Bus delivery filter
+7. Borzo sandbox telemetry evidence
+8. Shiprocket sandbox telemetry evidence
+9. provider capability/readiness evidence
+10. chef delivery-status APIM
+11. privacy/accuracy review
+12. optional live-location activation only after approval
 ```
 
-No new Azure paid resource is required for this module.
+No new Azure paid resource is required by this module.
 
-## Partner-contract manual dependencies
+## Partner contracts needed later
 
-For Shadowfax, Porter and Delhivery Direct Intracity, obtain from their onboarding/merchant channels:
+For Shadowfax, Porter and Delhivery Direct Intracity obtain exact sandbox/production URLs, API version, auth, quote/serviceability, create/cancel/track, webhooks/signatures, idempotency, provider IDs, retry/rate-limit and POD/OTP semantics from their partner onboarding channels. Do not paste credential values into chat/source; runtime secrets must be Key Vault-backed.
 
-```text
-sandbox + production base URLs
-API version
-auth scheme
-quote/serviceability contract
-create contract
-cancel contract
-track contract
-webhook event catalogue
-webhook signature verification
-idempotency expectations
-provider delivery-ID semantics
-retry/rate-limit guidance
-POD/OTP semantics where applicable
-```
-
-Do not paste credential values into chat or source. Runtime secrets must ultimately be Key Vault-backed.
-
-## Product decisions deliberately blocked
+## Product decisions still blocked
 
 ```text
-provider commercial priority/fallback
-when NDR should reattempt versus return
-who can initiate a return
-customer confirmation semantics for NDR
-how POD should be shown
-when delivery OTP/code is exposed
+provider priority/fallback
+NDR reattempt versus return
+who may initiate return
+customer confirmation for NDR
+POD presentation
+Delivery Code/OTP exposure
 commercial consequences of failed/returned delivery
 ```
 
-Engineering support exists or is represented, but these rules must not be invented.
-
 ## Rollback
 
-Use the narrowest control first:
-
 ```text
-live-coordinate problem -> disable live-location flag
-telemetry routing problem -> rollback Service Bus filter to status-only
-chef gateway problem -> remove only chef delivery-status APIM operation
-service defect -> existing service revision rollback
+live-coordinate issue -> disable live-location flag
+telemetry routing issue -> rollback Service Bus filter to status-only
+chef gateway issue -> remove chef delivery-status APIM operation
+service issue -> existing service revision rollback
 ```
 
 V17/V18/V112/V113 are additive and should not be destructively dropped during incident rollback.

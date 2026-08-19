@@ -55,6 +55,7 @@ craves:
     worker-enabled: ${CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED:false}
     worker-fixed-delay-ms: ${CRAVES_CHEF_ACCEPTANCE_WORKER_FIXED_DELAY_MS:30000}
     worker-batch-size: ${CRAVES_CHEF_ACCEPTANCE_WORKER_BATCH_SIZE:20}
+    timeout-claim-stale-seconds: ${CRAVES_CHEF_ACCEPTANCE_TIMEOUT_CLAIM_STALE_SECONDS:300}
   refund-status-consumer:
     enabled: ${CRAVES_REFUND_STATUS_CONSUMER_ENABLED:false}
     fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}

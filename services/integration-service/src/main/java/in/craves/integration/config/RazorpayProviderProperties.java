@@ -10,6 +10,9 @@ import org.springframework.util.StringUtils;
 
 @Component
 public class RazorpayProviderProperties {
+    private static final String PRODUCTION_API_HOST = "api.razorpay.com";
+    private static final String PRODUCTION_WEBHOOK_HOST = "api.craves.in";
+
     private final String environment;
     private final boolean productionActivationApproved;
     private final boolean productionPaymentExecutionEnabled;
@@ -47,15 +50,15 @@ public class RazorpayProviderProperties {
         if (!Set.of("SANDBOX", "PRODUCTION").contains(environment())) {
             throw new IllegalStateException("RAZORPAY_ENVIRONMENT must be SANDBOX or PRODUCTION");
         }
-        requireHttps(baseUrl, "RAZORPAY_BASE_URL");
-        requireHttps(webhookUrl, "RAZORPAY_WEBHOOK_URL");
+        URI apiUri = requireHttps(baseUrl, "RAZORPAY_BASE_URL");
+        URI webhookUri = requireHttps(webhookUrl, "RAZORPAY_WEBHOOK_URL");
         if (production() && !productionActivationApproved) {
             throw new IllegalStateException("RAZORPAY_PRODUCTION_ACTIVATION_APPROVED must be true for production");
         }
         if (StringUtils.hasText(keyId) != StringUtils.hasText(keySecret)) {
             throw new IllegalStateException("Razorpay key id and key secret must be configured together");
         }
-        if (production() && (!StringUtils.hasText(keyId) || !StringUtils.hasText(webhookSecret))) {
+        if (production() && (!hasCredentials() || !hasWebhookSecret())) {
             throw new IllegalStateException("Razorpay production credentials and webhook secret are required");
         }
         if (!production() && productionPaymentExecutionEnabled) {
@@ -67,6 +70,12 @@ public class RazorpayProviderProperties {
                 throw new IllegalStateException("RAZORPAY_KEY_ID does not match the selected environment");
             }
         }
+        if (production() && !PRODUCTION_API_HOST.equalsIgnoreCase(apiUri.getHost())) {
+            throw new IllegalStateException("RAZORPAY_BASE_URL must use api.razorpay.com in production");
+        }
+        if (production() && !PRODUCTION_WEBHOOK_HOST.equalsIgnoreCase(webhookUri.getHost())) {
+            throw new IllegalStateException("RAZORPAY_WEBHOOK_URL must use api.craves.in in production");
+        }
     }
 
     public String environment() {
@@ -77,6 +86,12 @@ public class RazorpayProviderProperties {
     public boolean productionActivationApproved() { return productionActivationApproved; }
     public boolean productionPaymentExecutionEnabled() { return productionPaymentExecutionEnabled; }
     public boolean paymentExecutionAllowed() { return sandbox() || productionPaymentExecutionEnabled; }
+    public boolean hasCredentials() { return StringUtils.hasText(keyId) && StringUtils.hasText(keySecret); }
+    public boolean hasWebhookSecret() { return StringUtils.hasText(webhookSecret); }
+    public boolean productionExecutionReady() {
+        return production() && productionActivationApproved && productionPaymentExecutionEnabled
+            && hasCredentials() && hasWebhookSecret();
+    }
     public String keyId() { return keyId; }
     public String keySecret() { return keySecret; }
     public String webhookSecret() { return webhookSecret; }
@@ -84,7 +99,7 @@ public class RazorpayProviderProperties {
     public String webhookUrl() { return webhookUrl; }
     public boolean autoCapture() { return autoCapture; }
 
-    private static void requireHttps(String value, String name) {
+    private static URI requireHttps(String value, String name) {
         URI uri;
         try {
             uri = URI.create(value);
@@ -94,5 +109,6 @@ public class RazorpayProviderProperties {
         if (!"https".equalsIgnoreCase(uri.getScheme()) || !StringUtils.hasText(uri.getHost())) {
             throw new IllegalStateException(name + " must be an HTTPS URL");
         }
+        return uri;
     }
 }

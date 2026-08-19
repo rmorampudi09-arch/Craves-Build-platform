@@ -19,8 +19,6 @@ import static in.craves.integration.delivery.provider.DeliveryProviderCapability
 
 import in.craves.integration.delivery.telemetry.DeliveryTelemetryExtractor;
 import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -60,35 +58,35 @@ public class DeliveryProviderCapabilityRegistry {
                 "Borzo",
                 "BUSINESS_API",
                 borzoCapabilities(),
-                "Public provider API; Craves adapter is implemented."
+                "Public provider API; Craves adapter and telemetry extractor are implemented."
             ),
             profile(
                 "shiprocket",
                 "Shiprocket Quick",
                 "HYPERLOCAL_AGGREGATOR",
                 shiprocketCapabilities(),
-                "Public Shiprocket API; Craves adapter is implemented."
+                "Public Shiprocket API; Craves adapter and GPS/ETD telemetry extractor are implemented."
             ),
             profile(
                 "shadowfax",
                 "Shadowfax",
                 "HYPERLOCAL_MARKETPLACE",
                 shadowfaxCapabilities(),
-                "Exact transaction/auth/webhook contract remains partner-gated and must be verified before execution."
+                "Public feature surface is known; exact transaction/auth/webhook contract remains partner-gated and must be verified before execution."
             ),
             profile(
                 "porter",
                 "Porter",
                 "INTRACITY_2W",
                 porterCapabilities(),
-                "Public feature surface exists; executable API credentials/contract must be verified before execution."
+                "Public quote/tracking/webhook/live-link/POD feature surface is known; executable API credentials and exact partner contract must be verified before execution."
             ),
             profile(
                 "delhivery",
                 "Delhivery Direct Intracity",
                 "DIRECT_INTRACITY",
                 delhiveryCapabilities(),
-                "Hyderabad intracity product is represented, but its exact executable API contract remains fail-closed until verified."
+                "Hyderabad intracity product is represented; exact executable API contract remains fail-closed until verified."
             )
         ));
     }
@@ -114,7 +112,7 @@ public class DeliveryProviderCapabilityRegistry {
 
     private static Map<DeliveryProviderCapability, CapabilityAvailability> borzoCapabilities() {
         return capabilities(Map.ofEntries(
-            Map.entry(SERVICEABILITY, CapabilityAvailability.NOT_VERIFIED),
+            Map.entry(SERVICEABILITY, CapabilityAvailability.SUPPORTED_NOT_WIRED),
             Map.entry(QUOTE, CapabilityAvailability.AVAILABLE_NOW),
             Map.entry(QUOTE_ETA, CapabilityAvailability.SUPPORTED_NOT_WIRED),
             Map.entry(CREATE_DELIVERY, CapabilityAvailability.AVAILABLE_NOW),
@@ -127,7 +125,7 @@ public class DeliveryProviderCapabilityRegistry {
             Map.entry(DELIVERY_VERIFICATION, CapabilityAvailability.SUPPORTED_NOT_WIRED),
             Map.entry(PROOF_OF_DELIVERY, CapabilityAvailability.SUPPORTED_NOT_WIRED),
             Map.entry(NDR_ACTION, CapabilityAvailability.NOT_VERIFIED),
-            Map.entry(RETURN_TRACKING, CapabilityAvailability.NOT_VERIFIED),
+            Map.entry(RETURN_TRACKING, CapabilityAvailability.SUPPORTED_NOT_WIRED),
             Map.entry(CREATE_RECONCILIATION, CapabilityAvailability.AVAILABLE_NOW),
             Map.entry(MULTI_STOP, CapabilityAvailability.SUPPORTED_NOT_WIRED)
         ));
@@ -187,8 +185,8 @@ public class DeliveryProviderCapabilityRegistry {
             Map.entry(WEBHOOK_STATUS, CapabilityAvailability.PRIVATE_CONTRACT_REQUIRED),
             Map.entry(LIVE_COURIER_LOCATION, CapabilityAvailability.PRIVATE_CONTRACT_REQUIRED),
             Map.entry(PROVIDER_ETA, CapabilityAvailability.PRIVATE_CONTRACT_REQUIRED),
-            Map.entry(DELIVERY_VERIFICATION, CapabilityAvailability.NOT_VERIFIED),
-            Map.entry(PROOF_OF_DELIVERY, CapabilityAvailability.NOT_VERIFIED),
+            Map.entry(DELIVERY_VERIFICATION, CapabilityAvailability.PRIVATE_CONTRACT_REQUIRED),
+            Map.entry(PROOF_OF_DELIVERY, CapabilityAvailability.PRIVATE_CONTRACT_REQUIRED),
             Map.entry(NDR_ACTION, CapabilityAvailability.NOT_VERIFIED),
             Map.entry(RETURN_TRACKING, CapabilityAvailability.NOT_VERIFIED),
             Map.entry(CREATE_RECONCILIATION, CapabilityAvailability.PRIVATE_CONTRACT_REQUIRED),
@@ -204,7 +202,7 @@ public class DeliveryProviderCapabilityRegistry {
         values.put(DELIVERY_VERIFICATION, CapabilityAvailability.NOT_VERIFIED);
         values.put(PROOF_OF_DELIVERY, CapabilityAvailability.NOT_VERIFIED);
         values.put(NDR_ACTION, CapabilityAvailability.NOT_VERIFIED);
-        values.put(MULTI_STOP, CapabilityAvailability.NOT_VERIFIED);
+        values.put(MULTI_STOP, CapabilityAvailability.PRIVATE_CONTRACT_REQUIRED);
         return Map.copyOf(values);
     }
 

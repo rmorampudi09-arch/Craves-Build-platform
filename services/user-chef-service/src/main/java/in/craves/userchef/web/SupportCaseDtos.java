@@ -32,9 +32,6 @@ public final class SupportCaseDtos {
     ) {
     }
 
-    public record AssignSupportCaseRequest(UUID assigneeIdentityId) {
-    }
-
     public record SupportCaseSummaryResponse(
         UUID id,
         String caseNumber,

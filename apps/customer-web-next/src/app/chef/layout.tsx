@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ArrowLeft, ChefHat } from "lucide-react";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { ChefWorkspaceNavigation } from "@/components/chef-workspace-navigation";
+import "./chef-mode.css";
 
 export default function ChefLayout({
   children,

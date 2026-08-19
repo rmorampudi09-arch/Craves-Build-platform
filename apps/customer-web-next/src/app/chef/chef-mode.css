@@ -1,0 +1,41 @@
+.chef-panel-theme {
+  font-family: "Poppins", var(--font-sans-family), sans-serif;
+}
+
+/* Chef Mode deliberately uses a single flame-red primary action. The shared
+   customer theme keeps generic buttons white, so these overrides stay scoped
+   to Chef Mode and cannot change customer pages. */
+.chef-panel-theme :is(button, a)[class*="bg-[#F62E18]"] {
+  border-color: transparent !important;
+  background: #f62e18 !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.chef-panel-theme :is(button, a)[class*="bg-[#F62E18]"]:not(:disabled):hover,
+.chef-panel-theme :is(button, a)[class*="bg-[#F62E18]"]:not(:disabled):focus-visible {
+  border-color: transparent !important;
+  background: #f62e18 !important;
+  color: #ffffff !important;
+  opacity: 0.92;
+}
+
+.chef-panel-theme :is(button, a)[class*="border-[#F62E18]"][class*="bg-white"] {
+  border-color: #f62e18 !important;
+  background: #ffffff !important;
+  color: #f62e18 !important;
+}
+
+.chef-panel-theme :is(button, a)[class*="border-[#F62E18]"][class*="bg-white"]:not(:disabled):hover,
+.chef-panel-theme :is(button, a)[class*="border-[#F62E18]"][class*="bg-white"]:not(:disabled):focus-visible {
+  border-color: #f62e18 !important;
+  background: #f62e18 !important;
+  color: #ffffff !important;
+}
+
+.chef-panel-theme :is(input, textarea, select):not([data-craves-single-border="true"]):focus,
+.chef-panel-theme :is(input, textarea, select):not([data-craves-single-border="true"]):focus-visible {
+  border-color: #f62e18 !important;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(246, 46, 24, 0.1);
+}

@@ -51,3 +51,11 @@ craves:
     max-radius-km: ${CRAVES_DISCOVERY_MAX_RADIUS_KM:15}
     max-query-radius-meters: ${CRAVES_DISCOVERY_MAX_QUERY_RADIUS_METERS:50000}
     max-page-size: ${CRAVES_DISCOVERY_MAX_PAGE_SIZE:100}
+  pickup-provisioning:
+    enabled: ${CRAVES_PICKUP_PROVISIONING_ENABLED:false}
+    integration-base-url: ${CRAVES_INTEGRATION_SERVICE_BASE_URL:}
+    internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}
+    batch-size: ${CRAVES_PICKUP_PROVISIONING_BATCH_SIZE:25}
+    max-attempts: ${CRAVES_PICKUP_PROVISIONING_MAX_ATTEMPTS:12}
+    stale-minutes: ${CRAVES_PICKUP_PROVISIONING_STALE_MINUTES:5}
+    fixed-delay-ms: ${CRAVES_PICKUP_PROVISIONING_FIXED_DELAY_MS:15000}

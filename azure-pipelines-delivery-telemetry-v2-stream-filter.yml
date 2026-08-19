@@ -1,0 +1,41 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: serviceBusNamespace
+    type: string
+    default: sb-craves-prodlow-l3ing6
+  - name: topicName
+    type: string
+    default: craves-domain-events
+  - name: subscriptionName
+    type: string
+    default: order-service-delivery-status-changed
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - script: |
+      set -euo pipefail
+      bash -n scripts/release/upgrade-order-delivery-stream-filter-v3.sh
+    displayName: Validate delivery stream filter upgrade helper
+
+  - task: AzureCLI@2
+    displayName: Add DELIVERY_TELEMETRY_UPDATED to existing Order delivery subscription
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        bash scripts/release/upgrade-order-delivery-stream-filter-v3.sh \
+          '${{ parameters.resourceGroupName }}' \
+          '${{ parameters.serviceBusNamespace }}' \
+          '${{ parameters.topicName }}' \
+          '${{ parameters.subscriptionName }}'

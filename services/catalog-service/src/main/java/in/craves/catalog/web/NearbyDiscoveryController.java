@@ -1,6 +1,11 @@
 package in.craves.catalog.web;
 
+import in.craves.catalog.service.DiscoveryCriteria;
+import in.craves.catalog.service.DiscoveryCriteria.KitchenSort;
+import in.craves.catalog.service.DiscoveryCriteria.MenuItemSort;
 import in.craves.catalog.service.NearbyDiscoveryService;
+import in.craves.catalog.web.ApiDtos.FoodType;
+import in.craves.catalog.web.ApiDtos.SpiceLevel;
 import in.craves.catalog.web.DiscoveryDtos.NearbyKitchenDiscoveryResponse;
 import in.craves.catalog.web.DiscoveryDtos.NearbyMenuItemDiscoveryResponse;
 import java.math.BigDecimal;
@@ -23,6 +28,14 @@ public class NearbyDiscoveryController {
         @RequestParam BigDecimal latitude,
         @RequestParam BigDecimal longitude,
         @RequestParam int radiusMeters,
+        @RequestParam(required = false) String query,
+        @RequestParam(required = false) String category,
+        @RequestParam(required = false) FoodType foodType,
+        @RequestParam(required = false) BigDecimal minPrice,
+        @RequestParam(required = false) BigDecimal maxPrice,
+        @RequestParam(required = false) Integer maxPreparationTimeMinutes,
+        @RequestParam(required = false) SpiceLevel spiceLevel,
+        @RequestParam(defaultValue = "DISTANCE_ASC") KitchenSort sort,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size
     ) {
@@ -30,6 +43,16 @@ public class NearbyDiscoveryController {
             latitude,
             longitude,
             radiusMeters,
+            new DiscoveryCriteria(
+                query,
+                category,
+                foodType,
+                minPrice,
+                maxPrice,
+                maxPreparationTimeMinutes,
+                spiceLevel
+            ),
+            sort,
             page,
             size
         );
@@ -40,6 +63,14 @@ public class NearbyDiscoveryController {
         @RequestParam BigDecimal latitude,
         @RequestParam BigDecimal longitude,
         @RequestParam int radiusMeters,
+        @RequestParam(required = false) String query,
+        @RequestParam(required = false) String category,
+        @RequestParam(required = false) FoodType foodType,
+        @RequestParam(required = false) BigDecimal minPrice,
+        @RequestParam(required = false) BigDecimal maxPrice,
+        @RequestParam(required = false) Integer maxPreparationTimeMinutes,
+        @RequestParam(required = false) SpiceLevel spiceLevel,
+        @RequestParam(defaultValue = "DISTANCE_ASC") MenuItemSort sort,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size
     ) {
@@ -47,6 +78,16 @@ public class NearbyDiscoveryController {
             latitude,
             longitude,
             radiusMeters,
+            new DiscoveryCriteria(
+                query,
+                category,
+                foodType,
+                minPrice,
+                maxPrice,
+                maxPreparationTimeMinutes,
+                spiceLevel
+            ),
+            sort,
             page,
             size
         );

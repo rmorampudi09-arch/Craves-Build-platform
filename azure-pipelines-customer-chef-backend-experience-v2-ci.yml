@@ -34,48 +34,15 @@ jobs:
             echo 'Backend-only diff guard disabled by explicit pipeline parameter.'
           displayName: Backend-only diff guard explicitly disabled
 
-  - job: catalog_verify
-    displayName: Catalog Service Java 21 verify
+  - job: auth_verify
+    displayName: Auth Service Java 21 verify
     steps:
       - checkout: self
       - task: JavaToolInstaller@0
-        inputs:
-          versionSpec: '21'
-          jdkArchitectureOption: x64
-          jdkSourceOption: PreInstalled
+        inputs: { versionSpec: '21', jdkArchitectureOption: x64, jdkSourceOption: PreInstalled }
       - bash: |
           set -euo pipefail
-          cd services/catalog-service
-          mvn -B -ntp clean verify
-        displayName: Maven clean verify
-
-  - job: notification_verify
-    displayName: Notification Service Java 21 verify
-    steps:
-      - checkout: self
-      - task: JavaToolInstaller@0
-        inputs:
-          versionSpec: '21'
-          jdkArchitectureOption: x64
-          jdkSourceOption: PreInstalled
-      - bash: |
-          set -euo pipefail
-          cd services/notification-service
-          mvn -B -ntp clean verify
-        displayName: Maven clean verify
-
-  - job: order_verify
-    displayName: Order Service Java 21 verify
-    steps:
-      - checkout: self
-      - task: JavaToolInstaller@0
-        inputs:
-          versionSpec: '21'
-          jdkArchitectureOption: x64
-          jdkSourceOption: PreInstalled
-      - bash: |
-          set -euo pipefail
-          cd services/order-service
+          cd services/auth-service
           mvn -B -ntp clean verify
         displayName: Maven clean verify
 
@@ -84,18 +51,75 @@ jobs:
     steps:
       - checkout: self
       - task: JavaToolInstaller@0
-        inputs:
-          versionSpec: '21'
-          jdkArchitectureOption: x64
-          jdkSourceOption: PreInstalled
+        inputs: { versionSpec: '21', jdkArchitectureOption: x64, jdkSourceOption: PreInstalled }
       - bash: |
           set -euo pipefail
           cd services/user-chef-service
           mvn -B -ntp clean verify
         displayName: Maven clean verify
 
+  - job: catalog_verify
+    displayName: Catalog Service Java 21 verify
+    steps:
+      - checkout: self
+      - task: JavaToolInstaller@0
+        inputs: { versionSpec: '21', jdkArchitectureOption: x64, jdkSourceOption: PreInstalled }
+      - bash: |
+          set -euo pipefail
+          cd services/catalog-service
+          mvn -B -ntp clean verify
+        displayName: Maven clean verify
+
+  - job: order_verify
+    displayName: Order Service Java 21 verify
+    steps:
+      - checkout: self
+      - task: JavaToolInstaller@0
+        inputs: { versionSpec: '21', jdkArchitectureOption: x64, jdkSourceOption: PreInstalled }
+      - bash: |
+          set -euo pipefail
+          cd services/order-service
+          mvn -B -ntp clean verify
+        displayName: Maven clean verify
+
+  - job: subscription_verify
+    displayName: Subscription Service Java 21 verify
+    steps:
+      - checkout: self
+      - task: JavaToolInstaller@0
+        inputs: { versionSpec: '21', jdkArchitectureOption: x64, jdkSourceOption: PreInstalled }
+      - bash: |
+          set -euo pipefail
+          cd services/subscription-service
+          mvn -B -ntp clean verify
+        displayName: Maven clean verify
+
+  - job: integration_verify
+    displayName: Integration Service Java 21 verify
+    steps:
+      - checkout: self
+      - task: JavaToolInstaller@0
+        inputs: { versionSpec: '21', jdkArchitectureOption: x64, jdkSourceOption: PreInstalled }
+      - bash: |
+          set -euo pipefail
+          cd services/integration-service
+          mvn -B -ntp clean verify
+        displayName: Maven clean verify
+
+  - job: notification_verify
+    displayName: Notification Service Java 21 verify
+    steps:
+      - checkout: self
+      - task: JavaToolInstaller@0
+        inputs: { versionSpec: '21', jdkArchitectureOption: x64, jdkSourceOption: PreInstalled }
+      - bash: |
+          set -euo pipefail
+          cd services/notification-service
+          mvn -B -ntp clean verify
+        displayName: Maven clean verify
+
   - job: release_artifact_validation
-    displayName: Flyway and APIM artifact validation
+    displayName: Flyway, APIM and API contract validation
     steps:
       - checkout: self
       - bash: |
@@ -108,7 +132,11 @@ jobs:
             scripts/apim/configure-kitchen-schedule-v1-apim.sh \
             scripts/apim/rollback-kitchen-schedule-v1-apim.sh \
             scripts/apim/configure-support-cases-v1-apim.sh \
-            scripts/apim/rollback-support-cases-v1-apim.sh; do
+            scripts/apim/rollback-support-cases-v1-apim.sh \
+            scripts/apim/configure-chef-financial-v1-apim.sh \
+            scripts/apim/rollback-chef-financial-v1-apim.sh \
+            scripts/apim/configure-chef-menu-bulk-availability-v1-apim.sh \
+            scripts/apim/rollback-chef-menu-bulk-availability-v1-apim.sh; do
             bash -n "$script"
             echo "bash -n PASS: $script"
           done
@@ -124,6 +152,8 @@ jobs:
               Path('infra/apim/notification-inbox-v2/notification-inbox-policy.xml'),
               Path('infra/apim/kitchen-schedule-v1/public-availability-policy.xml'),
               Path('infra/apim/support-cases-v1/support-case-policy.xml'),
+              Path('infra/apim/chef-financial-v1/chef-financial-policy.xml'),
+              Path('infra/apim/chef-kitchen/chef-kitchen-policy.xml'),
           ]
           for path in files:
               ET.parse(path)
@@ -138,10 +168,13 @@ jobs:
           import sys
 
           services = [
-              'catalog-service',
-              'notification-service',
-              'order-service',
+              'auth-service',
               'user-chef-service',
+              'catalog-service',
+              'order-service',
+              'subscription-service',
+              'integration-service',
+              'notification-service',
           ]
           failed = False
           for service in services:
@@ -172,5 +205,11 @@ jobs:
           grep -q 'no-store' infra/apim/kitchen-schedule-v1/public-availability-policy.xml
           grep -q 'Authorization' infra/apim/support-cases-v1/support-case-policy.xml
           grep -q 'no-store' infra/apim/support-cases-v1/support-case-policy.xml
-          echo 'APIM security/no-cache assertions passed.'
-        displayName: Assert APIM security guards
+          grep -q 'Authorization' infra/apim/chef-financial-v1/chef-financial-policy.xml
+          grep -q 'no-store' infra/apim/chef-financial-v1/chef-financial-policy.xml
+          grep -q '/api/v1/chef/earnings' openapi/chef-financial-v1.yaml
+          grep -q '/api/v1/kitchens/me/menu-items/availability' openapi/chef-menu-bulk-availability-v1.yaml
+          grep -q 'bearerAuth' openapi/chef-financial-v1.yaml
+          grep -q 'bearerAuth' openapi/chef-menu-bulk-availability-v1.yaml
+          echo 'APIM security/no-cache and OpenAPI contract assertions passed.'
+        displayName: Assert APIM and OpenAPI guards

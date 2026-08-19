@@ -1,0 +1,3 @@
+<fragment>
+  <validate-content unspecified-content-type-action="ignore" max-size="1048576" size-exceeded-action="prevent" errors-variable-name="cravesBodyValidationErrors" />
+</fragment>

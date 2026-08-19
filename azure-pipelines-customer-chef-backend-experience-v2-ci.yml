@@ -1,0 +1,175 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: enforceBackendOnlyDiff
+    type: boolean
+    default: true
+
+pool:
+  vmImage: ubuntu-latest
+
+jobs:
+  - job: backend_scope_guard
+    displayName: Backend-only release scope guard
+    steps:
+      - checkout: self
+        fetchDepth: 0
+      - bash: |
+          set -euo pipefail
+          if [[ '${{ parameters.enforceBackendOnlyDiff }}' != 'true' ]]; then
+            echo 'Backend-only diff guard disabled by explicit pipeline parameter.'
+            exit 0
+          fi
+          git fetch origin main --depth=1
+          CHANGED=$(git diff --name-only origin/main...HEAD)
+          printf '%s\n' "$CHANGED"
+          FORBIDDEN=$(printf '%s\n' "$CHANGED" | grep -E '^(apps/customer-web-next/|apps/.*mobile|mobile/|ios/|android/)' || true)
+          if [[ -n "$FORBIDDEN" ]]; then
+            echo 'ERROR: Backend-only release contains frontend/mobile paths:' >&2
+            printf '%s\n' "$FORBIDDEN" >&2
+            exit 1
+          fi
+          echo 'Backend-only scope guard passed.'
+        displayName: Reject customer/chef frontend or mobile changes
+
+  - job: catalog_verify
+    displayName: Catalog Service Java 21 verify
+    steps:
+      - checkout: self
+      - task: JavaToolInstaller@0
+        inputs:
+          versionSpec: '21'
+          jdkArchitectureOption: x64
+          jdkSourceOption: PreInstalled
+      - bash: |
+          set -euo pipefail
+          cd services/catalog-service
+          mvn -B -ntp clean verify
+        displayName: Maven clean verify
+
+  - job: notification_verify
+    displayName: Notification Service Java 21 verify
+    steps:
+      - checkout: self
+      - task: JavaToolInstaller@0
+        inputs:
+          versionSpec: '21'
+          jdkArchitectureOption: x64
+          jdkSourceOption: PreInstalled
+      - bash: |
+          set -euo pipefail
+          cd services/notification-service
+          mvn -B -ntp clean verify
+        displayName: Maven clean verify
+
+  - job: order_verify
+    displayName: Order Service Java 21 verify
+    steps:
+      - checkout: self
+      - task: JavaToolInstaller@0
+        inputs:
+          versionSpec: '21'
+          jdkArchitectureOption: x64
+          jdkSourceOption: PreInstalled
+      - bash: |
+          set -euo pipefail
+          cd services/order-service
+          mvn -B -ntp clean verify
+        displayName: Maven clean verify
+
+  - job: user_chef_verify
+    displayName: User-Chef Service Java 21 verify
+    steps:
+      - checkout: self
+      - task: JavaToolInstaller@0
+        inputs:
+          versionSpec: '21'
+          jdkArchitectureOption: x64
+          jdkSourceOption: PreInstalled
+      - bash: |
+          set -euo pipefail
+          cd services/user-chef-service
+          mvn -B -ntp clean verify
+        displayName: Maven clean verify
+
+  - job: release_artifact_validation
+    displayName: Flyway and APIM artifact validation
+    steps:
+      - checkout: self
+      - bash: |
+          set -euo pipefail
+          for script in \
+            scripts/apim/configure-order-history-v2-apim.sh \
+            scripts/apim/rollback-order-history-v2-apim.sh \
+            scripts/apim/configure-notification-inbox-v2-apim.sh \
+            scripts/apim/rollback-notification-inbox-v2-apim.sh \
+            scripts/apim/configure-kitchen-schedule-v1-apim.sh \
+            scripts/apim/rollback-kitchen-schedule-v1-apim.sh \
+            scripts/apim/configure-support-cases-v1-apim.sh \
+            scripts/apim/rollback-support-cases-v1-apim.sh; do
+            bash -n "$script"
+            echo "bash -n PASS: $script"
+          done
+        displayName: Validate APIM Bash syntax
+      - bash: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          files = [
+              Path('infra/apim/order-history-v2/order-history-policy.xml'),
+              Path('infra/apim/notification-inbox-v2/notification-inbox-policy.xml'),
+              Path('infra/apim/kitchen-schedule-v1/public-availability-policy.xml'),
+              Path('infra/apim/support-cases-v1/support-case-policy.xml'),
+          ]
+          for path in files:
+              ET.parse(path)
+              print(f'XML PASS: {path}')
+          PY
+        displayName: Parse APIM policy XML
+      - bash: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          services = [
+              'catalog-service',
+              'notification-service',
+              'order-service',
+              'user-chef-service',
+          ]
+          failed = False
+          for service in services:
+              migration_dir = Path('services') / service / 'src/main/resources/db/migration'
+              versions = {}
+              for path in sorted(migration_dir.glob('V*__*.sql')):
+                  match = re.match(r'V([^_]+)__', path.name)
+                  if not match:
+                      continue
+                  version = match.group(1)
+                  versions.setdefault(version, []).append(path.name)
+              duplicates = {v: names for v, names in versions.items() if len(names) > 1}
+              if duplicates:
+                  failed = True
+                  print(f'ERROR: duplicate Flyway versions in {service}: {duplicates}', file=sys.stderr)
+              else:
+                  print(f'Flyway version uniqueness PASS: {service}')
+          if failed:
+              raise SystemExit(1)
+          PY
+        displayName: Reject duplicate Flyway versions
+      - bash: |
+          set -euo pipefail
+          grep -q 'Authorization' infra/apim/order-history-v2/order-history-policy.xml
+          grep -q 'no-store' infra/apim/order-history-v2/order-history-policy.xml
+          grep -q 'Authorization' infra/apim/notification-inbox-v2/notification-inbox-policy.xml
+          grep -q 'no-store' infra/apim/notification-inbox-v2/notification-inbox-policy.xml
+          grep -q 'no-store' infra/apim/kitchen-schedule-v1/public-availability-policy.xml
+          grep -q 'Authorization' infra/apim/support-cases-v1/support-case-policy.xml
+          grep -q 'no-store' infra/apim/support-cases-v1/support-case-policy.xml
+          echo 'APIM security/no-cache assertions passed.'
+        displayName: Assert APIM security guards

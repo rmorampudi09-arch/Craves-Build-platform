@@ -7,16 +7,21 @@ import java.util.UUID;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class CatalogClient {
+    private static final String INTERNAL_HEADER = "X-Craves-Internal-Key";
+
     private final RestClient restClient;
+    private final String internalAccessValue;
 
     public CatalogClient(CatalogClientProperties properties, RestClient.Builder builder) {
         this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
+        this.internalAccessValue = properties.getInternalAccessValue();
     }
 
     public CatalogMenuItem getActiveMenuItem(UUID menuItemId) {
@@ -54,13 +59,20 @@ public class CatalogClient {
     }
 
     public CatalogKitchen getKitchen(UUID kitchenId) {
+        if (!StringUtils.hasText(internalAccessValue)) {
+            throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Catalog internal access is not configured"
+            );
+        }
         try {
             CatalogKitchen kitchen = restClient.get()
-                .uri("/kitchens/{kitchenId}", kitchenId)
+                .uri("/internal/kitchens/{kitchenId}", kitchenId)
+                .header(INTERNAL_HEADER, internalAccessValue)
                 .retrieve()
                 .body(CatalogKitchen.class);
-            if (kitchen == null || kitchen.id() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Catalog kitchen response is incomplete");
+            if (kitchen == null || kitchen.id() == null || kitchen.identityId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Catalog internal kitchen response is incomplete");
             }
             return kitchen;
         } catch (HttpClientErrorException.NotFound ex) {

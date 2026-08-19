@@ -1,0 +1,50 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: orderContainerAppName
+    type: string
+    default: ca-craves-order-service-prodlow
+  - name: maxLocationAgeSeconds
+    type: number
+    default: 300
+  - name: confirmLiveLocationActivation
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - script: |
+      set -euo pipefail
+      bash -n scripts/release/activate-order-delivery-live-location-v1.sh
+      bash -n scripts/release/rollback-order-delivery-live-location-v1.sh
+    displayName: Validate live-location activation and rollback helpers
+
+  - script: |
+      set -euo pipefail
+      [[ '${{ parameters.confirmLiveLocationActivation }}' == 'True' ]] || {
+        echo 'ERROR: set confirmLiveLocationActivation=true only after sandbox privacy/accuracy smoke evidence is approved.' >&2
+        exit 1
+      }
+    displayName: Require explicit live-location activation confirmation
+
+  - task: AzureCLI@2
+    displayName: Activate exact courier location exposure
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        export CONFIRM_LIVE_LOCATION_ACTIVATION=true
+        bash scripts/release/activate-order-delivery-live-location-v1.sh \
+          '${{ parameters.resourceGroupName }}' \
+          '${{ parameters.orderContainerAppName }}' \
+          '${{ parameters.maxLocationAgeSeconds }}'

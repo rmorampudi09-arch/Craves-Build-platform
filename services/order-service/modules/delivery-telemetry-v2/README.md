@@ -1,25 +1,30 @@
-# Order Service — Delivery Telemetry v2
+# Order Service — Multi-Provider Delivery Tracking Projection
 
 ## Purpose
 
-Order Service owns the customer/chef-facing projection of provider-neutral delivery telemetry. It does not call delivery providers and does not own raw courier-provider payloads.
+Order Service owns the customer/chef-facing projection of provider-neutral delivery state. It does not know Borzo/Shiprocket/Shadowfax/Porter/Delhivery response schemas and it never chooses the delivery provider.
+
+Integration Service translates whichever provider actually fulfils the order into one stable Craves delivery contract. Order Service then exposes the **best safe tracking experience available for that order**, without provider-specific branching in customer/chef APIs.
 
 ## Storage
 
-Flyway:
+Flyway migrations:
 
 ```text
-services/order-service/src/main/resources/db/migration/V17__delivery_telemetry_projection.sql
+V17__delivery_telemetry_projection.sql
+V18__delivery_provider_exact_eta.sql
 ```
 
-The latest trusted telemetry is stored on the existing chef-specific `order_schema.customer_order` row:
+The latest trusted snapshot is stored on the chef-specific `order_schema.customer_order` row:
 
 ```text
 delivery_courier_latitude
 delivery_courier_longitude
 delivery_courier_location_observed_at
+delivery_estimated_pickup_at
 delivery_estimated_pickup_start_at
 delivery_estimated_pickup_end_at
+delivery_estimated_dropoff_at
 delivery_estimated_dropoff_start_at
 delivery_estimated_dropoff_end_at
 delivery_telemetry_observed_at
@@ -27,6 +32,17 @@ delivery_telemetry_event_id
 ```
 
 There is deliberately no courier GPS history table.
+
+## Event compatibility
+
+Order accepts:
+
+```text
+DELIVERY_TELEMETRY_UPDATED 1.0
+DELIVERY_TELEMETRY_UPDATED 1.1
+```
+
+Version 1.1 adds provider-native exact ETA fields while retaining ETA windows. This is additive and historical 1.0 broker deliveries remain valid.
 
 ## Service Bus design
 
@@ -36,55 +52,90 @@ The module reuses the existing subscription:
 order-service-delivery-status-changed
 ```
 
-The approved SQL filter is broadened from status-only to:
+The guarded SQL filter accepts:
 
 ```text
-eventType = 'DELIVERY_STATUS_CHANGED'
-OR event_type = 'DELIVERY_STATUS_CHANGED'
-OR eventType = 'DELIVERY_TELEMETRY_UPDATED'
-OR event_type = 'DELIVERY_TELEMETRY_UPDATED'
+DELIVERY_STATUS_CHANGED
+DELIVERY_TELEMETRY_UPDATED
 ```
 
-The existing Order Service processor routes the two event contracts to separate projection services.
+No second subscription is introduced.
 
-No assumption is made that the broker processes the two messages serially. Telemetry can arrive before the matching status event. If the status projection is not present yet, telemetry is still stored after the chef-sub-order/checkout relationship is validated. Once the delivery status identity exists, later telemetry must match the delivery-job, provider and provider-delivery identifiers.
+Telemetry processing does not assume serial message order. A trusted telemetry event can arrive before the corresponding status event; later events must match the established delivery-job/provider/provider-delivery identity.
 
-## Ownership and privacy
+## Customer/chef APIs
 
-Customer route:
+Customer:
 
 ```http
 GET /api/v1/orders/{orderId}/delivery-status
 ```
 
-Requires CUSTOMER ownership.
-
-Chef route:
+Chef:
 
 ```http
 GET /api/v1/chef/orders/{orderId}/delivery-status
 ```
 
-Requires CHEF ownership through the Order-owned `chef_identity_id` snapshot.
+Both are ownership-scoped.
 
-Both responses use the same additive `telemetry` object.
+The response now includes:
 
-Exact courier coordinates are fail-closed by default:
+```text
+trackingExperience
+telemetry.estimatedPickupAt
+telemetry.estimatedPickupStartAt
+telemetry.estimatedPickupEndAt
+telemetry.estimatedDropoffAt
+telemetry.estimatedDropoffStartAt
+telemetry.estimatedDropoffEndAt
+```
+
+## Best available tracking experience
+
+Order Service derives the user experience from the data available for the actual order:
+
+```text
+fresh privacy-approved courier coordinates -> LIVE_MAP
+otherwise provider tracking URL -> PROVIDER_TRACKING_LINK
+otherwise -> STATUS_TIMELINE
+```
+
+This is a presentation capability, not provider ranking. It never changes which provider is selected.
+
+A provider can therefore give Craves richer tracking without forcing all other providers to implement the exact same mechanism.
+
+## Exact ETA versus ETA windows
+
+Craves keeps provider semantics intact:
+
+```text
+estimatedDropoffAt          = provider supplied one exact ETA
+estimatedDropoffStartAt/EndAt = provider supplied a window
+```
+
+An exact ETA is not converted into a fabricated zero-width window.
+
+No proprietary Craves ETA model is introduced by this module.
+
+## Ownership/privacy
+
+Exact courier coordinates remain fail-closed:
 
 ```text
 CRAVES_DELIVERY_LIVE_LOCATION_EXPOSURE_ENABLED=false
 CRAVES_DELIVERY_LIVE_LOCATION_MAX_AGE_SECONDS=300
 ```
 
-Coordinates are returned only when all conditions are true:
+Coordinates are returned only when:
 
-1. live-location exposure has been explicitly activated;
-2. the delivery is non-terminal;
-3. both latitude and longitude exist;
-4. the location timestamp is fresh under the configured maximum age;
-5. the timestamp is not more than the small provider clock-skew allowance in the future.
+1. live-location exposure is explicitly enabled;
+2. delivery is non-terminal;
+3. latitude and longitude are both present;
+4. location observation is fresh;
+5. provider timestamp is not materially in the future.
 
-When those conditions are not met:
+Otherwise:
 
 ```text
 liveLocationAvailable=false
@@ -93,106 +144,101 @@ courierLongitude=null
 locationObservedAt=null
 ```
 
-Terminal deliveries also suppress ETA windows from the public read response. Stored telemetry remains available for operational evidence.
+Terminal deliveries suppress exact ETA and ETA windows in the live public response as well.
 
-## Excluded public data
+## Never exposed
 
-The response does not expose:
+The customer/chef API does not expose:
 
-- provider delivery identifier;
-- raw provider payload;
-- courier phone number;
-- courier name/photo;
-- chef pickup/home address;
-- customer delivery address;
-- proof image URL;
-- arbitrary provider metadata.
+```text
+provider delivery identifier
+raw provider callback payload
+courier phone/name/photo
+chef private pickup/home address
+customer delivery address
+raw proof-image provider URL
+provider credentials
+arbitrary provider metadata
+```
 
 ## Contracts
 
-Customer OpenAPI:
-
 ```text
 contracts/openapi/order-delivery-status-v1.openapi.json
-```
-
-Chef OpenAPI:
-
-```text
 contracts/openapi/chef-delivery-status-v1.openapi.json
+contracts/events/delivery-telemetry-updated-v1.schema.json
 ```
-
-The customer contract remains the existing API with an additive nested telemetry object.
 
 ## APIM
 
-The existing customer delivery-status APIM operation remains unchanged in path and receives the additive response.
+The customer operation keeps its existing path. Chef delivery-status is an additive operation in the existing Chef Orders API.
 
-Chef delivery status is added to the existing Chef Orders API by:
+Configuration:
 
 ```text
 scripts/apim/configure-chef-order-read-apim.sh
 ```
 
-Narrow operation-only rollback:
+Narrow rollback:
 
 ```text
 scripts/apim/rollback-chef-delivery-status-apim.sh
 ```
 
-The existing Chef Orders policy enforces Bearer syntax and `Cache-Control: no-store, no-cache, must-revalidate`.
+Authenticated stateful reads remain `no-store`.
 
-## Service Bus filter rollout
+## Rollout source
 
-Guarded upgrade:
+Service Bus filter upgrade:
 
 ```text
-scripts/release/upgrade-order-delivery-stream-filter-v3.sh
 azure-pipelines-delivery-telemetry-v2-stream-filter.yml
 ```
 
-The script accepts only the known previous status-only filter or the already-upgraded filter. Any unknown rule expression stops the pipeline instead of overwriting it.
-
-Rollback:
+Filter rollback:
 
 ```text
-scripts/release/rollback-order-delivery-stream-filter-v3.sh
 azure-pipelines-delivery-telemetry-v2-stream-filter-rollback.yml
 ```
 
-Rollback returns the subscription to status-only filtering without deleting durable telemetry data.
-
-## Live-location activation
-
-Exact coordinates must remain disabled during initial deployment and sandbox telemetry validation.
-
-Activation:
+Live-location activation:
 
 ```text
-scripts/release/activate-order-delivery-live-location-v1.sh
 azure-pipelines-delivery-live-location-activation.yml
 ```
 
-Rollback:
+Live-location rollback:
 
 ```text
-scripts/release/rollback-order-delivery-live-location-v1.sh
 azure-pipelines-delivery-live-location-rollback.yml
 ```
 
-The activation pipeline requires explicit confirmation and validates Order Service health before/after the runtime change.
+Exact live-location activation remains a separate post-sandbox privacy/accuracy decision.
 
-## Local validation
-
-```bash
-cd services/order-service
-mvn -B -ntp clean verify
-```
-
-Contract/downstream validation:
+## CI
 
 ```text
 azure-pipelines-delivery-status-downstream-ci.yml
 ```
 
-That CI now validates Order, Integration and Notification compatibility, event/OpenAPI JSON, release-script shell syntax, fail-closed live-location defaults and runtime-preserving deployment contracts.
+The source gate verifies:
+
+```text
+Order Maven clean verify
+Integration Maven clean verify
+Notification compatibility
+V17/V18 and V112/V113 migration presence
+provider capability registry
+Borzo telemetry extractor
+Shiprocket telemetry extractor
+event JSON/OpenAPI JSON
+telemetry v1.1 compatibility
+best-tracking contract fields
+fail-closed live-location default
+provider-neutral/no-ranking guard
+runtime-preserving deployment scripts
+```
+
+## Deployment status
+
+Source-ready only. No Azure pipeline, migration, APIM operation, broker filter or live-location activation from this module has been executed yet.

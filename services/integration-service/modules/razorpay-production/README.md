@@ -86,6 +86,8 @@ CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED=false
 
 Cashfree code remains available for a future approved provider switch, but selecting Cashfree requires both its API and the independent `CASHFREE_TRAFFIC_ALLOWED` gate. This prevents an accidental environment-variable change from silently routing live customers to Cashfree.
 
+Cashfree is not an automatic failover provider. A Razorpay incident stops new payment mutation; it does not silently redirect customers to Cashfree.
+
 ## Key backend files
 
 ### Routing and provider configuration
@@ -160,26 +162,15 @@ The worker uses PostgreSQL `FOR UPDATE SKIP LOCKED`, allowing multiple Integrati
 
 Craves creates Razorpay Orders on the backend. The browser never supplies the final server-owned checkout amount.
 
-The order request uses:
+The order request uses the amount converted to Razorpay subunits exactly, checkout currency, a deterministic Craves receipt and Craves checkout/customer references in notes.
 
-- amount converted to Razorpay subunits exactly;
-- checkout currency;
-- deterministic Craves receipt;
-- Craves checkout/customer references in notes.
-
-The response is rejected unless:
-
-- the Razorpay order identity is present;
-- returned amount matches Craves;
-- returned currency matches Craves;
-- receipt matches the Craves receipt;
-- provider order status is a supported state.
+The response is rejected unless the Razorpay order identity is present and returned amount, currency and receipt match Craves. Unsupported provider states fail closed.
 
 ### Uncertain create reconciliation
 
-A network timeout does not prove that Razorpay failed to create the Order. Blindly submitting another create could create another provider-side payment order.
+A network timeout does not prove that Razorpay failed to create the Order. Blindly repeating the create can introduce an additional provider Order for the same Craves checkout.
 
-For transient/uncertain create outcomes, Craves queries Razorpay Orders by the deterministic `receipt`. A matching provider Order is accepted only after identity and money validation. If the result cannot be proven, the request fails closed instead of guessing.
+For transient/uncertain create outcomes, Craves queries Razorpay Orders by the deterministic `receipt`. A matching provider Order is accepted only after identity and money validation. If provider state cannot be proven, the request fails closed instead of guessing.
 
 ## Browser callback verification
 
@@ -293,16 +284,7 @@ Refund eligibility and refund amount are not decided in this adapter. They come 
 
 ## Subscription-payment parity
 
-Subscription payments use the same `RazorpayPaymentClient`, so they inherit:
-
-- backend Order creation;
-- money validation;
-- deterministic receipt;
-- uncertain create reconciliation;
-- checkout HMAC verification;
-- captured-payment verification;
-- paid-order verification;
-- asynchronous Razorpay webhook path.
+Subscription payments use the same `RazorpayPaymentClient`, so they inherit backend Order creation, money validation, deterministic receipt, uncertain-create reconciliation, checkout HMAC verification, captured-payment verification, paid-order verification and the asynchronous Razorpay webhook path.
 
 Subscription-specific business state remains in the existing subscription-payment module.
 
@@ -322,7 +304,7 @@ The readiness snapshot checks, among other things:
 - Razorpay durable worker is enabled;
 - no Razorpay webhook dead letters exist.
 
-The endpoint intentionally reports configuration booleans and counts, never secret values.
+Before live activation, `productionReady` is expected to remain false specifically because live payment execution is intentionally disabled. Use the blocker list to verify that no unexpected blocker exists before opening the controlled live test window.
 
 ## Customer web
 
@@ -360,17 +342,7 @@ The APIM policy performs edge header hygiene and forwards the untouched body to 
 
 `azure-pipelines-razorpay-production-ci.yml`
 
-Runs:
-
-- Integration Service Maven verify;
-- Order Service Maven verify;
-- customer web install/lint/typecheck/test/build;
-- static checks for fail-closed routing;
-- durable webhook queue invariants;
-- refund idempotency header;
-- APIM policy safety;
-- rollback safety;
-- source hygiene via `git diff --check`.
+Runs Integration Service Maven verify, Order Service Maven verify, customer web install/lint/typecheck/test/build and static checks for fail-closed routing, durable webhook queue invariants, refund idempotency, APIM policy safety, rollback safety and source hygiene.
 
 ### Environment staging
 
@@ -393,9 +365,7 @@ Therefore staging production configuration does not enable live charging.
 
 ### Customer web
 
-`azure-pipelines-razorpay-customer-web.yml`
-
-Deploys customer web with:
+`azure-pipelines-razorpay-customer-web.yml` deploys customer web with:
 
 ```text
 NEXT_PUBLIC_RAZORPAY_MODE=production
@@ -403,7 +373,7 @@ NEXT_PUBLIC_RAZORPAY_MODE=production
 
 and validates the public readiness endpoint.
 
-### Live activation
+### Live activation / controlled live-test window
 
 `azure-pipelines-razorpay-production-activation.yml`
 
@@ -415,7 +385,7 @@ ACTIVATE_RAZORPAY_LIVE_MONEY
 
 The pipeline refuses activation unless the staged environment, secret references, Cashfree-off state, Razorpay webhook worker, Integration Service health, public web readiness and public webhook negative probe pass.
 
-Only then does it enable new payment orders and Razorpay production payment execution. Refund execution can be enabled in the same guarded action.
+The activation opens the controlled live-money window by enabling new payment orders and Razorpay production execution. **Do not expose broad customer traffic immediately.** First execute the controlled low-value live payment/refund certification described below. If certification fails, run the kill switch immediately.
 
 ### Kill switch / rollback
 
@@ -427,14 +397,7 @@ Exact confirmation:
 STOP_RAZORPAY_LIVE_MONEY
 ```
 
-Rollback disables:
-
-- new payment orders;
-- new Razorpay payment execution;
-- refund execution;
-- refund reconciliation mutation gates.
-
-It deliberately keeps Razorpay API credentials, webhook ingress and webhook worker active so payments already in flight can still be reconciled. Cashfree remains disabled.
+Rollback disables new payment orders, new payment mutation and refund mutation, while deliberately keeping Razorpay API access, webhook ingress and webhook worker active so transactions already in flight can still reconcile. Cashfree remains disabled.
 
 ## Local validation
 
@@ -508,11 +471,10 @@ CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED=false
 
 - Complete/retain merchant KYC and live-mode enablement.
 - Generate the production key ID/key secret.
-- Configure the production webhook endpoint:
-  `https://api.craves.in/api/v1/payments/webhooks/razorpay`.
+- Configure `https://api.craves.in/api/v1/payments/webhooks/razorpay` as the production webhook.
 - Configure the webhook secret.
 - Subscribe the endpoint to the payment/order events required by this module.
-- Confirm the production domain/merchant configuration required by Razorpay.
+- Confirm provider production account/domain requirements.
 - Never paste live key material into chat or Git.
 
 ### Azure Key Vault / Container Apps
@@ -529,7 +491,7 @@ If rotating the webhook secret, add a Key Vault-backed secret reference for the 
 
 ### Azure DevOps
 
-Register/run the following YAML files if not already registered:
+Register the following YAML files if not already registered:
 
 1. `azure-pipelines-razorpay-production-ci.yml`
 2. `azure-pipelines-razorpay-webhook-apim.yml`
@@ -540,57 +502,38 @@ Register/run the following YAML files if not already registered:
 
 The activation pipeline is not a substitute for a successful CI run or Razorpay Dashboard configuration.
 
-## Recommended execution order
+## Authoritative production execution order
 
-1. Merge reviewed source after CI succeeds.
-2. Deploy the Integration Service build containing V112 and the new worker with production execution still disabled.
-3. Run the Razorpay webhook APIM pipeline.
-4. Configure the Razorpay Dashboard production webhook and secret.
-5. Deploy customer web in Razorpay production mode.
-6. Run `azure-pipelines-razorpay-environment.yml` for PRODUCTION with `CONFIGURE_RAZORPAY_PRODUCTION`.
-7. Confirm Integration Service health and the admin Razorpay readiness endpoint.
-8. Perform a controlled low-value production payment and confirm:
-   - Checkout result;
-   - payment captured;
-   - Order paid;
-   - Razorpay webhook accepted;
-   - durable queue completed;
-   - payment state moved to PAID once;
-   - Order Service received the paid transition once.
-9. Perform one controlled refund and confirm provider + Craves reconciliation.
-10. Confirm no Razorpay webhook dead letters.
-11. Run `azure-pipelines-razorpay-production-activation.yml` with `ACTIVATE_RAZORPAY_LIVE_MONEY` only after all go-live evidence is accepted.
-12. Monitor closely during controlled traffic ramp.
+1. Run `azure-pipelines-razorpay-production-ci.yml` against the exact reviewed branch/commit and require success.
+2. Merge the reviewed source only after CI succeeds.
+3. Deploy the Integration Service build containing V112 and the Razorpay worker while live payment execution remains disabled.
+4. Run the Razorpay webhook APIM pipeline and verify the public negative-authentication probe.
+5. Configure the Razorpay Dashboard production webhook and secret.
+6. Deploy customer web in Razorpay production mode.
+7. Run `azure-pipelines-razorpay-environment.yml` with `targetEnvironment=PRODUCTION` and exact confirmation `CONFIGURE_RAZORPAY_PRODUCTION`.
+8. Verify Integration Service health, Cashfree-off state, secret references, web readiness and the admin readiness blockers. At this stage live payment execution should still be the expected blocker.
+9. Run `azure-pipelines-razorpay-production-activation.yml` with `ACTIVATE_RAZORPAY_LIVE_MONEY`. This opens a **controlled live-test window**, not broad launch traffic.
+10. Immediately perform one authorized low-value production payment and confirm checkout, captured payment, paid Razorpay Order, webhook persistence/completion, one Craves PAID transition and one Order Service paid transition.
+11. Perform one approved controlled refund and confirm Razorpay + Craves reconciliation/idempotency.
+12. Confirm the Razorpay webhook dead-letter count is zero and review monitoring/log evidence.
+13. If any certification step fails, run `azure-pipelines-razorpay-production-rollback.yml` with `STOP_RAZORPAY_LIVE_MONEY` and investigate while webhook reconciliation remains active.
+14. Only after the controlled payment/refund evidence passes should customer traffic be increased gradually.
 
 ## Production scale validation still required
 
-Source engineering alone does not prove a concurrency target. Before claiming very high production scale, execute load/resilience tests against a controlled environment covering:
-
-- concurrent payment-order creation;
-- provider latency and timeout behavior;
-- uncertain-create reconciliation;
-- webhook bursts;
-- duplicate webhook storms;
-- out-of-order webhook events;
-- multiple Integration Service replicas;
-- DB connection pool and lock contention;
-- refund bursts;
-- Razorpay 429/5xx behavior;
-- kill-switch behavior while payments are in flight;
-- PostgreSQL failover/restart scenarios;
-- queue backlog recovery.
+Source engineering alone does not prove a concurrency target. Before claiming very high production scale, execute load/resilience tests against a controlled environment covering concurrent payment-order creation, provider latency/timeouts, uncertain-create reconciliation, webhook bursts, duplicate/out-of-order events, multiple Integration Service replicas, DB pool/lock contention, refund bursts, provider 429/5xx behavior, kill-switch behavior, PostgreSQL disruption and queue backlog recovery.
 
 Do not generate real high-volume Razorpay charges merely to load-test the application. Provider-facing performance testing must follow the provider’s permitted test environment and rate-limit guidance.
 
 ## Risks and operational notes
 
-- The application cannot guarantee Razorpay availability; provider failures must remain fail-closed.
-- Webhook delivery is asynchronous, so the browser callback and webhook can race. State transitions are therefore idempotent and provider-reverified.
-- A rollback must not disable webhook reconciliation for transactions already created before the kill switch.
-- A webhook secret rotation must account for provider retries signed with the earlier secret.
-- The durable queue scales horizontally, but PostgreSQL capacity, worker batch size and provider API rate limits must be measured before increasing worker concurrency aggressively.
-- Cashfree is not an automatic failover payment provider. Switching financial providers requires an explicit operational decision and separate activation; Craves must not silently redirect a failed Razorpay payment to Cashfree.
+- The application cannot guarantee Razorpay availability; provider failures remain fail-closed.
+- Browser callback and webhook can race; transitions are idempotent and provider-reverified.
+- Rollback must preserve webhook reconciliation for already-created transactions.
+- Webhook-secret rotation must account for provider retries signed with the earlier secret.
+- The durable queue is horizontally compatible, but PostgreSQL capacity, worker batch size and Razorpay API limits must be measured before aggressive concurrency increases.
+- Cashfree is not automatic failover; switching providers requires a separate explicit operational change.
 
 ## Current source-completion boundary
 
-This module establishes full-scale Razorpay **source engineering and guarded deployment mechanics**. It intentionally does not claim that live production transactions have been proven until CI, deployment, Dashboard configuration, a controlled live payment/refund test and operational evidence have actually passed.
+This module establishes full-scale Razorpay **source engineering and guarded deployment mechanics**. It intentionally does not claim live production certification until CI, deployment, Dashboard configuration, controlled live payment/refund evidence, webhook resilience testing and operational validation actually pass.

@@ -45,6 +45,7 @@ steps:
   - script: |
       set -euo pipefail
       bash -n scripts/release/upgrade-order-delivery-stream-filter-v3.sh
+      bash -n scripts/release/rollback-order-delivery-stream-filter-v3.sh
       bash -n scripts/release/activate-order-delivery-live-location-v1.sh
       bash -n scripts/release/rollback-order-delivery-live-location-v1.sh
       bash -n scripts/apim/configure-chef-order-read-apim.sh
@@ -67,7 +68,7 @@ steps:
         services/order-service/src/main/java/in/craves/order/config/DeliveryTelemetryViewProperties.java
 
       test -f services/order-service/src/main/resources/db/migration/V17__delivery_telemetry_projection.sql
-      test -f services/integration-service/src/main/resources/db/migration/V111__delivery_telemetry_projection.sql
+      test -f services/integration-service/src/main/resources/db/migration/V112__delivery_telemetry_projection.sql
 
       grep -F 'DELIVERY_TELEMETRY_UPDATED' contracts/events/delivery-telemetry-updated-v1.schema.json
       grep -F 'DELIVERY_TELEMETRY_UPDATED' scripts/release/upgrade-order-delivery-stream-filter-v3.sh

@@ -9,6 +9,9 @@ export type KitchenDiscoveryResult = {
   radiusMeters: number;
 };
 
+let discoveredKitchens: NearbyKitchen[] = [];
+let kitchenDiscoveryRadiusMeters = 5_000;
+
 export async function discoverKitchens(
   latitude: number,
   longitude: number,
@@ -49,9 +52,24 @@ export async function discoverKitchens(
     }
 
     if (payload.kitchens.length > 0) {
-      return { kitchens: payload.kitchens, radiusMeters: candidateRadius };
+      discoveredKitchens = payload.kitchens;
+      kitchenDiscoveryRadiusMeters = candidateRadius;
+      return {
+        kitchens: [...discoveredKitchens],
+        radiusMeters: candidateRadius,
+      };
     }
   }
 
+  discoveredKitchens = [];
+  kitchenDiscoveryRadiusMeters = usedRadius;
   return { kitchens: [], radiusMeters: usedRadius };
+}
+
+export function allKitchens(): NearbyKitchen[] {
+  return [...discoveredKitchens];
+}
+
+export function getKitchenDiscoveryRadiusMeters(): number {
+  return kitchenDiscoveryRadiusMeters;
 }

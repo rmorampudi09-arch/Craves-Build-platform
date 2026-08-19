@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -56,7 +57,9 @@ public class DeliveryStatusQueryService {
                    delivery_status_observed_at,
                    delivery_courier_latitude, delivery_courier_longitude,
                    delivery_courier_location_observed_at,
+                   delivery_estimated_pickup_at,
                    delivery_estimated_pickup_start_at, delivery_estimated_pickup_end_at,
+                   delivery_estimated_dropoff_at,
                    delivery_estimated_dropoff_start_at, delivery_estimated_dropoff_end_at,
                    delivery_telemetry_observed_at
             FROM order_schema.customer_order
@@ -94,15 +97,18 @@ public class DeliveryStatusQueryService {
         List<DeliveryStatusHistoryResponse> history
     ) throws SQLException {
         String status = resultSet.getString("delivery_status");
+        String trackingUrl = resultSet.getString("delivery_tracking_url");
+        DeliveryTelemetryResponse telemetry = telemetry(resultSet, status);
         return new DeliveryStatusResponse(
             resultSet.getObject("id", UUID.class),
             resultSet.getObject("delivery_job_id", UUID.class),
             resultSet.getString("delivery_provider_id"),
             status,
-            resultSet.getString("delivery_tracking_url"),
+            trackingUrl,
+            trackingExperience(telemetry, trackingUrl),
             instant(resultSet, "delivery_status_observed_at"),
             history,
-            telemetry(resultSet, status)
+            telemetry
         );
     }
 
@@ -115,12 +121,24 @@ public class DeliveryStatusQueryService {
             liveLocationAvailable ? resultSet.getBigDecimal("delivery_courier_latitude") : null,
             liveLocationAvailable ? resultSet.getBigDecimal("delivery_courier_longitude") : null,
             liveLocationAvailable ? locationObservedAt : null,
+            terminal ? null : instant(resultSet, "delivery_estimated_pickup_at"),
             terminal ? null : instant(resultSet, "delivery_estimated_pickup_start_at"),
             terminal ? null : instant(resultSet, "delivery_estimated_pickup_end_at"),
+            terminal ? null : instant(resultSet, "delivery_estimated_dropoff_at"),
             terminal ? null : instant(resultSet, "delivery_estimated_dropoff_start_at"),
             terminal ? null : instant(resultSet, "delivery_estimated_dropoff_end_at"),
             instant(resultSet, "delivery_telemetry_observed_at")
         );
+    }
+
+    private static String trackingExperience(DeliveryTelemetryResponse telemetry, String trackingUrl) {
+        if (telemetry.liveLocationAvailable()) {
+            return "LIVE_MAP";
+        }
+        if (StringUtils.hasText(trackingUrl)) {
+            return "PROVIDER_TRACKING_LINK";
+        }
+        return "STATUS_TIMELINE";
     }
 
     private boolean liveLocationAvailable(String status, Instant locationObservedAt) {

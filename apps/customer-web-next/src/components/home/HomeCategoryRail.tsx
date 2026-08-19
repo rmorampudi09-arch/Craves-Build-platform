@@ -37,11 +37,11 @@ type VisualCategory = {
 
 const categories: readonly VisualCategory[] = [
   { label: "All", value: null, icon: FaThLarge },
-  { label: "Biryani", value: "Biryani", fallbackImage: biryaniImage.src, icon: FaUtensils },
-  { label: "Tiffins", value: "Tiffins", fallbackImage: tiffinImage.src, icon: FaUtensils },
+  { label: "Biryani", value: "Biryani", fallbackImage: biryaniImage, icon: FaUtensils },
+  { label: "Tiffins", value: "Tiffins", fallbackImage: tiffinImage, icon: FaUtensils },
   { label: "Pickles", value: "Pickles", icon: FaPepperHot },
-  { label: "Meals", value: "Meals", fallbackImage: mealsImage.src, icon: FaUtensils },
-  { label: "Snacks", value: "Snacks", fallbackImage: snacksImage.src, icon: FaCookieBite },
+  { label: "Meals", value: "Meals", fallbackImage: mealsImage, icon: FaUtensils },
+  { label: "Snacks", value: "Snacks", fallbackImage: snacksImage, icon: FaCookieBite },
   { label: "Desserts", value: "Sweets", icon: FaCandyCane },
   { label: "Cake", value: "Cake", icon: FaBirthdayCake },
   { label: "Ice Cream", value: "Ice Cream", icon: FaIceCream },

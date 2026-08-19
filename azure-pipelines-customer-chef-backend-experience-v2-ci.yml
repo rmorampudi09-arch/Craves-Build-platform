@@ -140,7 +140,9 @@ jobs:
             scripts/apim/rollback-customer-cart-preflight-v1-apim.sh \
             scripts/apim/configure-apim-platform-baseline.sh \
             scripts/apim/rollback-apim-platform-baseline.sh \
-            scripts/release/verify-catalog-order-internal-secret-binding.sh; do
+            scripts/release/verify-catalog-order-internal-secret-binding.sh \
+            scripts/release/activate-catalog-public-privacy.sh \
+            scripts/release/rollback-catalog-public-privacy.sh; do
             bash -n "$script"
             echo "bash -n PASS: $script"
           done
@@ -218,11 +220,13 @@ jobs:
           grep -q 'If-Match' scripts/apim/configure-apim-platform-baseline.sh
           grep -q 'CRAVES_INTERNAL_SERVICE_SECRET' services/catalog-service/src/main/resources/application.yml
           grep -q 'CRAVES_INTERNAL_SERVICE_SECRET' services/order-service/src/main/resources/application.yml
+          grep -q 'CRAVES_PUBLIC_CATALOG_PRIVACY_ENFORCEMENT_ENABLED' services/catalog-service/src/main/resources/application.yml
+          grep -q 'verify-catalog-order-internal-secret-binding.sh' scripts/release/activate-catalog-public-privacy.sh
           grep -q '/api/v1/chef/earnings' openapi/chef-financial-v1.yaml
           grep -q '/api/v1/kitchens/me/menu-items/availability' openapi/chef-menu-bulk-availability-v1.yaml
           grep -q '/api/v1/cart/preflight' openapi/customer-cart-preflight-v1.yaml
           grep -q 'bearerAuth' openapi/chef-financial-v1.yaml
           grep -q 'bearerAuth' openapi/chef-menu-bulk-availability-v1.yaml
           grep -q 'bearerAuth' openapi/customer-cart-preflight-v1.yaml
-          echo 'APIM security, correlation, body guard, internal-access and OpenAPI assertions passed.'
-        displayName: Assert APIM, internal access and OpenAPI guards
+          echo 'APIM security, correlation, body guard, staged privacy, internal-access and OpenAPI assertions passed.'
+        displayName: Assert APIM, privacy, internal access and OpenAPI guards

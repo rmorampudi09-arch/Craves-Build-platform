@@ -2,6 +2,7 @@ package in.craves.catalog.web;
 
 import in.craves.catalog.exception.ApiException;
 import in.craves.catalog.security.CravesPrincipal;
+import in.craves.catalog.service.DiscoveryCacheService;
 import in.craves.catalog.service.KitchenScheduleService;
 import in.craves.catalog.web.KitchenScheduleDtos.KitchenDateOverrideRequest;
 import in.craves.catalog.web.KitchenScheduleDtos.KitchenDateOverrideResponse;
@@ -23,9 +24,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/kitchens/me/schedule")
 public class KitchenScheduleController {
     private final KitchenScheduleService kitchenScheduleService;
+    private final DiscoveryCacheService discoveryCacheService;
 
-    public KitchenScheduleController(KitchenScheduleService kitchenScheduleService) {
+    public KitchenScheduleController(
+        KitchenScheduleService kitchenScheduleService,
+        DiscoveryCacheService discoveryCacheService
+    ) {
         this.kitchenScheduleService = kitchenScheduleService;
+        this.discoveryCacheService = discoveryCacheService;
     }
 
     @GetMapping
@@ -39,7 +45,9 @@ public class KitchenScheduleController {
         @RequestBody KitchenScheduleUpdateRequest request
     ) {
         rejectNullWeeklyWindows(request);
-        return kitchenScheduleService.replaceMySchedule(principal, request);
+        KitchenScheduleResponse response = kitchenScheduleService.replaceMySchedule(principal, request);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
     }
 
     @GetMapping("/overrides/{serviceDate}")
@@ -57,7 +65,9 @@ public class KitchenScheduleController {
         @RequestBody KitchenDateOverrideRequest request
     ) {
         rejectNullOverrideWindows(request);
-        return kitchenScheduleService.putMyDateOverride(principal, serviceDate, request);
+        KitchenDateOverrideResponse response = kitchenScheduleService.putMyDateOverride(principal, serviceDate, request);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
     }
 
     @DeleteMapping("/overrides/{serviceDate}")
@@ -67,6 +77,7 @@ public class KitchenScheduleController {
         @PathVariable LocalDate serviceDate
     ) {
         kitchenScheduleService.deleteMyDateOverride(principal, serviceDate);
+        discoveryCacheService.invalidateAllDiscovery();
     }
 
     private static void rejectNullWeeklyWindows(KitchenScheduleUpdateRequest request) {

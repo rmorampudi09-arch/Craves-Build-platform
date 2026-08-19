@@ -6,23 +6,25 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import in.craves.catalog.exception.ApiException;
+import in.craves.catalog.service.DiscoveryCacheService;
 import in.craves.catalog.service.KitchenScheduleService;
 import in.craves.catalog.web.KitchenScheduleDtos.DateWindowRequest;
 import in.craves.catalog.web.KitchenScheduleDtos.KitchenDateOverrideRequest;
 import in.craves.catalog.web.KitchenScheduleDtos.KitchenScheduleUpdateRequest;
 import java.time.LocalDate;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class KitchenScheduleControllerValidationTest {
     private KitchenScheduleService service;
+    private DiscoveryCacheService cache;
     private KitchenScheduleController controller;
 
     @BeforeEach
     void setUp() {
         service = mock(KitchenScheduleService.class);
-        controller = new KitchenScheduleController(service);
+        cache = mock(DiscoveryCacheService.class);
+        controller = new KitchenScheduleController(service, cache);
     }
 
     @Test
@@ -36,7 +38,7 @@ class KitchenScheduleControllerValidationTest {
         );
 
         assertThat(exception.getCode()).isEqualTo("INVALID_SERVICE_WINDOW");
-        verifyNoInteractions(service);
+        verifyNoInteractions(service, cache);
     }
 
     @Test
@@ -51,6 +53,6 @@ class KitchenScheduleControllerValidationTest {
         );
 
         assertThat(exception.getCode()).isEqualTo("INVALID_SERVICE_WINDOW");
-        verifyNoInteractions(service);
+        verifyNoInteractions(service, cache);
     }
 }

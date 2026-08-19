@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.payment.RazorpayWebhookInboxService.WorkItem;
 import in.craves.integration.service.PaymentService;
 import java.math.BigDecimal;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -18,6 +19,12 @@ import org.springframework.web.server.ResponseStatusException;
 @ConditionalOnProperty(prefix = "craves.razorpay.webhook", name = "worker-enabled", havingValue = "true")
 public class RazorpayWebhookWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(RazorpayWebhookWorker.class);
+    private static final Set<String> SUPPORTED_EVENTS = Set.of(
+        "payment.authorized",
+        "payment.captured",
+        "payment.failed",
+        "order.paid"
+    );
 
     private final RazorpayWebhookInboxService inbox;
     private final RazorpayPaymentClient paymentClient;
@@ -40,12 +47,14 @@ public class RazorpayWebhookWorker {
     public void process() {
         for (WorkItem item : inbox.claimBatch()) {
             try {
-                verifySuccessStateWhenRequired(item.rawPayload());
-                paymentService.handleRazorpayWebhook(item.signature(), item.eventIdentity(), item.rawPayload());
+                ProcessingDecision decision = inspect(item.rawPayload());
+                if (decision == ProcessingDecision.PROCESS) {
+                    paymentService.handleRazorpayWebhook(item.signature(), item.eventIdentity(), item.rawPayload());
+                }
                 inbox.complete(item);
                 LOGGER.info(
-                    "Razorpay webhook processed deliveryId={} eventId={} attempt={}",
-                    item.id(), item.eventIdentity(), item.attemptCount()
+                    "Razorpay webhook completed deliveryId={} eventId={} attempt={} decision={}",
+                    item.id(), item.eventIdentity(), item.attemptCount(), decision
                 );
             } catch (Exception exception) {
                 inbox.fail(item, exception);
@@ -57,32 +66,55 @@ public class RazorpayWebhookWorker {
         }
     }
 
-    private void verifySuccessStateWhenRequired(String rawBody) {
+    private ProcessingDecision inspect(String rawBody) {
         JsonNode payload;
         try {
             payload = objectMapper.readTree(rawBody);
         } catch (Exception exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay webhook JSON is invalid");
         }
+
         String eventType = text(payload, "event");
-        if (!"payment.captured".equalsIgnoreCase(eventType) && !"order.paid".equalsIgnoreCase(eventType)) {
-            return;
+        if (!StringUtils.hasText(eventType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay webhook event type is missing");
         }
+        if (!SUPPORTED_EVENTS.contains(eventType.toLowerCase())) {
+            return ProcessingDecision.IGNORE_UNSUPPORTED_EVENT;
+        }
+
         JsonNode payment = payload.at("/payload/payment/entity");
         String paymentId = text(payment, "id");
         String orderId = text(payment, "order_id");
         String currency = text(payment, "currency");
         JsonNode amountNode = payment.get("amount");
-        if (!StringUtils.hasText(paymentId) || !StringUtils.hasText(orderId)
-            || !StringUtils.hasText(currency) || amountNode == null || !amountNode.canConvertToLong()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay success webhook is missing payment identity or money fields");
+        if (!StringUtils.hasText(paymentId) || !StringUtils.hasText(orderId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay payment webhook is missing payment or order identity");
         }
-        BigDecimal amount = RazorpayRequestSafety.fromSubunits(amountNode.longValue());
-        paymentClient.verifyCapturedProviderState(paymentId, orderId, amount, currency);
+
+        if ("payment.captured".equalsIgnoreCase(eventType) || "order.paid".equalsIgnoreCase(eventType)) {
+            if (!StringUtils.hasText(currency) || amountNode == null || !amountNode.canConvertToLong()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay success webhook is missing money fields");
+            }
+            BigDecimal amount = RazorpayRequestSafety.fromSubunits(amountNode.longValue());
+            paymentClient.verifyCapturedProviderState(paymentId, orderId, amount, currency);
+            return ProcessingDecision.PROCESS;
+        }
+
+        JsonNode currentOrder = paymentClient.fetchOrder(orderId);
+        if ("paid".equalsIgnoreCase(text(currentOrder, "status"))) {
+            return ProcessingDecision.IGNORE_STALE_NON_TERMINAL_EVENT;
+        }
+        return ProcessingDecision.PROCESS;
     }
 
     private static String text(JsonNode node, String field) {
         JsonNode value = node == null ? null : node.get(field);
         return value == null || value.isNull() ? null : value.asText();
+    }
+
+    enum ProcessingDecision {
+        PROCESS,
+        IGNORE_STALE_NON_TERMINAL_EVENT,
+        IGNORE_UNSUPPORTED_EVENT
     }
 }

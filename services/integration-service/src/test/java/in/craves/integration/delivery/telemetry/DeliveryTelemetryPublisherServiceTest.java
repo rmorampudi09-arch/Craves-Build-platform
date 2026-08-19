@@ -29,7 +29,7 @@ class DeliveryTelemetryPublisherServiceTest {
         DeliveryTelemetryRepository repository = mock(DeliveryTelemetryRepository.class);
         DeliveryOutboxRepository outbox = mock(DeliveryOutboxRepository.class);
         DeliveryTelemetryPublisherService service = new DeliveryTelemetryPublisherService(
-            extraction, repository, outbox, new ObjectMapper(), new SimpleMeterRegistry()
+            extraction, repository, outbox, objectMapper(), new SimpleMeterRegistry()
         );
         TrackingWorkItem workItem = workItem();
         TrackingSnapshot snapshot = snapshot(DeliveryStatus.IN_TRANSIT);
@@ -66,7 +66,7 @@ class DeliveryTelemetryPublisherServiceTest {
         DeliveryTelemetryRepository repository = mock(DeliveryTelemetryRepository.class);
         DeliveryOutboxRepository outbox = mock(DeliveryOutboxRepository.class);
         DeliveryTelemetryPublisherService service = new DeliveryTelemetryPublisherService(
-            extraction, repository, outbox, new ObjectMapper(), new SimpleMeterRegistry()
+            extraction, repository, outbox, objectMapper(), new SimpleMeterRegistry()
         );
         TrackingWorkItem workItem = workItem();
         TrackingSnapshot snapshot = snapshot(DeliveryStatus.DELIVERED);
@@ -91,10 +91,14 @@ class DeliveryTelemetryPublisherServiceTest {
         return new TrackingSnapshot(
             new ProviderDelivery(
                 "borzo", "12345", "CRV", status, status.name().toLowerCase(),
-                null, null, null, new ObjectMapper().createObjectNode(), observedAt
+                null, null, null, objectMapper().createObjectNode(), observedAt
             ),
             null,
             observedAt
         );
+    }
+
+    private static ObjectMapper objectMapper() {
+        return new ObjectMapper().findAndRegisterModules();
     }
 }

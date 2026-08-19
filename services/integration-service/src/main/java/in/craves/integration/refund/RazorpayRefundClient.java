@@ -37,7 +37,7 @@ public class RazorpayRefundClient {
     }
 
     public ProviderRefundResult createRefund(RefundWorkItem workItem) {
-        requireConfiguration();
+        requireMutationConfiguration();
         requireWorkItem(workItem);
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("amount", RazorpayRequestSafety.toSubunits(workItem.amount()));
@@ -59,7 +59,7 @@ public class RazorpayRefundClient {
     }
 
     public ProviderRefundResult getRefund(RefundWorkItem workItem) {
-        requireConfiguration();
+        requireReadConfiguration();
         requireWorkItem(workItem);
         if (!StringUtils.hasText(workItem.providerRefundId()) || !workItem.providerRefundId().startsWith("rfnd_")) {
             throw new RefundProviderNonRetryableException("Razorpay refund identity is missing or invalid");
@@ -119,9 +119,15 @@ public class RazorpayRefundClient {
         }
     }
 
-    private void requireConfiguration() {
+    private void requireMutationConfiguration() {
         if (!properties.paymentExecutionAllowed() || !properties.hasCredentials()) {
             throw new RefundProviderConfigurationException("Razorpay refund execution is not configured");
+        }
+    }
+
+    private void requireReadConfiguration() {
+        if (!properties.hasCredentials()) {
+            throw new RefundProviderConfigurationException("Razorpay refund reconciliation credentials are not configured");
         }
     }
 

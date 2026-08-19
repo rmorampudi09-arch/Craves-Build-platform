@@ -17,6 +17,7 @@ class RazorpayProviderPropertiesTest {
             "rzp_live_example",
             "secret-value",
             "webhook-secret",
+            "",
             "https://api.razorpay.com",
             "https://api.craves.in/api/v1/payments/webhooks/razorpay",
             true
@@ -34,6 +35,7 @@ class RazorpayProviderPropertiesTest {
             "rzp_test_example",
             "secret-value",
             "webhook-secret",
+            "",
             "https://api.razorpay.com",
             "https://api.craves.in/api/v1/payments/webhooks/razorpay",
             true
@@ -50,7 +52,25 @@ class RazorpayProviderPropertiesTest {
             "rzp_live_example",
             "secret-value",
             "webhook-secret",
+            "",
             "https://example.com",
+            "https://api.craves.in/api/v1/payments/webhooks/razorpay",
+            true
+        );
+        assertThrows(IllegalStateException.class, properties::validate);
+    }
+
+    @Test
+    void previousWebhookSecretMustDifferFromActiveSecret() {
+        RazorpayProviderProperties properties = new RazorpayProviderProperties(
+            "PRODUCTION",
+            true,
+            true,
+            "rzp_live_example",
+            "secret-value",
+            "same-secret",
+            "same-secret",
+            "https://api.razorpay.com",
             "https://api.craves.in/api/v1/payments/webhooks/razorpay",
             true
         );

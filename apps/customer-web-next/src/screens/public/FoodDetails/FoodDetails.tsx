@@ -1,6 +1,7 @@
 import { getRouteApi, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
+import { hasHomeReturnState } from "@/lib/home-return-state";
 import { loadSession } from "@/services/auth/cravesAuth";
 import {
   getDish,
@@ -80,6 +81,18 @@ function DishDetailPage() {
     };
   }, [id, navigate]);
 
+  const handleBack = () => {
+    if (
+      typeof window !== "undefined" &&
+      hasHomeReturnState() &&
+      window.history.length > 1
+    ) {
+      window.history.back();
+      return;
+    }
+    navigate({ to: "/home" });
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-cream px-4 py-12">
@@ -102,9 +115,9 @@ function DishDetailPage() {
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             {message || "This dish is no longer active in the Craves catalog."}
           </p>
-          <Link to="/home" className="btn-primary mt-6 inline-flex">
-            Back to discovery
-          </Link>
+          <button type="button" onClick={handleBack} className="btn-primary mt-6 inline-flex">
+            Back
+          </button>
         </div>
       </main>
     );
@@ -138,10 +151,7 @@ function DishDetailPage() {
 
   return (
     <div className="min-h-screen bg-cream pb-28 text-ink">
-      <DishImageHeader
-        dish={dish}
-        onBack={() => navigate({ to: "/home" })}
-      />
+      <DishImageHeader dish={dish} onBack={handleBack} />
       <div className="border-b border-border bg-white">
         <div className="mx-auto max-w-3xl px-4 py-3 md:px-6">
           <PersistentCustomerServiceNav />

@@ -25,7 +25,11 @@ function safeMetadata(value: unknown): ChefEvidenceMetadata | null {
   };
 }
 
-export function ChefApplicationDocumentPanel() {
+export function ChefApplicationDocumentPanel({
+  onComplete,
+}: {
+  onComplete?: () => void;
+}) {
   const [ready, setReady] = useState(false);
   const [locked, setLocked] = useState(false);
   const [documents, setDocuments] = useState<ChefEvidenceMetadata[]>([]);
@@ -33,7 +37,10 @@ export function ChefApplicationDocumentPanel() {
 
   const load = useCallback(async () => {
     const applicationResponse = await fetch("/api/chef/application", { cache: "no-store" });
-    const application = await applicationResponse.json().catch(() => null) as { id?: unknown; status?: unknown } | null;
+    const application = (await applicationResponse.json().catch(() => null)) as {
+      id?: unknown;
+      status?: unknown;
+    } | null;
     if (!applicationResponse.ok) return;
 
     const applicationReady = typeof application?.id === "string" && application.id.length > 0;
@@ -41,13 +48,15 @@ export function ChefApplicationDocumentPanel() {
     setLocked(application?.status === "APPROVED");
     if (!applicationReady) return;
 
-    const documentResponse = await fetch("/api/chef/application/evidence-status", { cache: "no-store" });
+    const documentResponse = await fetch("/api/chef/application/evidence-status", {
+      cache: "no-store",
+    });
     const body = await documentResponse.json().catch(() => null);
     if (!documentResponse.ok || !Array.isArray(body)) return;
     const parsed = body.map(safeMetadata);
-    if (parsed.some(item => item === null)) return;
+    if (parsed.some((item) => item === null)) return;
     setDocuments(parsed as ChefEvidenceMetadata[]);
-    setVersion(current => current + 1);
+    setVersion((current) => current + 1);
   }, []);
 
   useEffect(() => {
@@ -63,6 +72,7 @@ export function ChefApplicationDocumentPanel() {
       applicationReady={ready}
       locked={locked}
       initialDocuments={documents}
+      onComplete={onComplete}
     />
   );
 }

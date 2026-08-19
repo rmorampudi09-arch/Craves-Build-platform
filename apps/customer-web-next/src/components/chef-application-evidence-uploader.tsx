@@ -1,8 +1,16 @@
 "use client";
 
-import { CheckCircle2, CircleAlert, FileUp, ShieldCheck } from "lucide-react";
+import {
+  Camera,
+  Check,
+  CheckCircle2,
+  FileText,
+  ImagePlus,
+  LoaderCircle,
+  ShieldCheck,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export type ChefEvidenceMetadata = {
   id: string;
@@ -19,8 +27,7 @@ type EvidenceType =
   | "TAX_ID_CARD";
 
 type ProgressState = {
-  progress: number;
-  phase: "IDLE" | "UPLOADING" | "SECURING" | "DONE" | "ERROR";
+  phase: "IDLE" | "UPLOADING" | "DONE" | "ERROR";
   message: string;
 };
 
@@ -28,41 +35,41 @@ const REQUIREMENTS: Array<{
   type: EvidenceType;
   title: string;
   helper: string;
+  reassurance: string;
   accept: string;
 }> = [
   {
     type: "APPLICANT_PHOTO",
-    title: "Applicant photograph",
-    helper: "Upload a recent passport-size or clear passport-style portrait. JPG or PNG only.",
+    title: "Your photo",
+    helper: "Take a clear photo of your face, like a passport photo.",
+    reassurance: "This helps customers know who is cooking their food.",
     accept: "image/jpeg,image/png",
   },
   {
     type: "GOVERNMENT_ID_FRONT",
-    title: "Aadhaar / government photo ID — front",
-    helper: "Upload the front side of the government photo ID used for the application. A masked Aadhaar copy is preferred when suitable.",
+    title: "Your ID — front side",
+    helper: "Front of your Aadhaar card, Driving License, or Voter ID.",
+    reassurance: "We keep your ID private.",
     accept: "application/pdf,image/jpeg,image/png",
   },
   {
     type: "GOVERNMENT_ID_BACK",
-    title: "Aadhaar / government photo ID — back",
-    helper: "Upload the reverse side showing the address/details required for the application.",
+    title: "Your ID — back side",
+    helper: "Back of the same ID you used on the previous step.",
+    reassurance: "Both sides help us check the same ID.",
     accept: "application/pdf,image/jpeg,image/png",
   },
   {
     type: "TAX_ID_CARD",
-    title: "PAN card",
-    helper: "Upload the applicant's PAN/tax-ID card as PDF, JPG or PNG.",
+    title: "Your PAN card",
+    helper: "A clear photo of your PAN card so Craves can record payment details correctly.",
+    reassurance: "Your PAN card is kept private.",
     accept: "application/pdf,image/jpeg,image/png",
   },
 ];
 
-const INITIAL_PROGRESS: ProgressState = { progress: 0, phase: "IDLE", message: "" };
-
-function formatBytes(value: number): string {
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-}
+const INITIAL_PROGRESS: ProgressState = { phase: "IDLE", message: "" };
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 function parseUploadResponse(value: unknown): ChefEvidenceMetadata | null {
   if (!value || typeof value !== "object") return null;
@@ -83,212 +90,258 @@ function parseUploadResponse(value: unknown): ChefEvidenceMetadata | null {
   };
 }
 
+function firstTaskIndex(documents: ChefEvidenceMetadata[]): number {
+  const byType = new Map(documents.map((document) => [document.documentType, document]));
+  const correction = REQUIREMENTS.findIndex((item) => {
+    const document = byType.get(item.type);
+    return document && /reject|change|retry|replace/i.test(document.status);
+  });
+  if (correction >= 0) return correction;
+  const missing = REQUIREMENTS.findIndex((item) => !byType.has(item.type));
+  return missing >= 0 ? missing : REQUIREMENTS.length;
+}
+
+function allowedFile(type: EvidenceType, file: File): string | null {
+  const imageTypes = new Set(["image/jpeg", "image/png"]);
+  const allowed = type === "APPLICANT_PHOTO"
+    ? imageTypes.has(file.type)
+    : imageTypes.has(file.type) || file.type === "application/pdf";
+  if (!allowed) {
+    return type === "APPLICANT_PHOTO"
+      ? "Please choose a JPG or PNG photo."
+      : "Please choose a JPG, PNG, or PDF file.";
+  }
+  if (file.size > MAX_FILE_BYTES) return "This file is too large. Please choose one under 10 MB.";
+  return null;
+}
+
 export function ChefApplicationEvidenceUploader({
   applicationReady,
   locked,
   initialDocuments,
+  onComplete,
 }: {
   applicationReady: boolean;
   locked: boolean;
   initialDocuments: ChefEvidenceMetadata[];
+  onComplete?: () => void;
 }) {
   const router = useRouter();
   const [documents, setDocuments] = useState<ChefEvidenceMetadata[]>(initialDocuments);
-  const [files, setFiles] = useState<Partial<Record<EvidenceType, File>>>({});
-  const [progress, setProgress] = useState<Partial<Record<EvidenceType, ProgressState>>>({});
-  const requestRefs = useRef<Partial<Record<EvidenceType, XMLHttpRequest>>>({});
+  const [activeIndex, setActiveIndex] = useState(() => firstTaskIndex(initialDocuments));
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [progress, setProgress] = useState<ProgressState>(INITIAL_PROGRESS);
+  const requestRef = useRef<XMLHttpRequest | null>(null);
 
   const uploadedByType = useMemo(
-    () => new Map(documents.map(document => [document.documentType, document])),
+    () => new Map(documents.map((document) => [document.documentType, document])),
     [documents],
   );
-  const completedCount = REQUIREMENTS.filter(item => uploadedByType.has(item.type)).length;
-  const overallProgress = Math.round((completedCount / REQUIREMENTS.length) * 100);
 
-  function stateFor(type: EvidenceType): ProgressState {
-    return progress[type] ?? INITIAL_PROGRESS;
-  }
-
-  function setTypeProgress(type: EvidenceType, next: ProgressState) {
-    setProgress(current => ({ ...current, [type]: next }));
-  }
-
-  function chooseFile(type: EvidenceType, file: File | null) {
-    setFiles(current => {
-      const next = { ...current };
-      if (file) next[type] = file;
-      else delete next[type];
-      return next;
-    });
-    setTypeProgress(type, INITIAL_PROGRESS);
-  }
-
-  function upload(type: EvidenceType) {
-    const file = files[type];
-    if (!file) {
-      setTypeProgress(type, { progress: 0, phase: "ERROR", message: "Choose a file first." });
+  useEffect(() => {
+    if (!file || !file.type.startsWith("image/")) {
+      setPreviewUrl("");
       return;
     }
-    if (!applicationReady || locked) return;
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
 
-    requestRefs.current[type]?.abort();
+  function chooseFile(next: File | null) {
+    requestRef.current?.abort();
+    setFile(next);
+    if (!next || activeIndex >= REQUIREMENTS.length) {
+      setProgress(INITIAL_PROGRESS);
+      return;
+    }
+    const error = allowedFile(REQUIREMENTS[activeIndex]!.type, next);
+    setProgress(error ? { phase: "ERROR", message: error } : INITIAL_PROGRESS);
+  }
+
+  function upload() {
+    const requirement = REQUIREMENTS[activeIndex];
+    if (!requirement || !file || !applicationReady || locked) return;
+    const validation = allowedFile(requirement.type, file);
+    if (validation) {
+      setProgress({ phase: "ERROR", message: validation });
+      return;
+    }
+
     const data = new FormData();
-    data.set("documentType", type);
+    data.set("documentType", requirement.type);
     data.set("file", file);
 
     const xhr = new XMLHttpRequest();
-    requestRefs.current[type] = xhr;
+    requestRef.current = xhr;
     xhr.open("POST", "/api/chef/application/proof-files", true);
     xhr.responseType = "json";
     xhr.withCredentials = true;
-
-    setTypeProgress(type, { progress: 0, phase: "UPLOADING", message: "Starting secure upload…" });
-
-    xhr.upload.onprogress = event => {
-      if (!event.lengthComputable) return;
-      const value = Math.min(100, Math.round((event.loaded / event.total) * 100));
-      setTypeProgress(type, {
-        progress: value,
-        phase: value >= 100 ? "SECURING" : "UPLOADING",
-        message: value >= 100 ? "100% transferred · securing document…" : `Uploading · ${value}%`,
-      });
-    };
+    setProgress({ phase: "UPLOADING", message: "Saving this photo securely…" });
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         const uploaded = parseUploadResponse(xhr.response);
         if (!uploaded) {
-          setTypeProgress(type, { progress: 100, phase: "ERROR", message: "Upload completed but the response could not be verified." });
+          setProgress({ phase: "ERROR", message: "The photo was received, but we couldn’t confirm it. Please try again." });
           return;
         }
-        setDocuments(current => [
-          ...current.filter(document => document.documentType !== type),
+        setDocuments((current) => [
+          ...current.filter((document) => document.documentType !== requirement.type),
           uploaded,
         ]);
-        setFiles(current => {
-          const next = { ...current };
-          delete next[type];
-          return next;
-        });
-        setTypeProgress(type, { progress: 100, phase: "DONE", message: "Uploaded securely ✓" });
+        setFile(null);
+        setProgress({ phase: "DONE", message: "Looks good. This is saved." });
         router.refresh();
         return;
       }
-      const body = xhr.response as { message?: unknown } | null;
-      setTypeProgress(type, {
-        progress: 0,
-        phase: "ERROR",
-        message: typeof body?.message === "string" ? body.message : "Upload failed. Check the file and try again.",
-      });
+      const message = xhr.status === 413
+        ? "This file is too large. Please choose one under 10 MB."
+        : xhr.status === 400
+          ? "We couldn’t use this file. Please choose a clear JPG, PNG, or PDF."
+          : "This photo couldn’t be uploaded. Please try again.";
+      setProgress({ phase: "ERROR", message });
     };
-
-    xhr.onerror = () => setTypeProgress(type, { progress: 0, phase: "ERROR", message: "Network error during upload. Try again." });
-    xhr.onabort = () => setTypeProgress(type, { progress: 0, phase: "IDLE", message: "Upload cancelled." });
+    xhr.onerror = () => setProgress({ phase: "ERROR", message: "The connection dropped while saving this photo. Please try again." });
+    xhr.onabort = () => setProgress(INITIAL_PROGRESS);
     xhr.send(data);
   }
 
+  function continueForward() {
+    if (activeIndex >= REQUIREMENTS.length) {
+      if (onComplete) onComplete();
+      else router.push("/chef");
+      return;
+    }
+    const nextMissing = REQUIREMENTS.findIndex(
+      (item, index) => index > activeIndex && !uploadedByType.has(item.type),
+    );
+    setFile(null);
+    setProgress(INITIAL_PROGRESS);
+    setActiveIndex(nextMissing >= 0 ? nextMissing : REQUIREMENTS.length);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function goBack() {
+    if (activeIndex <= 0) return;
+    setFile(null);
+    setProgress(INITIAL_PROGRESS);
+    setActiveIndex((current) => Math.max(0, current - 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (!applicationReady) {
+    return (
+      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center">
+        <LoaderCircle className="mx-auto h-7 w-7 animate-spin text-[#F62E18]" aria-hidden="true" />
+        <h2 className="mt-4 text-xl font-bold text-[#1A1A1A]">Saving your details first</h2>
+        <p className="mt-2 text-sm text-[#6B6B6B]">Your photo step will open as soon as your details are ready.</p>
+      </section>
+    );
+  }
+
+  if (activeIndex >= REQUIREMENTS.length) {
+    return (
+      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center md:p-10">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
+          <CheckCircle2 className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
+        </span>
+        <p className="mt-6 text-sm font-semibold text-[#F62E18]">Part 2 of 3 · A few photos</p>
+        <h1 className="mt-1 text-3xl font-bold text-[#1A1A1A]">All photos received</h1>
+        <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#6B6B6B]">Your photo, ID, and PAN card are saved. You don’t need to upload them again unless Craves asks for a clearer copy.</p>
+        <div className="mt-6 grid grid-cols-4 gap-2" aria-hidden="true">
+          {REQUIREMENTS.map((item) => <span key={item.type} className="h-1.5 rounded-full bg-[#F62E18]" />)}
+        </div>
+        <button type="button" onClick={continueForward} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
+      </section>
+    );
+  }
+
+  const requirement = REQUIREMENTS[activeIndex]!;
+  const uploaded = uploadedByType.get(requirement.type);
+  const busy = progress.phase === "UPLOADING";
+  const saved = Boolean(uploaded) && !file;
+
   return (
-    <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 sm:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-3xl">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">FSSAI application documents</p>
-          <h2 className="mt-2 text-2xl font-bold">Upload all 4 required documents</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Each document has its own secure upload. You can replace a file while the Chef application is pending. Identity files are not exposed through public Blob URLs.
-          </p>
-        </div>
-        <div className="min-w-[180px] rounded-2xl bg-white p-4">
-          <div className="flex items-center justify-between gap-3 text-sm"><strong>{completedCount}/4 uploaded</strong><span>{overallProgress}%</span></div>
-          <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200" aria-label={`Overall document completion ${overallProgress}%`}>
-            <div className="h-full rounded-full bg-[#6930CA] transition-[width] duration-500 ease-out" style={{ width: `${overallProgress}%` }} />
+    <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        {activeIndex > 0 ? (
+          <button type="button" onClick={goBack} className="min-h-11 rounded-full px-2 text-sm font-semibold text-[#1A1A1A] hover:bg-[#F1F3F5]">← Back</button>
+        ) : <span />}
+        <p className="text-sm font-semibold text-[#6B6B6B]">Part 2 of 3 · A few photos</p>
+      </div>
+      <div className="mt-2 grid grid-cols-4 gap-2" aria-hidden="true">
+        {REQUIREMENTS.map((item, index) => (
+          <span key={item.type} className={`h-1.5 rounded-full ${index <= activeIndex || uploadedByType.has(item.type) ? "bg-[#F62E18]" : "bg-[#E5E7EB]"}`} />
+        ))}
+      </div>
+
+      <div className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
+        {requirement.type === "APPLICANT_PHOTO" ? <Camera className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /> : <ShieldCheck className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />}
+      </div>
+      <p className="mt-5 text-sm font-semibold text-[#F62E18]">Photo {activeIndex + 1} of 4</p>
+      <h1 className="mt-1 text-3xl font-bold text-[#1A1A1A]">{requirement.title}</h1>
+      <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{requirement.helper}</p>
+
+      <div className="mt-6 overflow-hidden rounded-2xl border border-dashed border-[#E5E7EB] bg-[#F1F3F5]">
+        {previewUrl ? (
+          <img src={previewUrl} alt="Selected preview" className="h-56 w-full object-contain bg-white" />
+        ) : saved ? (
+          <div className="flex min-h-52 flex-col items-center justify-center px-6 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white"><Check className="h-6 w-6 text-[#F62E18]" aria-hidden="true" /></span>
+            <p className="mt-3 font-semibold text-[#1A1A1A]">Saved</p>
+            <p className="mt-1 max-w-sm text-sm text-[#6B6B6B]">{requirement.reassurance}</p>
           </div>
-          <p className="mt-2 text-xs text-slate-500">Admin approval requires 4/4.</p>
-        </div>
+        ) : file?.type === "application/pdf" ? (
+          <div className="flex min-h-52 flex-col items-center justify-center px-6 text-center"><FileText className="h-8 w-8 text-[#F62E18]" aria-hidden="true" /><p className="mt-3 font-semibold text-[#1A1A1A]">{file.name}</p></div>
+        ) : (
+          <label className="flex min-h-52 cursor-pointer flex-col items-center justify-center px-6 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white"><ImagePlus className="h-6 w-6 text-[#F62E18]" aria-hidden="true" /></span>
+            <p className="mt-3 font-semibold text-[#1A1A1A]">Take a photo or choose one</p>
+            <p className="mt-1 text-sm text-[#6B6B6B]">Make sure the important details are easy to read.</p>
+            <input
+              type="file"
+              accept={requirement.accept}
+              capture={requirement.type === "APPLICANT_PHOTO" ? "user" : "environment"}
+              disabled={locked || busy}
+              onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+              className="sr-only"
+            />
+          </label>
+        )}
       </div>
 
-      {!applicationReady && (
-        <div className="mt-5 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" />
-          <div><strong>Submit your Chef details first.</strong><p className="mt-1">After the application record is created, all four upload buttons become available.</p></div>
-        </div>
-      )}
+      {file ? (
+        <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-[#F62E18]">
+          Choose a different photo
+          <input type="file" accept={requirement.accept} disabled={locked || busy} onChange={(event) => chooseFile(event.target.files?.[0] ?? null)} className="sr-only" />
+        </label>
+      ) : saved && !locked ? (
+        <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-[#F62E18]">
+          Replace this photo
+          <input type="file" accept={requirement.accept} disabled={busy} onChange={(event) => chooseFile(event.target.files?.[0] ?? null)} className="sr-only" />
+        </label>
+      ) : null}
 
-      {locked && (
-        <div className="mt-5 flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
-          <div><strong>Application approved.</strong><p className="mt-1">Evidence is locked and cannot be replaced.</p></div>
-        </div>
-      )}
+      {progress.message ? (
+        <p role={progress.phase === "ERROR" ? "alert" : "status"} className={`mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm ${progress.phase === "ERROR" ? "font-semibold text-[#F62E18]" : "text-[#6B6B6B]"}`}>
+          {progress.message}
+        </p>
+      ) : null}
 
-      <div className="mt-6 space-y-4">
-        {REQUIREMENTS.map(requirement => {
-          const uploaded = uploadedByType.get(requirement.type);
-          const selected = files[requirement.type];
-          const uploadState = stateFor(requirement.type);
-          const busy = uploadState.phase === "UPLOADING" || uploadState.phase === "SECURING";
-          const displayProgress = uploadState.phase === "IDLE" && uploaded ? 100 : uploadState.progress;
+      {locked && !saved ? (
+        <p className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">Your application is already approved, so these photos can’t be changed here.</p>
+      ) : null}
 
-          return (
-            <article key={requirement.type} className="rounded-2xl border border-[#eadfd0] bg-white p-4 sm:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 gap-3">
-                  <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${uploaded ? "bg-emerald-50 text-emerald-700" : "bg-[#f3ecff] text-[#6930CA]"}`}>
-                    {uploaded ? <CheckCircle2 className="h-5 w-5" /> : <FileUp className="h-5 w-5" />}
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-bold">{requirement.title} <span className="text-red-600">*</span></h3>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">{requirement.helper}</p>
-                    {uploaded && <p className="mt-2 truncate text-xs font-semibold text-emerald-700">Uploaded: {uploaded.originalFileName} · {formatBytes(uploaded.fileSizeBytes)}</p>}
-                  </div>
-                </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${uploaded ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
-                  {uploaded ? "Uploaded ✓" : "Required"}
-                </span>
-              </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-                <label className="text-sm font-semibold">
-                  {uploaded ? "Choose replacement file" : "Choose file"}
-                  <input
-                    type="file"
-                    accept={requirement.accept}
-                    disabled={!applicationReady || locked || busy}
-                    onChange={event => chooseFile(requirement.type, event.target.files?.[0] ?? null)}
-                    className="mt-2 block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm disabled:bg-slate-100"
-                  />
-                  {selected && <span className="mt-1 block text-xs font-normal text-slate-500">Selected: {selected.name} · {formatBytes(selected.size)}</span>}
-                </label>
-                <button
-                  type="button"
-                  disabled={!applicationReady || locked || busy || !selected}
-                  onClick={() => upload(requirement.type)}
-                  className="min-h-12 rounded-full bg-[#6930CA] px-6 font-bold text-white disabled:opacity-40"
-                >
-                  {busy ? "Uploading…" : uploaded ? "Replace" : "Upload"}
-                </button>
-              </div>
-
-              {(busy || uploadState.phase === "DONE" || uploadState.phase === "ERROR" || uploaded) && (
-                <div className="mt-4" aria-live="polite">
-                  <div className="flex items-center justify-between gap-3 text-xs"><span className={uploadState.phase === "ERROR" ? "font-semibold text-red-700" : "text-slate-600"}>{uploadState.message || (uploaded ? "Stored securely" : "")}</span><strong>{displayProgress}%</strong></div>
-                  <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200">
-                    <div
-                      className={`h-full rounded-full transition-[width] duration-300 ease-out ${uploadState.phase === "ERROR" ? "bg-red-500" : uploaded || uploadState.phase === "DONE" ? "bg-emerald-600" : "bg-[#6930CA]"}`}
-                      style={{ width: `${displayProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </article>
-          );
-        })}
-      </div>
-
-      <div className={`mt-5 rounded-2xl p-4 text-sm ${completedCount === 4 ? "bg-emerald-50 text-emerald-900" : "bg-white text-slate-700"}`}>
-        {completedCount === 4
-          ? "All required FSSAI application evidence is uploaded. Craves Admin can now complete document review."
-          : `${4 - completedCount} required document${4 - completedCount === 1 ? "" : "s"} remaining before Admin can approve the Chef application.`}
-      </div>
+      {file ? (
+        <button type="button" disabled={busy || progress.phase === "ERROR"} onClick={upload} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50">
+          {busy ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+          {busy ? "Saving…" : "Use this photo"}
+        </button>
+      ) : saved ? (
+        <button type="button" onClick={continueForward} className="mt-6 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
+      ) : null}
     </section>
   );
 }

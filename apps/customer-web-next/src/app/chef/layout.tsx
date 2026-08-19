@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowLeftRight, ChefHat } from "lucide-react";
+import { ArrowLeft, ChefHat } from "lucide-react";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { ChefWorkspaceNavigation } from "@/components/chef-workspace-navigation";
 
@@ -8,48 +8,47 @@ export default function ChefLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <div className="chef-panel-theme bg-white" style={{ background: "#FFFFFF" }}>
-      <header className="chef-panel-header" style={{ background: "#FFFFFF" }}>
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-3 md:px-6">
+    <div className="chef-panel-theme min-h-screen bg-white" style={{ background: "#FFFFFF" }}>
+      <header className="chef-panel-header border-b border-[#E5E7EB] bg-white">
+        <div className="mx-auto w-full max-w-7xl px-4 py-3 md:px-6">
           <div className="flex min-h-11 items-center justify-between gap-4">
             <Link
               href="/chef"
-              className="chef-panel-brand-group min-h-11 rounded-lg"
-              aria-label="Craves chef workspace home"
+              className="inline-flex min-h-11 items-center gap-3 rounded-xl"
+              aria-label="Craves Chef Mode home"
             >
               <CravesLogo size="sm" />
               <span className="hidden sm:block">
-                <span className="chef-panel-brand !block !text-lg">Craves</span>
-                <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Chef workspace
-                </span>
+                <span className="block text-base font-bold text-[#1A1A1A]">Craves</span>
+                <span className="block text-xs font-medium text-[#6B6B6B]">Chef Mode</span>
               </span>
-              <span className="chef-panel-mode-badge hidden md:inline-flex">
-                <ChefHat className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-                Chef mode
+              <span className="hidden items-center gap-1.5 rounded-full bg-[#F1F3F5] px-3 py-1.5 text-xs font-semibold text-[#1A1A1A] md:inline-flex">
+                <ChefHat className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
+                Chef
               </span>
             </Link>
 
             <Link
               href="/home"
-              className="chef-panel-customer-link inline-flex min-h-11 items-center gap-2"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-[#6B6B6B] transition hover:bg-[#F1F3F5] hover:text-[#1A1A1A]"
             >
-              <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Customer mode</span>
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Back to Craves</span>
+              <span className="sm:hidden">Back</span>
             </Link>
           </div>
 
-          <div className="min-w-0 border-t border-[#E5E7EB] pt-1">
-            <ChefWorkspaceNavigation />
-          </div>
+          <ChefWorkspaceNavigation />
         </div>
       </header>
 
       <div className="chef-panel-content">{children}</div>
 
-      <footer className="chef-panel-footer !w-full !max-w-7xl px-4 md:px-6">
-        <p>Craves chef workspace · Role and ownership checked by every backend service</p>
-        <Link href="/home">Return to customer experience</Link>
+      <footer className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] px-4 py-6 text-xs text-[#6B6B6B] md:px-6">
+        <p>Craves Chef Mode</p>
+        <Link href="/home" className="font-semibold text-[#1A1A1A] hover:text-[#F62E18]">
+          Customer home
+        </Link>
       </footer>
     </div>
   );

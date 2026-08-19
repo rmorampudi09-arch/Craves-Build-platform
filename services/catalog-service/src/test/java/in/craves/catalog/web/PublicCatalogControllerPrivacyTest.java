@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import in.craves.catalog.service.CatalogService;
+import in.craves.catalog.service.PublicMenuBatchResolveService;
 import in.craves.catalog.web.ApiDtos.DiscoveryRadiusResponse;
 import in.craves.catalog.web.ApiDtos.FoodType;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
@@ -22,7 +23,8 @@ import org.junit.jupiter.api.Test;
 
 class PublicCatalogControllerPrivacyTest {
     private final CatalogService catalogService = mock(CatalogService.class);
-    private final PublicCatalogController controller = new PublicCatalogController(catalogService);
+    private final PublicMenuBatchResolveService batchResolveService = mock(PublicMenuBatchResolveService.class);
+    private final PublicCatalogController controller = new PublicCatalogController(catalogService, batchResolveService);
 
     @Test
     void publicKitchenDetailExcludesIdentityContactAddressAndExactCoordinates() {

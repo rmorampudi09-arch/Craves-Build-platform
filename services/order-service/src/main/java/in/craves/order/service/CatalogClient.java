@@ -50,8 +50,10 @@ public class CatalogClient {
         if (menuItemIds == null || menuItemIds.isEmpty()) {
             return List.of();
         }
+        String internalKey = requireInternalAccess();
         List<ResolvedCatalogMenuItem> items = restClient.post()
-            .uri("/menu-items/resolve")
+            .uri("/internal/menu-items/resolve")
+            .header(INTERNAL_HEADER, internalKey)
             .body(new ResolveMenuItemsRequest(menuItemIds))
             .retrieve()
             .body(new ParameterizedTypeReference<List<ResolvedCatalogMenuItem>>() { });
@@ -59,16 +61,11 @@ public class CatalogClient {
     }
 
     public CatalogKitchen getKitchen(UUID kitchenId) {
-        if (!StringUtils.hasText(internalAccessValue)) {
-            throw new ResponseStatusException(
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "Catalog internal access is not configured"
-            );
-        }
+        String internalKey = requireInternalAccess();
         try {
             CatalogKitchen kitchen = restClient.get()
                 .uri("/internal/kitchens/{kitchenId}", kitchenId)
-                .header(INTERNAL_HEADER, internalAccessValue)
+                .header(INTERNAL_HEADER, internalKey)
                 .retrieve()
                 .body(CatalogKitchen.class);
             if (kitchen == null || kitchen.id() == null || kitchen.identityId() == null) {
@@ -78,6 +75,16 @@ public class CatalogClient {
         } catch (HttpClientErrorException.NotFound ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kitchen is not active");
         }
+    }
+
+    private String requireInternalAccess() {
+        if (!StringUtils.hasText(internalAccessValue)) {
+            throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Catalog internal access is not configured"
+            );
+        }
+        return internalAccessValue;
     }
 
     private record ResolveMenuItemsRequest(List<UUID> menuItemIds) {

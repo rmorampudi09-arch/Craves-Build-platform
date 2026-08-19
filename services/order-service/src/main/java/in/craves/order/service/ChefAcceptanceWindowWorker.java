@@ -47,13 +47,25 @@ public class ChefAcceptanceWindowWorker {
     }
 
     private void expireOrders(int batchSize) {
-        for (UUID orderId : workRepository.findExpiredOrderIds(batchSize)) {
+        UUID claimToken = UUID.randomUUID();
+        int staleClaimSeconds = properties.validatedTimeoutClaimStaleSeconds();
+        for (UUID orderId : workRepository.claimExpiredOrderIds(batchSize, staleClaimSeconds, claimToken)) {
             try {
-                if (resolutionService.timeoutExpiredOrder(orderId)) {
-                    LOGGER.info("Chef acceptance expired and refund was requested for orderId={}", orderId);
+                if (resolutionService.timeoutExpiredOrder(orderId, claimToken)) {
+                    LOGGER.info(
+                        "Chef acceptance expired and Razorpay refund was requested orderId={} claimToken={}",
+                        orderId,
+                        claimToken
+                    );
                 }
             } catch (RuntimeException exception) {
-                LOGGER.error("Chef acceptance timeout processing failed for orderId={}", orderId, exception);
+                workRepository.releaseTimeoutClaim(orderId, claimToken, safeMessage(exception));
+                LOGGER.error(
+                    "Chef acceptance timeout processing failed; claim released for retry orderId={} claimToken={}",
+                    orderId,
+                    claimToken,
+                    exception
+                );
             }
         }
     }
@@ -105,7 +117,7 @@ public class ChefAcceptanceWindowWorker {
                     "Chef acceptance {} reminder recorded for orderId={} chefIdentityId={}",
                     first ? "first" : "second",
                     candidate.orderId(),
-                    kitchen.identityId()
+                    candidate.kitchenId()
                 );
             }
         } catch (RuntimeException exception) {
@@ -120,8 +132,10 @@ public class ChefAcceptanceWindowWorker {
 
     private static String safeMessage(RuntimeException exception) {
         String message = exception.getMessage();
-        return message == null || message.isBlank()
-            ? exception.getClass().getSimpleName()
-            : message;
+        if (message == null || message.isBlank()) {
+            return exception.getClass().getSimpleName();
+        }
+        String normalized = message.replace('\n', ' ').replace('\r', ' ').trim();
+        return normalized.length() > 1000 ? normalized.substring(0, 1000) : normalized;
     }
 }

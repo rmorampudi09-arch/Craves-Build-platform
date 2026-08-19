@@ -36,22 +36,36 @@ test("authentication asks for customer or chef mode", () => {
   assert.match(contents, /onAuthenticated\?\.\(user, accountMode\)/);
 });
 
-test("signed-in home loads backend address, cart, and nearby kitchens before menu items", () => {
+test("signed-in home loads live discovery and opens chef details without losing home context", () => {
   const contents = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const search = source("../components/home/HomeSearchOverlay.tsx");
+  const returnState = source("./home-return-state.ts");
+
   assert.match(contents, /loadSelectedAddress\(\)/);
   assert.match(contents, /loadCart\(\)/);
   assert.match(
     contents,
     /discoverKitchens\(activeAddress\.lat, activeAddress\.lng, 5_000\)/,
   );
-  assert.match(contents, /loadKitchenMenu\(kitchen\.id\)/);
+  assert.match(contents, /discoverDishes\(activeAddress\.lat, activeAddress\.lng\)/);
+  assert.match(contents, /<HomeCategoryRail/);
+  assert.match(contents, /<TodaysSpecial/);
   assert.match(contents, /<KitchensGrid/);
-  assert.match(contents, /selectedKitchen \?/);
-  assert.doesNotMatch(
-    contents,
-    /discoverDishes\(activeAddress\.lat, activeAddress\.lng, 5_000\)/,
-  );
+  assert.match(contents, /<DishesGrid/);
+  assert.match(contents, /<HomeSearchOverlay/);
+  assert.match(contents, /rememberHomeView\(\)/);
+  assert.match(contents, /to: "\/chef\/\$id"/);
+  assert.doesNotMatch(contents, /loadKitchenMenu\(/);
+  assert.doesNotMatch(contents, /selectedKitchen \?/);
   assert.doesNotMatch(contents, /17\.4483|78\.3915/);
+
+  assert.match(search, /to="\/dish\/\$id"/);
+  assert.match(search, /to="\/chef\/\$id"/);
+  assert.match(search, /fixed inset-0/);
+  assert.match(returnState, /window\.sessionStorage/);
+  assert.match(returnState, /scrollY/);
+  assert.match(returnState, /searchTerm/);
+  assert.match(returnState, /homeCategory/);
 });
 
 test("profile exposes backend chef application status", () => {
@@ -88,15 +102,19 @@ test("real backend chefs remain available in production", () => {
   assert.doesNotMatch(contents, /reviewPool|LOCATIONS|NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK/);
 });
 
-test("dish and chef detail pages recover live data after a browser refresh", () => {
+test("dish and chef detail pages recover live data and return to saved home context", () => {
   const dishPage = source("../screens/public/FoodDetails/FoodDetails.tsx");
   const dishService = source("../services/api/dishes.ts");
   const chef = source("../screens/public/ChefProfile/ChefProfile.tsx");
 
   assert.match(dishPage, /loadDish\(id\)/);
+  assert.match(dishPage, /hasHomeReturnState\(\)/);
+  assert.match(dishPage, /window\.history\.back\(\)/);
   assert.match(dishService, /\/api\/catalog\/menu-items/);
   assert.match(chef, /loadSelectedAddress\(\)/);
   assert.match(chef, /discoverDishes\(address\.lat, address\.lng\)/);
+  assert.match(chef, /hasHomeReturnState\(\)/);
+  assert.match(chef, /window\.history\.back\(\)/);
 });
 
 test("every home-chef call to action opens the live chef registration flow", () => {
@@ -171,7 +189,7 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   }
 });
 
-test("customer service navigation is visible only on the signed-in home page", () => {
+test("customer service navigation is visible only on the signed-in home page without a redundant Discover item", () => {
   const navigation = source(
     "../components/navigation/PersistentCustomerServiceNav.tsx",
   );
@@ -179,7 +197,6 @@ test("customer service navigation is visible only on the signed-in home page", (
   const homeHeader = source("../components/home/BrowseHeader.tsx");
 
   for (const route of [
-    "/home",
     "/orders",
     "/subscriptions",
     "/notifications",
@@ -188,6 +205,7 @@ test("customer service navigation is visible only on the signed-in home page", (
     assert.match(navigation, new RegExp(route.replace("/", "\\/")));
   }
 
+  assert.doesNotMatch(navigation, /label: "Discover"/);
   assert.doesNotMatch(layout, /PersistentCustomerServiceNav/);
   assert.match(homeHeader, /<PersistentCustomerServiceNav/);
   assert.match(navigation, /pathname !== "\/home" \|\| !signedIn/);

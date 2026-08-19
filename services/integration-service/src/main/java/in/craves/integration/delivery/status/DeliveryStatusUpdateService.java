@@ -14,6 +14,7 @@ import in.craves.integration.delivery.provider.DeliveryWebhookNormalizer;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.DeliveryJobState;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.TrackingWorkItem;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.WebhookWorkItem;
+import in.craves.integration.delivery.telemetry.DeliveryTelemetryPublisherService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -35,17 +36,20 @@ public class DeliveryStatusUpdateService {
     private final DeliveryOutboxRepository outbox;
     private final DeliveryCommandProperties properties;
     private final ObjectMapper objectMapper;
+    private final DeliveryTelemetryPublisherService telemetryPublisher;
 
     public DeliveryStatusUpdateService(List<DeliveryWebhookNormalizer> normalizers,
                                        DeliveryStatusRepository repository,
                                        DeliveryOutboxRepository outbox,
                                        DeliveryCommandProperties properties,
-                                       ObjectMapper objectMapper) {
+                                       ObjectMapper objectMapper,
+                                       DeliveryTelemetryPublisherService telemetryPublisher) {
         this.normalizers = indexNormalizers(normalizers);
         this.repository = repository;
         this.outbox = outbox;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.telemetryPublisher = telemetryPublisher;
     }
 
     @Transactional
@@ -98,6 +102,10 @@ public class DeliveryStatusUpdateService {
         if (decision.applied()) {
             applyAndPublish(job, update, "WEBHOOK");
         }
+
+        // Telemetry is intentionally independent from status-state change. Providers can send
+        // multiple GPS/ETA updates while the normalized delivery status remains IN_TRANSIT.
+        telemetryPublisher.captureWebhook(job, update);
 
         repository.markWebhookProcessed(
             workItem.id(),

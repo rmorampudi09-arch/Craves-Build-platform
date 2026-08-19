@@ -32,7 +32,7 @@ public class PickupLocationProvisioningController {
         @RequestHeader(value = "X-Craves-Internal-Secret", required = false) String internalSecret,
         @RequestBody PickupLocationProvisioningRequest request
     ) {
-        internalRequestAuthorizer.requireAuthorized(internalSecret);
+        internalRequestAuthorizer.requireValid(internalSecret);
         ShiprocketPickupProvisioningService.ProvisioningResult result =
             shiprocketProvisioningService.provision(request);
         return ResponseEntity.ok(Map.of(

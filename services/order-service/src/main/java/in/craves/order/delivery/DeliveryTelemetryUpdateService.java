@@ -110,12 +110,22 @@ public class DeliveryTelemetryUpdateService {
                 "Chef acceptance metadata is not available yet"
             );
         }
-        if (order.deliveryJobId() == null
+
+        boolean noStatusProjectionYet = order.deliveryJobId() == null
+            && order.deliveryProviderId() == null
+            && order.deliveryProviderDeliveryId() == null
+            && order.deliveryStatus() == null;
+        if (noStatusProjectionYet) {
+            return;
+        }
+
+        boolean partialStatusProjection = order.deliveryJobId() == null
             || order.deliveryProviderId() == null
             || order.deliveryProviderDeliveryId() == null
-            || order.deliveryStatus() == null) {
+            || order.deliveryStatus() == null;
+        if (partialStatusProjection) {
             throw new DeliveryTelemetryRetryableException(
-                "Delivery status projection is not available before telemetry"
+                "Delivery status projection is temporarily incomplete"
             );
         }
         if (!order.deliveryJobId().equals(data.deliveryJobId())) {

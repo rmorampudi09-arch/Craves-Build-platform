@@ -51,6 +51,11 @@ craves:
     max-radius-km: ${CRAVES_DISCOVERY_MAX_RADIUS_KM:15}
     max-query-radius-meters: ${CRAVES_DISCOVERY_MAX_QUERY_RADIUS_METERS:50000}
     max-page-size: ${CRAVES_DISCOVERY_MAX_PAGE_SIZE:100}
+    cache:
+      enabled: ${CRAVES_DISCOVERY_CACHE_ENABLED:false}
+      ttl-seconds: ${CRAVES_DISCOVERY_CACHE_TTL_SECONDS:120}
+      failure-backoff-seconds: ${CRAVES_DISCOVERY_CACHE_FAILURE_BACKOFF_SECONDS:30}
+      key-prefix: ${CRAVES_DISCOVERY_CACHE_KEY_PREFIX:craves:catalog:discovery}
   pickup-provisioning:
     enabled: ${CRAVES_PICKUP_PROVISIONING_ENABLED:false}
     integration-base-url: ${CRAVES_INTEGRATION_SERVICE_BASE_URL:}

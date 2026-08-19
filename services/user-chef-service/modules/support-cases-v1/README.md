@@ -146,7 +146,7 @@ Admin support responses retain the full operational audit trail.
 
 The module reuses the existing User-Chef `notification_outbox` from Flyway V2.
 
-A database trigger adds a durable IN_APP outbox event when:
+The support service writes an outbox row **inside the same database transaction** when:
 
 ```text
 SUPPORT_ADMIN or PLATFORM_ADMIN posts a public reply
@@ -162,7 +162,19 @@ SUPPORT_CASE_REPLY
 SUPPORT_CASE_STATUS_CHANGED
 ```
 
-The existing outbox dispatcher retries delivery to Notification Service using the established User-Chef notification pipeline.
+Each event key includes the immutable support-message or status-history UUID, so the existing unique `notification_outbox.event_key` constraint makes enqueueing idempotent.
+
+Notification payloads contain only:
+
+```text
+caseId
+caseNumber
+status
+```
+
+Internal support notes are never copied into requester notification payloads.
+
+The existing User-Chef outbox dispatcher then retries delivery to Notification Service. Production must keep the already-existing notification dispatcher configuration enabled; this module introduces no new secret.
 
 ## Database
 

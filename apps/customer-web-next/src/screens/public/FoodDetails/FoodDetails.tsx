@@ -1,4 +1,4 @@
-import { getRouteApi, useNavigate, Link } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import { hasHomeReturnState } from "@/lib/home-return-state";

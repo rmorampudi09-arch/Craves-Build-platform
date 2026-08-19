@@ -71,6 +71,17 @@ public final class ApiDtos {
     ) {
     }
 
+    public record PublicKitchenProfileResponse(
+        UUID id,
+        String kitchenName,
+        String displayName,
+        String description,
+        String areaName,
+        String city,
+        String state
+    ) {
+    }
+
     public record MenuItemRequest(
         @NotBlank String itemName,
         String description,

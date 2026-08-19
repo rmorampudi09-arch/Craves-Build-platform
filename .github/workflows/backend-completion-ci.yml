@@ -9,6 +9,8 @@ on:
       - 'config/production/azure-resource-inventory.json'
       - 'scripts/release/**'
       - 'azure-pipelines-backend-completion.yml'
+      - 'azure-pipelines-razorpay-auto-refund-production.yml'
+      - 'azure-pipelines-razorpay-auto-refund-rollback.yml'
       - '.github/workflows/backend-completion-ci.yml'
   workflow_dispatch:
 
@@ -68,7 +70,7 @@ jobs:
             path: services/order-service
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -85,3 +87,53 @@ jobs:
           path: ${{ matrix.path }}/target/surefire-reports
           if-no-files-found: ignore
           retention-days: 14
+
+  razorpay-auto-refund-smoke:
+    name: Razorpay auto-refund smoke — 10x
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            services/order-service/pom.xml
+            services/integration-service/pom.xml
+      - name: Compile hardened Order and Integration services
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd services/order-service && mvn -B -ntp -DskipTests compile)
+          (cd services/integration-service && mvn -B -ntp -DskipTests compile)
+      - name: Run focused Razorpay auto-refund smoke tests ten times
+        shell: bash
+        run: |
+          set -euo pipefail
+          for run in $(seq 1 10); do
+            echo "::group::Razorpay auto-refund smoke ${run}/10 — Order Service"
+            (
+              cd services/order-service
+              mvn -B -ntp \
+                -Dtest=ChefAcceptanceWindowPropertiesTest,ChefAcceptancePolicyTest,ChefAcceptanceDistributedClaimCompatibilityTest \
+                -DfailIfNoTests=true test
+            )
+            echo "::endgroup::"
+
+            echo "::group::Razorpay auto-refund smoke ${run}/10 — Integration Service"
+            (
+              cd services/integration-service
+              mvn -B -ntp \
+                -Dtest=RefundRequestServiceTest,RazorpayAutoRefundRoutingCompatibilityTest,RazorpayRequestSafetyTest,PaymentRoutingPropertiesTest \
+                -DfailIfNoTests=true test
+            )
+            echo "::endgroup::"
+            echo "RAZORPAY_AUTO_REFUND_SMOKE_PASS=${run}/10"
+          done
+      - name: Verify all ten smoke iterations completed
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'The previous step is fail-fast; reaching this step proves all 10 focused smoke iterations completed successfully.'

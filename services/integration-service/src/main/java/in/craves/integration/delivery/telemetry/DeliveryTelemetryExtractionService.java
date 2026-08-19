@@ -1,6 +1,7 @@
 package in.craves.integration.delivery.telemetry;
 
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Courier;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderStatusUpdate;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
 import in.craves.integration.delivery.telemetry.DeliveryTelemetryModels.TelemetrySnapshot;
 import java.time.Instant;
@@ -27,7 +28,7 @@ public class DeliveryTelemetryExtractionService {
 
     public TelemetrySnapshot extract(String providerId, TrackingSnapshot snapshot) {
         if (snapshot == null) {
-            return empty(Instant.now());
+            return empty(Instant.now(), "TRACK");
         }
         DeliveryTelemetryExtractor extractor = extractors.get(normalize(providerId));
         if (extractor != null) {
@@ -39,11 +40,23 @@ public class DeliveryTelemetryExtractionService {
         return courierOnly(snapshot);
     }
 
+    public TelemetrySnapshot extractWebhook(String providerId, ProviderStatusUpdate update) {
+        if (update == null) {
+            return empty(Instant.now(), "WEBHOOK");
+        }
+        DeliveryTelemetryExtractor extractor = extractors.get(normalize(providerId));
+        if (extractor == null) {
+            return empty(update.observedAt(), "WEBHOOK");
+        }
+        TelemetrySnapshot extracted = extractor.extractWebhook(update);
+        return extracted == null ? empty(update.observedAt(), "WEBHOOK") : extracted;
+    }
+
     private static TelemetrySnapshot courierOnly(TrackingSnapshot snapshot) {
         Courier courier = snapshot.courier();
         Instant observedAt = snapshot.observedAt() == null ? Instant.now() : snapshot.observedAt();
         if (courier == null || courier.latitude() == null || courier.longitude() == null) {
-            return empty(observedAt);
+            return empty(observedAt, "TRACK");
         }
         return new TelemetrySnapshot(
             courier.latitude(),
@@ -53,12 +66,14 @@ public class DeliveryTelemetryExtractionService {
             null,
             null,
             null,
+            null,
+            null,
             observedAt,
             "TRACK"
         );
     }
 
-    private static TelemetrySnapshot empty(Instant observedAt) {
+    private static TelemetrySnapshot empty(Instant observedAt, String source) {
         return new TelemetrySnapshot(
             null,
             null,
@@ -67,8 +82,10 @@ public class DeliveryTelemetryExtractionService {
             null,
             null,
             null,
-            observedAt,
-            "TRACK"
+            null,
+            null,
+            observedAt == null ? Instant.now() : observedAt,
+            source
         );
     }
 

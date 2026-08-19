@@ -30,8 +30,7 @@ jobs:
             echo 'Backend-only scope guard passed.'
           displayName: Reject application frontend or mobile changes
       - ${{ if ne(parameters.enforceBackendOnlyDiff, true) }}:
-        - bash: |
-            echo 'Backend-only diff guard disabled by explicit pipeline parameter.'
+        - bash: echo 'Backend-only diff guard disabled by explicit pipeline parameter.'
           displayName: Backend-only diff guard explicitly disabled
 
   - job: auth_verify
@@ -136,7 +135,9 @@ jobs:
             scripts/apim/configure-chef-financial-v1-apim.sh \
             scripts/apim/rollback-chef-financial-v1-apim.sh \
             scripts/apim/configure-chef-menu-bulk-availability-v1-apim.sh \
-            scripts/apim/rollback-chef-menu-bulk-availability-v1-apim.sh; do
+            scripts/apim/rollback-chef-menu-bulk-availability-v1-apim.sh \
+            scripts/apim/configure-apim-platform-baseline.sh \
+            scripts/apim/rollback-apim-platform-baseline.sh; do
             bash -n "$script"
             echo "bash -n PASS: $script"
           done
@@ -153,13 +154,16 @@ jobs:
               Path('infra/apim/kitchen-schedule-v1/public-availability-policy.xml'),
               Path('infra/apim/support-cases-v1/support-case-policy.xml'),
               Path('infra/apim/chef-financial-v1/chef-financial-policy.xml'),
-              Path('infra/apim/chef-kitchen/chef-kitchen-policy.xml'),
+              Path('infra/apim/chef-menu-bulk-availability-v1/bulk-availability-policy.xml'),
+              Path('infra/apim/platform-baseline/craves-correlation-inbound.xml'),
+              Path('infra/apim/platform-baseline/craves-security-outbound.xml'),
+              Path('infra/apim/platform-baseline/craves-json-body-guard.xml'),
           ]
           for path in files:
               ET.parse(path)
               print(f'XML PASS: {path}')
           PY
-        displayName: Parse APIM policy XML
+        displayName: Parse APIM policy and fragment XML
       - bash: |
           set -euo pipefail
           python3 - <<'PY'
@@ -168,13 +172,8 @@ jobs:
           import sys
 
           services = [
-              'auth-service',
-              'user-chef-service',
-              'catalog-service',
-              'order-service',
-              'subscription-service',
-              'integration-service',
-              'notification-service',
+              'auth-service', 'user-chef-service', 'catalog-service', 'order-service',
+              'subscription-service', 'integration-service', 'notification-service',
           ]
           failed = False
           for service in services:
@@ -184,8 +183,7 @@ jobs:
                   match = re.match(r'V([^_]+)__', path.name)
                   if not match:
                       continue
-                  version = match.group(1)
-                  versions.setdefault(version, []).append(path.name)
+                  versions.setdefault(match.group(1), []).append(path.name)
               duplicates = {v: names for v, names in versions.items() if len(names) > 1}
               if duplicates:
                   failed = True
@@ -198,18 +196,24 @@ jobs:
         displayName: Reject duplicate Flyway versions
       - bash: |
           set -euo pipefail
-          grep -q 'Authorization' infra/apim/order-history-v2/order-history-policy.xml
-          grep -q 'no-store' infra/apim/order-history-v2/order-history-policy.xml
-          grep -q 'Authorization' infra/apim/notification-inbox-v2/notification-inbox-policy.xml
-          grep -q 'no-store' infra/apim/notification-inbox-v2/notification-inbox-policy.xml
+          for policy in \
+            infra/apim/order-history-v2/order-history-policy.xml \
+            infra/apim/notification-inbox-v2/notification-inbox-policy.xml \
+            infra/apim/support-cases-v1/support-case-policy.xml \
+            infra/apim/chef-financial-v1/chef-financial-policy.xml \
+            infra/apim/chef-menu-bulk-availability-v1/bulk-availability-policy.xml; do
+            grep -q 'Authorization' "$policy"
+            grep -q 'X-Correlation-ID' "$policy"
+            grep -q 'no-store' "$policy"
+          done
+          grep -q 'X-Correlation-ID' infra/apim/kitchen-schedule-v1/public-availability-policy.xml
           grep -q 'no-store' infra/apim/kitchen-schedule-v1/public-availability-policy.xml
-          grep -q 'Authorization' infra/apim/support-cases-v1/support-case-policy.xml
-          grep -q 'no-store' infra/apim/support-cases-v1/support-case-policy.xml
-          grep -q 'Authorization' infra/apim/chef-financial-v1/chef-financial-policy.xml
-          grep -q 'no-store' infra/apim/chef-financial-v1/chef-financial-policy.xml
+          grep -q 'validate-content' infra/apim/chef-menu-bulk-availability-v1/bulk-availability-policy.xml
+          grep -q 'rate-limit-by-key' scripts/apim/configure-apim-platform-baseline.sh
+          grep -q 'If-Match' scripts/apim/configure-apim-platform-baseline.sh
           grep -q '/api/v1/chef/earnings' openapi/chef-financial-v1.yaml
           grep -q '/api/v1/kitchens/me/menu-items/availability' openapi/chef-menu-bulk-availability-v1.yaml
           grep -q 'bearerAuth' openapi/chef-financial-v1.yaml
           grep -q 'bearerAuth' openapi/chef-menu-bulk-availability-v1.yaml
-          echo 'APIM security/no-cache and OpenAPI contract assertions passed.'
+          echo 'APIM security, correlation, body guard, rollback and OpenAPI assertions passed.'
         displayName: Assert APIM and OpenAPI guards

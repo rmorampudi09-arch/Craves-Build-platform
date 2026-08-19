@@ -28,6 +28,7 @@ describe('navigationPolicy', () => {
 
   it('keeps focused customer utility and detail routes immersive', () => {
     for (const routeName of [
+      'CustomerHomeSearch',
       'CustomerFilterSort',
       'CustomerDishDetail',
       'CustomerDishIngredients',

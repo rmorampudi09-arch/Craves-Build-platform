@@ -24,13 +24,16 @@ steps:
 
   - bash: |
       set -euo pipefail
-      grep -Fq 'PAYMENT_PROVIDER_NAME:RAZORPAY' services/integration-service/src/main/java/in/craves/integration/config/PaymentRoutingProperties.java || true
-      grep -Fq 'CASHFREE_TRAFFIC_ALLOWED:false' services/integration-service/src/main/java/in/craves/integration/config/PaymentRoutingProperties.java || true
-      grep -Fq 'X-Refund-Idempotency' services/integration-service/src/main/java/in/craves/integration/refund/RazorpayRefundClient.java
+      test -s services/integration-service/modules/razorpay-production/README.md
+      test -s docs/handover/2026-08-20-razorpay-full-scale-production.md
       test -s services/integration-service/src/main/resources/db/migration/V112__razorpay_webhook_delivery_guard.sql
+      grep -Fq '@Value("${PAYMENT_PROVIDER_NAME:RAZORPAY}")' services/integration-service/src/main/java/in/craves/integration/config/PaymentRoutingProperties.java
+      grep -Fq '@Value("${CASHFREE_TRAFFIC_ALLOWED:false}")' services/integration-service/src/main/java/in/craves/integration/config/PaymentRoutingProperties.java
+      grep -Fq 'X-Refund-Idempotency' services/integration-service/src/main/java/in/craves/integration/refund/RazorpayRefundClient.java
       grep -Fq 'FOR UPDATE SKIP LOCKED' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayWebhookInboxService.java
       grep -Fq 'verifyCapturedProviderState' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayWebhookWorker.java
       grep -Fq 'razorpayWebhookInboxService.accept' services/integration-service/src/main/java/in/craves/integration/web/PaymentController.java
+      grep -Fq 'queryParam("receipt", receipt)' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayPaymentClient.java
     displayName: Verify Razorpay full-scale source invariants
 
   - task: AzureCLI@2
@@ -149,6 +152,6 @@ steps:
         curl -fsS --max-time 30 "https://${fqdn}/actuator/health" >/dev/null || fail 'Post-activation health check failed.'
 
         trap - ERR
-        echo 'RAZORPAY LIVE MONEY: ACTIVATED'
+        echo 'RAZORPAY CONTROLLED LIVE-MONEY WINDOW: OPEN'
         echo 'Cashfree remains code-retained but traffic-disabled.'
-        echo 'Manual Razorpay Dashboard webhook registration and a controlled low-value live payment/refund proof are still required before broad customer traffic.'
+        echo 'Do not ramp broad customer traffic until the controlled live payment/refund certification passes.'

@@ -1,7 +1,18 @@
-import { AlertTriangle, MapPin, RefreshCw, SearchX } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  MapPin,
+  RefreshCw,
+  RotateCcw,
+  SearchX,
+} from "lucide-react";
 
 import { DishCard } from "@/components/home/DishCard";
 import type { DishCategory } from "@/constants/dishCategories";
+import type {
+  HomeDishSort,
+  HomeFoodPreference,
+} from "@/lib/home-return-state";
 import type { Dish } from "@/services/api/dishes";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
@@ -13,6 +24,11 @@ interface DishesGridProps {
   searchTerm: string;
   state: DiscoveryState;
   message: string;
+  sort: HomeDishSort;
+  foodPreference: HomeFoodPreference;
+  onSortChange: (sort: HomeDishSort) => void;
+  onFoodPreferenceChange: (preference: HomeFoodPreference) => void;
+  onRemoveFilters: () => void;
   onRetry: () => void;
   onManageAddress: () => void;
 }
@@ -31,8 +47,25 @@ function DishSkeleton() {
   );
 }
 
-export function DishesGrid({ dishes, selectedCategory, searchTerm, state, message, onRetry, onManageAddress }: DishesGridProps) {
+export function DishesGrid({
+  dishes,
+  selectedCategory,
+  searchTerm,
+  state,
+  message,
+  sort,
+  foodPreference,
+  onSortChange,
+  onFoodPreferenceChange,
+  onRemoveFilters,
+  onRetry,
+  onManageAddress,
+}: DishesGridProps) {
   const normalizedSearch = searchTerm.trim();
+  const hasFilters =
+    selectedCategory !== "All" ||
+    sort !== "recommended" ||
+    foodPreference !== "all";
   const emptyMessage = normalizedSearch
     ? `No live dishes match “${normalizedSearch}”. Try another search.`
     : selectedCategory === "All"
@@ -40,8 +73,11 @@ export function DishesGrid({ dishes, selectedCategory, searchTerm, state, messag
       : `No active ${selectedCategory.toLowerCase()} dishes are available for this delivery location yet.`;
 
   return (
-    <section className={`${styles.fadeUp} ${styles.delayTwo} mx-auto max-w-[88rem] px-4 pb-10 pt-12 md:px-7 lg:px-10 lg:pt-16`} aria-labelledby="available-dishes-heading">
-      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+    <section
+      className={`${styles.fadeUp} ${styles.delayTwo} mx-auto max-w-[88rem] scroll-mt-40 px-4 pb-10 pt-12 md:px-7 lg:px-10 lg:pt-16`}
+      aria-labelledby="available-dishes-heading"
+    >
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">Made close to you</p>
           <h2 id="available-dishes-heading" className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
@@ -55,6 +91,52 @@ export function DishesGrid({ dishes, selectedCategory, searchTerm, state, messag
           </span>
         ) : null}
       </div>
+
+      {state === "ready" ? (
+        <div className="mb-7 flex flex-wrap items-center gap-2.5" aria-label="Dish filters">
+          <label className="relative inline-flex min-h-11 items-center rounded-full border border-[#E5E7EB] bg-white shadow-[0_4px_14px_rgba(26,26,26,0.04)] transition hover:border-[#F62E18]/40 hover:shadow-[0_7px_20px_rgba(246,46,24,0.09)]">
+            <span className="sr-only">Sort dishes</span>
+            <select
+              value={sort}
+              onChange={(event) => onSortChange(event.target.value as HomeDishSort)}
+              className="min-h-11 appearance-none rounded-full border-0 bg-transparent py-0 pl-4 pr-10 text-sm font-bold text-[#1A1A1A] outline-none focus:ring-0"
+              aria-label="Sort dishes"
+            >
+              <option value="recommended">Sort by</option>
+              <option value="rating">Rating</option>
+              <option value="price-low-high">Price: Low to High</option>
+              <option value="price-high-low">Price: High to Low</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#6B6B6B]" aria-hidden="true" />
+          </label>
+
+          <label className="relative inline-flex min-h-11 items-center rounded-full border border-[#E5E7EB] bg-white shadow-[0_4px_14px_rgba(26,26,26,0.04)] transition hover:border-[#F62E18]/40 hover:shadow-[0_7px_20px_rgba(246,46,24,0.09)]">
+            <span className="sr-only">Filter by food type</span>
+            <select
+              value={foodPreference}
+              onChange={(event) => onFoodPreferenceChange(event.target.value as HomeFoodPreference)}
+              className="min-h-11 appearance-none rounded-full border-0 bg-transparent py-0 pl-4 pr-10 text-sm font-bold text-[#1A1A1A] outline-none focus:ring-0"
+              aria-label="Filter dishes by food type"
+            >
+              <option value="all">Food type</option>
+              <option value="veg">Veg</option>
+              <option value="non-veg">Non-veg</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#6B6B6B]" aria-hidden="true" />
+          </label>
+
+          {hasFilters ? (
+            <button
+              type="button"
+              onClick={onRemoveFilters}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#F1F3F5] px-4 text-sm font-black text-[#F62E18] transition hover:bg-[#E5E7EB]"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              Remove filters
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {state === "loading" ? (
         <div>

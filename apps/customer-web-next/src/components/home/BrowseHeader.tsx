@@ -69,7 +69,7 @@ export function BrowseHeader({
             </span>
           </button>
 
-          <label className="ml-auto hidden min-h-14 min-w-0 flex-1 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-all duration-200 ease-out hover:scale-[1.02] hover:shadow-[0_10px_30px_rgba(26,26,26,0.09)] focus-within:scale-[1.02] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_12px_34px_rgba(246,46,24,0.12)] motion-reduce:transform-none lg:flex lg:max-w-[36rem]">
+          <label className="ml-auto hidden min-h-14 min-w-0 flex-1 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-all duration-200 ease-out hover:scale-[1.02] hover:ring-2 hover:ring-[#F62E18]/40 hover:shadow-[0_10px_30px_rgba(246,46,24,0.16)] focus-within:scale-[1.02] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_12px_34px_rgba(246,46,24,0.18)] motion-reduce:transform-none lg:flex lg:max-w-[36rem]">
             <FaSearch className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
@@ -118,7 +118,7 @@ export function BrowseHeader({
         </div>
 
         <div className="grid gap-2.5 pb-2.5 lg:hidden">
-          <label className="flex min-h-14 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-all duration-200 ease-out hover:scale-[1.01] hover:shadow-[0_8px_24px_rgba(26,26,26,0.08)] focus-within:scale-[1.01] focus-within:ring-2 focus-within:ring-[#F62E18] motion-reduce:transform-none">
+          <label className="flex min-h-14 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-all duration-200 ease-out hover:scale-[1.01] hover:ring-2 hover:ring-[#F62E18]/40 hover:shadow-[0_8px_24px_rgba(246,46,24,0.15)] focus-within:scale-[1.01] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_10px_28px_rgba(246,46,24,0.17)] motion-reduce:transform-none">
             <FaSearch className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input

@@ -6,15 +6,19 @@ interface ChefDishesGridProps {
   dishes: Dish[];
 }
 
-/** "Dishes by {chef}" heading + grid, reusing the same DishCard as the browse page. */
 export function ChefDishesGrid({ chefName, dishes }: ChefDishesGridProps) {
   if (dishes.length === 0) return null;
+
   return (
-    <section className="mt-6">
-      <h2 className="font-display text-lg font-bold text-ink">Dishes by {chefName}</h2>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {dishes.map((d) => (
-          <DishCard key={d.id} dish={d} />
+    <section className="mt-7" aria-labelledby="home-kitchen-menu-heading">
+      <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">Live menu</p>
+      <h2 id="home-kitchen-menu-heading" className="mt-1.5 font-display text-2xl font-black tracking-[-0.04em] text-[#1A1A1A]">
+        Dishes from {chefName}
+      </h2>
+      <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">Available dishes from this home kitchen.</p>
+      <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {dishes.map((dish) => (
+          <DishCard key={dish.id} dish={dish} />
         ))}
       </div>
     </section>

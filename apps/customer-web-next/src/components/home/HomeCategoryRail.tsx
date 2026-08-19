@@ -8,7 +8,6 @@ import {
   FaCookieBite,
   FaIceCream,
   FaPepperHot,
-  FaThLarge,
   FaUtensils,
 } from "react-icons/fa";
 
@@ -30,13 +29,12 @@ export type CravingCategory =
 
 type VisualCategory = {
   label: string;
-  value: CravingCategory | null;
+  value: CravingCategory;
   fallbackImage?: string;
   icon: IconType;
 };
 
 const categories: readonly VisualCategory[] = [
-  { label: "All", value: null, icon: FaThLarge },
   { label: "Biryani", value: "Biryani", fallbackImage: biryaniImage, icon: FaUtensils },
   { label: "Tiffins", value: "Tiffins", fallbackImage: tiffinImage, icon: FaUtensils },
   { label: "Pickles", value: "Pickles", icon: FaPepperHot },
@@ -50,7 +48,7 @@ const categories: readonly VisualCategory[] = [
 interface HomeCategoryRailProps {
   selected: CravingCategory | null;
   images?: Partial<Record<CravingCategory, string>>;
-  onSelect: (category: CravingCategory | null) => void;
+  onSelect: (category: CravingCategory) => void;
 }
 
 export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCategoryRailProps) {
@@ -109,7 +107,7 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
         >
           {categories.map(({ label, value, fallbackImage, icon: Icon }) => {
             const active = selected === value;
-            const image = value ? images[value] || fallbackImage : undefined;
+            const image = images[value] || fallbackImage;
 
             return (
               <button

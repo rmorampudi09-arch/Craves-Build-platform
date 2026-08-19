@@ -11,6 +11,7 @@ import {
 
 import type { NearbyKitchen } from "@/lib/discovery-contract";
 import type { Dish } from "@/services/api/dishes";
+import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 interface HomeSearchOverlayProps {
   dishes: Dish[];
@@ -92,13 +93,13 @@ export function HomeSearchOverlay({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A] transition hover:scale-[1.03]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A] transition hover:scale-[1.03] hover:text-[#F62E18]"
             aria-label="Close search"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </button>
 
-          <label className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 focus-within:ring-2 focus-within:ring-[#F62E18]">
+          <label className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-all duration-200 hover:ring-2 hover:ring-[#F62E18]/40 hover:shadow-[0_10px_30px_rgba(246,46,24,0.16)] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_12px_34px_rgba(246,46,24,0.18)]">
             <Search className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
             <span className="sr-only">Search dishes or home chefs</span>
             <input
@@ -106,8 +107,10 @@ export function HomeSearchOverlay({
               value={searchTerm}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search dishes or home chefs"
-              className="w-full border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] outline-none placeholder:text-[#6B6B6B] focus:ring-0"
-              type="search"
+              className={`${styles.searchInput} w-full p-0 text-sm font-semibold text-[#1A1A1A] placeholder:text-[#6B6B6B]`}
+              style={{ border: 0, outline: "none", boxShadow: "none", background: "transparent" }}
+              type="text"
+              inputMode="search"
               autoComplete="off"
               aria-label="Search dishes or home chefs"
             />
@@ -179,7 +182,7 @@ export function HomeSearchOverlay({
                     key={kitchen.id}
                     to="/chef/$id"
                     params={{ id: kitchen.id }}
-                    className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 transition hover:border-[#F62E18] hover:shadow-[0_8px_24px_rgba(26,26,26,0.07)]"
+                    className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 transition hover:border-[#F62E18] hover:shadow-[0_8px_24px_rgba(246,46,24,0.09)]"
                   >
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
                       <ChefHat className="h-6 w-6" aria-hidden="true" />

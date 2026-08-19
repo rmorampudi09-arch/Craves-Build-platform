@@ -24,12 +24,12 @@ export const routeMeta = {
     const chef = getChef(params.id);
     return {
       meta: [
-        { title: chef ? `${chef.name} – Craves` : "Chef – Craves" },
+        { title: chef ? `${chef.name} – Craves` : "Home Kitchen – Craves" },
         {
           name: "description",
           content: chef
             ? `${chef.name} · Active home kitchen on Craves.`
-            : "Chef profile on Craves.",
+            : "Live home kitchen on Craves.",
         },
         { name: "robots", content: "noindex" },
       ],
@@ -110,24 +110,27 @@ function ChefProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-cream px-4 text-center text-sm text-muted-foreground">
-        Loading home kitchen from Craves…
+      <div className="flex min-h-screen items-center justify-center bg-white px-4 text-center">
+        <div role="status">
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-[#F1F3F5] border-t-[#F62E18]" />
+          <p className="mt-4 text-sm font-bold text-[#6B6B6B]">Loading this home kitchen…</p>
+        </div>
       </div>
     );
   }
 
   if (!chef) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-cream px-4 text-center">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-ink">
+      <div className="flex min-h-screen items-center justify-center bg-white px-4 text-center">
+        <div className="max-w-md rounded-[1.75rem] border border-[#E5E7EB] bg-white p-8">
+          <h1 className="font-display text-2xl font-black text-[#1A1A1A]">
             Home kitchen not found
           </h1>
-          {message && (
-            <p className="mt-3 text-sm text-muted-foreground">{message}</p>
-          )}
-          <button type="button" onClick={handleBack} className="btn-primary mt-6 inline-flex">
-            Back
+          <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
+            {message || "This kitchen is not currently available in the live Craves catalog."}
+          </p>
+          <button type="button" onClick={handleBack} className="mt-6 inline-flex min-h-11 items-center rounded-full bg-[#F62E18] px-5 text-sm font-black text-white">
+            Back to Craves
           </button>
         </div>
       </div>
@@ -137,14 +140,14 @@ function ChefProfilePage() {
   const dishes = getDishesByChef(chef.name);
 
   return (
-    <div className="min-h-screen bg-cream pb-10">
+    <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
       <ChefProfileHeader onBack={handleBack} />
-      <div className="border-b border-border bg-white">
-        <div className="mx-auto max-w-3xl px-4 py-3 md:px-6">
+      <div className="border-b border-[#E5E7EB] bg-white">
+        <div className="mx-auto max-w-5xl px-4 py-3 md:px-6">
           <PersistentCustomerServiceNav />
         </div>
       </div>
-      <main className="mx-auto max-w-3xl px-4 pt-6 md:px-6">
+      <main className="mx-auto max-w-5xl px-4 pt-7 md:px-6 md:pt-9">
         <ChefProfileHero chef={chef} />
         <ChefStatsRow chef={chef} />
         <ChefAboutSection chef={chef} />

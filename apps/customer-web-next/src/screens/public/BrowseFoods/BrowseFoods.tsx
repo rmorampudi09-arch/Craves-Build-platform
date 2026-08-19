@@ -36,6 +36,8 @@ import {
   clearHomeReturnState,
   readHomeReturnState,
   saveHomeReturnState,
+  type HomeDishSort,
+  type HomeFoodPreference,
 } from "@/lib/home-return-state";
 import {
   clearSession,
@@ -190,11 +192,30 @@ async function resolveLiveBrowsingLocation(
   }
 }
 
+function forceInstantWindowScroll(top: number): void {
+  const root = document.documentElement;
+  const body = document.body;
+  const previousRootBehavior = root.style.scrollBehavior;
+  const previousBodyBehavior = body.style.scrollBehavior;
+
+  root.style.scrollBehavior = "auto";
+  body.style.scrollBehavior = "auto";
+  window.scrollTo(0, top);
+
+  window.requestAnimationFrame(() => {
+    root.style.scrollBehavior = previousRootBehavior;
+    body.style.scrollBehavior = previousBodyBehavior;
+    window.history.scrollRestoration = "auto";
+  });
+}
+
 function BrowseFoodsPage() {
   const navigate = useNavigate();
   const [user, setUser] = useState<CravesUser | null>(null);
   const [address, setAddress] = useState<CravesAddress | null>(null);
   const [homeCategory, setHomeCategory] = useState<CravingCategory | null>(null);
+  const [dishSort, setDishSort] = useState<HomeDishSort>("recommended");
+  const [foodPreference, setFoodPreference] = useState<HomeFoodPreference>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
@@ -213,6 +234,8 @@ function BrowseFoodsPage() {
   ) => {
     if (resetFilters) {
       setHomeCategory(null);
+      setDishSort("recommended");
+      setFoodPreference("all");
       setSearchTerm("");
       setSearchOpen(false);
     }
@@ -279,27 +302,48 @@ function BrowseFoodsPage() {
     setHomeCategory(
       isCravingCategory(restored.homeCategory) ? restored.homeCategory : null,
     );
+    setDishSort(restored.dishSort);
+    setFoodPreference(restored.foodPreference);
     setSearchTerm(restored.searchTerm);
     setSearchOpen(restored.searchOpen);
 
     if (!restored.searchOpen) {
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          window.scrollTo({ top: restored.scrollY, behavior: "auto" });
+          forceInstantWindowScroll(restored.scrollY);
         });
       });
+    } else {
+      window.history.scrollRestoration = "auto";
     }
     clearHomeReturnState();
   }, []);
 
   const rememberHomeView = useCallback(() => {
+    window.history.scrollRestoration = "manual";
     saveHomeReturnState({
       scrollY: window.scrollY,
       searchTerm,
       searchOpen,
       homeCategory,
+      dishSort,
+      foodPreference,
     });
-  }, [homeCategory, searchOpen, searchTerm]);
+  }, [dishSort, foodPreference, homeCategory, searchOpen, searchTerm]);
+
+  const scrollToDishes = useCallback(() => {
+    const heading = document.getElementById("available-dishes-heading");
+    const section = heading?.closest("section");
+    if (!section) return;
+
+    const root = document.documentElement;
+    const previousBehavior = root.style.scrollBehavior;
+    root.style.scrollBehavior = "auto";
+    section.scrollIntoView({ behavior: "auto", block: "start" });
+    window.requestAnimationFrame(() => {
+      root.style.scrollBehavior = previousBehavior;
+    });
+  }, []);
 
   const handleDetailNavigationCapture = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target;
@@ -428,7 +472,7 @@ function BrowseFoodsPage() {
     const term = searchTerm.trim().toLocaleLowerCase("en-IN");
     const homeKeywords = homeCategory ? HOME_CATEGORY_KEYWORDS[homeCategory] : null;
 
-    return nearbyDishes.filter((dish) => {
+    const matchingDishes = nearbyDishes.filter((dish) => {
       const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
       const categoryMatches =
         !homeKeywords || homeKeywords.some((keyword) => searchable.includes(keyword));
@@ -438,9 +482,24 @@ function BrowseFoodsPage() {
         dish.chef.toLocaleLowerCase("en-IN").includes(term) ||
         dish.category.toLocaleLowerCase("en-IN").includes(term) ||
         dish.desc.toLocaleLowerCase("en-IN").includes(term);
-      return categoryMatches && searchMatches;
+      const foodTypeMatches =
+        foodPreference === "all" ||
+        (foodPreference === "veg" && dish.veg) ||
+        (foodPreference === "non-veg" && !dish.veg);
+      return categoryMatches && searchMatches && foodTypeMatches;
     });
-  }, [homeCategory, nearbyDishes, searchTerm]);
+
+    if (dishSort === "rating") {
+      return [...matchingDishes].sort((left, right) => right.rating - left.rating);
+    }
+    if (dishSort === "price-low-high") {
+      return [...matchingDishes].sort((left, right) => left.price - right.price);
+    }
+    if (dishSort === "price-high-low") {
+      return [...matchingDishes].sort((left, right) => right.price - left.price);
+    }
+    return matchingDishes;
+  }, [dishSort, foodPreference, homeCategory, nearbyDishes, searchTerm]);
 
   const handleLogout = async () => {
     await clearSession();
@@ -495,6 +554,7 @@ function BrowseFoodsPage() {
           onSelect={(nextCategory) => {
             setHomeCategory(nextCategory);
             setSearchTerm("");
+            window.requestAnimationFrame(scrollToDishes);
           }}
         />
 
@@ -519,6 +579,15 @@ function BrowseFoodsPage() {
           searchTerm={searchTerm}
           state={discoveryState}
           message={catalogMessage}
+          sort={dishSort}
+          foodPreference={foodPreference}
+          onSortChange={setDishSort}
+          onFoodPreferenceChange={setFoodPreference}
+          onRemoveFilters={() => {
+            setHomeCategory(null);
+            setDishSort("recommended");
+            setFoodPreference("all");
+          }}
           onRetry={() => void refreshDiscovery(address, false)}
           onManageAddress={() => navigate({ to: "/addresses" })}
         />

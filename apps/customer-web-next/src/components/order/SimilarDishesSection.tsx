@@ -3,40 +3,41 @@ import { Star } from "lucide-react";
 import { WishlistHeartButton } from "@/components/order/WishlistHeartButton";
 import type { Dish } from "@/services/api/dishes";
 
-/** "Similar Dishes" heading + "See All" link, then a horizontally-scrolling card rail. */
 export function SimilarDishesSection({ dishes }: { dishes: Dish[] }) {
   if (!dishes || dishes.length === 0) return null;
 
   return (
-    <section className="mt-6">
+    <section className="mt-7">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-bold text-ink">Similar Dishes</h2>
-        <button type="button" className="text-sm font-semibold text-primary">
+        <h2 className="font-display text-lg font-black text-[#1A1A1A]">Similar Dishes</h2>
+        <button type="button" className="text-sm font-black text-[#F62E18]">
           See All
         </button>
       </div>
-      <div className="mt-2 flex gap-3 overflow-x-auto pb-1">
-        {dishes.map((d) => (
+      <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
+        {dishes.map((dish) => (
           <Link
-            key={d.id}
+            key={dish.id}
             to="/dish/$id"
-            params={{ id: d.id }}
-            className="w-36 shrink-0 overflow-hidden rounded-2xl border border-border bg-card"
+            params={{ id: dish.id }}
+            className="w-40 shrink-0 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white transition hover:border-[#F62E18]/40"
           >
-            <div className="relative aspect-square">
-              <img src={d.img} alt={d.name} className="h-full w-full object-cover" />
+            <div className="relative aspect-square bg-[#F1F3F5]">
+              <img src={dish.img} alt={dish.name} className="h-full w-full object-cover" />
               <WishlistHeartButton
-                item={{ id: d.id, name: d.name, chef: d.chef, price: d.price, img: d.img }}
+                item={{ id: dish.id, name: dish.name, chef: dish.chef, price: dish.price, img: dish.img }}
                 className="absolute right-2 top-2"
               />
             </div>
-            <div className="p-2.5">
-              <p className="truncate text-sm font-semibold text-ink">{d.name}</p>
-              <div className="mt-1 flex items-center justify-between text-xs">
-                <span className="font-bold text-ink">₹{d.price}</span>
-                <span className="flex items-center gap-0.5 text-muted-foreground">
-                  <Star className="h-3 w-3 fill-primary text-primary" /> {d.rating}
-                </span>
+            <div className="p-3">
+              <p className="truncate text-sm font-black text-[#1A1A1A]">{dish.name}</p>
+              <div className="mt-1.5 flex items-center justify-between text-xs">
+                <span className="font-black text-[#1A1A1A]">₹{dish.price}</span>
+                {dish.rating > 0 ? (
+                  <span className="flex items-center gap-0.5 font-bold text-[#6B6B6B]">
+                    <Star className="h-3 w-3 fill-[#F62E18] text-[#F62E18]" aria-hidden="true" /> {dish.rating}
+                  </span>
+                ) : null}
               </div>
             </div>
           </Link>

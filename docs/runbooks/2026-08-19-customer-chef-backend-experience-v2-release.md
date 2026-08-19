@@ -1,6 +1,6 @@
 # Craves Customer + Home-Chef Backend Experience v2 — Production Release Runbook
 
-**Date:** 2026-08-19  
+**Date:** 2026-08-20  
 **Repository:** `rmorampudi09-arch/Craves-Build-platform`  
 **Release branch:** `chatgpt/backend-customer-chef-journey-20260819`  
 **Scope:** backend, PostgreSQL/Flyway, APIM, OpenAPI and Azure DevOps only. Web/mobile frontend remains unchanged.
@@ -10,6 +10,14 @@ The detailed engineering handover is:
 ```text
 docs/handover/2026-08-19-customer-chef-production-backend-master-handover.md
 ```
+
+Integration provider resilience/recovery supplement:
+
+```text
+docs/handover/2026-08-20-integration-provider-resilience-recovery-v1.md
+```
+
+> **2026-08-20 release supplement:** Integration Service now also contains finite default Spring `RestClient` timeouts, optional delivery-provider circuit/bulkhead isolation, provider resilience metrics, and audited Cashfree/delivery webhook dead-letter investigation/replay. `CRAVES_PROVIDER_RESILIENCE_ENABLED=false` remains the deployment default. Follow the supplement above for sandbox activation, failure-injection, RBAC, recovery and rollback steps. GitHub `Backend completion CI` was green for all seven Java services at source head `383532b0869b26d77980b032878943c7609649e7`; the required Azure DevOps release gate still remains to be run later.
 
 ---
 
@@ -35,11 +43,15 @@ Paged Notification inbox + unread count + read-all
 Customer/Chef Support Cases + support-admin workflow + durable outbox notifications
 Read-only chef earnings APIM exposure
 Normalized Integration/provider errors
+Finite default Integration Service RestClient timeouts
+Optional delivery-provider circuit/bulkhead isolation
+Audited Cashfree/delivery webhook dead-letter investigation/replay
+Provider resilience/recovery metrics
 APIM correlation/security fragments, JSON body guard and discovery abuse-ceiling tooling
 Production prerequisite, privacy activation and rollback pipelines
 ```
 
-No pricing, commission, cancellation/refund, delivery-radius, GST, FSSAI/KYC, ratings/reviews, substitutions, one-time scheduled-order policy or personalization rules are introduced.
+No pricing, commission, cancellation/refund, delivery-radius, GST, FSSAI/KYC, ratings/reviews, substitutions, one-time scheduled-order policy, delivery-provider priority or personalization rules are introduced.
 
 ---
 
@@ -461,7 +473,13 @@ Run:
 azure-pipelines-integration-service.yml
 ```
 
-Verify:
+Verify first with:
+
+```text
+CRAVES_PROVIDER_RESILIENCE_ENABLED=false
+```
+
+Required initial smoke:
 
 ```text
 health/readiness
@@ -469,6 +487,9 @@ existing provider internal/admin routes
 provider failures return normalized public error shape
 provider diagnostics remain in correlated server logs
 existing delivery-provider settings unchanged
+Cashfree create/verify remains functional
+Cashfree durable webhook worker remains functional
+delivery command/reconciliation/webhook/tracking workers remain functional
 ```
 
 Then configure read-only chef earnings:
@@ -484,6 +505,14 @@ bash scripts/apim/rollback-chef-financial-v1-apim.sh
 ```
 
 No earning/settlement/commission calculations are changed by this APIM exposure.
+
+Reliability/recovery validation, sandbox activation and fast rollback are documented in:
+
+```text
+docs/handover/2026-08-20-integration-provider-resilience-recovery-v1.md
+```
+
+Do not enable the provider circuit in production until the sandbox failure-injection evidence has been reviewed.
 
 ---
 
@@ -587,6 +616,17 @@ support public-reply delivery
 unread-count/page latency
 ```
 
+Integration:
+
+```text
+Cashfree/delivery webhook DEAD_LETTER counts
+WAITING_FOR_PROVIDER age
+delivery command DEAD_LETTER count
+provider call transient-failure rate
+provider circuit state/rejections when enabled
+recovery replay audit events
+```
+
 APIM:
 
 ```text
@@ -615,6 +655,12 @@ scripts/apim/rollback-chef-financial-v1-apim.sh
 scripts/apim/rollback-chef-menu-bulk-availability-v1-apim.sh
 scripts/apim/rollback-customer-cart-preflight-v1-apim.sh
 scripts/apim/rollback-apim-platform-baseline.sh
+```
+
+Provider resilience fast rollback:
+
+```text
+CRAVES_PROVIDER_RESILIENCE_ENABLED=false
 ```
 
 Public privacy rollback:
@@ -652,13 +698,25 @@ as a Key Vault-backed secretRef pointing to the same approved secret.
 
 Do not create new Firebase, Cashfree, delivery-provider or database credentials for this release.
 
+### Provider resilience activation is deferred
+
+The first Integration Service deployment should leave:
+
+```text
+CRAVES_PROVIDER_RESILIENCE_ENABLED=false
+```
+
+Later sandbox activation uses the same Container App environment-variable mechanism. No new secret is needed.
+
 ### No new paid Azure resource required
 
-Redis cache remains disabled by default. APIM scripts only configure the existing APIM service.
+Redis cache remains disabled by default. APIM scripts only configure the existing APIM service. Provider resilience/recovery itself provisions no Azure resource.
+
+Azure Monitor alerts for circuit-open duration, webhook dead letters, delivery command dead letters and aged `WAITING_FOR_PROVIDER` are recommended but deliberately not auto-created because alert rules can be billing-sensitive and thresholds require operations evidence.
 
 ### No frontend/store action
 
-No DNS, Apple/Google signing, mobile store or frontend build action is introduced here.
+No DNS, Apple/Google signing, mobile store or customer/chef frontend build action is introduced here.
 
 ---
 
@@ -667,38 +725,39 @@ No DNS, Apple/Google signing, mobile store or frontend build action is introduce
 Engineering must not implement these until approved contracts exist:
 
 ```text
-ratings/reviews eligibility, moderation and aggregation
-one-time scheduled-order window/capacity/cutoff/cancellation policy
-chef Need More Time semantics
-item substitution consent and price/refund handling
-personalized ranking and consent
-semantic/AI/voice ordering behavior
-refund/cancellation policy changes
-pricing/commission/tax/GST changes
+ratings/review eligibility and moderation
+cancellation/refund windows and fees
+one-time scheduled-order cutoff/payment semantics
+substitution workflow and price-difference consent
+promotions/discount funding and stacking
+commission/tax/GST rules
 delivery radius/fee rules
 FSSAI/KYC policy
+delivery-provider commercial priority
+personalization objective/privacy model
 ```
-
-The existing backend now provides the engineering foundation for later frontend/product work without fabricating these rules.
 
 ---
 
-## 19. Definition of release completion
-
-This release may be called **deployed and active** only when all of the following are true:
+## 19. Reliability follow-on items
 
 ```text
-current-head repository CI green
-unified Azure DevOps CI green
-production prerequisite pipeline green
-all seven affected service revisions healthy
-required Flyway migrations complete
-APIM operations configured and smoke-tested
-Catalog privacy activation completed after Order migration
-customer journey smoke passed
-chef journey smoke passed
-observability checked
-production evidence captured
+production Azure Monitor thresholds/alerts
+OpenTelemetry trace export across APIM -> services -> Service Bus/provider calls
+admin-console UI over the audited recovery backend
+duplicate-create-safe contract before delivery-command replay
+payment mutation reconciliation improvements before payment-level circuit/fallback behavior
 ```
 
-Until then, use the term **implemented / ready to run pipelines**, not “production deployed”.
+---
+
+## 20. Status language
+
+```text
+Implemented in source = code exists on release branch
+Validated = relevant Maven/CI gate actually passed
+Deployed = Azure revision promoted and healthy
+Activated = staged runtime flag intentionally enabled in target environment
+```
+
+GitHub backend CI has validated the source at the cited head. Azure DevOps production CI/deployment and provider-resilience activation remain later execution steps.

@@ -1,6 +1,7 @@
 package in.craves.catalog.web;
 
 import in.craves.catalog.security.CravesPrincipal;
+import in.craves.catalog.service.BulkMenuAvailabilityService;
 import in.craves.catalog.service.CatalogService;
 import in.craves.catalog.service.DiscoveryCacheService;
 import in.craves.catalog.web.ApiDtos.AvailabilityRequest;
@@ -9,6 +10,8 @@ import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemImageResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemRequest;
 import in.craves.catalog.web.ApiDtos.MenuItemResponse;
+import in.craves.catalog.web.BulkMenuAvailabilityDtos.BulkAvailabilityRequest;
+import in.craves.catalog.web.BulkMenuAvailabilityDtos.BulkAvailabilityResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -28,10 +31,16 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1/kitchens/me")
 public class KitchenController {
     private final CatalogService catalogService;
+    private final BulkMenuAvailabilityService bulkMenuAvailabilityService;
     private final DiscoveryCacheService discoveryCacheService;
 
-    public KitchenController(CatalogService catalogService, DiscoveryCacheService discoveryCacheService) {
+    public KitchenController(
+        CatalogService catalogService,
+        BulkMenuAvailabilityService bulkMenuAvailabilityService,
+        DiscoveryCacheService discoveryCacheService
+    ) {
         this.catalogService = catalogService;
+        this.bulkMenuAvailabilityService = bulkMenuAvailabilityService;
         this.discoveryCacheService = discoveryCacheService;
     }
 
@@ -84,6 +93,18 @@ public class KitchenController {
     ) {
         MenuItemResponse response = catalogService.updateAvailability(principal, menuItemId, request);
         discoveryCacheService.invalidateAllDiscovery();
+        return response;
+    }
+
+    @PatchMapping("/menu-items/availability")
+    public BulkAvailabilityResponse updateAvailabilityBulk(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @Valid @RequestBody BulkAvailabilityRequest request
+    ) {
+        BulkAvailabilityResponse response = bulkMenuAvailabilityService.update(principal, request);
+        if (response.changedCount() > 0) {
+            discoveryCacheService.invalidateAllDiscovery();
+        }
         return response;
     }
 

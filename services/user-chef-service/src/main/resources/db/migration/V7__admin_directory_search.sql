@@ -5,7 +5,13 @@ CREATE INDEX IF NOT EXISTS ix_customer_profile_email_lower
     ON customer_profile (lower(email))
     WHERE email IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS ix_customer_profile_name_lower
+CREATE INDEX IF NOT EXISTS ix_customer_profile_first_name_lower
+    ON customer_profile (lower(first_name));
+
+CREATE INDEX IF NOT EXISTS ix_customer_profile_last_name_lower
+    ON customer_profile (lower(last_name));
+
+CREATE INDEX IF NOT EXISTS ix_customer_profile_full_name_lower
     ON customer_profile (lower(first_name), lower(last_name));
 
 CREATE INDEX IF NOT EXISTS ix_chef_application_phone
@@ -14,7 +20,13 @@ CREATE INDEX IF NOT EXISTS ix_chef_application_phone
 CREATE INDEX IF NOT EXISTS ix_chef_application_email_lower
     ON chef_application (lower(email));
 
-CREATE INDEX IF NOT EXISTS ix_chef_application_name_lower
+CREATE INDEX IF NOT EXISTS ix_chef_application_first_name_lower
+    ON chef_application (lower(first_name));
+
+CREATE INDEX IF NOT EXISTS ix_chef_application_last_name_lower
+    ON chef_application (lower(last_name));
+
+CREATE INDEX IF NOT EXISTS ix_chef_application_full_name_lower
     ON chef_application (lower(first_name), lower(last_name));
 
 CREATE TABLE IF NOT EXISTS admin_directory_lookup_audit (

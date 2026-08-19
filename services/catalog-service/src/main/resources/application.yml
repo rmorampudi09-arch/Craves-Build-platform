@@ -41,6 +41,8 @@ craves:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
+  internal:
+    access-value: ${CRAVES_INTERNAL_SERVICE_SECRET:}
   storage:
     endpoint-value: ${CRAVES_STORAGE_ENDPOINT_VALUE:}
     media-container: ${CRAVES_STORAGE_MEDIA_CONTAINER:media}

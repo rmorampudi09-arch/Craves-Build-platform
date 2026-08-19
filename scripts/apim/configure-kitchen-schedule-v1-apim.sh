@@ -54,7 +54,9 @@ resolve_api(){
 reject_backend_id_policy(){
   local url="$1" label="$2" value
   value="$(az rest --method get --url "$url" --query properties.value -o tsv 2>/dev/null || true)"
-  [[ "$value" != *'set-backend-service backend-id='* ]] || fail "$label contains inherited backend-id routing"
+  if grep -Eqi '<set-backend-service[^>]+backend-id=' <<<"$value"; then
+    fail "$label contains inherited backend-id routing"
+  fi
 }
 
 CHEF_API_ID="$(resolve_api "$CHEF_API_PATH" "$CHEF_API_ID_DEFAULT" "Craves Chef Kitchen API")"

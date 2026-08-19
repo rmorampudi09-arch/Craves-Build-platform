@@ -52,7 +52,7 @@ Adding a future provider requires either:
 Flyway:
 
 ```text
-services/integration-service/src/main/resources/db/migration/V111__delivery_telemetry_projection.sql
+services/integration-service/src/main/resources/db/migration/V112__delivery_telemetry_projection.sql
 ```
 
 `delivery_schema.delivery_job` stores only the latest telemetry snapshot:

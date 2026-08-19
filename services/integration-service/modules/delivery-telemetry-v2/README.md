@@ -1,169 +1,236 @@
-# Integration Service — Delivery Telemetry v2
+# Integration Service — Multi-Provider Delivery Capability & Telemetry
 
 ## Purpose
 
-Delivery Telemetry v2 enriches the existing provider-neutral delivery lifecycle with the latest useful operational telemetry without creating a second delivery state machine.
+This module makes every Craves delivery provider a peer behind the provider-neutral Integration Service boundary. Borzo is not the architecture template and no provider-specific feature is silently discarded merely because another provider does not expose it.
 
-The pre-existing Craves delivery path already provides:
+The existing `DeliveryProviderAdapter` remains the common transaction contract for quote/create/cancel/track. This module adds a separate capability model plus provider-specific telemetry extractors so Craves can use the strongest verified feature set of the provider that actually fulfils an order.
 
-- durable provider webhook inbox processing;
-- normalized delivery statuses;
-- duplicate/out-of-order/terminal-state protection;
-- tracking reconciliation;
-- transactional delivery status outbox publication;
-- Order-owned customer delivery projection.
+It does **not** encode provider priority, commercial fallback, delivery fees or commission rules.
 
-This module preserves those controls and adds only telemetry that the current status path was discarding.
+## Providers represented
 
-## Scope
-
-The module can project:
-
-- latest courier latitude/longitude when a provider supplies trusted coordinates;
-- provider-supplied pickup arrival window;
-- provider-supplied drop-off arrival window;
-- telemetry observation timestamp;
-- telemetry source.
-
-It does not calculate a proprietary Craves ETA, store a courier GPS trail, expose courier phone/name/photo, persist proof-image URLs, change delivery-provider selection, call a provider create operation, change pricing, or change the commercial order lifecycle.
-
-## Provider support
-
-### Borzo
-
-`BorzoDeliveryTelemetryExtractor` consumes only fields already returned through the existing Borzo tracking response:
-
-- courier latitude/longitude from `TrackingSnapshot.courier`;
-- pickup/drop-off point arrival timestamps from the provider order payload.
-
-Malformed or missing arrival timestamps are ignored instead of breaking delivery tracking.
-
-### Shiprocket and other adapters
-
-The generic extractor can consume a provider adapter's canonical `TrackingSnapshot.courier` coordinates if that adapter supplies them. The current Shiprocket adapter does not populate a courier object, so no location is invented for Shiprocket.
-
-Adding a future provider requires either:
-
-- populating canonical `TrackingSnapshot.courier`; or
-- implementing `DeliveryTelemetryExtractor` for provider-specific documented ETA fields.
-
-## Storage model
-
-Flyway:
+The capability registry represents:
 
 ```text
-services/integration-service/src/main/resources/db/migration/V112__delivery_telemetry_projection.sql
+borzo
+shiprocket
+shadowfax
+porter
+delhivery
 ```
 
-`delivery_schema.delivery_job` stores only the latest telemetry snapshot:
+Source:
+
+```text
+services/integration-service/src/main/java/in/craves/integration/delivery/provider/DeliveryProviderCapability.java
+services/integration-service/src/main/java/in/craves/integration/delivery/provider/DeliveryProviderCapabilityRegistry.java
+```
+
+The admin-only operational read model is:
+
+```http
+GET /api/v1/admin/operations/delivery-provider-contracts/capabilities
+```
+
+The response distinguishes:
+
+```text
+AVAILABLE_NOW
+SUPPORTED_NOT_WIRED
+PRIVATE_CONTRACT_REQUIRED
+NOT_VERIFIED
+NOT_SUPPORTED
+```
+
+That distinction is deliberate. A public provider feature is not considered executable in Craves until the exact partner API/auth/webhook contract used by Craves is verified.
+
+## Capability vocabulary
+
+The current provider-neutral vocabulary includes:
+
+```text
+SERVICEABILITY
+QUOTE
+QUOTE_ETA
+CREATE_DELIVERY
+CANCEL_DELIVERY
+TRACK
+TRACKING_LINK
+WEBHOOK_STATUS
+LIVE_COURIER_LOCATION
+PROVIDER_ETA
+DELIVERY_VERIFICATION
+PROOF_OF_DELIVERY
+NDR_ACTION
+RETURN_TRACKING
+CREATE_RECONCILIATION
+MULTI_STOP
+```
+
+This list can grow without changing Order Service or leaking provider response schemas outside Integration Service.
+
+## Telemetry data model
+
+Flyway migrations:
+
+```text
+V112__delivery_telemetry_projection.sql
+V113__delivery_provider_exact_eta.sql
+```
+
+Integration stores only the latest useful snapshot on `delivery_schema.delivery_job`:
 
 ```text
 courier_latitude
 courier_longitude
 courier_location_observed_at
+estimated_pickup_at
 estimated_pickup_start_at
 estimated_pickup_end_at
+estimated_dropoff_at
 estimated_dropoff_start_at
 estimated_dropoff_end_at
 telemetry_observed_at
 telemetry_source
 ```
 
-This is deliberately not a GPS-history table. Raw provider status evidence remains in the existing webhook/event audit path.
+Exact provider ETA and ETA windows are intentionally separate. Craves does not convert a single exact ETA into a fake zero-width window.
 
-## Runtime flow
+There is deliberately no raw courier GPS history table.
+
+## Borzo
+
+`BorzoDeliveryTelemetryExtractor` supports both tracking snapshots and authenticated/normalized webhook payloads.
+
+It can retain:
 
 ```text
-existing tracking reconciliation worker
-  -> provider track()
-  -> existing normalized status processing
-  -> DeliveryTelemetryExtractionService
-  -> provider-specific/generic telemetry extractor
-  -> changed/stale/terminal checks
-  -> latest telemetry projection on delivery_job
-  -> existing delivery outbox
-  -> DELIVERY_TELEMETRY_UPDATED v1.0
+courier latitude/longitude
+provider exact pickup/drop-off ETA
+provider arrival start/end windows
 ```
 
-The existing normalized status event remains authoritative for status transitions.
+Coordinates are validated and `(0,0)` is discarded.
+
+Provider proof/check-in/multi-stop data is represented by the capability matrix but is not exposed as a Craves customer action until the product/privacy contract for that capability is approved.
+
+## Shiprocket
+
+`ShiprocketDeliveryTelemetryExtractor` is a first-class provider-specific extractor.
+
+It can retain:
+
+```text
+latest valid courier GPS point from provider tracking scans
+scan observation timestamp
+provider ETD as exact drop-off ETA
+tracking or webhook source
+```
+
+The extractor intentionally does **not** treat arbitrary top-level latitude/longitude values as courier position. Only GPS coordinates found in trusted tracking `scans` are eligible. This prevents a destination coordinate from being misclassified as the rider's location.
+
+Shiprocket NDR/reattempt/RTO and return tracking are represented as supported provider capabilities but are not automatically triggered. Choosing a reattempt versus return changes Craves order/customer policy and therefore remains an explicit product/operations decision.
+
+## Shadowfax
+
+The public feature surface includes API-based intake, live tracking/customer updates and OTP/POD-style delivery completion. The exact Craves partner transaction/auth/webhook contract is not present in the authoritative repository documentation, so executable calls remain `PRIVATE_CONTRACT_REQUIRED` rather than guessed.
+
+## Porter
+
+The public feature surface includes quote/serviceability, tracking API, webhooks, provider tracking link/live driver map and optional delivery-code proof. The API also publicly states one pickup + one drop for API orders. Exact Craves credentials and partner contract remain gated, so Craves keeps these operations fail-closed until verified.
+
+## Delhivery Direct Intracity
+
+The product is represented in the provider catalogue and Hyderabad intracity availability is tracked as an operational prerequisite. Public product documentation exposes booking/tracking concepts and multi-stop semantics, but the exact executable Direct Intracity API contract used by Craves is not in the repository. Runtime calls therefore remain fail-closed until the partner contract is verified.
+
+## Webhook telemetry semantics
+
+Provider telemetry is independent of normalized status changes.
+
+Example:
+
+```text
+IN_TRANSIT at 10:01 with rider GPS A
+IN_TRANSIT at 10:02 with rider GPS B
+```
+
+The second callback does not need another `DELIVERY_STATUS_CHANGED` event, but it may legitimately produce `DELIVERY_TELEMETRY_UPDATED`.
+
+Safety rule:
+
+```text
+new status transition -> status event + eligible telemetry
+newer same normalized state -> eligible telemetry only
+stale/equal callback -> no telemetry
+unknown callback -> no telemetry
+terminal-protected regression -> no telemetry
+```
+
+This prevents a late callback from resurrecting live location after delivery has already become terminal.
 
 ## Event contract
-
-Schema:
 
 ```text
 contracts/events/delivery-telemetry-updated-v1.schema.json
 ```
 
-Event type:
+Producer version:
 
 ```text
-DELIVERY_TELEMETRY_UPDATED
+DELIVERY_TELEMETRY_UPDATED 1.1
 ```
 
-The event contains only provider-neutral telemetry fields needed by Order Service. It does not include raw provider payloads, courier phone/name/photo, customer address, chef home address, or provider credentials.
+Order Service accepts historical `1.0` and current `1.1` events.
 
-## Noise and scale controls
+The provider-neutral event can include exact ETA fields plus ETA windows, but never includes raw provider payloads, courier phone/name/photo, chef/customer addresses or credentials.
 
-A telemetry event is not published when:
+## Scale/noise controls
 
-- the delivery is terminal;
-- the provider supplies no useful telemetry;
-- the observation is stale;
-- the latest coordinates/arrival windows did not materially change.
+Telemetry is not published when:
 
-This prevents the domain-event topic and Order database from becoming an unbounded raw GPS feed.
+```text
+delivery is terminal
+provider supplies no useful telemetry
+telemetry is stale
+data did not materially change
+```
+
+This keeps the domain-event stream proportional to useful state changes instead of becoming a raw GPS firehose.
 
 ## Metrics
-
-Integration emits:
 
 ```text
 craves.integration.delivery.telemetry.capture
 ```
 
-Low-cardinality tags:
+Low-cardinality tags only:
 
 ```text
 provider
 outcome
 ```
 
-Expected outcomes include:
-
-```text
-published
-terminal_state
-no_provider_telemetry
-stale_telemetry
-no_telemetry_change
-```
-
 ## Tests
 
-Relevant tests include:
-
 ```text
+services/integration-service/src/test/java/in/craves/integration/delivery/provider/DeliveryProviderCapabilityRegistryTest.java
 services/integration-service/src/test/java/in/craves/integration/delivery/borzo/BorzoDeliveryTelemetryExtractorTest.java
+services/integration-service/src/test/java/in/craves/integration/delivery/shiprocket/ShiprocketDeliveryTelemetryExtractorTest.java
 services/integration-service/src/test/java/in/craves/integration/delivery/telemetry/DeliveryTelemetryPublisherServiceTest.java
+services/integration-service/src/test/java/in/craves/integration/delivery/status/DeliveryStatusUpdateServiceTest.java
 services/integration-service/src/test/java/in/craves/integration/delivery/status/DeliveryTrackingReconciliationWorkerTest.java
 ```
 
-Local verification:
+Local validation:
 
 ```bash
 cd services/integration-service
 mvn -B -ntp clean verify
 ```
 
-## Activation
+## Deployment status
 
-No new Integration feature flag is required beyond the existing controlled tracking reconciliation path. Telemetry is generated only when the existing tracking worker actually obtains a tracking snapshot.
+Source implementation only. Azure deployment, Service Bus filter activation, provider activation and exact live-location exposure are intentionally deferred until the complete backend module set is finished.
 
-Do not enable tracking reconciliation merely to enable telemetry. Existing delivery/provider activation gates remain authoritative.
-
-## Deployment safety
-
-This module does not create a new Service Bus topic/subscription and does not require a new Azure role assignment. Order Service reuses its existing delivery-status subscription after the guarded SQL filter is expanded to include `DELIVERY_TELEMETRY_UPDATED`.
-
-No new Azure paid resource is required.
+No new Azure paid resource is required by this module.

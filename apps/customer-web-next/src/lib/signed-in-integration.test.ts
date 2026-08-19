@@ -36,10 +36,12 @@ test("authentication asks for customer or chef mode", () => {
   assert.match(contents, /onAuthenticated\?\.\(user, accountMode\)/);
 });
 
-test("signed-in home loads live discovery and opens chef details without losing home context", () => {
+test("signed-in home loads live discovery and opens customer kitchen details without losing home context", () => {
   const contents = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
   const search = source("../components/home/HomeSearchOverlay.tsx");
   const returnState = source("./home-return-state.ts");
+  const signOut = source("../components/home/CustomerSignOutDialog.tsx");
+  const kitchensService = source("../services/api/kitchens.ts");
 
   assert.match(contents, /loadSelectedAddress\(\)/);
   assert.match(contents, /loadCart\(\)/);
@@ -53,19 +55,29 @@ test("signed-in home loads live discovery and opens chef details without losing 
   assert.match(contents, /<KitchensGrid/);
   assert.match(contents, /<DishesGrid/);
   assert.match(contents, /<HomeSearchOverlay/);
+  assert.match(contents, /<CustomerSignOutDialog/);
   assert.match(contents, /rememberHomeView\(\)/);
-  assert.match(contents, /to: "\/chef\/\$id"/);
+  assert.match(contents, /to: "\/kitchen\/\$id"/);
+  assert.match(contents, /getSession\(\)/);
+  assert.match(contents, /getAddress\(\)/);
+  assert.match(contents, /allDishes\(\)/);
+  assert.match(contents, /allKitchens\(\)/);
+  assert.match(contents, /restoreHomeView\(\)/);
   assert.doesNotMatch(contents, /loadKitchenMenu\(/);
   assert.doesNotMatch(contents, /selectedKitchen \?/);
   assert.doesNotMatch(contents, /17\.4483|78\.3915/);
 
   assert.match(search, /to="\/dish\/\$id"/);
-  assert.match(search, /to="\/chef\/\$id"/);
+  assert.match(search, /to="\/kitchen\/\$id"/);
   assert.match(search, /fixed inset-0/);
   assert.match(returnState, /window\.sessionStorage/);
   assert.match(returnState, /scrollY/);
   assert.match(returnState, /searchTerm/);
   assert.match(returnState, /homeCategory/);
+  assert.match(signOut, /role="dialog"/);
+  assert.match(signOut, /Sign out of Craves\?/);
+  assert.match(signOut, /Stay signed in/);
+  assert.match(kitchensService, /export function allKitchens\(\)/);
 });
 
 test("profile exposes backend chef application status", () => {
@@ -102,19 +114,27 @@ test("real backend chefs remain available in production", () => {
   assert.doesNotMatch(contents, /reviewPool|LOCATIONS|NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK/);
 });
 
-test("dish and chef detail pages recover live data and return to saved home context", () => {
+test("dish and customer kitchen detail pages recover live data and return to saved home context", () => {
   const dishPage = source("../screens/public/FoodDetails/FoodDetails.tsx");
   const dishService = source("../services/api/dishes.ts");
-  const chef = source("../screens/public/ChefProfile/ChefProfile.tsx");
+  const kitchenPage = source("../screens/public/ChefProfile/ChefProfile.tsx");
+  const customerKitchenRoute = source("../app/kitchen/[id]/page.tsx");
+  const legacyChefRoute = source("../app/chef/[id]/page.tsx");
 
   assert.match(dishPage, /loadDish\(id\)/);
+  assert.match(dishPage, /const cachedDish = getDish\(id\)/);
   assert.match(dishPage, /hasHomeReturnState\(\)/);
   assert.match(dishPage, /window\.history\.back\(\)/);
   assert.match(dishService, /\/api\/catalog\/menu-items/);
-  assert.match(chef, /loadSelectedAddress\(\)/);
-  assert.match(chef, /discoverDishes\(address\.lat, address\.lng\)/);
-  assert.match(chef, /hasHomeReturnState\(\)/);
-  assert.match(chef, /window\.history\.back\(\)/);
+  assert.match(dishService, /const loadedIds = new Set/);
+  assert.match(kitchenPage, /getRouteApi\("\/kitchen\/\$id"\)/);
+  assert.match(kitchenPage, /loadSelectedAddress\(\)/);
+  assert.match(kitchenPage, /discoverDishes\(address\.lat, address\.lng\)/);
+  assert.match(kitchenPage, /hasHomeReturnState\(\)/);
+  assert.match(kitchenPage, /window\.history\.back\(\)/);
+  assert.match(customerKitchenRoute, /ChefProfilePage/);
+  assert.doesNotMatch(customerKitchenRoute, /ChefAccessBoundary|ChefWorkspaceNavigation/);
+  assert.match(legacyChefRoute, /redirect\(`\/kitchen\/\$\{encodeURIComponent\(id\)\}`\)/);
 });
 
 test("every home-chef call to action opens the live chef registration flow", () => {

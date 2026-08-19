@@ -31,8 +31,10 @@ public final class DeliveryTelemetryModels {
         BigDecimal courierLatitude,
         BigDecimal courierLongitude,
         Instant locationObservedAt,
+        Instant estimatedPickupAt,
         Instant estimatedPickupStartAt,
         Instant estimatedPickupEndAt,
+        Instant estimatedDropoffAt,
         Instant estimatedDropoffStartAt,
         Instant estimatedDropoffEndAt,
         Instant observedAt

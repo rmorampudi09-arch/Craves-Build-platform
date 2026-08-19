@@ -29,20 +29,45 @@ No Support microservice exists in the approved architecture/deployment inventory
 - Operation-only rollback script.
 - Cursor, access-guard and requester-redaction tests.
 
+## Durable notification implementation
+
+The support service writes the support mutation and its `notification_outbox` row in the same Spring database transaction.
+
+Outbox events are created when:
+
+```text
+SUPPORT_ADMIN or PLATFORM_ADMIN posts a public reply
+SUPPORT_ADMIN or PLATFORM_ADMIN changes support-case status
+```
+
+Internal notes do not create requester notifications.
+
+Event types:
+
+```text
+SUPPORT_CASE_REPLY
+SUPPORT_CASE_STATUS_CHANGED
+```
+
+The event key contains the immutable support-message or status-history UUID and remains idempotent under the existing unique `notification_outbox.event_key` constraint.
+
+The payload contains only `caseId`, `caseNumber`, and `status`; internal support notes are not copied into requester notifications.
+
 ## Production deployment sequence
 
 1. Run `mvn -B -ntp clean verify` in `services/user-chef-service`.
-2. Validate Flyway V1-V7 and confirm V2 `notification_outbox` exists before V7 support triggers.
-3. Deploy User-Chef via `azure-pipelines-user-chef-service.yml` using the established service connection.
-4. Confirm the new Container App revision is Ready/Healthy and runtime settings are preserved.
-5. Create one test customer support case through the backend and confirm ownership isolation.
-6. Use SUPPORT_ADMIN to post a public reply; confirm one `notification_outbox` row is created.
-7. Post an internal note; confirm no requester outbox row is created.
-8. Change status; confirm status history and outbox event.
-9. Configure APIM with `scripts/apim/configure-support-cases-v1-apim.sh`.
-10. Verify requester and admin routes reject requests without Bearer authorization.
-11. Verify a CUSTOMER cannot use `/api/v1/admin/support/cases` even with a valid Craves JWT.
-12. Roll back only APIM operations with `scripts/apim/rollback-support-cases-v1-apim.sh` if gateway exposure must be withdrawn.
+2. Validate Flyway V1-V7 and confirm the existing V2 `notification_outbox` table is present.
+3. Verify the existing User-Chef notification outbox dispatcher configuration remains enabled for production delivery.
+4. Deploy User-Chef via `azure-pipelines-user-chef-service.yml` using the established service connection.
+5. Confirm the new Container App revision is Ready/Healthy and runtime settings are preserved.
+6. Create one test customer support case through the backend and confirm ownership isolation.
+7. Use SUPPORT_ADMIN to post a public reply; confirm one PENDING `notification_outbox` row is created and dispatched.
+8. Post an internal note; confirm no requester outbox row is created.
+9. Change status; confirm status history plus a status-change outbox event.
+10. Configure APIM with `scripts/apim/configure-support-cases-v1-apim.sh`.
+11. Verify requester and admin routes reject requests without Bearer authorization.
+12. Verify a CUSTOMER cannot use `/api/v1/admin/support/cases` even with a valid Craves JWT.
+13. Roll back only APIM operations with `scripts/apim/rollback-support-cases-v1-apim.sh` if gateway exposure must be withdrawn.
 
 ## Security boundary
 
@@ -51,6 +76,28 @@ No Support microservice exists in the approved architecture/deployment inventory
 ## Azure/manual impact
 
 No new Azure resource or secret is required. No Firebase, Cashfree, DNS, mobile-store, signing, or billing action is introduced. The remaining external actions are the normal User-Chef Azure DevOps pipeline execution and APIM configuration because this ChatGPT session does not have an Azure DevOps execution connector.
+
+## Production smoke matrix
+
+```text
+CUSTOMER create/list/get/message own case
+CHEF create/list/get/message own case
+dual-role contextRole ownership enforcement
+requester A cannot access requester B case
+requester cannot use admin endpoints
+SUPPORT_ADMIN list/get/public reply/internal note/status/assign-to-me
+PLATFORM_ADMIN same workflow
+internal note hidden from requester
+support agent UUID hidden from requester
+assigned support agent UUID hidden from requester
+closed case rejects new messages
+public reply -> durable notification outbox event
+internal note -> no requester notification
+status change -> durable notification outbox event
+cursor remains stable under concurrent case updates
+APIM missing Authorization -> 401
+APIM response -> no-store
+```
 
 ## Product decisions not invented
 

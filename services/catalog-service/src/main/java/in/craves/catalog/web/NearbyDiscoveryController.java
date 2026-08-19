@@ -8,7 +8,9 @@ import in.craves.catalog.service.NearbyDiscoveryService;
 import in.craves.catalog.web.ApiDtos.FoodType;
 import in.craves.catalog.web.ApiDtos.SpiceLevel;
 import in.craves.catalog.web.DiscoveryDtos.NearbyKitchenDiscoveryResponse;
+import in.craves.catalog.web.DiscoveryDtos.NearbyKitchenSummaryResponse;
 import in.craves.catalog.web.DiscoveryDtos.NearbyMenuItemDiscoveryResponse;
+import in.craves.catalog.web.DiscoveryDtos.NearbyMenuItemSummaryResponse;
 import java.math.BigDecimal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -46,13 +48,7 @@ public class NearbyDiscoveryController {
         @RequestParam(defaultValue = "20") int size
     ) {
         DiscoveryCriteria criteria = new DiscoveryCriteria(
-            query,
-            category,
-            foodType,
-            minPrice,
-            maxPrice,
-            maxPreparationTimeMinutes,
-            spiceLevel
+            query, category, foodType, minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel
         );
         String cacheKey = key(
             "kitchens", latitude, longitude, radiusMeters, query, category, foodType,
@@ -61,9 +57,9 @@ public class NearbyDiscoveryController {
         return discoveryCacheService.getOrLoad(
             cacheKey,
             NearbyKitchenDiscoveryResponse.class,
-            () -> nearbyDiscoveryService.discoverKitchens(
+            () -> sanitize(nearbyDiscoveryService.discoverKitchens(
                 latitude, longitude, radiusMeters, criteria, sort, page, size
-            )
+            ))
         );
     }
 
@@ -84,13 +80,7 @@ public class NearbyDiscoveryController {
         @RequestParam(defaultValue = "20") int size
     ) {
         DiscoveryCriteria criteria = new DiscoveryCriteria(
-            query,
-            category,
-            foodType,
-            minPrice,
-            maxPrice,
-            maxPreparationTimeMinutes,
-            spiceLevel
+            query, category, foodType, minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel
         );
         String cacheKey = key(
             "menu-items", latitude, longitude, radiusMeters, query, category, foodType,
@@ -99,9 +89,64 @@ public class NearbyDiscoveryController {
         return discoveryCacheService.getOrLoad(
             cacheKey,
             NearbyMenuItemDiscoveryResponse.class,
-            () -> nearbyDiscoveryService.discoverMenuItems(
+            () -> sanitize(nearbyDiscoveryService.discoverMenuItems(
                 latitude, longitude, radiusMeters, criteria, sort, page, size
-            )
+            ))
+        );
+    }
+
+    private static NearbyKitchenDiscoveryResponse sanitize(NearbyKitchenDiscoveryResponse response) {
+        return new NearbyKitchenDiscoveryResponse(
+            response.latitude(),
+            response.longitude(),
+            response.radiusMeters(),
+            response.page(),
+            response.kitchens().stream().map(kitchen -> new NearbyKitchenSummaryResponse(
+                kitchen.id(),
+                kitchen.kitchenName(),
+                kitchen.displayName(),
+                kitchen.description(),
+                kitchen.areaName(),
+                kitchen.city(),
+                kitchen.state(),
+                null,
+                null,
+                kitchen.distanceMeters(),
+                kitchen.activeMenuItemCount()
+            )).toList()
+        );
+    }
+
+    private static NearbyMenuItemDiscoveryResponse sanitize(NearbyMenuItemDiscoveryResponse response) {
+        return new NearbyMenuItemDiscoveryResponse(
+            response.latitude(),
+            response.longitude(),
+            response.radiusMeters(),
+            response.page(),
+            response.menuItems().stream().map(item -> new NearbyMenuItemSummaryResponse(
+                item.id(),
+                item.kitchenId(),
+                item.kitchenName(),
+                item.kitchenDisplayName(),
+                item.areaName(),
+                item.city(),
+                item.state(),
+                null,
+                null,
+                item.distanceMeters(),
+                item.itemName(),
+                item.description(),
+                item.category(),
+                item.foodType(),
+                item.price(),
+                item.currency(),
+                item.servesCount(),
+                item.preparationTimeMinutes(),
+                item.spiceLevel(),
+                item.unitPackageWeightGrams(),
+                item.thermoboxRequired(),
+                item.primaryImageUrl()
+            )).toList()
         );
     }
 

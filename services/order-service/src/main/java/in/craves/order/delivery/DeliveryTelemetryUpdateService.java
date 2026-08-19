@@ -42,12 +42,12 @@ public class DeliveryTelemetryUpdateService {
         validator.validate(event);
         DeliveryTelemetryUpdatedData data = event.data();
         LockedOrder order = lockOrder(data.chefSubOrderId());
-        validateOrder(order, data);
+        validateOrderIdentity(order, data);
 
         if (event.eventId().equals(order.telemetryEventId())) {
             return result(false, true, "DUPLICATE_EVENT", data.providerId());
         }
-        if (INELIGIBLE_ORDER_STATUSES.contains(order.orderStatus())) {
+        if (order.refundRequestedAt() != null || INELIGIBLE_ORDER_STATUSES.contains(order.orderStatus())) {
             return result(false, false, "ORDER_NOT_ELIGIBLE", data.providerId());
         }
         if (TERMINAL_DELIVERY_STATUSES.contains(order.deliveryStatus())) {
@@ -99,7 +99,7 @@ public class DeliveryTelemetryUpdateService {
         ));
     }
 
-    private void validateOrder(LockedOrder order, DeliveryTelemetryUpdatedData data) {
+    private void validateOrderIdentity(LockedOrder order, DeliveryTelemetryUpdatedData data) {
         if (!order.checkoutId().equals(data.orderId())) {
             throw new DeliveryTelemetryNonRetryableException(
                 "Delivery telemetry checkout does not match the chef sub-order"
@@ -109,9 +109,6 @@ public class DeliveryTelemetryUpdateService {
             throw new DeliveryTelemetryRetryableException(
                 "Chef acceptance metadata is not available yet"
             );
-        }
-        if (order.refundRequestedAt() != null) {
-            return;
         }
         if (order.deliveryJobId() == null
             || order.deliveryProviderId() == null

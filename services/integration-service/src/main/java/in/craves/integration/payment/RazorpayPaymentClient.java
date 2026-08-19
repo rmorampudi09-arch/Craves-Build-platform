@@ -131,10 +131,13 @@ public class RazorpayPaymentClient {
     }
 
     public boolean verifyWebhook(String rawBody, String signature) {
-        return StringUtils.hasText(properties.webhookSecret())
-            && StringUtils.hasText(signature)
-            && rawBody != null
-            && verifyHex(rawBody, signature, properties.webhookSecret());
+        if (!StringUtils.hasText(signature) || rawBody == null) return false;
+        if (StringUtils.hasText(properties.webhookSecret())
+            && verifyHex(rawBody, signature, properties.webhookSecret())) {
+            return true;
+        }
+        return properties.hasPreviousWebhookSecret()
+            && verifyHex(rawBody, signature, properties.previousWebhookSecret());
     }
 
     private CreatedOrder reconcileOrderByReceipt(

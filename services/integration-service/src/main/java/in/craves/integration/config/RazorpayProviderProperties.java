@@ -19,6 +19,7 @@ public class RazorpayProviderProperties {
     private final String keyId;
     private final String keySecret;
     private final String webhookSecret;
+    private final String previousWebhookSecret;
     private final String baseUrl;
     private final String webhookUrl;
     private final boolean autoCapture;
@@ -30,6 +31,7 @@ public class RazorpayProviderProperties {
         @Value("${RAZORPAY_KEY_ID:}") String keyId,
         @Value("${RAZORPAY_KEY_SECRET:}") String keySecret,
         @Value("${RAZORPAY_WEBHOOK_SECRET:}") String webhookSecret,
+        @Value("${RAZORPAY_PREVIOUS_WEBHOOK_SECRET:}") String previousWebhookSecret,
         @Value("${RAZORPAY_BASE_URL:https://api.razorpay.com}") String baseUrl,
         @Value("${RAZORPAY_WEBHOOK_URL:https://api.craves.in/api/v1/payments/webhooks/razorpay}") String webhookUrl,
         @Value("${RAZORPAY_AUTO_CAPTURE:true}") boolean autoCapture
@@ -40,6 +42,7 @@ public class RazorpayProviderProperties {
         this.keyId = keyId;
         this.keySecret = keySecret;
         this.webhookSecret = webhookSecret;
+        this.previousWebhookSecret = previousWebhookSecret;
         this.baseUrl = baseUrl;
         this.webhookUrl = webhookUrl;
         this.autoCapture = autoCapture;
@@ -76,6 +79,11 @@ public class RazorpayProviderProperties {
         if (production() && !PRODUCTION_WEBHOOK_HOST.equalsIgnoreCase(webhookUri.getHost())) {
             throw new IllegalStateException("RAZORPAY_WEBHOOK_URL must use api.craves.in in production");
         }
+        if (StringUtils.hasText(previousWebhookSecret)
+            && StringUtils.hasText(webhookSecret)
+            && previousWebhookSecret.equals(webhookSecret)) {
+            throw new IllegalStateException("RAZORPAY_PREVIOUS_WEBHOOK_SECRET must differ from the active webhook secret");
+        }
     }
 
     public String environment() {
@@ -88,6 +96,7 @@ public class RazorpayProviderProperties {
     public boolean paymentExecutionAllowed() { return sandbox() || productionPaymentExecutionEnabled; }
     public boolean hasCredentials() { return StringUtils.hasText(keyId) && StringUtils.hasText(keySecret); }
     public boolean hasWebhookSecret() { return StringUtils.hasText(webhookSecret); }
+    public boolean hasPreviousWebhookSecret() { return StringUtils.hasText(previousWebhookSecret); }
     public boolean productionExecutionReady() {
         return production() && productionActivationApproved && productionPaymentExecutionEnabled
             && hasCredentials() && hasWebhookSecret();
@@ -95,6 +104,7 @@ public class RazorpayProviderProperties {
     public String keyId() { return keyId; }
     public String keySecret() { return keySecret; }
     public String webhookSecret() { return webhookSecret; }
+    public String previousWebhookSecret() { return previousWebhookSecret; }
     public String baseUrl() { return baseUrl; }
     public String webhookUrl() { return webhookUrl; }
     public boolean autoCapture() { return autoCapture; }

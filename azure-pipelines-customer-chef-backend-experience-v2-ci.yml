@@ -136,12 +136,15 @@ jobs:
             scripts/apim/rollback-chef-financial-v1-apim.sh \
             scripts/apim/configure-chef-menu-bulk-availability-v1-apim.sh \
             scripts/apim/rollback-chef-menu-bulk-availability-v1-apim.sh \
+            scripts/apim/configure-customer-cart-apim.sh \
+            scripts/apim/rollback-customer-cart-preflight-v1-apim.sh \
             scripts/apim/configure-apim-platform-baseline.sh \
-            scripts/apim/rollback-apim-platform-baseline.sh; do
+            scripts/apim/rollback-apim-platform-baseline.sh \
+            scripts/release/verify-catalog-order-internal-secret-binding.sh; do
             bash -n "$script"
             echo "bash -n PASS: $script"
           done
-        displayName: Validate APIM Bash syntax
+        displayName: Validate release Bash syntax
       - bash: |
           set -euo pipefail
           python3 - <<'PY'
@@ -155,6 +158,7 @@ jobs:
               Path('infra/apim/support-cases-v1/support-case-policy.xml'),
               Path('infra/apim/chef-financial-v1/chef-financial-policy.xml'),
               Path('infra/apim/chef-menu-bulk-availability-v1/bulk-availability-policy.xml'),
+              Path('infra/apim/customer-cart/customer-cart-policy.xml'),
               Path('infra/apim/platform-baseline/craves-correlation-inbound.xml'),
               Path('infra/apim/platform-baseline/craves-security-outbound.xml'),
               Path('infra/apim/platform-baseline/craves-json-body-guard.xml'),
@@ -201,7 +205,8 @@ jobs:
             infra/apim/notification-inbox-v2/notification-inbox-policy.xml \
             infra/apim/support-cases-v1/support-case-policy.xml \
             infra/apim/chef-financial-v1/chef-financial-policy.xml \
-            infra/apim/chef-menu-bulk-availability-v1/bulk-availability-policy.xml; do
+            infra/apim/chef-menu-bulk-availability-v1/bulk-availability-policy.xml \
+            infra/apim/customer-cart/customer-cart-policy.xml; do
             grep -q 'Authorization' "$policy"
             grep -q 'X-Correlation-ID' "$policy"
             grep -q 'no-store' "$policy"
@@ -211,9 +216,13 @@ jobs:
           grep -q 'validate-content' infra/apim/chef-menu-bulk-availability-v1/bulk-availability-policy.xml
           grep -q 'rate-limit-by-key' scripts/apim/configure-apim-platform-baseline.sh
           grep -q 'If-Match' scripts/apim/configure-apim-platform-baseline.sh
+          grep -q 'CRAVES_INTERNAL_SERVICE_SECRET' services/catalog-service/src/main/resources/application.yml
+          grep -q 'CRAVES_INTERNAL_SERVICE_SECRET' services/order-service/src/main/resources/application.yml
           grep -q '/api/v1/chef/earnings' openapi/chef-financial-v1.yaml
           grep -q '/api/v1/kitchens/me/menu-items/availability' openapi/chef-menu-bulk-availability-v1.yaml
+          grep -q '/api/v1/cart/preflight' openapi/customer-cart-preflight-v1.yaml
           grep -q 'bearerAuth' openapi/chef-financial-v1.yaml
           grep -q 'bearerAuth' openapi/chef-menu-bulk-availability-v1.yaml
-          echo 'APIM security, correlation, body guard, rollback and OpenAPI assertions passed.'
-        displayName: Assert APIM and OpenAPI guards
+          grep -q 'bearerAuth' openapi/customer-cart-preflight-v1.yaml
+          echo 'APIM security, correlation, body guard, internal-access and OpenAPI assertions passed.'
+        displayName: Assert APIM, internal access and OpenAPI guards

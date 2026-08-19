@@ -50,7 +50,13 @@ function DishDetailPage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    const cachedDish = getDish(id);
+    if (cachedDish) {
+      setDish(cachedDish);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setMessage("");
 
     void (async () => {
@@ -63,7 +69,7 @@ function DishDetailPage() {
       if (active) setDish(resolved);
     })()
       .catch((error) => {
-        if (active) {
+        if (active && !cachedDish) {
           setDish(undefined);
           setMessage(
             error instanceof Error
@@ -115,7 +121,7 @@ function DishDetailPage() {
           <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
             {message || "This dish is no longer active in the Craves catalog."}
           </p>
-          <button type="button" onClick={handleBack} className="mt-6 inline-flex min-h-11 items-center rounded-full bg-[#F62E18] px-5 text-sm font-black text-white">
+          <button type="button" onClick={handleBack} className="!mt-6 !inline-flex !min-h-11 !items-center !rounded-full !bg-[#F62E18] !px-5 !text-sm !font-black !text-white">
             Back
           </button>
         </div>

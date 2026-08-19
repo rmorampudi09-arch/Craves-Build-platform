@@ -1,0 +1,79 @@
+openapi: 3.0.3
+info:
+  title: Craves Chef Bulk Menu Availability API
+  version: 1.0.0
+  description: Atomic chef-owned bulk availability updates for operational sold-out/available control.
+paths:
+  /api/v1/kitchens/me/menu-items/availability:
+    patch:
+      operationId: updateMyMenuAvailabilityBulk
+      summary: Update availability for multiple owned menu items atomically
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkAvailabilityRequest'
+      responses:
+        '200':
+          description: Batch result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkAvailabilityResponse'
+        '400':
+          description: Invalid batch or delivery metadata
+        '401':
+          description: Authentication required
+        '403':
+          description: Chef role required
+        '404':
+          description: One or more menu items not owned by this kitchen
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    BulkAvailabilityRequest:
+      type: object
+      required: [changes]
+      properties:
+        changes:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/AvailabilityChange'
+    AvailabilityChange:
+      type: object
+      required: [menuItemId, available]
+      properties:
+        menuItemId:
+          type: string
+          format: uuid
+        available:
+          type: boolean
+        reason:
+          type: string
+          maxLength: 500
+    BulkAvailabilityResponse:
+      type: object
+      required: [requestedCount, changedCount, items]
+      properties:
+        requestedCount:
+          type: integer
+        changedCount:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            required: [menuItemId, available, changed]
+            properties:
+              menuItemId: {type: string, format: uuid}
+              available: {type: boolean}
+              changed: {type: boolean}
+security:
+  - bearerAuth: []

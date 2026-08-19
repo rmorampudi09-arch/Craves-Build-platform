@@ -1,6 +1,12 @@
 trigger: none
 pr: none
 
+parameters:
+  - name: confirmation
+    displayName: Exact rollback confirmation
+    type: string
+    default: ''
+
 variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia
@@ -12,26 +18,61 @@ pool:
 steps:
   - checkout: none
   - task: AzureCLI@2
-    displayName: Fail closed without re-enabling Cashfree
+    displayName: Stop new Razorpay charges and preserve in-flight reconciliation
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
-        set -euo pipefail
+        set -Eeuo pipefail
+        set +x
+
+        [[ '${{ parameters.confirmation }}' == 'STOP_RAZORPAY_LIVE_MONEY' ]] || {
+          echo 'Type STOP_RAZORPAY_LIVE_MONEY to run the payment kill switch.' >&2
+          exit 2
+        }
+
         az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' \
-          --remove-env-vars PAYMENT_PROVIDER_CLIENT_ID PAYMENT_PROVIDER_CLIENT_KEY \
           --set-env-vars \
-          CRAVES_PAYMENT_ORDER_API_ENABLED=false \
-          RAZORPAY_API_ENABLED=false \
-          CRAVES_RAZORPAY_WEBHOOK_INGRESS_ENABLED=false \
+          PAYMENT_PROVIDER_NAME=RAZORPAY \
+          RAZORPAY_API_ENABLED=true \
           RAZORPAY_PRODUCTION_PAYMENT_EXECUTION_ENABLED=false \
+          CRAVES_PAYMENT_ORDER_API_ENABLED=false \
+          CRAVES_RAZORPAY_WEBHOOK_INGRESS_ENABLED=true \
+          CRAVES_RAZORPAY_WEBHOOK_WORKER_ENABLED=true \
           CASHFREE_API_ENABLED=false \
-          PAYMENT_PROVIDER_ENVIRONMENT=sandbox \
-          CRAVES_CASHFREE_PRODUCTION_ACTIVATION_APPROVED=false \
+          CASHFREE_TRAFFIC_ALLOWED=false \
           CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED=false \
           CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED=false \
           CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED=false \
           CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED=false \
-          CRAVES_REFUND_RECONCILIATION_ENABLED=false >/dev/null
-        echo 'Payment execution is fail-closed. Cashfree remains disabled.'
+          CRAVES_REFUND_RECONCILIATION_ENABLED=false \
+          CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED=false \
+          CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED=false >/dev/null
+
+        latest=$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.latestRevisionName -o tsv --only-show-errors)
+        ready=''
+        replicas=0
+        for _ in $(seq 1 60); do
+          ready=$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.provisioningState -o tsv 2>/dev/null || true)
+          replicas=$(az containerapp revision show -g '$(resourceGroup)' -n '$(containerApp)' --revision "$latest" --query properties.replicas -o tsv 2>/dev/null || echo 0)
+          [[ "$ready" == Provisioned && "$replicas" -ge 1 ]] && break
+          sleep 10
+        done
+        [[ "$ready" == Provisioned && "$replicas" -ge 1 ]] || {
+          echo 'Rollback revision did not become healthy.' >&2
+          exit 2
+        }
+
+        env_json=$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].env' -o json --only-show-errors)
+        value() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // "")' <<<"$env_json" | tail -1; }
+        [[ "$(value RAZORPAY_PRODUCTION_PAYMENT_EXECUTION_ENABLED)" == false ]]
+        [[ "$(value CRAVES_PAYMENT_ORDER_API_ENABLED)" == false ]]
+        [[ "$(value CRAVES_RAZORPAY_WEBHOOK_INGRESS_ENABLED)" == true ]]
+        [[ "$(value CRAVES_RAZORPAY_WEBHOOK_WORKER_ENABLED)" == true ]]
+        [[ "$(value CASHFREE_TRAFFIC_ALLOWED)" == false ]]
+
+        echo 'RAZORPAY LIVE MONEY: STOPPED'
+        echo 'New payment orders and refunds are disabled.'
+        echo 'Razorpay webhook ingestion and read-side reconciliation remain active for transactions already in flight.'
+        echo 'Cashfree remains disabled and receives no traffic.'

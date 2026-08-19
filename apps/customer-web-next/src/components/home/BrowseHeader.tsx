@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect } from "react";
 import {
   FaMapMarkerAlt,
   FaSearch,
@@ -23,9 +22,8 @@ interface BrowseHeaderProps {
   onLogout: () => void;
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
+  onSearchFocus: () => void;
 }
-
-const CATEGORY_SEARCH_EVENT = "craves:home-category-search";
 
 export function BrowseHeader({
   locationLabel,
@@ -35,17 +33,8 @@ export function BrowseHeader({
   onLogout,
   searchTerm,
   onSearchTermChange,
+  onSearchFocus,
 }: BrowseHeaderProps) {
-  useEffect(() => {
-    const handleCategorySearch = (event: Event) => {
-      const detail = (event as CustomEvent<string>).detail;
-      if (typeof detail === "string") onSearchTermChange(detail);
-    };
-
-    window.addEventListener(CATEGORY_SEARCH_EVENT, handleCategorySearch);
-    return () => window.removeEventListener(CATEGORY_SEARCH_EVENT, handleCategorySearch);
-  }, [onSearchTermChange]);
-
   const openLocation = () => {
     rememberReturnRoute("/addresses", "/home");
     onOpenLocation();
@@ -85,6 +74,7 @@ export function BrowseHeader({
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
               value={searchTerm}
+              onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search homemade dishes or kitchens"
               className={`${styles.searchInput} w-full p-0 text-sm font-semibold text-[#1A1A1A] placeholder:text-[#6B6B6B]`}
@@ -133,6 +123,7 @@ export function BrowseHeader({
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
               value={searchTerm}
+              onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search homemade dishes or kitchens"
               className={`${styles.searchInput} w-full p-0 text-sm font-semibold text-[#1A1A1A] placeholder:text-[#6B6B6B]`}

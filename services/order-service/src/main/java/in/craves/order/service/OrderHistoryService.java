@@ -72,20 +72,15 @@ public class OrderHistoryService {
             .addValue("identityId", identityId)
             .addValue("fetchLimit", limit + 1);
 
-        StringBuilder sql = new StringBuilder();
+        StringBuilder sql = new StringBuilder("""
+            SELECT o.*
+              FROM order_schema.customer_order o
+             WHERE
+            """);
         if (chef) {
-            sql.append("""
-                SELECT o.*
-                  FROM order_schema.customer_order o
-                  JOIN catalog_schema.kitchen_profile kp ON kp.id = o.kitchen_id
-                 WHERE kp.identity_id = :identityId
-                """);
+            sql.append(" o.chef_identity_id = :identityId\n");
         } else {
-            sql.append("""
-                SELECT o.*
-                  FROM order_schema.customer_order o
-                 WHERE o.customer_identity_id = :identityId
-                """);
+            sql.append(" o.customer_identity_id = :identityId\n");
         }
         if (status != null) {
             sql.append(" AND o.status = :status\n");

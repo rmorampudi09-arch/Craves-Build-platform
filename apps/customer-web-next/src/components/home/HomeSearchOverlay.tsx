@@ -93,7 +93,7 @@ export function HomeSearchOverlay({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A] transition hover:scale-[1.03] hover:text-[#F62E18]"
+            className="!flex !h-11 !w-11 !shrink-0 !items-center !justify-center !rounded-full !bg-[#F1F3F5] !p-0 !text-[#1A1A1A] hover:!text-[#F62E18]"
             aria-label="Close search"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
@@ -180,7 +180,7 @@ export function HomeSearchOverlay({
                 return (
                   <Link
                     key={kitchen.id}
-                    to="/chef/$id"
+                    to="/kitchen/$id"
                     params={{ id: kitchen.id }}
                     className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 transition hover:border-[#F62E18] hover:shadow-[0_8px_24px_rgba(246,46,24,0.09)]"
                   >

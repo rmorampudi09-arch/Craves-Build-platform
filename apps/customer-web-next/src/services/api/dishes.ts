@@ -190,8 +190,13 @@ export async function loadKitchenMenu(kitchenId: string): Promise<Dish[]> {
     throw new Error("Craves returned an invalid kitchen menu response.");
   }
 
-  discoveredDishes = body.map(mapDetail);
-  return [...discoveredDishes];
+  const loaded = body.map(mapDetail);
+  const loadedIds = new Set(loaded.map((dish) => dish.id));
+  discoveredDishes = [
+    ...loaded,
+    ...discoveredDishes.filter((existing) => !loadedIds.has(existing.id)),
+  ];
+  return loaded;
 }
 
 export async function loadDish(id: string): Promise<Dish> {

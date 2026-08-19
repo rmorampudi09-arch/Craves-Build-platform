@@ -35,6 +35,20 @@ const workspaceRoutes = [
   "/chef/operations",
 ] as const;
 
+const dailyDashboardRoutes = [
+  "/chef/application",
+  "/chef/kitchen",
+  "/chef/menu",
+  "/chef/orders",
+  "/chef/earnings",
+] as const;
+
+const deferredDashboardRoutes = [
+  "/chef/meal-plans",
+  "/chef/capacity",
+  "/chef/operations",
+] as const;
+
 test("every chef route inherits the responsive Craves workspace shell", () => {
   assert.match(layout, /className="chef-panel-theme bg-white"/);
   assert.match(layout, /ChefWorkspaceNavigation/);
@@ -46,26 +60,25 @@ test("every chef route inherits the responsive Craves workspace shell", () => {
   assert.match(navigation, /aria-current=\{active \? "page" : undefined\}/);
 });
 
-test("chef dashboard destinations follow the same order as navigation", () => {
-  let navPosition = -1;
-  let dashboardPosition = -1;
-
-  for (const route of workspaceRoutes) {
-    const nextNavPosition = navigation.indexOf(`href: "${route}"`);
-    const nextDashboardPosition = dashboard.indexOf(`href: "${route}"`);
-    assert.ok(nextNavPosition > navPosition, `${route} navigation order drifted`);
-    assert.ok(nextDashboardPosition > dashboardPosition, `${route} dashboard order drifted`);
-    navPosition = nextNavPosition;
-    dashboardPosition = nextDashboardPosition;
+test("chef dashboard keeps daily actions visible and defers advanced areas", () => {
+  for (const route of dailyDashboardRoutes) {
+    assert.match(dashboard, new RegExp(route.replaceAll("/", "\\/")));
+  }
+  for (const route of deferredDashboardRoutes) {
+    assert.doesNotMatch(
+      dashboard,
+      new RegExp(route.replaceAll("/", "\\/")),
+      `${route} should stay out of the simplified daily dashboard`,
+    );
   }
 });
 
-test("chef workspace shell and primary pages share the same content width", () => {
+test("chef workspace shell is wide while focused setup flows stay readable", () => {
   assert.match(layout, /max-w-7xl/);
-  assert.match(applicationPage, /max-w-7xl/);
-  assert.match(kitchenPage, /max-w-7xl/);
-  assert.doesNotMatch(applicationPage, /max-w-6xl/);
-  assert.doesNotMatch(kitchenPage, /max-w-6xl/);
+  assert.match(applicationPage, /max-w-3xl/);
+  assert.match(kitchenPage, /max-w-3xl/);
+  assert.doesNotMatch(applicationPage, /max-w-7xl/);
+  assert.doesNotMatch(kitchenPage, /max-w-7xl/);
 });
 
 test("chef theme still maps legacy form classes to canonical customer tokens", () => {

@@ -15,23 +15,24 @@ jobs:
     steps:
       - checkout: self
         fetchDepth: 0
-      - bash: |
-          set -euo pipefail
-          if [[ '${{ parameters.enforceBackendOnlyDiff }}' != 'true' ]]; then
+      - ${{ if eq(parameters.enforceBackendOnlyDiff, true) }}:
+        - bash: |
+            set -euo pipefail
+            git fetch origin main --depth=1
+            CHANGED=$(git diff --name-only origin/main...HEAD)
+            printf '%s\n' "$CHANGED"
+            FORBIDDEN=$(printf '%s\n' "$CHANGED" | grep -E '^(apps/|mobile/|ios/|android/)' || true)
+            if [[ -n "$FORBIDDEN" ]]; then
+              echo 'ERROR: Backend-only release contains application/frontend/mobile paths:' >&2
+              printf '%s\n' "$FORBIDDEN" >&2
+              exit 1
+            fi
+            echo 'Backend-only scope guard passed.'
+          displayName: Reject application frontend or mobile changes
+      - ${{ if ne(parameters.enforceBackendOnlyDiff, true) }}:
+        - bash: |
             echo 'Backend-only diff guard disabled by explicit pipeline parameter.'
-            exit 0
-          fi
-          git fetch origin main --depth=1
-          CHANGED=$(git diff --name-only origin/main...HEAD)
-          printf '%s\n' "$CHANGED"
-          FORBIDDEN=$(printf '%s\n' "$CHANGED" | grep -E '^(apps/customer-web-next/|apps/.*mobile|mobile/|ios/|android/)' || true)
-          if [[ -n "$FORBIDDEN" ]]; then
-            echo 'ERROR: Backend-only release contains frontend/mobile paths:' >&2
-            printf '%s\n' "$FORBIDDEN" >&2
-            exit 1
-          fi
-          echo 'Backend-only scope guard passed.'
-        displayName: Reject customer/chef frontend or mobile changes
+          displayName: Backend-only diff guard explicitly disabled
 
   - job: catalog_verify
     displayName: Catalog Service Java 21 verify

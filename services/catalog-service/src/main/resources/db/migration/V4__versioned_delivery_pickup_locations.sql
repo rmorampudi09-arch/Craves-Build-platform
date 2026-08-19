@@ -110,10 +110,12 @@ CREATE OR REPLACE FUNCTION catalog_schema.enqueue_pickup_location_provisioning(
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    -- One outbox row exists for one immutable pickup version, so the pickup UUID is also a safe,
+    -- deterministic event UUID. This avoids requiring pgcrypto/uuid-ossp merely to enqueue work.
     INSERT INTO catalog_schema.pickup_location_provisioning_outbox (
         event_id, pickup_location_id, kitchen_id, status, created_at, updated_at
     ) VALUES (
-        gen_random_uuid(), p_pickup_location_id, p_kitchen_id, 'PENDING', now(), now()
+        p_pickup_location_id, p_pickup_location_id, p_kitchen_id, 'PENDING', now(), now()
     ) ON CONFLICT (pickup_location_id) DO UPDATE SET
         status = CASE
             WHEN catalog_schema.pickup_location_provisioning_outbox.status = 'DELIVERED'
@@ -172,7 +174,9 @@ INSERT INTO catalog_schema.pickup_location_provisioning_outbox (
     event_id, pickup_location_id, kitchen_id, status, created_at, updated_at
 )
 SELECT
-    gen_random_uuid(),
+    catalog_schema.delivery_pickup_location_id(
+        id, phone_number, address_line1, address_line2, landmark, area_name, city, state, postal_code
+    ),
     catalog_schema.delivery_pickup_location_id(
         id, phone_number, address_line1, address_line2, landmark, area_name, city, state, postal_code
     ),

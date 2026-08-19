@@ -255,7 +255,7 @@ Coverage includes all five provider profiles, private-contract gating, Borzo exa
 
 ## Validation status
 
-GitHub **Backend completion CI run 396** completed successfully at multi-provider source/documentation head `33ab3c841538a123b17a9cd554aaffb68f0b9cd8` before this validation-note-only documentation commit.
+GitHub **Backend completion CI run 396** completed successfully at multi-provider source/documentation head `33ab3c841538a123b17a9cd554aaffb68f0b9cd8`. Commits after that run only update this handover/validation wording and do not alter runtime Java, migrations, contracts or provider behavior.
 
 Passed:
 

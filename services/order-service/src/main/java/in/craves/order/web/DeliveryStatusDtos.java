@@ -15,6 +15,7 @@ public final class DeliveryStatusDtos {
         String providerId,
         String status,
         String trackingUrl,
+        String trackingExperience,
         Instant observedAt,
         List<DeliveryStatusHistoryResponse> history,
         DeliveryTelemetryResponse telemetry
@@ -35,8 +36,10 @@ public final class DeliveryStatusDtos {
         BigDecimal courierLatitude,
         BigDecimal courierLongitude,
         Instant locationObservedAt,
+        Instant estimatedPickupAt,
         Instant estimatedPickupStartAt,
         Instant estimatedPickupEndAt,
+        Instant estimatedDropoffAt,
         Instant estimatedDropoffStartAt,
         Instant estimatedDropoffEndAt,
         Instant telemetryObservedAt

@@ -22,6 +22,7 @@ public class DeliveryStatusQueryService {
     private static final Set<String> TERMINAL_DELIVERY_STATUSES = Set.of(
         "DELIVERED", "CANCELLED", "RETURNED", "FAILED"
     );
+    private static final long MAX_PROVIDER_CLOCK_SKEW_SECONDS = 120;
 
     private final JdbcTemplate jdbcTemplate;
     private final DeliveryTelemetryViewProperties telemetryProperties;
@@ -106,6 +107,7 @@ public class DeliveryStatusQueryService {
     }
 
     private DeliveryTelemetryResponse telemetry(ResultSet resultSet, String status) throws SQLException {
+        boolean terminal = TERMINAL_DELIVERY_STATUSES.contains(status);
         Instant locationObservedAt = instant(resultSet, "delivery_courier_location_observed_at");
         boolean liveLocationAvailable = liveLocationAvailable(status, locationObservedAt);
         return new DeliveryTelemetryResponse(
@@ -113,10 +115,10 @@ public class DeliveryStatusQueryService {
             liveLocationAvailable ? resultSet.getBigDecimal("delivery_courier_latitude") : null,
             liveLocationAvailable ? resultSet.getBigDecimal("delivery_courier_longitude") : null,
             liveLocationAvailable ? locationObservedAt : null,
-            instant(resultSet, "delivery_estimated_pickup_start_at"),
-            instant(resultSet, "delivery_estimated_pickup_end_at"),
-            instant(resultSet, "delivery_estimated_dropoff_start_at"),
-            instant(resultSet, "delivery_estimated_dropoff_end_at"),
+            terminal ? null : instant(resultSet, "delivery_estimated_pickup_start_at"),
+            terminal ? null : instant(resultSet, "delivery_estimated_pickup_end_at"),
+            terminal ? null : instant(resultSet, "delivery_estimated_dropoff_start_at"),
+            terminal ? null : instant(resultSet, "delivery_estimated_dropoff_end_at"),
             instant(resultSet, "delivery_telemetry_observed_at")
         );
     }
@@ -127,8 +129,12 @@ public class DeliveryStatusQueryService {
             || TERMINAL_DELIVERY_STATUSES.contains(status)) {
             return false;
         }
+        Instant now = Instant.now();
+        if (locationObservedAt.isAfter(now.plusSeconds(MAX_PROVIDER_CLOCK_SKEW_SECONDS))) {
+            return false;
+        }
         return locationObservedAt.isAfter(
-            Instant.now().minusSeconds(telemetryProperties.getLiveLocationMaxAgeSeconds())
+            now.minusSeconds(telemetryProperties.getLiveLocationMaxAgeSeconds())
         );
     }
 

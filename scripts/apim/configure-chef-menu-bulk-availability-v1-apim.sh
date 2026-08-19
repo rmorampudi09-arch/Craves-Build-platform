@@ -8,11 +8,11 @@ CATALOG_APP="${CATALOG_APP:-ca-craves-catalog-service-prodlo}"
 API_PATH="${API_PATH:-api/v1/kitchens/me}"
 API_VERSION="${API_VERSION:-2022-08-01}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-POLICY_TEMPLATE="${POLICY_TEMPLATE:-$ROOT/infra/apim/chef-kitchen/chef-kitchen-policy.xml}"
+POLICY_TEMPLATE="${POLICY_TEMPLATE:-$ROOT/infra/apim/chef-menu-bulk-availability-v1/bulk-availability-policy.xml}"
 
 fail(){ echo "ERROR: $*" >&2; exit 1; }
 for tool in az jq curl sed grep; do command -v "$tool" >/dev/null || fail "$tool is required"; done
-[[ -f "$POLICY_TEMPLATE" ]] || fail "Chef kitchen policy template is missing"
+[[ -f "$POLICY_TEMPLATE" ]] || fail "Chef bulk availability policy template is missing"
 
 SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 APP_JSON="$(az containerapp show -g "$RG" -n "$CATALOG_APP" -o json)"
@@ -68,4 +68,6 @@ rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
 POLICY="$(az rest --method get --url "${MGMT}/operations/${OPERATION_ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)"
 [[ "$POLICY" == *"Authorization"* && "$POLICY" == *"Bearer "* ]] || fail "Bearer guard verification failed"
 [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"no-store"* ]] || fail "Backend/no-store verification failed"
+[[ "$POLICY" == *"X-Correlation-ID"* ]] || fail "Correlation verification failed"
+[[ "$POLICY" == *"validate-content"* ]] || fail "Request body guard verification failed"
 echo "SUCCESS: Chef bulk menu availability operation configured on existing Chef Kitchen API."

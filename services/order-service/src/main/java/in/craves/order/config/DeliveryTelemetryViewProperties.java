@@ -1,37 +1,31 @@
 package in.craves.order.config;
 
-import jakarta.annotation.PostConstruct;
-import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConfigurationProperties(prefix = "craves.delivery-telemetry")
 public class DeliveryTelemetryViewProperties {
-    private boolean liveLocationExposureEnabled = false;
-    private int liveLocationMaxAgeSeconds = 300;
+    private final boolean liveLocationExposureEnabled;
+    private final int liveLocationMaxAgeSeconds;
 
-    @PostConstruct
-    void validate() {
+    public DeliveryTelemetryViewProperties(
+        @Value("${CRAVES_DELIVERY_LIVE_LOCATION_EXPOSURE_ENABLED:false}") boolean liveLocationExposureEnabled,
+        @Value("${CRAVES_DELIVERY_LIVE_LOCATION_MAX_AGE_SECONDS:300}") int liveLocationMaxAgeSeconds
+    ) {
         if (liveLocationMaxAgeSeconds < 30 || liveLocationMaxAgeSeconds > 3600) {
             throw new IllegalStateException(
-                "Delivery liveLocationMaxAgeSeconds must be between 30 and 3600"
+                "CRAVES_DELIVERY_LIVE_LOCATION_MAX_AGE_SECONDS must be between 30 and 3600"
             );
         }
+        this.liveLocationExposureEnabled = liveLocationExposureEnabled;
+        this.liveLocationMaxAgeSeconds = liveLocationMaxAgeSeconds;
     }
 
     public boolean isLiveLocationExposureEnabled() {
         return liveLocationExposureEnabled;
     }
 
-    public void setLiveLocationExposureEnabled(boolean liveLocationExposureEnabled) {
-        this.liveLocationExposureEnabled = liveLocationExposureEnabled;
-    }
-
     public int getLiveLocationMaxAgeSeconds() {
         return liveLocationMaxAgeSeconds;
-    }
-
-    public void setLiveLocationMaxAgeSeconds(int liveLocationMaxAgeSeconds) {
-        this.liveLocationMaxAgeSeconds = liveLocationMaxAgeSeconds;
     }
 }

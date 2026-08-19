@@ -1,12 +1,12 @@
 package in.craves.catalog.web;
 
+import in.craves.catalog.config.PublicCatalogPrivacyProperties;
 import in.craves.catalog.service.CatalogService;
 import in.craves.catalog.service.PublicMenuBatchResolveService;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemImageResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemResponse;
 import in.craves.catalog.web.ApiDtos.PublicKitchenDiscoveryResponse;
-import in.craves.catalog.web.ApiDtos.PublicKitchenProfileResponse;
 import in.craves.catalog.web.ApiDtos.PublicKitchenSummaryResponse;
 import in.craves.catalog.web.PublicCatalogBatchDtos.ResolveMenuItemsRequest;
 import in.craves.catalog.web.PublicCatalogBatchDtos.ResolvedMenuItemResponse;
@@ -27,13 +27,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicCatalogController {
     private final CatalogService catalogService;
     private final PublicMenuBatchResolveService publicMenuBatchResolveService;
+    private final PublicCatalogPrivacyProperties privacyProperties;
 
     public PublicCatalogController(
         CatalogService catalogService,
-        PublicMenuBatchResolveService publicMenuBatchResolveService
+        PublicMenuBatchResolveService publicMenuBatchResolveService,
+        PublicCatalogPrivacyProperties privacyProperties
     ) {
         this.catalogService = catalogService;
         this.publicMenuBatchResolveService = publicMenuBatchResolveService;
+        this.privacyProperties = privacyProperties;
     }
 
     @GetMapping("/kitchens")
@@ -51,6 +54,9 @@ public class PublicCatalogController {
             areaName,
             radiusKm
         );
+        if (!privacyProperties.isPrivacyEnforcementEnabled()) {
+            return response;
+        }
         return new PublicKitchenDiscoveryResponse(
             response.radius(),
             response.kitchens().stream().map(PublicCatalogController::sanitizeKitchenSummary).toList()
@@ -58,29 +64,26 @@ public class PublicCatalogController {
     }
 
     @GetMapping("/kitchens/{kitchenId}")
-    public PublicKitchenProfileResponse getKitchen(@PathVariable UUID kitchenId) {
+    public KitchenProfileResponse getKitchen(@PathVariable UUID kitchenId) {
         KitchenProfileResponse kitchen = catalogService.getPublicKitchen(kitchenId);
-        return new PublicKitchenProfileResponse(
-            kitchen.id(),
-            kitchen.kitchenName(),
-            kitchen.displayName(),
-            kitchen.description(),
-            kitchen.areaName(),
-            kitchen.city(),
-            kitchen.state()
-        );
+        return privacyProperties.isPrivacyEnforcementEnabled()
+            ? sanitizeKitchenProfile(kitchen)
+            : kitchen;
     }
 
     @GetMapping("/kitchens/{kitchenId}/menu-items")
     public List<MenuItemResponse> getKitchenMenuItems(@PathVariable UUID kitchenId) {
-        return catalogService.getPublicMenuItems(kitchenId).stream()
-            .map(PublicCatalogController::sanitizeMenuItem)
-            .toList();
+        List<MenuItemResponse> items = catalogService.getPublicMenuItems(kitchenId);
+        if (!privacyProperties.isPrivacyEnforcementEnabled()) {
+            return items;
+        }
+        return items.stream().map(PublicCatalogController::sanitizeMenuItem).toList();
     }
 
     @GetMapping("/menu-items/{menuItemId}")
     public MenuItemResponse getMenuItem(@PathVariable UUID menuItemId) {
-        return sanitizeMenuItem(catalogService.getPublicMenuItem(menuItemId));
+        MenuItemResponse item = catalogService.getPublicMenuItem(menuItemId);
+        return privacyProperties.isPrivacyEnforcementEnabled() ? sanitizeMenuItem(item) : item;
     }
 
     @PostMapping("/menu-items/resolve")
@@ -88,6 +91,30 @@ public class PublicCatalogController {
         @Valid @RequestBody ResolveMenuItemsRequest request
     ) {
         return publicMenuBatchResolveService.resolve(request);
+    }
+
+    private static KitchenProfileResponse sanitizeKitchenProfile(KitchenProfileResponse kitchen) {
+        return new KitchenProfileResponse(
+            kitchen.id(),
+            null,
+            kitchen.kitchenName(),
+            kitchen.displayName(),
+            kitchen.description(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            kitchen.areaName(),
+            kitchen.city(),
+            kitchen.state(),
+            null,
+            null,
+            null,
+            kitchen.status(),
+            null,
+            null
+        );
     }
 
     private static PublicKitchenSummaryResponse sanitizeKitchenSummary(PublicKitchenSummaryResponse kitchen) {

@@ -113,9 +113,7 @@ public class SupportCaseService {
         requireRequester(user);
         SupportCaseSummaryResponse supportCase = requireOwnedCase(user.identityId(), caseId);
         ensureCaseAcceptsMessages(supportCase);
-        String message = request == null
-            ? null
-            : request.message();
+        String message = request == null ? null : request.message();
         message = requireText(message, "MESSAGE_REQUIRED", "Message is required");
         validateLength(message, MAX_MESSAGE_LENGTH, "MESSAGE_TOO_LONG", "Message must be 5000 characters or fewer");
         String senderRole = requireContextRole(user, supportCase.requesterRole());
@@ -162,11 +160,22 @@ public class SupportCaseService {
         validateLength(message, MAX_MESSAGE_LENGTH, "MESSAGE_TOO_LONG", "Message must be 5000 characters or fewer");
         String senderRole = supportRole(user);
         boolean internalNote = request != null && request.internalNote();
-        insertMessage(caseId, user.identityId(), senderRole, message, internalNote);
+        UUID messageId = insertMessage(caseId, user.identityId(), senderRole, message, internalNote);
         jdbc.update(
             "UPDATE support_case SET last_support_message_at = now(), updated_at = now() WHERE id = :id",
             new MapSqlParameterSource("id", caseId)
         );
+        if (!internalNote) {
+            insertRequesterNotification(
+                "support-reply-" + messageId,
+                "SUPPORT_CASE_REPLY",
+                "SUPPORT_CASE_REPLY_IN_APP",
+                supportCase,
+                "Craves Support replied",
+                "Craves Support replied to case " + supportCase.caseNumber() + ".",
+                supportCase.status()
+            );
+        }
         return getBackoffice(user, caseId);
     }
 
@@ -207,13 +216,22 @@ public class SupportCaseService {
                 .addValue("status", next.name())
                 .addValue("id", caseId)
         );
-        insertStatusHistory(
+        UUID historyId = insertStatusHistory(
             caseId,
             current.status(),
             next,
             user.identityId(),
             supportRole(user),
             note
+        );
+        insertRequesterNotification(
+            "support-status-" + historyId,
+            "SUPPORT_CASE_STATUS_CHANGED",
+            "SUPPORT_CASE_STATUS_CHANGED_IN_APP",
+            current,
+            "Support case updated",
+            statusNotificationBody(current.caseNumber(), next),
+            next
         );
         return getBackoffice(user, caseId);
     }
@@ -358,13 +376,14 @@ public class SupportCaseService {
         );
     }
 
-    private void insertMessage(
+    private UUID insertMessage(
         UUID caseId,
         UUID senderIdentityId,
         String senderRole,
         String message,
         boolean internalNote
     ) {
+        UUID messageId = UUID.randomUUID();
         jdbc.update(
             """
                 INSERT INTO support_case_message(
@@ -373,16 +392,17 @@ public class SupportCaseService {
                 VALUES (:id, :caseId, :senderIdentityId, :senderRole, :body, :internalNote, now())
                 """,
             new MapSqlParameterSource()
-                .addValue("id", UUID.randomUUID())
+                .addValue("id", messageId)
                 .addValue("caseId", caseId)
                 .addValue("senderIdentityId", senderIdentityId)
                 .addValue("senderRole", senderRole)
                 .addValue("body", message)
                 .addValue("internalNote", internalNote)
         );
+        return messageId;
     }
 
-    private void insertStatusHistory(
+    private UUID insertStatusHistory(
         UUID caseId,
         SupportCaseStatus oldStatus,
         SupportCaseStatus newStatus,
@@ -390,6 +410,7 @@ public class SupportCaseService {
         String actorRole,
         String note
     ) {
+        UUID historyId = UUID.randomUUID();
         jdbc.update(
             """
                 INSERT INTO support_case_status_history(
@@ -398,13 +419,58 @@ public class SupportCaseService {
                 VALUES (:id, :caseId, :oldStatus, :newStatus, :actorIdentityId, :actorRole, :note, now())
                 """,
             new MapSqlParameterSource()
-                .addValue("id", UUID.randomUUID())
+                .addValue("id", historyId)
                 .addValue("caseId", caseId)
                 .addValue("oldStatus", oldStatus == null ? null : oldStatus.name())
                 .addValue("newStatus", newStatus.name())
                 .addValue("actorIdentityId", actorIdentityId)
                 .addValue("actorRole", actorRole)
                 .addValue("note", note)
+        );
+        return historyId;
+    }
+
+    private void insertRequesterNotification(
+        String eventKey,
+        String eventType,
+        String templateCode,
+        SupportCaseSummaryResponse supportCase,
+        String title,
+        String body,
+        SupportCaseStatus status
+    ) {
+        jdbc.update(
+            """
+                INSERT INTO notification_outbox(
+                    event_key, event_type, aggregate_type, aggregate_id,
+                    user_identity_id, user_role, channel, template_code,
+                    title, body, target_type, target_id, payload,
+                    status, created_at, updated_at
+                )
+                VALUES (
+                    :eventKey, :eventType, 'SUPPORT_CASE', :caseId,
+                    :requesterIdentityId, :requesterRole, 'IN_APP', :templateCode,
+                    :title, :body, 'SUPPORT_CASE', :caseId,
+                    jsonb_build_object(
+                        'caseId', CAST(:caseId AS text),
+                        'caseNumber', :caseNumber,
+                        'status', :supportStatus
+                    ),
+                    'PENDING', now(), now()
+                )
+                ON CONFLICT (event_key) DO NOTHING
+                """,
+            new MapSqlParameterSource()
+                .addValue("eventKey", eventKey)
+                .addValue("eventType", eventType)
+                .addValue("caseId", supportCase.id())
+                .addValue("requesterIdentityId", supportCase.requesterIdentityId())
+                .addValue("requesterRole", supportCase.requesterRole())
+                .addValue("templateCode", templateCode)
+                .addValue("title", title)
+                .addValue("body", body)
+                .addValue("caseNumber", supportCase.caseNumber())
+                .addValue("supportStatus", status.name())
         );
     }
 
@@ -531,6 +597,16 @@ public class SupportCaseService {
     private static String caseNumber(UUID id) {
         String compact = id.toString().replace("-", "").toUpperCase(Locale.ROOT);
         return "CRV-" + compact.substring(0, 28);
+    }
+
+    private static String statusNotificationBody(String caseNumber, SupportCaseStatus status) {
+        return switch (status) {
+            case OPEN -> "Support case " + caseNumber + " is open.";
+            case IN_PROGRESS -> "Support case " + caseNumber + " is being reviewed.";
+            case WAITING_FOR_REQUESTER -> "Craves Support needs more information for case " + caseNumber + ".";
+            case RESOLVED -> "Support case " + caseNumber + " has been marked resolved.";
+            case CLOSED -> "Support case " + caseNumber + " has been closed.";
+        };
     }
 
     private static SupportCaseStatus statusOrNull(String value) {

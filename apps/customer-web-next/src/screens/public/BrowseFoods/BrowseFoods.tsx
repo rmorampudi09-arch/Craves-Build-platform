@@ -71,11 +71,14 @@ const SAVED_ADDRESS_MATCH_RADIUS_METERS = 100;
 const HOME_CATEGORY_KEYWORDS: Record<CravingCategory, readonly string[]> = {
   Biryani: ["biryani"],
   Tiffins: ["tiffin", "dosa", "idli", "pongal", "upma", "breakfast"],
+  Curry: ["curry", "kura", "gravy"],
   Pickles: ["pickle", "pachadi", "chutney"],
   Meals: ["meal", "thali", "lunch", "dinner"],
   Snacks: ["snack", "pakoda", "pakora", "samosa", "chaat", "vada"],
   Sweets: ["sweet", "dessert", "halwa", "kheer", "laddu", "ladoo"],
+  Desserts: ["dessert", "pudding", "custard", "mousse"],
   Cake: ["cake", "pastry", "cupcake"],
+  "Fast Food": ["fast food", "burger", "pizza", "sandwich", "noodles", "fries"],
   "Ice Cream": ["ice cream", "kulfi", "gelato"],
 };
 

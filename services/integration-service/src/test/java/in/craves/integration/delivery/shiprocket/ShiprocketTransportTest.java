@@ -20,6 +20,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
 class ShiprocketTransportTest {
     private ShiprocketProperties properties;
@@ -27,6 +28,17 @@ class ShiprocketTransportTest {
     private ObjectMapper objectMapper;
     private HttpClient httpClient;
     private ShiprocketTransport transport;
+
+    @Test
+    void productionConstructorRemainsTheExplicitSpringInjectionPoint() throws Exception {
+        var constructor = ShiprocketTransport.class.getConstructor(
+            ShiprocketProperties.class,
+            ShiprocketAuthClient.class,
+            ObjectMapper.class
+        );
+
+        assertThat(constructor.isAnnotationPresent(Autowired.class)).isTrue();
+    }
 
     @BeforeEach
     void setUp() {

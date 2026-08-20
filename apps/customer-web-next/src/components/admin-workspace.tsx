@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import {
   BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, LayoutDashboard,
-  Menu, ReceiptText, Search, SearchCheck, ShieldCheck, UsersRound, X
+  Menu, ReceiptText, Search, SearchCheck, ShieldCheck, X
 } from "lucide-react";
 import type { AdminIdentity } from "@/lib/admin-contract";
 import { SyncfusionLicense } from "@/components/syncfusion-license";

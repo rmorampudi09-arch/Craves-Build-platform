@@ -1,0 +1,24 @@
+name: Customer Fix Workflow Probe
+on:
+  push:
+    branches:
+      - fix/customer-card-navigation-nearby-2026-08-21
+    paths:
+      - .github/workflows/probe-customer-fix.yml
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/customer-card-navigation-nearby-2026-08-21
+      - name: Record run
+        run: |
+          printf '%s\n' "$GITHUB_RUN_ID" > .github/customer-fix-run.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/customer-fix-run.txt
+          git commit -m "chore: record customer fix workflow run"
+          git push origin HEAD:fix/customer-card-navigation-nearby-2026-08-21

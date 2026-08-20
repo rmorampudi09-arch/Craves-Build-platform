@@ -1,3 +1,5 @@
+import * as Popover from "@radix-ui/react-popover";
+import { useState } from "react";
 import {
   AlertTriangle,
   ChevronDown,
@@ -5,6 +7,7 @@ import {
   RefreshCw,
   RotateCcw,
   SearchX,
+  SlidersHorizontal,
 } from "lucide-react";
 
 import { DishCard } from "@/components/home/DishCard";
@@ -17,6 +20,29 @@ import type { Dish } from "@/services/api/dishes";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
+
+type FoodFilterOption = {
+  value: Exclude<HomeFoodPreference, "all">;
+  label: string;
+  dotClass: string;
+};
+
+type SortFilterOption = {
+  value: Exclude<HomeDishSort, "recommended">;
+  label: string;
+};
+
+const FOOD_FILTERS: readonly FoodFilterOption[] = [
+  { value: "veg", label: "Veg", dotClass: "bg-[#2E7D32]" },
+  { value: "non-veg", label: "Non Veg", dotClass: "bg-[#F62E18]" },
+  { value: "egg", label: "Egg", dotClass: "bg-[#D99A00]" },
+];
+
+const SORT_FILTERS: readonly SortFilterOption[] = [
+  { value: "rating", label: "Rating" },
+  { value: "price-low-high", label: "Cost: Low to High" },
+  { value: "price-high-low", label: "Cost: High to Low" },
+];
 
 interface DishesGridProps {
   dishes: Dish[];
@@ -47,6 +73,19 @@ function DishSkeleton() {
   );
 }
 
+function SelectionCircle({ selected }: { selected: boolean }) {
+  return (
+    <span
+      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+        selected ? "border-[#F62E18]" : "border-[#6B6B6B]"
+      }`}
+      aria-hidden="true"
+    >
+      {selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#F62E18]" /> : null}
+    </span>
+  );
+}
+
 export function DishesGrid({
   dishes,
   selectedCategory,
@@ -61,16 +100,55 @@ export function DishesGrid({
   onRetry,
   onManageAddress,
 }: DishesGridProps) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftSort, setDraftSort] = useState<HomeDishSort>(sort);
+  const [draftFoodPreference, setDraftFoodPreference] =
+    useState<HomeFoodPreference>(foodPreference);
   const normalizedSearch = searchTerm.trim();
   const hasFilters =
     selectedCategory !== "All" ||
     sort !== "recommended" ||
     foodPreference !== "all";
+  const activeFilterCount =
+    Number(selectedCategory !== "All") +
+    Number(sort !== "recommended") +
+    Number(foodPreference !== "all");
   const emptyMessage = normalizedSearch
     ? `No live dishes match “${normalizedSearch}”. Try another search.`
     : selectedCategory === "All"
       ? message || "No active dishes are available for this delivery location yet."
       : `No active ${selectedCategory.toLowerCase()} dishes are available for this delivery location yet.`;
+
+  const scrollToDishes = () => {
+    const heading = document.getElementById("available-dishes-heading");
+    heading?.closest("section")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  const handleFilterOpenChange = (open: boolean) => {
+    if (open) {
+      setDraftSort(sort);
+      setDraftFoodPreference(foodPreference);
+    }
+    setFiltersOpen(open);
+  };
+
+  const applyFilters = () => {
+    onSortChange(draftSort);
+    onFoodPreferenceChange(draftFoodPreference);
+    setFiltersOpen(false);
+    window.requestAnimationFrame(scrollToDishes);
+  };
+
+  const removeFilters = () => {
+    setDraftSort("recommended");
+    setDraftFoodPreference("all");
+    onRemoveFilters();
+    setFiltersOpen(false);
+    window.requestAnimationFrame(scrollToDishes);
+  };
 
   return (
     <section
@@ -94,45 +172,107 @@ export function DishesGrid({
 
       {state === "ready" ? (
         <div className="mb-7 flex flex-wrap items-center gap-2.5" aria-label="Dish filters">
-          <label className="relative inline-flex min-h-11 items-center rounded-full border border-[#E5E7EB] bg-white shadow-[0_4px_14px_rgba(26,26,26,0.04)] transition hover:border-[#F62E18]/40 hover:shadow-[0_7px_20px_rgba(246,46,24,0.09)]">
-            <span className="sr-only">Sort dishes</span>
-            <select
-              value={sort}
-              onChange={(event) => onSortChange(event.target.value as HomeDishSort)}
-              className="min-h-11 appearance-none rounded-full border-0 bg-transparent py-0 pl-4 pr-10 text-sm font-bold text-[#1A1A1A] outline-none focus:ring-0"
-              aria-label="Sort dishes"
-            >
-              <option value="recommended">Sort by</option>
-              <option value="rating">Rating</option>
-              <option value="price-low-high">Price: Low to High</option>
-              <option value="price-high-low">Price: High to Low</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#6B6B6B]" aria-hidden="true" />
-          </label>
+          <Popover.Root open={filtersOpen} onOpenChange={handleFilterOpenChange}>
+            <Popover.Trigger asChild>
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#F1F3F5] px-4 text-sm font-black text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(26,26,26,0.09)]"
+                aria-label="Open dish filters"
+              >
+                <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                Filters
+                {activeFilterCount > 0 ? (
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[0.65rem] font-black text-[#F62E18]">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+                <ChevronDown className="h-4 w-4 text-[#6B6B6B]" aria-hidden="true" />
+              </button>
+            </Popover.Trigger>
 
-          <label className="relative inline-flex min-h-11 items-center rounded-full border border-[#E5E7EB] bg-white shadow-[0_4px_14px_rgba(26,26,26,0.04)] transition hover:border-[#F62E18]/40 hover:shadow-[0_7px_20px_rgba(246,46,24,0.09)]">
-            <span className="sr-only">Filter by food type</span>
-            <select
-              value={foodPreference}
-              onChange={(event) => onFoodPreferenceChange(event.target.value as HomeFoodPreference)}
-              className="min-h-11 appearance-none rounded-full border-0 bg-transparent py-0 pl-4 pr-10 text-sm font-bold text-[#1A1A1A] outline-none focus:ring-0"
-              aria-label="Filter dishes by food type"
-            >
-              <option value="all">Food type</option>
-              <option value="veg">Veg</option>
-              <option value="non-veg">Non-veg</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#6B6B6B]" aria-hidden="true" />
-          </label>
+            <Popover.Portal>
+              <Popover.Content
+                sideOffset={10}
+                align="start"
+                className="z-[80] w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[1.55rem] border border-[#F1F3F5] bg-white shadow-[0_24px_60px_rgba(26,26,26,0.16)] outline-none"
+                aria-label="Dish filter options"
+              >
+                <div className="px-5 pb-4 pt-5">
+                  <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-[#6B6B6B]">Food Type</p>
+                  <div className="mt-2" role="radiogroup" aria-label="Food type">
+                    {FOOD_FILTERS.map((option) => {
+                      const selected = draftFoodPreference === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setDraftFoodPreference(option.value)}
+                          className="flex w-full items-center justify-between gap-4 rounded-xl bg-white px-1 py-2.5 text-left text-sm font-bold text-[#1A1A1A] transition hover:bg-[#F1F3F5]"
+                        >
+                          <span className="inline-flex items-center gap-2.5">
+                            <span className={`h-2.5 w-2.5 rounded-full ${option.dotClass}`} aria-hidden="true" />
+                            {option.label}
+                          </span>
+                          <SelectionCircle selected={selected} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="border-t border-[#F1F3F5] px-5 py-4">
+                  <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-[#6B6B6B]">Sorting</p>
+                  <div className="mt-2" role="radiogroup" aria-label="Dish sorting">
+                    {SORT_FILTERS.map((option) => {
+                      const selected = draftSort === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setDraftSort(option.value)}
+                          className="flex w-full items-center justify-between gap-4 rounded-xl bg-white px-1 py-2.5 text-left text-sm font-bold text-[#1A1A1A] transition hover:bg-[#F1F3F5]"
+                        >
+                          <span>{option.label}</span>
+                          <SelectionCircle selected={selected} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 border-t border-[#F1F3F5] bg-white p-3">
+                  <button
+                    type="button"
+                    onClick={removeFilters}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F1F3F5] px-3 text-xs font-black text-[#6B6B6B] transition hover:-translate-y-0.5 hover:text-[#1A1A1A]"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                    Remove Filters
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applyFilters}
+                    className="min-h-11 rounded-xl bg-[#F1F3F5] px-4 text-sm font-black text-[#F62E18] transition hover:-translate-y-0.5 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)]"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
 
           {hasFilters ? (
             <button
               type="button"
-              onClick={onRemoveFilters}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#F1F3F5] px-4 text-sm font-black text-[#F62E18] transition hover:bg-[#E5E7EB]"
+              onClick={removeFilters}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#F1F3F5] px-4 text-sm font-black text-[#6B6B6B] transition-all duration-200 hover:-translate-y-0.5 hover:text-[#1A1A1A]"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              Remove filters
+              Remove Filters
             </button>
           ) : null}
         </div>

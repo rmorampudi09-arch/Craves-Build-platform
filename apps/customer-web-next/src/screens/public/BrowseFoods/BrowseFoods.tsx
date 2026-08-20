@@ -18,7 +18,6 @@ import {
 } from "@/components/home/HomeCategoryRail";
 import { HomeSearchOverlay } from "@/components/home/HomeSearchOverlay";
 import { KitchensGrid } from "@/components/home/KitchensGrid";
-import { TodaysSpecial } from "@/components/home/TodaysSpecial";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
 import { ALL_DISHES_CATEGORY } from "@/constants/dishCategories";
 import {
@@ -559,10 +558,12 @@ function BrowseFoodsPage() {
         dish.chef.toLocaleLowerCase("en-IN").includes(term) ||
         dish.category.toLocaleLowerCase("en-IN").includes(term) ||
         dish.desc.toLocaleLowerCase("en-IN").includes(term);
+      const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
       const foodTypeMatches =
         foodPreference === "all" ||
-        (foodPreference === "veg" && dish.veg) ||
-        (foodPreference === "non-veg" && !dish.veg);
+        (foodPreference === "veg" && foodType === "VEG") ||
+        (foodPreference === "non-veg" && foodType === "NON_VEG") ||
+        (foodPreference === "egg" && foodType === "EGG");
       return categoryMatches && searchMatches && foodTypeMatches;
     });
 
@@ -641,8 +642,6 @@ function BrowseFoodsPage() {
             window.requestAnimationFrame(scrollToDishes);
           }}
         />
-
-        <TodaysSpecial dishes={nearbyDishes} />
 
         <KitchensGrid
           kitchens={filteredKitchens}

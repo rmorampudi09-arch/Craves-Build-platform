@@ -16,6 +16,7 @@ export type Dish = {
   rating: number;
   time: string;
   veg: boolean;
+  foodType?: "VEG" | "NON_VEG" | "EGG";
   tag?: string;
   desc: string;
   ingredients?: string[];
@@ -68,6 +69,7 @@ function mapNearbyItem(item: NearbyMenuItem): Dish {
       ? `${item.preparationTimeMinutes} min`
       : "Prepared after ordering",
     veg: item.foodType === "VEG",
+    foodType: item.foodType,
     desc: item.description || "Description has not been provided by this kitchen.",
     serves: servesLabel(item.servesCount),
     spiceLevel: spiceLabel(item.spiceLevel),
@@ -111,6 +113,7 @@ function mapDetail(item: PublicMenuItemDetail): Dish {
       ? `${item.preparationTimeMinutes} min`
       : "Prepared after ordering",
     veg: item.foodType === "VEG",
+    foodType: item.foodType,
     desc: item.description || "Description has not been provided by this kitchen.",
     serves: servesLabel(item.servesCount),
     spiceLevel: spiceLabel(item.spiceLevel),

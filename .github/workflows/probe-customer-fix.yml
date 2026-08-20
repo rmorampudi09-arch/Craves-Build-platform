@@ -113,3 +113,5 @@ jobs:
           git add apps/mobile services/order-service
           git commit -m "fix(mobile): finalize customer cards navigation and nearby flow" || true
           git push origin HEAD:fix/customer-card-navigation-nearby-2026-08-21
+
+# validation retry 2

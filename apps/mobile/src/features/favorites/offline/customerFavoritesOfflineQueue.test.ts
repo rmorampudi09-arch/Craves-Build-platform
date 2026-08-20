@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AppApiError} from '../../../core/http/apiError';
 import {
   clearFavoriteMutationQueue,
+  discardFavoriteMutation,
   enqueueFavoriteMutation,
   getFavoriteMutationQueueSnapshot,
   hydrateFavoriteMutationQueue,
@@ -45,6 +46,17 @@ describe('customerFavoritesOfflineQueue', () => {
       targetFavorite: false,
       attempts: 0,
     });
+  });
+
+  it('discards an older queued intent after a newer online mutation succeeds', async () => {
+    await enqueueFavoriteMutation(CUSTOMER_A, ITEM_A, true);
+    await enqueueFavoriteMutation(CUSTOMER_A, ITEM_B, true);
+
+    await discardFavoriteMutation(CUSTOMER_A, ITEM_A);
+
+    expect(getFavoriteMutationQueueSnapshot(CUSTOMER_A).map(item => item.menuItemId)).toEqual([
+      ITEM_B,
+    ]);
   });
 
   it('keeps pending mutations segregated by authenticated identity', async () => {

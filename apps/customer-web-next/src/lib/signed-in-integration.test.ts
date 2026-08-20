@@ -51,7 +51,7 @@ test("signed-in home loads live discovery and opens customer kitchen details wit
   );
   assert.match(contents, /discoverDishes\(activeAddress\.lat, activeAddress\.lng\)/);
   assert.match(contents, /<HomeCategoryRail/);
-  assert.match(contents, /<TodaysSpecial/);
+  assert.doesNotMatch(contents, /<TodaysSpecial/);
   assert.match(contents, /<KitchensGrid/);
   assert.match(contents, /<DishesGrid/);
   assert.match(contents, /<HomeSearchOverlay/);

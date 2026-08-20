@@ -26,10 +26,19 @@ type ReplayHandler = (mutation: PendingFavoriteMutation) => Promise<void>;
 
 const listeners = new Set<QueueListener>();
 const snapshots = new Map<string, readonly PendingFavoriteMutation[]>();
+const generations = new Map<string, number>();
 const EMPTY_QUEUE: readonly PendingFavoriteMutation[] = [];
 
 function storageKey(identityId: string): string {
   return `${STORAGE_PREFIX}${identityId}`;
+}
+
+function generation(identityId: string): number {
+  return generations.get(identityId) ?? 0;
+}
+
+function bumpGeneration(identityId: string): void {
+  generations.set(identityId, generation(identityId) + 1);
 }
 
 function notify(): void {
@@ -84,6 +93,7 @@ async function currentQueue(identityId: string): Promise<readonly PendingFavorit
 export async function hydrateFavoriteMutationQueue(
   identityId: string,
 ): Promise<readonly PendingFavoriteMutation[]> {
+  const startedAtGeneration = generation(identityId);
   const raw = await AsyncStorage.getItem(storageKey(identityId));
   let parsed: unknown = [];
   if (raw) {
@@ -93,6 +103,13 @@ export async function hydrateFavoriteMutationQueue(
       parsed = [];
     }
   }
+
+  // A logout/account-switch clear can complete while AsyncStorage.getItem is in
+  // flight. Never resurrect the older persisted payload after that clear.
+  if (generation(identityId) !== startedAtGeneration) {
+    return snapshots.get(identityId) ?? EMPTY_QUEUE;
+  }
+
   const queue = normalizeQueue(identityId, parsed);
   await persist(identityId, queue);
   return queue;
@@ -132,6 +149,10 @@ export async function discardFavoriteMutation(
 }
 
 export async function clearFavoriteMutationQueue(identityId: string): Promise<void> {
+  // Invalidates in-flight hydrate/replay work before storage is changed. The
+  // generation check prevents an older asynchronous replay from restoring data
+  // after logout or account switch.
+  bumpGeneration(identityId);
   await persist(identityId, []);
 }
 
@@ -156,6 +177,7 @@ export async function replayFavoriteMutationQueue(
   identityId: string,
   handler: ReplayHandler,
 ): Promise<FavoriteReplayResult> {
+  const startedAtGeneration = generation(identityId);
   const queue = [...(await currentQueue(identityId))];
   if (queue.length === 0) {
     return {replayed: 0, dropped: 0, remaining: 0, stoppedForAuthentication: false};
@@ -167,6 +189,15 @@ export async function replayFavoriteMutationQueue(
   let stoppedForAuthentication = false;
 
   for (let index = 0; index < queue.length; index += 1) {
+    if (generation(identityId) !== startedAtGeneration) {
+      return {
+        replayed,
+        dropped,
+        remaining: getFavoriteMutationQueueSnapshot(identityId).length,
+        stoppedForAuthentication: false,
+      };
+    }
+
     const mutation = queue[index];
     try {
       await handler(mutation);
@@ -197,6 +228,15 @@ export async function replayFavoriteMutationQueue(
       // drop so the optimistic UI is corrected explicitly.
       dropped += 1;
     }
+  }
+
+  if (generation(identityId) !== startedAtGeneration) {
+    return {
+      replayed,
+      dropped,
+      remaining: getFavoriteMutationQueueSnapshot(identityId).length,
+      stoppedForAuthentication: false,
+    };
   }
 
   await persist(identityId, remaining);

@@ -1,6 +1,9 @@
 trigger: none
 pr: none
 
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
 parameters:
   - name: action
     type: string

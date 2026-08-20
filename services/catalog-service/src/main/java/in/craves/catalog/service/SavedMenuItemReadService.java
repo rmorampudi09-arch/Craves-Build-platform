@@ -144,12 +144,15 @@ public class SavedMenuItemReadService {
         jdbc.query(
             sql,
             new MapSqlParameterSource("kitchenIds", kitchenIds),
-            rs -> result.computeIfAbsent(rs.getObject("kitchen_id", UUID.class), ignored -> new ArrayList<>())
-                .add(new ServiceWindow(
-                    rs.getInt("day_of_week"),
-                    rs.getObject("opens_at", LocalTime.class),
-                    rs.getObject("closes_at", LocalTime.class)
-                ))
+            rs -> {
+                UUID kitchenId = rs.getObject("kitchen_id", UUID.class);
+                result.computeIfAbsent(kitchenId, ignored -> new ArrayList<>())
+                    .add(new ServiceWindow(
+                        rs.getInt("day_of_week"),
+                        rs.getObject("opens_at", LocalTime.class),
+                        rs.getObject("closes_at", LocalTime.class)
+                    ));
+            }
         );
         return result;
     }
@@ -441,6 +444,7 @@ public class SavedMenuItemReadService {
             null,
             null,
             false,
+            null,
             null,
             null,
             null,

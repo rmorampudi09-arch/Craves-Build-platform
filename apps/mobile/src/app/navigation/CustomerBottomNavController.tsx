@@ -2,6 +2,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -10,6 +11,7 @@ import React, {
 import {
   Animated,
   Easing,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -164,6 +166,7 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
   const itemCount = useAppSelector(selectCartItemCount);
   const subtotal = useAppSelector(selectCartFoodSubtotal);
   const [barHeight, setBarHeight] = useState(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const activeTabRoute = props.state.routes[props.state.index];
   const focusedChildRouteName = getFocusedRouteNameFromRoute(activeTabRoute);
   const focusedRoutePolicy = resolveRouteChromePolicy(
@@ -175,6 +178,19 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
     setBarHeight(Math.ceil(event.nativeEvent.layout.height));
   }, []);
 
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
   const handleOpenCart = useCallback(() => {
     props.navigation.dispatch(
       CommonActions.navigate({
@@ -184,7 +200,7 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
     );
   }, [activeTabRoute.name, props.navigation]);
 
-  if (!focusedRoutePolicy.bottomNavigationVisible) {
+  if (keyboardVisible || !focusedRoutePolicy.bottomNavigationVisible) {
     return null;
   }
 

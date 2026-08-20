@@ -40,6 +40,7 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {getDisplayAvailabilityCount} from '../../../shared/menuAvailability';
 import type {CartLine} from '../../cart/domain/cartTypes';
 import {
   addCartItem,
@@ -135,6 +136,7 @@ function DishCard({
   const kitchenName = dish.kitchenDisplayName?.trim() || dish.kitchenName;
   const location = [dish.areaName, dish.city].filter(Boolean).join(', ');
   const quantity = cartLine?.quantity ?? 0;
+  const availableCount = getDisplayAvailabilityCount(dish.id);
   const foodTypeLabel =
     dish.foodType === 'NON_VEG' ? 'Non-veg' : dish.foodType === 'EGG' ? 'Egg' : 'Veg';
   const foodTypeColor =
@@ -146,39 +148,42 @@ function DishCard({
   const spiceLabel = dish.spiceLevel
     ? `${dish.spiceLevel.charAt(0)}${dish.spiceLevel.slice(1).toLowerCase()} spice`
     : null;
-  const hasExtraMetadata = Boolean(
-    dish.preparationTimeMinutes || dish.servesCount || spiceLabel,
-  );
 
   return (
     <View style={styles.dishCard}>
-      <Pressable
-        accessibilityHint="Opens full dish information and purchase actions"
-        accessibilityLabel={`View details for ${dish.itemName}`}
-        accessibilityRole="button"
-        onPress={() => onOpen(dish.id)}
-        style={({pressed}) => pressed && styles.dishOpenPressed}>
-        {dish.primaryImageUrl ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            source={{uri: dish.primaryImageUrl}}
-            resizeMode="cover"
-            style={styles.dishImage}
-          />
-        ) : (
-          <View style={styles.imageFallback}>
-            <Text style={styles.imageFallbackText}>{dish.category}</Text>
-          </View>
-        )}
-      </Pressable>
-      <CustomerFavoriteHeartButton
-        favorite={favorite}
-        pending={favoritePending}
-        disabled={favoriteDisabled}
-        itemLabel={dish.itemName}
-        onToggle={() => onFavoriteToggle(dish.id, favorite)}
-        style={styles.favoriteButton}
-      />
+      <View style={styles.mediaWrap}>
+        <Pressable
+          accessibilityHint="Opens full dish information and purchase actions"
+          accessibilityLabel={`View details for ${dish.itemName}`}
+          accessibilityRole="button"
+          onPress={() => onOpen(dish.id)}
+          style={({pressed}) => pressed && styles.dishOpenPressed}>
+          {dish.primaryImageUrl ? (
+            <Image
+              accessibilityIgnoresInvertColors
+              source={{uri: dish.primaryImageUrl}}
+              resizeMode="cover"
+              style={styles.dishImage}
+            />
+          ) : (
+            <View style={styles.imageFallback}>
+              <Text style={styles.imageFallbackText}>{dish.category}</Text>
+            </View>
+          )}
+        </Pressable>
+        <CustomerFavoriteHeartButton
+          favorite={favorite}
+          pending={favoritePending}
+          disabled={favoriteDisabled}
+          itemLabel={dish.itemName}
+          onToggle={() => onFavoriteToggle(dish.id, favorite)}
+          style={styles.favoriteButton}
+        />
+        <View pointerEvents="none" style={styles.foodTypePill}>
+          <View style={[styles.foodTypeDot, {backgroundColor: foodTypeColor}]} />
+          <Text style={styles.foodTypeText}>{foodTypeLabel}</Text>
+        </View>
+      </View>
 
       <View style={styles.dishBody}>
         <Pressable
@@ -186,26 +191,33 @@ function DishCard({
           accessibilityRole="button"
           onPress={() => onOpen(dish.id)}
           style={({pressed}) => pressed && styles.dishOpenPressed}>
-          <Text numberOfLines={2} style={styles.dishName}>
-            {dish.itemName}
-          </Text>
+          <View style={styles.titlePriceRow}>
+            <Text numberOfLines={2} style={styles.dishName}>
+              {dish.itemName}
+            </Text>
+            <Text style={styles.price}>{formatDishPrice(dish.price, dish.currency)}</Text>
+          </View>
+          <View style={styles.availabilityRow}>
+            <Icon name="check" size={16} color={colors.success} surface={false} />
+            <Text style={styles.availabilityText}>Available - {availableCount}</Text>
+          </View>
           <Text numberOfLines={1} style={styles.kitchenName}>
             From {kitchenName}
           </Text>
         </Pressable>
 
         <View style={styles.metadataRow}>
-          <Icon name="location" size={14} color={colors.textSecondary} />
+          <Icon name="location" size={16} color={colors.textSecondary} surface={false} />
           <Text numberOfLines={1} style={styles.metadata}>
             {[formatDistance(dish.distanceMeters), location].filter(Boolean).join(' · ')}
           </Text>
         </View>
 
-        {hasExtraMetadata ? (
+        <View style={styles.purchaseRow}>
           <View style={styles.detailRow}>
             {dish.preparationTimeMinutes ? (
               <View style={styles.detailItem}>
-                <Icon name="clock" size={14} color={colors.textSecondary} />
+                <Icon name="clock" size={15} color={colors.textSecondary} surface={false} />
                 <Text style={styles.detailText}>{dish.preparationTimeMinutes} min</Text>
               </View>
             ) : null}
@@ -213,16 +225,6 @@ function DishCard({
               <Text style={styles.detailText}>Serves {dish.servesCount}</Text>
             ) : null}
             {spiceLabel ? <Text style={styles.detailText}>{spiceLabel}</Text> : null}
-          </View>
-        ) : null}
-
-        <View style={styles.dishFooter}>
-          <View style={styles.priceGroup}>
-            <Text style={styles.price}>{formatDishPrice(dish.price, dish.currency)}</Text>
-            <View style={styles.foodTypePill}>
-              <View style={[styles.foodTypeDot, {backgroundColor: foodTypeColor}]} />
-              <Text style={styles.foodTypeText}>{foodTypeLabel}</Text>
-            </View>
           </View>
 
           {cartLine && quantity > 0 ? (
@@ -970,6 +972,9 @@ const styles = StyleSheet.create({
   dishOpenPressed: {
     opacity: 0.88,
   },
+  mediaWrap: {
+    position: 'relative',
+  },
   dishImage: {
     width: '100%',
     aspectRatio: 1.75,
@@ -987,16 +992,69 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
   },
-  favoriteButton: {position: 'absolute', top: spacing.sm, right: spacing.sm, zIndex: 4},
+  favoriteButton: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    zIndex: 4,
+    backgroundColor: 'rgba(255,255,255,0.78)',
+  },
+  foodTypePill: {
+    position: 'absolute',
+    left: spacing.sm,
+    bottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  foodTypeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.pill,
+  },
+  foodTypeText: {
+    color: colors.textPrimary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.medium,
+  },
   dishBody: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
   },
+  titlePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   dishName: {
+    flex: 1,
+    minWidth: 0,
     color: colors.espressoBrown,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
+  },
+  price: {
+    flexShrink: 0,
+    color: colors.espressoBrown,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.extrabold,
+  },
+  availabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    marginTop: spacing.xxs,
+  },
+  availabilityText: {
+    color: colors.success,
+    fontSize: typography.small,
+    fontWeight: fontWeight.medium,
   },
   kitchenName: {
     color: colors.textSecondary,
@@ -1017,12 +1075,21 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.small,
   },
+  purchaseRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
   detailRow: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginTop: spacing.xs,
+    paddingBottom: spacing.xxs,
   },
   detailItem: {
     flexDirection: 'row',
@@ -1034,47 +1101,10 @@ const styles = StyleSheet.create({
     fontSize: typography.tiny,
     fontWeight: fontWeight.medium,
   },
-  dishFooter: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  priceGroup: {
-    minWidth: 0,
-    flex: 1,
-    alignItems: 'flex-start',
-    gap: spacing.xxs,
-  },
-  price: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.extrabold,
-  },
-  foodTypePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xxs,
-  },
-  foodTypeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: radius.pill,
-  },
-  foodTypeText: {
-    color: colors.espressoBrown,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
-  },
   addButton: {
     minHeight: touchTarget.minimum,
-    minWidth: 88,
-    paddingHorizontal: spacing.sm,
+    minWidth: 104,
+    paddingHorizontal: spacing.md,
   },
   quantitySelector: {
     minHeight: touchTarget.minimum,

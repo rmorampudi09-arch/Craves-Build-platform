@@ -20,6 +20,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class ShiprocketTransportTest {
@@ -42,6 +43,7 @@ class ShiprocketTransportTest {
     @Test
     void springSelectsProductionConstructor() {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            TestPropertyValues.of("craves.providers.shiprocket.enabled=true").applyTo(context);
             context.registerBean(ShiprocketProperties.class, ShiprocketProperties::new);
             context.registerBean(ShiprocketAuthClient.class, () -> mock(ShiprocketAuthClient.class));
             context.registerBean(ObjectMapper.class, () -> new ObjectMapper());

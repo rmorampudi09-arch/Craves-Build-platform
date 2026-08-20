@@ -83,6 +83,7 @@ public class CustomerFavoriteService {
     @Transactional
     public void remove(CurrentUser user, UUID menuItemId) {
         requireCustomer(user);
+        lockFavoriteSet(user.identityId());
         jdbcTemplate.update(
             "DELETE FROM customer_favorite_menu_item WHERE identity_id = ? AND menu_item_id = ?",
             user.identityId(),
@@ -92,7 +93,7 @@ public class CustomerFavoriteService {
 
     private void lockFavoriteSet(UUID identityId) {
         // The cap is a per-customer invariant. PostgreSQL transaction-scoped
-        // advisory locking serializes competing saves for the same identity
+        // advisory locking serializes competing mutations for the same identity
         // across all service replicas without introducing a new coordination
         // service. A hash collision can only reduce concurrency; it cannot
         // violate the cap.

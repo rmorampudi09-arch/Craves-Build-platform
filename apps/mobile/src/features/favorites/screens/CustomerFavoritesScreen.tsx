@@ -32,12 +32,20 @@ import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
-import {dishDetailApi, type CustomerDishDetail} from '../../dishDetail/api/dishDetailApi';
+import type {SavedCatalogItem} from '../api/savedCatalogApi';
+import {
+  availabilityCopyForItem,
+  canOpenSavedDish,
+  savedDishDisplayName,
+  savedKitchenDisplayName,
+  type SavedAvailabilityTone,
+} from '../presentation/savedCatalogPresentation';
 import {
   useCustomerFavoritesQuery,
   useCustomerFavoritesQueueState,
   useToggleCustomerFavorite,
 } from '../query/customerFavoritesQueries';
+import {useSavedCatalogQuery} from '../query/savedCatalogQueries';
 
 type FavoritesNavigation = NativeStackNavigationProp<
   CustomerProfileStackParamList,
@@ -57,9 +65,41 @@ function FilledIcon({
   return <MaterialDesignIcons name={name as never} size={size} color={color} />;
 }
 
-function formatPrice(amount: number, currency: string): string {
+function formatPrice(amount: number | null, currency: string | null): string | null {
+  if (amount === null || !currency) return null;
   const value = Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(2);
   return currency === 'INR' ? `₹${value}` : `${currency} ${value}`;
+}
+
+function foodTypeCopy(foodType: string | null): string | null {
+  switch (foodType) {
+    case 'NON_VEG':
+      return 'Non-veg';
+    case 'EGG':
+      return 'Egg';
+    case 'VEG':
+      return 'Veg';
+    default:
+      return null;
+  }
+}
+
+function toneStyles(tone: SavedAvailabilityTone) {
+  if (tone === 'positive') {
+    return {container: styles.availabilityPositive, text: styles.availabilityPositiveText};
+  }
+  if (tone === 'attention') {
+    return {container: styles.availabilityAttention, text: styles.availabilityAttentionText};
+  }
+  return {container: styles.availabilityMuted, text: styles.availabilityMutedText};
+}
+
+function sectionRows(
+  rows: readonly SavedCatalogItem[],
+  states: readonly SavedCatalogItem['availabilityState'][],
+): SavedCatalogItem[] {
+  const stateSet = new Set(states);
+  return rows.filter(row => stateSet.has(row.availabilityState));
 }
 
 export function CustomerFavoritesScreen() {
@@ -68,40 +108,8 @@ export function CustomerFavoritesScreen() {
   const favorites = useCustomerFavoritesQuery();
   const queueState = useCustomerFavoritesQueueState();
   const toggleFavorite = useToggleCustomerFavorite();
+  const savedCatalog = useSavedCatalogQuery(favorites.data, favorites.isSuccess);
   const [locationSelectorVisible, setLocationSelectorVisible] = React.useState(false);
-  const [details, setDetails] = React.useState<Record<string, CustomerDishDetail>>({});
-  const [detailLoading, setDetailLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    const rows = favorites.data ?? [];
-    if (!rows.length) {
-      setDetails({});
-      setDetailLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    setDetailLoading(true);
-    Promise.allSettled(
-      rows.map(favorite =>
-        dishDetailApi.getCustomerDishDetail(favorite.menuItemId, controller.signal),
-      ),
-    )
-      .then(results => {
-        if (controller.signal.aborted) return;
-        const next: Record<string, CustomerDishDetail> = {};
-        results.forEach(result => {
-          if (result.status === 'fulfilled') {
-            next[result.value.id] = result.value;
-          }
-        });
-        setDetails(next);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setDetailLoading(false);
-      });
-    return () => controller.abort();
-  }, [favorites.data]);
 
   const browseMeals = React.useCallback(() => {
     const tabs = navigation.getParent<CustomerTabsNavigation>();
@@ -113,13 +121,110 @@ export function CustomerFavoritesScreen() {
   }, [navigation]);
 
   const refresh = React.useCallback(() => {
-    favorites.refetch().catch(() => undefined);
-  }, [favorites]);
+    Promise.all([
+      favorites.refetch(),
+      savedCatalog.menuItemIds.length > 0
+        ? savedCatalog.refetch()
+        : Promise.resolve(undefined),
+    ]).catch(() => undefined);
+  }, [favorites, savedCatalog]);
 
   const favoriteRows = favorites.data ?? [];
-  const loadedRows = favoriteRows
-    .map(favorite => details[favorite.menuItemId])
-    .filter((dish): dish is CustomerDishDetail => Boolean(dish));
+  const resolvedRows = savedCatalog.data ?? [];
+  const cookingToday = sectionRows(resolvedRows, [
+    'AVAILABLE_NOW',
+    'COOKING_LATER_TODAY',
+  ]);
+  const savedForLater = resolvedRows.filter(
+    row =>
+      row.availabilityState !== 'AVAILABLE_NOW' &&
+      row.availabilityState !== 'COOKING_LATER_TODAY',
+  );
+
+  const renderDishCard = React.useCallback(
+    (dish: SavedCatalogItem) => {
+      const queued = queueState.pendingMenuItemIds.includes(dish.menuItemId);
+      const displayName = savedDishDisplayName(dish);
+      const kitchenName = savedKitchenDisplayName(dish);
+      const availability = availabilityCopyForItem(dish);
+      const availabilityStyle = toneStyles(availability.tone);
+      const price = formatPrice(dish.price, dish.currency);
+      const foodType = foodTypeCopy(dish.foodType);
+      const meta = [dish.category, foodType].filter(Boolean).join(' · ');
+      const canOpen = canOpenSavedDish(dish);
+
+      return (
+        <Pressable
+          accessibilityHint={
+            canOpen ? 'Opens current dish details.' : 'This saved item cannot be opened right now.'
+          }
+          accessibilityRole={canOpen ? 'button' : undefined}
+          disabled={!canOpen}
+          key={dish.menuItemId}
+          onPress={
+            canOpen
+              ? () =>
+                  navigation.navigate('CustomerDishDetail', {
+                    menuItemId: dish.menuItemId,
+                  })
+              : undefined
+          }
+          style={({pressed}) => [
+            styles.dishCard,
+            !canOpen && styles.dishCardUnavailable,
+            pressed && styles.pressed,
+          ]}>
+          {dish.primaryImageUrl ? (
+            <Image
+              accessibilityIgnoresInvertColors
+              source={{uri: dish.primaryImageUrl}}
+              resizeMode="cover"
+              style={styles.dishImage}
+            />
+          ) : (
+            <View style={styles.dishImageFallback}>
+              <FilledIcon name={dish.found ? 'food' : 'bookmark-outline'} size={30} color={colors.flameRed} />
+            </View>
+          )}
+          <View style={styles.dishCopy}>
+            <Text numberOfLines={2} style={styles.dishName}>
+              {displayName}
+            </Text>
+            <Text numberOfLines={1} style={styles.kitchenName}>
+              {kitchenName}
+            </Text>
+            {meta ? <Text style={styles.metaText}>{meta}</Text> : null}
+            {price ? <Text style={styles.priceText}>{price}</Text> : null}
+            <View
+              accessibilityLabel={`${availability.title}. ${availability.detail ?? ''}`.trim()}
+              style={[styles.availabilityBadge, availabilityStyle.container]}>
+              <Text style={[styles.availabilityTitle, availabilityStyle.text]}>
+                {availability.title}
+              </Text>
+            </View>
+            {availability.detail ? (
+              <Text style={styles.availabilityDetail}>{availability.detail}</Text>
+            ) : null}
+            {queued ? <Text style={styles.queuedText}>Waiting to sync</Text> : null}
+          </View>
+          <Pressable
+            accessibilityLabel={`Remove ${displayName} from favorites`}
+            accessibilityRole="button"
+            accessibilityState={{busy: toggleFavorite.isPending || queued}}
+            disabled={toggleFavorite.isPending}
+            hitSlop={spacing.xs}
+            onPress={event => {
+              event.stopPropagation();
+              toggleFavorite.mutate({menuItemId: dish.menuItemId, favorite: true});
+            }}
+            style={({pressed}) => [styles.heartButton, pressed && styles.pressed]}>
+            <FilledIcon name="heart" size={24} color={colors.flameRed} />
+          </Pressable>
+        </Pressable>
+      );
+    },
+    [navigation, queueState.pendingMenuItemIds, toggleFavorite],
+  );
 
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-favorites">
@@ -135,7 +240,7 @@ export function CustomerFavoritesScreen() {
           refreshControl={
             favorites.sessionRequired ? undefined : (
               <RefreshControl
-                refreshing={favorites.isRefetching}
+                refreshing={favorites.isRefetching || savedCatalog.isRefetching}
                 onRefresh={refresh}
                 colors={[colors.flameRed]}
                 tintColor={colors.flameRed}
@@ -150,16 +255,22 @@ export function CustomerFavoritesScreen() {
                 <FilledIcon name="heart" size={28} color={colors.flameRed} />
               </View>
               <View style={styles.introCopy}>
-                <Text accessibilityRole="header" style={styles.title}>Favorites</Text>
+                <Text accessibilityRole="header" style={styles.title}>
+                  Saved for you
+                </Text>
                 <Text style={styles.subtitle}>
-                  Your saved dishes stay synchronized with your Craves customer account.
+                  Remember the dishes you trust and see when their home kitchens are cooking.
                 </Text>
               </View>
             </View>
 
             {queueState.hasPendingChanges ? (
               <View accessibilityLiveRegion="polite" style={styles.syncCard}>
-                <FilledIcon name="cloud-sync-outline" size={20} color={colors.flameRedAccessible} />
+                <FilledIcon
+                  name="cloud-sync-outline"
+                  size={20}
+                  color={colors.flameRedAccessible}
+                />
                 <View style={styles.syncCopy}>
                   <Text style={styles.syncTitle}>Saving when online</Text>
                   <Text style={styles.syncText}>
@@ -197,69 +308,64 @@ export function CustomerFavoritesScreen() {
                 actionLabel="Browse meals"
                 onAction={browseMeals}
               />
+            ) : savedCatalog.isPending ? (
+              <View accessibilityRole="progressbar" style={styles.loadingCard}>
+                <ActivityIndicator color={colors.flameRed} />
+                <Text style={styles.loadingText}>Checking what your favorites are cooking…</Text>
+              </View>
+            ) : savedCatalog.isError ? (
+              <TerminalState
+                title="Your saves are safe"
+                description="We could not refresh current dish and kitchen availability. Your saved items have not been removed."
+                actionLabel="Check again"
+                onAction={() => savedCatalog.refetch().catch(() => undefined)}
+              />
             ) : (
               <>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Saved dishes</Text>
-                  <Text style={styles.countText}>{favoriteRows.length}</Text>
-                </View>
-                {loadedRows.map(dish => {
-                  const queued = queueState.pendingMenuItemIds.includes(dish.id);
-                  return (
-                    <Pressable
-                      accessibilityRole="button"
-                      key={dish.id}
-                      onPress={() => navigation.navigate('CustomerDishDetail', {menuItemId: dish.id})}
-                      style={({pressed}) => [styles.dishCard, pressed && styles.pressed]}>
-                      {dish.images[0]?.url ? (
-                        <Image
-                          accessibilityIgnoresInvertColors
-                          source={{uri: dish.images[0].url}}
-                          resizeMode="cover"
-                          style={styles.dishImage}
-                        />
-                      ) : (
-                        <View style={styles.dishImageFallback}>
-                          <FilledIcon name="food" size={30} color={colors.flameRed} />
-                        </View>
-                      )}
-                      <View style={styles.dishCopy}>
-                        <Text numberOfLines={2} style={styles.dishName}>{dish.itemName}</Text>
-                        <Text numberOfLines={1} style={styles.kitchenName}>
-                          {dish.kitchen.displayName ?? dish.kitchen.kitchenName}
-                        </Text>
-                        <Text style={styles.metaText}>
-                          {dish.category} · {dish.foodType === 'NON_VEG' ? 'Non-veg' : dish.foodType === 'EGG' ? 'Egg' : 'Veg'}
-                        </Text>
-                        <Text style={styles.priceText}>{formatPrice(dish.price.amount, dish.price.currency)}</Text>
-                        {queued ? <Text style={styles.queuedText}>Waiting to sync</Text> : null}
+                {cookingToday.length > 0 ? (
+                  <View style={styles.todaySection}>
+                    <View style={styles.todayHeader}>
+                      <View style={styles.todayIcon}>
+                        <FilledIcon name="pot-steam-outline" size={22} color={colors.successText} />
                       </View>
-                      <Pressable
-                        accessibilityLabel={`Remove ${dish.itemName} from favorites`}
-                        accessibilityRole="button"
-                        accessibilityState={{busy: toggleFavorite.isPending || queued}}
-                        disabled={toggleFavorite.isPending}
-                        hitSlop={spacing.xs}
-                        onPress={event => {
-                          event.stopPropagation();
-                          toggleFavorite.mutate({menuItemId: dish.id, favorite: true});
-                        }}
-                        style={({pressed}) => [styles.heartButton, pressed && styles.pressed]}>
-                        <FilledIcon name="heart" size={24} color={colors.flameRed} />
-                      </Pressable>
-                    </Pressable>
-                  );
-                })}
-                {detailLoading ? (
-                  <View style={styles.detailLoadingRow}>
-                    <ActivityIndicator size="small" color={colors.flameRed} />
-                    <Text style={styles.loadingText}>Refreshing dish details…</Text>
+                      <View style={styles.todayHeaderCopy}>
+                        <Text accessibilityRole="header" style={styles.todayTitle}>
+                          Your favorites are cooking today
+                        </Text>
+                        <Text style={styles.todaySubtitle}>
+                          Based only on the kitchen's current schedule and catalog availability.
+                        </Text>
+                      </View>
+                    </View>
+                    {cookingToday.map(renderDishCard)}
                   </View>
-                ) : loadedRows.length < favoriteRows.length ? (
-                  <Text style={styles.staleCopy}>
-                    Some saved dishes are no longer currently sellable and are hidden until the catalog can verify them again.
-                  </Text>
+                ) : (
+                  <View style={styles.calmStatusCard}>
+                    <FilledIcon name="weather-sunset" size={22} color={colors.textSecondary} />
+                    <View style={styles.syncCopy}>
+                      <Text style={styles.calmStatusTitle}>Nothing saved is cooking today yet</Text>
+                      <Text style={styles.calmStatusText}>
+                        Your dishes stay saved. Pull to refresh when kitchen schedules change.
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {savedForLater.length > 0 ? (
+                  <View style={styles.savedSection}>
+                    <View style={styles.sectionHeader}>
+                      <Text accessibilityRole="header" style={styles.sectionTitle}>
+                        Saved for later
+                      </Text>
+                      <Text style={styles.countText}>{savedForLater.length}</Text>
+                    </View>
+                    {savedForLater.map(renderDishCard)}
+                  </View>
                 ) : null}
+
+                <Text style={styles.transparencyCopy}>
+                  Availability is checked from Craves catalog and kitchen schedule data. We do not label a dish “sold out” unless inventory data proves it.
+                </Text>
               </>
             )}
           </View>
@@ -302,8 +408,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.iconSurface,
   },
   introCopy: {minWidth: 0, flex: 1},
-  title: {color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.bold},
-  subtitle: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
+  title: {
+    color: colors.espressoBrown,
+    fontSize: typography.hero,
+    fontWeight: fontWeight.bold,
+  },
+  subtitle: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
   syncCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -313,17 +427,95 @@ const styles = StyleSheet.create({
     backgroundColor: colors.iconSurface,
   },
   syncCopy: {minWidth: 0, flex: 1},
-  syncTitle: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.bold},
-  syncText: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},
-  loadingCard: {minHeight: 220, alignItems: 'center', justifyContent: 'center', gap: spacing.sm},
+  syncTitle: {
+    color: colors.espressoBrown,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  syncText: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
+  loadingCard: {
+    minHeight: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
   loadingText: {color: colors.textSecondary, fontSize: typography.small},
-  sectionHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
-  sectionTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
-  countText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.bold},
+  todaySection: {
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.successSoft,
+  },
+  todayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  todayIcon: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  todayHeaderCopy: {minWidth: 0, flex: 1},
+  todayTitle: {
+    color: colors.successText,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
+  todaySubtitle: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
+  calmStatusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceMuted,
+  },
+  calmStatusTitle: {
+    color: colors.espressoBrown,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  calmStatusText: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
+  savedSection: {gap: spacing.sm},
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    color: colors.espressoBrown,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
+  countText: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
   dishCard: {
     minHeight: 124,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     padding: spacing.sm,
     borderRadius: radius.lg,
@@ -332,16 +524,83 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     ...elevation.card,
   },
-  dishImage: {width: 104, height: 104, borderRadius: radius.md, backgroundColor: colors.surfaceMuted},
-  dishImageFallback: {width: 104, height: 104, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.iconSurface},
+  dishCardUnavailable: {elevation: 0, shadowOpacity: 0},
+  dishImage: {
+    width: 104,
+    height: 104,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+  },
+  dishImageFallback: {
+    width: 104,
+    height: 104,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.iconSurface,
+  },
   dishCopy: {minWidth: 0, flex: 1},
-  dishName: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
-  kitchenName: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
-  metaText: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},
-  priceText: {marginTop: spacing.xs, color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.bold},
-  queuedText: {marginTop: spacing.xxs, color: colors.flameRedAccessible, fontSize: typography.tiny, fontWeight: fontWeight.bold},
-  heartButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.iconSurface},
-  detailLoadingRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, padding: spacing.md},
-  staleCopy: {padding: spacing.sm, color: colors.textSecondary, fontSize: typography.small, lineHeight: 20},
+  dishName: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  kitchenName: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
+  metaText: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
+  priceText: {
+    marginTop: spacing.xs,
+    color: colors.flameRedAccessible,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  availabilityBadge: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.pill,
+  },
+  availabilityPositive: {backgroundColor: colors.successSoft},
+  availabilityPositiveText: {color: colors.successText},
+  availabilityAttention: {backgroundColor: colors.warningSoft},
+  availabilityAttentionText: {color: colors.warningText},
+  availabilityMuted: {backgroundColor: colors.surfaceMuted},
+  availabilityMutedText: {color: colors.textSecondary},
+  availabilityTitle: {
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
+  },
+  availabilityDetail: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
+  queuedText: {
+    marginTop: spacing.xxs,
+    color: colors.flameRedAccessible,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
+  },
+  heartButton: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.iconSurface,
+  },
+  transparencyCopy: {
+    padding: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
   pressed: {opacity: 0.72},
 });

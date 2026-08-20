@@ -8,6 +8,7 @@ import {
   type CustomerFavorite,
 } from '../api/customerFavoritesApi';
 import {
+  discardFavoriteMutation,
   enqueueFavoriteMutation,
   getFavoriteMutationQueueSnapshot,
   subscribeFavoriteMutationQueue,
@@ -68,17 +69,15 @@ interface ToggleContext {
   previous: CustomerFavorite[] | undefined;
 }
 
-function optimisticFavorites(
+export function applyOptimisticFavoriteState(
   current: CustomerFavorite[] | undefined,
   menuItemId: string,
   targetFavorite: boolean,
+  now = new Date().toISOString(),
 ): CustomerFavorite[] {
   const withoutItem = (current ?? []).filter(item => item.menuItemId !== menuItemId);
   if (!targetFavorite) return withoutItem;
-  return [
-    {menuItemId, createdAt: new Date().toISOString()},
-    ...withoutItem,
-  ];
+  return [{menuItemId, createdAt: now}, ...withoutItem];
 }
 
 export function useToggleCustomerFavorite() {
@@ -96,6 +95,7 @@ export function useToggleCustomerFavorite() {
       try {
         if (targetFavorite) {
           const saved = await customerFavoritesApi.save(menuItemId);
+          await discardFavoriteMutation(identityId, menuItemId);
           return {
             menuItemId,
             favorite: true,
@@ -105,6 +105,7 @@ export function useToggleCustomerFavorite() {
         }
 
         await customerFavoritesApi.remove(menuItemId);
+        await discardFavoriteMutation(identityId, menuItemId);
         return {
           menuItemId,
           favorite: false,
@@ -133,7 +134,7 @@ export function useToggleCustomerFavorite() {
       await queryClient.cancelQueries({queryKey, exact: true});
       const previous = queryClient.getQueryData<CustomerFavorite[]>(queryKey);
       queryClient.setQueryData<CustomerFavorite[]>(queryKey, current =>
-        optimisticFavorites(current, menuItemId, !favorite),
+        applyOptimisticFavoriteState(current, menuItemId, !favorite),
       );
       return {queryKey, previous};
     },

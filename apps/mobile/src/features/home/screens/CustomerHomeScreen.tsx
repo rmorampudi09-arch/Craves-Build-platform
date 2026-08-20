@@ -933,7 +933,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 30,
-    elevation: 30,
     backgroundColor: colors.surfaceBase,
   },
   emptyResultSpace: {

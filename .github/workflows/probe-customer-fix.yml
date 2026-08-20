@@ -1,62 +1,112 @@
-name: Customer Fix Implementation
+name: Customer Fix Build APK
 on:
   push:
     branches:
       - fix/customer-card-navigation-nearby-2026-08-21
     paths:
       - .github/workflows/probe-customer-fix.yml
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
-  implement-and-validate:
+  implement-validate-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Checkout fix branch
         uses: actions/checkout@v4
         with:
           ref: fix/customer-card-navigation-nearby-2026-08-21
           fetch-depth: 0
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Apply targeted source changes
+
+      - name: Apply requested customer UI, navigation and cart fixes
         run: python3 .github/customer-fix-apply.py
+
+      - name: Install Craves launcher logo
+        run: |
+          set -euo pipefail
+          base64 --decode .github/craves-logo.b64 > /tmp/craves-logo.png
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq imagemagick
+          declare -A sizes=(
+            [mipmap-mdpi]=48
+            [mipmap-hdpi]=72
+            [mipmap-xhdpi]=96
+            [mipmap-xxhdpi]=144
+            [mipmap-xxxhdpi]=192
+          )
+          for density in "${!sizes[@]}"; do
+            size="${sizes[$density]}"
+            target="apps/mobile/android/app/src/main/res/$density"
+            mkdir -p "$target"
+            convert /tmp/craves-logo.png -resize "${size}x${size}" "$target/ic_launcher.png"
+            convert /tmp/craves-logo.png -resize "${size}x${size}" "$target/ic_launcher_round.png"
+          done
+
       - name: Install mobile dependencies
         working-directory: apps/mobile
         run: npm ci
+
       - name: TypeScript validation
         working-directory: apps/mobile
         run: npx tsc --noEmit
+
       - name: Mobile lint
         working-directory: apps/mobile
         run: npm run lint
+
       - name: Mobile test suite
         working-directory: apps/mobile
         run: npm test -- --runInBand
+
       - name: Order service compile
         working-directory: services/order-service
         run: mvn -q -DskipTests compile
+
       - name: Order service regression test
         working-directory: services/order-service
         run: mvn -q -Dtest=CatalogClientCartSnapshotTest test
-      - name: Commit validated changes
+
+      - name: Build Android debug APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Stage downloadable APK
         run: |
+          mkdir -p dist
+          cp apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk dist/Craves-QA-2026-08-21.apk
+          sha256sum dist/Craves-QA-2026-08-21.apk > dist/Craves-QA-2026-08-21.apk.sha256
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Craves-QA-APK-2026-08-21
+          path: |
+            dist/Craves-QA-2026-08-21.apk
+            dist/Craves-QA-2026-08-21.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Commit validated source and launcher assets
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$GITHUB_RUN_ID" > .github/customer-fix-build-run.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/probe-customer-fix.yml
-          git rm .github/workflows/customer-card-navigation-nearby-fix.yml
-          git rm .github/customer-fix-apply.py
-          git rm .github/customer-fix-run.txt
-          git add apps/mobile services/order-service
-          git commit -m "fix(mobile): align customer cards and stabilize cart navigation discovery"
+          git add apps/mobile services/order-service .github/customer-fix-build-run.txt
+          git commit -m "fix(mobile): finalize customer cards navigation nearby and Craves launcher" || true
           git push origin HEAD:fix/customer-card-navigation-nearby-2026-08-21

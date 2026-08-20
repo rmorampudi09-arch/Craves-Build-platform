@@ -1,0 +1,84 @@
+name: CRAVES QA Mobile APK Build
+
+on:
+  push:
+    branches:
+      - build/qa-mobile-apk-2026-08-20
+    paths:
+      - .github/workflows/mobile-qa-apk-build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-qa-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout QA build branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: TypeScript strict check
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        working-directory: apps/mobile
+        run: npm run lint -- --max-warnings=0
+
+      - name: Targeted QA regression tests
+        working-directory: apps/mobile
+        run: npm test -- --runInBand src/app/navigation/navigationPolicy.test.ts src/features/cart/cartInteractionPolicy.test.ts
+
+      - name: Configure production API runtime
+        working-directory: apps/mobile
+        run: cp .env.example .env
+
+      - name: Build standalone Android testing APK
+        working-directory: apps/mobile/android
+        env:
+          NODE_ENV: production
+          CRAVES_ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/apps/mobile/android/app/debug.keystore
+          CRAVES_ANDROID_KEYSTORE_PASSWORD: android
+          CRAVES_ANDROID_KEY_ALIAS: androiddebugkey
+          CRAVES_ANDROID_KEY_PASSWORD: android
+        run: ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Verify embedded JavaScript bundle
+        run: |
+          APK="apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          unzip -l "$APK" | grep -E 'assets/index\.android\.bundle$'
+
+      - name: Verify APK signature
+        run: |
+          APK="apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --verbose "$APK"
+
+      - name: Upload QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: craves-qa-mobile-testing-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 7

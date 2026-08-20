@@ -24,7 +24,18 @@ az containerapp update \
   -o none \
   --only-show-errors
 
-AFTER="$(az containerapp show -g "$RG" -n "$CATALOG_APP" -o json --only-show-errors)"
+for attempt in $(seq 1 60); do
+  AFTER="$(az containerapp show -g "$RG" -n "$CATALOG_APP" -o json --only-show-errors)"
+  LATEST="$(jq -r '.properties.latestRevisionName // ""' <<<"$AFTER")"
+  READY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$AFTER")"
+  RUNNING="$(jq -r '.properties.runningStatus // ""' <<<"$AFTER")"
+  if [[ -n "$LATEST" && "$LATEST" == "$READY" && "$RUNNING" == "Running" ]]; then
+    break
+  fi
+  (( attempt < 60 )) || fail "Catalog privacy revision did not become Ready within 300 seconds"
+  sleep 5
+done
+
 LATEST="$(jq -r '.properties.latestRevisionName // ""' <<<"$AFTER")"
 READY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$AFTER")"
 RUNNING="$(jq -r '.properties.runningStatus // ""' <<<"$AFTER")"

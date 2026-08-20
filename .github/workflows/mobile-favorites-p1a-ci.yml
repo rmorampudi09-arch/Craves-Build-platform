@@ -141,3 +141,40 @@ jobs:
           fi
 
           echo 'P1A mobile-only scope guard passed.'
+
+      - name: Package P1A source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P1A_Source_Package"
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+
+          git diff --name-only origin/mobile-ui-rebuild-from-scratch...HEAD \
+            | while IFS= read -r path; do
+                [[ -n "$path" && -f "$path" ]] || continue
+                mkdir -p "$package_root/$(dirname "$path")"
+                cp "$path" "$package_root/$path"
+              done
+
+          cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
+          CRAVES Favorites 2.0 P1A Mobile Saved Reliability
+          Canonical source: GitHub PR #267 / feature/favorites-p1a-mobile-reliability-20260821
+          Base: mobile-ui-rebuild-from-scratch
+          This package contains the full changed source files from the P1A PR, not generated build output.
+          P0 runtime certification remains a separate prerequisite before production promotion.
+          EOF
+
+          (
+            cd "$RUNNER_TEMP"
+            zip -qr Craves_Favorites_2_0_P1A_Source_Package.zip Craves_Favorites_2_0_P1A_Source_Package
+          )
+          test -s "$RUNNER_TEMP/Craves_Favorites_2_0_P1A_Source_Package.zip"
+
+      - name: Upload P1A source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Craves_Favorites_2_0_P1A_Source_Package
+          path: ${{ runner.temp }}/Craves_Favorites_2_0_P1A_Source_Package.zip
+          if-no-files-found: error
+          retention-days: 30

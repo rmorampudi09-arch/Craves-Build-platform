@@ -10,7 +10,9 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -34,6 +36,17 @@ class OrderHistoryServiceValidationTest {
             "+918888888888",
             Set.of("CHEF")
         );
+    }
+
+    @Test
+    void springSelectsJdbcTemplateConstructor() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class));
+            context.register(OrderHistoryService.class);
+            context.refresh();
+
+            assertThat(context.getBean(OrderHistoryService.class)).isNotNull();
+        }
     }
 
     @Test

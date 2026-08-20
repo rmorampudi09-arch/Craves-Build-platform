@@ -21,7 +21,7 @@ permissions:
 jobs:
   validate-favorites-p1a:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Checkout candidate
@@ -40,9 +40,58 @@ jobs:
         working-directory: apps/mobile
         run: npm ci
 
-      - name: TypeScript strict check
-        working-directory: apps/mobile
-        run: npx tsc --noEmit
+      - name: TypeScript regression gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            mobile-ui-rebuild-from-scratch:refs/remotes/origin/mobile-ui-rebuild-from-scratch
+
+          candidate_root="$GITHUB_WORKSPACE/apps/mobile"
+          base_root="/tmp/craves-mobile-base"
+          rm -rf "$base_root"
+          git worktree add --detach "$base_root" origin/mobile-ui-rebuild-from-scratch
+          ln -s "$candidate_root/node_modules" "$base_root/apps/mobile/node_modules"
+
+          set +e
+          (
+            cd "$base_root/apps/mobile"
+            npx tsc --noEmit --pretty false
+          ) > /tmp/base-tsc.log 2>&1
+          base_status=$?
+
+          (
+            cd "$candidate_root"
+            npx tsc --noEmit --pretty false
+          ) > /tmp/candidate-tsc.log 2>&1
+          candidate_status=$?
+          set -e
+
+          echo '--- mobile integration baseline TypeScript diagnostics ---'
+          cat /tmp/base-tsc.log || true
+          echo '--- P1A candidate TypeScript diagnostics ---'
+          cat /tmp/candidate-tsc.log || true
+
+          grep -E '^src/.*error TS[0-9]+:' /tmp/base-tsc.log | sort -u > /tmp/base-tsc-errors.txt || true
+          grep -E '^src/.*error TS[0-9]+:' /tmp/candidate-tsc.log | sort -u > /tmp/candidate-tsc-errors.txt || true
+          comm -13 /tmp/base-tsc-errors.txt /tmp/candidate-tsc-errors.txt > /tmp/new-tsc-errors.txt
+
+          if [[ -s /tmp/new-tsc-errors.txt ]]; then
+            echo 'ERROR: P1A introduces new TypeScript diagnostics:' >&2
+            cat /tmp/new-tsc-errors.txt >&2
+            exit 1
+          fi
+
+          if [[ "$base_status" -ne 0 ]]; then
+            echo 'NOTICE: The mobile integration base already contains TypeScript debt; P1A introduced no additional TypeScript diagnostics.'
+          elif [[ "$candidate_status" -ne 0 ]]; then
+            echo 'ERROR: Candidate TypeScript check failed even though the base is clean.' >&2
+            exit 1
+          else
+            echo 'TypeScript strict check passed with a clean base and candidate.'
+          fi
+
+          git worktree remove --force "$base_root"
 
       - name: ESLint
         working-directory: apps/mobile

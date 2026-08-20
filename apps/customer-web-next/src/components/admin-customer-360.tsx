@@ -123,13 +123,30 @@ export function AdminCustomer360({ identityId, reason }: { identityId: string; r
   useEffect(() => { void loadAll(); }, [identityId, reason, loadAll]);
 
   async function loadMore(resource: Resource) {
-    const page = data[resource];
-    if (!page?.hasMore) return;
-    const cursor = resource === "orders"
-      ? { orderBeforeCreatedAt: page.nextBeforeCreatedAt, orderBeforeId: page.nextBeforeOrderId }
-      : resource === "payments"
-        ? { paymentBeforeCreatedAt: page.nextBeforeCreatedAt, paymentBeforeId: page.nextBeforePaymentId }
-        : { refundBeforeCreatedAt: page.nextBeforeCreatedAt, refundBeforeId: page.nextBeforeRefundId };
+    let cursor: Record<string, string | null>;
+    if (resource === "orders") {
+      const page = data.orders;
+      if (!page?.hasMore) return;
+      cursor = {
+        orderBeforeCreatedAt: page.nextBeforeCreatedAt,
+        orderBeforeId: page.nextBeforeOrderId,
+      };
+    } else if (resource === "payments") {
+      const page = data.payments;
+      if (!page?.hasMore) return;
+      cursor = {
+        paymentBeforeCreatedAt: page.nextBeforeCreatedAt,
+        paymentBeforeId: page.nextBeforePaymentId,
+      };
+    } else {
+      const page = data.refunds;
+      if (!page?.hasMore) return;
+      cursor = {
+        refundBeforeCreatedAt: page.nextBeforeCreatedAt,
+        refundBeforeId: page.nextBeforeRefundId,
+      };
+    }
+
     setLoadingMore(resource);
     setMessage("");
     try {

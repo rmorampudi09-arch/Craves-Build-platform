@@ -61,16 +61,24 @@ export async function POST(request: NextRequest) {
       },
     );
     if (!upstream.ok) {
+      const upstreamError = await upstream.json().catch(() => null) as { code?: unknown } | null;
+      const approvedDocument = upstream.status === 409 && upstreamError?.code === "CHEF_DOCUMENT_ALREADY_APPROVED";
       const response = NextResponse.json(
         {
-          code: upstream.status === 401 ? "SESSION_EXPIRED" : "PROOF_FILE_UPLOAD_FAILED",
+          code: upstream.status === 401
+            ? "SESSION_EXPIRED"
+            : approvedDocument
+              ? "CHEF_DOCUMENT_ALREADY_APPROVED"
+              : "PROOF_FILE_UPLOAD_FAILED",
           message: upstream.status === 401
             ? "Your session expired. Sign in again."
             : upstream.status === 400
               ? "The file was rejected. Use the requested JPG, PNG or PDF format under 10 MB."
-              : upstream.status === 409
-                ? "Proof files cannot be changed after chef approval."
-                : "Proof upload is temporarily unavailable.",
+              : approvedDocument
+                ? "This document is already approved and cannot be replaced."
+                : upstream.status === 409
+                  ? "This document cannot be replaced in its current review state."
+                  : "Proof upload is temporarily unavailable.",
         },
         { status: upstream.status },
       );

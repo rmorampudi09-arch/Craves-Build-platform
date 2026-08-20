@@ -49,26 +49,19 @@ jobs:
       - name: Apply requested customer UI, navigation and cart fixes
         run: python3 .github/customer-fix-apply.py
 
-      - name: Install Craves launcher logo
+      - name: Verify Craves launcher resources
         run: |
           set -euo pipefail
-          base64 --decode .github/craves-logo.b64 > /tmp/craves-logo.png
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq imagemagick
-          declare -A sizes=(
-            [mipmap-mdpi]=48
-            [mipmap-hdpi]=72
-            [mipmap-xhdpi]=96
-            [mipmap-xxhdpi]=144
-            [mipmap-xxxhdpi]=192
-          )
-          for density in "${!sizes[@]}"; do
-            size="${sizes[$density]}"
-            target="apps/mobile/android/app/src/main/res/$density"
-            mkdir -p "$target"
-            convert /tmp/craves-logo.png -resize "${size}x${size}" "$target/ic_launcher.png"
-            convert /tmp/craves-logo.png -resize "${size}x${size}" "$target/ic_launcher_round.png"
-          done
+          test -s apps/mobile/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          test -s apps/mobile/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          test -s apps/mobile/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          test -s apps/mobile/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          test -s apps/mobile/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          test -s apps/mobile/android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          test -s apps/mobile/android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          test -s apps/mobile/android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          test -s apps/mobile/android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          test -s apps/mobile/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
       - name: Install mobile dependencies
         working-directory: apps/mobile
@@ -114,9 +107,9 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Commit validated source and launcher assets
+      - name: Commit validated source changes
         run: |
           set -euo pipefail
           git add apps/mobile services/order-service
-          git commit -m "fix(mobile): finalize customer cards navigation nearby and Craves launcher" || true
+          git commit -m "fix(mobile): finalize customer cards navigation and nearby flow" || true
           git push origin HEAD:fix/customer-card-navigation-nearby-2026-08-21

@@ -299,6 +299,7 @@ public class ChefApplicationService {
             rs.getObject("id", UUID.class), KycDocumentType.valueOf(rs.getString("document_type")),
             rs.getString("original_file_name"), rs.getString("blob_container"), rs.getString("blob_name"),
             rs.getString("content_type"), rs.getLong("file_size_bytes"), rs.getString("status"),
+            rs.getString("review_reason"), instant(rs, "reviewed_at"),
             instant(rs, "created_at"), instant(rs, "updated_at")
         );
     }

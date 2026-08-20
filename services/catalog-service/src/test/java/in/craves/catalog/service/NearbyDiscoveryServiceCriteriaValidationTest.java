@@ -29,7 +29,7 @@ class NearbyDiscoveryServiceCriteriaValidationTest {
     void springSelectsJdbcTemplateConstructor() {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             CatalogDiscoveryProperties properties = new CatalogDiscoveryProperties();
-            context.registerBean(JdbcTemplate.class, JdbcTemplate::new);
+            context.registerBean(JdbcTemplate.class, () -> new JdbcTemplate());
             context.registerBean(CatalogDiscoveryProperties.class, () -> properties);
             context.register(NearbyDiscoveryService.class);
             context.refresh();

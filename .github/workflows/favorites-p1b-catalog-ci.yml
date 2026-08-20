@@ -77,3 +77,46 @@ jobs:
             infra/apim/favorites-p1b \
             scripts/apim/configure-favorites-p1b-catalog-apim.sh \
             scripts/apim/rollback-favorites-p1b-catalog-apim.sh
+
+  source-package:
+    name: Package exact P1B Catalog source
+    needs: [catalog-verify, apim-source-guard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Package validated source diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_branch='chatgpt/backend-customer-chef-journey-20260819'
+          git fetch --no-tags origin "$base_branch:refs/remotes/origin/$base_branch"
+          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P1B_Catalog_Source_Package"
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+
+          git diff --name-only "origin/$base_branch...HEAD" \
+            | while IFS= read -r path; do
+                [[ -n "$path" && -f "$path" ]] || continue
+                mkdir -p "$package_root/$(dirname "$path")"
+                cp "$path" "$package_root/$path"
+              done
+
+          cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
+          CRAVES Favorites 2.0 P1B Catalog Saved Read
+          Base: chatgpt/backend-customer-chef-journey-20260819
+          Source only. No Azure deployment or APIM publication is performed by this package job.
+          Runtime certification remains pending until the user intentionally runs the approved pipelines.
+          EOF
+
+          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P1B_Catalog_Source_Package.zip Craves_Favorites_2_0_P1B_Catalog_Source_Package)
+          test -s "$RUNNER_TEMP/Craves_Favorites_2_0_P1B_Catalog_Source_Package.zip"
+      - name: Upload P1B Catalog source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Craves_Favorites_2_0_P1B_Catalog_Source_Package
+          path: ${{ runner.temp }}/Craves_Favorites_2_0_P1B_Catalog_Source_Package.zip
+          if-no-files-found: error
+          retention-days: 30

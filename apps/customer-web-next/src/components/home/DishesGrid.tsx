@@ -61,7 +61,10 @@ interface DishesGridProps {
 
 function DishSkeleton() {
   return (
-    <div className="overflow-hidden rounded-[1.65rem] border border-[#E5E7EB] bg-white" aria-hidden="true">
+    <div
+      className="overflow-hidden rounded-[1.65rem] border border-[#E5E7EB] bg-white"
+      aria-hidden="true"
+    >
       <div className="aspect-[4/3] animate-pulse bg-[#F1F3F5]" />
       <div className="space-y-3 p-5">
         <div className="h-5 w-3/4 animate-pulse rounded-full bg-[#F1F3F5]" />
@@ -76,9 +79,9 @@ function DishSkeleton() {
 function SelectionCircle({ selected }: { selected: boolean }) {
   return (
     <span
-      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-        selected ? "border-[#F62E18]" : "border-[#6B6B6B]"
-      }`}
+      className={`${styles.filterSelectionCircle} ${
+        selected ? styles.filterSelectionCircleSelected : ""
+      } flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2`}
       aria-hidden="true"
     >
       {selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#F62E18]" /> : null}
@@ -157,26 +160,39 @@ export function DishesGrid({
     >
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">Made close to you</p>
-          <h2 id="available-dishes-heading" className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">
+            Made close to you
+          </p>
+          <h2
+            id="available-dishes-heading"
+            className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl"
+          >
             {selectedCategory === "All" ? "Dishes near you" : selectedCategory}
           </h2>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">Freshly prepared by nearby home kitchens, made with care.</p>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
+            Freshly prepared by nearby home kitchens, made with care.
+          </p>
         </div>
         {state === "ready" ? (
-          <span className="rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]" aria-live="polite">
+          <span
+            className="rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]"
+            aria-live="polite"
+          >
             {dishes.length} {dishes.length === 1 ? "dish" : "dishes"}
           </span>
         ) : null}
       </div>
 
       {state === "ready" ? (
-        <div className="mb-7 flex flex-wrap items-center gap-2.5" aria-label="Dish filters">
+        <div
+          className="mb-7 flex flex-wrap items-center gap-2.5"
+          aria-label="Dish filters"
+        >
           <Popover.Root open={filtersOpen} onOpenChange={handleFilterOpenChange}>
             <Popover.Trigger asChild>
               <button
                 type="button"
-                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#F1F3F5] px-4 text-sm font-black text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(26,26,26,0.09)]"
+                className={`${styles.filterTriggerButton} inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-black`}
                 aria-label="Open dish filters"
               >
                 <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -198,7 +214,9 @@ export function DishesGrid({
                 aria-label="Dish filter options"
               >
                 <div className="px-5 pb-4 pt-5">
-                  <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-[#6B6B6B]">Food Type</p>
+                  <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-[#6B6B6B]">
+                    Food Type
+                  </p>
                   <div className="mt-2" role="radiogroup" aria-label="Food type">
                     {FOOD_FILTERS.map((option) => {
                       const selected = draftFoodPreference === option.value;
@@ -209,10 +227,13 @@ export function DishesGrid({
                           role="radio"
                           aria-checked={selected}
                           onClick={() => setDraftFoodPreference(option.value)}
-                          className="flex w-full items-center justify-between gap-4 rounded-xl bg-white px-1 py-2.5 text-left text-sm font-bold text-[#1A1A1A] transition hover:bg-[#F1F3F5]"
+                          className={`${styles.filterOptionButton} flex w-full items-center justify-between gap-4 rounded-xl px-1 py-2.5 text-left text-sm font-bold`}
                         >
                           <span className="inline-flex items-center gap-2.5">
-                            <span className={`h-2.5 w-2.5 rounded-full ${option.dotClass}`} aria-hidden="true" />
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full ${option.dotClass}`}
+                              aria-hidden="true"
+                            />
                             {option.label}
                           </span>
                           <SelectionCircle selected={selected} />
@@ -223,7 +244,9 @@ export function DishesGrid({
                 </div>
 
                 <div className="border-t border-[#F1F3F5] px-5 py-4">
-                  <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-[#6B6B6B]">Sorting</p>
+                  <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-[#6B6B6B]">
+                    Sorting
+                  </p>
                   <div className="mt-2" role="radiogroup" aria-label="Dish sorting">
                     {SORT_FILTERS.map((option) => {
                       const selected = draftSort === option.value;
@@ -234,7 +257,7 @@ export function DishesGrid({
                           role="radio"
                           aria-checked={selected}
                           onClick={() => setDraftSort(option.value)}
-                          className="flex w-full items-center justify-between gap-4 rounded-xl bg-white px-1 py-2.5 text-left text-sm font-bold text-[#1A1A1A] transition hover:bg-[#F1F3F5]"
+                          className={`${styles.filterOptionButton} flex w-full items-center justify-between gap-4 rounded-xl px-1 py-2.5 text-left text-sm font-bold`}
                         >
                           <span>{option.label}</span>
                           <SelectionCircle selected={selected} />
@@ -248,7 +271,7 @@ export function DishesGrid({
                   <button
                     type="button"
                     onClick={removeFilters}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F1F3F5] px-3 text-xs font-black text-[#6B6B6B] transition hover:-translate-y-0.5 hover:text-[#1A1A1A]"
+                    className={`${styles.filterFooterButton} inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-black`}
                   >
                     <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                     Remove Filters
@@ -256,7 +279,7 @@ export function DishesGrid({
                   <button
                     type="button"
                     onClick={applyFilters}
-                    className="min-h-11 rounded-xl bg-[#F1F3F5] px-4 text-sm font-black text-[#F62E18] transition hover:-translate-y-0.5 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)]"
+                    className={`${styles.filterFooterButton} min-h-11 rounded-xl px-4 text-sm font-black`}
                   >
                     Apply
                   </button>
@@ -269,7 +292,7 @@ export function DishesGrid({
             <button
               type="button"
               onClick={removeFilters}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#F1F3F5] px-4 text-sm font-black text-[#6B6B6B] transition-all duration-200 hover:-translate-y-0.5 hover:text-[#1A1A1A]"
+              className={`${styles.filterFooterButton} inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-black`}
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Remove Filters
@@ -280,9 +303,13 @@ export function DishesGrid({
 
       {state === "loading" ? (
         <div>
-          <p className="sr-only" role="status">Loading nearby dishes</p>
+          <p className="sr-only" role="status">
+            Loading nearby dishes
+          </p>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 8 }, (_, index) => <DishSkeleton key={index} />)}
+            {Array.from({ length: 8 }, (_, index) => (
+              <DishSkeleton key={index} />
+            ))}
           </div>
         </div>
       ) : null}
@@ -290,21 +317,47 @@ export function DishesGrid({
       {state === "address-required" ? (
         <div className="rounded-[2rem] border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_14px_40px_rgba(26,26,26,0.05)] md:p-12">
           <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-            <MapPin className="h-6 w-6 fill-current" strokeWidth={1.5} aria-hidden="true" />
+            <MapPin
+              className="h-6 w-6 fill-current"
+              strokeWidth={1.5}
+              aria-hidden="true"
+            />
           </span>
-          <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">Choose your delivery location</h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">{message}</p>
-          <button type="button" onClick={onManageAddress} className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-all hover:-translate-y-0.5 hover:scale-[1.02]">Choose location</button>
+          <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">
+            Choose your delivery location
+          </h3>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
+            {message}
+          </p>
+          <button
+            type="button"
+            onClick={onManageAddress}
+            className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-all hover:-translate-y-0.5 hover:scale-[1.02]"
+          >
+            Choose location
+          </button>
         </div>
       ) : null}
 
       {state === "error" ? (
         <div className="rounded-[2rem] border border-[#F62E18]/25 bg-white p-8 text-center md:p-12">
-          <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
-          <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">Nearby dishes could not be loaded</h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">{message}</p>
-          <button type="button" onClick={onRetry} className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 text-sm font-black text-[#F62E18] transition hover:bg-[#F62E18] hover:text-white">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
+          <AlertTriangle
+            className="mx-auto h-9 w-9 text-[#F62E18]"
+            aria-hidden="true"
+          />
+          <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">
+            Nearby dishes could not be loaded
+          </h3>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
+            {message}
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 text-sm font-black text-[#F62E18] transition hover:bg-[#F62E18] hover:text-white"
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            Try again
           </button>
         </div>
       ) : null}
@@ -312,17 +365,29 @@ export function DishesGrid({
       {state === "ready" && dishes.length === 0 ? (
         <div className="rounded-[2rem] border border-dashed border-[#E5E7EB] bg-[#F1F3F5] p-8 text-center md:p-10">
           <SearchX className="mx-auto h-9 w-9 text-[#6B6B6B]" aria-hidden="true" />
-          <h3 className="mt-4 font-display text-lg font-black text-[#1A1A1A]">Nothing available for this view</h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">{emptyMessage}</p>
+          <h3 className="mt-4 font-display text-lg font-black text-[#1A1A1A]">
+            Nothing available for this view
+          </h3>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
+            {emptyMessage}
+          </p>
           {!normalizedSearch ? (
-            <button type="button" onClick={onRetry} className="mt-5 min-h-10 rounded-full border border-[#F62E18] bg-white px-4 text-xs font-black text-[#F62E18] transition hover:bg-[#F62E18] hover:text-white">Refresh live catalog</button>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-5 min-h-10 rounded-full border border-[#F62E18] bg-white px-4 text-xs font-black text-[#F62E18] transition hover:bg-[#F62E18] hover:text-white"
+            >
+              Refresh live catalog
+            </button>
           ) : null}
         </div>
       ) : null}
 
       {state === "ready" && dishes.length > 0 ? (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {dishes.map((dish) => <DishCard key={dish.id} dish={dish} />)}
+          {dishes.map((dish) => (
+            <DishCard key={dish.id} dish={dish} />
+          ))}
         </div>
       ) : null}
     </section>

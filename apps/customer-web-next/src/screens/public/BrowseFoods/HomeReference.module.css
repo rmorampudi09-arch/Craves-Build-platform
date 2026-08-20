@@ -71,8 +71,10 @@
   -webkit-appearance: none;
   border: 0 !important;
   background: #ffffff !important;
+  color: #1a1a1a !important;
   box-shadow: none !important;
   outline: none;
+  transform: none !important;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -113,6 +115,141 @@
   transform: scale(1.095);
 }
 
+.categoryArrowButton,
+.categoryArrowButton:focus,
+.categoryArrowButton:focus-visible,
+.categoryArrowButton:active {
+  border: 1px solid #f1f3f5 !important;
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 8px 24px rgba(26, 26, 26, 0.14) !important;
+}
+
+.categoryArrowButton:hover {
+  border: 1px solid #f1f3f5 !important;
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  transform: translateY(-55%) scale(1.03) !important;
+  box-shadow: 0 12px 28px rgba(26, 26, 26, 0.18) !important;
+}
+
+.filterTriggerButton,
+.filterTriggerButton:hover,
+.filterTriggerButton:focus,
+.filterTriggerButton:focus-visible,
+.filterTriggerButton:active {
+  border: 1px solid transparent !important;
+  background: #f1f3f5 !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 4px 14px rgba(26, 26, 26, 0.05) !important;
+}
+
+.filterTriggerButton:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 8px 20px rgba(26, 26, 26, 0.09) !important;
+}
+
+.filterOptionButton,
+.filterOptionButton:hover,
+.filterOptionButton:focus,
+.filterOptionButton:focus-visible,
+.filterOptionButton:active {
+  border: 0 !important;
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.filterSelectionCircle {
+  border-color: #6b6b6b;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.filterSelectionCircleSelected {
+  border-color: #f62e18 !important;
+}
+
+.filterOptionButton:hover .filterSelectionCircle,
+.filterOptionButton:focus-visible .filterSelectionCircle {
+  border-color: #f62e18 !important;
+  box-shadow: 0 0 0 3px rgba(246, 46, 24, 0.1);
+}
+
+.filterFooterButton,
+.filterFooterButton:hover,
+.filterFooterButton:focus,
+.filterFooterButton:focus-visible,
+.filterFooterButton:active {
+  border: 1px solid transparent !important;
+  background: #f1f3f5 !important;
+  color: #1a1a1a !important;
+  box-shadow: none !important;
+}
+
+.filterFooterButton:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(26, 26, 26, 0.08) !important;
+}
+
+.dishAddButton,
+.dishAddButton:hover,
+.dishAddButton:focus,
+.dishAddButton:focus-visible,
+.dishAddButton:active {
+  border: 1px solid transparent !important;
+  background: #f1f3f5 !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 5px 14px rgba(26, 26, 26, 0.06) !important;
+}
+
+.dishAddButton:hover {
+  transform: translateY(-1px) !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(26, 26, 26, 0.1) !important;
+}
+
+.dishQuantityButton,
+.dishQuantityButton:hover,
+.dishQuantityButton:focus,
+.dishQuantityButton:focus-visible,
+.dishQuantityButton:active {
+  border: 0 !important;
+  background: #f1f3f5 !important;
+  color: #1a1a1a !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.dishQuantityButton:hover {
+  background: #ffffff !important;
+}
+
+.floatingCartButton,
+.floatingCartButton:focus,
+.floatingCartButton:focus-visible,
+.floatingCartButton:active {
+  border: 1px solid #f1f3f5 !important;
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  box-shadow:
+    0 18px 48px rgba(26, 26, 26, 0.14),
+    inset 0 1px 0 #ffffff !important;
+}
+
+.floatingCartButton:hover {
+  border: 1px solid #f1f3f5 !important;
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  transform: translateY(-3px) !important;
+  box-shadow:
+    0 22px 54px rgba(26, 26, 26, 0.17),
+    0 0 30px rgba(46, 125, 50, 0.24),
+    inset 0 1px 0 #ffffff !important;
+}
+
 .cartEnter {
   animation: cartRise 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -142,5 +279,12 @@
   .categoryImageShell,
   .categoryImage {
     transition: none;
+  }
+
+  .filterTriggerButton:hover,
+  .filterFooterButton:hover,
+  .dishAddButton:hover,
+  .floatingCartButton:hover {
+    transform: none !important;
   }
 }

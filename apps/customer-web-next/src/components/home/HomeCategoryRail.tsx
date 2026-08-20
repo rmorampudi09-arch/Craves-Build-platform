@@ -13,8 +13,6 @@ import {
 import biryaniImage from "@/assets/images/food-chicken-biryani.jpg";
 import curryImage from "@/assets/images/food-chicken-curry.jpg";
 import mealsImage from "@/assets/images/food-thali.jpg";
-import snacksImage from "@/assets/images/food-paratha.jpg";
-import tiffinImage from "@/assets/images/food-dosa.jpg";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 export type CravingCategory =
@@ -38,15 +36,60 @@ type VisualCategory = {
 };
 
 const categories: readonly VisualCategory[] = [
-  { label: "Biryani", value: "Biryani", fallbackImage: biryaniImage, icon: FaUtensils },
-  { label: "Tiffins", value: "Tiffins", fallbackImage: tiffinImage, icon: FaUtensils },
-  { label: "Curry", value: "Curry", fallbackImage: curryImage, icon: FaUtensils },
-  { label: "Meals", value: "Meals", fallbackImage: mealsImage, icon: FaUtensils },
-  { label: "Snacks", value: "Snacks", fallbackImage: snacksImage, icon: FaCookieBite },
-  { label: "Sweets", value: "Sweets", icon: FaCandyCane },
-  { label: "Desserts", value: "Desserts", icon: FaCandyCane },
-  { label: "Cake", value: "Cake", icon: FaBirthdayCake },
-  { label: "Fast Food", value: "Fast Food", icon: FaUtensils },
+  {
+    label: "Biryani",
+    value: "Biryani",
+    fallbackImage: biryaniImage,
+    icon: FaUtensils,
+  },
+  {
+    label: "Tiffins",
+    value: "Tiffins",
+    fallbackImage: "/home/cravings/craving-idli.webp",
+    icon: FaUtensils,
+  },
+  {
+    label: "Curry",
+    value: "Curry",
+    fallbackImage: curryImage,
+    icon: FaUtensils,
+  },
+  {
+    label: "Meals",
+    value: "Meals",
+    fallbackImage: mealsImage,
+    icon: FaUtensils,
+  },
+  {
+    label: "Snacks",
+    value: "Snacks",
+    fallbackImage: "/home/cravings/craving-rolls.webp",
+    icon: FaCookieBite,
+  },
+  {
+    label: "Sweets",
+    value: "Sweets",
+    fallbackImage: "/home/cravings/craving-dessert.webp",
+    icon: FaCandyCane,
+  },
+  {
+    label: "Desserts",
+    value: "Desserts",
+    fallbackImage: "/home/cravings/craving-dessert.webp",
+    icon: FaCandyCane,
+  },
+  {
+    label: "Cake",
+    value: "Cake",
+    fallbackImage: "/home/cravings/craving-dessert.webp",
+    icon: FaBirthdayCake,
+  },
+  {
+    label: "Fast Food",
+    value: "Fast Food",
+    fallbackImage: "/home/cravings/craving-shawarma.webp",
+    icon: FaUtensils,
+  },
   { label: "Pickles", value: "Pickles", icon: FaPepperHot },
 ];
 
@@ -56,7 +99,11 @@ interface HomeCategoryRailProps {
   onSelect: (category: CravingCategory) => void;
 }
 
-export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCategoryRailProps) {
+export function HomeCategoryRail({
+  selected,
+  images = {},
+  onSelect,
+}: HomeCategoryRailProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -167,7 +214,7 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
               type="button"
               onClick={() => scrollCategories(-1)}
               aria-label="Show previous craving categories"
-              className="absolute -left-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] bg-white text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[transform,box-shadow] duration-200 hover:-translate-y-[55%] hover:bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] sm:flex"
+              className={`${styles.categoryArrowButton} absolute -left-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] bg-white text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[transform,box-shadow] duration-200 sm:flex`}
             >
               <FaChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -181,7 +228,7 @@ export function HomeCategoryRail({ selected, images = {}, onSelect }: HomeCatego
               type="button"
               onClick={() => scrollCategories(1)}
               aria-label="Show more craving categories"
-              className="absolute -right-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] bg-white text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[transform,box-shadow] duration-200 hover:-translate-y-[55%] hover:bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] sm:flex"
+              className={`${styles.categoryArrowButton} absolute -right-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] bg-white text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[transform,box-shadow] duration-200 sm:flex`}
             >
               <FaChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
             </button>

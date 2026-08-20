@@ -253,6 +253,10 @@ public class SavedMenuItemReadService {
             && kitchenActive
             && item.itemAvailable()
             && schedule.availableNow();
+        Instant surfacedNextAvailability = switch (state) {
+            case COOKING_LATER_TODAY, NOT_TODAY, PAUSED -> schedule.nextAvailabilityAt();
+            default -> null;
+        };
 
         return new SavedMenuItemResponse(
             item.menuItemId(),
@@ -280,7 +284,7 @@ public class SavedMenuItemReadService {
             item.acceptingOrders(),
             schedule.paused(),
             sellableNow,
-            sellableNow ? null : schedule.nextAvailabilityAt()
+            surfacedNextAvailability
         );
     }
 

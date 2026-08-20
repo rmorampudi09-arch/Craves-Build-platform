@@ -95,7 +95,9 @@ export function useToggleCustomerFavorite() {
       try {
         if (targetFavorite) {
           const saved = await customerFavoritesApi.save(menuItemId);
-          await discardFavoriteMutation(identityId, menuItemId);
+          // Server acknowledgement is authoritative. A local queue-cleanup
+          // failure must never turn a confirmed save into a fake offline error.
+          await discardFavoriteMutation(identityId, menuItemId).catch(() => undefined);
           return {
             menuItemId,
             favorite: true,
@@ -105,7 +107,9 @@ export function useToggleCustomerFavorite() {
         }
 
         await customerFavoritesApi.remove(menuItemId);
-        await discardFavoriteMutation(identityId, menuItemId);
+        // Same rule for DELETE: once the server confirms the idempotent remove,
+        // preserve that truth even if AsyncStorage cleanup is temporarily bad.
+        await discardFavoriteMutation(identityId, menuItemId).catch(() => undefined);
         return {
           menuItemId,
           favorite: false,

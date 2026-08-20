@@ -84,11 +84,6 @@ function object(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function string(value: unknown, nullable = false): string | null {
-  if (value === null || value === undefined) return nullable ? null : null;
-  return typeof value === "string" ? value : null;
-}
-
 function number(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

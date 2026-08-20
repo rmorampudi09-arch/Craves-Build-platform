@@ -19,11 +19,13 @@ export type CravingCategory =
   | "Biryani"
   | "Tiffins"
   | "Curry"
+  | "Meals"
   | "Snacks"
   | "Sweets"
   | "Desserts"
   | "Cake"
   | "Fast Food"
+  | "Ice Cream"
   | "Pickles";
 
 type VisualCategory = {
@@ -37,11 +39,13 @@ const categories: readonly VisualCategory[] = [
   { label: "Biryani", value: "Biryani", fallbackImage: biryaniImage, icon: FaUtensils },
   { label: "Tiffins", value: "Tiffins", fallbackImage: tiffinImage, icon: FaUtensils },
   { label: "Curry", value: "Curry", icon: FaUtensils },
+  { label: "Meals", value: "Meals", icon: FaUtensils },
   { label: "Snacks", value: "Snacks", fallbackImage: snacksImage, icon: FaCookieBite },
   { label: "Sweets", value: "Sweets", icon: FaCandyCane },
   { label: "Desserts", value: "Desserts", icon: FaCandyCane },
   { label: "Cake", value: "Cake", icon: FaBirthdayCake },
   { label: "Fast Food", value: "Fast Food", icon: FaUtensils },
+  { label: "Ice Cream", value: "Ice Cream", icon: FaCandyCane },
   { label: "Pickles", value: "Pickles", icon: FaPepperHot },
 ];
 

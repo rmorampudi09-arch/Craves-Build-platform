@@ -117,6 +117,26 @@ describe('customerFavoritesOfflineQueue', () => {
     expect(getFavoriteMutationQueueSnapshot(CUSTOMER_A)).toHaveLength(2);
   });
 
+  it('does not resurrect a queue cleared while replay is in flight', async () => {
+    await enqueueFavoriteMutation(CUSTOMER_A, ITEM_A, true);
+
+    let releaseHandler: (() => void) | undefined;
+    const waiting = new Promise<void>(resolve => {
+      releaseHandler = resolve;
+    });
+    const replay = replayFavoriteMutationQueue(CUSTOMER_A, async () => waiting);
+
+    await Promise.resolve();
+    await clearFavoriteMutationQueue(CUSTOMER_A);
+    releaseHandler?.();
+    await replay;
+
+    expect(getFavoriteMutationQueueSnapshot(CUSTOMER_A)).toEqual([]);
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
+      `@craves/customer-favorites/pending/v1/${CUSTOMER_A}`,
+    );
+  });
+
   it('rehydrates only valid rows for the requested identity', async () => {
     const values = installMemoryStorage();
     values.set(

@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 class SupportCaseServiceValidationTest {
@@ -36,6 +38,17 @@ class SupportCaseServiceValidationTest {
             "+918888888888",
             List.of("SUPPORT_ADMIN")
         );
+    }
+
+    @Test
+    void springSelectsJdbcTemplateConstructor() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class));
+            context.register(SupportCaseService.class);
+            context.refresh();
+
+            assertThat(context.getBean(SupportCaseService.class)).isNotNull();
+        }
     }
 
     @Test

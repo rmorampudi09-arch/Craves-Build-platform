@@ -4,7 +4,7 @@ export type HomeDishSort =
   | "price-low-high"
   | "price-high-low";
 
-export type HomeFoodPreference = "all" | "veg" | "non-veg";
+export type HomeFoodPreference = "all" | "veg" | "non-veg" | "egg";
 
 export type HomeReturnState = {
   scrollY: number;
@@ -28,6 +28,7 @@ const HOME_FOOD_PREFERENCES = new Set<HomeFoodPreference>([
   "all",
   "veg",
   "non-veg",
+  "egg",
 ]);
 
 function isBrowser(): boolean {

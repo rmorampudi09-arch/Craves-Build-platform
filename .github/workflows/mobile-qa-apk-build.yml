@@ -6,6 +6,11 @@ on:
       - build/qa-mobile-apk-2026-08-20
     paths:
       - .github/workflows/mobile-qa-apk-build.yml
+  pull_request:
+    branches:
+      - qa/mobile-findings-2026-08-19
+    paths:
+      - .github/workflows/mobile-qa-apk-build.yml
   workflow_dispatch:
 
 permissions:

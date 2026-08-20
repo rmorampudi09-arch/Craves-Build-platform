@@ -11,6 +11,7 @@ import in.craves.catalog.web.ApiDtos.SpiceLevel;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class NearbyDiscoveryServiceCriteriaValidationTest {
@@ -22,6 +23,19 @@ class NearbyDiscoveryServiceCriteriaValidationTest {
         properties.setMaxQueryRadiusMeters(50_000);
         properties.setMaxPageSize(100);
         service = new NearbyDiscoveryService(new JdbcTemplate(), properties);
+    }
+
+    @Test
+    void springSelectsJdbcTemplateConstructor() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            CatalogDiscoveryProperties properties = new CatalogDiscoveryProperties();
+            context.registerBean(JdbcTemplate.class, JdbcTemplate::new);
+            context.registerBean(CatalogDiscoveryProperties.class, () -> properties);
+            context.register(NearbyDiscoveryService.class);
+            context.refresh();
+
+            assertThat(context.getBean(NearbyDiscoveryService.class)).isNotNull();
+        }
     }
 
     @Test

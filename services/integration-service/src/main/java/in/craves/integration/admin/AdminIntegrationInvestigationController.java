@@ -34,6 +34,7 @@ public class AdminIntegrationInvestigationController {
         PaymentSnapshot payment = jdbcTemplate.query(
             """
             SELECT id, checkout_id, customer_identity_id, craves_payment_order_ref,
+                   provider, provider_order_id, provider_payment_id,
                    cashfree_order_id, cashfree_cf_order_id, amount, currency,
                    status, provider_status, created_at, updated_at
               FROM payment_schema.payment_order
@@ -42,6 +43,7 @@ public class AdminIntegrationInvestigationController {
             (rs, rowNum) -> new PaymentSnapshot(
                 rs.getObject("id", UUID.class), rs.getObject("checkout_id", UUID.class),
                 rs.getObject("customer_identity_id", UUID.class), rs.getString("craves_payment_order_ref"),
+                rs.getString("provider"), rs.getString("provider_order_id"), rs.getString("provider_payment_id"),
                 rs.getString("cashfree_order_id"), rs.getString("cashfree_cf_order_id"),
                 rs.getBigDecimal("amount"), rs.getString("currency"), rs.getString("status"),
                 rs.getString("provider_status"), rs.getObject("created_at", OffsetDateTime.class),
@@ -51,15 +53,16 @@ public class AdminIntegrationInvestigationController {
 
         List<PaymentAttemptSnapshot> attempts = jdbcTemplate.query(
             """
-            SELECT cf_payment_id, payment_status, payment_amount, payment_currency, created_at
+            SELECT provider, provider_payment_id, cf_payment_id,
+                   payment_status, payment_amount, payment_currency, created_at
               FROM payment_schema.payment_attempt
              WHERE payment_order_id = ?
              ORDER BY created_at, id
             """,
             (rs, rowNum) -> new PaymentAttemptSnapshot(
-                rs.getString("cf_payment_id"), rs.getString("payment_status"),
-                rs.getBigDecimal("payment_amount"), rs.getString("payment_currency"),
-                rs.getObject("created_at", OffsetDateTime.class)
+                rs.getString("provider"), rs.getString("provider_payment_id"), rs.getString("cf_payment_id"),
+                rs.getString("payment_status"), rs.getBigDecimal("payment_amount"),
+                rs.getString("payment_currency"), rs.getObject("created_at", OffsetDateTime.class)
             ), paymentOrderId
         );
 
@@ -87,7 +90,8 @@ public class AdminIntegrationInvestigationController {
         RefundSnapshot refund = jdbcTemplate.query(
             """
             SELECT id, payment_order_id, checkout_id, chef_sub_order_id, customer_identity_id,
-                   request_event_id, cashfree_order_id, refund_ref, idempotency_key,
+                   request_event_id, provider, provider_order_id, provider_payment_id, provider_refund_id,
+                   cashfree_order_id, refund_ref, idempotency_key,
                    amount, currency, reason, status, provider_status, cf_refund_id,
                    attempt_count, next_attempt_at, processed_at, last_error, created_at, updated_at
               FROM payment_schema.refund
@@ -97,7 +101,8 @@ public class AdminIntegrationInvestigationController {
                 rs.getObject("id", UUID.class), rs.getObject("payment_order_id", UUID.class),
                 rs.getObject("checkout_id", UUID.class), rs.getObject("chef_sub_order_id", UUID.class),
                 rs.getObject("customer_identity_id", UUID.class), rs.getObject("request_event_id", UUID.class),
-                rs.getString("cashfree_order_id"), rs.getString("refund_ref"),
+                rs.getString("provider"), rs.getString("provider_order_id"), rs.getString("provider_payment_id"),
+                rs.getString("provider_refund_id"), rs.getString("cashfree_order_id"), rs.getString("refund_ref"),
                 rs.getObject("idempotency_key", UUID.class), rs.getBigDecimal("amount"),
                 rs.getString("currency"), rs.getString("reason"), rs.getString("status"),
                 rs.getString("provider_status"), rs.getString("cf_refund_id"), rs.getInt("attempt_count"),
@@ -243,13 +248,16 @@ public class AdminIntegrationInvestigationController {
     private record AuditContext(UUID actorIdentityId, String resourceType, UUID resourceId, String reason, UUID correlationId) {}
     public record PaymentInvestigationResponse(PaymentSnapshot payment, List<PaymentAttemptSnapshot> attempts, List<PaymentEventSnapshot> events) {}
     public record PaymentSnapshot(UUID paymentOrderId, UUID checkoutId, UUID customerIdentityId, String cravesReference,
+        String provider, String providerOrderId, String providerPaymentId,
         String cashfreeOrderId, String cashfreeCfOrderId, BigDecimal amount, String currency,
         String status, String providerStatus, OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
-    public record PaymentAttemptSnapshot(String cashfreePaymentId, String paymentStatus, BigDecimal amount, String currency, OffsetDateTime createdAt) {}
+    public record PaymentAttemptSnapshot(String provider, String providerPaymentId, String cashfreePaymentId,
+        String paymentStatus, BigDecimal amount, String currency, OffsetDateTime createdAt) {}
     public record PaymentEventSnapshot(String providerEventId, String eventType, String paymentStatus, OffsetDateTime createdAt) {}
     public record RefundInvestigationResponse(RefundSnapshot refund, List<OutboxSnapshot> statusEvents) {}
     public record RefundSnapshot(UUID refundId, UUID paymentOrderId, UUID checkoutId, UUID chefSubOrderId, UUID customerIdentityId,
-        UUID requestEventId, String cashfreeOrderId, String refundReference, UUID idempotencyKey,
+        UUID requestEventId, String provider, String providerOrderId, String providerPaymentId, String providerRefundId,
+        String cashfreeOrderId, String refundReference, UUID idempotencyKey,
         BigDecimal amount, String currency, String reason, String status, String providerStatus,
         String cashfreeRefundId, int attemptCount, OffsetDateTime nextAttemptAt, OffsetDateTime processedAt,
         String lastError, OffsetDateTime createdAt, OffsetDateTime updatedAt) {}

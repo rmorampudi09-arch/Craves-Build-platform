@@ -44,7 +44,7 @@ class ShiprocketTransportTest {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(ShiprocketProperties.class, ShiprocketProperties::new);
             context.registerBean(ShiprocketAuthClient.class, () -> mock(ShiprocketAuthClient.class));
-            context.registerBean(ObjectMapper.class, ObjectMapper::new);
+            context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
             context.register(ShiprocketTransport.class);
             context.refresh();
 

@@ -32,7 +32,6 @@ import type {NearbyDish} from '../../home/api/homeFeedApi';
 import {
   filterHomeDishes,
   flattenNearbyDishPages,
-  formatDishPrice,
   formatDistance,
 } from '../../home/homePresentation';
 import {useHomeNearbyDishesQuery} from '../../home/query/homeFeedQueries';
@@ -202,9 +201,6 @@ export function CustomerHomeSearchScreen() {
                         From {kitchenName} · {formatDistance(item.dish.distanceMeters)}
                       </Text>
                     </View>
-                    <Text style={styles.resultPrice}>
-                      {formatDishPrice(item.dish.price, item.dish.currency)}
-                    </Text>
                     <Icon name="chevron-right" size={18} color={colors.textSecondary} surface={false} />
                   </Pressable>
                 );
@@ -326,10 +322,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxs,
     color: colors.textSecondary,
     fontSize: typography.tiny,
-  },
-  resultPrice: {
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
   },
 });

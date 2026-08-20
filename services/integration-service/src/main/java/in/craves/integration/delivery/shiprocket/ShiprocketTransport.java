@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.StringJoiner;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +26,7 @@ public class ShiprocketTransport {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
+    @Autowired
     public ShiprocketTransport(ShiprocketProperties properties,
                                ShiprocketAuthClient authClient,
                                ObjectMapper objectMapper) {

@@ -30,7 +30,7 @@ BACKEND="https://${FQDN}/api/v1/chef/orders"
 put_operation(){
   local ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" PARAMS="$5"; local BODY RENDERED POLICY_BODY
   BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
-  printf '%s' "{\"properties\":{\"displayName\":\"$DISPLAY\",\"method\":\"$METHOD\",\"urlTemplate\":\"$TEMPLATE\",\"templateParameters\":$PARAMS,\"responses\":[{\"statusCode\":200,\"description\":\"Chef order response\"},{\"statusCode\":401,\"description\":\"Authentication required\"},{\"statusCode\":403,\"description\":\"Chef role required\"}]}}" >"$BODY"
+  printf '%s' "{\"properties\":{\"displayName\":\"$DISPLAY\",\"method\":\"$METHOD\",\"urlTemplate\":\"$TEMPLATE\",\"templateParameters\":$PARAMS,\"responses\":[{\"statusCode\":200,\"description\":\"Chef order response\"},{\"statusCode\":401,\"description\":\"Authentication required\"},{\"statusCode\":403,\"description\":\"Chef role required\"},{\"statusCode\":404,\"description\":\"Chef-owned order not found\"}]}}" >"$BODY"
   az rest --method put --url "${MGMT}/operations/${ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
   sed "s|__CHEF_ORDERS_BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
   jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
@@ -39,5 +39,6 @@ put_operation(){
 }
 put_operation "list-my-chef-orders" "GET" "/" "List my chef orders" '[]'
 put_operation "get-my-chef-order" "GET" "/{orderId}" "Get my chef order" '[{"name":"orderId","type":"string","required":true}]'
-for ID in list-my-chef-orders get-my-chef-order; do az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none; done
-echo "SUCCESS: Chef order read operations configured on API $API_ID."
+put_operation "get-my-chef-order-delivery-status" "GET" "/{orderId}/delivery-status" "Get my chef order delivery status" '[{"name":"orderId","type":"string","required":true}]'
+for ID in list-my-chef-orders get-my-chef-order get-my-chef-order-delivery-status; do az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none; done
+echo "SUCCESS: Chef order read + delivery status operations configured on API $API_ID."

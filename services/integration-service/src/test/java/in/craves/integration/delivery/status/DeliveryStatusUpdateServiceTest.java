@@ -18,6 +18,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderS
 import in.craves.integration.delivery.provider.DeliveryWebhookNormalizer;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.DeliveryJobState;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.WebhookWorkItem;
+import in.craves.integration.delivery.telemetry.DeliveryTelemetryPublisherService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -28,10 +29,11 @@ class DeliveryStatusUpdateServiceTest {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
-    void appliesNewerWebhookAndEnqueuesStatusOutboxTransactionally() {
+    void appliesNewerWebhookAndEnqueuesStatusOutboxAndTelemetryTransactionally() {
         DeliveryStatusRepository repository = mock(DeliveryStatusRepository.class);
         DeliveryOutboxRepository outbox = mock(DeliveryOutboxRepository.class);
         DeliveryWebhookNormalizer normalizer = mock(DeliveryWebhookNormalizer.class);
+        DeliveryTelemetryPublisherService telemetryPublisher = mock(DeliveryTelemetryPublisherService.class);
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setTrackingPollSeconds(60);
         when(normalizer.providerId()).thenReturn("borzo");
@@ -68,12 +70,8 @@ class DeliveryStatusUpdateServiceTest {
             isNull()
         )).thenReturn(true);
 
-        DeliveryStatusUpdateService service = new DeliveryStatusUpdateService(
-            List.of(normalizer),
-            repository,
-            outbox,
-            properties,
-            objectMapper
+        DeliveryStatusUpdateService service = service(
+            normalizer, repository, outbox, properties, telemetryPublisher
         );
 
         var result = service.processWebhook(workItem);
@@ -95,6 +93,7 @@ class DeliveryStatusUpdateServiceTest {
             eq(orderId),
             any()
         );
+        verify(telemetryPublisher).captureWebhook(job, update);
         verify(repository).markWebhookProcessed(
             workItem.id(),
             jobId,
@@ -106,10 +105,58 @@ class DeliveryStatusUpdateServiceTest {
     }
 
     @Test
-    void recordsOlderWebhookButDoesNotRegressDeliveryJobOrPublish() {
+    void newerSameStateWebhookCanRefreshTelemetryWithoutPublishingAnotherStatus() {
         DeliveryStatusRepository repository = mock(DeliveryStatusRepository.class);
         DeliveryOutboxRepository outbox = mock(DeliveryOutboxRepository.class);
         DeliveryWebhookNormalizer normalizer = mock(DeliveryWebhookNormalizer.class);
+        DeliveryTelemetryPublisherService telemetryPublisher = mock(DeliveryTelemetryPublisherService.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        when(normalizer.providerId()).thenReturn("shiprocket");
+
+        UUID jobId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID subOrderId = UUID.randomUUID();
+        Instant previous = Instant.parse("2026-07-24T03:00:00Z");
+        Instant observedAt = Instant.parse("2026-07-24T03:01:00Z");
+        ProviderStatusUpdate update = new ProviderStatusUpdate(
+            "shiprocket", "AWB123", "AWB123", DeliveryStatus.IN_TRANSIT,
+            "IN TRANSIT", "https://tracking.example/AWB123", observedAt,
+            objectMapper.createObjectNode()
+        );
+        WebhookWorkItem workItem = new WebhookWorkItem(
+            UUID.randomUUID(), "shiprocket", "provider-event-2",
+            objectMapper.createObjectNode().put("event_type", "shipment_status"), 1
+        );
+        DeliveryJobState job = new DeliveryJobState(
+            jobId, orderId, subOrderId, "shiprocket", "AWB123", "IN_TRANSIT",
+            "IN TRANSIT", "https://tracking.example/AWB123", previous
+        );
+
+        when(normalizer.normalize(workItem.rawPayload())).thenReturn(update);
+        when(repository.findJobByProviderOrder("shiprocket", "AWB123")).thenReturn(Optional.of(job));
+        when(repository.lockJob(jobId)).thenReturn(Optional.of(job));
+        when(repository.insertEventIfAbsent(
+            eq(jobId), eq("shiprocket"), eq("provider-event-2"), eq("shipment_status"),
+            eq("WEBHOOK"), eq("IN_TRANSIT"), eq("IN TRANSIT"), eq(workItem.rawPayload()),
+            eq(observedAt), eq(false), eq("NO_STATE_CHANGE")
+        )).thenReturn(true);
+
+        var result = service(normalizer, repository, outbox, properties, telemetryPublisher)
+            .processWebhook(workItem);
+
+        assertThat(result.applied()).isFalse();
+        assertThat(result.result()).isEqualTo("NO_STATE_CHANGE");
+        verify(repository, never()).applyJobStatus(any(), anyString(), anyString(), any(), any(), anyString(), any());
+        verify(outbox, never()).enqueue(anyString(), any(), any(), any());
+        verify(telemetryPublisher).captureWebhook(job, update);
+    }
+
+    @Test
+    void recordsOlderWebhookButDoesNotRegressDeliveryJobPublishOrTelemetry() {
+        DeliveryStatusRepository repository = mock(DeliveryStatusRepository.class);
+        DeliveryOutboxRepository outbox = mock(DeliveryOutboxRepository.class);
+        DeliveryWebhookNormalizer normalizer = mock(DeliveryWebhookNormalizer.class);
+        DeliveryTelemetryPublisherService telemetryPublisher = mock(DeliveryTelemetryPublisherService.class);
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         when(normalizer.providerId()).thenReturn("borzo");
 
@@ -145,28 +192,14 @@ class DeliveryStatusUpdateServiceTest {
             eq("STALE_OR_EQUAL_OBSERVED_AT")
         )).thenReturn(true);
 
-        DeliveryStatusUpdateService service = new DeliveryStatusUpdateService(
-            List.of(normalizer),
-            repository,
-            outbox,
-            properties,
-            objectMapper
-        );
-
-        var result = service.processWebhook(workItem);
+        var result = service(normalizer, repository, outbox, properties, telemetryPublisher)
+            .processWebhook(workItem);
 
         assertThat(result.applied()).isFalse();
         assertThat(result.result()).isEqualTo("STALE_OR_EQUAL_OBSERVED_AT");
-        verify(repository, never()).applyJobStatus(
-            any(),
-            anyString(),
-            anyString(),
-            any(),
-            any(),
-            anyString(),
-            any()
-        );
+        verify(repository, never()).applyJobStatus(any(), anyString(), anyString(), any(), any(), anyString(), any());
         verify(outbox, never()).enqueue(anyString(), any(), any(), any());
+        verify(telemetryPublisher, never()).captureWebhook(any(), any());
         verify(repository).markWebhookProcessed(
             workItem.id(),
             jobId,
@@ -178,10 +211,11 @@ class DeliveryStatusUpdateServiceTest {
     }
 
     @Test
-    void protectsTerminalDeliveryFromLaterNonTerminalCallback() {
+    void protectsTerminalDeliveryFromLaterNonTerminalCallbackAndTelemetry() {
         DeliveryStatusRepository repository = mock(DeliveryStatusRepository.class);
         DeliveryOutboxRepository outbox = mock(DeliveryOutboxRepository.class);
         DeliveryWebhookNormalizer normalizer = mock(DeliveryWebhookNormalizer.class);
+        DeliveryTelemetryPublisherService telemetryPublisher = mock(DeliveryTelemetryPublisherService.class);
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         when(normalizer.providerId()).thenReturn("borzo");
 
@@ -217,28 +251,26 @@ class DeliveryStatusUpdateServiceTest {
             eq("TERMINAL_STATUS_PROTECTED")
         )).thenReturn(true);
 
-        DeliveryStatusUpdateService service = new DeliveryStatusUpdateService(
-            List.of(normalizer),
-            repository,
-            outbox,
-            properties,
-            objectMapper
-        );
-
-        var result = service.processWebhook(workItem);
+        var result = service(normalizer, repository, outbox, properties, telemetryPublisher)
+            .processWebhook(workItem);
 
         assertThat(result.applied()).isFalse();
         assertThat(result.result()).isEqualTo("TERMINAL_STATUS_PROTECTED");
-        verify(repository, never()).applyJobStatus(
-            any(),
-            anyString(),
-            anyString(),
-            any(),
-            any(),
-            anyString(),
-            any()
-        );
+        verify(repository, never()).applyJobStatus(any(), anyString(), anyString(), any(), any(), anyString(), any());
         verify(outbox, never()).enqueue(anyString(), any(), any(), any());
+        verify(telemetryPublisher, never()).captureWebhook(any(), any());
+    }
+
+    private DeliveryStatusUpdateService service(
+        DeliveryWebhookNormalizer normalizer,
+        DeliveryStatusRepository repository,
+        DeliveryOutboxRepository outbox,
+        DeliveryCommandProperties properties,
+        DeliveryTelemetryPublisherService telemetryPublisher
+    ) {
+        return new DeliveryStatusUpdateService(
+            List.of(normalizer), repository, outbox, properties, objectMapper, telemetryPublisher
+        );
     }
 
     private WebhookWorkItem workItem() {
@@ -251,8 +283,7 @@ class DeliveryStatusUpdateServiceTest {
         );
     }
 
-    private static ProviderStatusUpdate update(DeliveryStatus status,
-                                               Instant observedAt) {
+    private static ProviderStatusUpdate update(DeliveryStatus status, Instant observedAt) {
         return new ProviderStatusUpdate(
             "borzo",
             "1250032",
@@ -265,11 +296,13 @@ class DeliveryStatusUpdateServiceTest {
         );
     }
 
-    private static DeliveryJobState job(UUID jobId,
-                                        UUID orderId,
-                                        UUID subOrderId,
-                                        String status,
-                                        Instant lastObservedAt) {
+    private static DeliveryJobState job(
+        UUID jobId,
+        UUID orderId,
+        UUID subOrderId,
+        String status,
+        Instant lastObservedAt
+    ) {
         return new DeliveryJobState(
             jobId,
             orderId,

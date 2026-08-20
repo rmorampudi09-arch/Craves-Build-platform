@@ -15,6 +15,7 @@ import {
   UserRoundCheck,
 } from "lucide-react";
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import type { CustomerNotification } from "@/lib/notification-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
 
@@ -309,7 +310,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="notifications-page min-h-screen bg-white pb-12 text-[#1A1A1A]">
-      <header className="border-b border-[#E5E7EB] bg-white">
+      <header className="border-b border-border bg-white/95">
         <div className="mx-auto flex min-h-[96px] w-full max-w-6xl items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <button
             type="button"
@@ -330,6 +331,9 @@ export default function NotificationsPage() {
               Notifications
             </h1>
           </div>
+        </div>
+        <div className="mx-auto w-full max-w-6xl px-4 pb-4 sm:px-6 lg:px-8">
+          <PersistentCustomerServiceNav />
         </div>
       </header>
 

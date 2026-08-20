@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: Craves Chef Financial Read API
+  version: 1.0.0
+  description: Read-only chef-owned earning ledger projection. This contract does not create payouts or calculate commercial policy.
+paths:
+  /api/v1/chef/earnings:
+    get:
+      operationId: listChefEarnings
+      summary: List authenticated chef earning ledger entries
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 100
+      responses:
+        '200':
+          description: Chef-owned ledger entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Earning'
+        '401':
+          description: Authentication required
+        '403':
+          description: Chef role required
+components:
+  schemas:
+    Earning:
+      type: object
+      additionalProperties: true
+      description: Server-authoritative earning ledger entry. Commercial values are recorded by approved finance/admin workflow; this read API does not calculate them.
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []

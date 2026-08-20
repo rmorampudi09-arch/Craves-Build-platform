@@ -1,0 +1,24 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - task: AzureCLI@2
+    displayName: Verify production backend prerequisites
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        bash scripts/release/verify-catalog-order-internal-secret-binding.sh
+
+  - bash: |
+      set -euo pipefail
+      bash -n scripts/release/verify-catalog-order-internal-secret-binding.sh
+      echo 'Production prerequisite validation script syntax: PASS'
+    displayName: Validate prerequisite script syntax

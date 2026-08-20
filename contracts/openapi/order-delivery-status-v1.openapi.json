@@ -2,166 +2,112 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Craves Customer Delivery Status API",
-    "version": "1.0.0",
-    "description": "Authenticated customer read model for the provider-neutral delivery lifecycle of one chef-specific order."
+    "version": "1.2.0",
+    "description": "Authenticated customer read model for the provider-neutral delivery lifecycle and latest privacy-controlled provider telemetry of one chef-specific order."
   },
-  "servers": [
-    {
-      "url": "https://api.craves.in"
-    }
-  ],
+  "servers": [{ "url": "https://api.craves.in" }],
   "paths": {
     "/api/v1/orders/{orderId}/delivery-status": {
       "get": {
         "operationId": "getOrderDeliveryStatus",
-        "summary": "Get delivery status for an owned chef-specific order",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "summary": "Get delivery status and best available tracking experience for an owned chef-specific order",
+        "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
             "name": "orderId",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
           "200": {
-            "description": "Owned order with its current provider-neutral delivery projection. Delivery fields can be null before the first delivery status is accepted.",
+            "description": "Owned order with current provider-neutral delivery status and latest privacy-controlled telemetry. Delivery fields can be null before the first provider status or telemetry is accepted.",
             "headers": {
               "Cache-Control": {
-                "description": "Delivery state must not be cached by shared or browser caches.",
-                "schema": {
-                  "type": "string",
-                  "example": "no-store, no-cache, must-revalidate"
-                }
+                "description": "Delivery state and courier telemetry must not be cached by shared or browser caches.",
+                "schema": { "type": "string", "example": "no-store, no-cache, must-revalidate" }
               }
             },
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeliveryStatusResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/DeliveryStatusResponse" }
               }
             }
           },
-          "401": {
-            "description": "Missing or invalid bearer token"
-          },
-          "403": {
-            "description": "Authenticated identity does not have the customer role"
-          },
-          "404": {
-            "description": "The authenticated customer does not own an order with this identifier"
-          }
+          "401": { "description": "Missing or invalid bearer token" },
+          "403": { "description": "Authenticated identity does not have the customer role" },
+          "404": { "description": "The authenticated customer does not own an order with this identifier" }
         }
       }
     }
   },
   "components": {
     "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
-      }
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
     },
     "schemas": {
       "DeliveryStatusResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "orderId",
-          "history"
-        ],
+        "required": ["orderId", "trackingExperience", "history", "telemetry"],
         "properties": {
-          "orderId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "deliveryJobId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "providerId": {
-            "type": "string",
-            "nullable": true
-          },
+          "orderId": { "type": "string", "format": "uuid" },
+          "deliveryJobId": { "type": "string", "format": "uuid", "nullable": true },
+          "providerId": { "type": "string", "nullable": true },
           "status": {
             "type": "string",
             "nullable": true,
             "enum": [
-              "PENDING",
-              "SEARCHING",
-              "COURIER_ASSIGNED",
-              "COURIER_TO_PICKUP",
-              "AT_PICKUP",
-              "PICKED_UP",
-              "IN_TRANSIT",
-              "AT_DROPOFF",
-              "DELIVERED",
-              "CANCELLED",
-              "DELAYED",
-              "RETURNING",
-              "RETURNED",
-              "FAILED"
+              "PENDING", "SEARCHING", "COURIER_ASSIGNED", "COURIER_TO_PICKUP", "AT_PICKUP",
+              "PICKED_UP", "IN_TRANSIT", "AT_DROPOFF", "DELIVERED", "CANCELLED", "DELAYED",
+              "RETURNING", "RETURNED", "FAILED"
             ]
           },
-          "trackingUrl": {
+          "trackingUrl": { "type": "string", "format": "uri", "nullable": true },
+          "trackingExperience": {
             "type": "string",
-            "format": "uri",
-            "nullable": true
+            "enum": ["LIVE_MAP", "PROVIDER_TRACKING_LINK", "STATUS_TIMELINE"],
+            "description": "Best safe tracking UX currently available for this fulfilled order. It does not imply provider ranking."
           },
-          "observedAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
+          "observedAt": { "type": "string", "format": "date-time", "nullable": true },
           "history": {
             "type": "array",
             "maxItems": 100,
-            "items": {
-              "$ref": "#/components/schemas/DeliveryStatusHistoryResponse"
-            }
-          }
+            "items": { "$ref": "#/components/schemas/DeliveryStatusHistoryResponse" }
+          },
+          "telemetry": { "$ref": "#/components/schemas/DeliveryTelemetryResponse" }
+        }
+      },
+      "DeliveryTelemetryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["liveLocationAvailable"],
+        "description": "Latest provider-neutral delivery telemetry. Exact provider ETA and ETA windows are kept semantically distinct. Exact courier coordinates are null unless staged live-location exposure is enabled, the delivery is active, and the coordinate observation is fresh.",
+        "properties": {
+          "liveLocationAvailable": { "type": "boolean" },
+          "courierLatitude": { "type": "number", "format": "double", "minimum": -90, "maximum": 90, "nullable": true },
+          "courierLongitude": { "type": "number", "format": "double", "minimum": -180, "maximum": 180, "nullable": true },
+          "locationObservedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "estimatedPickupAt": { "type": "string", "format": "date-time", "nullable": true },
+          "estimatedPickupStartAt": { "type": "string", "format": "date-time", "nullable": true },
+          "estimatedPickupEndAt": { "type": "string", "format": "date-time", "nullable": true },
+          "estimatedDropoffAt": { "type": "string", "format": "date-time", "nullable": true },
+          "estimatedDropoffStartAt": { "type": "string", "format": "date-time", "nullable": true },
+          "estimatedDropoffEndAt": { "type": "string", "format": "date-time", "nullable": true },
+          "telemetryObservedAt": { "type": "string", "format": "date-time", "nullable": true }
         }
       },
       "DeliveryStatusHistoryResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "newStatus",
-          "observedAt",
-          "recordedAt"
-        ],
+        "required": ["newStatus", "observedAt", "recordedAt"],
         "properties": {
-          "oldStatus": {
-            "type": "string",
-            "nullable": true
-          },
-          "newStatus": {
-            "type": "string"
-          },
-          "trackingUrl": {
-            "type": "string",
-            "format": "uri",
-            "nullable": true
-          },
-          "observedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "recordedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
+          "oldStatus": { "type": "string", "nullable": true },
+          "newStatus": { "type": "string" },
+          "trackingUrl": { "type": "string", "format": "uri", "nullable": true },
+          "observedAt": { "type": "string", "format": "date-time" },
+          "recordedAt": { "type": "string", "format": "date-time" }
         }
       }
     }

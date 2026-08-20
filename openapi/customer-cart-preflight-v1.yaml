@@ -1,0 +1,62 @@
+openapi: 3.0.3
+info:
+  title: Craves Customer Cart Preflight API
+  version: 1.0.0
+  description: Read-only cart inspection before checkout. It reports current availability and review changes without mutating cart contents or commercial policy.
+paths:
+  /api/v1/cart/preflight:
+    get:
+      operationId: preflightCustomerCart
+      summary: Inspect current customer cart against active Catalog state
+      responses:
+        '200':
+          description: Cart preflight result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartPreflightResponse'
+        '401': {description: Authentication required}
+        '403': {description: Customer role required}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    CartPreflightResponse:
+      type: object
+      required: [cartId, readyForCurrentCheckoutValidation, hasReviewChanges, itemCount, blockingIssueCount, reviewChangeCount, checkedAt, items]
+      properties:
+        cartId: {type: string, format: uuid}
+        readyForCurrentCheckoutValidation: {type: boolean}
+        hasReviewChanges: {type: boolean}
+        itemCount: {type: integer}
+        blockingIssueCount: {type: integer}
+        reviewChangeCount: {type: integer}
+        checkedAt: {type: string, format: date-time}
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItemPreflight'
+    CartItemPreflight:
+      type: object
+      properties:
+        cartItemId: {type: string, format: uuid}
+        menuItemId: {type: string, format: uuid}
+        quantity: {type: integer}
+        activeAndAvailable: {type: boolean}
+        blockingIssue: {type: boolean}
+        cartUnitPrice: {type: number}
+        currentUnitPrice: {type: number, nullable: true}
+        cartKitchenId: {type: string, format: uuid}
+        currentKitchenId: {type: string, format: uuid, nullable: true}
+        cartItemName: {type: string}
+        currentItemName: {type: string, nullable: true}
+        issues:
+          type: array
+          items:
+            type: string
+            enum: [MENU_ITEM_UNAVAILABLE, DELIVERY_METADATA_MISSING, PRICE_CHANGED, KITCHEN_CHANGED, ITEM_NAME_CHANGED]
+security:
+  - bearerAuth: []

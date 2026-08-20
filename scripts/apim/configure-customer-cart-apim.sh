@@ -58,16 +58,18 @@ JSON
 
 ITEM_PARAM='[{"name":"cartItemId","type":"string","required":true}]'
 put_operation "get-customer-cart" "GET" "/" "Get customer cart" '[]'
+put_operation "preflight-customer-cart-v1" "GET" "/preflight" "Inspect customer cart before checkout" '[]'
 put_operation "clear-customer-cart" "DELETE" "/" "Clear customer cart" '[]'
 put_operation "add-customer-cart-item" "POST" "/items" "Add customer cart item" '[]'
 put_operation "update-customer-cart-item" "PUT" "/items/{cartItemId}" "Update customer cart item" "$ITEM_PARAM"
 put_operation "remove-customer-cart-item" "DELETE" "/items/{cartItemId}" "Remove customer cart item" "$ITEM_PARAM"
 put_operation "validate-customer-cart" "POST" "/validate" "Validate customer cart" '[]'
 
-for ID in get-customer-cart clear-customer-cart add-customer-cart-item update-customer-cart-item remove-customer-cart-item validate-customer-cart; do
+for ID in get-customer-cart preflight-customer-cart-v1 clear-customer-cart add-customer-cart-item update-customer-cart-item remove-customer-cart-item validate-customer-cart; do
   az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none
   POLICY=$(az rest --method get --url "${MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
   [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Authorization"* && "$POLICY" == *"no-store"* ]] || fail "Operation $ID policy verification failed"
+  [[ "$POLICY" == *"X-Correlation-ID"* ]] || fail "Operation $ID correlation verification failed"
 done
 
-echo "SUCCESS: Customer cart operations configured on APIM API $API_ID."
+echo "SUCCESS: Customer cart operations including preflight configured on APIM API $API_ID."

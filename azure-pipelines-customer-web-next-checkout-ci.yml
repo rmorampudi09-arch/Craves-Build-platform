@@ -28,7 +28,7 @@ steps:
       PY
       grep -q 'deliveryAddressId' apps/customer-web-next/src/lib/checkout-contract.ts
       grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/checkout/route.ts
-      if grep -REn '(platformFee|taxAmount|deliveryFee|grandTotal).*[-+*/]' apps/customer-web-next/src/components/customer-checkout.tsx; then
+      if grep -PREn '((platformFee|taxAmount|deliveryFee|grandTotal)\\s*[-+*/]|[-+*/]\\s*(checkout\\.)?(platformFee|taxAmount|deliveryFee|grandTotal))' apps/customer-web-next/src/components/customer-checkout.tsx; then
         echo 'ERROR: Frontend checkout appears to calculate backend-owned charges.' >&2
         exit 1
       fi

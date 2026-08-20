@@ -36,6 +36,7 @@ craves:
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://api.craves.in/api/v1/catalog}
+    internal-access-value: ${CRAVES_INTERNAL_SERVICE_SECRET:}
   launch-policy:
     enforcement-enabled: ${CRAVES_LAUNCH_POLICY_ENFORCEMENT_ENABLED:false}
   notification:

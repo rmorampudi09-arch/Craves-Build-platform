@@ -44,6 +44,16 @@ public class CustomerFavoriteService {
             return existing.getFirst();
         }
 
+        lockFavoriteSet(user.identityId());
+
+        // A second request may have inserted the same favorite while this request
+        // waited for the per-customer transaction lock. Re-check to preserve the
+        // idempotent PUT contract without consuming another slot.
+        existing = find(user.identityId(), menuItemId);
+        if (!existing.isEmpty()) {
+            return existing.getFirst();
+        }
+
         Integer count = jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM customer_favorite_menu_item WHERE identity_id = ?",
             Integer.class,
@@ -77,6 +87,18 @@ public class CustomerFavoriteService {
             "DELETE FROM customer_favorite_menu_item WHERE identity_id = ? AND menu_item_id = ?",
             user.identityId(),
             menuItemId
+        );
+    }
+
+    private void lockFavoriteSet(UUID identityId) {
+        // The cap is a per-customer invariant. PostgreSQL transaction-scoped
+        // advisory locking serializes competing saves for the same identity
+        // across all service replicas without introducing a new coordination
+        // service. A hash collision can only reduce concurrency; it cannot
+        // violate the cap.
+        jdbcTemplate.queryForList(
+            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            identityId.toString()
         );
     }
 

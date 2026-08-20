@@ -154,11 +154,13 @@ test("customer orders page uses a white page surface", () => {
   assert.doesNotMatch(orders, /min-h-screen bg-cream pb-20 text-ink/);
 });
 
-test("customer cart and notifications use white page surfaces", () => {
+test("customer cart and finalized notifications use white page surfaces", () => {
   assert.match(cart, /min-h-screen bg-white pb-32 text-ink/);
   assert.doesNotMatch(cart, /min-h-screen bg-cream pb-32 text-ink/);
   assert.match(notifications, /min-h-screen bg-white pb-12/);
-  assert.match(notifications, /border-b border-border bg-white\/95/);
+  assert.match(notifications, /border-b border-\[#E5E7EB\] bg-white/);
+  assert.match(notifications, /notification-back-button/);
+  assert.match(notifications, /<CravesLogo size="lg" priority \/>/);
   assert.doesNotMatch(notifications, /min-h-screen bg-cream pb-12/);
   assert.doesNotMatch(notifications, /border-b border-border bg-cream\/95/);
 });

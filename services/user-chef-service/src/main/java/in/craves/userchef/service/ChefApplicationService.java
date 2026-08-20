@@ -97,13 +97,21 @@ public class ChefApplicationService {
             throw ApiException.badRequest("CHEF_DOCUMENT_TYPE_NOT_ALLOWED", "Use one of the current Chef application evidence types");
         }
 
-        StoredDocument stored = storageService.uploadKycDocument(user.identityId(), documentType, file);
-        List<UUID> existing = jdbcTemplate.query(
-            "SELECT id FROM chef_kyc_document WHERE application_id = ? AND document_type = ?",
-            (rs, rowNum) -> rs.getObject("id", UUID.class), application.id(), documentType.name()
+        List<ExistingDocument> existing = jdbcTemplate.query(
+            "SELECT id, status FROM chef_kyc_document WHERE application_id = ? AND document_type = ?",
+            (rs, rowNum) -> new ExistingDocument(rs.getObject("id", UUID.class), rs.getString("status")),
+            application.id(),
+            documentType.name()
         );
+        if (!existing.isEmpty() && "APPROVED".equals(existing.getFirst().status())) {
+            throw ApiException.conflict(
+                "CHEF_DOCUMENT_ALREADY_APPROVED",
+                "An approved Chef document stays accepted and cannot be replaced unless the application is reopened through a controlled process"
+            );
+        }
 
-        UUID documentId = existing.isEmpty() ? UUID.randomUUID() : existing.getFirst();
+        StoredDocument stored = storageService.uploadKycDocument(user.identityId(), documentType, file);
+        UUID documentId = existing.isEmpty() ? UUID.randomUUID() : existing.getFirst().id();
         if (existing.isEmpty()) {
             jdbcTemplate.update(
                 "INSERT INTO chef_kyc_document (id, application_id, identity_id, document_type, original_file_name, blob_container, blob_name, content_type, file_size_bytes, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'UPLOADED', now(), now())",
@@ -112,7 +120,9 @@ public class ChefApplicationService {
             );
         } else {
             jdbcTemplate.update(
-                "UPDATE chef_kyc_document SET original_file_name = ?, blob_container = ?, blob_name = ?, content_type = ?, file_size_bytes = ?, status = 'UPLOADED', updated_at = now() WHERE id = ?",
+                "UPDATE chef_kyc_document SET original_file_name = ?, blob_container = ?, blob_name = ?, content_type = ?, " +
+                    "file_size_bytes = ?, status = 'UPLOADED', review_reason = NULL, reviewed_by_identity_id = NULL, " +
+                    "reviewed_at = NULL, updated_at = now() WHERE id = ?",
                 stored.originalFileName(), stored.container(), stored.blobName(), stored.contentType(),
                 stored.fileSizeBytes(), documentId
             );
@@ -180,7 +190,8 @@ public class ChefApplicationService {
     }
 
     private void requireCompleteApplicationDocuments(UUID applicationId) {
-        Set<KycDocumentType> uploaded = listApplicationEvidence(applicationId).stream()
+        List<KycDocumentResponse> evidence = listApplicationEvidence(applicationId);
+        Set<KycDocumentType> uploaded = evidence.stream()
             .map(KycDocumentResponse::documentType)
             .collect(java.util.stream.Collectors.toSet());
         List<KycDocumentType> missing = REQUIRED_APPLICATION_DOCUMENTS.stream()
@@ -193,6 +204,22 @@ public class ChefApplicationService {
                 "Required Chef application evidence is incomplete: " + missing.stream()
                     .map(ChefApplicationService::documentLabel)
                     .toList()
+            );
+        }
+
+        Set<KycDocumentType> approved = evidence.stream()
+            .filter(document -> "APPROVED".equals(document.status()))
+            .map(KycDocumentResponse::documentType)
+            .collect(java.util.stream.Collectors.toSet());
+        List<KycDocumentType> awaitingApproval = REQUIRED_APPLICATION_DOCUMENTS.stream()
+            .filter(type -> !approved.contains(type))
+            .sorted()
+            .toList();
+        if (!awaitingApproval.isEmpty()) {
+            throw ApiException.conflict(
+                "CHEF_REQUIRED_DOCUMENTS_NOT_APPROVED",
+                "Every required Chef document must be individually approved before the application can be approved: " +
+                    awaitingApproval.stream().map(ChefApplicationService::documentLabel).toList()
             );
         }
     }
@@ -272,6 +299,7 @@ public class ChefApplicationService {
             rs.getObject("id", UUID.class), KycDocumentType.valueOf(rs.getString("document_type")),
             rs.getString("original_file_name"), rs.getString("blob_container"), rs.getString("blob_name"),
             rs.getString("content_type"), rs.getLong("file_size_bytes"), rs.getString("status"),
+            rs.getString("review_reason"), instant(rs, "reviewed_at"),
             instant(rs, "created_at"), instant(rs, "updated_at")
         );
     }
@@ -298,4 +326,6 @@ public class ChefApplicationService {
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }
+
+    private record ExistingDocument(UUID id, String status) {}
 }

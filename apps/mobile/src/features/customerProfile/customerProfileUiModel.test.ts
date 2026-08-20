@@ -31,35 +31,37 @@ function profile(
 }
 
 describe('customerProfileUiModel', () => {
-  it('keeps rows deterministic and excludes duplicate order navigation', () => {
+  it('keeps rows deterministic and maps each row to the registered action', () => {
     expect(CUSTOMER_PROFILE_MENU_ROWS.map(row => row.id)).toEqual([
       'favorites',
       'payments',
-      'contact',
+      'membership',
+      'referral',
       'switch-chef',
+      'contact',
       'logout',
     ]);
 
+    expect(
+      CUSTOMER_PROFILE_MENU_ROWS.map(row => [row.id, row.action]),
+    ).toEqual([
+      ['favorites', 'route-favorites'],
+      ['payments', 'route-payments'],
+      ['membership', 'route-membership'],
+      ['referral', 'route-referral'],
+      ['switch-chef', 'switch-chef'],
+      ['contact', 'route-support'],
+      ['logout', 'logout'],
+    ]);
+
     const favorites = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'favorites');
-    expect(favorites?.action).toBe('route-favorites');
     expect(favorites?.icon).toBe('heart');
 
     const payments = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'payments');
-    expect(payments?.action).toBe('route-payments');
-    expect(payments?.icon).toBe('shield');
+    expect(payments?.icon).toBe('wallet');
 
-    const switchChef = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'switch-chef');
-    expect(switchChef?.action).toBe('switch-chef');
-
-    const logout = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'logout');
-    expect(logout?.action).toBe('logout');
-
-    const blocked = CUSTOMER_PROFILE_MENU_ROWS.filter(
-      row => row.action === 'contract-blocker',
-    );
-    expect(blocked).toHaveLength(1);
-    expect(blocked.map(row => row.id)).toEqual(['contact']);
-    expect(blocked.every(row => Boolean(row.blockerMessage))).toBe(true);
+    const contact = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'contact');
+    expect(contact?.icon).toBe('headset');
   });
 
   it('derives display identity only from approved profile fields', () => {

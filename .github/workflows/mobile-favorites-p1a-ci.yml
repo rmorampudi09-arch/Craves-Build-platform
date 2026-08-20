@@ -1,0 +1,94 @@
+name: CRAVES Mobile Favorites P1A CI
+
+on:
+  push:
+    branches:
+      - 'feature/favorites-p1a-mobile-reliability-*'
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-favorites-p1a-ci.yml'
+  pull_request:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-favorites-p1a-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-favorites-p1a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Install locked dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: TypeScript strict check
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        working-directory: apps/mobile
+        run: npm run lint -- --max-warnings=0
+
+      - name: Favorites unit and contract tests
+        working-directory: apps/mobile
+        run: |
+          npm test -- --runInBand --runTestsByPath \
+            src/features/favorites/customerFavoritesActiveCart.test.ts \
+            src/features/favorites/customerFavoritesContract.test.ts \
+            src/features/favorites/offline/customerFavoritesOfflineQueue.test.ts \
+            src/features/favorites/query/customerFavoritesOptimisticState.test.ts
+
+      - name: Production Android JavaScript bundle
+        working-directory: apps/mobile
+        run: |
+          rm -rf build/favorites-p1a-bundle
+          mkdir -p build/favorites-p1a-bundle
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output build/favorites-p1a-bundle/index.android.bundle \
+            --assets-dest build/favorites-p1a-bundle/assets
+          test -s build/favorites-p1a-bundle/index.android.bundle
+
+      - name: Enforce mobile-only P1A scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            mobile-ui-rebuild-from-scratch:refs/remotes/origin/mobile-ui-rebuild-from-scratch
+          changed="$(git diff --name-only origin/mobile-ui-rebuild-from-scratch...HEAD)"
+          printf '%s\n' "$changed"
+
+          disallowed="$(printf '%s\n' "$changed" | grep -Ev '^(apps/mobile/|\.github/workflows/mobile-favorites-p1a-ci\.yml$)' || true)"
+          if [[ -n "$disallowed" ]]; then
+            echo 'ERROR: P1A must remain mobile-only. Disallowed paths:' >&2
+            printf '%s\n' "$disallowed" >&2
+            exit 1
+          fi
+
+          if printf '%s\n' "$changed" | grep -Eq '^(services/|infra/|openapi/|apps/api/)'; then
+            echo 'ERROR: Backend/APIM/infrastructure changes are not allowed in P1A.' >&2
+            exit 1
+          fi
+
+          echo 'P1A mobile-only scope guard passed.'

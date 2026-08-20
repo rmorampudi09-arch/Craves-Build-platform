@@ -15,8 +15,8 @@ CREATE INDEX IF NOT EXISTS ix_chef_kyc_document_application_status
 
 CREATE TABLE IF NOT EXISTS admin_chef_document_decision_audit (
     id UUID PRIMARY KEY,
-    application_id UUID NOT NULL REFERENCES chef_application(id) ON DELETE CASCADE,
-    document_id UUID NOT NULL REFERENCES chef_kyc_document(id) ON DELETE CASCADE,
+    application_id UUID NOT NULL REFERENCES chef_application(id),
+    document_id UUID NOT NULL REFERENCES chef_kyc_document(id),
     admin_identity_id UUID NOT NULL,
     decision VARCHAR(20) NOT NULL,
     reason VARCHAR(1000),

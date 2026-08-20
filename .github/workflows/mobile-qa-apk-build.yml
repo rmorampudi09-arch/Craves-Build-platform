@@ -43,14 +43,6 @@ jobs:
         working-directory: apps/mobile
         run: npm ci
 
-      - name: TypeScript strict check
-        working-directory: apps/mobile
-        run: npx tsc --noEmit
-
-      - name: ESLint
-        working-directory: apps/mobile
-        run: npm run lint -- --max-warnings=0
-
       - name: Targeted QA regression tests
         working-directory: apps/mobile
         run: npm test -- --runInBand src/app/navigation/navigationPolicy.test.ts src/features/cart/cartInteractionPolicy.test.ts

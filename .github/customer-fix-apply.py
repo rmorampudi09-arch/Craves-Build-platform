@@ -55,7 +55,6 @@ replace_once(
 profile = 'apps/mobile/src/features/kitchenProfile/screens/CustomerKitchenProfileScreen.tsx'
 replace_once(profile, '  Image,\n', '')
 replace_once(profile, "import {getDisplayAvailabilityCount} from '../../../shared/menuAvailability';\n", '')
-replace_once(profile, "import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';\n", '')
 replace_once(profile, "import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';\n", '')
 replace_once(
     profile,
@@ -104,7 +103,6 @@ replace_once(
 
 dishes = 'apps/mobile/src/features/kitchenProfile/screens/CustomerKitchenDishesScreen.tsx'
 replace_once(dishes, '  Image,\n', '')
-replace_once(dishes, "import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';\n", '')
 replace_once(dishes, "import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';\n", '')
 replace_once(
     dishes,

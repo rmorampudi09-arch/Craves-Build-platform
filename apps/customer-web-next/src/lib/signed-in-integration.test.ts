@@ -171,12 +171,13 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   }
 });
 
-test("customer navigation stays inside customer page headers instead of above the website", () => {
+test("customer navigation stays in customer headers, with finalized notifications using its dedicated shell", () => {
   const navigation = source(
     "../components/navigation/PersistentCustomerServiceNav.tsx",
   );
   const layout = source("../app/layout.tsx");
   const homeHeader = source("../components/home/BrowseHeader.tsx");
+  const notifications = source("../screens/Notifications/Notifications.tsx");
 
   for (const route of [
     "/home",
@@ -194,7 +195,6 @@ test("customer navigation stays inside customer page headers instead of above th
 
   for (const customerSurface of [
     "../screens/OrderHistory/OrderHistory.tsx",
-    "../screens/Notifications/Notifications.tsx",
     "../app/subscriptions/page.tsx",
     "../components/profile/ProfileHeader.tsx",
     "../components/cart/CartHeader.tsx",
@@ -206,6 +206,10 @@ test("customer navigation stays inside customer page headers instead of above th
   ]) {
     assert.match(source(customerSurface), /PersistentCustomerServiceNav/, customerSurface);
   }
+
+  assert.match(notifications, /notification-back-button/);
+  assert.match(notifications, /<CravesLogo size="lg" priority \/>/);
+  assert.doesNotMatch(notifications, /PersistentCustomerServiceNav/);
 
   assert.match(navigation, /data-customer-service-navigation="embedded"/);
   assert.match(navigation, /border-\[#F62E18\] bg-white/);

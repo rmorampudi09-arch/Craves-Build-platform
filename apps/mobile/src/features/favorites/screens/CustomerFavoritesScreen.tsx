@@ -35,6 +35,7 @@ import {CustomerLocationSelector} from '../../customerShell/components/CustomerL
 import {dishDetailApi, type CustomerDishDetail} from '../../dishDetail/api/dishDetailApi';
 import {
   useCustomerFavoritesQuery,
+  useCustomerFavoritesQueueState,
   useToggleCustomerFavorite,
 } from '../query/customerFavoritesQueries';
 
@@ -65,6 +66,7 @@ export function CustomerFavoritesScreen() {
   const navigation = useNavigation<FavoritesNavigation>();
   const bottomNavScroll = useCustomerBottomNavScroll();
   const favorites = useCustomerFavoritesQuery();
+  const queueState = useCustomerFavoritesQueueState();
   const toggleFavorite = useToggleCustomerFavorite();
   const [locationSelectorVisible, setLocationSelectorVisible] = React.useState(false);
   const [details, setDetails] = React.useState<Record<string, CustomerDishDetail>>({});
@@ -155,6 +157,20 @@ export function CustomerFavoritesScreen() {
               </View>
             </View>
 
+            {queueState.hasPendingChanges ? (
+              <View accessibilityLiveRegion="polite" style={styles.syncCard}>
+                <FilledIcon name="cloud-sync-outline" size={20} color={colors.flameRedAccessible} />
+                <View style={styles.syncCopy}>
+                  <Text style={styles.syncTitle}>Saving when online</Text>
+                  <Text style={styles.syncText}>
+                    {queueState.pendingCount === 1
+                      ? '1 favorite change is waiting to sync.'
+                      : `${queueState.pendingCount} favorite changes are waiting to sync.`}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
             {favorites.sessionRequired ? (
               <TerminalState
                 title="Sign in required"
@@ -187,49 +203,53 @@ export function CustomerFavoritesScreen() {
                   <Text style={styles.sectionTitle}>Saved dishes</Text>
                   <Text style={styles.countText}>{favoriteRows.length}</Text>
                 </View>
-                {loadedRows.map(dish => (
-                  <Pressable
-                    accessibilityRole="button"
-                    key={dish.id}
-                    onPress={() => navigation.navigate('CustomerDishDetail', {menuItemId: dish.id})}
-                    style={({pressed}) => [styles.dishCard, pressed && styles.pressed]}>
-                    {dish.images[0]?.url ? (
-                      <Image
-                        accessibilityIgnoresInvertColors
-                        source={{uri: dish.images[0].url}}
-                        resizeMode="cover"
-                        style={styles.dishImage}
-                      />
-                    ) : (
-                      <View style={styles.dishImageFallback}>
-                        <FilledIcon name="food" size={30} color={colors.flameRed} />
-                      </View>
-                    )}
-                    <View style={styles.dishCopy}>
-                      <Text numberOfLines={2} style={styles.dishName}>{dish.itemName}</Text>
-                      <Text numberOfLines={1} style={styles.kitchenName}>
-                        {dish.kitchen.displayName ?? dish.kitchen.kitchenName}
-                      </Text>
-                      <Text style={styles.metaText}>
-                        {dish.category} · {dish.foodType === 'NON_VEG' ? 'Non-veg' : dish.foodType === 'EGG' ? 'Egg' : 'Veg'}
-                      </Text>
-                      <Text style={styles.priceText}>{formatPrice(dish.price.amount, dish.price.currency)}</Text>
-                    </View>
+                {loadedRows.map(dish => {
+                  const queued = queueState.pendingMenuItemIds.includes(dish.id);
+                  return (
                     <Pressable
-                      accessibilityLabel={`Remove ${dish.itemName} from favorites`}
                       accessibilityRole="button"
-                      accessibilityState={{busy: toggleFavorite.isPending}}
-                      disabled={toggleFavorite.isPending}
-                      hitSlop={spacing.xs}
-                      onPress={event => {
-                        event.stopPropagation();
-                        toggleFavorite.mutate({menuItemId: dish.id, favorite: true});
-                      }}
-                      style={({pressed}) => [styles.heartButton, pressed && styles.pressed]}>
-                      <FilledIcon name="heart" size={24} color={colors.flameRed} />
+                      key={dish.id}
+                      onPress={() => navigation.navigate('CustomerDishDetail', {menuItemId: dish.id})}
+                      style={({pressed}) => [styles.dishCard, pressed && styles.pressed]}>
+                      {dish.images[0]?.url ? (
+                        <Image
+                          accessibilityIgnoresInvertColors
+                          source={{uri: dish.images[0].url}}
+                          resizeMode="cover"
+                          style={styles.dishImage}
+                        />
+                      ) : (
+                        <View style={styles.dishImageFallback}>
+                          <FilledIcon name="food" size={30} color={colors.flameRed} />
+                        </View>
+                      )}
+                      <View style={styles.dishCopy}>
+                        <Text numberOfLines={2} style={styles.dishName}>{dish.itemName}</Text>
+                        <Text numberOfLines={1} style={styles.kitchenName}>
+                          {dish.kitchen.displayName ?? dish.kitchen.kitchenName}
+                        </Text>
+                        <Text style={styles.metaText}>
+                          {dish.category} · {dish.foodType === 'NON_VEG' ? 'Non-veg' : dish.foodType === 'EGG' ? 'Egg' : 'Veg'}
+                        </Text>
+                        <Text style={styles.priceText}>{formatPrice(dish.price.amount, dish.price.currency)}</Text>
+                        {queued ? <Text style={styles.queuedText}>Waiting to sync</Text> : null}
+                      </View>
+                      <Pressable
+                        accessibilityLabel={`Remove ${dish.itemName} from favorites`}
+                        accessibilityRole="button"
+                        accessibilityState={{busy: toggleFavorite.isPending || queued}}
+                        disabled={toggleFavorite.isPending}
+                        hitSlop={spacing.xs}
+                        onPress={event => {
+                          event.stopPropagation();
+                          toggleFavorite.mutate({menuItemId: dish.id, favorite: true});
+                        }}
+                        style={({pressed}) => [styles.heartButton, pressed && styles.pressed]}>
+                        <FilledIcon name="heart" size={24} color={colors.flameRed} />
+                      </Pressable>
                     </Pressable>
-                  </Pressable>
-                ))}
+                  );
+                })}
                 {detailLoading ? (
                   <View style={styles.detailLoadingRow}>
                     <ActivityIndicator size="small" color={colors.flameRed} />
@@ -284,6 +304,17 @@ const styles = StyleSheet.create({
   introCopy: {minWidth: 0, flex: 1},
   title: {color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.bold},
   subtitle: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
+  syncCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.iconSurface,
+  },
+  syncCopy: {minWidth: 0, flex: 1},
+  syncTitle: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.bold},
+  syncText: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},
   loadingCard: {minHeight: 220, alignItems: 'center', justifyContent: 'center', gap: spacing.sm},
   loadingText: {color: colors.textSecondary, fontSize: typography.small},
   sectionHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
@@ -308,6 +339,7 @@ const styles = StyleSheet.create({
   kitchenName: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
   metaText: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},
   priceText: {marginTop: spacing.xs, color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.bold},
+  queuedText: {marginTop: spacing.xxs, color: colors.flameRedAccessible, fontSize: typography.tiny, fontWeight: fontWeight.bold},
   heartButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.iconSurface},
   detailLoadingRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, padding: spacing.md},
   staleCopy: {padding: spacing.sm, color: colors.textSecondary, fontSize: typography.small, lineHeight: 20},

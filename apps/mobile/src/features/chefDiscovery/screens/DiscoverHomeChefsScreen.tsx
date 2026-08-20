@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
@@ -30,6 +31,7 @@ import {
   RecoverableErrorBanner,
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
+import {Icon} from '../../../shared/components/Icon';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
@@ -70,20 +72,15 @@ function ChefDiscoverySkeleton() {
 
 interface KitchenCardProps {
   kitchen: NearbyKitchen;
-  onPress: (kitchen: NearbyKitchen) => void;
+  onViewKitchen: (kitchen: NearbyKitchen) => void;
 }
 
-function KitchenCard({kitchen, onPress}: KitchenCardProps) {
+function KitchenCard({kitchen, onViewKitchen}: KitchenCardProps) {
   const title = kitchen.kitchenName;
   const location = formatKitchenLocation(kitchen);
 
   return (
-    <Pressable
-      accessibilityHint="Opens this kitchen's public profile and available-dish preview."
-      accessibilityLabel={`Open ${title}`}
-      accessibilityRole="button"
-      onPress={() => onPress(kitchen)}
-      style={({pressed}) => [styles.kitchenCard, pressed && styles.kitchenCardPressed]}>
+    <View style={styles.kitchenCard}>
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{getKitchenInitials(kitchen)}</Text>
       </View>
@@ -116,10 +113,18 @@ function KitchenCard({kitchen, onPress}: KitchenCardProps) {
             {kitchen.activeMenuItemCount}{' '}
             {kitchen.activeMenuItemCount === 1 ? 'dish available' : 'dishes available'}
           </Text>
-          <Text style={styles.viewKitchen}>View kitchen ›</Text>
+          <Pressable
+            accessibilityHint="Opens this kitchen's public profile and available dishes"
+            accessibilityLabel={`View ${title} kitchen`}
+            accessibilityRole="button"
+            onPress={() => onViewKitchen(kitchen)}
+            style={({pressed}) => [styles.viewKitchenButton, pressed && styles.filterButtonPressed]}>
+            <Text style={styles.viewKitchen}>View kitchen</Text>
+            <Icon name="chevron-right" size={18} color={colors.flameRedAccessible} surface={false} />
+          </Pressable>
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -132,6 +137,7 @@ export function DiscoverHomeChefsScreen() {
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const listRef = useRef<FlatList<NearbyKitchen>>(null);
+  const searchRowYRef = useRef(0);
 
   const discovery = useNearbyChefDiscoveryQuery({
     radiusMeters: DISCOVERY_RADIUS_METERS,
@@ -206,6 +212,19 @@ export function DiscoverHomeChefsScreen() {
     resetSearchPosition();
     search.clear();
   }, [discovery, resetSearchPosition, search]);
+
+  const handleSearchRowLayout = useCallback((event: LayoutChangeEvent) => {
+    searchRowYRef.current = event.nativeEvent.layout.y;
+  }, []);
+
+  const handleSearchFocus = useCallback(() => {
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({
+        offset: Math.max(0, searchRowYRef.current - spacing.sm),
+        animated: true,
+      });
+    });
+  }, []);
 
   const saveListOffset = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -322,11 +341,12 @@ export function DiscoverHomeChefsScreen() {
         </Text>
       </View>
 
-      <View style={styles.searchRow}>
+      <View onLayout={handleSearchRowLayout} style={styles.searchRow}>
         <DiscoverySearchInput
           accessibilityLabel="Search nearby kitchens"
           onChangeText={handleSearchChange}
           onClear={handleClearSearch}
+          onFocus={handleSearchFocus}
           placeholder="Search chefs, kitchens or area"
           style={styles.searchField}
           value={search.draft}
@@ -337,6 +357,7 @@ export function DiscoverHomeChefsScreen() {
           accessibilityRole="button"
           onPress={openFilters}
           style={({pressed}) => [styles.filterButton, pressed && styles.filterButtonPressed]}>
+          <Icon name="filter" size={18} color={colors.flameRedAccessible} surface={false} />
           <Text style={styles.filterButtonText}>Filters</Text>
         </Pressable>
       </View>
@@ -372,11 +393,12 @@ export function DiscoverHomeChefsScreen() {
   );
 
   return (
-    <ScreenShell edges={['top']} keyboardAvoiding={false} testID="discover-home-chefs">
+    <ScreenShell edges={['top']} keyboardAvoiding testID="discover-home-chefs">
       <FlatList
         ref={listRef}
         contentContainerStyle={styles.listContent}
         data={visibleKitchens}
+        keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         keyExtractor={item => item.id}
         ListEmptyComponent={emptyState}
@@ -405,7 +427,7 @@ export function DiscoverHomeChefsScreen() {
           />
         }
         renderItem={({item}) => (
-          <KitchenCard kitchen={item} onPress={openKitchenProfile} />
+          <KitchenCard kitchen={item} onViewKitchen={openKitchenProfile} />
         )}
         scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
         showsVerticalScrollIndicator={false}
@@ -448,30 +470,36 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
   },
   searchField: {
+    minWidth: 0,
     flex: 1,
   },
   filterButton: {
-    minHeight: touchTarget.comfortable,
-    paddingHorizontal: spacing.md,
+    minHeight: touchTarget.minimum,
+    minWidth: 92,
+    flexDirection: 'row',
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: colors.flameRed,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    ...elevation.primaryAction,
+    gap: spacing.xxs,
   },
   filterButtonPressed: {
-    opacity: 0.84,
+    backgroundColor: colors.surfaceMuted,
     transform: [{scale: 0.98}],
   },
   filterButtonText: {
-    color: colors.white,
+    color: colors.flameRedAccessible,
     fontSize: typography.small,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.semibold,
   },
   sectionHeadingRow: {
     flexDirection: 'row',
@@ -591,8 +619,17 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.tiny,
   },
+  viewKitchenButton: {
+    minHeight: touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.md,
+  },
   viewKitchen: {
-    color: colors.flameRed,
+    color: colors.flameRedAccessible,
     fontSize: typography.small,
     fontWeight: fontWeight.bold,
   },

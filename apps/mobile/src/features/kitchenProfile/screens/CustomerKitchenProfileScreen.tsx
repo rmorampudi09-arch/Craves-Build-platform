@@ -36,6 +36,7 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {getDisplayAvailabilityCount} from '../../../shared/menuAvailability';
 import type {CartLine} from '../../cart/domain/cartTypes';
 import {
   addCartItem,
@@ -122,45 +123,122 @@ function MenuPreviewCard({
   onDecrease,
 }: MenuPreviewCardProps) {
   const image = getCustomerKitchenMenuImage(item);
-  const metadata = [
-    foodTypeLabel(item.foodType),
-    item.preparationTimeMinutes ? `${item.preparationTimeMinutes} min` : null,
-  ]
-    .filter(Boolean)
-    .join(' • ');
+  const availableCount = getDisplayAvailabilityCount(item.id);
+  const typeLabel = foodTypeLabel(item.foodType);
+  const typeColor =
+    item.foodType === 'VEG'
+      ? colors.success
+      : item.foodType === 'EGG'
+        ? colors.warning
+        : colors.error;
+
+  const purchaseControl = cartLine ? (
+    <View style={styles.quantityControl}>
+      <Pressable
+        accessibilityLabel={`Decrease ${item.itemName} quantity`}
+        accessibilityRole="button"
+        disabled={busy}
+        onPress={() => onDecrease(cartLine)}
+        style={({pressed}) => [
+          styles.quantityButton,
+          busy && styles.disabled,
+          pressed && !busy && styles.pressed,
+        ]}>
+        <Text style={styles.quantityButtonText}>−</Text>
+      </Pressable>
+      <Text accessibilityLabel={`${cartLine.quantity} in cart`} style={styles.quantityText}>
+        {cartLine.quantity}
+      </Text>
+      <Pressable
+        accessibilityLabel={`Increase ${item.itemName} quantity`}
+        accessibilityRole="button"
+        disabled={busy}
+        onPress={() => onIncrease(item)}
+        style={({pressed}) => [
+          styles.quantityButton,
+          busy && styles.disabled,
+          pressed && !busy && styles.pressed,
+        ]}>
+        <Text style={styles.quantityButtonText}>+</Text>
+      </Pressable>
+    </View>
+  ) : (
+    <Pressable
+      accessibilityLabel={`Add ${item.itemName} to cart`}
+      accessibilityRole="button"
+      accessibilityState={{busy, disabled: busy}}
+      disabled={busy}
+      onPress={() => onIncrease(item)}
+      style={({pressed}) => [
+        styles.addButton,
+        busy && styles.disabled,
+        pressed && !busy && styles.pressed,
+      ]}>
+      <Text style={styles.addButtonText}>{busy ? 'Adding…' : 'Add'}</Text>
+    </Pressable>
+  );
 
   return (
     <View style={styles.menuCard}>
-      <Pressable
-        accessibilityLabel={`Open ${item.itemName}`}
-        accessibilityRole="button"
-        onPress={() => onOpen(item.id)}
-        style={({pressed}) => [styles.menuOpenArea, pressed && styles.pressed]}>
-        {image ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`${item.itemName} image`}
-            source={{uri: image.url}}
-            resizeMode="cover"
-            style={styles.menuImage}
-          />
-        ) : (
-          <View style={styles.menuImageFallback}>
-            <Text style={styles.menuImageFallbackText}>{item.category}</Text>
-          </View>
-        )}
+      <View style={styles.menuCardRow}>
+        <Pressable
+          accessibilityLabel={`Open ${item.itemName}`}
+          accessibilityRole="button"
+          onPress={() => onOpen(item.id)}
+          style={({pressed}) => [styles.menuImagePressable, pressed && styles.pressed]}>
+          {image ? (
+            <Image
+              accessibilityIgnoresInvertColors
+              accessibilityLabel={`${item.itemName} image`}
+              source={{uri: image.url}}
+              resizeMode="cover"
+              style={styles.menuImage}
+            />
+          ) : (
+            <View style={styles.menuImageFallback}>
+              <Text style={styles.menuImageFallbackText}>{item.category}</Text>
+            </View>
+          )}
+        </Pressable>
+
         <View style={styles.menuCopy}>
-          <Text numberOfLines={2} style={styles.menuTitle}>
-            {item.itemName}
-          </Text>
-          <Text numberOfLines={1} style={styles.menuMeta}>
-            {item.category} • {metadata}
-          </Text>
-          <Text style={styles.menuPrice}>
-            {formatDishDetailPrice(item.price.amount, item.price.currency)}
-          </Text>
+          <Pressable
+            accessibilityLabel={`Open ${item.itemName}`}
+            accessibilityRole="button"
+            onPress={() => onOpen(item.id)}
+            style={({pressed}) => pressed && styles.pressed}>
+            <Text numberOfLines={2} style={styles.menuTitle}>
+              {item.itemName}
+            </Text>
+            <View style={styles.availabilityRow}>
+              <Icon name="check" size={16} color={colors.success} surface={false} />
+              <Text style={styles.availabilityText}>Available - {availableCount}</Text>
+            </View>
+            <View style={styles.menuMetadataRow}>
+              <Text numberOfLines={1} style={styles.menuMeta}>{item.category}</Text>
+              {item.preparationTimeMinutes ? (
+                <>
+                  <Text style={styles.metadataSeparator}>|</Text>
+                  <Icon name="clock" size={16} color={colors.textSecondary} surface={false} />
+                  <Text style={styles.menuMeta}>{item.preparationTimeMinutes} min</Text>
+                </>
+              ) : null}
+            </View>
+            <View style={styles.foodTypePill}>
+              <View style={[styles.foodTypeDot, {backgroundColor: typeColor}]} />
+              <Text style={styles.foodTypeText}>{typeLabel}</Text>
+            </View>
+          </Pressable>
+
+          <View style={styles.menuPurchaseRow}>
+            <Text style={styles.menuPrice}>
+              {formatDishDetailPrice(item.price.amount, item.price.currency)}
+            </Text>
+            {purchaseControl}
+          </View>
         </View>
-      </Pressable>
+      </View>
+
       <CustomerFavoriteHeartButton
         favorite={favorite}
         pending={favoritePending}
@@ -169,52 +247,6 @@ function MenuPreviewCard({
         onToggle={() => onFavoriteToggle(item.id, favorite)}
         style={styles.favoriteButton}
       />
-
-      {cartLine ? (
-        <View style={styles.quantityControl}>
-          <Pressable
-            accessibilityLabel={`Decrease ${item.itemName} quantity`}
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={() => onDecrease(cartLine)}
-            style={({pressed}) => [
-              styles.quantityButton,
-              busy && styles.disabled,
-              pressed && !busy && styles.pressed,
-            ]}>
-            <Text style={styles.quantityButtonText}>−</Text>
-          </Pressable>
-          <Text accessibilityLabel={`${cartLine.quantity} in cart`} style={styles.quantityText}>
-            {cartLine.quantity}
-          </Text>
-          <Pressable
-            accessibilityLabel={`Increase ${item.itemName} quantity`}
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={() => onIncrease(item)}
-            style={({pressed}) => [
-              styles.quantityButton,
-              busy && styles.disabled,
-              pressed && !busy && styles.pressed,
-            ]}>
-            <Text style={styles.quantityButtonText}>+</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <Pressable
-          accessibilityLabel={`Add ${item.itemName} to cart`}
-          accessibilityRole="button"
-          accessibilityState={{busy, disabled: busy}}
-          disabled={busy}
-          onPress={() => onIncrease(item)}
-          style={({pressed}) => [
-            styles.addButton,
-            busy && styles.disabled,
-            pressed && !busy && styles.pressed,
-          ]}>
-          <Text style={styles.addButtonText}>{busy ? 'Adding…' : 'Add'}</Text>
-        </Pressable>
-      )}
     </View>
   );
 }
@@ -887,8 +919,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
   },
-  favoriteButton: {position: 'absolute', top: spacing.sm, right: spacing.sm, zIndex: 4},
+  favoriteButton: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    zIndex: 4,
+  },
   menuCard: {
+    minHeight: 164,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
@@ -896,21 +934,26 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...elevation.card,
   },
-  menuOpenArea: {
+  menuCardRow: {
     flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  menuImagePressable: {
+    width: 132,
+    minHeight: 164,
   },
   menuImage: {
-    width: 116,
-    height: 116,
+    width: 132,
+    height: 164,
     backgroundColor: colors.surfaceMuted,
   },
   menuImageFallback: {
-    width: 116,
-    height: 116,
+    width: 132,
+    height: 164,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surfaceMuted,
   },
   menuImageFallbackText: {
     color: colors.flameRed,
@@ -920,28 +963,83 @@ const styles = StyleSheet.create({
   },
   menuCopy: {
     flex: 1,
+    minWidth: 0,
     padding: spacing.sm,
+    paddingRight: spacing.md,
   },
   menuTitle: {
+    paddingRight: touchTarget.minimum,
     color: colors.espressoBrown,
     fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },
-  menuMeta: {
+  availabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    marginTop: spacing.xxs,
+  },
+  availabilityText: {
+    color: colors.success,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.medium,
+  },
+  menuMetadataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xxs,
     marginTop: spacing.xs,
+  },
+  menuMeta: {
     color: colors.textSecondary,
     fontSize: typography.tiny,
   },
-  menuPrice: {
+  metadataSeparator: {
+    color: colors.borderStrong,
+    fontSize: typography.tiny,
+    marginHorizontal: spacing.xxs,
+  },
+  foodTypePill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    marginTop: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xxs,
+    backgroundColor: colors.white,
+  },
+  foodTypeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.pill,
+  },
+  foodTypeText: {
+    color: colors.textPrimary,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.medium,
+  },
+  menuPurchaseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  menuPrice: {
+    flexShrink: 1,
     color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.extrabold,
   },
   addButton: {
     minHeight: touchTarget.minimum,
-    margin: spacing.sm,
-    marginTop: 0,
+    minWidth: 104,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -949,19 +1047,20 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: colors.white,
-    fontSize: typography.small,
+    fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },
   quantityControl: {
-    minHeight: touchTarget.comfortable,
-    margin: spacing.sm,
-    marginTop: 0,
+    minHeight: touchTarget.minimum,
+    minWidth: 120,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.flameRed,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: colors.white,
+    overflow: 'hidden',
   },
   quantityButton: {
     width: touchTarget.minimum,

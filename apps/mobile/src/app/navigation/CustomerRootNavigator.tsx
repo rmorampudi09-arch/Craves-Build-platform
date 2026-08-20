@@ -8,6 +8,7 @@ import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {fontWeight, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
+import {refreshCartSnapshot} from '../../features/cart/state/cartRefresh';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
 import {customerAddressesApi} from '../../features/customerAddresses/api/customerAddressesApi';
 import {
@@ -60,6 +61,7 @@ import {
   useCustomerBottomNavReveal,
 } from './CustomerBottomNavController';
 import {
+  CUSTOMER_PROFILE_TAB_STATE_OPTIONS,
   CUSTOMER_TAB_ACTIVE_COLOR,
   CUSTOMER_TAB_INACTIVE_COLOR,
   CUSTOMER_TAB_STATE_OPTIONS,
@@ -155,6 +157,7 @@ const ordersTabOptions = {
   tabBarIcon: OrdersTabIcon,
 };
 const profileTabOptions = {
+  ...CUSTOMER_PROFILE_TAB_STATE_OPTIONS,
   tabBarAccessibilityLabel: `${profileTab.label} tab`,
   tabBarLabel: profileTab.label,
   tabBarIcon: ProfileTabIcon,
@@ -303,6 +306,25 @@ function CustomerLaunchLocationResolver() {
   return null;
 }
 
+function CustomerLaunchCartResolver() {
+  const dispatch = useAppDispatch();
+  const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
+  const refreshedIdentityRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!identityId) {
+      refreshedIdentityRef.current = null;
+      return;
+    }
+    if (refreshedIdentityRef.current === identityId) return;
+
+    refreshedIdentityRef.current = identityId;
+    void dispatch(refreshCartSnapshot());
+  }, [dispatch, identityId]);
+
+  return null;
+}
+
 function CustomerHomeStackNavigator() {
   const rootListeners = useCustomerTabRootListeners();
   const stackScreenOptions = useCustomerStackScreenOptions();
@@ -423,6 +445,7 @@ export function CustomerRootNavigator() {
   return (
     <CustomerBottomNavVisibilityProvider>
       <CustomerLaunchLocationResolver />
+      <CustomerLaunchCartResolver />
       <CustomerTabsNavigator />
     </CustomerBottomNavVisibilityProvider>
   );

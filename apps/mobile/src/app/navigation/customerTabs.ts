@@ -28,6 +28,15 @@ export const CUSTOMER_TAB_STATE_OPTIONS = {
   popToTopOnBlur: false,
 } as const;
 
+/**
+ * Profile can be opened deeply from Orders/Help. Once Profile loses focus, reset
+ * that nested stack so the next explicit Profile-tab press always opens Profile root.
+ */
+export const CUSTOMER_PROFILE_TAB_STATE_OPTIONS = {
+  ...CUSTOMER_TAB_STATE_OPTIONS,
+  popToTopOnBlur: true,
+} as const;
+
 export function getCustomerTabDefinition(
   routeName: CustomerTabRouteName,
 ): CustomerTabDefinition {

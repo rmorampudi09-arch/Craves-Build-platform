@@ -1,5 +1,6 @@
 import {colors} from '../../design/tokens';
 import {
+  CUSTOMER_PROFILE_TAB_STATE_OPTIONS,
   CUSTOMER_TAB_ACTIVE_COLOR,
   CUSTOMER_TAB_STATE_OPTIONS,
   CUSTOMER_TABS,
@@ -30,6 +31,13 @@ describe('customerTabs', () => {
     expect(CUSTOMER_TAB_STATE_OPTIONS).toEqual({
       lazy: true,
       popToTopOnBlur: false,
+    });
+  });
+
+  it('resets only the Profile nested stack after leaving a deep profile route', () => {
+    expect(CUSTOMER_PROFILE_TAB_STATE_OPTIONS).toEqual({
+      lazy: true,
+      popToTopOnBlur: true,
     });
   });
 

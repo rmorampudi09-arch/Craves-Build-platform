@@ -2,6 +2,7 @@ import React from 'react';
 import {AppState} from 'react-native';
 import {appQueryClient} from '../../../app/query';
 import {useAppSelector} from '../../../app/store/hooks';
+import {AppApiError} from '../../../core/http/apiError';
 import {customerFavoritesApi} from '../api/customerFavoritesApi';
 import {createCustomerFavoritesQueryKey} from '../query/customerFavoritesQueries';
 import {
@@ -12,14 +13,6 @@ import {
 } from './customerFavoritesOfflineQueue';
 
 const REPLAY_INTERVAL_MS = 30_000;
-
-async function applyPendingMutation(mutation: PendingFavoriteMutation): Promise<void> {
-  if (mutation.targetFavorite) {
-    await customerFavoritesApi.save(mutation.menuItemId);
-  } else {
-    await customerFavoritesApi.remove(mutation.menuItemId);
-  }
-}
 
 /**
  * Keeps queued Favorite mutations bound to the currently authenticated identity.
@@ -32,16 +25,45 @@ async function applyPendingMutation(mutation: PendingFavoriteMutation): Promise<
 export function CustomerFavoritesSyncCoordinator() {
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const previousIdentityRef = React.useRef<string | null>(null);
+  const activeIdentityRef = React.useRef<string | null>(identityId);
   const replayingRef = React.useRef(false);
+  activeIdentityRef.current = identityId;
 
   const replay = React.useCallback(async () => {
     if (!identityId || replayingRef.current) return;
+    const replayIdentityId = identityId;
     replayingRef.current = true;
     try {
-      const result = await replayFavoriteMutationQueue(identityId, applyPendingMutation);
-      if (result.replayed > 0 || result.dropped > 0) {
+      const result = await replayFavoriteMutationQueue(
+        replayIdentityId,
+        async (mutation: PendingFavoriteMutation) => {
+          if (activeIdentityRef.current !== replayIdentityId) {
+            // Never let a queued mutation created under account A be sent using
+            // account B's newly active credentials. Treat this as retriable so
+            // the replay loop stops without dropping the old identity's queue;
+            // the identity-change effect below then removes that private state.
+            throw new AppApiError(
+              'FAVORITES_IDENTITY_CHANGED',
+              'Favorite sync stopped because the signed-in account changed.',
+              undefined,
+              undefined,
+              true,
+            );
+          }
+
+          if (mutation.targetFavorite) {
+            await customerFavoritesApi.save(mutation.menuItemId);
+          } else {
+            await customerFavoritesApi.remove(mutation.menuItemId);
+          }
+        },
+      );
+      if (
+        activeIdentityRef.current === replayIdentityId &&
+        (result.replayed > 0 || result.dropped > 0)
+      ) {
         await appQueryClient.invalidateQueries({
-          queryKey: createCustomerFavoritesQueryKey(identityId),
+          queryKey: createCustomerFavoritesQueryKey(replayIdentityId),
           exact: true,
         });
       }

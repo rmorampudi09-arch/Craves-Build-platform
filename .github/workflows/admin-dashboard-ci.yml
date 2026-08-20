@@ -7,12 +7,18 @@ on:
       - apps/customer-web-next/**
       - services/order-service/**
       - services/user-chef-service/**
+      - services/integration-service/**
       - infra/apim/admin-dashboard/**
       - infra/apim/admin-directory/**
+      - infra/apim/admin-operational-investigations/**
+      - infra/apim/subscription-backoffice/**
       - scripts/apim/configure-admin-dashboard-apim.sh
       - scripts/apim/configure-admin-directory-apim.sh
+      - scripts/apim/configure-admin-operational-investigations-apim.sh
+      - scripts/apim/configure-chef-review-document-list-apim.sh
       - azure-pipelines-admin-dashboard*.yml
       - azure-pipelines-admin-directory-apim.yml
+      - azure-pipelines-chef-application-apim.yml
       - .github/workflows/admin-dashboard-ci.yml
   push:
     branches: [main]
@@ -20,12 +26,18 @@ on:
       - apps/customer-web-next/**
       - services/order-service/**
       - services/user-chef-service/**
+      - services/integration-service/**
       - infra/apim/admin-dashboard/**
       - infra/apim/admin-directory/**
+      - infra/apim/admin-operational-investigations/**
+      - infra/apim/subscription-backoffice/**
       - scripts/apim/configure-admin-dashboard-apim.sh
       - scripts/apim/configure-admin-directory-apim.sh
+      - scripts/apim/configure-admin-operational-investigations-apim.sh
+      - scripts/apim/configure-chef-review-document-list-apim.sh
       - azure-pipelines-admin-dashboard*.yml
       - azure-pipelines-admin-directory-apim.yml
+      - azure-pipelines-chef-application-apim.yml
       - .github/workflows/admin-dashboard-ci.yml
 
 permissions:
@@ -59,7 +71,7 @@ jobs:
           NEXT_PUBLIC_CASHFREE_MODE: sandbox
 
   order-service:
-    name: Order-service admin authorization
+    name: Order-service admin checks
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -71,14 +83,29 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - run: mvn -B -ntp -Dtest=AdminDashboardControllerTest test
+      - run: mvn -B -ntp test
 
   user-chef-service:
-    name: User/Chef admin directory checks
+    name: User/Chef admin checks
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: services/user-chef-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - run: mvn -B -ntp test
+
+  integration-service:
+    name: Integration admin financial checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/integration-service
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -95,3 +122,5 @@ jobs:
       - uses: actions/checkout@v4
       - run: bash -n scripts/apim/configure-admin-dashboard-apim.sh
       - run: bash -n scripts/apim/configure-admin-directory-apim.sh
+      - run: bash -n scripts/apim/configure-admin-operational-investigations-apim.sh
+      - run: bash -n scripts/apim/configure-chef-review-document-list-apim.sh

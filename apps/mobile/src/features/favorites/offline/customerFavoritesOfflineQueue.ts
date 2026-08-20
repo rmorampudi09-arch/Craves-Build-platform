@@ -26,6 +26,7 @@ type ReplayHandler = (mutation: PendingFavoriteMutation) => Promise<void>;
 
 const listeners = new Set<QueueListener>();
 const snapshots = new Map<string, readonly PendingFavoriteMutation[]>();
+const EMPTY_QUEUE: readonly PendingFavoriteMutation[] = [];
 
 function storageKey(identityId: string): string {
   return `${STORAGE_PREFIX}${identityId}`;
@@ -75,6 +76,11 @@ async function persist(identityId: string, queue: readonly PendingFavoriteMutati
   notify();
 }
 
+async function currentQueue(identityId: string): Promise<readonly PendingFavoriteMutation[]> {
+  const existing = snapshots.get(identityId);
+  return existing ?? hydrateFavoriteMutationQueue(identityId);
+}
+
 export async function hydrateFavoriteMutationQueue(
   identityId: string,
 ): Promise<readonly PendingFavoriteMutation[]> {
@@ -97,7 +103,7 @@ export async function enqueueFavoriteMutation(
   menuItemId: string,
   targetFavorite: boolean,
 ): Promise<PendingFavoriteMutation> {
-  const current = [...(snapshots.get(identityId) ?? (await hydrateFavoriteMutationQueue(identityId)))];
+  const current = [...(await currentQueue(identityId))];
   const now = new Date().toISOString();
   const next: PendingFavoriteMutation = {
     id: `${identityId}:${menuItemId}:${now}`,
@@ -114,6 +120,17 @@ export async function enqueueFavoriteMutation(
   return next;
 }
 
+export async function discardFavoriteMutation(
+  identityId: string,
+  menuItemId: string,
+): Promise<void> {
+  const current = [...(await currentQueue(identityId))];
+  const next = current.filter(item => item.menuItemId !== menuItemId);
+  if (next.length !== current.length) {
+    await persist(identityId, next);
+  }
+}
+
 export async function clearFavoriteMutationQueue(identityId: string): Promise<void> {
   await persist(identityId, []);
 }
@@ -126,8 +143,8 @@ export function subscribeFavoriteMutationQueue(listener: QueueListener): () => v
 export function getFavoriteMutationQueueSnapshot(
   identityId: string | null,
 ): readonly PendingFavoriteMutation[] {
-  if (!identityId) return [];
-  return snapshots.get(identityId) ?? [];
+  if (!identityId) return EMPTY_QUEUE;
+  return snapshots.get(identityId) ?? EMPTY_QUEUE;
 }
 
 export function isFavoriteMutationQueued(identityId: string | null, menuItemId: string): boolean {
@@ -139,7 +156,7 @@ export async function replayFavoriteMutationQueue(
   identityId: string,
   handler: ReplayHandler,
 ): Promise<FavoriteReplayResult> {
-  const queue = [...(snapshots.get(identityId) ?? (await hydrateFavoriteMutationQueue(identityId)))];
+  const queue = [...(await currentQueue(identityId))];
   if (queue.length === 0) {
     return {replayed: 0, dropped: 0, remaining: 0, stoppedForAuthentication: false};
   }

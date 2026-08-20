@@ -1,29 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ChefApplicationEvidenceUploader } from "@/components/chef-application-evidence-uploader";
 import {
-  ChefApplicationEvidenceUploader,
+  parseChefEvidenceList,
   type ChefEvidenceMetadata,
-} from "@/components/chef-application-evidence-uploader";
-
-function safeMetadata(value: unknown): ChefEvidenceMetadata | null {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Record<string, unknown>;
-  if (
-    typeof raw.id !== "string" ||
-    typeof raw.documentType !== "string" ||
-    typeof raw.originalFileName !== "string" ||
-    typeof raw.fileSizeBytes !== "number" ||
-    typeof raw.status !== "string"
-  ) return null;
-  return {
-    id: raw.id,
-    documentType: raw.documentType,
-    originalFileName: raw.originalFileName,
-    fileSizeBytes: raw.fileSizeBytes,
-    status: raw.status,
-  };
-}
+} from "@/lib/chef-application-evidence-contract";
 
 export function ChefApplicationDocumentPanel() {
   const [ready, setReady] = useState(false);
@@ -39,14 +21,15 @@ export function ChefApplicationDocumentPanel() {
     const applicationReady = typeof application?.id === "string" && application.id.length > 0;
     setReady(applicationReady);
     setLocked(application?.status === "APPROVED");
-    if (!applicationReady) return;
+    if (!applicationReady) {
+      setDocuments([]);
+      return;
+    }
 
     const documentResponse = await fetch("/api/chef/application/evidence-status", { cache: "no-store" });
-    const body = await documentResponse.json().catch(() => null);
-    if (!documentResponse.ok || !Array.isArray(body)) return;
-    const parsed = body.map(safeMetadata);
-    if (parsed.some(item => item === null)) return;
-    setDocuments(parsed as ChefEvidenceMetadata[]);
+    const parsed = parseChefEvidenceList(await documentResponse.json().catch(() => null));
+    if (!documentResponse.ok || !parsed) return;
+    setDocuments(parsed);
     setVersion(current => current + 1);
   }, []);
 

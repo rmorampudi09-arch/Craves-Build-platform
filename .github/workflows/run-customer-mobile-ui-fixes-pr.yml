@@ -44,6 +44,20 @@ jobs:
           PY
           bash /tmp/apply-customer-fixes.sh
 
+      - name: Keep availability fallback lint-safe
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('apps/mobile/src/shared/menuAvailability.ts')
+          text = path.read_text()
+          old = "hash = (Math.imul(hash, 31) + itemId.charCodeAt(index)) >>> 0;"
+          new = "hash = (hash * 31 + itemId.charCodeAt(index)) % 2147483647;"
+          if old not in text:
+            raise SystemExit('Expected availability hash line was not generated.')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Validate targeted tests
         working-directory: apps/mobile
         run: npm test -- --runInBand src/shared/menuAvailability.test.ts src/app/navigation/customerTabs.test.ts

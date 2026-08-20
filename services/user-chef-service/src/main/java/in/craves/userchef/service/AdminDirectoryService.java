@@ -172,17 +172,22 @@ public class AdminDirectoryService {
     }
 
     private void searchByPhone(String value, List<DirectoryHit> hits) {
+        List<String> variants = phoneVariants(value);
         hits.addAll(jdbcTemplate.query(
             "SELECT id, identity_id, registered_phone_number, first_name, last_name, email " +
-                "FROM customer_profile WHERE registered_phone_number = ? LIMIT 10",
+                "FROM customer_profile WHERE registered_phone_number IN (?, ?, ?) LIMIT 10",
             (rs, rowNum) -> customerHit(rs, "PHONE", value),
-            value
+            variants.get(0),
+            variants.get(1),
+            variants.get(2)
         ));
         hits.addAll(jdbcTemplate.query(
             "SELECT id, identity_id, phone_number, email, first_name, last_name, status " +
-                "FROM chef_application WHERE phone_number = ? LIMIT 10",
+                "FROM chef_application WHERE phone_number IN (?, ?, ?) LIMIT 10",
             (rs, rowNum) -> chefHit(rs, "PHONE", value),
-            value
+            variants.get(0),
+            variants.get(1),
+            variants.get(2)
         ));
     }
 
@@ -426,6 +431,28 @@ public class AdminDirectoryService {
             return null;
         }
         return compact;
+    }
+
+    private static List<String> phoneVariants(String value) {
+        String digits = value.startsWith("+") ? value.substring(1) : value;
+        List<String> variants = new ArrayList<>(3);
+        if (digits.matches("\\d{10}")) {
+            variants.add(digits);
+            variants.add("91" + digits);
+            variants.add("+91" + digits);
+            return variants;
+        }
+        if (digits.matches("91\\d{10}")) {
+            String national = digits.substring(2);
+            variants.add(national);
+            variants.add("91" + national);
+            variants.add("+91" + national);
+            return variants;
+        }
+        variants.add(value);
+        variants.add(value.startsWith("+") ? digits : "+" + digits);
+        variants.add(value);
+        return variants;
     }
 
     private static String displayName(String firstName, String lastName) {

@@ -41,8 +41,16 @@ export type FavoriteWatchChannel = z.infer<typeof favoriteWatchChannelSchema>;
 export type FavoriteChef = z.infer<typeof favoriteChefSchema>;
 export type FavoriteKitchen = z.infer<typeof favoriteKitchenSchema>;
 export type FavoriteWatch = z.infer<typeof favoriteWatchSchema>;
-export type FavoriteChefPage = z.infer<ReturnType<typeof cursorPage<typeof favoriteChefSchema>>>;
-export type FavoriteKitchenPage = z.infer<ReturnType<typeof cursorPage<typeof favoriteKitchenSchema>>>;
+
+export interface FavoriteChefPage {
+  items: FavoriteChef[];
+  nextCursor: string | null;
+}
+
+export interface FavoriteKitchenPage {
+  items: FavoriteKitchen[];
+  nextCursor: string | null;
+}
 
 function requireUuid(label: string, value: string): string {
   const parsed = z.string().uuid().safeParse(value.trim());

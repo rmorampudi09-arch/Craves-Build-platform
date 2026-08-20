@@ -26,11 +26,11 @@ export function FloatingCartBar({ itemCount, total, currency, onViewCart }: Floa
       <button
         type="button"
         onClick={onViewCart}
-        className="group pointer-events-auto relative mx-auto flex min-h-[4.6rem] w-full max-w-[58rem] items-center gap-4 overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-white px-[1.125rem] text-left text-[#1A1A1A] shadow-[0_18px_44px_rgba(26,26,26,0.16)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_52px_rgba(26,26,26,0.2)] sm:px-6"
+        className="group pointer-events-auto relative mx-auto flex min-h-[4.6rem] w-full max-w-[58rem] items-center gap-4 overflow-hidden rounded-[1.45rem] border border-[#F1F3F5] bg-[#FFFFFF] px-[1.125rem] text-left text-[#1A1A1A] shadow-[0_18px_44px_rgba(26,26,26,0.12)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_0_28px_rgba(100,180,120,0.28)] sm:px-6"
         aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
       >
-        <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-white/95 backdrop-blur-md" />
-        <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+        <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[#FFFFFF]/95 backdrop-blur-xl" />
+        <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
           <CravesCartIcon className="h-5 w-5" />
         </span>
         <span className="relative z-10 min-w-0 flex-1">
@@ -39,7 +39,7 @@ export function FloatingCartBar({ itemCount, total, currency, onViewCart }: Floa
           </span>
           <span className="mt-0.5 block text-[0.68rem] font-semibold text-[#6B6B6B] sm:text-xs">Extra charges may apply</span>
         </span>
-        <span className="relative z-10 inline-flex shrink-0 items-center gap-2 text-sm font-black text-[#F62E18] sm:text-base">
+        <span className="relative z-10 inline-flex shrink-0 items-center gap-2 text-sm font-black text-[#1A1A1A] sm:text-base">
           View Cart
           <ArrowRight className="h-[1.125rem] w-[1.125rem] transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
         </span>

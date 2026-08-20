@@ -8,6 +8,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: customer-fix-build-apk
+  cancel-in-progress: true
 jobs:
   implement-validate-build:
     runs-on: ubuntu-latest
@@ -18,6 +21,16 @@ jobs:
         with:
           ref: fix/customer-card-navigation-nearby-2026-08-21
           fetch-depth: 0
+
+      - name: Record workflow run
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$GITHUB_RUN_ID" > .github/customer-fix-build-run.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/customer-fix-build-run.txt
+          git commit -m "chore: record customer fix APK build run"
+          git push origin HEAD:fix/customer-card-navigation-nearby-2026-08-21
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -104,9 +117,6 @@ jobs:
       - name: Commit validated source and launcher assets
         run: |
           set -euo pipefail
-          printf '%s\n' "$GITHUB_RUN_ID" > .github/customer-fix-build-run.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/mobile services/order-service .github/customer-fix-build-run.txt
+          git add apps/mobile services/order-service
           git commit -m "fix(mobile): finalize customer cards navigation nearby and Craves launcher" || true
           git push origin HEAD:fix/customer-card-navigation-nearby-2026-08-21

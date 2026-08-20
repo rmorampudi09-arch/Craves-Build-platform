@@ -4,6 +4,7 @@ import {Provider} from 'react-redux';
 import {QueryClientProvider} from '@tanstack/react-query';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {CustomerFavoritesSyncCoordinator} from '../../features/favorites/offline/CustomerFavoritesSyncCoordinator';
 import {appQueryClient} from '../query';
 import {store} from '../store/store';
 
@@ -13,6 +14,7 @@ export function AppProviders({children}: PropsWithChildren) {
       <SafeAreaProvider>
         <Provider store={store}>
           <QueryClientProvider client={appQueryClient}>
+            <CustomerFavoritesSyncCoordinator />
             {children}
           </QueryClientProvider>
         </Provider>

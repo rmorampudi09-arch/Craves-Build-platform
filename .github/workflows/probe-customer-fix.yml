@@ -1,5 +1,4 @@
-name: Customer Fix Workflow Probe
-# trigger existing workflow
+name: Customer Fix Implementation
 on:
   push:
     branches:
@@ -9,17 +8,55 @@ on:
 permissions:
   contents: write
 jobs:
-  probe:
+  implement-and-validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout fix branch
+        uses: actions/checkout@v4
         with:
           ref: fix/customer-card-navigation-nearby-2026-08-21
-      - name: Record run
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Apply targeted source changes
+        run: python3 .github/customer-fix-apply.py
+      - name: Install mobile dependencies
+        working-directory: apps/mobile
+        run: npm ci
+      - name: TypeScript validation
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+      - name: Mobile lint
+        working-directory: apps/mobile
+        run: npm run lint
+      - name: Mobile test suite
+        working-directory: apps/mobile
+        run: npm test -- --runInBand
+      - name: Order service compile
+        working-directory: services/order-service
+        run: mvn -q -DskipTests compile
+      - name: Order service regression test
+        working-directory: services/order-service
+        run: mvn -q -Dtest=CatalogClientCartSnapshotTest test
+      - name: Commit validated changes
         run: |
-          printf '%s\n' "$GITHUB_RUN_ID" > .github/customer-fix-run.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/customer-fix-run.txt
-          git commit -m "chore: record customer fix workflow run"
+          git rm .github/workflows/probe-customer-fix.yml
+          git rm .github/workflows/customer-card-navigation-nearby-fix.yml
+          git rm .github/customer-fix-apply.py
+          git rm .github/customer-fix-run.txt
+          git add apps/mobile services/order-service
+          git commit -m "fix(mobile): align customer cards and stabilize cart navigation discovery"
           git push origin HEAD:fix/customer-card-navigation-nearby-2026-08-21

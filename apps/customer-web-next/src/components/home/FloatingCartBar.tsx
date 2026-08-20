@@ -26,11 +26,11 @@ export function FloatingCartBar({ itemCount, total, currency, onViewCart }: Floa
       <button
         type="button"
         onClick={onViewCart}
-        className="group pointer-events-auto relative mx-auto flex min-h-[4.6rem] w-full max-w-[58rem] items-center gap-4 overflow-hidden rounded-[1.35rem] border border-white bg-[#FFFFFF] px-[1.125rem] text-left text-[#1A1A1A] shadow-[0_18px_44px_rgba(26,26,26,0.14)] transition-all duration-300 hover:shadow-[0_22px_52px_rgba(34,197,94,0.22)] sm:px-6"
+        className="group pointer-events-auto relative mx-auto flex min-h-[4.6rem] w-full max-w-[58rem] items-center gap-4 overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-white px-[1.125rem] text-left text-[#1A1A1A] shadow-[0_18px_44px_rgba(26,26,26,0.16)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_52px_rgba(26,26,26,0.2)] sm:px-6"
         aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
       >
-        <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[1.35rem] bg-[rgba(241,243,245,0.9)] backdrop-blur-xl" />
-        <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18] shadow-[0_3px_10px_rgba(26,26,26,0.08)]">
+        <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-white/95 backdrop-blur-md" />
+        <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
           <CravesCartIcon className="h-5 w-5" />
         </span>
         <span className="relative z-10 min-w-0 flex-1">

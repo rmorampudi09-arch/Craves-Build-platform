@@ -277,10 +277,10 @@ export default function OrdersPage() {
                 type="button"
                 onClick={() => setView(nextView)}
                 aria-pressed={selected}
-                className={`relative min-h-11 pb-2 text-sm font-semibold transition-colors ${
+                className={`relative min-h-11 appearance-none border-0 !bg-transparent px-0 pb-2 text-sm font-semibold shadow-none outline-none transition-colors hover:!bg-transparent focus:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent ${
                   selected
                     ? "text-[#F62E18] after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:rounded-full after:bg-[#F62E18]"
-                    : "text-[#1A1A1A] hover:text-[#F62E18]"
+                    : "text-[#1A1A1A] after:absolute after:inset-x-2 after:bottom-[-1px] after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-[#F62E18] after:transition-transform hover:text-[#F62E18] hover:after:scale-x-100 focus-visible:text-[#F62E18] focus-visible:after:scale-x-100"
                 }`}
               >
                 {label} ({counts[nextView]})

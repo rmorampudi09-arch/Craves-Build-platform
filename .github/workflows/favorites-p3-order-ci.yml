@@ -3,13 +3,13 @@ name: CRAVES Favorites P3 Order CI
 on:
   push:
     branches:
-      - feature/favorites-p3-order-like-last-time-20260821
+      - feature/favorites-clean-p3-order-20260821
     paths:
       - 'services/order-service/**'
       - '.github/workflows/favorites-p3-order-ci.yml'
   pull_request:
     branches:
-      - chatgpt/backend-customer-chef-journey-20260819
+      - main
     paths:
       - 'services/order-service/**'
       - '.github/workflows/favorites-p3-order-ci.yml'
@@ -50,12 +50,12 @@ jobs:
           ! grep -R --line-number -E '(password|secret|token|api[-_]?key)[[:space:]]*=[[:space:]]*[^$<{[:space:]]' \
             services/order-service/modules/favorites-p3-repeat-order \
             services/order-service/src/main/java/in/craves/order/service/RepeatOrderService.java
-      - name: Package exact P3 Order source
+      - name: Package clean P3 Order source
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin chatgpt/backend-customer-chef-journey-20260819:refs/remotes/origin/p3-order-base
-          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P3_Order_Source"
+          git fetch --no-tags origin main:refs/remotes/origin/p3-order-base
+          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P3_Order_Clean_Source"
           rm -rf "$package_root"
           mkdir -p "$package_root"
           git diff --name-only refs/remotes/origin/p3-order-base...HEAD | while IFS= read -r path; do
@@ -64,15 +64,16 @@ jobs:
             cp "$path" "$package_root/$path"
           done
           cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
-          CRAVES Favorites 2.0 P3 Order Like Last Time
-          Base: chatgpt/backend-customer-chef-journey-20260819
+          CRAVES Favorites 2.0 P3 Order Like Last Time clean integration
+          Base: main
+          Includes only the P3 Order slice plus required cursor helper classes.
           Source only. Existing atomic reorder endpoint remains the write path.
           EOF
-          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P3_Order_Source.zip Craves_Favorites_2_0_P3_Order_Source)
+          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P3_Order_Clean_Source.zip Craves_Favorites_2_0_P3_Order_Clean_Source)
       - uses: actions/upload-artifact@v4
         with:
-          name: Craves_Favorites_2_0_P3_Order_Source
-          path: ${{ runner.temp }}/Craves_Favorites_2_0_P3_Order_Source.zip
+          name: Craves_Favorites_2_0_P3_Order_Clean_Source
+          path: ${{ runner.temp }}/Craves_Favorites_2_0_P3_Order_Clean_Source.zip
           if-no-files-found: error
           retention-days: 30
       - name: Publish test reports

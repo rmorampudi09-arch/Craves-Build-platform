@@ -1,7 +1,6 @@
 import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {
   FlatList,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -45,20 +44,18 @@ import {
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
-import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
   isFavoriteMenuItem,
   useCustomerFavoritesQuery,
   useToggleCustomerFavorite,
 } from '../../favorites/query/customerFavoritesQueries';
 import type {CustomerKitchenMenuItemSummary} from '../api/kitchenProfileApi';
+import {CustomerKitchenMenuCard} from '../components/CustomerKitchenMenuCard';
 import {
   ALL_KITCHEN_DISHES_CATEGORY,
   filterCustomerKitchenDishes,
-  formatCustomerKitchenDishMetadata,
   getCustomerKitchenDishCategories,
 } from '../kitchenDishesPresentation';
-import {getCustomerKitchenMenuImage} from '../kitchenProfilePresentation';
 import {useCustomerKitchenProfileQuery} from '../query/kitchenProfileQueries';
 
 type KitchenDishesRoute = RouteProp<
@@ -102,124 +99,8 @@ interface KitchenDishRowProps {
   onDecrease: (line: CartLine) => void;
 }
 
-function KitchenDishRow({
-  item,
-  cartLine,
-  busy,
-  favorite,
-  favoritePending,
-  favoriteDisabled,
-  onFavoriteToggle,
-  onOpen,
-  onIncrease,
-  onDecrease,
-}: KitchenDishRowProps) {
-  const image = getCustomerKitchenMenuImage(item);
-  const metadata = formatCustomerKitchenDishMetadata(item);
-
-  return (
-    <View style={styles.dishCard}>
-      <Pressable
-        accessibilityLabel={`Open ${item.itemName}`}
-        accessibilityRole="button"
-        onPress={() => onOpen(item.id)}
-        style={({pressed}) => [styles.dishMain, pressed && styles.pressed]}>
-        {image ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`${item.itemName} image`}
-            resizeMode="cover"
-            source={{uri: image.url}}
-            style={styles.dishImage}
-          />
-        ) : (
-          <View style={styles.dishImageFallback}>
-            <Text numberOfLines={2} style={styles.dishImageFallbackText}>
-              {item.category}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.dishCopy}>
-          <Text numberOfLines={2} style={styles.dishTitle}>
-            {item.itemName}
-          </Text>
-          <Text numberOfLines={1} style={styles.dishCategory}>
-            {item.category}
-          </Text>
-          {metadata ? (
-            <Text numberOfLines={1} style={styles.dishMeta}>
-              {metadata}
-            </Text>
-          ) : null}
-          {item.description ? (
-            <Text numberOfLines={2} style={styles.dishDescription}>
-              {item.description}
-            </Text>
-          ) : null}
-          <Text style={styles.dishPrice}>
-            {formatDishDetailPrice(item.price.amount, item.price.currency)}
-          </Text>
-        </View>
-      </Pressable>
-      <CustomerFavoriteHeartButton
-        favorite={favorite}
-        pending={favoritePending}
-        disabled={favoriteDisabled}
-        itemLabel={item.itemName}
-        onToggle={() => onFavoriteToggle(item.id, favorite)}
-        style={styles.favoriteButton}
-      />
-
-      {cartLine ? (
-        <View style={styles.quantityControl}>
-          <Pressable
-            accessibilityLabel={`Decrease ${item.itemName} quantity`}
-            accessibilityRole="button"
-            accessibilityState={{disabled: busy}}
-            disabled={busy}
-            onPress={() => onDecrease(cartLine)}
-            style={({pressed}) => [
-              styles.quantityButton,
-              busy && styles.disabled,
-              pressed && !busy && styles.pressed,
-            ]}>
-            <Text style={styles.quantityButtonText}>−</Text>
-          </Pressable>
-          <Text accessibilityLabel={`${cartLine.quantity} in cart`} style={styles.quantityText}>
-            {cartLine.quantity}
-          </Text>
-          <Pressable
-            accessibilityLabel={`Increase ${item.itemName} quantity`}
-            accessibilityRole="button"
-            accessibilityState={{busy, disabled: busy}}
-            disabled={busy}
-            onPress={() => onIncrease(item)}
-            style={({pressed}) => [
-              styles.quantityButton,
-              busy && styles.disabled,
-              pressed && !busy && styles.pressed,
-            ]}>
-            <Text style={styles.quantityButtonText}>+</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <Pressable
-          accessibilityLabel={`Add ${item.itemName} to cart`}
-          accessibilityRole="button"
-          accessibilityState={{busy, disabled: busy}}
-          disabled={busy}
-          onPress={() => onIncrease(item)}
-          style={({pressed}) => [
-            styles.addButton,
-            busy && styles.disabled,
-            pressed && !busy && styles.pressed,
-          ]}>
-          <Text style={styles.addButtonText}>{busy ? 'Updating…' : 'Add'}</Text>
-        </Pressable>
-      )}
-    </View>
-  );
+function KitchenDishRow(props: KitchenDishRowProps) {
+  return <CustomerKitchenMenuCard {...props} />;
 }
 
 function DishSeparator() {

@@ -1,6 +1,5 @@
 import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -36,7 +35,6 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
-import {getDisplayAvailabilityCount} from '../../../shared/menuAvailability';
 import type {CartLine} from '../../cart/domain/cartTypes';
 import {
   addCartItem,
@@ -45,18 +43,17 @@ import {
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
-import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
   isFavoriteMenuItem,
   useCustomerFavoritesQuery,
   useToggleCustomerFavorite,
 } from '../../favorites/query/customerFavoritesQueries';
 import type {CustomerKitchenMenuItemSummary} from '../api/kitchenProfileApi';
+import {CustomerKitchenMenuCard} from '../components/CustomerKitchenMenuCard';
 import {
   formatCustomerKitchenJoinedLabel,
   formatCustomerKitchenLocation,
   getCustomerKitchenInitials,
-  getCustomerKitchenMenuImage,
   getCustomerKitchenMenuPreview,
 } from '../kitchenProfilePresentation';
 import {useCustomerKitchenProfileQuery} from '../query/kitchenProfileQueries';
@@ -87,16 +84,6 @@ function KitchenProfileSkeleton() {
   );
 }
 
-function foodTypeLabel(foodType: CustomerKitchenMenuItemSummary['foodType']): string {
-  if (foodType === 'NON_VEG') {
-    return 'Non-veg';
-  }
-  if (foodType === 'EGG') {
-    return 'Egg';
-  }
-  return 'Veg';
-}
-
 interface MenuPreviewCardProps {
   item: CustomerKitchenMenuItemSummary;
   cartLine: CartLine | null;
@@ -110,145 +97,8 @@ interface MenuPreviewCardProps {
   onDecrease: (line: CartLine) => void;
 }
 
-function MenuPreviewCard({
-  item,
-  cartLine,
-  busy,
-  favorite,
-  favoritePending,
-  favoriteDisabled,
-  onFavoriteToggle,
-  onOpen,
-  onIncrease,
-  onDecrease,
-}: MenuPreviewCardProps) {
-  const image = getCustomerKitchenMenuImage(item);
-  const availableCount = getDisplayAvailabilityCount(item.id);
-  const typeLabel = foodTypeLabel(item.foodType);
-  const typeColor =
-    item.foodType === 'VEG'
-      ? colors.success
-      : item.foodType === 'EGG'
-        ? colors.warning
-        : colors.error;
-
-  const purchaseControl = cartLine ? (
-    <View style={styles.quantityControl}>
-      <Pressable
-        accessibilityLabel={`Decrease ${item.itemName} quantity`}
-        accessibilityRole="button"
-        disabled={busy}
-        onPress={() => onDecrease(cartLine)}
-        style={({pressed}) => [
-          styles.quantityButton,
-          busy && styles.disabled,
-          pressed && !busy && styles.pressed,
-        ]}>
-        <Text style={styles.quantityButtonText}>−</Text>
-      </Pressable>
-      <Text accessibilityLabel={`${cartLine.quantity} in cart`} style={styles.quantityText}>
-        {cartLine.quantity}
-      </Text>
-      <Pressable
-        accessibilityLabel={`Increase ${item.itemName} quantity`}
-        accessibilityRole="button"
-        disabled={busy}
-        onPress={() => onIncrease(item)}
-        style={({pressed}) => [
-          styles.quantityButton,
-          busy && styles.disabled,
-          pressed && !busy && styles.pressed,
-        ]}>
-        <Text style={styles.quantityButtonText}>+</Text>
-      </Pressable>
-    </View>
-  ) : (
-    <Pressable
-      accessibilityLabel={`Add ${item.itemName} to cart`}
-      accessibilityRole="button"
-      accessibilityState={{busy, disabled: busy}}
-      disabled={busy}
-      onPress={() => onIncrease(item)}
-      style={({pressed}) => [
-        styles.addButton,
-        busy && styles.disabled,
-        pressed && !busy && styles.pressed,
-      ]}>
-      <Text style={styles.addButtonText}>{busy ? 'Adding…' : 'Add'}</Text>
-    </Pressable>
-  );
-
-  return (
-    <View style={styles.menuCard}>
-      <View style={styles.menuCardRow}>
-        <Pressable
-          accessibilityLabel={`Open ${item.itemName}`}
-          accessibilityRole="button"
-          onPress={() => onOpen(item.id)}
-          style={({pressed}) => [styles.menuImagePressable, pressed && styles.pressed]}>
-          {image ? (
-            <Image
-              accessibilityIgnoresInvertColors
-              accessibilityLabel={`${item.itemName} image`}
-              source={{uri: image.url}}
-              resizeMode="cover"
-              style={styles.menuImage}
-            />
-          ) : (
-            <View style={styles.menuImageFallback}>
-              <Text style={styles.menuImageFallbackText}>{item.category}</Text>
-            </View>
-          )}
-        </Pressable>
-
-        <View style={styles.menuCopy}>
-          <Pressable
-            accessibilityLabel={`Open ${item.itemName}`}
-            accessibilityRole="button"
-            onPress={() => onOpen(item.id)}
-            style={({pressed}) => pressed && styles.pressed}>
-            <Text numberOfLines={2} style={styles.menuTitle}>
-              {item.itemName}
-            </Text>
-            <View style={styles.availabilityRow}>
-              <Icon name="check" size={16} color={colors.success} surface={false} />
-              <Text style={styles.availabilityText}>Available - {availableCount}</Text>
-            </View>
-            <View style={styles.menuMetadataRow}>
-              <Text numberOfLines={1} style={styles.menuMeta}>{item.category}</Text>
-              {item.preparationTimeMinutes ? (
-                <>
-                  <Text style={styles.metadataSeparator}>|</Text>
-                  <Icon name="clock" size={16} color={colors.textSecondary} surface={false} />
-                  <Text style={styles.menuMeta}>{item.preparationTimeMinutes} min</Text>
-                </>
-              ) : null}
-            </View>
-            <View style={styles.foodTypePill}>
-              <View style={[styles.foodTypeDot, {backgroundColor: typeColor}]} />
-              <Text style={styles.foodTypeText}>{typeLabel}</Text>
-            </View>
-          </Pressable>
-
-          <View style={styles.menuPurchaseRow}>
-            <Text style={styles.menuPrice}>
-              {formatDishDetailPrice(item.price.amount, item.price.currency)}
-            </Text>
-            {purchaseControl}
-          </View>
-        </View>
-      </View>
-
-      <CustomerFavoriteHeartButton
-        favorite={favorite}
-        pending={favoritePending}
-        disabled={favoriteDisabled}
-        itemLabel={item.itemName}
-        onToggle={() => onFavoriteToggle(item.id, favorite)}
-        style={styles.favoriteButton}
-      />
-    </View>
-  );
+function MenuPreviewCard(props: MenuPreviewCardProps) {
+  return <CustomerKitchenMenuCard {...props} />;
 }
 
 export function CustomerKitchenProfileScreen() {
@@ -610,6 +460,7 @@ export function CustomerKitchenProfileScreen() {
                       pressed && styles.pressed,
                     ]}>
                     <Text style={styles.previewPillText}>View all</Text>
+                    <Icon name="chevron-right" size={18} color={colors.flameRedAccessible} surface={false} />
                   </Pressable>
                 ) : null}
               </View>
@@ -903,16 +754,16 @@ const styles = StyleSheet.create({
   },
   previewPill: {
     minHeight: touchTarget.minimum,
-    borderRadius: radius.pill,
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.xs,
+    backgroundColor: 'transparent',
   },
   previewPillText: {
-    color: colors.flameRed,
-    fontSize: typography.tiny,
+    color: colors.flameRedAccessible,
+    fontSize: typography.small,
     fontWeight: fontWeight.bold,
   },
   menuList: {

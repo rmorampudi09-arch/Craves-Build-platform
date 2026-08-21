@@ -997,7 +997,7 @@ const styles = StyleSheet.create({
     top: spacing.sm,
     right: spacing.sm,
     zIndex: 4,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: 'transparent',
   },
   foodTypePill: {
     position: 'absolute',
@@ -1007,9 +1007,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xxs,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.82)',
+    backgroundColor: 'transparent',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.78)',
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.xxs,
   },
   foodTypeDot: {
     width: 8,
@@ -1077,9 +1079,9 @@ const styles = StyleSheet.create({
   },
   purchaseRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: spacing.xs,
     marginTop: spacing.xs,
   },
   detailRow: {
@@ -1087,9 +1089,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    paddingBottom: spacing.xxs,
+    flexWrap: 'nowrap',
+    gap: spacing.xs,
+    paddingBottom: 0,
   },
   detailItem: {
     flexDirection: 'row',
@@ -1102,9 +1104,12 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.medium,
   },
   addButton: {
+    width: 132,
+    minWidth: 132,
+    maxWidth: 132,
     minHeight: touchTarget.minimum,
-    minWidth: 104,
-    paddingHorizontal: spacing.md,
+    flexShrink: 0,
+    paddingHorizontal: spacing.sm,
   },
   quantitySelector: {
     minHeight: touchTarget.minimum,

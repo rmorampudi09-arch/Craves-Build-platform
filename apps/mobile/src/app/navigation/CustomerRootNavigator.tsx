@@ -436,7 +436,18 @@ function CustomerTabsNavigator() {
       <Tab.Screen name="Home" component={CustomerHomeStackNavigator} options={homeTabOptions} />
       <Tab.Screen name="Chefs" component={CustomerChefsStackNavigator} options={chefsTabOptions} />
       <Tab.Screen name="Orders" component={CustomerOrdersStackNavigator} options={ordersTabOptions} />
-      <Tab.Screen name="Profile" component={CustomerProfileStackNavigator} options={profileTabOptions} />
+      <Tab.Screen
+      name="Profile"
+      component={CustomerProfileStackNavigator}
+      options={profileTabOptions}
+      listeners={({navigation}) => ({
+        tabPress: event => {
+          showBottomNav();
+          event.preventDefault();
+          navigation.navigate('Profile', {screen: 'CustomerProfileRoot'});
+        },
+      })}
+    />
     </Tab.Navigator>
   );
 }

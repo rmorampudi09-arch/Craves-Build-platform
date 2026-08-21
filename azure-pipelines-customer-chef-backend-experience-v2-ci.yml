@@ -26,6 +26,12 @@ steps:
 
   - script: |
       set -euo pipefail
+      sudo apt-get update
+      sudo apt-get install -y --no-install-recommends libxml2-utils
+    displayName: Install XML validation tooling
+
+  - script: |
+      set -euo pipefail
       chmod +x scripts/release/*.sh
       scripts/release/verify-seven-service-deployment-contracts.sh
     displayName: Verify seven-service deployment contracts

@@ -20,7 +20,7 @@ Authoritative ownership remains in User/Chef Service. Catalog remains authoritat
 
 ## Data model
 
-Migration `V9__customer_home_relationship_favorites.sql` creates three explicit tables rather than a generic polymorphic favorite table:
+Migration `V10__customer_home_relationship_favorites.sql` creates three explicit tables rather than a generic polymorphic favorite table:
 
 - `customer_favorite_chef`
 - `customer_favorite_kitchen`
@@ -48,7 +48,7 @@ mvn -B -ntp clean verify
 ## Manual steps later
 
 - Deploy User/Chef Service using the existing guarded service pipeline.
-- Verify Flyway V9 applied successfully.
+- Verify Flyway V10 applied successfully.
 - Publish P2 customer APIM operations only after backend health is green.
 - Do not enable any availability-notification dispatcher until the global cap and quiet-hour product policy is configured and runtime serviceability checks are available.
 

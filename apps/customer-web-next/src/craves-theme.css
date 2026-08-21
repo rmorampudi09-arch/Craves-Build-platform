@@ -168,6 +168,11 @@ nav[aria-label="Filter orders"] button:not(:disabled):focus-visible {
   color: var(--color-white) !important;
 }
 
+nav[aria-label="Filter orders"] button:not(:disabled):hover::after,
+nav[aria-label="Filter orders"] button:not(:disabled):focus-visible::after {
+  background: var(--color-white) !important;
+}
+
 [aria-label="Notification filters"] {
   display: inline-flex;
   flex-wrap: wrap;
@@ -191,8 +196,8 @@ nav[aria-label="Filter orders"] button:not(:disabled):focus-visible {
   font-weight: 700 !important;
 }
 
-nav[aria-label="Customer services"] a[href="/subscriptions"]:hover,
-nav[aria-label="Customer services"] a[href="/subscriptions"]:focus-visible {
+nav[aria-label="Customer services"] a:hover,
+nav[aria-label="Customer services"] a:focus-visible {
   background: var(--color-flame-red) !important;
   color: var(--color-white) !important;
   font-weight: 700 !important;

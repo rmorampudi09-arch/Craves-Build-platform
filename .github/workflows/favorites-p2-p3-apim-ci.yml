@@ -3,7 +3,7 @@ name: CRAVES Favorites P2 P3 APIM CI
 on:
   push:
     branches:
-      - feature/favorites-p2-p3-apim-publication-20260821
+      - feature/favorites-clean-p2-p3-apim-20260821
     paths:
       - 'scripts/apim/configure-favorites-p2-p3-apim.sh'
       - 'scripts/apim/rollback-favorites-p2-p3-apim.sh'
@@ -85,6 +85,7 @@ jobs:
           cat > "$root/SOURCE_PACKAGE_README.txt" <<'EOF'
           CRAVES Favorites 2.0 P2/P3 APIM Publication Source
           Source validation only. This GitHub Actions workflow performs no Azure write.
+          Clean main-based integration; PR #258 is not included.
           EOF
           (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P2_P3_APIM_Source.zip Craves_Favorites_2_0_P2_P3_APIM_Source)
       - uses: actions/upload-artifact@v4

@@ -1,0 +1,90 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: catalogContainerAppName
+    type: string
+    default: ca-craves-catalog-service-prodlo
+  - name: orderContainerAppName
+    type: string
+    default: ca-craves-order-service-prodlow
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+steps:
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 1
+
+  - script: |
+      set -euo pipefail
+      scripts/release/scan-secret-material.sh .
+      scripts/release/verify-seven-service-deployment-contracts.sh
+    displayName: Validate production prerequisite source contracts
+
+  - task: AzureCLI@2
+    displayName: Read-only Azure prerequisite check
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        CATALOG_APP='${{ parameters.catalogContainerAppName }}'
+        ORDER_APP='${{ parameters.orderContainerAppName }}'
+        fail() { echo "ERROR: $*" >&2; exit 1; }
+
+        catalog_json="$(az containerapp show -g "$RG" -n "$CATALOG_APP" -o json)"
+        order_json="$(az containerapp show -g "$RG" -n "$ORDER_APP" -o json)"
+
+        jq -e '.properties.latestReadyRevisionName != null' <<<"$catalog_json" >/dev/null \
+          || fail "Catalog latest ready revision is missing"
+        jq -e '.properties.latestReadyRevisionName != null' <<<"$order_json" >/dev/null \
+          || fail "Order latest ready revision is missing"
+
+        env_secret_ref() {
+          local json="$1" name="$2"
+          jq -r --arg name "$name" '
+            .properties.template.containers[0].env[]
+            | select(.name == $name)
+            | .secretRef // empty
+          ' <<<"$json"
+        }
+
+        catalog_internal_ref="$(env_secret_ref "$catalog_json" CRAVES_INTERNAL_SERVICE_KEY)"
+        if [[ -z "$catalog_internal_ref" ]]; then
+          catalog_internal_ref="$(env_secret_ref "$catalog_json" CRAVES_INTERNAL_SERVICE_SECRET)"
+        fi
+        order_internal_ref="$(env_secret_ref "$order_json" CRAVES_INTERNAL_SERVICE_SECRET)"
+        if [[ -z "$order_internal_ref" ]]; then
+          order_internal_ref="$(env_secret_ref "$order_json" CRAVES_INTERNAL_SERVICE_KEY)"
+        fi
+
+        [[ -n "$catalog_internal_ref" ]] || fail 'Catalog internal service secret must be a Container App secret reference'
+        [[ -n "$order_internal_ref" ]] || fail 'Order internal service secret must be a Container App secret reference'
+
+        secret_kv_uri() {
+          local app="$1" ref="$2"
+          az containerapp secret list -g "$RG" -n "$app" \
+            --query "[?name=='${ref}'].keyVaultUrl | [0]" -o tsv
+        }
+
+        catalog_kv="$(secret_kv_uri "$CATALOG_APP" "$catalog_internal_ref")"
+        order_kv="$(secret_kv_uri "$ORDER_APP" "$order_internal_ref")"
+        [[ "$catalog_kv" == https://*.vault.azure.net/secrets/* ]] \
+          || fail 'Catalog internal secret reference is not Key Vault backed'
+        [[ "$order_kv" == https://*.vault.azure.net/secrets/* ]] \
+          || fail 'Order internal secret reference is not Key Vault backed'
+        [[ "$catalog_kv" == "$order_kv" ]] \
+          || fail 'Catalog and Order internal secret references point to different Key Vault secrets'
+
+        echo 'SUCCESS: Catalog and Order share the same Key Vault-backed internal secret binding.'
+        echo 'No secret values were read, printed, copied or changed.'

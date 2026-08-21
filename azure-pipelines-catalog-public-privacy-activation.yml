@@ -1,0 +1,81 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: action
+    displayName: Public Catalog privacy action
+    type: string
+    default: ACTIVATE
+    values:
+      - ACTIVATE
+      - ROLLBACK
+  - name: confirmCatalogOrderSmokePassed
+    displayName: Confirm Catalog to Order private-data checkout smoke passed
+    type: boolean
+    default: false
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: catalogContainerAppName
+    type: string
+    default: ca-craves-catalog-service-prodlo
+  - name: publicPrivacyEnvName
+    type: string
+    default: CRAVES_CATALOG_PUBLIC_PRIVACY_ENFORCEMENT_ENABLED
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+steps:
+  - task: AzureCLI@2
+    displayName: Apply guarded Catalog public privacy switch
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        ACTION='${{ parameters.action }}'
+        CONFIRM='${{ parameters.confirmCatalogOrderSmokePassed }}'
+        RG='${{ parameters.resourceGroupName }}'
+        APP='${{ parameters.catalogContainerAppName }}'
+        ENV_NAME='${{ parameters.publicPrivacyEnvName }}'
+
+        if [[ "$ACTION" == 'ACTIVATE' && "$CONFIRM" != 'True' && "$CONFIRM" != 'true' ]]; then
+          echo 'ERROR: Activation requires confirmed Catalog↔Order private-data checkout smoke evidence.' >&2
+          exit 1
+        fi
+
+        before="$(az containerapp show -g "$RG" -n "$APP" -o json)"
+        before_ready="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$before")"
+        [[ -n "$before_ready" ]] || { echo 'ERROR: Catalog latest ready revision is missing.' >&2; exit 1; }
+
+        if [[ "$ACTION" == 'ACTIVATE' ]]; then
+          value=true
+        else
+          value=false
+        fi
+
+        az containerapp update \
+          --resource-group "$RG" \
+          --name "$APP" \
+          --set-env-vars "${ENV_NAME}=${value}" \
+          -o none
+
+        after="$(az containerapp show -g "$RG" -n "$APP" -o json)"
+        after_ready="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$after")"
+        [[ -n "$after_ready" ]] || { echo 'ERROR: Catalog latest ready revision is missing after update.' >&2; exit 1; }
+
+        current="$(jq -r --arg name "$ENV_NAME" '
+          .properties.template.containers[0].env[]
+          | select(.name == $name)
+          | .value // empty
+        ' <<<"$after")"
+        [[ "$current" == "$value" ]] || { echo "ERROR: $ENV_NAME did not become $value." >&2; exit 1; }
+
+        echo "SUCCESS: $ENV_NAME=$value"
+        echo "Previous ready revision: $before_ready"
+        echo "Current ready revision:  $after_ready"

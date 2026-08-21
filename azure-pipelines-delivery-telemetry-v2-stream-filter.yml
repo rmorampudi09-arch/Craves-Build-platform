@@ -1,0 +1,83 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: serviceBusNamespace
+    type: string
+    default: sb-craves-prodlow-l3ing6
+  - name: topicName
+    type: string
+    default: craves-domain-events
+  - name: subscriptionName
+    type: string
+    default: order-service-delivery-status-changed
+  - name: ruleName
+    type: string
+    default: delivery-status-and-telemetry-v2
+  - name: confirmOrderAndIntegrationHealthy
+    displayName: Confirm Order and Integration are healthy before widening stream filter
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+steps:
+  - task: AzureCLI@2
+    displayName: Upgrade Order delivery subscription stream filter
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        CONFIRM='${{ parameters.confirmOrderAndIntegrationHealthy }}'
+        [[ "$CONFIRM" == 'True' || "$CONFIRM" == 'true' ]] || {
+          echo 'ERROR: Stream-filter upgrade requires healthy Order and Integration evidence.' >&2
+          exit 1
+        }
+
+        RG='${{ parameters.resourceGroupName }}'
+        NS='${{ parameters.serviceBusNamespace }}'
+        TOPIC='${{ parameters.topicName }}'
+        SUB='${{ parameters.subscriptionName }}'
+        RULE='${{ parameters.ruleName }}'
+        FILTER="eventType IN ('DELIVERY_STATUS_CHANGED','DELIVERY_TELEMETRY_UPDATED') OR event_type IN ('DELIVERY_STATUS_CHANGED','DELIVERY_TELEMETRY_UPDATED')"
+
+        az servicebus topic show -g "$RG" --namespace-name "$NS" --name "$TOPIC" -o none
+        az servicebus topic subscription show -g "$RG" --namespace-name "$NS" --topic-name "$TOPIC" --name "$SUB" -o none
+
+        existing_rules="$(az servicebus topic subscription rule list \
+          -g "$RG" --namespace-name "$NS" --topic-name "$TOPIC" --subscription-name "$SUB" \
+          --query "[].name" -o tsv)"
+
+        if grep -qx "$RULE" <<<"$existing_rules"; then
+          az servicebus topic subscription rule update \
+            -g "$RG" --namespace-name "$NS" --topic-name "$TOPIC" --subscription-name "$SUB" \
+            --name "$RULE" --filter-sql-expression "$FILTER" -o none
+        else
+          az servicebus topic subscription rule create \
+            -g "$RG" --namespace-name "$NS" --topic-name "$TOPIC" --subscription-name "$SUB" \
+            --name "$RULE" --filter-sql-expression "$FILTER" -o none
+        fi
+
+        for rule in $existing_rules; do
+          if [[ "$rule" != "$RULE" && "$rule" != '$Default' ]]; then
+            az servicebus topic subscription rule delete \
+              -g "$RG" --namespace-name "$NS" --topic-name "$TOPIC" --subscription-name "$SUB" \
+              --name "$rule" -o none
+          fi
+        done
+
+        actual="$(az servicebus topic subscription rule show \
+          -g "$RG" --namespace-name "$NS" --topic-name "$TOPIC" --subscription-name "$SUB" \
+          --name "$RULE" --query sqlFilter.sqlExpression -o tsv)"
+        [[ "$actual" == "$FILTER" ]] || { echo 'ERROR: Stream filter did not match expected expression.' >&2; exit 1; }
+
+        echo 'SUCCESS: Order subscription now accepts DELIVERY_STATUS_CHANGED and DELIVERY_TELEMETRY_UPDATED.'

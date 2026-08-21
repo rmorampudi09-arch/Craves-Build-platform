@@ -66,6 +66,30 @@ class CustomerFavoriteServiceTest {
         CustomerFavorite saved = service.save(customer, menuItemId);
 
         assertThat(saved).isEqualTo(existing);
+        verify(jdbcTemplate, never()).queryForList(anyString(), any(Object[].class));
+        verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
+    }
+
+    @Test
+    void serializesCustomerFavoriteSetBeforeCheckingTheLimit() {
+        UUID identityId = UUID.randomUUID();
+        UUID menuItemId = UUID.randomUUID();
+        CurrentUser customer = customer(identityId);
+
+        doReturn(List.of()).when(jdbcTemplate).query(
+            anyString(),
+            any(RowMapper.class),
+            eq(identityId),
+            eq(menuItemId)
+        );
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(identityId))).thenReturn(200);
+
+        assertThatThrownBy(() -> service.save(customer, menuItemId))
+            .isInstanceOf(ApiException.class)
+            .satisfies(error -> assertThat(((ApiException) error).getCode())
+                .isEqualTo("FAVORITES_LIMIT_REACHED"));
+
+        verify(jdbcTemplate).queryForList(anyString(), eq(identityId.toString()));
         verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
     }
 

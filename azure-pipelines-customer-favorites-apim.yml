@@ -1,0 +1,126 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmConfigureCustomerFavorites
+    displayName: Confirm customer-favorites APIM write
+    type: boolean
+    default: false
+  - name: resourceGroupName
+    displayName: Azure resource group
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: apimServiceName
+    displayName: API Management service
+    type: string
+    default: apim-craves-prodlow-l3ing6
+  - name: userChefContainerAppName
+    displayName: User/Chef Service Container App
+    type: string
+    default: ca-craves-user-chef-service-prod
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - script: |
+      set -euo pipefail
+      bash -n scripts/apim/configure-customer-favorites-apim.sh
+      bash -n scripts/apim/rollback-customer-favorites-apim.sh
+      python - <<'PY'
+      import xml.etree.ElementTree as ET
+      ET.parse("infra/apim/customer-favorites/customer-favorites-policy.xml")
+      print("Customer Favorites APIM scripts and policy are syntactically valid.")
+      PY
+      grep -Fq '@GetMapping' services/user-chef-service/src/main/java/in/craves/userchef/web/CustomerFavoriteController.java
+      grep -Fq '@PutMapping' services/user-chef-service/src/main/java/in/craves/userchef/web/CustomerFavoriteController.java
+      grep -Fq '@DeleteMapping' services/user-chef-service/src/main/java/in/craves/userchef/web/CustomerFavoriteController.java
+    displayName: Validate Favorites source and APIM assets
+
+  - script: |
+      set -euo pipefail
+      cd services/user-chef-service
+      mvn -B -ntp clean verify
+    displayName: Verify User/Chef Favorites backend
+
+  - task: AzureCLI@2
+    displayName: Configure and verify customer-favorites APIM operations
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+
+        CONFIRM='${{ parameters.confirmConfigureCustomerFavorites }}'
+        if [[ "${CONFIRM,,}" != 'true' ]]; then
+          echo 'ERROR: confirmConfigureCustomerFavorites must be true before changing APIM.' >&2
+          exit 1
+        fi
+
+        export RG='${{ parameters.resourceGroupName }}'
+        export APIM='${{ parameters.apimServiceName }}'
+        export USER_APP='${{ parameters.userChefContainerAppName }}'
+
+        bash scripts/apim/configure-customer-favorites-apim.sh
+
+        GATEWAY_URL=$(az apim show \
+          --resource-group "$RG" \
+          --name "$APIM" \
+          --query gatewayUrl \
+          --output tsv)
+        [[ "$GATEWAY_URL" == https://* ]] || {
+          echo 'ERROR: APIM gateway URL was not resolved.' >&2
+          exit 1
+        }
+
+        GET_CODE=$(curl -sS --max-time 30 \
+          -o /tmp/customer-favorites-get.json \
+          -D /tmp/customer-favorites-get.headers \
+          -w '%{http_code}' \
+          "$GATEWAY_URL/api/v1/customer/favorites" || true)
+
+        SAMPLE_ID='00000000-0000-4000-8000-000000000001'
+        PUT_CODE=$(curl -sS --max-time 30 \
+          -X PUT \
+          -o /tmp/customer-favorites-put.json \
+          -D /tmp/customer-favorites-put.headers \
+          -w '%{http_code}' \
+          "$GATEWAY_URL/api/v1/customer/favorites/$SAMPLE_ID" || true)
+
+        DELETE_CODE=$(curl -sS --max-time 30 \
+          -X DELETE \
+          -o /tmp/customer-favorites-delete.json \
+          -D /tmp/customer-favorites-delete.headers \
+          -w '%{http_code}' \
+          "$GATEWAY_URL/api/v1/customer/favorites/$SAMPLE_ID" || true)
+
+        echo "Unauthenticated Favorites probes: GET=$GET_CODE PUT=$PUT_CODE DELETE=$DELETE_CODE"
+        for CODE in "$GET_CODE" "$PUT_CODE" "$DELETE_CODE"; do
+          [[ "$CODE" == '401' ]] || {
+            echo "ERROR: Favorites route expected HTTP 401 without a token, received $CODE." >&2
+            exit 1
+          }
+        done
+
+        grep -Eiq '^X-Correlation-Id:' /tmp/customer-favorites-get.headers || {
+          echo 'ERROR: Favorites APIM response did not expose X-Correlation-Id.' >&2
+          exit 1
+        }
+
+        echo 'SUCCESS: Favorites GET/PUT/DELETE routes exist in APIM, reject unauthenticated traffic, and expose correlation IDs.'

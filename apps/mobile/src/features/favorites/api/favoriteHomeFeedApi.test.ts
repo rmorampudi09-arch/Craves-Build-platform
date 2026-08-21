@@ -1,6 +1,7 @@
 import {chunkFavoriteHomeRelationships} from './favoriteHomeFeedApi';
 
-const uuid = (value: number) => `00000000-0000-0000-0000-${value.toString().padStart(12, '0')}`;
+const uuid = (value: number) =>
+  `00000000-0000-4000-8000-${value.toString().padStart(12, '0')}`;
 
 describe('favoriteHomeFeedApi batching', () => {
   it('keeps each resolver batch at or below one hundred relationships', () => {

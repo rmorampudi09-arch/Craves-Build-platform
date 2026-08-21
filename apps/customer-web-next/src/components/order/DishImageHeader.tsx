@@ -1,5 +1,11 @@
-import { ArrowLeft, ImageOff, Share2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, Heart, ImageOff, Share2 } from "lucide-react";
 import type { Dish } from "@/services/api/dishes";
+import {
+  loadCustomerFavoriteIds,
+  removeCustomerFavorite,
+  saveCustomerFavorite,
+} from "@/services/api/customerFavorites";
 
 interface DishImageHeaderProps {
   dish: Dish;
@@ -7,6 +13,58 @@ interface DishImageHeaderProps {
 }
 
 export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
+  const [favorite, setFavorite] = useState(false);
+  const [favoritesReady, setFavoritesReady] = useState(false);
+  const [favoritePending, setFavoritePending] = useState(false);
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setFavorite(false);
+    setFavoritesReady(false);
+    setFavoriteError(null);
+
+    void loadCustomerFavoriteIds()
+      .then((ids) => {
+        if (!active) return;
+        setFavorite(ids.has(dish.id));
+        setFavoritesReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setFavorite(false);
+        setFavoritesReady(false);
+        setFavoriteError("Favorites are temporarily unavailable.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [dish.id]);
+
+  const handleFavorite = async () => {
+    if (!favoritesReady || favoritePending) return;
+    setFavoritePending(true);
+    setFavoriteError(null);
+    try {
+      if (favorite) {
+        await removeCustomerFavorite(dish.id);
+        setFavorite(false);
+      } else {
+        await saveCustomerFavorite(dish.id);
+        setFavorite(true);
+      }
+    } catch (error) {
+      setFavoriteError(
+        error instanceof Error
+          ? error.message
+          : "Favorite could not be updated.",
+      );
+    } finally {
+      setFavoritePending(false);
+    }
+  };
+
   const handleShare = async () => {
     if (!navigator.share) return;
     try {
@@ -19,6 +77,12 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
       // The native share sheet can be dismissed without an application error.
     }
   };
+
+  const favoriteLabel = !favoritesReady
+    ? `Loading favorite status for ${dish.name}`
+    : favorite
+      ? `Remove ${dish.name} from favorites`
+      : `Save ${dish.name} to favorites`;
 
   return (
     <header className="relative overflow-hidden bg-ink">
@@ -48,17 +112,36 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </button>
-        {typeof navigator !== "undefined" && "share" in navigator && (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => void handleShare()}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-ink shadow-[var(--shadow-card)] transition-transform hover:-translate-y-0.5"
-            aria-label="Share this dish"
+            onClick={() => void handleFavorite()}
+            disabled={!favoritesReady || favoritePending}
+            aria-label={favoriteLabel}
+            aria-pressed={favorite}
+            title={favoriteError ?? favoriteLabel}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-ink shadow-[var(--shadow-card)] transition-transform hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-70"
           >
-            <Share2 className="h-5 w-5" aria-hidden="true" />
+            <Heart
+              className={`h-5 w-5 transition-colors ${favorite ? "fill-contrast-red text-contrast-red" : "text-ink"} ${favoritePending ? "animate-pulse" : ""}`}
+              aria-hidden="true"
+            />
           </button>
-        )}
+          {typeof navigator !== "undefined" && "share" in navigator && (
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-ink shadow-[var(--shadow-card)] transition-transform hover:-translate-y-0.5"
+              aria-label="Share this dish"
+            >
+              <Share2 className="h-5 w-5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
+      {favoriteError && (
+        <span className="sr-only" role="alert">{favoriteError}</span>
+      )}
     </header>
   );
 }

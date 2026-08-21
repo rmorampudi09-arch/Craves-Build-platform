@@ -57,7 +57,8 @@ sed "s|__BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
 jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
 
 put_operation() {
-  local operation_id="$1" method="$2" template="$3" display="$4" has_identity_param="$5" body="$TMP_DIR/${operation_id}.json"
+  local operation_id="$1" method="$2" template="$3" display="$4" has_identity_param="$5"
+  local body="$TMP_DIR/${operation_id}.json"
   if [[ "$has_identity_param" == "true" ]]; then
     jq -n --arg display "$display" --arg method "$method" --arg template "$template" \
       '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:[{name:"identityId",type:"string",required:true}],responses:[{statusCode:200,description:"Audited directory response"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"ADMIN access required"},{statusCode:404,description:"Not found"}]}}' >"$body"

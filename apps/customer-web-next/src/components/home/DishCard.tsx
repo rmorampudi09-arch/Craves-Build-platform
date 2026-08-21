@@ -77,6 +77,7 @@ export function DishCard({
           chef: dish.chef,
           price: dish.price,
           img: dish.img,
+          kitchenId: dish.kitchenId,
         },
         1,
       );

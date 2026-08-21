@@ -36,8 +36,16 @@ import {
 } from '../presentation/repeatOrderPresentation';
 import {useRepeatOrderCandidatesQuery} from '../query/repeatOrderQueries';
 
-function Icon({name, size = 20}: {name: string; size?: number}) {
-  return <MaterialDesignIcons name={name as never} size={size} color={colors.flameRedAccessible} />;
+function Icon({
+  name,
+  size = 20,
+  color = colors.flameRedAccessible,
+}: {
+  name: string;
+  size?: number;
+  color?: string;
+}) {
+  return <MaterialDesignIcons name={name as never} size={size} color={color} />;
 }
 
 function orderedDate(value: string): string {
@@ -197,7 +205,11 @@ export function CustomerYourUsualSection() {
                 disabled={Boolean(pendingOrderId)}
                 onPress={() => confirm(candidate)}
                 style={({pressed}) => [styles.orderButton, pressed && styles.pressed]}>
-                {pending ? <ActivityIndicator size="small" color={colors.white} /> : <Icon name="restore" size={18} />}
+                {pending ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Icon name="restore" size={18} color={colors.white} />
+                )}
                 <Text style={styles.orderButtonText}>Order like last time</Text>
               </Pressable>
             </View>

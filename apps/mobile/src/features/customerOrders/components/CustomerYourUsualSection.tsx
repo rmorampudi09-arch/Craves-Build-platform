@@ -24,7 +24,6 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {cartActions} from '../../cart/state/cartSlice';
 import {reorderCart} from '../../cart/state/cartMutations';
 import {useFavoriteHomeFeedQuery, useFavoriteKitchensQuery} from '../../favorites/query/homeFavoriteQueries';
 import type {RepeatOrderCandidate} from '../api/repeatOrdersApi';
@@ -92,7 +91,6 @@ export function CustomerYourUsualSection() {
         return;
       }
       if (outcome.status === 'APPLIED') {
-        dispatch(cartActions.clearPreflight());
         navigation.navigate('CustomerCart');
       }
     } catch (error) {

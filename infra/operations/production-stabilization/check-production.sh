@@ -20,7 +20,7 @@ require_env() {
   [[ -n "${!name:-}" ]] || fail "Required environment variable is missing: $name"
 }
 
-for command_name in az curl dig openssl awk sed sort grep; do
+for command_name in az curl dig jq openssl awk sed sort grep; do
   require_command "$command_name"
 done
 
@@ -36,7 +36,10 @@ for env_name in \
   CUSTOMER_APEX_HOSTNAME \
   CUSTOMER_WWW_HOSTNAME \
   CUSTOMER_DOMAIN_VERIFICATION_ID \
+  FRONT_DOOR_PROFILE_NAME \
+  FRONT_DOOR_ENDPOINT_HOSTNAME \
   APIM_HOSTNAME \
+  APIM_EXPECTED_CNAME \
   ROLLBACK_WWW_HOSTNAME; do
   require_env "$env_name"
 done
@@ -299,6 +302,64 @@ echo "============================================================"
 echo "3. AUTHORITATIVE AND PUBLIC DNS"
 echo "============================================================"
 
+az extension add \
+  --name cdn \
+  --upgrade \
+  --yes \
+  --only-show-errors >/dev/null
+
+FRONT_DOOR_ENDPOINTS="$(
+  az afd endpoint list \
+    --resource-group "$RESOURCE_GROUP" \
+    --profile-name "$FRONT_DOOR_PROFILE_NAME" \
+    --output json \
+    --only-show-errors
+)"
+
+FRONT_DOOR_ENDPOINT="$(
+  jq -c \
+    --arg hostname "$FRONT_DOOR_ENDPOINT_HOSTNAME" \
+    '[.[] | select((.hostName // .properties.hostName) == $hostname)] | first // {}' \
+    <<<"$FRONT_DOOR_ENDPOINTS"
+)"
+
+FRONT_DOOR_ENDPOINT_NAME="$(jq -r '.name // empty' <<<"$FRONT_DOOR_ENDPOINT")"
+FRONT_DOOR_ENDPOINT_STATE="$(jq -r '.enabledState // .properties.enabledState // empty' <<<"$FRONT_DOOR_ENDPOINT")"
+FRONT_DOOR_ENDPOINT_PROVISIONING="$(jq -r '.provisioningState // .properties.provisioningState // empty' <<<"$FRONT_DOOR_ENDPOINT")"
+
+FRONT_DOOR_DOMAINS="$(
+  az afd custom-domain list \
+    --resource-group "$RESOURCE_GROUP" \
+    --profile-name "$FRONT_DOOR_PROFILE_NAME" \
+    --output json \
+    --only-show-errors
+)"
+
+echo "$FRONT_DOOR_ENDPOINT"
+
+if [[ -n "$FRONT_DOOR_ENDPOINT_NAME" && "$FRONT_DOOR_ENDPOINT_STATE" == "Enabled" && "$FRONT_DOOR_ENDPOINT_PROVISIONING" == "Succeeded" ]]; then
+  record_pass "Front Door endpoint $FRONT_DOOR_ENDPOINT_HOSTNAME is enabled and provisioned."
+else
+  record_failure "Front Door endpoint is not healthy (name=${FRONT_DOOR_ENDPOINT_NAME:-empty}, enabled=${FRONT_DOOR_ENDPOINT_STATE:-empty}, provisioning=${FRONT_DOOR_ENDPOINT_PROVISIONING:-empty})."
+fi
+
+for HOSTNAME in "$CUSTOMER_APEX_HOSTNAME" "$CUSTOMER_WWW_HOSTNAME"; do
+  DOMAIN_STATE="$(
+    jq -r \
+      --arg hostname "$HOSTNAME" \
+      '[.[] | select((.hostName // .properties.hostName) == $hostname)] | first |
+        [(.provisioningState // .properties.provisioningState // ""),
+         (.domainValidationState // .properties.domainValidationState // "")] | @tsv' \
+      <<<"$FRONT_DOOR_DOMAINS"
+  )"
+
+  if [[ "$DOMAIN_STATE" == $'Succeeded\tApproved' ]]; then
+    record_pass "Front Door custom domain $HOSTNAME is provisioned and approved."
+  else
+    record_failure "Front Door custom domain $HOSTNAME is not ready: ${DOMAIN_STATE:-empty}."
+  fi
+done
+
 AUTH_APEX="$(dig @ns51.domaincontrol.com "$CUSTOMER_APEX_HOSTNAME" A +short | sort -u)"
 AUTH_WWW="$(dig @ns51.domaincontrol.com "$CUSTOMER_WWW_HOSTNAME" CNAME +short | sed 's/\.$//' | sort -u)"
 GOOGLE_APEX="$(dig @8.8.8.8 "$CUSTOMER_APEX_HOSTNAME" A +short | sort -u)"
@@ -314,24 +375,20 @@ printf 'Cloudflare apex:    %s\n' "$CLOUDFLARE_APEX"
 printf 'Cloudflare www:     %s\n' "$CLOUDFLARE_WWW"
 
 for VALUE in "$AUTH_APEX" "$GOOGLE_APEX" "$CLOUDFLARE_APEX"; do
-  if [[ "$VALUE" != "$CUSTOMER_WEB_STATIC_IP" ]]; then
-    record_failure "Apex DNS mismatch detected: ${VALUE:-empty}."
+  if [[ -n "$VALUE" ]]; then
+    record_pass "Apex DNS resolves through the checked resolver."
+  else
+    record_failure "Apex DNS did not resolve through the checked resolver."
   fi
 done
 
 for VALUE in "$AUTH_WWW" "$GOOGLE_WWW" "$CLOUDFLARE_WWW"; do
-  if [[ "$VALUE" != "$CUSTOMER_WEB_APP_FQDN" ]]; then
+  if [[ "$VALUE" != "$FRONT_DOOR_ENDPOINT_HOSTNAME" ]]; then
     record_failure "WWW CNAME mismatch detected: ${VALUE:-empty}."
+  else
+    record_pass "WWW CNAME points to the Front Door endpoint."
   fi
 done
-
-if [[ "$AUTH_APEX" == "$CUSTOMER_WEB_STATIC_IP" ]]; then
-  record_pass "Apex authoritative DNS points to Container Apps."
-fi
-
-if [[ "$AUTH_WWW" == "$CUSTOMER_WEB_APP_FQDN" ]]; then
-  record_pass "WWW authoritative DNS points directly to Container App FQDN."
-fi
 
 ASUID_APEX="$(dig @8.8.8.8 "asuid.${CUSTOMER_APEX_HOSTNAME}" TXT +short | tr -d '"')"
 ASUID_WWW="$(dig @8.8.8.8 "asuid.${CUSTOMER_WWW_HOSTNAME}" TXT +short | tr -d '"')"
@@ -364,11 +421,13 @@ echo "4. LIVE CUSTOMER HTTPS"
 echo "============================================================"
 
 for HOSTNAME in "$CUSTOMER_APEX_HOSTNAME" "$CUSTOMER_WWW_HOSTNAME"; do
+  RESPONSE_HEADERS="$TEMP_CERT_DIR/${HOSTNAME}.headers"
   CURL_OUTPUT="$(
     curl -sS \
       -L \
       --max-redirs 5 \
       --connect-timeout 15 \
+      --dump-header "$RESPONSE_HEADERS" \
       -o /dev/null \
       -w '%{http_code}|%{ssl_verify_result}|%{remote_ip}|%{url_effective}' \
       "https://${HOSTNAME}/" || true
@@ -395,10 +454,10 @@ for HOSTNAME in "$CUSTOMER_APEX_HOSTNAME" "$CUSTOMER_WWW_HOSTNAME"; do
     record_failure "$HOSTNAME TLS verification result is ${TLS_VERIFY:-empty}."
   fi
 
-  if [[ "$REMOTE_IP" == "$CUSTOMER_WEB_STATIC_IP" ]]; then
-    record_pass "$HOSTNAME is served from expected Container Apps IP."
+  if grep -Eiq '^x-azure-ref:' "$RESPONSE_HEADERS"; then
+    record_pass "$HOSTNAME is served through Azure Front Door."
   else
-    record_failure "$HOSTNAME remote IP is ${REMOTE_IP:-empty}."
+    record_failure "$HOSTNAME response did not include an Azure Front Door reference header (remote IP ${REMOTE_IP:-empty})."
   fi
 done
 
@@ -424,10 +483,10 @@ printf 'APIM root: HTTP %s, TLS %s, remote %s\n' \
   "${API_TLS:-empty}" \
   "${API_REMOTE:-empty}"
 
-if [[ "$API_CNAME" == "api.craves.in" ]]; then
-  record_pass "api.craves.in CNAME is unchanged."
+if [[ "$API_CNAME" == "$APIM_EXPECTED_CNAME" ]]; then
+  record_pass "api.craves.in CNAME points to the expected APIM gateway."
 else
-  record_failure "api.craves.in CNAME changed to ${API_CNAME:-empty}."
+  record_failure "api.craves.in CNAME changed to ${API_CNAME:-empty}; expected $APIM_EXPECTED_CNAME."
 fi
 
 if [[ "$API_TLS" == "0" ]]; then

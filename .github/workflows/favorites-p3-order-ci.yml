@@ -1,0 +1,85 @@
+name: CRAVES Favorites P3 Order CI
+
+on:
+  push:
+    branches:
+      - feature/favorites-p3-order-like-last-time-20260821
+    paths:
+      - 'services/order-service/**'
+      - '.github/workflows/favorites-p3-order-ci.yml'
+  pull_request:
+    branches:
+      - chatgpt/backend-customer-chef-journey-20260819
+    paths:
+      - 'services/order-service/**'
+      - '.github/workflows/favorites-p3-order-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/order-service/pom.xml
+      - name: Maven clean verify
+        working-directory: services/order-service
+        run: mvn -B -ntp clean verify
+      - name: Repeat-order safety guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          service='services/order-service/src/main/java/in/craves/order/service/RepeatOrderService.java'
+          order_service='services/order-service/src/main/java/in/craves/order/service/OrderService.java'
+          grep -q "status = 'DELIVERED'" "$service"
+          grep -q 'MAX_PAGE_SIZE = 50' "$service"
+          grep -q 'preferenceRecallSupported' services/order-service/src/main/java/in/craves/order/web/RepeatOrderDtos.java
+          grep -q '@Transactional' "$order_service"
+          grep -q 'replaceCartFromOrder' "$order_service"
+          grep -q 'Resolve and validate every historical menu item before touching the existing cart' "$order_service"
+          ! grep -R --line-number -E '(password|secret|token|api[-_]?key)[[:space:]]*=[[:space:]]*[^$<{[:space:]]' \
+            services/order-service/modules/favorites-p3-repeat-order \
+            services/order-service/src/main/java/in/craves/order/service/RepeatOrderService.java
+      - name: Package exact P3 Order source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin chatgpt/backend-customer-chef-journey-20260819:refs/remotes/origin/p3-order-base
+          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P3_Order_Source"
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+          git diff --name-only refs/remotes/origin/p3-order-base...HEAD | while IFS= read -r path; do
+            [[ -n "$path" && -f "$path" ]] || continue
+            mkdir -p "$package_root/$(dirname "$path")"
+            cp "$path" "$package_root/$path"
+          done
+          cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
+          CRAVES Favorites 2.0 P3 Order Like Last Time
+          Base: chatgpt/backend-customer-chef-journey-20260819
+          Source only. Existing atomic reorder endpoint remains the write path.
+          EOF
+          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P3_Order_Source.zip Craves_Favorites_2_0_P3_Order_Source)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Craves_Favorites_2_0_P3_Order_Source
+          path: ${{ runner.temp }}/Craves_Favorites_2_0_P3_Order_Source.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: favorites-p3-order-surefire
+          path: services/order-service/target/surefire-reports
+          if-no-files-found: ignore
+          retention-days: 14

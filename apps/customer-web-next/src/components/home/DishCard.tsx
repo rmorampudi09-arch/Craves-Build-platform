@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Check, Clock, MapPin, Plus, ShoppingBag } from "lucide-react";
+import { Check, Clock, Heart, MapPin, Plus, ShoppingBag } from "lucide-react";
 import { addToCart } from "@/services/api/cravesCart";
 import type { Dish } from "@/services/api/dishes";
 
@@ -19,10 +19,41 @@ function priceLabel(price: number, currency = "INR"): string {
   }).format(price);
 }
 
-export function DishCard({ dish }: { dish: Dish }) {
+interface DishCardProps {
+  dish: Dish;
+  favorite: boolean;
+  favoritesReady: boolean;
+  onToggleFavorite: (dish: Dish, nextFavorite: boolean) => Promise<void>;
+}
+
+export function DishCard({
+  dish,
+  favorite,
+  favoritesReady,
+  onToggleFavorite,
+}: DishCardProps) {
   const [state, setState] = useState<"idle" | "adding" | "added" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [favoritePending, setFavoritePending] = useState(false);
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
   const distance = distanceLabel(dish.distanceMeters);
+
+  const handleFavorite = async () => {
+    if (!favoritesReady || favoritePending) return;
+    setFavoritePending(true);
+    setFavoriteError(null);
+    try {
+      await onToggleFavorite(dish, !favorite);
+    } catch (error) {
+      setFavoriteError(
+        error instanceof Error
+          ? error.message
+          : "Favorite could not be updated.",
+      );
+    } finally {
+      setFavoritePending(false);
+    }
+  };
 
   const handleAdd = async () => {
     if (state === "adding") return;
@@ -48,6 +79,12 @@ export function DishCard({ dish }: { dish: Dish }) {
     }
   };
 
+  const favoriteLabel = !favoritesReady
+    ? `Loading favorite status for ${dish.name}`
+    : favorite
+      ? `Remove ${dish.name} from favorites`
+      : `Save ${dish.name} to favorites`;
+
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-[var(--shadow-card)] transition duration-[var(--motion-fast)] hover:-translate-y-1 hover:border-primary/35">
       <div className="relative aspect-[4/3] overflow-hidden bg-grey-200">
@@ -70,6 +107,20 @@ export function DishCard({ dish }: { dish: Dish }) {
         <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-[0.07em] text-ink shadow-sm">
           {dish.category}
         </span>
+        <button
+          type="button"
+          onClick={() => void handleFavorite()}
+          disabled={!favoritesReady || favoritePending}
+          aria-label={favoriteLabel}
+          aria-pressed={favorite}
+          title={favoriteError ?? favoriteLabel}
+          className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-ink shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-70"
+        >
+          <Heart
+            className={`h-5 w-5 transition-colors ${favorite ? "fill-contrast-red text-contrast-red" : "text-ink"} ${favoritePending ? "animate-pulse" : ""}`}
+            aria-hidden="true"
+          />
+        </button>
         <span
           className={`pointer-events-none absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-[0.68rem] font-bold ${dish.veg ? "text-success" : "text-error"}`}
         >
@@ -125,6 +176,11 @@ export function DishCard({ dish }: { dish: Dish }) {
           </button>
         </div>
 
+        {favoriteError && (
+          <p className="mt-3 text-xs font-medium text-error" role="alert">
+            {favoriteError}
+          </p>
+        )}
         {message && (
           <p className={`mt-3 text-xs font-medium ${state === "error" ? "text-error" : "text-success"}`} role={state === "error" ? "alert" : "status"}>
             {message}

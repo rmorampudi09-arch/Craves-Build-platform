@@ -1,7 +1,13 @@
+import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, MapPin, RefreshCw, SearchX } from "lucide-react";
 import { DishCard } from "@/components/home/DishCard";
 import type { Dish } from "@/services/api/dishes";
 import type { DishCategory } from "@/constants/dishCategories";
+import {
+  loadCustomerFavoriteIds,
+  removeCustomerFavorite,
+  saveCustomerFavorite,
+} from "@/services/api/customerFavorites";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
@@ -38,6 +44,45 @@ export function DishesGrid({
   onRetry,
   onManageAddress,
 }: DishesGridProps) {
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [favoritesReady, setFavoritesReady] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setFavoritesReady(false);
+
+    void loadCustomerFavoriteIds()
+      .then((ids) => {
+        if (!active) return;
+        setFavoriteIds(ids);
+        setFavoritesReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setFavoriteIds(new Set());
+        setFavoritesReady(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const toggleFavorite = useCallback(async (dish: Dish, nextFavorite: boolean) => {
+    if (nextFavorite) {
+      await saveCustomerFavorite(dish.id);
+    } else {
+      await removeCustomerFavorite(dish.id);
+    }
+
+    setFavoriteIds((current) => {
+      const next = new Set(current);
+      if (nextFavorite) next.add(dish.id);
+      else next.delete(dish.id);
+      return next;
+    });
+  }, []);
+
   const normalizedSearch = searchTerm.trim();
   const emptyMessage = normalizedSearch
     ? `No live dishes match “${normalizedSearch}”. Try another search.`
@@ -107,7 +152,15 @@ export function DishesGrid({
 
       {state === "ready" && dishes.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {dishes.map((dish) => <DishCard key={dish.id} dish={dish} />)}
+          {dishes.map((dish) => (
+            <DishCard
+              key={dish.id}
+              dish={dish}
+              favorite={favoriteIds.has(dish.id)}
+              favoritesReady={favoritesReady}
+              onToggleFavorite={toggleFavorite}
+            />
+          ))}
         </div>
       )}
     </section>

@@ -3,7 +3,7 @@ name: CRAVES Favorites P1B Catalog CI
 on:
   push:
     branches:
-      - feature/favorites-p1b-catalog-saved-read-20260821
+      - feature/favorites-clean-p1b-p2-catalog-20260821
     paths:
       - 'services/catalog-service/**'
       - 'infra/apim/favorites-p1b/**'
@@ -12,7 +12,7 @@ on:
       - '.github/workflows/favorites-p1b-catalog-ci.yml'
   pull_request:
     branches:
-      - chatgpt/backend-customer-chef-journey-20260819
+      - main
     paths:
       - 'services/catalog-service/**'
       - 'infra/apim/favorites-p1b/**'
@@ -79,7 +79,7 @@ jobs:
             scripts/apim/rollback-favorites-p1b-catalog-apim.sh
 
   source-package:
-    name: Package exact P1B Catalog source
+    name: Package clean P1B/P2 Catalog source
     needs: [catalog-verify, apim-source-guard]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -91,9 +91,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base_branch='chatgpt/backend-customer-chef-journey-20260819'
+          base_branch='main'
           git fetch --no-tags origin "$base_branch:refs/remotes/origin/$base_branch"
-          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P1B_Catalog_Source_Package"
+          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P1B_P2_Catalog_Clean_Source_Package"
           rm -rf "$package_root"
           mkdir -p "$package_root"
 
@@ -105,18 +105,18 @@ jobs:
               done
 
           cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
-          CRAVES Favorites 2.0 P1B Catalog Saved Read
-          Base: chatgpt/backend-customer-chef-journey-20260819
+          CRAVES Favorites 2.0 P1B/P2 Catalog clean integration
+          Base: main
           Source only. No Azure deployment or APIM publication is performed by this package job.
           Runtime certification remains pending until the user intentionally runs the approved pipelines.
           EOF
 
-          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P1B_Catalog_Source_Package.zip Craves_Favorites_2_0_P1B_Catalog_Source_Package)
-          test -s "$RUNNER_TEMP/Craves_Favorites_2_0_P1B_Catalog_Source_Package.zip"
-      - name: Upload P1B Catalog source package
+          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P1B_P2_Catalog_Clean_Source_Package.zip Craves_Favorites_2_0_P1B_P2_Catalog_Clean_Source_Package)
+          test -s "$RUNNER_TEMP/Craves_Favorites_2_0_P1B_P2_Catalog_Clean_Source_Package.zip"
+      - name: Upload clean Catalog source package
         uses: actions/upload-artifact@v4
         with:
-          name: Craves_Favorites_2_0_P1B_Catalog_Source_Package
-          path: ${{ runner.temp }}/Craves_Favorites_2_0_P1B_Catalog_Source_Package.zip
+          name: Craves_Favorites_2_0_P1B_P2_Catalog_Clean_Source_Package
+          path: ${{ runner.temp }}/Craves_Favorites_2_0_P1B_P2_Catalog_Clean_Source_Package.zip
           if-no-files-found: error
           retention-days: 30

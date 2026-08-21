@@ -1,0 +1,210 @@
+name: Validate Current Customer Fixes V2 - No APK
+
+on:
+  push:
+    branches:
+      - mobile-ui-rebuild-from-scratch
+    paths:
+      - .github/workflows/validate-customer-fix-current-v2-no-apk.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout current mobile branch
+        uses: actions/checkout@v4
+        with:
+          ref: mobile-ui-rebuild-from-scratch
+          fetch-depth: 0
+
+      - name: Record validation run ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$GITHUB_RUN_ID" > .github/customer-fix-current-v2-no-apk-run.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/customer-fix-current-v2-no-apk-run.txt
+          git commit -m "chore(mobile): record corrected no-APK validation run"
+          git push origin HEAD:mobile-ui-rebuild-from-scratch
+
+      - name: Apply remaining prepared mobile UI and navigation changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path: str, old: str, new: str):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}: {old[:100]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          def sub_once(path: str, pattern: str, replacement: str):
+              p = Path(path)
+              text = p.read_text()
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f'{path}: regex expected one match, found {count}: {pattern[:100]!r}')
+              p.write_text(updated)
+
+          home = 'apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx'
+          replace_once(home, "    backgroundColor: 'rgba(255,255,255,0.78)',\n", "    backgroundColor: 'transparent',\n")
+          replace_once(home, "    backgroundColor: 'rgba(255,255,255,0.82)',\n    paddingHorizontal: spacing.sm,\n    paddingVertical: spacing.xs,\n", "    backgroundColor: 'transparent',\n    borderWidth: StyleSheet.hairlineWidth,\n    borderColor: 'rgba(255,255,255,0.78)',\n    paddingHorizontal: spacing.sm,\n    paddingVertical: spacing.xxs,\n")
+          replace_once(home, "  purchaseRow: {\n    flexDirection: 'row',\n    alignItems: 'flex-end',\n    justifyContent: 'space-between',\n    gap: spacing.sm,\n    marginTop: spacing.xs,\n  },\n", "  purchaseRow: {\n    flexDirection: 'row',\n    alignItems: 'center',\n    justifyContent: 'space-between',\n    gap: spacing.xs,\n    marginTop: spacing.xs,\n  },\n")
+          replace_once(home, "    flexWrap: 'wrap',\n    gap: spacing.sm,\n    paddingBottom: spacing.xxs,\n", "    flexWrap: 'nowrap',\n    gap: spacing.xs,\n    paddingBottom: 0,\n")
+          replace_once(home, "  addButton: {\n    minHeight: touchTarget.minimum,\n    minWidth: 104,\n    paddingHorizontal: spacing.md,\n  },\n", "  addButton: {\n    width: 132,\n    minWidth: 132,\n    maxWidth: 132,\n    minHeight: touchTarget.minimum,\n    flexShrink: 0,\n    paddingHorizontal: spacing.sm,\n  },\n")
+
+          profile = 'apps/mobile/src/features/kitchenProfile/screens/CustomerKitchenProfileScreen.tsx'
+          replace_once(profile, '  Image,\n', '')
+          replace_once(profile, "import {getDisplayAvailabilityCount} from '../../../shared/menuAvailability';\n", '')
+          replace_once(profile, "import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';\n", '')
+          replace_once(profile, "import type {CustomerKitchenMenuItemSummary} from '../api/kitchenProfileApi';\n", "import type {CustomerKitchenMenuItemSummary} from '../api/kitchenProfileApi';\nimport {CustomerKitchenMenuCard} from '../components/CustomerKitchenMenuCard';\n")
+          replace_once(profile, '  getCustomerKitchenMenuImage,\n', '')
+          sub_once(profile, r"function foodTypeLabel\(.*?\nexport function CustomerKitchenProfileScreen", '''interface MenuPreviewCardProps {
+            item: CustomerKitchenMenuItemSummary;
+            cartLine: CartLine | null;
+            busy: boolean;
+            favorite: boolean;
+            favoritePending: boolean;
+            favoriteDisabled: boolean;
+            onFavoriteToggle: (menuItemId: string, favorite: boolean) => void;
+            onOpen: (menuItemId: string) => void;
+            onIncrease: (item: CustomerKitchenMenuItemSummary) => void;
+            onDecrease: (line: CartLine) => void;
+          }
+
+          function MenuPreviewCard(props: MenuPreviewCardProps) {
+            return <CustomerKitchenMenuCard {...props} />;
+          }
+
+          export function CustomerKitchenProfileScreen''')
+          replace_once(profile, '<Text style={styles.previewPillText}>View all</Text>\n', '<Text style={styles.previewPillText}>View all</Text>\n                    <Icon name="chevron-right" size={18} color={colors.flameRedAccessible} surface={false} />\n')
+          replace_once(profile, "  previewPill: {\n    minHeight: touchTarget.minimum,\n    borderRadius: radius.pill,\n    backgroundColor: colors.white,\n    paddingHorizontal: spacing.sm,\n    paddingVertical: spacing.xs,\n    alignItems: 'center',\n    justifyContent: 'center',\n  },\n", "  previewPill: {\n    minHeight: touchTarget.minimum,\n    flexDirection: 'row',\n    alignItems: 'center',\n    justifyContent: 'center',\n    gap: spacing.xxs,\n    paddingHorizontal: spacing.xs,\n    backgroundColor: 'transparent',\n  },\n")
+          replace_once(profile, "  previewPillText: {\n    color: colors.flameRed,\n    fontSize: typography.tiny,\n    fontWeight: fontWeight.bold,\n  },\n", "  previewPillText: {\n    color: colors.flameRedAccessible,\n    fontSize: typography.small,\n    fontWeight: fontWeight.bold,\n  },\n")
+
+          dishes = 'apps/mobile/src/features/kitchenProfile/screens/CustomerKitchenDishesScreen.tsx'
+          replace_once(dishes, '  Image,\n', '')
+          replace_once(dishes, "import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';\n", '')
+          replace_once(dishes, "import type {CustomerKitchenMenuItemSummary} from '../api/kitchenProfileApi';\n", "import type {CustomerKitchenMenuItemSummary} from '../api/kitchenProfileApi';\nimport {CustomerKitchenMenuCard} from '../components/CustomerKitchenMenuCard';\n")
+          replace_once(dishes, '  formatCustomerKitchenDishMetadata,\n', '')
+          replace_once(dishes, "import {getCustomerKitchenMenuImage} from '../kitchenProfilePresentation';\n", '')
+          sub_once(dishes, r"function KitchenDishRow\(\{.*?\n\}\n\nfunction DishSeparator", '''function KitchenDishRow(props: KitchenDishRowProps) {
+            return <CustomerKitchenMenuCard {...props} />;
+          }
+
+          function DishSeparator''')
+
+          nav = 'apps/mobile/src/app/navigation/CustomerRootNavigator.tsx'
+          replace_once(nav, '      <Tab.Screen name="Profile" component={CustomerProfileStackNavigator} options={profileTabOptions} />\n', '''      <Tab.Screen
+                name="Profile"
+                component={CustomerProfileStackNavigator}
+                options={profileTabOptions}
+                listeners={({navigation}) => ({
+                  tabPress: event => {
+                    showBottomNav();
+                    event.preventDefault();
+                    navigation.navigate('Profile', {screen: 'CustomerProfileRoot'});
+                  },
+                })}
+              />
+          ''')
+          PY
+
+      - name: Diff hygiene
+        run: git diff --check
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: TypeScript strict validation
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+
+      - name: ESLint strict validation
+        working-directory: apps/mobile
+        run: npm run lint -- --max-warnings=0
+
+      - name: Full mobile Jest suite
+        working-directory: apps/mobile
+        run: npm test -- --runInBand
+
+      - name: Production JavaScript bundle validation
+        working-directory: apps/mobile
+        run: |
+          rm -rf build/no-apk-validation
+          mkdir -p build/no-apk-validation
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output build/no-apk-validation/index.android.bundle \
+            --assets-dest build/no-apk-validation/assets
+          test -s build/no-apk-validation/index.android.bundle
+
+      - name: Production discovery contract smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://api.craves.in'
+          LAT='17.3850'
+          LON='78.4867'
+          curl --fail --silent --show-error --retry 2 --connect-timeout 10 --max-time 30 \
+            "$BASE/api/v1/discovery/kitchens?latitude=$LAT&longitude=$LON&radiusMeters=10000&page=0&size=20" -o /tmp/kitchens.json
+          curl --fail --silent --show-error --retry 2 --connect-timeout 10 --max-time 30 \
+            "$BASE/api/v1/discovery/menu-items?latitude=$LAT&longitude=$LON&radiusMeters=10000&page=0&size=20" -o /tmp/menu-items.json
+          curl --fail --silent --show-error --retry 2 --connect-timeout 10 --max-time 30 \
+            "$BASE/api/v1/catalog/kitchens?latitude=$LAT&longitude=$LON&radiusKm=10" -o /tmp/catalog-kitchens.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          kitchens = json.loads(Path('/tmp/kitchens.json').read_text())
+          meals = json.loads(Path('/tmp/menu-items.json').read_text())
+          fallback = json.loads(Path('/tmp/catalog-kitchens.json').read_text())
+          assert all(k in kitchens for k in ('latitude','longitude','radiusMeters','page','kitchens'))
+          assert all(k in meals for k in ('latitude','longitude','radiusMeters','page','menuItems'))
+          assert 'kitchens' in fallback
+          for kitchen in kitchens['kitchens']:
+              assert kitchen.get('latitude') is None or isinstance(kitchen.get('latitude'), (int, float))
+              assert kitchen.get('longitude') is None or isinstance(kitchen.get('longitude'), (int, float))
+          for meal in meals['menuItems']:
+              assert meal.get('kitchenLatitude') is None or isinstance(meal.get('kitchenLatitude'), (int, float))
+              assert meal.get('kitchenLongitude') is None or isinstance(meal.get('kitchenLongitude'), (int, float))
+          print('Production discovery contract smoke passed.')
+          PY
+
+      - name: Commit validated prepared changes and clean temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f \
+            .github/workflows/validate-customer-fix-current-v2-no-apk.yml \
+            .github/workflows/validate-customer-fix-current-no-apk.yml \
+            .github/workflows/validate-customer-fix-no-apk.yml \
+            .github/workflows/mobile-production-discovery-smoke.yml \
+            .github/customer-fix-current-v2-no-apk-run.txt \
+            .github/customer-fix-current-no-apk-run.txt \
+            .github/mobile-production-discovery-smoke-run.txt
+          git add -A apps/mobile/src .github
+          git commit -m "fix(mobile): finish customer navigation and discovery compatibility"
+          git pull --rebase origin mobile-ui-rebuild-from-scratch
+          git push origin HEAD:mobile-ui-rebuild-from-scratch

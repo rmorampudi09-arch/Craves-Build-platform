@@ -10,7 +10,10 @@ export interface RuntimeConfig {
 export const CRAVES_PRODUCTION_API_ORIGIN = 'https://api.craves.in';
 
 const API_VERSION_PREFIX = '/api/v1';
-const LEGACY_PLACEHOLDER_API_BASE_URL = 'https://api.example.invalid';
+const LEGACY_PRODUCTION_API_ORIGINS = new Set([
+  'https://api.example.invalid',
+  'https://apim-craves-prodlow-l3ing6.azure-api.net',
+]);
 
 export class RuntimeConfigurationError extends Error {
   readonly code = 'MOBILE_RUNTIME_CONFIG_INVALID';
@@ -38,8 +41,6 @@ function resolveEnvironment(value: string | undefined): RuntimeEnvironment {
     );
   }
 
-  // A non-debug Android binary must never inherit a stale local-development
-  // environment from a copied .env file. Staging remains an explicit opt-in.
   if (!__DEV__ && normalized === 'development') {
     return 'production';
   }
@@ -53,13 +54,7 @@ function resolveApiBaseUrl(
 ): string {
   let candidate = value?.trim().replace(/\/+$/, '');
 
-  // Production has one public mobile gateway. Keep a safe fallback so a
-  // release build cannot become unusable merely because an ignored .env file
-  // was absent, or because the old checked-in placeholder was copied locally.
-  if (
-    environment === 'production' &&
-    (!candidate || candidate === LEGACY_PLACEHOLDER_API_BASE_URL)
-  ) {
+  if (!candidate && environment === 'production') {
     candidate = CRAVES_PRODUCTION_API_ORIGIN;
   }
 
@@ -97,21 +92,20 @@ function resolveApiBaseUrl(
   }
 
   const normalizedPath = parsed.pathname.replace(/\/+$/, '');
-
-  // Every production client action already carries its published /api/v1
-  // route. Accept and normalize the previously supplied full API base to avoid
-  // producing /api/v1/api/v1/... requests after Firebase OTP verification.
-  if (normalizedPath === API_VERSION_PREFIX) {
-    return `${parsed.protocol}//${parsed.host}`;
-  }
-
-  if (normalizedPath) {
+  if (normalizedPath && normalizedPath !== API_VERSION_PREFIX) {
     throw new RuntimeConfigurationError(
       'CRAVES_API_BASE_URL must be the gateway origin only; mobile API paths already include /api/v1.',
     );
   }
 
-  return candidate;
+  const configuredOrigin = `${parsed.protocol}//${parsed.host}`;
+  const resolvedOrigin =
+    environment === 'production' &&
+    LEGACY_PRODUCTION_API_ORIGINS.has(configuredOrigin)
+      ? CRAVES_PRODUCTION_API_ORIGIN
+      : configuredOrigin;
+
+  return resolvedOrigin;
 }
 
 export function getRuntimeConfig(): RuntimeConfig {

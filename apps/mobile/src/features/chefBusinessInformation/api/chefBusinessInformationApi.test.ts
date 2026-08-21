@@ -18,6 +18,8 @@ function proofDocument(overrides: Record<string, unknown> = {}) {
     contentType: 'application/pdf',
     fileSizeBytes: 2048,
     status: 'UPLOADED',
+    reviewReason: null,
+    reviewedAt: null,
     createdAt: '2026-08-01T07:00:00Z',
     updatedAt: '2026-08-09T08:00:00Z',
     ...overrides,
@@ -64,6 +66,8 @@ describe('Chef Business Information verification parsing', () => {
             id: DOCUMENT_ID,
             documentType: 'AADHAAR_CARD',
             status: 'UPLOADED',
+            reviewReason: null,
+            reviewedAt: null,
           }),
         ],
       }),
@@ -72,6 +76,37 @@ describe('Chef Business Information verification parsing', () => {
     expect(parsed).not.toHaveProperty('reviewedByIdentityId');
     expect(parsed?.documents[0]).not.toHaveProperty('blobContainer');
     expect(parsed?.documents[0]).not.toHaveProperty('blobName');
+  });
+
+  it('accepts approved and rejected document review states from the current backend contract', () => {
+    const approved = parseChefBusinessProofDocument(
+      proofDocument({
+        status: 'APPROVED',
+        reviewedAt: '2026-08-10T09:30:00Z',
+      }),
+    );
+    const rejected = parseChefBusinessProofDocument(
+      proofDocument({
+        status: 'REJECTED',
+        reviewReason: 'Document image is unreadable.',
+        reviewedAt: '2026-08-10T09:35:00Z',
+      }),
+    );
+
+    expect(approved).toEqual(
+      expect.objectContaining({
+        status: 'APPROVED',
+        reviewReason: null,
+        reviewedAt: '2026-08-10T09:30:00Z',
+      }),
+    );
+    expect(rejected).toEqual(
+      expect.objectContaining({
+        status: 'REJECTED',
+        reviewReason: 'Document image is unreadable.',
+        reviewedAt: '2026-08-10T09:35:00Z',
+      }),
+    );
   });
 
   it('accepts the service NOT_SUBMITTED response only with a null application id', () => {
@@ -106,8 +141,27 @@ describe('Chef Business Information verification parsing', () => {
     ).toBeNull();
   });
 
-  it('fails closed on document states that the current backend does not define', () => {
+  it('fails closed on inconsistent or unsupported document review states', () => {
     expect(parseChefBusinessProofDocument(proofDocument({status: 'VERIFIED'}))).toBeNull();
+    expect(
+      parseChefBusinessProofDocument(
+        proofDocument({status: 'APPROVED', reviewedAt: null}),
+      ),
+    ).toBeNull();
+    expect(
+      parseChefBusinessProofDocument(
+        proofDocument({
+          status: 'APPROVED',
+          reviewReason: 'Should not exist',
+          reviewedAt: '2026-08-10T09:30:00Z',
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      parseChefBusinessProofDocument(
+        proofDocument({status: 'REJECTED', reviewedAt: '2026-08-10T09:30:00Z'}),
+      ),
+    ).toBeNull();
     expect(parseChefBusinessProofDocument(proofDocument({documentType: 'FSSAI'}))).toBeNull();
     expect(parseChefBusinessProofDocument(proofDocument({contentType: 'text/plain'}))).toBeNull();
   });

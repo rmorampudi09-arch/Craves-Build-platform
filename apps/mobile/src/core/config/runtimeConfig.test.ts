@@ -20,6 +20,10 @@ afterEach(() => {
 });
 
 describe('getRuntimeConfig', () => {
+  it('pins the production gateway to the current Craves custom domain', () => {
+    expect(CRAVES_PRODUCTION_API_ORIGIN).toBe('https://api.craves.in');
+  });
+
   it('normalizes the API base URL and resolves an explicit environment', () => {
     mutableConfig.CRAVES_ENVIRONMENT = 'staging';
     mutableConfig.CRAVES_API_BASE_URL = ' https://staging.example.invalid/ ';

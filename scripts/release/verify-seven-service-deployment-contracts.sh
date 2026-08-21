@@ -36,14 +36,7 @@ common_pipeline_required = (
     "AZURE_SERVICE_CONNECTION",
 )
 
-shared_helper_services = {
-    "auth",
-    "user-chef",
-    "order",
-    "subscription",
-    "integration",
-    "notification",
-}
+shared_helper_services = set(pipelines)
 
 forbidden_pipeline_patterns = (
     r"--set-env-vars\b",
@@ -83,19 +76,6 @@ for service, path in pipelines.items():
             raise SystemExit(
                 f"ERROR: {path.name} must use the shared runtime-preserving deployment helper"
             )
-    else:
-        catalog_required = (
-            "Runtime environment preserved: YES",
-            "secret_metadata_hash",
-            "environment_hash",
-            "--image",
-            "/actuator/health/readiness",
-        )
-        for token in catalog_required:
-            if token not in text:
-                raise SystemExit(
-                    f"ERROR: {path.name} lacks Catalog runtime-preservation token: {token}"
-                )
 
     for pattern in forbidden_pipeline_patterns:
         if re.search(pattern, text):

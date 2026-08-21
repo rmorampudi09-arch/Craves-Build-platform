@@ -7,8 +7,7 @@ export interface RuntimeConfig {
   environment: RuntimeEnvironment;
 }
 
-export const CRAVES_PRODUCTION_API_ORIGIN =
-  'https://apim-craves-prodlow-l3ing6.azure-api.net';
+export const CRAVES_PRODUCTION_API_ORIGIN = 'https://api.craves.in';
 
 const API_VERSION_PREFIX = '/api/v1';
 const LEGACY_PLACEHOLDER_API_BASE_URL = 'https://api.example.invalid';

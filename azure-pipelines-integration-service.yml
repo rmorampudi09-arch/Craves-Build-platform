@@ -42,6 +42,11 @@ steps:
 
   - script: |
       set -euo pipefail
+      bash scripts/release/verify-integration-flyway-history.sh
+    displayName: Verify immutable Integration Flyway history
+
+  - script: |
+      set -euo pipefail
       cd $(modulePath)
       mvn -B -ntp clean verify
     displayName: Maven build and tests

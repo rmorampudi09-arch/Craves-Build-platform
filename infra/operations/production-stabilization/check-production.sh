@@ -20,7 +20,7 @@ require_env() {
   [[ -n "${!name:-}" ]] || fail "Required environment variable is missing: $name"
 }
 
-for command_name in az curl dig jq openssl awk sed sort grep; do
+for command_name in az curl dig jq openssl awk sed sort grep head; do
   require_command "$command_name"
 done
 
@@ -360,8 +360,16 @@ for HOSTNAME in "$CUSTOMER_APEX_HOSTNAME" "$CUSTOMER_WWW_HOSTNAME"; do
   fi
 done
 
-AUTH_APEX="$(dig @ns51.domaincontrol.com "$CUSTOMER_APEX_HOSTNAME" A +short | sort -u)"
-AUTH_WWW="$(dig @ns51.domaincontrol.com "$CUSTOMER_WWW_HOSTNAME" CNAME +short | sed 's/\.$//' | sort -u)"
+AUTHORITATIVE_NS="$(dig "$CUSTOMER_APEX_HOSTNAME" NS +short | sort -u | head -n 1 | sed 's/\.$//')"
+
+if [[ -n "$AUTHORITATIVE_NS" ]]; then
+  record_pass "Authoritative nameserver discovered: $AUTHORITATIVE_NS"
+else
+  fail "No authoritative nameserver could be discovered for $CUSTOMER_APEX_HOSTNAME."
+fi
+
+AUTH_APEX="$(dig @"$AUTHORITATIVE_NS" "$CUSTOMER_APEX_HOSTNAME" A +short | sort -u)"
+AUTH_WWW="$(dig @"$AUTHORITATIVE_NS" "$CUSTOMER_WWW_HOSTNAME" CNAME +short | sed 's/\.$//' | sort -u)"
 GOOGLE_APEX="$(dig @8.8.8.8 "$CUSTOMER_APEX_HOSTNAME" A +short | sort -u)"
 GOOGLE_WWW="$(dig @8.8.8.8 "$CUSTOMER_WWW_HOSTNAME" CNAME +short | sed 's/\.$//' | sort -u)"
 CLOUDFLARE_APEX="$(dig @1.1.1.1 "$CUSTOMER_APEX_HOSTNAME" A +short | sort -u)"

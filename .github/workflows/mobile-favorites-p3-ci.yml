@@ -73,11 +73,14 @@ jobs:
       - name: ESLint
         working-directory: apps/mobile
         run: npm run lint -- --max-warnings=0
-      - name: P3 repeat-order tests
+      - name: P3 repeat-order and Favorites regression tests
         working-directory: apps/mobile
         run: |
           npm test -- --runInBand --runTestsByPath \
             src/features/customerOrders/presentation/repeatOrderPresentation.test.ts \
+            src/features/customerOrders/presentation/repeatOrderPresentationApi.test.ts \
+            src/features/customerOrders/presentation/repeatOrderReorderSafety.test.ts \
+            src/features/customerOrders/presentation/repeatOrderPageSafety.test.ts \
             src/features/customerOrders/customerOrdersActiveCart.test.ts \
             src/features/cart/cartMutations.test.ts \
             src/features/favorites/customerFavoritesActiveCart.test.ts \

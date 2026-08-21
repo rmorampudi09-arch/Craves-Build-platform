@@ -1,6 +1,6 @@
 # Craves Production Stabilization Verification
 
-This module verifies the production-low customer website after the `craves.in` and `www.craves.in` migration to Azure Container Apps.
+This module verifies the production-low customer website after `craves.in` and `www.craves.in` were placed behind Azure Front Door Premium, with Azure Container Apps retained as the origin.
 
 It is intentionally read-only. It does not change DNS, certificates, custom-domain bindings, Container App revisions, APIM configuration, or application settings. It also does not provision Azure Monitor, Application Insights, Log Analytics, action groups, or any other billable Azure resource.
 
@@ -17,11 +17,13 @@ The checks cover:
 - Container Apps certificate provisioning is `Succeeded` and valid.
 - Key Vault certificate SANs include `craves.in` and `www.craves.in`.
 - Certificate has more than 30 days remaining.
-- GoDaddy authoritative DNS and Google/Cloudflare recursive DNS all match the cutover state.
+- The Azure Front Door endpoint is enabled and successfully provisioned.
+- Both Front Door custom domains are provisioned and validation-approved.
+- The currently delegated authoritative DNS and Google/Cloudflare recursive DNS all resolve the apex, and `www` points to the Front Door endpoint.
 - `asuid` ownership TXT records remain correct.
 - Both ACME validation child zones retain four delegated nameservers.
-- Both public customer URLs return HTTP 200 with valid TLS from `4.187.245.188`.
-- `api.craves.in` CNAME and APIM TLS remain unchanged.
+- Both public customer URLs return HTTP 200 with valid TLS and an Azure Front Door response marker.
+- `api.craves.in` points to the expected APIM gateway and APIM TLS remains valid.
 - The legacy Azure Static Web App remains reachable as a temporary rollback target.
 
 ## Files
@@ -67,7 +69,7 @@ LEGACY_ROLLBACK_TARGET_AVAILABLE=true
 Do not immediately roll back on a single failed assertion. Use the failed section to classify the issue first:
 
 - Runtime/revision failure: investigate the Container App revision before changing DNS.
-- DNS mismatch: compare GoDaddy authoritative DNS with public resolvers. A recursive-only mismatch can be cache propagation.
+- DNS mismatch: compare the currently delegated authoritative DNS with public resolvers and the configured Front Door endpoint. A recursive-only mismatch can be cache propagation.
 - TLS or certificate failure: keep custom-domain bindings intact while checking `craves-web-tls` and the renewal pipeline.
 - APIM failure: do not change customer website DNS; API routing is a separate component.
 - Legacy rollback target failure: this only reduces rollback options; it does not imply the current Container App is unhealthy.

@@ -88,6 +88,13 @@ steps:
 
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
 
+        # Craves prod-low has documented Container App revisions that require
+        # more than 10 minutes to converge even though the application later
+        # becomes healthy. Keep all existing fail-fast terminal-state checks,
+        # but give Catalog the proven 25-minute bounded observation window.
+        echo 'Catalog Container App readiness window: 1500 seconds (150 x 10s).'
+        READY_ATTEMPTS=150 \
+        READY_SLEEP_SECONDS=10 \
         bash scripts/release/deploy-single-service-preserve-runtime.sh \
           "$RG" \
           "$APP" \

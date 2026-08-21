@@ -19,7 +19,7 @@ The checks cover:
 - Certificate has more than 30 days remaining.
 - The Azure Front Door endpoint is enabled and successfully provisioned.
 - Both Front Door custom domains are provisioned and validation-approved.
-- GoDaddy authoritative DNS and Google/Cloudflare recursive DNS all resolve the apex, and `www` points to the Front Door endpoint.
+- The currently delegated authoritative DNS and Google/Cloudflare recursive DNS all resolve the apex, and `www` points to the Front Door endpoint.
 - `asuid` ownership TXT records remain correct.
 - Both ACME validation child zones retain four delegated nameservers.
 - Both public customer URLs return HTTP 200 with valid TLS and an Azure Front Door response marker.
@@ -69,7 +69,7 @@ LEGACY_ROLLBACK_TARGET_AVAILABLE=true
 Do not immediately roll back on a single failed assertion. Use the failed section to classify the issue first:
 
 - Runtime/revision failure: investigate the Container App revision before changing DNS.
-- DNS mismatch: compare GoDaddy authoritative DNS with public resolvers and the configured Front Door endpoint. A recursive-only mismatch can be cache propagation.
+- DNS mismatch: compare the currently delegated authoritative DNS with public resolvers and the configured Front Door endpoint. A recursive-only mismatch can be cache propagation.
 - TLS or certificate failure: keep custom-domain bindings intact while checking `craves-web-tls` and the renewal pipeline.
 - APIM failure: do not change customer website DNS; API routing is a separate component.
 - Legacy rollback target failure: this only reduces rollback options; it does not imply the current Container App is unhealthy.

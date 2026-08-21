@@ -1,0 +1,66 @@
+trigger: none
+pr: none
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+parameters:
+  - name: action
+    type: string
+    default: CONFIGURE
+    values:
+      - CONFIGURE
+      - ROLLBACK
+  - name: confirmCatalogInternalKitchen
+    type: boolean
+    default: false
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: apimName
+    type: string
+    default: apim-craves-prodlow-l3ing6
+  - name: catalogContainerAppName
+    type: string
+    default: ca-craves-catalog-service-prodlo
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - bash: |
+      set -euo pipefail
+      CONFIRM='${{ parameters.confirmCatalogInternalKitchen }}'
+      [[ "${CONFIRM,,}" == 'true' ]] || {
+        echo 'ERROR: confirmCatalogInternalKitchen must be true.' >&2
+        exit 1
+      }
+      bash -n scripts/apim/configure-catalog-internal-kitchen-apim.sh
+      bash -n scripts/apim/rollback-catalog-internal-kitchen-apim.sh
+      python3 - <<'PY'
+      import xml.etree.ElementTree as ET
+      ET.parse('infra/apim/catalog-internal/catalog-internal-kitchen-policy.xml')
+      print('Catalog internal kitchen APIM XML: PASS')
+      PY
+    displayName: Confirm and validate Catalog internal kitchen APIM
+
+  - task: AzureCLI@2
+    displayName: Catalog internal kitchen APIM ${{ parameters.action }}
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        if [[ '${{ parameters.action }}' == 'CONFIGURE' ]]; then
+          RG='${{ parameters.resourceGroupName }}' \
+          APIM='${{ parameters.apimName }}' \
+          CATALOG_APP='${{ parameters.catalogContainerAppName }}' \
+          bash scripts/apim/configure-catalog-internal-kitchen-apim.sh
+        else
+          RG='${{ parameters.resourceGroupName }}' \
+          APIM='${{ parameters.apimName }}' \
+          bash scripts/apim/rollback-catalog-internal-kitchen-apim.sh
+        fi

@@ -1,0 +1,122 @@
+name: CRAVES Favorites P1B Catalog CI
+
+on:
+  push:
+    branches:
+      - feature/favorites-p1b-catalog-saved-read-20260821
+    paths:
+      - 'services/catalog-service/**'
+      - 'infra/apim/favorites-p1b/**'
+      - 'scripts/apim/configure-favorites-p1b-catalog-apim.sh'
+      - 'scripts/apim/rollback-favorites-p1b-catalog-apim.sh'
+      - '.github/workflows/favorites-p1b-catalog-ci.yml'
+  pull_request:
+    branches:
+      - chatgpt/backend-customer-chef-journey-20260819
+    paths:
+      - 'services/catalog-service/**'
+      - 'infra/apim/favorites-p1b/**'
+      - 'scripts/apim/configure-favorites-p1b-catalog-apim.sh'
+      - 'scripts/apim/rollback-favorites-p1b-catalog-apim.sh'
+      - '.github/workflows/favorites-p1b-catalog-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: favorites-p1b-catalog-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  catalog-verify:
+    name: Java 21 Catalog verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/catalog-service/pom.xml
+      - name: Maven clean verify
+        working-directory: services/catalog-service
+        run: mvn -B -ntp clean verify
+      - name: Publish Catalog test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: favorites-p1b-catalog-surefire
+          path: services/catalog-service/target/surefire-reports
+          if-no-files-found: ignore
+          retention-days: 14
+
+  apim-source-guard:
+    name: APIM source guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate scripts and policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/apim/configure-favorites-p1b-catalog-apim.sh
+          bash -n scripts/apim/rollback-favorites-p1b-catalog-apim.sh
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          ET.parse('infra/apim/favorites-p1b/catalog-saved-resolver-policy.xml')
+          PY
+          grep -q 'CONFIRM_FAVORITES_P1B_APIM=true' scripts/apim/configure-favorites-p1b-catalog-apim.sh
+          grep -q 'CONFIRM_FAVORITES_P1B_APIM_ROLLBACK=true' scripts/apim/rollback-favorites-p1b-catalog-apim.sh
+          grep -q 'no-store' infra/apim/favorites-p1b/catalog-saved-resolver-policy.xml
+          grep -q 'X-Correlation-ID' infra/apim/favorites-p1b/catalog-saved-resolver-policy.xml
+          ! grep -R --line-number -E '(password|secret|token|api[-_]?key)[[:space:]]*=[[:space:]]*[^$<{[:space:]]' \
+            infra/apim/favorites-p1b \
+            scripts/apim/configure-favorites-p1b-catalog-apim.sh \
+            scripts/apim/rollback-favorites-p1b-catalog-apim.sh
+
+  source-package:
+    name: Package exact P1B Catalog source
+    needs: [catalog-verify, apim-source-guard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Package validated source diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_branch='chatgpt/backend-customer-chef-journey-20260819'
+          git fetch --no-tags origin "$base_branch:refs/remotes/origin/$base_branch"
+          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P1B_Catalog_Source_Package"
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+
+          git diff --name-only "origin/$base_branch...HEAD" \
+            | while IFS= read -r path; do
+                [[ -n "$path" && -f "$path" ]] || continue
+                mkdir -p "$package_root/$(dirname "$path")"
+                cp "$path" "$package_root/$path"
+              done
+
+          cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
+          CRAVES Favorites 2.0 P1B Catalog Saved Read
+          Base: chatgpt/backend-customer-chef-journey-20260819
+          Source only. No Azure deployment or APIM publication is performed by this package job.
+          Runtime certification remains pending until the user intentionally runs the approved pipelines.
+          EOF
+
+          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P1B_Catalog_Source_Package.zip Craves_Favorites_2_0_P1B_Catalog_Source_Package)
+          test -s "$RUNNER_TEMP/Craves_Favorites_2_0_P1B_Catalog_Source_Package.zip"
+      - name: Upload P1B Catalog source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Craves_Favorites_2_0_P1B_Catalog_Source_Package
+          path: ${{ runner.temp }}/Craves_Favorites_2_0_P1B_Catalog_Source_Package.zip
+          if-no-files-found: error
+          retention-days: 30

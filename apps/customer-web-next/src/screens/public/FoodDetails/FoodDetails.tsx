@@ -140,6 +140,7 @@ function DishDetailPage() {
           chef: dish.chef,
           price: dish.price,
           img: dish.img,
+          kitchenId: dish.kitchenId,
         },
         qty,
       );

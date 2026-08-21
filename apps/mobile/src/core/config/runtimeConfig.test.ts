@@ -42,7 +42,7 @@ describe('getRuntimeConfig', () => {
     expect(() => getRuntimeConfig()).toThrow('CRAVES_API_BASE_URL');
   });
 
-  it('uses the production APIM origin when a production base URL is missing', () => {
+  it('uses the production gateway when a production base URL is missing', () => {
     mutableConfig.CRAVES_ENVIRONMENT = 'production';
     mutableConfig.CRAVES_API_BASE_URL = '   ';
 
@@ -52,7 +52,7 @@ describe('getRuntimeConfig', () => {
     });
   });
 
-  it('replaces the legacy placeholder with the production APIM origin', () => {
+  it('replaces the legacy placeholder with the production gateway', () => {
     mutableConfig.CRAVES_ENVIRONMENT = 'production';
     mutableConfig.CRAVES_API_BASE_URL = 'https://api.example.invalid';
 
@@ -62,7 +62,29 @@ describe('getRuntimeConfig', () => {
     });
   });
 
-  it('normalizes a configured /api/v1 base back to the APIM origin', () => {
+  it('replaces the retired Azure APIM hostname with the current custom domain', () => {
+    mutableConfig.CRAVES_ENVIRONMENT = 'production';
+    mutableConfig.CRAVES_API_BASE_URL =
+      'https://apim-craves-prodlow-l3ing6.azure-api.net';
+
+    expect(getRuntimeConfig()).toEqual({
+      apiBaseUrl: CRAVES_PRODUCTION_API_ORIGIN,
+      environment: 'production',
+    });
+  });
+
+  it('also replaces the retired Azure APIM hostname when /api/v1 is present', () => {
+    mutableConfig.CRAVES_ENVIRONMENT = 'production';
+    mutableConfig.CRAVES_API_BASE_URL =
+      'https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/';
+
+    expect(getRuntimeConfig()).toEqual({
+      apiBaseUrl: CRAVES_PRODUCTION_API_ORIGIN,
+      environment: 'production',
+    });
+  });
+
+  it('normalizes a configured /api/v1 base back to the gateway origin', () => {
     mutableConfig.CRAVES_ENVIRONMENT = 'production';
     mutableConfig.CRAVES_API_BASE_URL = `${CRAVES_PRODUCTION_API_ORIGIN}/api/v1/`;
 

@@ -33,7 +33,6 @@ import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import type {FavoriteHomeCard} from '../api/favoriteHomeFeedApi';
-import type {FavoriteEntityType} from '../api/homeFavoritesApi';
 import type {SavedCatalogItem} from '../api/savedCatalogApi';
 import {
   favoriteHomeDisplayName,

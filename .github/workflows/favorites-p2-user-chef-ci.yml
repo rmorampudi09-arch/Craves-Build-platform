@@ -1,0 +1,85 @@
+name: CRAVES Favorites P2 User-Chef CI
+
+on:
+  push:
+    branches:
+      - feature/favorites-clean-p2-user-chef-20260821
+    paths:
+      - 'services/user-chef-service/**'
+      - '.github/workflows/favorites-p2-user-chef-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'services/user-chef-service/**'
+      - '.github/workflows/favorites-p2-user-chef-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/user-chef-service/pom.xml
+      - name: Maven clean verify
+        working-directory: services/user-chef-service
+        run: mvn -B -ntp clean verify
+      - name: P2 schema safety guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='services/user-chef-service/src/main/resources/db/migration/V10__customer_home_relationship_favorites.sql'
+          test -s "$migration"
+          grep -q 'PRIMARY KEY (identity_id, chef_identity_id)' "$migration"
+          grep -q 'PRIMARY KEY (identity_id, kitchen_id)' "$migration"
+          grep -q 'customer_favorite_watch' "$migration"
+          grep -q "IN ('MENU_ITEM', 'CHEF', 'KITCHEN')" "$migration"
+          grep -q "IN ('IN_APP', 'PUSH')" "$migration"
+          ! grep -R --line-number -E '(password|secret|token|api[-_]?key)[[:space:]]*=[[:space:]]*[^$<{[:space:]]' \
+            services/user-chef-service/modules/favorites-p2-home-relationships \
+            services/user-chef-service/src/main/java/in/craves/userchef/service/CustomerHomeFavoriteService.java \
+            services/user-chef-service/src/main/java/in/craves/userchef/web/CustomerHomeFavoriteController.java
+      - name: Package exact P2 User-Chef source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/p2-base
+          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P2_UserChef_Source"
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+          git diff --name-only origin/p2-base...HEAD | while IFS= read -r path; do
+            [[ -n "$path" && -f "$path" ]] || continue
+            mkdir -p "$package_root/$(dirname "$path")"
+            cp "$path" "$package_root/$path"
+          done
+          cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
+          CRAVES Favorites 2.0 P2 User-Chef Home Relationships
+          Base: main
+          Source only. No Azure/APIM/database runtime action was executed by this workflow.
+          EOF
+          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P2_UserChef_Source.zip Craves_Favorites_2_0_P2_UserChef_Source)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Craves_Favorites_2_0_P2_UserChef_Source
+          path: ${{ runner.temp }}/Craves_Favorites_2_0_P2_UserChef_Source.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: favorites-p2-user-chef-surefire
+          path: services/user-chef-service/target/surefire-reports
+          if-no-files-found: ignore
+          retention-days: 14

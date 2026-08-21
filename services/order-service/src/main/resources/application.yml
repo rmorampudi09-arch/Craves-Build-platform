@@ -36,6 +36,7 @@ craves:
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://api.craves.in/api/v1/catalog}
+    internal-access-value: ${CRAVES_INTERNAL_SERVICE_SECRET:}
   launch-policy:
     enforcement-enabled: ${CRAVES_LAUNCH_POLICY_ENFORCEMENT_ENABLED:false}
   notification:
@@ -47,7 +48,7 @@ craves:
       fixed-delay-ms: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_FIXED_DELAY_MS:30000}
       batch-size: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_BATCH_SIZE:25}
       max-attempts: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_MAX_ATTEMPTS:5}
-      retry-base-delay-seconds: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_RETRY_BASE_DELAY_SECONDS:60}
+      retry-base-delay-seconds: ${CRAVES_NOTIFICATION_OUTBOX_RETRY_BASE_DELAY_SECONDS:60}
   chef-acceptance:
     timeout-minutes: ${CRAVES_CHEF_ACCEPTANCE_TIMEOUT_MINUTES:30}
     first-reminder-minutes: ${CRAVES_CHEF_ACCEPTANCE_FIRST_REMINDER_MINUTES:10}

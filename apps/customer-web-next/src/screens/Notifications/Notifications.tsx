@@ -192,7 +192,7 @@ export default function NotificationsPage() {
         {!loading && !error && notices.length > 0 ? (
           <div className="mb-6 flex items-center justify-between gap-4">
             <div
-              className="inline-flex rounded-xl bg-[#F1F3F5] p-1"
+              className="flex flex-wrap items-center gap-2 bg-transparent p-0"
               aria-label="Notification filters"
             >
               {(
@@ -209,10 +209,10 @@ export default function NotificationsPage() {
                     type="button"
                     onClick={() => setFilter(value)}
                     aria-pressed={active}
-                    className={`min-h-9 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:px-4 ${
+                    className={`min-h-10 rounded-xl border px-3.5 py-2 text-sm font-semibold shadow-none transition-[background-color,color,border-color,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:px-4 ${
                       active
-                        ? "bg-white text-[#F62E18] shadow-sm"
-                        : "text-[#6B6B6B] hover:text-[#1A1A1A]"
+                        ? "!border-[#F62E18] !bg-[#F62E18] !text-white"
+                        : "!border-[#E5E7EB] !bg-[#F1F3F5] !text-[#1A1A1A] hover:!border-[#F62E18] hover:!bg-[#F62E18] hover:!text-white focus-visible:!border-[#F62E18] focus-visible:!bg-[#F62E18] focus-visible:!text-white"
                     }`}
                   >
                     {label}

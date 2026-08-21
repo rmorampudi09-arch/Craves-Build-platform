@@ -3,6 +3,10 @@
 import { useState } from "react";
 import type { NearbyKitchenDiscovery, NearbyMenuDiscovery } from "@/lib/discovery-contract";
 import { formatDistance } from "@/lib/discovery-contract";
+import {
+  addToCart as addCravesCartItem,
+  cartCount,
+} from "@/services/api/cravesCart";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 
 type Mode = "kitchens" | "menu-items";
@@ -96,18 +100,25 @@ export function DiscoveryBrowser() {
     await discoverAt(latitude, longitude, nextMode);
   }
 
-  async function addToCart(menuItemId: string, itemName: string) {
-    setCartBusyId(menuItemId);
-    setMessage(`Adding ${itemName} to your cart…`);
+  async function addToCart(item: NearbyMenuDiscovery["menuItems"][number]) {
+    setCartBusyId(item.id);
+    setMessage(`Adding ${item.itemName} to your cart…`);
     try {
-      const response = await fetch("/api/cart/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ menuItemId, quantity: 1 }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body?.message || "Item could not be added.");
-      setMessage(`${itemName} added. Your cart now has ${body.items?.length ?? 0} item${body.items?.length === 1 ? "" : "s"}.`);
+      await addCravesCartItem(
+        {
+          id: item.id,
+          name: item.itemName,
+          chef: item.kitchenDisplayName ?? item.kitchenName,
+          price: item.price,
+          img: item.primaryImageUrl ?? "/brand/craves-logo.svg",
+          kitchenId: item.kitchenId,
+        },
+        1,
+      );
+      const count = cartCount();
+      setMessage(
+        `${item.itemName} added. Your cart now has ${count} item${count === 1 ? "" : "s"}.`,
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Item could not be added.");
     } finally {
@@ -169,7 +180,7 @@ export function DiscoveryBrowser() {
                 <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-600">{item.description ?? "Prepared by a nearby home kitchen."}</p>
                 <div className="mt-4 flex items-center justify-between text-sm text-slate-600"><span>{item.kitchenDisplayName ?? item.kitchenName}</span><span>{formatDistance(item.distanceMeters)}</span></div>
                 <p className="mt-2 text-xs text-slate-500">{item.areaName ? `${item.areaName}, ` : ""}{item.city}</p>
-                <button type="button" disabled={cartBusyId === item.id} onClick={() => void addToCart(item.id, item.itemName)} className="mt-5 w-full rounded-full bg-[#6930CA] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{cartBusyId === item.id ? "Adding…" : "Add to cart"}</button>
+                <button type="button" disabled={cartBusyId === item.id} onClick={() => void addToCart(item)} className="mt-5 w-full rounded-full bg-[#6930CA] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{cartBusyId === item.id ? "Adding…" : "Add to cart"}</button>
               </div>
             </article>
           ))}

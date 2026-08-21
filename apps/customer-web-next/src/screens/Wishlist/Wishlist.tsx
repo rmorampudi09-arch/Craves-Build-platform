@@ -116,7 +116,9 @@ function WishlistPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => void addToCart(item, 1)}
+                      onClick={() => {
+                        void addToCart(item, 1).catch(() => undefined);
+                      }}
                       className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
                     >
                       <ShoppingCart className="h-3.5 w-3.5" /> Add

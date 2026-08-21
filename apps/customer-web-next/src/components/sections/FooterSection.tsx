@@ -1,4 +1,5 @@
 import { ChefHat, Heart, House } from "lucide-react";
+import { FaApple, FaGooglePlay } from "react-icons/fa";
 
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import styles from "@/screens/public/LandingPage/LandingV2.module.css";
@@ -69,7 +70,22 @@ export function FooterSection({ landingHrefPrefix = "" }: FooterSectionProps) {
           <div>
             <FooterHeading>DOWNLOAD THE APP</FooterHeading>
             <p className="mt-5 text-sm leading-6 text-[#C7C9CC]">Delicious food at your fingertips.</p>
-            <a href="#craves-app" className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition-colors hover:border-white/50">App Store • Google Play</a>
+            <div className="mt-5 flex flex-wrap gap-2" aria-label="Mobile apps coming soon">
+              <span className="inline-flex min-h-12 items-center gap-2.5 rounded-xl border border-white/20 bg-black px-3.5 text-white">
+                <FaApple className="shrink-0 text-xl" aria-hidden="true" />
+                <span>
+                  <span className="block text-[0.5rem] font-medium leading-3 text-white/65">COMING SOON ON</span>
+                  <span className="block text-xs font-bold leading-4">App Store</span>
+                </span>
+              </span>
+              <span className="inline-flex min-h-12 items-center gap-2.5 rounded-xl border border-white/20 bg-black px-3.5 text-white">
+                <FaGooglePlay className="shrink-0 text-lg" aria-hidden="true" />
+                <span>
+                  <span className="block text-[0.5rem] font-medium leading-3 text-white/65">COMING SOON ON</span>
+                  <span className="block text-xs font-bold leading-4">Google Play</span>
+                </span>
+              </span>
+            </div>
           </div>
         </div>
 

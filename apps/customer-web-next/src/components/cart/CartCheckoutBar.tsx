@@ -37,12 +37,15 @@ export function CartCheckoutBar({
           type="button"
           onClick={onContinue}
           disabled={disabled}
-          className="ml-auto inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F1F3F5] px-6 text-sm font-bold text-[#1A1A1A] transition-colors hover:bg-[#E5E7EB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F62E18] sm:flex-none disabled:cursor-wait disabled:opacity-60"
+          className="group ml-auto inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F1F3F5] px-6 text-sm font-bold text-[#1A1A1A] transition-colors hover:bg-[#E5E7EB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F62E18] sm:flex-none disabled:cursor-wait disabled:opacity-60"
         >
           {disabled ? (
             <LoaderCircle className="h-4 w-4 animate-spin text-[#F62E18]" aria-hidden="true" />
           ) : (
-            <FaArrowRight className="text-sm text-[#F62E18]" aria-hidden="true" />
+            <FaArrowRight
+              className="text-sm text-[#F62E18] transition-colors group-hover:!text-white group-focus-visible:!text-white"
+              aria-hidden="true"
+            />
           )}
           {disabled ? "Checking cart…" : "Choose address"}
         </button>

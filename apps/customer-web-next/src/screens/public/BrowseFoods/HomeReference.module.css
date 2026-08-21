@@ -231,23 +231,25 @@
 .floatingCartButton:focus,
 .floatingCartButton:focus-visible,
 .floatingCartButton:active {
-  border: 1px solid #f1f3f5 !important;
-  background: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.76) !important;
+  background: rgba(255, 255, 255, 0.68) !important;
   color: #1a1a1a !important;
+  -webkit-backdrop-filter: blur(24px) saturate(155%);
+  backdrop-filter: blur(24px) saturate(155%);
   box-shadow:
     0 18px 48px rgba(26, 26, 26, 0.14),
-    inset 0 1px 0 #ffffff !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.88) !important;
 }
 
 .floatingCartButton:hover {
-  border: 1px solid #f1f3f5 !important;
-  background: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.88) !important;
+  background: rgba(255, 255, 255, 0.76) !important;
   color: #1a1a1a !important;
   transform: translateY(-3px) !important;
   box-shadow:
     0 22px 54px rgba(26, 26, 26, 0.17),
-    0 0 30px rgba(46, 125, 50, 0.24),
-    inset 0 1px 0 #ffffff !important;
+    0 0 30px rgba(46, 125, 50, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
 }
 
 .cartEnter {

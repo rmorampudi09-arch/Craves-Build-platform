@@ -72,6 +72,12 @@ steps:
         [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
 
+        # Craves prod-low has documented healthy Container App revisions taking
+        # more than ten minutes to converge. Preserve fail-fast terminal-state
+        # checks but use the proven bounded 25-minute observation window.
+        echo 'Order Container App readiness window: 1500 seconds (150 x 10s).'
+        READY_ATTEMPTS=150 \
+        READY_SLEEP_SECONDS=10 \
         bash scripts/release/deploy-single-service-preserve-runtime.sh \
           "$RG" \
           "$APP" \

@@ -18,7 +18,10 @@ export type ChefBusinessDocumentType =
   | 'TAX_ID_CARD'
   | 'AADHAAR_CARD'
   | 'PAN_CARD';
-export type ChefBusinessDocumentStatus = 'UPLOADED';
+export type ChefBusinessDocumentStatus =
+  | 'UPLOADED'
+  | 'APPROVED'
+  | 'REJECTED';
 export type ChefBusinessDocumentContentType =
   | 'application/pdf'
   | 'image/jpeg'
@@ -31,6 +34,8 @@ export interface ChefBusinessProofDocument {
   contentType: ChefBusinessDocumentContentType;
   fileSizeBytes: number;
   status: ChefBusinessDocumentStatus;
+  reviewReason: string | null;
+  reviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,7 +80,11 @@ const DOCUMENT_TYPES = new Set<ChefBusinessDocumentType>([
   'AADHAAR_CARD',
   'PAN_CARD',
 ]);
-const DOCUMENT_STATUSES = new Set<ChefBusinessDocumentStatus>(['UPLOADED']);
+const DOCUMENT_STATUSES = new Set<ChefBusinessDocumentStatus>([
+  'UPLOADED',
+  'APPROVED',
+  'REJECTED',
+]);
 const DOCUMENT_CONTENT_TYPES = new Set<ChefBusinessDocumentContentType>([
   'application/pdf',
   'image/jpeg',
@@ -145,6 +154,8 @@ export function parseChefBusinessProofDocument(
     raw.status,
     40,
   ) as ChefBusinessDocumentStatus | null;
+  const reviewReason = optionalString(raw.reviewReason, 1_000);
+  const reviewedAt = timestamp(raw.reviewedAt);
   const createdAt = timestamp(raw.createdAt);
   const updatedAt = timestamp(raw.updatedAt);
   const fileSizeBytes = raw.fileSizeBytes;
@@ -161,11 +172,24 @@ export function parseChefBusinessProofDocument(
     !DOCUMENT_CONTENT_TYPES.has(contentType) ||
     !status ||
     !DOCUMENT_STATUSES.has(status) ||
+    reviewReason === undefined ||
+    reviewedAt === undefined ||
     typeof fileSizeBytes !== 'number' ||
     !Number.isSafeInteger(fileSizeBytes) ||
     fileSizeBytes < 1 ||
     !createdAt ||
     !updatedAt
+  ) {
+    return null;
+  }
+
+  if (
+    (status === 'UPLOADED' &&
+      (reviewReason !== null || reviewedAt !== null)) ||
+    (status === 'APPROVED' &&
+      (reviewReason !== null || reviewedAt === null)) ||
+    (status === 'REJECTED' &&
+      (reviewReason === null || reviewedAt === null))
   ) {
     return null;
   }
@@ -177,6 +201,8 @@ export function parseChefBusinessProofDocument(
     contentType,
     fileSizeBytes,
     status,
+    reviewReason,
+    reviewedAt,
     createdAt,
     updatedAt,
   };

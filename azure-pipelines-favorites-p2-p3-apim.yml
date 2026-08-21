@@ -1,0 +1,92 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmConfigureFavoritesP2P3
+    displayName: 'I confirm Favorites P2/P3 APIM publication after all backend revisions are healthy'
+    type: boolean
+    default: false
+  - name: confirmRollbackFavoritesP2P3
+    displayName: 'I confirm removal of only the Favorites P2/P3 APIM operations created by this module'
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    fetchDepth: 0
+
+  - bash: |
+      set -euo pipefail
+      bash -n scripts/apim/configure-favorites-p2-p3-apim.sh
+      bash -n scripts/apim/rollback-favorites-p2-p3-apim.sh
+      test -s infra/apim/favorites-p2-p3/favorites-private-operation-policy.xml
+      grep -q 'Authorization' infra/apim/favorites-p2-p3/favorites-private-operation-policy.xml
+      grep -q 'X-Correlation-Id' infra/apim/favorites-p2-p3/favorites-private-operation-policy.xml
+      grep -q 'no-store' infra/apim/favorites-p2-p3/favorites-private-operation-policy.xml
+      grep -q '/favorite-chefs' scripts/apim/configure-favorites-p2-p3-apim.sh
+      grep -q '/favorite-kitchens' scripts/apim/configure-favorites-p2-p3-apim.sh
+      grep -q '/favorite-watches' scripts/apim/configure-favorites-p2-p3-apim.sh
+      grep -q '/favorites/home/resolve' scripts/apim/configure-favorites-p2-p3-apim.sh
+      grep -q '/repeat-candidates' scripts/apim/configure-favorites-p2-p3-apim.sh
+      grep -q '/reorder/{orderId}' scripts/apim/configure-favorites-p2-p3-apim.sh
+      grep -q 'CONFIRM_FAVORITES_P2_P3_APIM_ROLLBACK=true' scripts/apim/rollback-favorites-p2-p3-apim.sh
+    displayName: 'Validate Favorites P2/P3 APIM source'
+
+  - bash: |
+      set -euo pipefail
+      if [[ '${{ parameters.confirmConfigureFavoritesP2P3 }}' == 'true' && '${{ parameters.confirmRollbackFavoritesP2P3 }}' == 'true' ]]; then
+        echo 'Configuration and rollback cannot be requested in the same run.' >&2
+        exit 1
+      fi
+      if [[ '${{ parameters.confirmConfigureFavoritesP2P3 }}' != 'true' && '${{ parameters.confirmRollbackFavoritesP2P3 }}' != 'true' ]]; then
+        echo 'Validation-only mode. No Azure/APIM write will run.'
+      fi
+    displayName: 'Enforce explicit write intent'
+
+  - task: AzureCLI@2
+    displayName: 'Publish Favorites P2/P3 private APIM operations'
+    condition: and(succeeded(), eq('${{ parameters.confirmConfigureFavoritesP2P3 }}', 'true'), ne('${{ parameters.confirmRollbackFavoritesP2P3 }}', 'true'))
+    inputs:
+      azureSubscription: 'Craves-Dev-Service-Connection'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        chmod +x scripts/apim/configure-favorites-p2-p3-apim.sh
+        scripts/apim/configure-favorites-p2-p3-apim.sh
+
+        gateway="$(az apim show -g rg-craves-prodlow-centralindia -n apim-craves-prodlow-l3ing6 --query gatewayUrl -o tsv)"
+        test -n "$gateway"
+        correlation="favorites-p2-p3-$(Build.BuildId)"
+        probe_401() {
+          local method="$1" path="$2"
+          local status
+          status="$(curl -sS -o /tmp/favorites-probe-body -w '%{http_code}' -X "$method" -H "X-Correlation-Id: $correlation" "$gateway/$path")"
+          if [[ "$status" != '401' ]]; then
+            echo "Expected unauthenticated 401 from $method $path, received $status" >&2
+            cat /tmp/favorites-probe-body >&2 || true
+            exit 1
+          fi
+        }
+        probe_401 GET 'api/v1/customer/favorite-chefs'
+        probe_401 GET 'api/v1/customer/favorite-kitchens'
+        probe_401 GET 'api/v1/customer/favorite-watches?entityType=CHEF'
+        probe_401 POST 'api/v1/discovery/favorites/home/resolve'
+        probe_401 GET 'api/v1/orders/repeat-candidates'
+        probe_401 POST 'api/v1/cart/reorder/00000000-0000-4000-8000-000000000001'
+        echo "Unauthenticated operation probes are fail-closed. Correlation: $correlation"
+
+  - task: AzureCLI@2
+    displayName: 'Rollback Favorites P2/P3 APIM operations'
+    condition: and(succeeded(), eq('${{ parameters.confirmRollbackFavoritesP2P3 }}', 'true'), ne('${{ parameters.confirmConfigureFavoritesP2P3 }}', 'true'))
+    inputs:
+      azureSubscription: 'Craves-Dev-Service-Connection'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        chmod +x scripts/apim/rollback-favorites-p2-p3-apim.sh
+        CONFIRM_FAVORITES_P2_P3_APIM_ROLLBACK=true scripts/apim/rollback-favorites-p2-p3-apim.sh

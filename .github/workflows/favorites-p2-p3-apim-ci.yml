@@ -1,0 +1,96 @@
+name: CRAVES Favorites P2 P3 APIM CI
+
+on:
+  push:
+    branches:
+      - feature/favorites-clean-p2-p3-apim-20260821
+    paths:
+      - 'scripts/apim/configure-favorites-p2-p3-apim.sh'
+      - 'scripts/apim/rollback-favorites-p2-p3-apim.sh'
+      - 'infra/apim/favorites-p2-p3/**'
+      - 'azure-pipelines-favorites-p2-p3-apim.yml'
+      - '.github/workflows/favorites-p2-p3-apim-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/apim/configure-favorites-p2-p3-apim.sh'
+      - 'scripts/apim/rollback-favorites-p2-p3-apim.sh'
+      - 'infra/apim/favorites-p2-p3/**'
+      - 'azure-pipelines-favorites-p2-p3-apim.yml'
+      - '.github/workflows/favorites-p2-p3-apim-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Shell syntax
+        run: |
+          set -euo pipefail
+          bash -n scripts/apim/configure-favorites-p2-p3-apim.sh
+          bash -n scripts/apim/rollback-favorites-p2-p3-apim.sh
+      - name: Policy XML syntax and safety markers
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          path = 'infra/apim/favorites-p2-p3/favorites-private-operation-policy.xml'
+          ET.parse(path)
+          text = open(path, encoding='utf-8').read()
+          for required in ['Authorization', 'X-Correlation-Id', 'no-store', '__FAVORITES_BACKEND_URL__']:
+              if required not in text:
+                  raise SystemExit(f'missing required policy marker: {required}')
+          PY
+      - name: Route contract guard
+        run: |
+          set -euo pipefail
+          script=scripts/apim/configure-favorites-p2-p3-apim.sh
+          for route in \
+            '/favorite-chefs' \
+            '/favorite-kitchens' \
+            '/favorite-watches' \
+            '/favorites/home/resolve' \
+            '/repeat-candidates' \
+            '/reorder/{orderId}'; do
+            grep -Fq "$route" "$script"
+          done
+          grep -Fq 'Expected exactly one APIM API' "$script"
+          grep -Fq 'backend-id policy cannot be safely overridden' "$script"
+          grep -Fq 'CONFIRM_FAVORITES_P2_P3_APIM_ROLLBACK' scripts/apim/rollback-favorites-p2-p3-apim.sh
+      - name: No live Azure write in CI
+        run: |
+          set -euo pipefail
+          ! grep -R --line-number -E '^\s*(az apim|az rest|az containerapp)' .github/workflows/favorites-p2-p3-apim-ci.yml
+          grep -Fq 'confirmConfigureFavoritesP2P3' azure-pipelines-favorites-p2-p3-apim.yml
+          grep -Fq 'default: false' azure-pipelines-favorites-p2-p3-apim.yml
+      - name: Package exact APIM source
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/Craves_Favorites_2_0_P2_P3_APIM_Source"
+          mkdir -p "$root/scripts/apim" "$root/infra/apim/favorites-p2-p3" "$root/.github/workflows"
+          cp scripts/apim/configure-favorites-p2-p3-apim.sh "$root/scripts/apim/"
+          cp scripts/apim/rollback-favorites-p2-p3-apim.sh "$root/scripts/apim/"
+          cp infra/apim/favorites-p2-p3/favorites-private-operation-policy.xml "$root/infra/apim/favorites-p2-p3/"
+          cp infra/apim/favorites-p2-p3/README.md "$root/infra/apim/favorites-p2-p3/"
+          cp azure-pipelines-favorites-p2-p3-apim.yml "$root/"
+          cp .github/workflows/favorites-p2-p3-apim-ci.yml "$root/.github/workflows/"
+          cat > "$root/SOURCE_PACKAGE_README.txt" <<'EOF'
+          CRAVES Favorites 2.0 P2/P3 APIM Publication Source
+          Source validation only. This GitHub Actions workflow performs no Azure write.
+          Clean main-based integration; PR #258 is not included.
+          EOF
+          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P2_P3_APIM_Source.zip Craves_Favorites_2_0_P2_P3_APIM_Source)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Craves_Favorites_2_0_P2_P3_APIM_Source
+          path: ${{ runner.temp }}/Craves_Favorites_2_0_P2_P3_APIM_Source.zip
+          if-no-files-found: error
+          retention-days: 30

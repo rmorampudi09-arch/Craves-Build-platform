@@ -10,7 +10,7 @@ mapfile -t SCRIPTS < <(find scripts/apim -type f -name '*.sh' 2>/dev/null | sort
 ((${#POLICIES[@]} > 0)) || { echo 'ERROR: no APIM policy XML files found.' >&2; exit 1; }
 
 WRITE_CONFIRM_PATTERN=$(cat <<'REGEX'
-confirm[^=]*=["']?(true|yes)
+^[[:space:]]*(export[[:space:]]+)?[[:alnum:]_]*confirm[[:alnum:]_]*=["']?(true|yes)\b|\$\{[[:alnum:]_]*confirm[[:alnum:]_]*:-(true|yes)\}
 REGEX
 )
 

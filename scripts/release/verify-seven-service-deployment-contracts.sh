@@ -103,11 +103,13 @@ helper_required = (
     "verify_active_secret_refs_are_key_vault_backed",
     "az containerapp update",
     "--image",
-    "rollback()",
+    "Attempting guarded rollback",
+    "Previous image was restored as ready revision",
     "/actuator/health/liveness",
     "/actuator/health/readiness",
-    "Credential values read:     NO",
-    "Credential values changed:  NO",
+    "Container App configuration drift detected after image deployment.",
+    "Managed identity drift detected after image deployment.",
+    "Container App secret metadata drift detected after image deployment.",
 )
 for token in helper_required:
     if token not in helper_text:

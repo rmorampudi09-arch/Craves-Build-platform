@@ -1,5 +1,6 @@
 package in.craves.order.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -9,6 +10,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -20,6 +23,17 @@ class RepeatOrderServiceValidationTest {
     void setUp() {
         jdbc = mock(NamedParameterJdbcTemplate.class);
         service = new RepeatOrderService(jdbc);
+    }
+
+    @Test
+    void springContextUsesJdbcTemplateConstructor() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class));
+            context.register(RepeatOrderService.class);
+            context.refresh();
+
+            assertThat(context.getBean(RepeatOrderService.class)).isNotNull();
+        }
     }
 
     @Test

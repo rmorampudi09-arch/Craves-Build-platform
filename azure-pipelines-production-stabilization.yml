@@ -21,7 +21,10 @@ variables:
   customerApexHostname: craves.in
   customerWwwHostname: www.craves.in
   customerDomainVerificationId: 8CBF8092F604318F13145F6181237B80D12FD1336F3F37C199AA8D7099FF5DF1
+  frontDoorProfileName: afd-craves-prodlow
+  frontDoorEndpointHostname: craves-prodlow-4f897b61-d4e6bvhscdbzbgbv.z01.azurefd.net
   apimHostname: api.craves.in
+  apimExpectedCname: apim-craves-prodlow-l3ing6.azure-api.net
   rollbackWwwHostname: lemon-bay-06f924610.7.azurestaticapps.net
   certMinRemainingDays: 30
 
@@ -37,6 +40,7 @@ steps:
       set -euo pipefail
       packages=()
       command -v dig >/dev/null 2>&1 || packages+=(dnsutils)
+      command -v jq >/dev/null 2>&1 || packages+=(jq)
       command -v shellcheck >/dev/null 2>&1 || packages+=(shellcheck)
       if [[ ${#packages[@]} -gt 0 ]]; then
         sudo apt-get update -qq
@@ -69,7 +73,10 @@ steps:
         export CUSTOMER_APEX_HOSTNAME='$(customerApexHostname)'
         export CUSTOMER_WWW_HOSTNAME='$(customerWwwHostname)'
         export CUSTOMER_DOMAIN_VERIFICATION_ID='$(customerDomainVerificationId)'
+        export FRONT_DOOR_PROFILE_NAME='$(frontDoorProfileName)'
+        export FRONT_DOOR_ENDPOINT_HOSTNAME='$(frontDoorEndpointHostname)'
         export APIM_HOSTNAME='$(apimHostname)'
+        export APIM_EXPECTED_CNAME='$(apimExpectedCname)'
         export ROLLBACK_WWW_HOSTNAME='$(rollbackWwwHostname)'
         export CERT_MIN_REMAINING_DAYS='$(certMinRemainingDays)'
 

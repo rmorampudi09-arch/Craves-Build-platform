@@ -3,13 +3,13 @@ name: CRAVES Favorites P2 User-Chef CI
 on:
   push:
     branches:
-      - feature/favorites-p2-home-relationships-20260821
+      - feature/favorites-clean-p2-user-chef-20260821
     paths:
       - 'services/user-chef-service/**'
       - '.github/workflows/favorites-p2-user-chef-ci.yml'
   pull_request:
     branches:
-      - feature/favorites-2-p0-reliability-20260820
+      - main
     paths:
       - 'services/user-chef-service/**'
       - '.github/workflows/favorites-p2-user-chef-ci.yml'
@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          migration='services/user-chef-service/src/main/resources/db/migration/V9__customer_home_relationship_favorites.sql'
+          migration='services/user-chef-service/src/main/resources/db/migration/V10__customer_home_relationship_favorites.sql'
           test -s "$migration"
           grep -q 'PRIMARY KEY (identity_id, chef_identity_id)' "$migration"
           grep -q 'PRIMARY KEY (identity_id, kitchen_id)' "$migration"
@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin feature/favorites-2-p0-reliability-20260820:refs/remotes/origin/p2-base
+          git fetch --no-tags origin main:refs/remotes/origin/p2-base
           package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P2_UserChef_Source"
           rm -rf "$package_root"
           mkdir -p "$package_root"
@@ -65,7 +65,7 @@ jobs:
           done
           cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
           CRAVES Favorites 2.0 P2 User-Chef Home Relationships
-          Base: feature/favorites-2-p0-reliability-20260820
+          Base: main
           Source only. No Azure/APIM/database runtime action was executed by this workflow.
           EOF
           (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P2_UserChef_Source.zip Craves_Favorites_2_0_P2_UserChef_Source)

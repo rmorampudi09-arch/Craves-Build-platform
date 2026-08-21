@@ -38,14 +38,14 @@ export function FloatingCartBar({
       >
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(255,255,255,0.48),rgba(255,255,255,0.16)_48%,rgba(255,255,255,0.34))]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(255,255,255,0.96),rgba(248,249,250,0.88)_48%,rgba(255,255,255,0.96))]"
         />
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-10 top-0 h-px bg-white/85"
+          className="pointer-events-none absolute inset-x-10 top-0 h-px bg-white"
         />
 
-        <span className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] border border-white/70 bg-white/55 text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_20px_rgba(26,26,26,0.08)] backdrop-blur-md">
+        <span className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] border border-white bg-white/95 text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,1),0_8px_20px_rgba(26,26,26,0.08)] backdrop-blur-md">
           <CravesCartIcon className="h-5 w-5" />
         </span>
 
@@ -59,7 +59,7 @@ export function FloatingCartBar({
           </span>
         </span>
 
-        <span className="relative z-10 inline-flex shrink-0 items-center gap-2 rounded-full border border-white/70 bg-white/60 px-3.5 py-2.5 text-xs font-black text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md sm:px-4 sm:text-sm">
+        <span className="relative z-10 inline-flex shrink-0 items-center gap-2 rounded-full border border-white bg-white/95 px-3.5 py-2.5 text-xs font-black text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,1)] backdrop-blur-md sm:px-4 sm:text-sm">
           View Cart
           <ArrowRight
             className="h-[1.05rem] w-[1.05rem] transition-transform duration-200 group-hover:translate-x-0.5"

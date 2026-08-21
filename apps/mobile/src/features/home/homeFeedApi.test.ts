@@ -33,8 +33,8 @@ const response = {
       areaName: 'Madhapur',
       city: 'Hyderabad',
       state: 'Telangana',
-      kitchenLatitude: 17.449,
-      kitchenLongitude: 78.392,
+      kitchenLatitude: null,
+      kitchenLongitude: null,
       distanceMeters: 320,
       itemName: 'Veg Meal',
       description: 'Fresh meal',
@@ -60,7 +60,7 @@ describe('P31 home feed API', () => {
   it('maps only the exact nearby discovery location and pagination parameters', async () => {
     getMock.mockResolvedValueOnce(response);
 
-    await homeFeedApi.listNearbyDishes({
+    const result = await homeFeedApi.listNearbyDishes({
       latitude: 17.4483,
       longitude: 78.3915,
       radiusMeters: 10000,
@@ -79,6 +79,8 @@ describe('P31 home feed API', () => {
       signal: undefined,
       dedupeKey: 'home-nearby-dishes:17.4483:78.3915:10000:0:20',
     });
+    expect(result.menuItems[0].kitchenLatitude).toBeNull();
+    expect(result.menuItems[0].kitchenLongitude).toBeNull();
   });
 
   it('rejects requests outside backend discovery bounds before transport', () => {

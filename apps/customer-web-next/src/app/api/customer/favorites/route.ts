@@ -5,20 +5,27 @@ import {
   SessionRequiredError,
 } from "@/lib/server-api";
 
-function failure(status: number) {
-  const message = status === 401
-    ? "Please sign in again."
-    : status === 403
-      ? "Customer access is required to use favorites."
-      : status === 502
-        ? "Craves received an invalid favorites response."
-        : "Favorites are temporarily unavailable.";
+function failure(status: number, upstreamMessage?: string) {
+  const message = upstreamMessage?.trim()
+    || (
+      status === 401
+        ? "Please sign in again."
+        : status === 403
+          ? "Customer access is required to use favorites."
+          : status === 404 || status === 405
+            ? "Favorites are not available on the live API route yet."
+            : status === 502
+              ? "Craves received an invalid favorites response."
+              : "Favorites are temporarily unavailable."
+    );
 
   return NextResponse.json({
     error: status === 401
       ? "SESSION_REQUIRED"
       : status === 403
         ? "CUSTOMER_ROLE_REQUIRED"
+        : status === 404 || status === 405
+          ? "FAVORITES_ROUTE_UNAVAILABLE"
         : status === 502
           ? "INVALID_FAVORITES_RESPONSE"
           : "FAVORITES_UNAVAILABLE",
@@ -26,11 +33,17 @@ function failure(status: number) {
   }, { status });
 }
 
+function safeUpstreamMessage(status: number, body: unknown): string | undefined {
+  if (status >= 500 || !body || typeof body !== "object") return undefined;
+  const message = (body as { message?: unknown }).message;
+  return typeof message === "string" ? message : undefined;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const upstream = await authenticatedApiFetch(request, "/customer/favorites");
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return failure(upstream.status);
+    if (!upstream.ok) return failure(upstream.status, safeUpstreamMessage(upstream.status, body));
 
     const favorites = parseCustomerFavorites(body);
     return favorites

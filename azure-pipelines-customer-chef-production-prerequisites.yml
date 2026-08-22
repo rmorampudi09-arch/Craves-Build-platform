@@ -25,8 +25,8 @@ steps:
 
   - script: |
       set -euo pipefail
-      scripts/release/scan-secret-material.sh .
-      scripts/release/verify-seven-service-deployment-contracts.sh
+      bash scripts/release/scan-secret-material.sh .
+      bash scripts/release/verify-seven-service-deployment-contracts.sh
     displayName: Validate production prerequisite source contracts
 
   - task: AzureCLI@2

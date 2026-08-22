@@ -43,6 +43,8 @@ craves:
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
   internal:
     access-value: ${CRAVES_INTERNAL_SERVICE_SECRET:}
+  public-catalog:
+    privacy-enforcement-enabled: ${CRAVES_PUBLIC_CATALOG_PRIVACY_ENFORCEMENT_ENABLED:false}
   storage:
     endpoint-value: ${CRAVES_STORAGE_ENDPOINT_VALUE:}
     media-container: ${CRAVES_STORAGE_MEDIA_CONTAINER:media}

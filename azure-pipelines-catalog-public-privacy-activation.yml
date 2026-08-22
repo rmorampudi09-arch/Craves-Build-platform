@@ -21,7 +21,7 @@ parameters:
     default: ca-craves-catalog-service-prodlo
   - name: publicPrivacyEnvName
     type: string
-    default: CRAVES_CATALOG_PUBLIC_PRIVACY_ENFORCEMENT_ENABLED
+    default: CRAVES_PUBLIC_CATALOG_PRIVACY_ENFORCEMENT_ENABLED
 
 pool:
   vmImage: ubuntu-latest

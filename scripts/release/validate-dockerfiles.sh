@@ -2,12 +2,19 @@
 set -euo pipefail
 
 ROOT="${1:-.}"
+shift || true
 cd "$ROOT"
-mapfile -t DOCKERFILES < <(find . -name Dockerfile -not -path '*/node_modules/*' -not -path '*/target/*' | sort)
+
+if (($# > 0)); then
+  DOCKERFILES=("$@")
+else
+  mapfile -t DOCKERFILES < <(find . -name Dockerfile -not -path '*/node_modules/*' -not -path '*/target/*' | sort)
+fi
 ((${#DOCKERFILES[@]} > 0)) || { echo 'ERROR: no Dockerfiles found.' >&2; exit 1; }
 
 failures=0
 for file in "${DOCKERFILES[@]}"; do
+  [[ -f "$file" ]] || { echo "ERROR: Dockerfile not found: $file" >&2; failures=$((failures+1)); continue; }
   echo "Checking $file"
   if grep -Eiq '^FROM[[:space:]]+[^[:space:]]+:latest([[:space:]]|$)' "$file"; then
     echo "ERROR: $file uses the mutable latest tag." >&2; failures=$((failures+1))

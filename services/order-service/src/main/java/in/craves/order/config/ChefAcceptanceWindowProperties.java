@@ -10,6 +10,7 @@ public class ChefAcceptanceWindowProperties {
     private boolean workerEnabled = false;
     private long workerFixedDelayMs = 30000;
     private int workerBatchSize = 20;
+    private int timeoutClaimStaleSeconds = 300;
 
     public int getTimeoutMinutes() {
         return timeoutMinutes;
@@ -59,6 +60,14 @@ public class ChefAcceptanceWindowProperties {
         this.workerBatchSize = workerBatchSize;
     }
 
+    public int getTimeoutClaimStaleSeconds() {
+        return timeoutClaimStaleSeconds;
+    }
+
+    public void setTimeoutClaimStaleSeconds(int timeoutClaimStaleSeconds) {
+        this.timeoutClaimStaleSeconds = timeoutClaimStaleSeconds;
+    }
+
     public int validatedTimeoutMinutes() {
         return timeoutMinutes > 0 ? timeoutMinutes : 30;
     }
@@ -79,6 +88,10 @@ public class ChefAcceptanceWindowProperties {
     }
 
     public int validatedWorkerBatchSize() {
-        return workerBatchSize > 0 ? Math.min(workerBatchSize, 100) : 20;
+        return workerBatchSize > 0 ? Math.min(workerBatchSize, 200) : 20;
+    }
+
+    public int validatedTimeoutClaimStaleSeconds() {
+        return timeoutClaimStaleSeconds >= 30 ? Math.min(timeoutClaimStaleSeconds, 3600) : 300;
     }
 }

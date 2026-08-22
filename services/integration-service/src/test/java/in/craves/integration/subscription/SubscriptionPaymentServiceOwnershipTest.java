@@ -80,7 +80,7 @@ class SubscriptionPaymentServiceOwnershipTest {
             repository,
             paymentProperties,
             providerProperties,
-            new PaymentRoutingProperties("CASHFREE", true, false),
+            new PaymentRoutingProperties("CASHFREE", true, true, false),
             razorpayPaymentClient,
             new ObjectMapper().findAndRegisterModules(),
             builder

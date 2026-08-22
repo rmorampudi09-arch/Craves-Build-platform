@@ -1,7 +1,9 @@
 package in.craves.integration.web;
 
 import in.craves.integration.config.PaymentApiProperties;
+import in.craves.integration.config.PaymentRoutingProperties;
 import in.craves.integration.payment.CashfreeWebhookInboxService;
+import in.craves.integration.payment.RazorpayWebhookInboxService;
 import in.craves.integration.service.PaymentService;
 import in.craves.integration.web.PaymentDtos.CreatePaymentOrderRequest;
 import in.craves.integration.web.PaymentDtos.CreatePaymentOrderResponse;
@@ -11,6 +13,7 @@ import in.craves.integration.web.PaymentDtos.VerifyPaymentRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,22 +22,29 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/payments")
 public class PaymentController {
     private final PaymentService paymentService;
     private final CashfreeWebhookInboxService cashfreeWebhookInboxService;
+    private final RazorpayWebhookInboxService razorpayWebhookInboxService;
     private final PaymentApiProperties apiProperties;
+    private final PaymentRoutingProperties routing;
 
     public PaymentController(
         PaymentService paymentService,
         CashfreeWebhookInboxService cashfreeWebhookInboxService,
-        PaymentApiProperties apiProperties
+        RazorpayWebhookInboxService razorpayWebhookInboxService,
+        PaymentApiProperties apiProperties,
+        PaymentRoutingProperties routing
     ) {
         this.paymentService = paymentService;
         this.cashfreeWebhookInboxService = cashfreeWebhookInboxService;
+        this.razorpayWebhookInboxService = razorpayWebhookInboxService;
         this.apiProperties = apiProperties;
+        this.routing = routing;
     }
 
     @PostMapping("/orders")
@@ -72,6 +82,9 @@ public class PaymentController {
         @RequestHeader(name = "x-idempotency-key", required = false) String idempotencyKey,
         @RequestBody String rawBody
     ) {
+        if (!routing.cashfreeTrafficAllowed()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Cashfree traffic is disabled");
+        }
         apiProperties.requireCashfreeWebhookIngressEnabled();
         cashfreeWebhookInboxService.accept(timestamp, signature, version, idempotencyKey, rawBody);
         return ResponseEntity.ok().build();
@@ -84,7 +97,7 @@ public class PaymentController {
         @RequestBody String rawBody
     ) {
         apiProperties.requireRazorpayWebhookIngressEnabled();
-        paymentService.handleRazorpayWebhook(signature, eventId, rawBody);
+        razorpayWebhookInboxService.accept(signature, eventId, rawBody);
         return ResponseEntity.ok().build();
     }
 }

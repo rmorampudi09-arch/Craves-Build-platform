@@ -8,6 +8,7 @@ import {
   CalendarRange,
   ChefHat,
   ClipboardList,
+  Heart,
   Home,
 } from "lucide-react";
 import {
@@ -18,6 +19,7 @@ import {
 
 const serviceLinks = [
   { href: "/home", label: "Discover", icon: Home },
+  { href: "/wishlist", label: "Saved", icon: Heart },
   { href: "/orders", label: "Orders", icon: ClipboardList },
   { href: "/subscriptions", label: "Meal plans", icon: CalendarRange },
   { href: "/notifications", label: "Updates", icon: Bell },

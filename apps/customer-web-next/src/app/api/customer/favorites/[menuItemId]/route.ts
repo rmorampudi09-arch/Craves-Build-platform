@@ -7,18 +7,23 @@ import {
   SessionRequiredError,
 } from "@/lib/server-api";
 
-function failure(status: number) {
-  const message = status === 400
-    ? "A valid dish is required."
-    : status === 401
-      ? "Please sign in again."
-      : status === 403
-        ? "Customer access is required to use favorites."
-        : status === 409
-          ? "You have reached the maximum number of favorite dishes."
-          : status === 502
-            ? "Craves received an invalid favorites response."
-            : "Favorites are temporarily unavailable.";
+function failure(status: number, upstreamMessage?: string) {
+  const message = upstreamMessage?.trim()
+    || (
+      status === 400
+        ? "A valid dish is required."
+        : status === 401
+          ? "Please sign in again."
+          : status === 403
+            ? "Customer access is required to use favorites."
+            : status === 404 || status === 405
+              ? "Favorites are not available on the live API route yet."
+              : status === 409
+                ? "You have reached the maximum number of favorite dishes."
+                : status === 502
+                  ? "Craves received an invalid favorites response."
+                  : "Favorites are temporarily unavailable."
+    );
 
   return NextResponse.json({
     error: status === 400
@@ -27,6 +32,8 @@ function failure(status: number) {
         ? "SESSION_REQUIRED"
         : status === 403
           ? "CUSTOMER_ROLE_REQUIRED"
+          : status === 404 || status === 405
+            ? "FAVORITES_ROUTE_UNAVAILABLE"
           : status === 409
             ? "FAVORITES_LIMIT_REACHED"
             : status === 502
@@ -34,6 +41,12 @@ function failure(status: number) {
               : "FAVORITES_UNAVAILABLE",
     message,
   }, { status });
+}
+
+function safeUpstreamMessage(status: number, body: unknown): string | undefined {
+  if (status >= 500 || !body || typeof body !== "object") return undefined;
+  const message = (body as { message?: unknown }).message;
+  return typeof message === "string" ? message : undefined;
 }
 
 async function menuItemIdFrom(
@@ -64,7 +77,7 @@ export async function PUT(
       { method: "PUT" },
     );
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return failure(upstream.status);
+    if (!upstream.ok) return failure(upstream.status, safeUpstreamMessage(upstream.status, body));
 
     const favorite = parseCustomerFavorite(body);
     return favorite
@@ -97,7 +110,8 @@ export async function DELETE(
       `/customer/favorites/${menuItemId}`,
       { method: "DELETE" },
     );
-    if (!upstream.ok) return failure(upstream.status);
+    const body = await upstream.json().catch(() => null);
+    if (!upstream.ok) return failure(upstream.status, safeUpstreamMessage(upstream.status, body));
 
     return new NextResponse(null, {
       status: 204,

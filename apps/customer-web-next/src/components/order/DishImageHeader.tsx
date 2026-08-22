@@ -30,11 +30,15 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
         setFavorite(ids.has(dish.id));
         setFavoritesReady(true);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) return;
         setFavorite(false);
-        setFavoritesReady(false);
-        setFavoriteError("Favorites are temporarily unavailable.");
+        setFavoritesReady(true);
+        setFavoriteError(
+          error instanceof Error
+            ? error.message
+            : "Favorites are temporarily unavailable.",
+        );
       });
 
     return () => {

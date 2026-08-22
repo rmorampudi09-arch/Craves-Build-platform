@@ -1,0 +1,102 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: action
+    displayName: Admin Front Door action
+    type: string
+    default: discover
+    values:
+      - discover
+      - prepare
+      - associate
+      - smoke
+  - name: confirmFrontDoorWrite
+    displayName: Confirm Front Door mutation for prepare/associate
+    type: boolean
+    default: false
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: frontDoorProfileName
+    type: string
+    default: afd-craves-prodlow
+  - name: adminContainerAppName
+    type: string
+    default: ca-craves-admin-web-prodlow
+  - name: adminHostname
+    type: string
+    default: admin.craves.in
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  artifactDir: $(Build.ArtifactStagingDirectory)/admin-frontdoor
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - bash: |
+      set -euo pipefail
+      packages=()
+      command -v dig >/dev/null 2>&1 || packages+=(dnsutils)
+      command -v jq >/dev/null 2>&1 || packages+=(jq)
+      command -v shellcheck >/dev/null 2>&1 || packages+=(shellcheck)
+      if [[ ${#packages[@]} -gt 0 ]]; then
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends "${packages[@]}"
+      fi
+      bash -n scripts/frontdoor/configure-admin-portal-frontdoor.sh
+      shellcheck scripts/frontdoor/configure-admin-portal-frontdoor.sh
+    displayName: Validate admin Front Door automation
+
+  - bash: |
+      set -euo pipefail
+      action='${{ parameters.action }}'
+      confirm='${{ parameters.confirmFrontDoorWrite }}'
+      if [[ "$action" == prepare || "$action" == associate ]]; then
+        [[ "$confirm" == True || "$confirm" == true ]] || {
+          echo "ERROR: prepare/associate requires confirmFrontDoorWrite=true" >&2
+          exit 1
+        }
+      fi
+      if [[ "$action" == discover || "$action" == smoke ]]; then
+        [[ "$confirm" == False || "$confirm" == false ]] || {
+          echo "ERROR: discover/smoke are read-only; leave confirmFrontDoorWrite=false" >&2
+          exit 1
+        }
+      fi
+    displayName: Enforce mutation guard
+
+  - task: AzureCLI@2
+    displayName: Run admin Front Door ${{ parameters.action }}
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      addSpnToEnvironment: false
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+        mkdir -p '$(artifactDir)'
+        export ACTION='${{ parameters.action }}'
+        export RESOURCE_GROUP='${{ parameters.resourceGroupName }}'
+        export FRONT_DOOR_PROFILE='${{ parameters.frontDoorProfileName }}'
+        export ADMIN_CONTAINER_APP='${{ parameters.adminContainerAppName }}'
+        export ADMIN_HOSTNAME='${{ parameters.adminHostname }}'
+        export CONFIRM_FRONTDOOR_WRITE='${{ parameters.confirmFrontDoorWrite }}'
+        export ARTIFACT_DIR='$(artifactDir)'
+        bash scripts/frontdoor/configure-admin-portal-frontdoor.sh
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish admin Front Door evidence
+    condition: always()
+    inputs:
+      targetPath: $(artifactDir)
+      artifact: admin-frontdoor-$(Build.BuildId)
+      publishLocation: pipeline

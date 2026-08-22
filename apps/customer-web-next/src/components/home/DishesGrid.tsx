@@ -60,7 +60,7 @@ export function DishesGrid({
       .catch(() => {
         if (!active) return;
         setFavoriteIds(new Set());
-        setFavoritesReady(false);
+        setFavoritesReady(true);
       });
 
     return () => {

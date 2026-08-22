@@ -30,7 +30,7 @@ export function ChefDishesGrid({ chefName, dishes }: ChefDishesGridProps) {
       .catch(() => {
         if (!active) return;
         setFavoriteIds(new Set());
-        setFavoritesReady(false);
+        setFavoritesReady(true);
       });
 
     return () => {

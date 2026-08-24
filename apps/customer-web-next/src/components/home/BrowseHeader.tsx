@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import Link from "next/link";
 import {
   LogOut,
   MapPin,
@@ -40,7 +40,7 @@ export function BrowseHeader({
     <header className="sticky top-0 z-40 border-b border-border bg-white/95 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 md:px-6">
         <div className="flex min-h-18 items-center gap-3 py-3">
-          <Link to="/home" className="flex min-h-11 shrink-0 items-center gap-3 rounded-lg pr-2" aria-label="Craves discovery home">
+          <Link href="/home" className="flex min-h-11 shrink-0 items-center gap-3 rounded-lg pr-2" aria-label="Craves discovery home">
             <CravesLogo size="md" />
             <span className="hidden leading-tight sm:block">
               <span className="block font-display text-xl font-bold tracking-[-0.04em] text-ink">Craves</span>
@@ -63,7 +63,7 @@ export function BrowseHeader({
           <div className="ml-auto flex items-center gap-2">
             <span className="hidden text-sm font-semibold text-ink lg:inline">Hi, {firstName}</span>
             <Link
-              to="/profile"
+              href="/profile"
               className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${actionLinkClass}`}
             >
               <UserCircle className="h-5 w-5" aria-hidden="true" />

@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import Link from "next/link";
 import { useState } from "react";
 import { Check, Clock, Heart, MapPin, Plus, ShoppingBag } from "lucide-react";
 import { addToCart } from "@/services/api/cravesCart";
@@ -89,8 +89,7 @@ export function DishCard({
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-[var(--shadow-card)] transition duration-[var(--motion-fast)] hover:-translate-y-1 hover:border-primary/35">
       <div className="relative aspect-[4/3] overflow-hidden bg-grey-200">
         <Link
-          to="/dish/$id"
-          params={{ id: dish.id }}
+          href={`/dish/${encodeURIComponent(dish.id)}`}
           className="absolute inset-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35 focus-visible:ring-inset"
           aria-label={`View ${dish.name} details`}
         >
@@ -136,7 +135,7 @@ export function DishCard({
 
       <div className="flex flex-1 flex-col p-4">
         <div>
-          <Link to="/dish/$id" params={{ id: dish.id }} className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35">
+          <Link href={`/dish/${encodeURIComponent(dish.id)}`} className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35">
             <h3 className="font-display text-lg font-bold leading-6 tracking-[-0.025em] text-ink group-hover:text-contrast-red">
               {dish.name}
             </h3>

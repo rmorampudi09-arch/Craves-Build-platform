@@ -1,5 +1,5 @@
 import { ChefHat, Star, MapPin, BadgeCheck } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import Link from "next/link";
 
 interface ChefInfoCardProps {
   chefId?: string;
@@ -50,8 +50,7 @@ export function ChefInfoCard({
 
   return chefId ? (
     <Link
-      to="/chef/$id"
-      params={{ id: chefId }}
+      href={`/chef/${encodeURIComponent(chefId)}`}
       className="mt-5 block rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary"
       aria-label={`View ${chefName}`}
     >

@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, MapPin, Utensils } from "lucide-react";
 
@@ -154,7 +154,7 @@ async function resolveLiveBrowsingLocation(
 }
 
 function BrowseFoodsPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [user, setUser] = useState<CravesUser | null>(null);
   const [address, setAddress] = useState<CravesAddress | null>(null);
   const [category, setCategory] = useState<DishCategory>(ALL_DISHES_CATEGORY);
@@ -253,7 +253,7 @@ function BrowseFoodsPage() {
       const current = await loadSession();
       if (!active) return;
       if (!current) {
-        navigate({ to: "/", replace: true });
+        router.replace("/");
         return;
       }
       setUser(current);
@@ -298,7 +298,7 @@ function BrowseFoodsPage() {
       active = false;
       unsubscribeCart();
     };
-  }, [navigate, refreshDiscovery]);
+  }, [router, refreshDiscovery]);
 
   const categories = useMemo<readonly DishCategory[]>(() => {
     const live = Array.from(
@@ -343,7 +343,7 @@ function BrowseFoodsPage() {
 
   const handleLogout = async () => {
     await clearSession();
-    navigate({ to: "/" });
+    router.push("/");
   };
 
   const locationLabel = address
@@ -369,9 +369,9 @@ function BrowseFoodsPage() {
       <BrowseHeader
         user={user}
         locationLabel={locationLabel}
-        onOpenLocation={() => navigate({ to: "/addresses" })}
+        onOpenLocation={() => router.push("/addresses")}
         cartCount={cartItemCount}
-        onOpenCart={() => navigate({ to: "/cart" })}
+        onOpenCart={() => router.push("/cart")}
         onLogout={handleLogout}
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
@@ -439,7 +439,7 @@ function BrowseFoodsPage() {
               state={discoveryState}
               message={catalogMessage}
               onRetry={() => void openKitchen(selectedKitchen)}
-              onManageAddress={() => navigate({ to: "/addresses" })}
+              onManageAddress={() => router.push("/addresses")}
             />
           </>
         ) : (
@@ -450,13 +450,13 @@ function BrowseFoodsPage() {
             message={catalogMessage}
             onSelectKitchen={(kitchen) => void openKitchen(kitchen)}
             onRetry={() => void refreshDiscovery(address)}
-            onManageAddress={() => navigate({ to: "/addresses" })}
+            onManageAddress={() => router.push("/addresses")}
           />
         )}
       </main>
       <FloatingCartBar
         itemCount={cartItemCount}
-        onViewCart={() => navigate({ to: "/cart" })}
+        onViewCart={() => router.push("/cart")}
       />
     </div>
   );

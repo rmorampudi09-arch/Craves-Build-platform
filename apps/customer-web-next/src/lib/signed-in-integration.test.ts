@@ -54,6 +54,26 @@ test("signed-in home loads backend address, cart, and nearby kitchens before men
   assert.doesNotMatch(contents, /17\.4483|78\.3915/);
 });
 
+test("catalog discovery has one canonical Next.js route and working detail navigation", () => {
+  const legacyEntry = source("../app/discover/page.tsx");
+  const browse = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const header = source("../components/home/BrowseHeader.tsx");
+  const card = source("../components/home/DishCard.tsx");
+  const detail = source("../screens/public/FoodDetails/FoodDetails.tsx");
+  const chef = source("../screens/public/ChefProfile/ChefProfile.tsx");
+
+  assert.match(legacyEntry, /redirect\("\/home"\)/);
+  assert.match(browse, /useRouter\(\)/);
+  assert.match(header, /from "next\/link"/);
+  assert.match(card, /href=\{`\/dish\/\$\{encodeURIComponent\(dish\.id\)\}`\}/);
+  assert.match(detail, /useParams<\{ id: string \}>\(\)/);
+  assert.match(chef, /useParams<\{ id: string \}>\(\)/);
+
+  for (const contents of [browse, header, card, detail, chef]) {
+    assert.doesNotMatch(contents, /@tanstack\/react-router/);
+  }
+});
+
 test("profile exposes backend chef application status", () => {
   const contents = source("../screens/Profile/Profile.tsx");
   assert.match(contents, /fetch\("\/api\/chef\/application"/);

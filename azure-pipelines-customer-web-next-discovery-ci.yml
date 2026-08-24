@@ -16,18 +16,37 @@ steps:
   - script: |
       set -euo pipefail
       cd "$(appPath)"
-      npm install --ignore-scripts
+      npm ci --no-audit --no-fund
+      npm run lint
       npm run typecheck
       npm run test
       npm run build
     displayName: Typecheck, test and build customer discovery
   - script: |
       set -euo pipefail
-      grep -q 'navigator.geolocation' apps/customer-web-next/src/components/discovery-browser.tsx
+      grep -q 'redirect("/home")' apps/customer-web-next/src/app/discover/page.tsx
+      grep -q 'navigator.geolocation' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
+      grep -q 'discoverKitchens(activeAddress.lat, activeAddress.lng, 5_000)' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
+      grep -q 'loadKitchenMenu(kitchen.id)' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
+      grep -q 'loadCustomerFavoriteIds' apps/customer-web-next/src/components/home/DishesGrid.tsx
+      grep -q 'href={`/dish/${encodeURIComponent(dish.id)}`}' apps/customer-web-next/src/components/home/DishCard.tsx
       grep -q 'url.protocol === "https:"' apps/customer-web-next/src/lib/discovery-contract.ts
       grep -q 'Cache-Control.*no-store' apps/customer-web-next/src/app/api/discovery/kitchens/route.ts
-      if grep -REn '(phoneNumber|email|identityId|kitchenLatitude|kitchenLongitude)' apps/customer-web-next/src/components/discovery-browser.tsx; then
+      if grep -REn '(phoneNumber|email|identityId|kitchenLatitude|kitchenLongitude)' \
+        apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx \
+        apps/customer-web-next/src/components/home/KitchensGrid.tsx \
+        apps/customer-web-next/src/components/home/DishesGrid.tsx \
+        apps/customer-web-next/src/components/home/DishCard.tsx; then
         echo 'ERROR: Discovery UI references private catalog fields.' >&2
+        exit 1
+      fi
+      if grep -REn '@tanstack/react-router|to="/dish/\$id"|to="/chef/\$id"' \
+        apps/customer-web-next/src/screens/public/BrowseFoods \
+        apps/customer-web-next/src/screens/public/FoodDetails \
+        apps/customer-web-next/src/screens/public/ChefProfile \
+        apps/customer-web-next/src/components/home \
+        apps/customer-web-next/src/components/order; then
+        echo 'ERROR: Catalog discovery still contains legacy router links.' >&2
         exit 1
       fi
       echo 'Discovery privacy and location controls passed.'

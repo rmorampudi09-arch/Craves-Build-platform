@@ -1,6 +1,15 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Clock3, Heart, MapPin, Minus, Plus, ShoppingBag } from "lucide-react";
+import {
+  ChefHat,
+  Clock3,
+  Heart,
+  MapPin,
+  Minus,
+  Plus,
+  ShoppingBag,
+  UsersRound,
+} from "lucide-react";
 
 import {
   addToCart,
@@ -178,7 +187,7 @@ export function DishCard({
 
   return (
     <article
-      className={`group flex h-full flex-col overflow-hidden border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-all duration-300 hover:-translate-y-1.5 hover:border-[#F62E18] hover:shadow-[0_16px_38px_rgba(26,26,26,0.10)] ${
+      className={`group flex h-full flex-col overflow-hidden border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-all duration-300 hover:-translate-y-1.5 hover:border-[#F62E18]/45 hover:shadow-[0_18px_42px_rgba(26,26,26,0.11)] ${
         featured ? "rounded-[2rem]" : "rounded-[1.65rem]"
       }`}
     >
@@ -215,11 +224,15 @@ export function DishCard({
           aria-pressed={favorite}
           aria-label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
           title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
-          className="absolute right-3.5 top-3.5 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/80 text-[#1A1A1A] shadow-[0_8px_22px_rgba(26,26,26,0.12)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white disabled:cursor-wait disabled:opacity-60"
+          className={`absolute right-3.5 top-3.5 z-10 flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-xl transition-all duration-200 hover:scale-[1.06] disabled:cursor-wait disabled:opacity-60 ${
+            favorite
+              ? "border-[#F62E18] bg-[#F62E18] text-white shadow-[0_9px_24px_rgba(246,46,24,0.28)] hover:shadow-[0_12px_28px_rgba(246,46,24,0.34)]"
+              : "border-white/80 bg-white/90 text-[#1A1A1A] shadow-[0_8px_22px_rgba(26,26,26,0.12)] hover:border-[#F62E18]/25 hover:bg-white hover:text-[#F62E18]"
+          }`}
         >
           <Heart
             className={`h-[1.05rem] w-[1.05rem] transition-colors ${
-              favorite ? "fill-[#F62E18] text-[#F62E18]" : "text-[#1A1A1A]"
+              favorite ? "fill-white text-white" : "text-current"
             } ${favoriteBusy ? "animate-pulse" : ""}`}
             aria-hidden="true"
           />
@@ -246,46 +259,54 @@ export function DishCard({
       </div>
 
       <div className={`flex flex-1 flex-col ${featured ? "p-4.5" : "p-4"}`}>
-        <div>
-          <Link
-            to="/dish/$id"
-            params={{ id: dish.id }}
-            className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
-          >
-            <h3
-              className={`font-display font-black leading-tight tracking-[-0.03em] text-[#1A1A1A] transition-colors group-hover:text-[#F62E18] ${
-                featured ? "text-xl" : "text-[1.02rem]"
-              }`}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <Link
+              to="/dish/$id"
+              params={{ id: dish.id }}
+              className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
             >
-              {dish.name}
-            </h3>
-          </Link>
-          <p className="mt-1 truncate text-[0.72rem] font-bold text-[#6B6B6B]">
-            {dish.chef}
-          </p>
-        </div>
+              <h3
+                className={`font-display font-black leading-tight tracking-[-0.03em] text-[#1A1A1A] transition-colors group-hover:text-[#F62E18] ${
+                  featured ? "text-xl" : "text-[1.02rem]"
+                }`}
+              >
+                {dish.name}
+              </h3>
+            </Link>
+            <p className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-full bg-[#F1F3F5] px-2.5 py-1 text-[0.68rem] font-bold text-[#6B6B6B]">
+              <ChefHat className="h-3.5 w-3.5 shrink-0 text-[#F62E18]" aria-hidden="true" />
+              <span className="truncate">{dish.chef}</span>
+            </p>
+          </div>
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.69rem] font-bold text-[#6B6B6B]">
-          <span className="inline-flex items-center gap-1.5">
-            <Clock3 className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
-            {dish.time}
-          </span>
-          {dish.serves ? <span>{dish.serves}</span> : null}
-        </div>
-
-        <div className="mt-auto flex items-end justify-between gap-3 pt-3.5">
-          <div>
-            <span className="block text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
+          <div className="shrink-0 text-right">
+            <span className="block text-[0.56rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
               Price
             </span>
             <span className="font-display text-lg font-black tracking-[-0.03em] text-[#1A1A1A]">
               {priceLabel(dish.price, dish.currency)}
             </span>
           </div>
+        </div>
+
+        <div className="mt-3 flex items-end justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-[0.68rem] font-bold text-[#6B6B6B]">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-[inset_0_0_0_1px_#E5E7EB]">
+              <Clock3 className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
+              {dish.time}
+            </span>
+            {dish.serves ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-[inset_0_0_0_1px_#E5E7EB]">
+                <UsersRound className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
+                {dish.serves}
+              </span>
+            ) : null}
+          </div>
 
           {quantity > 0 ? (
             <div
-              className="inline-flex min-h-10 items-center overflow-hidden rounded-full bg-[#F1F3F5] text-[#1A1A1A] shadow-[0_5px_14px_rgba(26,26,26,0.06)]"
+              className="inline-flex min-h-10 shrink-0 items-center overflow-hidden rounded-full bg-[#F1F3F5] text-[#1A1A1A] shadow-[0_5px_14px_rgba(26,26,26,0.06)]"
               aria-label={`${dish.name} quantity ${quantity}`}
             >
               <button
@@ -318,7 +339,7 @@ export function DishCard({
               type="button"
               onClick={() => void handleAdd()}
               disabled={state === "busy"}
-              className={`${styles.dishAddButton} inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full px-4 text-xs font-black disabled:cursor-wait disabled:opacity-60`}
+              className={`${styles.dishAddButton} inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full px-4 text-xs font-black disabled:cursor-wait disabled:opacity-60`}
               aria-label={`Add ${dish.name} to cart`}
             >
               {state === "busy" ? (

@@ -1,4 +1,5 @@
-import { getRouteApi, useNavigate, Link } from "@tanstack/react-router";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import {
@@ -36,11 +37,9 @@ export const routeMeta = {
   },
 };
 
-const routeApi = getRouteApi("/chef/$id");
-
 function ChefProfilePage() {
-  const { id } = routeApi.useParams();
-  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [chef, setChef] = useState<Chef | undefined>(() => getChef(id));
   const [loading, setLoading] = useState(!chef);
   const [message, setMessage] = useState("");
@@ -52,7 +51,7 @@ function ChefProfilePage() {
     void (async () => {
       const session = await loadSession();
       if (!session) {
-        navigate({ to: "/" });
+        router.replace("/");
         return;
       }
       let resolved = getChef(id);
@@ -83,7 +82,7 @@ function ChefProfilePage() {
     return () => {
       active = false;
     };
-  }, [id, navigate]);
+  }, [id, router]);
 
   if (loading) {
     return (
@@ -103,7 +102,7 @@ function ChefProfilePage() {
           {message && (
             <p className="mt-3 text-sm text-muted-foreground">{message}</p>
           )}
-          <Link to="/home" className="btn-primary mt-6 inline-flex">
+          <Link href="/home" className="btn-primary mt-6 inline-flex">
             Back to menu
           </Link>
         </div>
@@ -115,7 +114,7 @@ function ChefProfilePage() {
 
   return (
     <div className="min-h-screen bg-cream pb-10">
-      <ChefProfileHeader onBack={() => navigate({ to: "/home" })} />
+      <ChefProfileHeader onBack={() => router.push("/home")} />
       <div className="border-b border-border bg-white">
         <div className="mx-auto max-w-3xl px-4 py-3 md:px-6">
           <PersistentCustomerServiceNav />

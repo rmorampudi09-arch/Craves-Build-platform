@@ -146,7 +146,7 @@ export function BrowseHeader({
             </span>
             <span className="truncate">{locationLabel}</span>
           </button>
-          <PersistentCustomerServiceNav className="ml-auto min-w-0 !gap-1 !pb-0 [&>a]:!min-h-9 [&>a]:!border-0 [&>a]:!bg-transparent [&>a]:!px-2.5 [&>a]:!text-xs [&>a]:!text-[#1A1A1A] [&>a:hover]:!bg-[#F62E18] [&>a:hover]:!font-bold [&>a:hover]:!text-white [&>a:focus-visible]:!bg-[#F62E18] [&>a:focus-visible]:!font-bold [&>a:focus-visible]:!text-white" />
+          <PersistentCustomerServiceNav className="ml-auto min-w-0 !gap-1 !pb-0 [&>a]:!min-h-9 [&>a]:!border-0 [&>a]:!px-2.5 [&>a]:!text-xs" />
         </div>
       </div>
     </header>

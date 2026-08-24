@@ -33,19 +33,15 @@ export function FloatingCartBar({
       <button
         type="button"
         onClick={onViewCart}
-        className={`${styles.floatingCartButton} group pointer-events-auto relative isolate mx-auto flex min-h-[4.7rem] w-full max-w-[58rem] items-center gap-4 overflow-hidden rounded-[1.7rem] px-[1.125rem] text-left sm:px-6`}
+        className={`${styles.floatingCartButton} group pointer-events-auto relative isolate mx-auto flex min-h-[4.7rem] w-full max-w-[58rem] items-center gap-4 overflow-hidden rounded-full border border-white/60 bg-white/45 px-5 py-3 text-left shadow-md backdrop-blur-md transition-all duration-200 ease-out sm:px-6`}
         aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
       >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(255,255,255,0.18),rgba(248,249,250,0.05)_48%,rgba(255,255,255,0.18))]"
-        />
         <span
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-10 top-0 h-px bg-white/80"
         />
 
-        <span className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] border border-white bg-white/95 text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,1),0_8px_20px_rgba(26,26,26,0.08)] backdrop-blur-md">
+        <span className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/70 bg-white/75 text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_20px_rgba(26,26,26,0.08)] backdrop-blur-md">
           <CravesCartIcon className="h-5 w-5" />
         </span>
 
@@ -59,7 +55,7 @@ export function FloatingCartBar({
           </span>
         </span>
 
-        <span className="relative z-10 inline-flex shrink-0 items-center gap-2 rounded-full border border-white bg-white/95 px-3.5 py-2.5 text-xs font-black text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,1)] backdrop-blur-md sm:px-4 sm:text-sm">
+        <span className="relative z-10 inline-flex shrink-0 items-center gap-2 rounded-full border border-white/70 bg-white/75 px-3.5 py-2.5 text-xs font-black text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-md sm:px-4 sm:text-sm">
           View Cart
           <ArrowRight
             className="h-[1.05rem] w-[1.05rem] transition-transform duration-200 group-hover:translate-x-0.5"

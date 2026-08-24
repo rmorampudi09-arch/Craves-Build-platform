@@ -277,13 +277,21 @@ export default function OrdersPage() {
                 type="button"
                 onClick={() => setView(nextView)}
                 aria-pressed={selected}
-                className={`relative min-h-11 appearance-none rounded-xl border-0 !bg-transparent px-3 pb-2 pt-2 text-sm font-semibold shadow-none outline-none transition-[background-color,color,box-shadow,transform] duration-200 hover:-translate-y-px hover:!bg-[#F62E18] hover:!text-white hover:shadow-[0_6px_18px_rgba(246,46,24,0.18)] focus:!bg-transparent active:!bg-transparent focus-visible:!bg-[#F62E18] focus-visible:!text-white ${
+                className={`group relative min-h-11 appearance-none border-0 !bg-transparent px-3 pb-2 pt-2 text-sm font-semibold shadow-none outline-none transition-colors duration-200 hover:!bg-transparent focus:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent ${
                   selected
-                    ? "text-[#F62E18] after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:rounded-full after:bg-[#F62E18]"
-                    : "text-[#1A1A1A] after:absolute after:inset-x-2 after:bottom-[-1px] after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-[#F62E18] after:transition-transform hover:after:scale-x-100 focus-visible:after:scale-x-100"
+                    ? "after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:rounded-full after:bg-[#F62E18]"
+                    : "after:absolute after:inset-x-2 after:bottom-[-1px] after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-[#F62E18]"
                 }`}
               >
-                {label} ({counts[nextView]})
+                <span
+                  className={`transition-colors duration-200 ${
+                    selected
+                      ? "text-[#F62E18]"
+                      : "text-[#1A1A1A] group-hover:text-[#F62E18] group-focus-visible:text-[#F62E18]"
+                  }`}
+                >
+                  {label} ({counts[nextView]})
+                </span>
               </button>
             );
           })}

@@ -36,6 +36,18 @@ test("retains compatibility with an older flat identity response", () => {
   assert.equal(parsed?.status, "ACTIVE");
 });
 
+test("accepts the privacy-reduced admin BFF response", () => {
+  const parsed = parseAdminIdentity({
+    displayName: "Operations Admin",
+    email: "admin@example.com",
+    status: "ACTIVE",
+    adminEnabled: true,
+  });
+
+  assert.equal(parsed?.adminEnabled, true);
+  assert.equal(parsed?.displayName, "Operations Admin");
+});
+
 test("does not enable inactive or non-admin identity", () => {
   assert.equal(parseAdminIdentity({ identity: { status: "INACTIVE", roles: ["ADMIN"] } })?.adminEnabled, false);
   assert.equal(parseAdminIdentity({ identity: { status: "ACTIVE", roles: ["CUSTOMER"] } })?.adminEnabled, false);

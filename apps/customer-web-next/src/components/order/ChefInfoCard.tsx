@@ -50,7 +50,7 @@ export function ChefInfoCard({
 
   return chefId ? (
     <Link
-      href={`/chef/${encodeURIComponent(chefId)}`}
+      href={`/kitchens/${encodeURIComponent(chefId)}`}
       className="mt-5 block rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary"
       aria-label={`View ${chefName}`}
     >

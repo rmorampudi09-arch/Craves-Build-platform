@@ -59,6 +59,7 @@ test("catalog discovery has one canonical Next.js route and working detail navig
   const browse = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
   const header = source("../components/home/BrowseHeader.tsx");
   const card = source("../components/home/DishCard.tsx");
+  const kitchenCard = source("../components/order/ChefInfoCard.tsx");
   const detail = source("../screens/public/FoodDetails/FoodDetails.tsx");
   const chef = source("../screens/public/ChefProfile/ChefProfile.tsx");
 
@@ -66,8 +67,13 @@ test("catalog discovery has one canonical Next.js route and working detail navig
   assert.match(browse, /useRouter\(\)/);
   assert.match(header, /from "next\/link"/);
   assert.match(card, /href=\{`\/dish\/\$\{encodeURIComponent\(dish\.id\)\}`\}/);
+  assert.match(
+    kitchenCard,
+    /href=\{`\/kitchens\/\$\{encodeURIComponent\(chefId\)\}`\}/,
+  );
   assert.match(detail, /useParams<\{ id: string \}>\(\)/);
   assert.match(chef, /useParams<\{ id: string \}>\(\)/);
+  assert.doesNotMatch(kitchenCard, /href=\{`\/chef\//);
 
   for (const contents of [browse, header, card, detail, chef]) {
     assert.doesNotMatch(contents, /@tanstack\/react-router/);

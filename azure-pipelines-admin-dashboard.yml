@@ -163,8 +163,19 @@ stages:
                         ACTUAL_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$JSON")
                         if [[ "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$ACTUAL_IMAGE" == "$IMAGE" ]]; then
                           FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON")
-                          curl --fail --silent --show-error --max-time 30 "https://$FQDN/admin" >/dev/null
-                          echo "SUCCESS: Admin revision is healthy. Rollback image: $PREVIOUS_IMAGE"
+                          BASE_URL="https://$FQDN"
+                          for route in /admin /admin/search /admin/chef-reviews /admin/subscription-plans /admin/subscriptions /admin/subscription-capacity /admin/operations /admin/accounts /admin/notifications; do
+                            STATUS=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 "${BASE_URL}${route}")
+                            [[ "$STATUS" == '200' ]] || { echo "ERROR: ${route} returned HTTP ${STATUS}." >&2; exit 1; }
+                          done
+                          HEADERS=$(mktemp)
+                          BODY=$(mktemp)
+                          trap 'rm -f "$HEADERS" "$BODY"' EXIT
+                          AUTH_STATUS=$(curl --silent --show-error --dump-header "$HEADERS" --output "$BODY" --write-out '%{http_code}' --max-time 30 "${BASE_URL}/api/admin/me")
+                          [[ "$AUTH_STATUS" == '401' ]] || { echo "ERROR: Signed-out admin identity guard returned HTTP ${AUTH_STATUS}." >&2; exit 1; }
+                          grep -Eiq '^cache-control:.*no-store' "$HEADERS" || { echo 'ERROR: Admin identity response is cacheable.' >&2; exit 1; }
+                          jq -e '.code == "AUTHENTICATION_REQUIRED"' "$BODY" >/dev/null || { echo 'ERROR: Admin identity guard returned an unexpected body.' >&2; exit 1; }
+                          echo "SUCCESS: Admin revision and signed-out route matrix are healthy at ${BASE_URL}. Rollback image: $PREVIOUS_IMAGE"
                           exit 0
                         fi
                         sleep 10

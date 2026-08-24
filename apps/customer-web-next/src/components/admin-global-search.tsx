@@ -17,9 +17,20 @@ type OpenCase = { kind: "CUSTOMER"; value: CustomerCase } | { kind: "CHEF"; valu
 
 function CopyValue({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
-  return <button type="button" onClick={() => void navigator.clipboard.writeText(value).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1200); })}
+  const [copyFailed, setCopyFailed] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setCopyFailed(false);
+    } catch {
+      setCopyFailed(true);
+    }
+    window.setTimeout(() => { setCopied(false); setCopyFailed(false); }, 1200);
+  }
+  return <button type="button" onClick={() => void copy()}
     className="inline-flex items-center gap-1 rounded-lg border border-[#e6dfeb] bg-white px-2 py-1 text-[11px] font-bold text-[#6930ca] hover:bg-[#f8f4ff]" aria-label={`Copy ${value}`}>
-    <Copy size={12} />{copied ? "Copied" : "Copy"}
+    <Copy size={12} />{copied ? "Copied" : copyFailed ? "Copy failed" : "Copy"}
   </button>;
 }
 
@@ -71,7 +82,16 @@ export function AdminGlobalSearch() {
 
   async function call(payload: Record<string,string>) {
     const response=await fetch("/api/admin/directory",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),cache:"no-store"});
-    const body=await response.json().catch(()=>null); if(!response.ok) throw new Error(response.status===403?"Administrator access is required.":response.status===404?"No record was found.":"Directory request could not be completed."); return body;
+    const body=await response.json().catch(()=>null);
+    if(!response.ok) throw new Error(
+      response.status===401?"Your administrator session expired. Sign in again.":
+      response.status===403?"Administrator access is required.":
+      response.status===404?"No record was found.":
+      response.status===400?"Check the exact search value and provide an operational reason of at least 10 characters.":
+      response.status===502?"The directory returned an invalid response. Try again or use the owning module.":
+      "Directory search is temporarily unavailable."
+    );
+    return body;
   }
   async function runSearch(){if(!canSearch)return;setBusy(true);setMessage("");setOpenCase(null);try{const parsed=parseAdminDirectorySearch(await call({action:"search",query:query.trim(),reason:reason.trim()}));if(!parsed)throw new Error("Directory returned an invalid response.");setResult(parsed);if(!parsed.hits.length)setMessage("No customer or chef matched that exact value.");}catch(e){setMessage(e instanceof Error?e.message:"Search unavailable.");}finally{setBusy(false);}}
   async function open(hit:AdminDirectoryHit){setBusy(true);setMessage("");try{const raw=await call({action:hit.entityType==="CUSTOMER"?"customer-case":"chef-case",identityId:hit.identityId,reason:reason.trim()});if(hit.entityType==="CUSTOMER"){const parsed=parseCustomerCase(raw);if(!parsed)throw new Error("Customer case response was invalid.");setOpenCase({kind:"CUSTOMER",value:parsed});}else{const parsed=parseChefCase(raw);if(!parsed)throw new Error("Chef case response was invalid.");setOpenCase({kind:"CHEF",value:parsed});}}catch(e){setMessage(e instanceof Error?e.message:"Case unavailable.");}finally{setBusy(false);}}

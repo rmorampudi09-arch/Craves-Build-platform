@@ -224,15 +224,11 @@ export function DishCard({
           aria-pressed={favorite}
           aria-label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
           title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
-          className={`absolute right-3.5 top-3.5 z-10 flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-xl transition-all duration-200 hover:scale-[1.06] disabled:cursor-wait disabled:opacity-60 ${
-            favorite
-              ? "border-[#F62E18] bg-[#F62E18] text-white shadow-[0_9px_24px_rgba(246,46,24,0.28)] hover:shadow-[0_12px_28px_rgba(246,46,24,0.34)]"
-              : "border-white/80 bg-white/90 text-[#1A1A1A] shadow-[0_8px_22px_rgba(26,26,26,0.12)] hover:border-[#F62E18]/25 hover:bg-white hover:text-[#F62E18]"
-          }`}
+          className="absolute right-3.5 top-3.5 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/90 text-[#1A1A1A] shadow-[0_8px_22px_rgba(26,26,26,0.12)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-1 hover:scale-[1.06] hover:border-[#F62E18]/30 hover:bg-white hover:text-[#F62E18] hover:shadow-[0_10px_26px_rgba(246,46,24,0.16)] disabled:cursor-wait disabled:opacity-60"
         >
           <Heart
             className={`h-[1.05rem] w-[1.05rem] transition-colors ${
-              favorite ? "fill-white text-white" : "text-current"
+              favorite ? "fill-[#F62E18] text-[#F62E18]" : "text-current"
             } ${favoriteBusy ? "animate-pulse" : ""}`}
             aria-hidden="true"
           />
@@ -318,10 +314,7 @@ export function DishCard({
               >
                 <Minus className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
-              <span
-                className="min-w-7 text-center text-xs font-black"
-                aria-live="polite"
-              >
+              <span className="min-w-7 text-center text-xs font-black" aria-live="polite">
                 {quantity}
               </span>
               <button
@@ -343,10 +336,7 @@ export function DishCard({
               aria-label={`Add ${dish.name} to cart`}
             >
               {state === "busy" ? (
-                <ShoppingBag
-                  className="h-4 w-4 animate-pulse"
-                  aria-hidden="true"
-                />
+                <ShoppingBag className="h-4 w-4 animate-pulse" aria-hidden="true" />
               ) : (
                 <Plus className="h-4 w-4" aria-hidden="true" />
               )}

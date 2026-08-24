@@ -218,6 +218,7 @@ test("customer service navigation is visible only on the signed-in home page wit
 
   for (const route of [
     "/orders",
+    "/wishlist",
     "/subscriptions",
     "/notifications",
     "/chef",
@@ -232,10 +233,11 @@ test("customer service navigation is visible only on the signed-in home page wit
   assert.match(navigation, /serviceLinks\.map/);
   assert.doesNotMatch(navigation, /visibleLinks/);
   assert.match(navigation, /data-customer-service-navigation="embedded"/);
-  assert.match(navigation, /border-\[#F62E18\] bg-white/);
-  assert.match(navigation, /text-black/);
-  assert.match(navigation, /hover:bg-\[#F62E18\]/);
-  assert.match(navigation, /hover:font-bold/);
-  assert.match(navigation, /hover:text-white/);
+  assert.match(navigation, /savedCount/);
+  assert.match(navigation, /border-transparent bg-transparent/);
+  assert.match(navigation, /text-\[#1A1A1A\]/);
+  assert.match(navigation, /hover:bg-\[#F1F3F5\]/);
+  assert.match(navigation, /hover:text-\[#F62E18\]/);
+  assert.doesNotMatch(navigation, /hover:text-white/);
   assert.doesNotMatch(navigation, /bg-\[#C92716\]/);
 });

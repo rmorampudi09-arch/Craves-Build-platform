@@ -209,7 +209,7 @@ export default function NotificationsPage() {
                     type="button"
                     onClick={() => setFilter(value)}
                     aria-pressed={active}
-                    className={`min-h-10 rounded-xl border px-3.5 py-2 text-sm font-semibold shadow-none transition-[background-color,color,border-color,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:px-4 ${
+                    className={`min-h-10 rounded-xl border px-3.5 py-2 text-sm font-semibold shadow-none transition-[background-color,color,border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:shadow-[0_6px_18px_rgba(246,46,24,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:px-4 ${
                       active
                         ? "!border-[#F62E18] !bg-[#F62E18] !text-white"
                         : "!border-[#E5E7EB] !bg-[#F1F3F5] !text-[#1A1A1A] hover:!border-[#F62E18] hover:!bg-[#F62E18] hover:!text-white focus-visible:!border-[#F62E18] focus-visible:!bg-[#F62E18] focus-visible:!text-white"

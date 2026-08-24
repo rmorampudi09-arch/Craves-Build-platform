@@ -1,4 +1,5 @@
-import { getRouteApi, useNavigate, Link } from "@tanstack/react-router";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
 import { loadSession } from "@/services/auth/cravesAuth";
@@ -36,11 +37,9 @@ export const routeMeta = {
   },
 };
 
-const routeApi = getRouteApi("/dish/$id");
-
 function DishDetailPage() {
-  const { id } = routeApi.useParams();
-  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [dish, setDish] = useState<Dish | undefined>(() => getDish(id));
   const [loading, setLoading] = useState(!dish);
   const [qty, setQty] = useState(1);
@@ -55,7 +54,7 @@ function DishDetailPage() {
     void (async () => {
       const session = await loadSession();
       if (!session) {
-        navigate({ to: "/" });
+        router.replace("/");
         return;
       }
       const resolved = await loadDish(id);
@@ -78,7 +77,7 @@ function DishDetailPage() {
     return () => {
       active = false;
     };
-  }, [id, navigate]);
+  }, [id, router]);
 
   if (loading) {
     return (
@@ -102,7 +101,7 @@ function DishDetailPage() {
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             {message || "This dish is no longer active in the Craves catalog."}
           </p>
-          <Link to="/home" className="btn-primary mt-6 inline-flex">
+          <Link href="/home" className="btn-primary mt-6 inline-flex">
             Back to discovery
           </Link>
         </div>
@@ -124,7 +123,7 @@ function DishDetailPage() {
         },
         qty,
       );
-      navigate({ to: "/cart" });
+      router.push("/cart");
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -140,7 +139,7 @@ function DishDetailPage() {
     <div className="min-h-screen bg-cream pb-28 text-ink">
       <DishImageHeader
         dish={dish}
-        onBack={() => navigate({ to: "/home" })}
+        onBack={() => router.push("/home")}
       />
       <div className="border-b border-border bg-white">
         <div className="mx-auto max-w-3xl px-4 py-3 md:px-6">

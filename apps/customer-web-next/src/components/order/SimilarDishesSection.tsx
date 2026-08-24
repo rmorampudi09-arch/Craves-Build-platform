@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import Link from "next/link";
 import { Star } from "lucide-react";
 import { WishlistHeartButton } from "@/components/order/WishlistHeartButton";
 import type { Dish } from "@/services/api/dishes";
@@ -19,8 +19,7 @@ export function SimilarDishesSection({ dishes }: { dishes: Dish[] }) {
         {dishes.map((d) => (
           <Link
             key={d.id}
-            to="/dish/$id"
-            params={{ id: d.id }}
+            href={`/dish/${encodeURIComponent(d.id)}`}
             className="w-36 shrink-0 overflow-hidden rounded-2xl border border-border bg-card"
           >
             <div className="relative aspect-square">

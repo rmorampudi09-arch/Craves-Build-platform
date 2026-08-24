@@ -1,14 +1,13 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
   Heart,
-  ShoppingBag,
+  ShoppingCart,
   Trash2,
 } from "lucide-react";
 
-import { CravesLogo } from "@/components/brand/CravesLogo";
 import { addToCart } from "@/services/api/cravesCart";
 import {
   loadCustomerFavoriteIds,
@@ -131,174 +130,128 @@ function WishlistPage() {
     }
   }, [busyId]);
 
-  const itemCountLabel = useMemo(
-    () => `${items.length} saved ${items.length === 1 ? "dish" : "dishes"}`,
-    [items.length],
-  );
-
   if (!ready) return null;
 
   return (
-    <div className="min-h-screen bg-white pb-24 text-[#1A1A1A]">
-      <header className="sticky top-0 z-30 border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-4 md:px-6">
+    <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]">
+      <header className="border-b border-[#E5E7EB] bg-white">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 md:px-6">
           <Link
             to="/home"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#1A1A1A] transition-all duration-200 hover:-translate-y-px hover:!text-[#F62E18] hover:shadow-[0_6px_18px_rgba(26,26,26,0.08)]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A] transition-all duration-200 hover:-translate-y-px hover:text-[#F62E18] hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
             aria-label="Back to home"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Link>
-          <Link to="/home" className="shrink-0 rounded-lg" aria-label="Craves home">
-            <CravesLogo size="sm" decorative />
-          </Link>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[#F62E18]">
-              Your favourites
-            </p>
-            <div className="mt-0.5 flex items-center gap-2.5">
-              <h1 className="font-display text-xl font-black tracking-[-0.03em] text-[#1A1A1A]">
-                Saved dishes
-              </h1>
-              {!loading ? (
-                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[#F1F3F5] px-2 text-xs font-black text-[#F62E18]">
-                  {items.length}
-                </span>
-              ) : null}
-            </div>
-          </div>
+          <h1 className="font-display text-xl font-black tracking-[-0.03em]">
+            Saved dishes
+          </h1>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-7 md:px-6 md:py-9">
+      <main className="mx-auto max-w-3xl px-4 py-6 md:px-6">
         {loading ? (
-          <div aria-busy="true">
-            <div className="mb-5 h-5 w-28 animate-pulse rounded-full bg-[#F1F3F5]" />
-            <div className="grid gap-4 md:grid-cols-2">
-              {Array.from({ length: 4 }, (_, index) => (
-                <div
-                  key={index}
-                  className="h-36 animate-pulse rounded-[1.5rem] border border-[#E5E7EB] bg-[#F1F3F5]"
-                />
-              ))}
-            </div>
+          <div className="space-y-3" aria-busy="true">
+            {Array.from({ length: 3 }, (_, index) => (
+              <div
+                key={index}
+                className="h-[104px] animate-pulse rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5]"
+              />
+            ))}
             <span className="sr-only" role="status">Loading saved dishes</span>
           </div>
         ) : message && items.length === 0 ? (
-          <div className="rounded-[1.75rem] border border-[#F62E18]/20 bg-white p-9 text-center shadow-[0_12px_36px_rgba(26,26,26,0.06)]">
-            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-              <AlertTriangle className="h-6 w-6" aria-hidden="true" />
+          <div className="rounded-2xl border border-[#E5E7EB] bg-white px-6 py-10 text-center shadow-sm">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
             </span>
-            <h2 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">
-              Saved dishes could not be loaded
-            </h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">
-              {message}
-            </p>
+            <h2 className="mt-4 font-display text-lg font-black">Saved dishes could not be loaded</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">{message}</p>
             <button
               type="button"
               onClick={() => void loadFavorites()}
-              className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white"
+              className="mt-5 min-h-10 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white"
             >
               Try again
             </button>
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-[1.75rem] border border-dashed border-[#E5E7EB] bg-white p-10 text-center">
-            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-              <Heart className="h-7 w-7" aria-hidden="true" />
+          <div className="px-4 py-12 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+              <Heart className="h-6 w-6" aria-hidden="true" />
             </span>
-            <h2 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">
-              No saved dishes yet
-            </h2>
+            <h2 className="mt-4 font-display text-xl font-black">No saved dishes yet</h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">
-              Tap the heart on any dish to save it here. Your saved dishes stay connected to your Craves account.
+              Tap the heart on a dish to keep it here for quick access.
             </p>
             <Link
               to="/home"
-              className="mt-6 inline-flex min-h-11 items-center rounded-full bg-[#F62E18] px-5 text-sm font-black text-white"
+              className="mt-5 inline-flex min-h-10 items-center rounded-full bg-[#F62E18] px-5 text-sm font-black text-white"
             >
               Browse dishes
             </Link>
           </div>
         ) : (
           <>
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <p className="text-sm font-bold text-[#6B6B6B]" aria-live="polite">
-                {itemCountLabel}
-              </p>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F1F3F5] px-3 py-1.5 text-xs font-bold text-[#6B6B6B]">
-                <Heart className="h-3.5 w-3.5 fill-[#F62E18] text-[#F62E18]" aria-hidden="true" />
-                Synced
-              </span>
-            </div>
+            <p className="mb-3 text-sm font-semibold text-[#6B6B6B]" aria-live="polite">
+              {items.length} saved {items.length === 1 ? "dish" : "dishes"}
+            </p>
 
             {message ? (
-              <p
-                className="mb-4 rounded-2xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]"
-                role="status"
-              >
+              <p className="mb-3 rounded-xl bg-[#F1F3F5] px-4 py-2.5 text-sm font-semibold" role="status">
                 {message}
               </p>
             ) : null}
 
-            <ul className="grid gap-4 md:grid-cols-2">
+            <ul className="space-y-3">
               {items.map((item) => (
                 <li
                   key={item.id}
-                  className="group flex min-w-0 gap-4 rounded-[1.5rem] border border-[#E5E7EB] bg-white p-3.5 shadow-[0_8px_26px_rgba(26,26,26,0.05)] transition-all duration-250 hover:-translate-y-1 hover:border-[#F62E18]/30 hover:shadow-[0_16px_36px_rgba(246,46,24,0.10)]"
+                  className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-[0_4px_16px_rgba(26,26,26,0.04)] transition-[border-color,box-shadow] duration-200 hover:border-[#F62E18]/25 hover:shadow-[0_9px_24px_rgba(26,26,26,0.08)]"
                 >
                   <Link
                     to="/dish/$id"
                     params={{ id: item.id }}
-                    className="shrink-0 overflow-hidden rounded-[1.1rem] bg-[#F1F3F5]"
+                    className="shrink-0 overflow-hidden rounded-xl bg-[#F1F3F5]"
                   >
                     <img
                       src={item.img}
                       alt={item.name}
-                      width={104}
-                      height={104}
-                      className="h-[104px] w-[104px] object-cover transition-transform duration-300 group-hover:scale-[1.055]"
+                      width={82}
+                      height={82}
+                      className="h-[82px] w-[82px] object-cover transition-transform duration-300 group-hover:scale-[1.035]"
                     />
                   </Link>
 
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <Link to="/dish/$id" params={{ id: item.id }}>
-                          <h2 className="truncate font-display text-base font-black text-[#1A1A1A] transition-colors group-hover:text-[#F62E18]">
-                            {item.name}
-                          </h2>
-                        </Link>
-                        <p className="mt-0.5 truncate text-xs font-semibold text-[#6B6B6B]">
-                          {item.chef}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void removeSavedDish(item)}
-                        disabled={busyId === item.id}
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#6B6B6B] transition-all duration-200 hover:-translate-y-px hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_5px_14px_rgba(26,26,26,0.10)] disabled:cursor-wait disabled:opacity-50"
-                        aria-label={`Remove ${item.name} from saved dishes`}
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
+                  <div className="min-w-0 flex-1">
+                    <Link to="/dish/$id" params={{ id: item.id }}>
+                      <h2 className="truncate font-display text-base font-black transition-colors hover:text-[#F62E18]">
+                        {item.name}
+                      </h2>
+                    </Link>
+                    <p className="mt-0.5 truncate text-xs font-semibold text-[#6B6B6B]">by {item.chef}</p>
+                    <p className="mt-2 font-display text-sm font-black">{money(item.price, item.currency)}</p>
+                  </div>
 
-                    <div className="mt-auto flex items-end justify-between gap-3 pt-3">
-                      <span className="font-display text-base font-black text-[#1A1A1A]">
-                        {money(item.price, item.currency)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void addSavedDishToCart(item)}
-                        disabled={busyId === item.id}
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full !bg-[#F1F3F5] px-3 text-xs font-black !text-[#1A1A1A] transition-all duration-200 hover:-translate-y-px hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_6px_16px_rgba(26,26,26,0.10)] disabled:cursor-wait disabled:opacity-50"
-                      >
-                        <ShoppingBag className="h-3.5 w-3.5" aria-hidden="true" />
-                        Add
-                      </button>
-                    </div>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void removeSavedDish(item)}
+                      disabled={busyId === item.id}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-transparent text-[#6B6B6B] transition-colors hover:text-[#F62E18] disabled:cursor-wait disabled:opacity-50"
+                      aria-label={`Remove ${item.name} from saved dishes`}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void addSavedDishToCart(item)}
+                      disabled={busyId === item.id}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#F1F3F5] px-3 text-xs font-black text-[#1A1A1A] transition-colors hover:text-[#F62E18] disabled:cursor-wait disabled:opacity-50"
+                    >
+                      <ShoppingCart className="h-3.5 w-3.5" aria-hidden="true" />
+                      Add
+                    </button>
                   </div>
                 </li>
               ))}

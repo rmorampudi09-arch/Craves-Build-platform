@@ -1,0 +1,106 @@
+.cartEnter {
+  animation: cartRise 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes cartRise {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.988);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.floatingCartButton,
+.floatingCartButton:focus,
+.floatingCartButton:focus-visible,
+.floatingCartButton:active {
+  border: 1px solid rgba(255, 255, 255, 0.72) !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #1a1a1a !important;
+  -webkit-backdrop-filter: blur(34px) saturate(138%) contrast(94%);
+  backdrop-filter: blur(34px) saturate(138%) contrast(94%);
+  box-shadow:
+    0 18px 46px rgba(26, 26, 26, 0.15),
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 -1px 0 rgba(255, 255, 255, 0.2) inset !important;
+}
+
+.floatingCartButton:hover {
+  border-color: rgba(46, 125, 50, 0.38) !important;
+  background: rgba(255, 255, 255, 0.27) !important;
+  transform: translateY(-3px) !important;
+  box-shadow:
+    0 22px 52px rgba(26, 26, 26, 0.15),
+    0 12px 34px rgba(46, 125, 50, 0.2),
+    0 0 0 2px rgba(46, 125, 50, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.92) inset !important;
+}
+
+.floatingCartGlass {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    112deg,
+    rgba(255, 255, 255, 0.24) 0%,
+    rgba(255, 255, 255, 0.08) 48%,
+    rgba(255, 255, 255, 0.19) 100%
+  );
+  -webkit-backdrop-filter: blur(36px) saturate(135%);
+  backdrop-filter: blur(36px) saturate(135%);
+}
+
+.floatingCartShine {
+  pointer-events: none;
+  position: absolute;
+  inset: 1px 5% auto;
+  z-index: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.88),
+    transparent
+  );
+}
+
+:global(button[aria-pressed="true"][aria-label*="saved dishes"]) {
+  border-color: rgba(255, 255, 255, 0.82) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: #f62e18 !important;
+  box-shadow: 0 8px 22px rgba(26, 26, 26, 0.12) !important;
+}
+
+:global(button[aria-pressed="true"][aria-label*="saved dishes"] svg) {
+  fill: #f62e18 !important;
+  color: #f62e18 !important;
+  stroke: #f62e18 !important;
+}
+
+:global(button[aria-pressed="true"][aria-label*="saved dishes"]:hover),
+:global(button[aria-pressed="false"][aria-label^="Save "]:hover) {
+  border-color: rgba(246, 46, 24, 0.3) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: #f62e18 !important;
+  transform: translateY(-2px) scale(1.06) !important;
+  box-shadow:
+    0 10px 26px rgba(26, 26, 26, 0.12),
+    0 0 0 3px rgba(246, 46, 24, 0.08) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cartEnter {
+    animation: none;
+  }
+
+  .floatingCartButton:hover,
+  :global(button[aria-pressed="true"][aria-label*="saved dishes"]:hover),
+  :global(button[aria-pressed="false"][aria-label^="Save "]:hover) {
+    transform: none !important;
+  }
+}

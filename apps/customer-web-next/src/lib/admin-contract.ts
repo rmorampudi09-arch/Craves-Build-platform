@@ -21,6 +21,16 @@ export function parseAdminIdentity(value: unknown): AdminIdentity | null {
   const envelope = record(value);
   if (!envelope) return null;
 
+  const safeStatus = text(envelope.status, 40)?.toUpperCase() ?? null;
+  if (safeStatus && typeof envelope.adminEnabled === "boolean") {
+    return {
+      displayName: text(envelope.displayName, 160),
+      email: text(envelope.email, 320),
+      status: safeStatus,
+      adminEnabled: safeStatus === "ACTIVE" && envelope.adminEnabled,
+    };
+  }
+
   // Auth Service returns GET /auth/me as { identity: { ... } }.
   // Retain flat-response compatibility for older deployed revisions.
   const raw = record(envelope.identity) ?? envelope;

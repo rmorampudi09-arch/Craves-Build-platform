@@ -190,9 +190,9 @@ export default function NotificationsPage() {
 
       <main className="mx-auto max-w-4xl px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
         {!loading && !error && notices.length > 0 ? (
-          <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="mb-6">
             <div
-              className="flex flex-wrap items-center gap-2 bg-transparent p-0"
+              className="flex gap-7 border-b border-[#E5E7EB] sm:gap-9"
               aria-label="Notification filters"
             >
               {(
@@ -209,14 +209,15 @@ export default function NotificationsPage() {
                     type="button"
                     onClick={() => setFilter(value)}
                     aria-pressed={active}
-                    className={`min-h-10 rounded-xl border px-3.5 py-2 text-sm font-semibold shadow-none transition-[background-color,color,border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:shadow-[0_6px_18px_rgba(246,46,24,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:px-4 ${
+                    className={`group relative min-h-11 appearance-none border-0 !bg-transparent px-3 pb-2 pt-2 text-sm font-semibold shadow-none outline-none transition-colors duration-200 hover:!bg-transparent focus:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent ${
                       active
-                        ? "!border-[#F62E18] !bg-[#F62E18] !text-white"
-                        : "!border-[#E5E7EB] !bg-[#F1F3F5] !text-[#1A1A1A] hover:!border-[#F62E18] hover:!bg-[#F62E18] hover:!text-white focus-visible:!border-[#F62E18] focus-visible:!bg-[#F62E18] focus-visible:!text-white"
+                        ? "after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:rounded-full after:bg-[#F62E18]"
+                        : "after:absolute after:inset-x-2 after:bottom-[-1px] after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-[#F62E18]"
                     }`}
                   >
-                    {label}
-                    <span className="ml-1.5 text-xs font-medium">{count}</span>
+                    <span className="text-[#1A1A1A] transition-colors duration-200 group-hover:text-[#F62E18] group-focus-visible:text-[#F62E18]">
+                      {label} ({count})
+                    </span>
                   </button>
                 );
               })}

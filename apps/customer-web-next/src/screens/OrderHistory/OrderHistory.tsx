@@ -283,13 +283,7 @@ export default function OrdersPage() {
                     : "after:absolute after:inset-x-2 after:bottom-[-1px] after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-[#F62E18]"
                 }`}
               >
-                <span
-                  className={`transition-colors duration-200 ${
-                    selected
-                      ? "text-[#F62E18]"
-                      : "text-[#1A1A1A] group-hover:text-[#F62E18] group-focus-visible:text-[#F62E18]"
-                  }`}
-                >
+                <span className="text-[#1A1A1A] transition-colors duration-200 group-hover:text-[#F62E18] group-focus-visible:text-[#F62E18]">
                   {label} ({counts[nextView]})
                 </span>
               </button>

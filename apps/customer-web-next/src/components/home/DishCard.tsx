@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Clock3, MapPin, Minus, Plus, ShoppingBag } from "lucide-react";
+import { Clock3, Heart, MapPin, Minus, Plus, ShoppingBag } from "lucide-react";
 
 import {
   addToCart,
@@ -8,6 +8,14 @@ import {
   setQty,
   subscribeCart,
 } from "@/services/api/cravesCart";
+import {
+  customerFavoritesLoaded,
+  getCustomerFavoriteIds,
+  loadCustomerFavoriteIds,
+  removeCustomerFavorite,
+  saveCustomerFavorite,
+  subscribeCustomerFavorites,
+} from "@/services/api/customerFavorites";
 import type { Dish } from "@/services/api/dishes";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
@@ -52,6 +60,14 @@ export function DishCard({
   const [cartLine, setCartLine] = useState(() =>
     getCart().find((item) => item.menuItemId === dish.id),
   );
+  const [favorite, setFavorite] = useState(() =>
+    getCustomerFavoriteIds().has(dish.id),
+  );
+  const [favoritesReady, setFavoritesReady] = useState(() =>
+    customerFavoritesLoaded(),
+  );
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
   const distance = distanceLabel(dish.distanceMeters);
   const featured = variant === "featured";
   const indicator = foodIndicator(dish);
@@ -64,6 +80,52 @@ export function DishCard({
     syncCartLine();
     return subscribeCart(syncCartLine);
   }, [dish.id]);
+
+  useEffect(() => {
+    let active = true;
+    const syncFavorite = () => {
+      if (active) setFavorite(getCustomerFavoriteIds().has(dish.id));
+    };
+    const unsubscribe = subscribeCustomerFavorites(syncFavorite);
+    syncFavorite();
+
+    if (!customerFavoritesLoaded()) {
+      void loadCustomerFavoriteIds()
+        .then(() => {
+          if (!active) return;
+          syncFavorite();
+          setFavoritesReady(true);
+        })
+        .catch(() => {
+          if (active) setFavoritesReady(true);
+        });
+    } else {
+      setFavoritesReady(true);
+    }
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [dish.id]);
+
+  const handleFavorite = async () => {
+    if (!favoritesReady || favoriteBusy) return;
+    setFavoriteBusy(true);
+    setFavoriteError(null);
+    try {
+      if (favorite) await removeCustomerFavorite(dish.id);
+      else await saveCustomerFavorite(dish.id);
+    } catch (error) {
+      setFavoriteError(
+        error instanceof Error
+          ? error.message
+          : "Saved dishes could not be updated.",
+      );
+    } finally {
+      setFavoriteBusy(false);
+    }
+  };
 
   const handleAdd = async () => {
     if (state === "busy") return;
@@ -145,6 +207,23 @@ export function DishCard({
         <span className="pointer-events-none absolute left-3.5 top-3.5 rounded-full border border-[#E5E7EB] bg-white/92 px-3 py-1.5 text-[0.64rem] font-black uppercase tracking-[0.09em] text-[#1A1A1A] shadow-sm backdrop-blur-md">
           {dish.category}
         </span>
+
+        <button
+          type="button"
+          onClick={() => void handleFavorite()}
+          disabled={!favoritesReady || favoriteBusy}
+          aria-pressed={favorite}
+          aria-label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
+          title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
+          className="absolute right-3.5 top-3.5 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/80 text-[#1A1A1A] shadow-[0_8px_22px_rgba(26,26,26,0.12)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white disabled:cursor-wait disabled:opacity-60"
+        >
+          <Heart
+            className={`h-[1.05rem] w-[1.05rem] transition-colors ${
+              favorite ? "fill-[#F62E18] text-[#F62E18]" : "text-[#1A1A1A]"
+            } ${favoriteBusy ? "animate-pulse" : ""}`}
+            aria-hidden="true"
+          />
+        </button>
 
         <span className="pointer-events-none absolute bottom-3.5 left-3.5 inline-flex items-center gap-1.5 rounded-full bg-white/94 px-2.5 py-1.5 text-[0.65rem] font-black text-[#1A1A1A] shadow-sm backdrop-blur-md">
           <span
@@ -254,6 +333,12 @@ export function DishCard({
             </button>
           )}
         </div>
+
+        {favoriteError ? (
+          <p className="mt-2 text-[0.68rem] font-bold text-[#F62E18]" role="alert">
+            {favoriteError}
+          </p>
+        ) : null}
 
         {message ? (
           <p

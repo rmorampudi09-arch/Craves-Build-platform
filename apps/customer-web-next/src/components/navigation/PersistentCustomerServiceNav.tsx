@@ -8,6 +8,7 @@ import {
   CalendarRange,
   ChefHat,
   ClipboardList,
+  Heart,
 } from "lucide-react";
 import {
   getSession,
@@ -18,6 +19,7 @@ import { rememberReturnRoute } from "@/lib/return-navigation";
 
 const serviceLinks = [
   { href: "/orders", label: "Orders", icon: ClipboardList },
+  { href: "/wishlist", label: "Saved", icon: Heart },
   { href: "/subscriptions", label: "Meal plans", icon: CalendarRange },
   { href: "/notifications", label: "Updates", icon: Bell },
   { href: "/chef", label: "Chef mode", icon: ChefHat },

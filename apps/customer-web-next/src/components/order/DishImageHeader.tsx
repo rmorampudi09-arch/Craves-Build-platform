@@ -1,4 +1,13 @@
-import { ArrowLeft, ImageOff, Share2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, Heart, ImageOff, Share2 } from "lucide-react";
+import {
+  customerFavoritesLoaded,
+  getCustomerFavoriteIds,
+  loadCustomerFavoriteIds,
+  removeCustomerFavorite,
+  saveCustomerFavorite,
+  subscribeCustomerFavorites,
+} from "@/services/api/customerFavorites";
 import type { Dish } from "@/services/api/dishes";
 
 interface DishImageHeaderProps {
@@ -7,6 +16,61 @@ interface DishImageHeaderProps {
 }
 
 export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
+  const [favorite, setFavorite] = useState(() =>
+    getCustomerFavoriteIds().has(dish.id),
+  );
+  const [favoritesReady, setFavoritesReady] = useState(() =>
+    customerFavoritesLoaded(),
+  );
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const syncFavorite = () => {
+      if (active) setFavorite(getCustomerFavoriteIds().has(dish.id));
+    };
+    const unsubscribe = subscribeCustomerFavorites(syncFavorite);
+    syncFavorite();
+
+    if (!customerFavoritesLoaded()) {
+      void loadCustomerFavoriteIds()
+        .then(() => {
+          if (!active) return;
+          syncFavorite();
+          setFavoritesReady(true);
+        })
+        .catch(() => {
+          if (active) setFavoritesReady(true);
+        });
+    } else {
+      setFavoritesReady(true);
+    }
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [dish.id]);
+
+  const handleFavorite = async () => {
+    if (!favoritesReady || favoriteBusy) return;
+    setFavoriteBusy(true);
+    setFavoriteError(null);
+    try {
+      if (favorite) await removeCustomerFavorite(dish.id);
+      else await saveCustomerFavorite(dish.id);
+    } catch (error) {
+      setFavoriteError(
+        error instanceof Error
+          ? error.message
+          : "Saved dishes could not be updated.",
+      );
+    } finally {
+      setFavoriteBusy(false);
+    }
+  };
+
   const handleShare = async () => {
     if (!navigator.share) return;
     try {
@@ -51,16 +115,36 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
             >
               <ArrowLeft className="h-5 w-5" aria-hidden="true" />
             </button>
-            {typeof navigator !== "undefined" && "share" in navigator ? (
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => void handleShare()}
-                className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !bg-white !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] hover:!text-[#F62E18]"
-                aria-label="Share this dish"
+                onClick={() => void handleFavorite()}
+                disabled={!favoritesReady || favoriteBusy}
+                aria-pressed={favorite}
+                aria-label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
+                title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
+                className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/70 !bg-white/85 !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] !backdrop-blur-md transition-all hover:!-translate-y-0.5 hover:!text-[#F62E18] disabled:cursor-wait disabled:opacity-60"
               >
-                <Share2 className="h-5 w-5" aria-hidden="true" />
+                <Heart
+                  className={`h-5 w-5 ${
+                    favorite ? "fill-[#F62E18] text-[#F62E18]" : "text-current"
+                  } ${favoriteBusy ? "animate-pulse" : ""}`}
+                  aria-hidden="true"
+                />
               </button>
-            ) : null}
+
+              {typeof navigator !== "undefined" && "share" in navigator ? (
+                <button
+                  type="button"
+                  onClick={() => void handleShare()}
+                  className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !bg-white !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] hover:!text-[#F62E18]"
+                  aria-label="Share this dish"
+                >
+                  <Share2 className="h-5 w-5" aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

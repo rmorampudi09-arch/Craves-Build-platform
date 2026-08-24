@@ -8,6 +8,7 @@ import {
   Menu, ReceiptText, Search, SearchCheck, ShieldCheck, X
 } from "lucide-react";
 import type { AdminIdentity } from "@/lib/admin-contract";
+import { loadAdminIdentity } from "@/lib/admin-session";
 import { SyncfusionLicense } from "@/components/syncfusion-license";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 
@@ -31,16 +32,8 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/admin/me", { cache: "no-store" })
-      .then(async response => ({ response, body: await response.json().catch(() => null) }))
-      .then(({ response, body }) => {
-        if (!active) return;
-        if (response.status === 401) throw new Error("Sign in with an administrator account.");
-        if (response.status === 403) throw new Error("This account does not have administrator access.");
-        if (!response.ok) throw new Error("Administrator identity is temporarily unavailable.");
-        setIdentity(body as AdminIdentity);
-        setMessage("");
-      })
+    loadAdminIdentity()
+      .then(admin => { if (active) { setIdentity(admin); setMessage(""); } })
       .catch(error => active && setMessage(error instanceof Error ? error.message : "Administrator access is unavailable."));
     return () => { active = false; };
   }, []);

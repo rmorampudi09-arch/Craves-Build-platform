@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
+
+import { CartKitchenReplacementDialogHost } from "@/components/cart/CartKitchenReplacementDialogHost";
+
 import "../styles.css";
 import "../craves-theme.css";
 import "../otp-overrides.css";
@@ -50,7 +53,10 @@ export default function RootLayout({
       lang="en"
       className={`${displayFont.variable} ${bodyFont.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        <CartKitchenReplacementDialogHost />
+      </body>
     </html>
   );
 }

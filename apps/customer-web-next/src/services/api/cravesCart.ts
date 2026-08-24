@@ -1,6 +1,7 @@
 "use client";
 
 import type { CustomerCart, ServerCartItem } from "@/lib/cart-contract";
+import { requestCartKitchenReplacement } from "@/lib/cart-kitchen-replacement";
 import type { CustomerOrder } from "@/lib/order-contract";
 import { getDish, loadDish } from "./dishes";
 
@@ -166,14 +167,6 @@ function differentKitchen(target: KitchenReference): boolean {
   );
 }
 
-function confirmCartReplacement(target: KitchenReference): boolean {
-  const currentKitchen = cart?.items[0]?.kitchenName ?? "another kitchen";
-  if (typeof window === "undefined") return false;
-  return window.confirm(
-    `Your cart contains items from ${currentKitchen}. Replace them with items from ${target.name}?`,
-  );
-}
-
 export async function loadCart(): Promise<CartItem[]> {
   try {
     await cartRequest("/api/cart", { cache: "no-store" });
@@ -220,7 +213,12 @@ export async function addToCart(
 
   const targetKitchen = await resolveKitchen(item);
   if (differentKitchen(targetKitchen)) {
-    if (!confirmCartReplacement(targetKitchen)) {
+    const currentKitchen = cart?.items[0]?.kitchenName ?? "your current kitchen";
+    const replaceCart = await requestCartKitchenReplacement(
+      currentKitchen,
+      targetKitchen.name,
+    );
+    if (!replaceCart) {
       throw new Error("Your current cart is unchanged.");
     }
     await cartRequest("/api/cart", { method: "DELETE" });

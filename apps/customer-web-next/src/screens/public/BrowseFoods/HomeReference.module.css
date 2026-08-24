@@ -231,26 +231,26 @@
 .floatingCartButton:focus,
 .floatingCartButton:focus-visible,
 .floatingCartButton:active {
-  border: 1px solid rgba(255, 255, 255, 0.76) !important;
-  background: rgba(255, 255, 255, 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  background: rgba(255, 255, 255, 0.86) !important;
   color: #1a1a1a !important;
-  -webkit-backdrop-filter: blur(18px) saturate(145%);
-  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(150%);
   box-shadow:
     0 18px 48px rgba(26, 26, 26, 0.14),
-    0 1px 0 rgba(255, 255, 255, 0.84) inset,
-    0 -1px 0 rgba(241, 243, 245, 0.56) inset !important;
+    0 1px 0 rgba(255, 255, 255, 0.94) inset,
+    0 -1px 0 rgba(241, 243, 245, 0.68) inset !important;
 }
 
 .floatingCartButton:hover {
-  border: 1px solid rgba(255, 255, 255, 0.9) !important;
-  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.96) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
   color: #1a1a1a !important;
   transform: translateY(-2px) !important;
   box-shadow:
     0 22px 54px rgba(26, 26, 26, 0.16),
     0 0 30px rgba(46, 125, 50, 0.18),
-    0 1px 0 rgba(255, 255, 255, 0.92) inset !important;
+    0 1px 0 rgba(255, 255, 255, 0.98) inset !important;
 }
 
 .cartEnter {

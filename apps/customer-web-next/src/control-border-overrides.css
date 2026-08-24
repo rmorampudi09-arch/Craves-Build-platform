@@ -68,3 +68,17 @@ input.craves-otp-field:focus-visible {
 .craves-otp-slot[data-active="true"] {
   border-color: var(--color-grey-400) !important;
 }
+
+/* Orders tabs: hover should change only the label to Craves Flame Red. */
+nav[aria-label="Filter orders"] button:hover,
+nav[aria-label="Filter orders"] button:focus-visible {
+  background: transparent !important;
+  color: #f62e18 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+nav[aria-label="Filter orders"] button[aria-pressed="false"]:hover::after,
+nav[aria-label="Filter orders"] button[aria-pressed="false"]:focus-visible::after {
+  transform: scaleX(0) !important;
+}

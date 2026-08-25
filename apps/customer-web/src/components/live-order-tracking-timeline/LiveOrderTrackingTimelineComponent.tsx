@@ -1,49 +1,25 @@
 import React from 'react';
+import { useLiveOrderTrackingTimeline } from '../../hooks/useLiveOrderTrackingTimeline';
 
-type TimelineEvent = { status: string; label: string; occurredAt: string; completed: boolean };
+export function LiveOrderTrackingTimelineComponent() {
+  const events = useLiveOrderTrackingTimeline('33333333-3333-3333-3333-333333333333');
 
-type Props = {
-  currentStatus: string;
-  etaMinutes: number;
-  deliveryPartner: string;
-  mapUrl: string;
-  timeline: TimelineEvent[];
-};
-
-export const LiveOrderTrackingTimelineComponent = ({ currentStatus, etaMinutes, deliveryPartner, mapUrl, timeline }: Props) => (
-  <section className="grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
-    <div className="rounded-3xl bg-slate-900 p-6 ring-1 ring-white/10">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-cyan-300">Current status</p>
-          <h2 className="text-2xl font-semibold">{currentStatus.replaceAll('_', ' ')}</h2>
-        </div>
-        <div className="text-right">
-          <p className="text-sm text-slate-400">ETA</p>
-          <p className="text-2xl font-bold text-cyan-300">{etaMinutes} mins</p>
-        </div>
+  return (
+    <div className="min-h-screen bg-slate-50 p-6">
+      <div className="mx-auto max-w-3xl rounded-3xl bg-white p-8 shadow-sm">
+        <h1 className="text-3xl font-bold text-slate-900">Live order tracking</h1>
+        <p className="mt-2 text-slate-600">Track every step from chef acceptance to doorstep delivery.</p>
+        <ol className="mt-8 space-y-4 border-l-2 border-orange-200 pl-6">
+          {events.map((event) => (
+            <li key={`${event.status}-${event.eventTime}`} className="relative">
+              <span className="absolute -left-[31px] top-1 h-4 w-4 rounded-full bg-orange-500" />
+              <p className="font-semibold text-slate-900">{event.status}</p>
+              <p className="text-slate-600">{event.message}</p>
+              <p className="text-sm text-slate-400">{new Date(event.eventTime).toLocaleString()}</p>
+            </li>
+          ))}
+        </ol>
       </div>
-      <ol className="mt-8 space-y-4">
-        {timeline.map((event) => (
-          <li key={event.status} className="flex gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className={`mt-1 h-3 w-3 rounded-full ${event.completed ? 'bg-cyan-300' : 'bg-slate-600'}`} />
-            <div>
-              <p className="font-semibold text-white">{event.label}</p>
-              <p className="text-sm text-slate-400">{new Date(event.occurredAt).toLocaleString()}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
     </div>
-    <aside className="rounded-3xl bg-slate-900 p-6 ring-1 ring-white/10">
-      <h3 className="text-lg font-semibold">Delivery details</h3>
-      <p className="mt-3 text-sm text-slate-300">Provider: {deliveryPartner}</p>
-      <a href={mapUrl} className="mt-6 inline-flex rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300">
-        Open tracking map
-      </a>
-      <div className="mt-6 rounded-2xl bg-white/5 p-4 text-sm text-slate-300">
-        <p>Timeline states are normalized across chef prep, pickup and Shiprocket status updates.</p>
-      </div>
-    </aside>
-  </section>
-);
+  );
+}

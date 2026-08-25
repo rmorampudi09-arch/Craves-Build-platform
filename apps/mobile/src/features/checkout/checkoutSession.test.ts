@@ -18,6 +18,21 @@ const deliveryAddressId = '44444444-4444-4444-8444-444444444444';
 const orderId = '55555555-5555-4555-8555-555555555555';
 const cartId = '66666666-6666-4666-8666-666666666666';
 
+const deliveryAddressSnapshot = {
+  sourceAddressId: deliveryAddressId,
+  recipientName: 'Ashoka',
+  contactPhoneNumber: '+919876543210',
+  addressLine1: '12 Market Road',
+  addressLine2: 'Second Floor',
+  landmark: 'Near City Park',
+  areaName: 'Central Market',
+  city: 'Hyderabad',
+  state: 'Telangana',
+  postalCode: '500001',
+  latitude: 17.385,
+  longitude: 78.4867,
+};
+
 const apiResponse = {
   id: checkoutId,
   customerIdentityId,
@@ -30,6 +45,7 @@ const apiResponse = {
   grandTotal: 313,
   chargePolicyId,
   deliveryAddressId,
+  deliveryAddress: deliveryAddressSnapshot,
   orders: [
     {
       id: orderId,
@@ -71,9 +87,31 @@ describe('P49 checkout session creation', () => {
       grandTotal: {amount: '313', currency: 'INR'},
       chargePolicyId,
       deliveryAddressId,
+      deliveryAddress: deliveryAddressSnapshot,
       orders: [{orderId, checkoutId, status: 'PAYMENT_PENDING'}],
       createdAt: '2026-08-08T12:00:00Z',
     });
+  });
+
+  it('keeps older persisted checkout responses compatible when no address snapshot exists', () => {
+    const {deliveryAddress: _deliveryAddress, ...legacyResponse} = apiResponse;
+    expect(parseCheckoutSession(legacyResponse)).toMatchObject({
+      checkoutId,
+      deliveryAddressId,
+      deliveryAddress: null,
+    });
+  });
+
+  it('rejects a checkout whose address snapshot belongs to a different saved address', () => {
+    expect(
+      parseCheckoutSession({
+        ...apiResponse,
+        deliveryAddress: {
+          ...deliveryAddressSnapshot,
+          sourceAddressId: '77777777-7777-4777-8777-777777777777',
+        },
+      }),
+    ).toBeNull();
   });
 
   it('accepts the seeded PostgreSQL charge-policy UUID used by the live backend', () => {

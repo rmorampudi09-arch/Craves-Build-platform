@@ -352,6 +352,24 @@ export function CustomerCartScreen() {
     if (outcome.status === 'FAILED') setRefreshError(outcome.error.message);
   }, [dispatch]);
 
+  const openOrderConfirmation = useCallback(
+    (checkout: CheckoutSession) => {
+      const tabs = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
+      if (!tabs) return false;
+
+      if (checkout.orders.length === 1) {
+        tabs.navigate('Orders', {
+          screen: 'CustomerOrderDetail',
+          params: {orderId: checkout.orders[0].orderId},
+        });
+      } else {
+        tabs.navigate('Orders', {screen: 'CustomerOrdersRoot'});
+      }
+      return true;
+    },
+    [navigation],
+  );
+
   const reconcileInterruptedPayment = useCallback(
     (showSuccessAlert: boolean) => {
       if (persistedRecoveryRef.current) return persistedRecoveryRef.current;
@@ -374,13 +392,14 @@ export function CustomerCartScreen() {
 
           if (recovery.outcome === 'SUCCEEDED') {
             setPaymentNotice(null);
-            if (showSuccessAlert) {
+            await refreshCart();
+            const opened = openOrderConfirmation(recovery.checkout);
+            if (showSuccessAlert && !opened) {
               Alert.alert(
                 'Payment successful',
                 'Your interrupted payment was verified by Craves.',
               );
             }
-            await refreshCart();
           } else if (recovery.outcome === 'RECONCILING') {
             setPaymentNotice(
               'A previous payment is still being confirmed by Craves. Check its status before paying again.',
@@ -412,7 +431,7 @@ export function CustomerCartScreen() {
         .catch(() => undefined);
       return task;
     },
-    [refreshCart],
+    [openOrderConfirmation, refreshCart],
   );
 
   const handlePaymentStatusCheck = useCallback(async () => {
@@ -582,8 +601,10 @@ export function CustomerCartScreen() {
 
         if (recovery.outcome === 'SUCCEEDED') {
           setPaymentNotice(null);
-          Alert.alert('Payment successful', 'Your payment was verified by Craves.');
           await refreshCart();
+          if (!openOrderConfirmation(recovery.checkout)) {
+            Alert.alert('Payment successful', 'Your payment was verified by Craves.');
+          }
           return;
         }
         if (recovery.outcome === 'RECONCILING') {
@@ -614,8 +635,10 @@ export function CustomerCartScreen() {
           setPaymentRecoveryActive(recoveryActive);
           if (recovery.outcome === 'SUCCEEDED') {
             setPaymentNotice(null);
-            Alert.alert('Payment successful', 'Your payment was verified by Craves.');
             await refreshCart();
+            if (!openOrderConfirmation(recovery.checkout)) {
+              Alert.alert('Payment successful', 'Your payment was verified by Craves.');
+            }
             return;
           }
           if (
@@ -655,6 +678,7 @@ export function CustomerCartScreen() {
     checkoutBusy,
     header.selectedLocation,
     model,
+    openOrderConfirmation,
     reconcileInterruptedPayment,
     refreshCart,
     verifyServiceability,

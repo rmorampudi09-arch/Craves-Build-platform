@@ -20,6 +20,21 @@ export interface CheckoutMoney {
   currency: string;
 }
 
+export interface CheckoutDeliveryAddressSnapshot {
+  sourceAddressId: string;
+  recipientName: string | null;
+  contactPhoneNumber: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  landmark: string | null;
+  areaName: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export interface CheckoutOrderReference {
   orderId: string;
   checkoutId: string;
@@ -38,6 +53,13 @@ export interface CheckoutSession {
   grandTotal: CheckoutMoney;
   chargePolicyId: string;
   deliveryAddressId: string;
+  /**
+   * Authoritative checkout-time address snapshot returned by the order service.
+   * Optional for compatibility with older persisted checkouts created before the
+   * snapshot contract was introduced; freshly created sessions normalize it to
+   * either the validated snapshot or null.
+   */
+  deliveryAddress?: CheckoutDeliveryAddressSnapshot | null;
   orders: readonly CheckoutOrderReference[];
   createdAt: string;
 }

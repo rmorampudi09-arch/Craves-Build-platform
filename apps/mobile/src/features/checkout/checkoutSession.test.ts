@@ -94,7 +94,8 @@ describe('P49 checkout session creation', () => {
   });
 
   it('keeps older persisted checkout responses compatible when no address snapshot exists', () => {
-    const {deliveryAddress: _deliveryAddress, ...legacyResponse} = apiResponse;
+    const {deliveryAddress, ...legacyResponse} = apiResponse;
+    expect(deliveryAddress).toBe(deliveryAddressSnapshot);
     expect(parseCheckoutSession(legacyResponse)).toMatchObject({
       checkoutId,
       deliveryAddressId,

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "phase": "P119",
+  "boundary": {
+    "client": "apps/mobile",
+    "publicGateway": "Azure API Management",
+    "rule": "Catalog presentation and legacy discovery compatibility calls must remain on published /api/v1 APIM operations."
+  },
+  "actions": [
+    {
+      "id": "discovery.kitchens.legacyFallback",
+      "source": "src/features/chefDiscovery/api/nearbyChefDiscoveryApi.ts",
+      "method": "GET",
+      "path": "/api/v1/catalog/kitchens",
+      "auth": "bearer",
+      "requestModel": "latitude + longitude + radiusKm query",
+      "responseModel": "legacy nearby kitchen response",
+      "requestValidator": "normalizeNearbyKitchenPageRequest + radiusMeters to radiusKm conversion",
+      "responseValidator": "legacyNearbyKitchenResponseSchema + mapLegacyNearbyKitchenPage"
+    },
+    {
+      "id": "catalog.presentation.kitchen.get",
+      "source": "src/shared/catalog/customerCatalogPresentationApi.ts",
+      "method": "GET",
+      "path": "/api/v1/catalog/kitchens/{kitchenId}",
+      "auth": "bearer",
+      "requestModel": "none",
+      "responseModel": "CustomerCatalogKitchenPresentation",
+      "requestValidator": "normalizeId",
+      "responseValidator": "kitchenPresentationSchema + kitchen identity check"
+    },
+    {
+      "id": "catalog.presentation.menuItem.get",
+      "source": "src/shared/catalog/customerCatalogPresentationApi.ts",
+      "method": "GET",
+      "path": "/api/v1/catalog/menu-items/{menuItemId}",
+      "auth": "bearer",
+      "requestModel": "none",
+      "responseModel": "primary HTTPS menu-item image URL or null",
+      "requestValidator": "normalizeId",
+      "responseValidator": "menuItemPresentationSchema + menu-item identity check + normalizeHttpsUrl"
+    }
+  ],
+  "quarantined": []
+}

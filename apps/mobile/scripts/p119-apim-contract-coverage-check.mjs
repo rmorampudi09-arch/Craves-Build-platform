@@ -8,6 +8,7 @@ const srcRoot = path.join(mobileRoot, 'src');
 const manifestPaths = [
   path.resolve(mobileRoot, '../../api/apim-api/contracts/mobile-production.v1.json'),
   path.resolve(mobileRoot, '../../api/apim-api/contracts/mobile-subscriptions.v1.json'),
+  path.resolve(mobileRoot, '../../api/apim-api/contracts/mobile-catalog-presentation.v1.json'),
 ];
 
 const fail = message => {

@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Craves Customer",
+    "slug": "craves-customer-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "in.craves.customer"
+    },
+    "extra": {
+      "apiBaseUrl": "https://api.craves.in"
+    }
+  }
+}

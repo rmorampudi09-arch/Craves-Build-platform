@@ -1,5 +1,6 @@
-import React, {useMemo} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
+  FlatList,
   Image,
   Pressable,
   ScrollView,
@@ -8,6 +9,8 @@ import {
   useWindowDimensions,
   View,
   type ImageSourcePropType,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -33,42 +36,143 @@ declare const require: (path: string) => ImageSourcePropType;
 const HOME_RADIUS_METERS = 10_000;
 const TOP_KITCHEN_PAGE_SIZE = 12;
 const MAX_TOP_KITCHENS = 8;
+const PROMO_AUTO_ADVANCE_MS = 5_000;
 
-const HOME_PROMO = {
-  eyebrow: 'HOME-COOKED',
-  title: 'Made with love.',
-  accent: 'Up to 30% off',
-  caption: 'Fresh meals from trusted home kitchens',
-  art: require('../../../assets/categories/curry.jpg'),
-} as const;
+const HOME_PROMO_BANNERS = [
+  {
+    id: 'home-kitchen-picks',
+    label: 'Fresh meals from home chefs, up to 30 percent off',
+    image: require('../../../assets/home/home-kitchen-picks.jpg'),
+  },
+  {
+    id: 'daily-home-feasts',
+    label: 'Healthy dinners from trusted home cooks, starting at 199 rupees',
+    image: require('../../../assets/home/daily-home-feasts.jpg'),
+  },
+  {
+    id: 'local-chef-specials',
+    label: 'Tasty lunches from neighborhood kitchens, flat 25 percent off',
+    image: require('../../../assets/home/local-chef-specials.jpg'),
+  },
+] as const;
 
-function PromoCard({width}: {width: number}) {
+type PromoBanner = (typeof HOME_PROMO_BANNERS)[number];
+
+function PromoCarousel({width}: {width: number}) {
+  const listRef = useRef<FlatList<PromoBanner>>(null);
+  const activeIndexRef = useRef(0);
+  const isDraggingRef = useRef(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const updateActiveIndex = (index: number) => {
+    activeIndexRef.current = index;
+    setActiveIndex(index);
+  };
+
+  useEffect(() => {
+    if (width <= 0) {
+      return undefined;
+    }
+
+    listRef.current?.scrollToOffset({
+      offset: activeIndexRef.current * width,
+      animated: false,
+    });
+
+    return undefined;
+  }, [width]);
+
+  useEffect(() => {
+    if (HOME_PROMO_BANNERS.length < 2 || width <= 0) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      if (isDraggingRef.current) {
+        return;
+      }
+
+      const nextIndex =
+        (activeIndexRef.current + 1) % HOME_PROMO_BANNERS.length;
+
+      listRef.current?.scrollToOffset({
+        offset: nextIndex * width,
+        animated: true,
+      });
+      updateActiveIndex(nextIndex);
+    }, PROMO_AUTO_ADVANCE_MS);
+
+    return () => clearInterval(interval);
+  }, [width]);
+
+  const handleMomentumScrollEnd = (
+    event: NativeSyntheticEvent<NativeScrollEvent>,
+  ) => {
+    if (width <= 0) {
+      return;
+    }
+
+    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+    const safeIndex = Math.max(
+      0,
+      Math.min(HOME_PROMO_BANNERS.length - 1, nextIndex),
+    );
+
+    isDraggingRef.current = false;
+    updateActiveIndex(safeIndex);
+  };
+
   return (
-    <View style={[styles.banner, {width}]}>
-      <View style={styles.bannerCopy}>
-        <Text style={styles.bannerEyebrow}>{HOME_PROMO.eyebrow}</Text>
-        <Text style={styles.bannerTitle}>{HOME_PROMO.title}</Text>
-        <Text numberOfLines={2} style={styles.bannerCaption}>
-          {HOME_PROMO.caption}
-        </Text>
-        <View style={styles.offerPill}>
-          <Text style={styles.offerPillText}>{HOME_PROMO.accent}</Text>
-        </View>
-      </View>
-      <View style={styles.bannerArtPanel}>
-        <View pointerEvents="none" style={styles.steamGroup}>
-          <View style={[styles.steam, styles.steamOne]} />
-          <View style={[styles.steam, styles.steamTwo]} />
-          <View style={[styles.steam, styles.steamThree]} />
-        </View>
-        <View style={styles.bowlFrame}>
-          <Image
-            accessibilityIgnoresInvertColors
-            source={HOME_PROMO.art}
-            resizeMode="cover"
-            style={styles.bannerArt}
+    <View style={styles.promoCarousel}>
+      <FlatList
+        ref={listRef}
+        data={HOME_PROMO_BANNERS}
+        horizontal
+        pagingEnabled
+        nestedScrollEnabled
+        decelerationRate="fast"
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={item => item.id}
+        getItemLayout={(_, index) => ({
+          length: width,
+          offset: width * index,
+          index,
+        })}
+        onScrollBeginDrag={() => {
+          isDraggingRef.current = true;
+        }}
+        onScrollEndDrag={() => {
+          isDraggingRef.current = false;
+        }}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        renderItem={({item}) => (
+          <View style={[styles.bannerSlide, {width}]}>
+            <Image
+              accessible
+              accessibilityIgnoresInvertColors
+              accessibilityLabel={item.label}
+              source={item.image}
+              resizeMode="cover"
+              style={styles.bannerImage}
+            />
+          </View>
+        )}
+      />
+
+      <View
+        accessibilityLabel={`Banner ${activeIndex + 1} of ${HOME_PROMO_BANNERS.length}`}
+        accessibilityRole="text"
+        pointerEvents="none"
+        style={styles.pagination}>
+        {HOME_PROMO_BANNERS.map((banner, index) => (
+          <View
+            key={banner.id}
+            style={[
+              styles.paginationDot,
+              index === activeIndex && styles.paginationDotActive,
+            ]}
           />
-        </View>
+        ))}
       </View>
     </View>
   );
@@ -145,7 +249,7 @@ export function HomePromoAndKitchens() {
   return (
     <View>
       <View style={styles.bannerRow}>
-        <PromoCard width={bannerWidth} />
+        <PromoCarousel width={bannerWidth} />
       </View>
 
       {kitchens.length > 0 ? (
@@ -153,7 +257,9 @@ export function HomePromoAndKitchens() {
           <Text accessibilityRole="header" style={styles.sectionTitle}>
             Top kitchens near you
           </Text>
-          <Text style={styles.sectionCaption}>Active home kitchens closest to you</Text>
+          <Text style={styles.sectionCaption}>
+            Active home kitchens closest to you
+          </Text>
           <ScrollView
             horizontal
             nestedScrollEnabled
@@ -180,99 +286,39 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
-  banner: {
-    minHeight: 174,
-    flexDirection: 'row',
+  promoCarousel: {
+    width: '100%',
+  },
+  bannerSlide: {
+    aspectRatio: 2,
     overflow: 'hidden',
     borderRadius: radius.lg,
     backgroundColor: '#FFF7F2',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  bannerCopy: {
-    width: '54%',
-    zIndex: 2,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+  bannerImage: {
+    width: '100%',
+    height: '100%',
   },
-  bannerEyebrow: {
-    color: colors.espressoBrown,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.extrabold,
-    letterSpacing: 0.7,
-  },
-  bannerTitle: {
-    marginTop: 2,
-    color: colors.flameRed,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.extrabold,
-  },
-  bannerCaption: {
-    marginTop: spacing.xs,
-    color: colors.espressoBrown,
-    fontSize: typography.tiny,
-    lineHeight: 17,
-  },
-  offerPill: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radius.sm,
-    backgroundColor: colors.flameRed,
-  },
-  offerPillText: {
-    color: colors.white,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.bold,
-  },
-  bannerArtPanel: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: '52%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.flameRed,
-  },
-  bowlFrame: {
-    width: 132,
-    height: 132,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 66,
-    padding: 8,
-    backgroundColor: colors.espressoBrown,
-    ...elevation.card,
-  },
-  bannerArt: {
-    width: 116,
-    height: 116,
-    borderRadius: 58,
-  },
-  steamGroup: {
-    position: 'absolute',
-    top: 10,
-    left: 26,
-    right: 26,
-    height: 42,
+  pagination: {
+    minHeight: 18,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    opacity: 0.34,
+    gap: 6,
+    paddingTop: spacing.xs,
   },
-  steam: {
-    width: 5,
-    height: 36,
+  paginationDot: {
+    width: 6,
+    height: 6,
     borderRadius: radius.pill,
-    backgroundColor: colors.white,
-    transform: [{rotate: '10deg'}],
+    backgroundColor: colors.border,
   },
-  steamOne: {height: 30, marginTop: 8},
-  steamTwo: {height: 40},
-  steamThree: {height: 28, marginTop: 10},
+  paginationDotActive: {
+    width: 18,
+    backgroundColor: colors.flameRed,
+  },
   kitchensSection: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,

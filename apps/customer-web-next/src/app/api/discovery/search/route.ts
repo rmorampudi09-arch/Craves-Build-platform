@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseAdvancedSearchResponse } from "@/lib/advanced-search-contract";
+import { MAX_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
 import { publicApiFetch } from "@/lib/public-api";
 
 function numeric(request: NextRequest, name: string, min: number, max: number, integer = false): number | null {
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const latitude = numeric(request, "latitude", -90, 90);
   const longitude = numeric(request, "longitude", -180, 180);
-  const radiusMeters = numeric(request, "radiusMeters", 1, 100_000, true);
+  const radiusMeters = numeric(request, "radiusMeters", 1, MAX_DISCOVERY_RADIUS_METERS, true);
   const page = numeric(request, "page", 0, 10_000, true) ?? 0;
   const size = numeric(request, "size", 1, 50, true) ?? 20;
   if (q.length < 2 || q.length > 120 || latitude === null || longitude === null || radiusMeters === null) {
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
 
   const query = new URLSearchParams({ q, latitude: String(latitude), longitude: String(longitude), radiusMeters: String(radiusMeters), page: String(page), size: String(size) });
   const foodType = request.nextUrl.searchParams.get("foodType");
-  if (foodType === "VEG" || foodType === "NON_VEG") query.set("foodType", foodType);
+  if (foodType === "VEG" || foodType === "NON_VEG" || foodType === "EGG") query.set("foodType", foodType);
   const category = request.nextUrl.searchParams.get("category")?.trim();
   if (category && category.length <= 80) query.set("category", category);
   const maxPrice = numeric(request, "maxPrice", 0.01, 1_000_000);

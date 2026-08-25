@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import type { AdvancedSearchResponse } from "@/lib/advanced-search-contract";
+import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
@@ -31,7 +32,7 @@ export default function SearchPage() {
           q: query.trim(),
           latitude: String(position.coords.latitude),
           longitude: String(position.coords.longitude),
-          radiusMeters: "5000",
+          radiusMeters: String(DEFAULT_DISCOVERY_RADIUS_METERS),
           page: "0",
           size: "20",
         });
@@ -60,7 +61,7 @@ export default function SearchPage() {
         <form className="mt-6 grid gap-3 md:grid-cols-4" onSubmit={submit}>
           <input aria-label="Search" value={query} onChange={(event) => setQuery(event.target.value)} maxLength={120} placeholder="Dish, category or kitchen" className="rounded-xl border border-slate-300 bg-white p-3 md:col-span-2" />
           <select aria-label="Food type" value={foodType} onChange={(event) => setFoodType(event.target.value)} className="rounded-xl border border-slate-300 bg-white p-3">
-            <option value="">All food types</option><option value="VEG">Vegetarian</option><option value="NON_VEG">Non-vegetarian</option>
+            <option value="">All food types</option><option value="VEG">Vegetarian</option><option value="NON_VEG">Non-vegetarian</option><option value="EGG">Egg</option>
           </select>
           <button type="submit" disabled={loading} className="rounded-xl bg-[#F6B545] p-3 font-semibold disabled:opacity-60">{loading ? "Searching…" : "Search"}</button>
           <input aria-label="Maximum price" inputMode="decimal" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)} placeholder="Max price (optional)" className="rounded-xl border border-slate-300 bg-white p-3" />

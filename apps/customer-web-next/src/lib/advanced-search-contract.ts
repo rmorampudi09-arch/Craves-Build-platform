@@ -11,7 +11,7 @@ export type AdvancedSearchItem = {
   itemName: string;
   description: string | null;
   category: string;
-  foodType: "VEG" | "NON_VEG";
+  foodType: "VEG" | "NON_VEG" | "EGG";
   price: number;
   currency: string;
   preparationTimeMinutes: number | null;
@@ -48,7 +48,7 @@ export function parseAdvancedSearchResponse(value: unknown): AdvancedSearchRespo
       typeof item.itemName !== "string" ||
       (item.description !== null && typeof item.description !== "string") ||
       typeof item.category !== "string" ||
-      (item.foodType !== "VEG" && item.foodType !== "NON_VEG") ||
+      (item.foodType !== "VEG" && item.foodType !== "NON_VEG" && item.foodType !== "EGG") ||
       typeof item.price !== "number" || !Number.isFinite(item.price) || item.price < 0 ||
       typeof item.currency !== "string" ||
       (item.preparationTimeMinutes !== null && (typeof item.preparationTimeMinutes !== "number" || !Number.isInteger(item.preparationTimeMinutes) || item.preparationTimeMinutes < 0)) ||

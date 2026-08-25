@@ -2,6 +2,7 @@ import {AppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
 import type {
   CheckoutCreateRequest,
+  CheckoutDeliveryAddressSnapshot,
   CheckoutMoney,
   CheckoutOrderReference,
   CheckoutOrderStatus,
@@ -53,6 +54,20 @@ function boundedString(value: unknown, maxLength: number): string | null {
   return normalized && normalized.length <= maxLength ? normalized : null;
 }
 
+function optionalBoundedString(
+  value: unknown,
+  maxLength: number,
+): string | null | undefined {
+  if (value == null || value === '') {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const normalized = value.trim();
+  return normalized.length <= maxLength ? normalized || null : undefined;
+}
+
 function parseResourceUuid(value: unknown): string | null {
   const candidate = boundedString(value, 64);
   return candidate && RESOURCE_UUID_PATTERN.test(candidate) ? candidate : null;
@@ -85,6 +100,27 @@ function parseDecimal(value: unknown): string | null {
   return DECIMAL_PATTERN.test(normalized) ? normalized : null;
 }
 
+function parseCoordinate(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+): number | null | undefined {
+  if (value == null || value === '') {
+    return null;
+  }
+  const numberValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value)
+        : Number.NaN;
+  return Number.isFinite(numberValue) &&
+    numberValue >= minimum &&
+    numberValue <= maximum
+    ? numberValue
+    : undefined;
+}
+
 function parseMoney(value: unknown, currency: string): CheckoutMoney | null {
   const amount = parseDecimal(value);
   return amount ? {amount, currency} : null;
@@ -104,6 +140,65 @@ function parseOrderStatus(value: unknown): CheckoutOrderStatus | null {
   return typeof value === 'string' && ORDER_STATUSES.has(value as CheckoutOrderStatus)
     ? (value as CheckoutOrderStatus)
     : null;
+}
+
+function parseDeliveryAddressSnapshot(
+  value: unknown,
+  expectedAddressId: string,
+): CheckoutDeliveryAddressSnapshot | null | undefined {
+  if (value == null) {
+    return null;
+  }
+  const address = asRecord(value);
+  if (!address) {
+    return undefined;
+  }
+
+  const sourceAddressId = parseResourceUuid(address.sourceAddressId);
+  const recipientName = optionalBoundedString(address.recipientName, 160);
+  const contactPhoneNumber = optionalBoundedString(address.contactPhoneNumber, 32);
+  const addressLine1 = optionalBoundedString(address.addressLine1, 250);
+  const addressLine2 = optionalBoundedString(address.addressLine2, 250);
+  const landmark = optionalBoundedString(address.landmark, 240);
+  const areaName = optionalBoundedString(address.areaName, 160);
+  const city = optionalBoundedString(address.city, 120);
+  const state = optionalBoundedString(address.state, 120);
+  const postalCode = optionalBoundedString(address.postalCode, 32);
+  const latitude = parseCoordinate(address.latitude, -90, 90);
+  const longitude = parseCoordinate(address.longitude, -180, 180);
+
+  if (
+    sourceAddressId !== expectedAddressId ||
+    recipientName === undefined ||
+    contactPhoneNumber === undefined ||
+    addressLine1 === undefined ||
+    addressLine2 === undefined ||
+    landmark === undefined ||
+    areaName === undefined ||
+    city === undefined ||
+    state === undefined ||
+    postalCode === undefined ||
+    latitude === undefined ||
+    longitude === undefined ||
+    (latitude === null) !== (longitude === null)
+  ) {
+    return undefined;
+  }
+
+  return {
+    sourceAddressId,
+    recipientName,
+    contactPhoneNumber,
+    addressLine1,
+    addressLine2,
+    landmark,
+    areaName,
+    city,
+    state,
+    postalCode,
+    latitude,
+    longitude,
+  };
 }
 
 function parseOrderReference(
@@ -160,6 +255,14 @@ export function parseCheckoutSession(value: unknown): CheckoutSession | null {
     return null;
   }
 
+  const deliveryAddress = parseDeliveryAddressSnapshot(
+    checkout.deliveryAddress,
+    deliveryAddressId,
+  );
+  if (deliveryAddress === undefined) {
+    return null;
+  }
+
   const orders: CheckoutOrderReference[] = [];
   for (const valueOfOrder of checkout.orders) {
     const order = parseOrderReference(valueOfOrder, checkoutId);
@@ -181,6 +284,7 @@ export function parseCheckoutSession(value: unknown): CheckoutSession | null {
     grandTotal,
     chargePolicyId,
     deliveryAddressId,
+    deliveryAddress,
     orders,
     createdAt,
   };

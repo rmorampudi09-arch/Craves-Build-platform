@@ -56,6 +56,10 @@ test("signed-in home loads live discovery and opens customer kitchen details wit
   assert.match(contents, /<DishesGrid/);
   assert.match(contents, /<HomeSearchOverlay/);
   assert.match(contents, /<CustomerSignOutDialog/);
+  assert.match(contents, /<CartAddressAvailabilityDialog/);
+  assert.match(contents, /nearbyKitchenIds/);
+  assert.match(contents, /loadKitchenMenu\(kitchenId\)/);
+  assert.match(contents, /unavailableCartItems/);
   assert.match(contents, /rememberHomeView\(\)/);
   assert.match(contents, /to: "\/kitchen\/\$id"/);
   assert.match(contents, /getSession\(\)/);
@@ -63,7 +67,6 @@ test("signed-in home loads live discovery and opens customer kitchen details wit
   assert.match(contents, /allDishes\(\)/);
   assert.match(contents, /allKitchens\(\)/);
   assert.match(contents, /restoreHomeView\(\)/);
-  assert.doesNotMatch(contents, /loadKitchenMenu\(/);
   assert.doesNotMatch(contents, /selectedKitchen \?/);
   assert.doesNotMatch(contents, /17\.4483|78\.3915/);
 

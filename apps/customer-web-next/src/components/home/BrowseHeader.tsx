@@ -58,13 +58,14 @@ export function BrowseHeader({
           <button
             type="button"
             onClick={openLocation}
-            className="hidden min-h-11 min-w-0 max-w-[15rem] items-center gap-2.5 rounded-full bg-[#F1F3F5] px-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(26,26,26,0.08)] md:flex"
+            className="hidden min-h-11 min-w-0 max-w-[16rem] items-center gap-2.5 rounded-full bg-[#F1F3F5] px-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(26,26,26,0.08)] md:flex"
+            aria-label={`Default delivery address: ${locationLabel}. Manage address`}
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
               <FaMapMarkerAlt className="h-4 w-4" aria-hidden="true" />
             </span>
             <span className="min-w-0">
-              <span className="block text-[0.62rem] font-bold uppercase tracking-[0.12em] text-[#6B6B6B]">Deliver to</span>
+              <span className="block text-[0.6rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">Default delivery</span>
               <span className="block truncate text-xs font-extrabold text-[#1A1A1A]">{locationLabel}</span>
             </span>
           </button>
@@ -139,12 +140,16 @@ export function BrowseHeader({
           <button
             type="button"
             onClick={openLocation}
-            className="flex min-w-0 max-w-[8rem] shrink items-center gap-2 text-left text-xs font-bold text-[#1A1A1A] sm:max-w-[12rem] md:hidden"
+            className="flex min-w-0 max-w-[11rem] shrink items-center gap-2 text-left text-xs font-bold text-[#1A1A1A] sm:max-w-[14rem] md:hidden"
+            aria-label={`Default delivery address: ${locationLabel}. Manage address`}
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
               <FaMapMarkerAlt className="h-4 w-4" aria-hidden="true" />
             </span>
-            <span className="truncate">{locationLabel}</span>
+            <span className="min-w-0">
+              <span className="block text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#6B6B6B]">Default</span>
+              <span className="block truncate">{locationLabel}</span>
+            </span>
           </button>
           <PersistentCustomerServiceNav className="ml-auto min-w-0 !gap-1 !pb-0 [&>a]:!min-h-9 [&>a]:!border-0 [&>a]:!px-2.5 [&>a]:!text-xs" />
         </div>

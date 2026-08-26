@@ -233,6 +233,11 @@ export function allDishes(): Dish[] {
   return [...discoveredDishes];
 }
 
+export function clearDishDiscoveryCache(): void {
+  discoveredDishes = [];
+  discoveryRadiusMeters = 5_000;
+}
+
 export function getDish(id: string): Dish | undefined {
   return discoveredDishes.find((dish) => dish.id === id);
 }

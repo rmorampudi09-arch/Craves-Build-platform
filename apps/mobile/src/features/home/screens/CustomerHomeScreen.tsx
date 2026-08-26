@@ -33,6 +33,10 @@ import {
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
+import {
+  HomeFoodTypeSelector,
+  type HomeFoodType,
+} from '../components/HomeFoodTypeSelector';
 import {HomePromoAndKitchens} from '../components/HomePromoAndKitchens';
 import {
   OfflineNotice,
@@ -357,6 +361,10 @@ export function CustomerHomeScreen() {
     return items;
   }, [feed.locationRequired, visibleDishes]);
   const activeDiscoveryFilterCount = getActiveDiscoveryFilterCount(appliedFilters);
+  const selectedFoodType = useMemo<HomeFoodType>(() => {
+    const [diet] = appliedFilters.diets;
+    return appliedFilters.diets.length === 1 && diet ? diet : 'ALL';
+  }, [appliedFilters.diets]);
   const cartLinesByMenuItemId = useMemo(() => {
     const lines = new Map<string, CartLine>();
     for (const line of cartSnapshot?.lines ?? []) {
@@ -372,8 +380,6 @@ export function CustomerHomeScreen() {
     }
   }, [search.scrollOffset, searchScopeKey]);
 
-  const firstName = identity?.displayName?.trim().split(/\s+/)[0] ?? null;
-  const greeting = firstName ? `Hi ${firstName}` : 'Hello';
   const queryError = feed.error ? toAppApiError(feed.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
   const initialLoading = feed.isPending && dishes.length === 0 && !feed.locationRequired;
@@ -534,6 +540,29 @@ export function CustomerHomeScreen() {
     navigation.navigate('CustomerFilterSort', {origin: 'HOME'});
   };
 
+  const handleFoodTypeChange = useCallback(
+    (foodType: HomeFoodType) => {
+      dispatch(
+        discoveryFilterActions.filterDraftUpdated({
+          surface: 'HOME',
+          scopeKey: searchScopeKey,
+          selection: {
+            ...appliedFilters,
+            diets: foodType === 'ALL' ? [] : [foodType],
+          },
+        }),
+      );
+      dispatch(
+        discoveryFilterActions.filtersApplied({
+          surface: 'HOME',
+          scopeKey: searchScopeKey,
+        }),
+      );
+      resetSearchPosition();
+    },
+    [appliedFilters, dispatch, resetSearchPosition, searchScopeKey],
+  );
+
   const clearFilters = () => {
     handleClearSearch();
     setSelectedCategory(null);
@@ -643,24 +672,16 @@ export function CustomerHomeScreen() {
 
   const headerContent = (
     <View onLayout={handleHeaderLayout}>
-      <View style={[styles.heroCopy, compactLayout && styles.heroCopyCompact]}>
-        <Text style={styles.greeting}>{greeting}</Text>
-        <Text accessibilityRole="header" style={styles.heading}>
-          What are you craving today?
-        </Text>
-        <Text style={styles.subheading}>
-          Fresh meals from active home kitchens around your selected location.
-        </Text>
-      </View>
-
       {selectedLocation ? (
         <>
           <View style={[styles.searchRow, compactLayout && styles.searchRowCompact]}>
             <DiscoverySearchInput
               accessibilityLabel="Search nearby meals"
+              iconColor={colors.flameRedAccessible}
               onChangeText={handleSearchChange}
               onClear={handleClearSearch}
               onFocus={openSearch}
+              pill
               placeholder="Search nearby dishes or kitchens"
               showSoftInputOnFocus={false}
               style={styles.searchField}
@@ -678,16 +699,15 @@ export function CustomerHomeScreen() {
               ]}>
               <Icon
                 name="filter"
-                size={18}
+                size={20}
                 color={colors.flameRedAccessible}
                 surface={false}
               />
-              <Text style={styles.filterButtonText}>
-                {activeDiscoveryFilterCount > 0
-                  ? `Filters (${activeDiscoveryFilterCount})`
-                  : 'Filters'}
-              </Text>
             </Pressable>
+            <HomeFoodTypeSelector
+              value={selectedFoodType}
+              onChange={handleFoodTypeChange}
+            />
           </View>
 
           <HomePromoAndKitchens />
@@ -858,35 +878,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: colors.surfaceBase,
   },
-  heroCopy: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-  },
-  heroCopyCompact: {
-    paddingTop: spacing.xxs,
-  },
-  greeting: {
-    color: colors.flameRedAccessible,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  heading: {
-    color: colors.espressoBrown,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
-    marginTop: spacing.xxs,
-  },
-  subheading: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xs,
-  },
   searchRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
   },
   searchRowCompact: {
     gap: spacing.xs,
@@ -896,17 +893,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   filterButton: {
-    minHeight: touchTarget.minimum,
-    minWidth: 92,
-    flexDirection: 'row',
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    flexShrink: 0,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xxs,
   },
   filterButtonActive: {
     borderColor: colors.flameRed,
@@ -914,12 +909,7 @@ const styles = StyleSheet.create({
   },
   filterButtonPressed: {
     backgroundColor: colors.surfaceMuted,
-    transform: [{scale: 0.98}],
-  },
-  filterButtonText: {
-    color: colors.flameRedAccessible,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
+    transform: [{scale: 0.96}],
   },
   mindHeadingRow: {
     paddingHorizontal: spacing.md,

@@ -51,8 +51,12 @@ interface ScopedFilterAction {
   scopeKey: string | null;
 }
 
+interface FilterDraftUpdatedAction extends ScopedFilterAction {
+  selection: DiscoveryFilterSnapshot;
+}
+
 interface FiltersAppliedAction extends ScopedFilterAction {
-  filters: DiscoveryFilterSnapshot;
+  filters?: DiscoveryFilterSnapshot;
 }
 
 function normalizeFilters(filters: DiscoveryFilterSnapshot): DiscoveryFilterSnapshot {
@@ -89,13 +93,23 @@ const discoveryFilterSlice = createSlice({
     scopeChanged(state, action: PayloadAction<ScopedFilterAction>) {
       ensureScope(state, action.payload.surface, action.payload.scopeKey);
     },
+    filterDraftUpdated(state, action: PayloadAction<FilterDraftUpdatedAction>) {
+      const session = ensureScope(
+        state,
+        action.payload.surface,
+        action.payload.scopeKey,
+      );
+      session.applied = normalizeFilters(action.payload.selection);
+    },
     filtersApplied(state, action: PayloadAction<FiltersAppliedAction>) {
       const session = ensureScope(
         state,
         action.payload.surface,
         action.payload.scopeKey,
       );
-      session.applied = normalizeFilters(action.payload.filters);
+      if (action.payload.filters) {
+        session.applied = normalizeFilters(action.payload.filters);
+      }
     },
     filtersCleared(state, action: PayloadAction<ScopedFilterAction>) {
       const session = ensureScope(

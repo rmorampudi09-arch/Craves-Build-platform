@@ -40,18 +40,6 @@
     0 1px 0 rgba(255, 255, 255, 0.96) inset !important;
 }
 
-.floatingCartTint {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-  background:
-    radial-gradient(circle at 12% 18%, rgba(255, 239, 193, 0.18), transparent 31%),
-    radial-gradient(circle at 76% 78%, rgba(255, 255, 255, 0.12), transparent 36%);
-  mix-blend-mode: soft-light;
-}
-
 .floatingCartGlass {
   pointer-events: none;
   position: absolute;
@@ -59,19 +47,19 @@
   z-index: 0;
   border-radius: inherit;
   background:
-    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.28), transparent 34%),
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.32), transparent 34%),
     linear-gradient(
       108deg,
-      rgba(255, 255, 255, 0.16) 0%,
-      rgba(255, 255, 255, 0.045) 46%,
-      rgba(255, 255, 255, 0.13) 100%
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0.06) 46%,
+      rgba(255, 255, 255, 0.16) 100%
     );
 }
 
 .floatingCartShine {
   pointer-events: none;
   position: absolute;
-  inset: 1px 5% auto;
+  inset: 1px 4% auto;
   z-index: 1;
   height: 1px;
   background: linear-gradient(
@@ -82,79 +70,12 @@
   );
 }
 
-.cartIconShell {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  width: 3rem;
-  height: 3rem;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.82);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.8);
-  color: #f62e18;
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  backdrop-filter: blur(14px) saturate(150%);
-  box-shadow:
-    0 8px 20px rgba(26, 26, 26, 0.11),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
-}
-
-.viewCartPill {
-  position: relative;
-  z-index: 10;
-  display: inline-flex;
-  min-height: 2.6rem;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
-  padding: 0.65rem 1rem;
-  color: #1a1a1a;
-  font-size: 0.75rem;
-  font-weight: 900;
-  line-height: 1;
-  -webkit-backdrop-filter: blur(14px) saturate(145%);
-  backdrop-filter: blur(14px) saturate(145%);
-  box-shadow:
-    0 8px 22px rgba(26, 26, 26, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.96);
-  transition:
-    transform 200ms ease,
-    background 200ms ease,
-    box-shadow 200ms ease;
-}
-
-.floatingCartButton:hover .viewCartPill {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow:
-    0 11px 25px rgba(26, 26, 26, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.98);
-}
-
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .floatingCartButton,
   .floatingCartButton:focus,
   .floatingCartButton:focus-visible,
   .floatingCartButton:active {
-    background: rgba(242, 239, 232, 0.94) !important;
-  }
-
-  .cartIconShell,
-  .viewCartPill {
-    background: rgba(255, 255, 255, 0.96);
-  }
-}
-
-@media (min-width: 640px) {
-  .viewCartPill {
-    padding-inline: 1.25rem;
-    font-size: 0.875rem;
+    background: rgba(255, 255, 255, 0.9) !important;
   }
 }
 
@@ -163,8 +84,7 @@
     animation: none;
   }
 
-  .floatingCartButton:hover,
-  .floatingCartButton:hover .viewCartPill {
+  .floatingCartButton:hover {
     transform: none !important;
   }
 }

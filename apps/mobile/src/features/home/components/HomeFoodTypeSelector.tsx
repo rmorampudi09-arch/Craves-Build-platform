@@ -16,9 +16,9 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import type {DiscoveryDietFilter} from '../../discoveryFilters/state/discoveryFilterSlice';
+import type {DiscoveryDietOption} from '../../discoveryFilters/state/discoveryFilterSlice';
 
-export type HomeFoodType = 'ALL' | DiscoveryDietFilter;
+export type HomeFoodType = 'ALL' | DiscoveryDietOption;
 
 type FoodTypeOption = {
   value: HomeFoodType;
@@ -102,22 +102,31 @@ export function HomeFoodTypeSelector({
   onChange,
 }: HomeFoodTypeSelectorProps) {
   const [visible, setVisible] = useState(false);
+  const [popupTop, setPopupTop] = useState(0);
+  const triggerRef = useRef<View>(null);
   const progress = useRef(new Animated.Value(0)).current;
   const selectedOption =
     FOOD_TYPE_OPTIONS.find(option => option.value === value) ?? FOOD_TYPE_OPTIONS[0];
 
-  const open = () => {
+  const animateOpen = () => {
     progress.stopAnimation();
     progress.setValue(0);
     setVisible(true);
     requestAnimationFrame(() => {
       Animated.spring(progress, {
         toValue: 1,
-        damping: 18,
-        stiffness: 220,
-        mass: 0.7,
+        damping: 19,
+        stiffness: 240,
+        mass: 0.72,
         useNativeDriver: true,
       }).start();
+    });
+  };
+
+  const open = () => {
+    triggerRef.current?.measureInWindow((_x, y, _width, height) => {
+      setPopupTop(y + height + spacing.sm);
+      animateOpen();
     });
   };
 
@@ -125,7 +134,7 @@ export function HomeFoodTypeSelector({
     progress.stopAnimation();
     Animated.timing(progress, {
       toValue: 0,
-      duration: 140,
+      duration: 130,
       useNativeDriver: true,
     }).start(() => setVisible(false));
   };
@@ -137,20 +146,21 @@ export function HomeFoodTypeSelector({
 
   const popupScale = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.84, 1],
-  });
-  const popupTranslateX = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [72, 0],
+    outputRange: [0.96, 1],
   });
   const popupTranslateY = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [-72, 0],
+    outputRange: [-10, 0],
+  });
+  const backdropOpacity = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
   });
 
   return (
     <>
       <Pressable
+        ref={triggerRef}
         accessibilityHint="Choose All, Veg, Non Veg, or Egg"
         accessibilityLabel={`Food type: ${selectedOption.label}`}
         accessibilityRole="button"
@@ -171,6 +181,10 @@ export function HomeFoodTypeSelector({
         transparent
         visible={visible}>
         <View style={styles.modalRoot}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.backdrop, {opacity: backdropOpacity}]}
+          />
           <Pressable
             accessibilityLabel="Close food type selector"
             accessibilityRole="button"
@@ -182,12 +196,9 @@ export function HomeFoodTypeSelector({
             style={[
               styles.popup,
               {
+                top: popupTop,
                 opacity: progress,
-                transform: [
-                  {translateX: popupTranslateX},
-                  {translateY: popupTranslateY},
-                  {scale: popupScale},
-                ],
+                transform: [{translateY: popupTranslateY}, {scale: popupScale}],
               },
             ]}>
             <View style={styles.optionRow}>
@@ -247,13 +258,15 @@ const styles = StyleSheet.create({
   },
   modalRoot: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.46)',
   },
   popup: {
-    width: '100%',
-    maxWidth: 380,
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: radius.lg,

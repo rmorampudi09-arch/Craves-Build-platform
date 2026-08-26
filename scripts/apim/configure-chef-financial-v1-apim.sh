@@ -72,7 +72,13 @@ POLICY="$(az rest --method get --url "${MGMT}/operations/${OPERATION_ID}/policie
 [[ "$POLICY" == *"$BACKEND"* ]] || fail "Backend verification failed"
 [[ "$POLICY" == *"no-store"* ]] || fail "No-store verification failed"
 GATEWAY_URL="$(az apim show -g "$RG" -n "$APIM" --query gatewayUrl -o tsv)"
-HTTP_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 "${GATEWAY_URL%/}/${API_PATH}")"
+HTTP_STATUS=""
+for attempt in {1..6}; do
+  HTTP_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --connect-timeout 10 --max-time 30 "${GATEWAY_URL%/}/${API_PATH}" || true)"
+  [[ "$HTTP_STATUS" == "401" ]] && break
+  (( attempt < 6 )) && sleep 10
+done
 [[ "$HTTP_STATUS" == "401" ]] || fail "Unauthenticated gateway guard returned HTTP $HTTP_STATUS instead of 401"
 
 echo "SUCCESS: Chef financial read API configured and verified at /${API_PATH}."

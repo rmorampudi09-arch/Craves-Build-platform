@@ -71,7 +71,7 @@ export function WelcomeBanner({
               type="button"
               onClick={onManageDefaultAddress}
               className="group inline-flex min-h-12 max-w-full items-center gap-2.5 rounded-full border border-[#E5E7EB] bg-white px-3 py-2 text-left shadow-[0_5px_16px_rgba(26,26,26,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#F62E18]/25 hover:shadow-[0_10px_24px_rgba(26,26,26,0.09)]"
-              aria-label={hasDefaultAddress ? `Default delivery address: ${defaultAddressLabel}. Change address` : "Choose default delivery address"}
+              aria-label={hasDefaultAddress ? `Default delivery address: ${defaultAddressLabel}. Change address` : "Choose a default delivery address"}
             >
               <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
                 <MapPin className="h-4 w-4" aria-hidden="true" />
@@ -81,15 +81,18 @@ export function WelcomeBanner({
                   </span>
                 ) : null}
               </span>
-              <span className="min-w-0 max-w-[15rem] sm:max-w-[20rem]">
+              <span className="min-w-0 max-w-[15rem] sm:max-w-[21rem]">
                 <span className="block text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
-                  {hasDefaultAddress ? "Default address" : "Delivery address"}
+                  {hasDefaultAddress ? "Default delivery address" : "Set default delivery address"}
                 </span>
                 <span className="block truncate text-xs font-black text-[#1A1A1A]">
                   {hasDefaultAddress
                     ? `${defaultAddressLabel}${radiusLabel ? ` · ${radiusLabel}` : ""}`
-                    : "Choose default address"}
+                    : "Choose where Craves should deliver"}
                 </span>
+              </span>
+              <span className="hidden shrink-0 rounded-full bg-[#F1F3F5] px-2.5 py-1 text-[0.62rem] font-black text-[#6B6B6B] sm:inline-flex">
+                {hasDefaultAddress ? "Change" : "Add"}
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-[#6B6B6B] transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
             </button>

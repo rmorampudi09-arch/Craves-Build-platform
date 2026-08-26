@@ -22,6 +22,7 @@ const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
 const welcome = source("../components/home/WelcomeBanner.tsx");
 const floatingCart = source("../components/home/FloatingCartBar.module.css");
 const cartAddressDialog = source("../components/home/CartAddressAvailabilityDialog.tsx");
+const addresses = source("../screens/Profile/Addresses.tsx");
 const checkout = source("../screens/Checkout/Checkout.tsx");
 const orders = source("../screens/OrderHistory/OrderHistory.tsx");
 const cart = source("../screens/Cart/Cart.tsx");
@@ -120,16 +121,16 @@ test("public landing keeps the approved semantic reference experience and wired 
   assert.doesNotMatch(landing, /min-h-screen bg-cream text-ink/);
 });
 
-test("welcome banner uses the saved default address instead of current-location discovery", () => {
+test("welcome banner stays focused on home content while discovery uses the saved default address", () => {
   assert.match(welcome, /src="\/home\/reference\/home-hero-reference\.webp"/);
   assert.match(welcome, /styles\.heroArtwork/);
   assert.match(welcome, /Welcome home, \{firstName\}/);
   assert.match(welcome, /Eat for Health\./);
   assert.match(welcome, /Taste the Comfort of Home\./);
-  assert.match(welcome, /Default address/);
-  assert.match(welcome, /Choose default address/);
-  assert.match(welcome, /onManageDefaultAddress/);
   assert.match(welcome, /dishCount/);
+  assert.doesNotMatch(welcome, /<button/);
+  assert.doesNotMatch(welcome, /Default address/);
+  assert.doesNotMatch(welcome, /Choose default address/);
   assert.doesNotMatch(welcome, /Use current delivery location/);
   assert.doesNotMatch(welcome, /Current Location/);
 
@@ -137,6 +138,21 @@ test("welcome banner uses the saved default address instead of current-location 
   assert.match(home, /default delivery address/);
   assert.doesNotMatch(home, /navigator\.geolocation/);
   assert.doesNotMatch(home, /resolveLiveBrowsingLocation/);
+});
+
+test("address manager owns default selection and reference-style editing", () => {
+  assert.match(addresses, /Add New Address/);
+  assert.match(addresses, /Choose your default delivery address here/);
+  assert.match(addresses, /Select as default/);
+  assert.match(addresses, /Default address/);
+  assert.match(addresses, /async function selectDefault/);
+  assert.match(addresses, /role="dialog"/);
+  assert.match(addresses, /Address label/);
+  assert.match(addresses, /Contact details/);
+  assert.match(addresses, /Address details/);
+  assert.match(addresses, /Use my current location/);
+  assert.match(addresses, /Update address/);
+  assert.doesNotMatch(addresses, /Make this my default address/);
 });
 
 test("home rechecks cart availability after default-address changes", () => {

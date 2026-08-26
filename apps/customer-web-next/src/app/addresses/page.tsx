@@ -6,7 +6,9 @@ import AddressesPage from "@/screens/Profile/Addresses";
 export default function AddressesRoutePage() {
   return (
     <ContextualBackBoundary destination="/addresses">
-      <AddressesPage />
+      <div className="[&>div>main>div:first-child]:hidden">
+        <AddressesPage />
+      </div>
     </ContextualBackBoundary>
   );
 }

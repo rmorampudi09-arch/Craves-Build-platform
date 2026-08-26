@@ -12,3 +12,12 @@ export function selectActiveDeliveryAddress(
     ?? ready[0]
     ?? null;
 }
+
+export function selectDefaultDeliveryAddress(
+  addresses: readonly CustomerAddress[],
+): DeliveryReadyAddress | null {
+  return addresses.find(
+    (address): address is DeliveryReadyAddress =>
+      address.isDefault && isDeliveryReadyAddress(address),
+  ) ?? null;
+}

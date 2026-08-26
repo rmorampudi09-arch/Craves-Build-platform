@@ -73,3 +73,8 @@ export function allKitchens(): NearbyKitchen[] {
 export function getKitchenDiscoveryRadiusMeters(): number {
   return kitchenDiscoveryRadiusMeters;
 }
+
+export function clearKitchenDiscoveryCache(): void {
+  discoveredKitchens = [];
+  kitchenDiscoveryRadiusMeters = 5_000;
+}

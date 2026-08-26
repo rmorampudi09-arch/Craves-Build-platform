@@ -146,6 +146,10 @@ test("address manager owns default selection and reference-style editing", () =>
   assert.match(addresses, /Select as default/);
   assert.match(addresses, /Default address/);
   assert.match(addresses, /async function selectDefault/);
+  assert.match(addresses, /invalidateHomeDeliveryContext/);
+  assert.match(addresses, /invalidateSelectedAddress/);
+  assert.match(addresses, /clearDishDiscoveryCache/);
+  assert.match(addresses, /clearKitchenDiscoveryCache/);
   assert.match(addresses, /role="dialog"/);
   assert.match(addresses, /Address label/);
   assert.match(addresses, /Contact details/);

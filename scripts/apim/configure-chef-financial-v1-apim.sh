@@ -28,7 +28,7 @@ RUNNING="$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")"
 [[ -n "$FQDN" ]] || fail "Integration Service FQDN could not be resolved"
 [[ -n "$LATEST" && "$LATEST" == "$READY" ]] || fail "Integration Service latest revision is not Ready"
 [[ "$RUNNING" == "Running" ]] || fail "Integration Service is not Running"
-curl -sS --fail --max-time 30 "https://$FQDN/actuator/health" >/dev/null
+curl -sS --fail --max-time 30 "https://$FQDN/actuator/health/readiness" >/dev/null
 
 SERVICE_MGMT="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}"
 mapfile -t API_IDS < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='${API_PATH}'].name" -o tsv)

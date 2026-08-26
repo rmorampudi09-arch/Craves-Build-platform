@@ -176,6 +176,10 @@ export function getAddress(): CravesAddress | null {
   return selectedLocation;
 }
 
+export function invalidateSelectedAddress(): void {
+  selectedLocation = null;
+}
+
 function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
   return {
     id: address.id,

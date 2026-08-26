@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { BrowseHeader } from "@/components/home/BrowseHeader";
+import { CartAddressAvailabilityDialog } from "@/components/home/CartAddressAvailabilityDialog";
 import { CustomerSignOutDialog } from "@/components/home/CustomerSignOutDialog";
 import { DishesGrid } from "@/components/home/DishesGrid";
 import { FloatingCartBar } from "@/components/home/FloatingCartBar";
@@ -20,23 +21,8 @@ import { HomeSearchOverlay } from "@/components/home/HomeSearchOverlay";
 import { KitchensGrid } from "@/components/home/KitchensGrid";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
 import { ALL_DISHES_CATEGORY } from "@/constants/dishCategories";
-import {
-  allDishes,
-  discoverDishes,
-  getDiscoveryRadiusMeters,
-  type Dish,
-} from "@/services/api/dishes";
-import {
-  allKitchens,
-  discoverKitchens,
-  getKitchenDiscoveryRadiusMeters,
-} from "@/services/api/kitchens";
 import { formatDiscoveryRadius } from "@/lib/catalog-discovery-policy";
 import { type NearbyKitchen } from "@/lib/discovery-contract";
-import {
-  parseLocationRecommendation,
-  type CustomerAddress,
-} from "@/lib/address-contract";
 import {
   clearHomeReturnState,
   readHomeReturnState,
@@ -44,28 +30,42 @@ import {
   type HomeDishSort,
   type HomeFoodPreference,
 } from "@/lib/home-return-state";
+import { rememberReturnRoute } from "@/lib/return-navigation";
+import {
+  cartCount,
+  cartCurrency,
+  cartTotal,
+  clearCart,
+  getCart,
+  loadCart,
+  removeFromCart,
+  subscribeCart,
+  type CartItem,
+} from "@/services/api/cravesCart";
+import {
+  allDishes,
+  discoverDishes,
+  getDiscoveryRadiusMeters,
+  loadKitchenMenu,
+  type Dish,
+} from "@/services/api/dishes";
+import {
+  allKitchens,
+  discoverKitchens,
+  getKitchenDiscoveryRadiusMeters,
+} from "@/services/api/kitchens";
 import {
   clearSession,
   getAddress,
   getSession,
   loadSelectedAddress,
   loadSession,
-  saveAddress,
   type CravesAddress,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
-import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
-import {
-  cartCount,
-  cartCurrency,
-  cartTotal,
-  loadCart,
-  subscribeCart,
-} from "@/services/api/cravesCart";
 import styles from "./HomeReference.module.css";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
-const SAVED_ADDRESS_MATCH_RADIUS_METERS = 100;
 
 const HOME_CATEGORY_KEYWORDS: Record<CravingCategory, readonly string[]> = {
   Biryani: ["biryani"],
@@ -102,104 +102,13 @@ function isCravingCategory(value: string | null): value is CravingCategory {
   return value !== null && CRAVING_CATEGORIES.has(value as CravingCategory);
 }
 
-function savedAddressToBrowsingLocation(address: CustomerAddress): CravesAddress | null {
-  if (address.latitude == null || address.longitude == null || !address.areaName) return null;
-  return {
-    id: address.id,
-    label: address.addressLabel,
-    hno: address.addressLine1,
-    street: address.addressLine2 ?? address.landmark ?? undefined,
-    city: address.city,
-    mandal: address.areaName,
-    district: address.districtName ?? address.city,
-    pincode: address.postalCode ?? undefined,
-    lat: address.latitude,
-    lng: address.longitude,
-  };
-}
-
-function readCurrentPosition(): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      reject(new Error("Location access is unavailable."));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 12_000,
-      maximumAge: 30_000,
-    });
-  });
-}
-
-async function resolveLiveBrowsingLocation(
-  fallback: CravesAddress | null,
-): Promise<CravesAddress | null> {
-  let position: GeolocationPosition;
-  try {
-    position = await readCurrentPosition();
-  } catch {
-    return fallback;
-  }
-
-  const latitude = Number(position.coords.latitude.toFixed(7));
-  const longitude = Number(position.coords.longitude.toFixed(7));
-  const query = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
-    matchRadiusMeters: String(SAVED_ADDRESS_MATCH_RADIUS_METERS),
-  });
-
-  try {
-    const recommendationResponse = await fetch(
-      `/api/customer/addresses/recommendation?${query}`,
-      { cache: "no-store", credentials: "same-origin" },
-    );
-    if (recommendationResponse.ok) {
-      const recommendation = parseLocationRecommendation(
-        await recommendationResponse.json().catch(() => null),
-      );
-      if (recommendation?.selectedSavedAddress) {
-        const matched = savedAddressToBrowsingLocation(recommendation.selectedSavedAddress);
-        if (matched) {
-          saveAddress(matched);
-          return matched;
-        }
-      }
-    }
-  } catch {
-    // Saved-address matching is an optimization. GPS discovery can continue.
-  }
-
-  try {
-    const detected = await reverseGeocodeCurrentLocation(latitude, longitude);
-    const live: CravesAddress = {
-      label: "CURRENT LOCATION",
-      hno: detected.houseNumber || detected.formattedAddress,
-      street: detected.street ?? undefined,
-      city: detected.city || "",
-      mandal: detected.area || detected.city || "Current location",
-      district: detected.district || detected.city || "",
-      pincode: detected.postalCode ?? undefined,
-      lat: latitude,
-      lng: longitude,
-    };
-    saveAddress(live);
-    return live;
-  } catch {
-    const liveWithoutAddress: CravesAddress = {
-      label: "CURRENT LOCATION",
-      hno: "Current location",
-      city: "",
-      mandal: "Current location",
-      district: "",
-      pincode: undefined,
-      lat: latitude,
-      lng: longitude,
-    };
-    saveAddress(liveWithoutAddress);
-    return liveWithoutAddress;
-  }
+function isSameBrowsingAddress(
+  left: CravesAddress | null,
+  right: CravesAddress | null,
+): boolean {
+  if (!left || !right) return left === right;
+  if (left.id && right.id) return left.id === right.id;
+  return left.lat === right.lat && left.lng === right.lng;
 }
 
 function forceInstantWindowScroll(top: number): void {
@@ -244,15 +153,22 @@ function BrowseFoodsPage() {
   const [cartItemCount, setCartItemCount] = useState(() => cartCount());
   const [cartSubtotal, setCartSubtotal] = useState(() => cartTotal());
   const [cartCurrencyCode, setCartCurrencyCode] = useState(() => cartCurrency());
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
+  const [unavailableCartItems, setUnavailableCartItems] = useState<CartItem[]>([]);
+  const [dismissedCartAvailabilityKey, setDismissedCartAvailabilityKey] = useState<string | null>(null);
+  const [cartRepairBusy, setCartRepairBusy] = useState(false);
+  const [cartRepairError, setCartRepairError] = useState<string | null>(null);
   const [kitchens, setKitchens] = useState<NearbyKitchen[]>(initialCache.kitchens);
+  const [defaultAddressResolved, setDefaultAddressResolved] = useState(false);
+  const [kitchenDiscoveryVerified, setKitchenDiscoveryVerified] = useState(hasInitialCatalog);
   const [nearbyDishes, setNearbyDishes] = useState<Dish[]>(initialCache.dishes);
   const [discoveryState, setDiscoveryState] = useState<DiscoveryState>(
     hasInitialCatalog ? "ready" : "loading",
   );
   const [catalogMessage, setCatalogMessage] = useState(
     hasInitialCatalog
-      ? "Fresh homemade food available near your delivery location."
-      : "Detecting your current delivery location…",
+      ? "Fresh homemade food available near your default delivery address."
+      : "Loading your default delivery address…",
   );
   const [radiusLabel, setRadiusLabel] = useState<string | null>(() => {
     if (initialCache.kitchens.length > 0) {
@@ -263,13 +179,13 @@ function BrowseFoodsPage() {
     }
     return null;
   });
-  const [locating, setLocating] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   const refreshDiscovery = useCallback(async (
     activeAddress: CravesAddress | null,
     resetFilters = true,
+    preserveExistingCatalog = false,
   ) => {
     if (resetFilters) {
       setHomeCategory(null);
@@ -284,20 +200,25 @@ function BrowseFoodsPage() {
       typeof activeAddress.lng !== "number"
     ) {
       setKitchens([]);
+      setKitchenDiscoveryVerified(false);
       setNearbyDishes([]);
       setRadiusLabel(null);
       setDiscoveryState("address-required");
       setCatalogMessage(
-        "Choose or save a delivery location so Craves can show nearby home kitchens.",
+        "Choose a default delivery address so Craves can show nearby home kitchens.",
       );
       return;
     }
 
     const preserveExisting =
-      !resetFilters && (allDishes().length > 0 || allKitchens().length > 0);
+      preserveExistingCatalog && (allDishes().length > 0 || allKitchens().length > 0);
     if (!preserveExisting) {
+      setKitchens([]);
+      setKitchenDiscoveryVerified(false);
+      setNearbyDishes([]);
+      setRadiusLabel(null);
       setDiscoveryState("loading");
-      setCatalogMessage("Loading nearby home kitchens and fresh dishes…");
+      setCatalogMessage("Loading food near your default delivery address…");
     }
 
     const [kitchenResult, dishResult] = await Promise.allSettled([
@@ -310,8 +231,10 @@ function BrowseFoodsPage() {
 
     if (kitchenResult.status === "fulfilled") {
       setKitchens(loadedKitchens);
-    } else if (!preserveExisting) {
-      setKitchens([]);
+      setKitchenDiscoveryVerified(true);
+    } else {
+      setKitchenDiscoveryVerified(false);
+      if (!preserveExisting) setKitchens([]);
     }
     if (dishResult.status === "fulfilled") {
       setNearbyDishes(loadedDishes);
@@ -330,7 +253,7 @@ function BrowseFoodsPage() {
     if (kitchenResult.status === "rejected" && dishResult.status === "rejected") {
       if (preserveExisting) {
         setDiscoveryState("ready");
-        setCatalogMessage("Showing your recent nearby results while Craves refreshes in the background.");
+        setCatalogMessage("Showing your recent default-address results while Craves refreshes in the background.");
         return;
       }
       setDiscoveryState("error");
@@ -343,11 +266,11 @@ function BrowseFoodsPage() {
 
     setDiscoveryState("ready");
     if (loadedKitchens.length === 0 && loadedDishes.length === 0) {
-      setCatalogMessage("No active home kitchens or dishes were returned for this location yet.");
+      setCatalogMessage("No active home kitchens or dishes were returned for your default address yet.");
     } else if (kitchenResult.status === "rejected" || dishResult.status === "rejected") {
       setCatalogMessage("Some nearby results are temporarily unavailable. Showing the live results we could load.");
     } else {
-      setCatalogMessage("Fresh homemade food available near your delivery location.");
+      setCatalogMessage("Fresh homemade food available near your default delivery address.");
     }
   }, []);
 
@@ -415,26 +338,6 @@ function BrowseFoodsPage() {
     }
   }, [rememberHomeView]);
 
-  const useCurrentLocation = useCallback(async () => {
-    setLocating(true);
-    setCatalogMessage("Detecting your current delivery location…");
-
-    try {
-      const activeLocation = await resolveLiveBrowsingLocation(address);
-      setAddress(activeLocation);
-      await refreshDiscovery(activeLocation);
-    } catch (error) {
-      setDiscoveryState("error");
-      setCatalogMessage(
-        error instanceof Error
-          ? error.message
-          : "Your current delivery location could not be detected.",
-      );
-    } finally {
-      setLocating(false);
-    }
-  }, [address, refreshDiscovery]);
-
   useEffect(() => {
     restoreHomeView();
   }, [restoreHomeView]);
@@ -447,6 +350,7 @@ function BrowseFoodsPage() {
       setCartItemCount(cartCount());
       setCartSubtotal(cartTotal());
       setCartCurrencyCode(cartCurrency());
+      setCartItems(getCart());
     };
 
     void (async () => {
@@ -459,42 +363,34 @@ function BrowseFoodsPage() {
       setUser(current);
 
       try {
-        const savedFallback = await loadSelectedAddress();
+        const defaultAddress = await loadSelectedAddress();
         if (!active) return;
-        setAddress(savedFallback);
-        if (!hasInitialCatalog) {
-          setCatalogMessage(
-            savedFallback
-              ? "Checking whether you are still near your saved address…"
-              : "Detecting your current delivery location…",
-          );
-        }
-        const activeLocation = await resolveLiveBrowsingLocation(savedFallback);
-        if (!active) return;
-        setAddress(activeLocation);
-        await refreshDiscovery(activeLocation, false);
+        const canPreserveInitialCatalog = isSameBrowsingAddress(
+          initialCache.address,
+          defaultAddress,
+        );
+        setAddress(defaultAddress);
+        setCatalogMessage(
+          defaultAddress
+            ? "Loading food near your default delivery address…"
+            : "Choose a default delivery address to see nearby food.",
+        );
+        await refreshDiscovery(defaultAddress, false, canPreserveInitialCatalog);
+        if (active) setDefaultAddressResolved(true);
       } catch (error) {
         if (!active) return;
-        const cachedAddress = getAddress();
-        const cachedKitchens = allKitchens();
-        const cachedDishes = allDishes();
-        if (cachedAddress && (cachedKitchens.length > 0 || cachedDishes.length > 0)) {
-          setAddress(cachedAddress);
-          setKitchens(cachedKitchens);
-          setNearbyDishes(cachedDishes);
-          setDiscoveryState("ready");
-          setCatalogMessage("Showing your recent nearby results while location refresh is unavailable.");
-        } else {
-          setAddress(null);
-          setKitchens([]);
-          setNearbyDishes([]);
-          setDiscoveryState("error");
-          setCatalogMessage(
-            error instanceof Error
-              ? error.message
-              : "Your delivery location could not be loaded.",
-          );
-        }
+        setAddress(null);
+        setKitchens([]);
+        setKitchenDiscoveryVerified(false);
+        setNearbyDishes([]);
+        setRadiusLabel(null);
+        setDiscoveryState("error");
+        setDefaultAddressResolved(true);
+        setCatalogMessage(
+          error instanceof Error
+            ? error.message
+            : "Your default delivery address could not be loaded.",
+        );
       }
 
       try {
@@ -505,6 +401,7 @@ function BrowseFoodsPage() {
           setCartItemCount(0);
           setCartSubtotal(0);
           setCartCurrencyCode("INR");
+          setCartItems([]);
         }
       }
     })();
@@ -514,7 +411,78 @@ function BrowseFoodsPage() {
       active = false;
       unsubscribeCart();
     };
-  }, [hasInitialCatalog, navigate, refreshDiscovery]);
+  }, [initialCache.address, navigate, refreshDiscovery]);
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      setCartRepairError(null);
+      if (
+        !defaultAddressResolved ||
+        discoveryState !== "ready" ||
+        !kitchenDiscoveryVerified ||
+        cartItems.length === 0 ||
+        typeof address?.lat !== "number" ||
+        typeof address.lng !== "number"
+      ) {
+        setUnavailableCartItems([]);
+        return;
+      }
+
+      const nearbyKitchenIds = new Set(kitchens.map((kitchen) => kitchen.id));
+      const outOfRangeItems = cartItems.filter(
+        (item) => !nearbyKitchenIds.has(item.kitchenId),
+      );
+      if (outOfRangeItems.length > 0) {
+        setUnavailableCartItems(outOfRangeItems);
+        return;
+      }
+
+      const nearbyDishIds = new Set(nearbyDishes.map((dish) => dish.id));
+      const unresolvedItems = cartItems.filter(
+        (item) => !nearbyDishIds.has(item.menuItemId),
+      );
+      if (unresolvedItems.length === 0) {
+        setUnavailableCartItems([]);
+        return;
+      }
+
+      const kitchenIds = Array.from(new Set(unresolvedItems.map((item) => item.kitchenId)));
+      const menuResults = await Promise.all(
+        kitchenIds.map(async (kitchenId) => {
+          try {
+            const menu = await loadKitchenMenu(kitchenId);
+            return [kitchenId, new Set(menu.map((dish) => dish.id))] as const;
+          } catch {
+            return [kitchenId, null] as const;
+          }
+        }),
+      );
+      if (!active) return;
+
+      const menuIdsByKitchen = new Map(menuResults);
+      setUnavailableCartItems(
+        unresolvedItems.filter((item) => {
+          const menuIds = menuIdsByKitchen.get(item.kitchenId);
+          return menuIds instanceof Set && !menuIds.has(item.menuItemId);
+        }),
+      );
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    address?.lat,
+    address?.lng,
+    cartItems,
+    defaultAddressResolved,
+    discoveryState,
+    kitchenDiscoveryVerified,
+    kitchens,
+    nearbyDishes,
+  ]);
 
   const categoryImages = useMemo<Partial<Record<CravingCategory, string>>>(() => {
     const result: Partial<Record<CravingCategory, string>> = {};
@@ -579,6 +547,51 @@ function BrowseFoodsPage() {
     return matchingDishes;
   }, [dishSort, foodPreference, homeCategory, nearbyDishes, searchTerm]);
 
+  const locationLabel = address
+    ? [address.mandal, address.city].filter(Boolean).join(", ")
+    : "Choose default address";
+
+  const cartAvailabilityKey = unavailableCartItems.length > 0
+    ? `${address?.id ?? `${address?.lat ?? ""}:${address?.lng ?? ""}`}|${unavailableCartItems
+        .map((item) => item.id)
+        .sort()
+        .join(",")}`
+    : null;
+
+  const cartAvailabilityOpen = Boolean(
+    cartAvailabilityKey && cartAvailabilityKey !== dismissedCartAvailabilityKey,
+  );
+
+  const resolveUnavailableCartItems = useCallback(async () => {
+    if (unavailableCartItems.length === 0 || cartRepairBusy) return;
+    setCartRepairBusy(true);
+    setCartRepairError(null);
+    try {
+      if (unavailableCartItems.length === cartItems.length) {
+        await clearCart();
+      } else {
+        for (const item of unavailableCartItems) {
+          await removeFromCart(item.id);
+        }
+      }
+      setUnavailableCartItems([]);
+      setDismissedCartAvailabilityKey(null);
+    } catch (error) {
+      setCartRepairError(
+        error instanceof Error
+          ? error.message
+          : "Your cart could not be updated. Please try again.",
+      );
+    } finally {
+      setCartRepairBusy(false);
+    }
+  }, [cartItems.length, cartRepairBusy, unavailableCartItems]);
+
+  const openAddressManager = useCallback(() => {
+    rememberReturnRoute("/addresses", "/home");
+    navigate({ to: "/addresses" });
+  }, [navigate]);
+
   const handleLogout = async () => {
     if (signingOut) return;
     setSigningOut(true);
@@ -590,10 +603,6 @@ function BrowseFoodsPage() {
       setSigningOut(false);
     }
   };
-
-  const locationLabel = address
-    ? [address.mandal, address.city].filter(Boolean).join(", ")
-    : "Set delivery location";
 
   if (!user) {
     return (
@@ -614,7 +623,7 @@ function BrowseFoodsPage() {
       <BrowseHeader
         user={user}
         locationLabel={locationLabel}
-        onOpenLocation={() => navigate({ to: "/addresses" })}
+        onOpenLocation={openAddressManager}
         cartCount={cartItemCount}
         onOpenCart={() => navigate({ to: "/cart" })}
         onLogout={() => setSignOutOpen(true)}
@@ -628,9 +637,9 @@ function BrowseFoodsPage() {
           firstName={user.firstName || user.username.split(" ")[0] || "there"}
           dishCount={nearbyDishes.length}
           radiusLabel={radiusLabel}
-          hasAddress={Boolean(address?.lat != null && address?.lng != null)}
-          locating={locating}
-          onUseCurrentLocation={useCurrentLocation}
+          defaultAddressLabel={locationLabel}
+          hasDefaultAddress={Boolean(address?.lat != null && address?.lng != null)}
+          onManageDefaultAddress={openAddressManager}
         />
 
         <HomeCategoryRail
@@ -652,8 +661,8 @@ function BrowseFoodsPage() {
             rememberHomeView();
             navigate({ to: "/kitchen/$id", params: { id: kitchen.id } });
           }}
-          onRetry={() => void refreshDiscovery(address, false)}
-          onManageAddress={() => navigate({ to: "/addresses" })}
+          onRetry={() => void refreshDiscovery(address, false, true)}
+          onManageAddress={openAddressManager}
         />
 
         <DishesGrid
@@ -671,8 +680,8 @@ function BrowseFoodsPage() {
             setDishSort("recommended");
             setFoodPreference("all");
           }}
-          onRetry={() => void refreshDiscovery(address, false)}
-          onManageAddress={() => navigate({ to: "/addresses" })}
+          onRetry={() => void refreshDiscovery(address, false, true)}
+          onManageAddress={openAddressManager}
         />
 
         <HomeBottomSections />
@@ -683,6 +692,22 @@ function BrowseFoodsPage() {
         total={cartSubtotal}
         currency={cartCurrencyCode}
         onViewCart={() => navigate({ to: "/cart" })}
+      />
+
+      <CartAddressAvailabilityDialog
+        open={cartAvailabilityOpen}
+        addressLabel={locationLabel}
+        unavailableItems={unavailableCartItems}
+        totalCartItems={cartItems.length}
+        busy={cartRepairBusy}
+        error={cartRepairError}
+        onResolve={() => void resolveUnavailableCartItems()}
+        onChooseAddress={openAddressManager}
+        onClose={() => {
+          if (cartAvailabilityKey) {
+            setDismissedCartAvailabilityKey(cartAvailabilityKey);
+          }
+        }}
       />
 
       {searchOpen ? (

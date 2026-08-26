@@ -18,7 +18,10 @@ const referenceCrop = source(
   "../components/sections/landing-reference/ReferenceImageCrop.tsx",
 );
 const landing = source("../screens/public/LandingPage/LandingPage.tsx");
+const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
 const welcome = source("../components/home/WelcomeBanner.tsx");
+const floatingCart = source("../components/home/FloatingCartBar.module.css");
+const cartAddressDialog = source("../components/home/CartAddressAvailabilityDialog.tsx");
 const checkout = source("../screens/Checkout/Checkout.tsx");
 const orders = source("../screens/OrderHistory/OrderHistory.tsx");
 const cart = source("../screens/Cart/Cart.tsx");
@@ -117,15 +120,40 @@ test("public landing keeps the approved semantic reference experience and wired 
   assert.doesNotMatch(landing, /min-h-screen bg-cream text-ink/);
 });
 
-test("welcome banner keeps the rebuilt home reference hero and live location controls", () => {
+test("welcome banner uses the saved default address instead of current-location discovery", () => {
   assert.match(welcome, /src="\/home\/reference\/home-hero-reference\.webp"/);
   assert.match(welcome, /styles\.heroArtwork/);
   assert.match(welcome, /Welcome home, \{firstName\}/);
   assert.match(welcome, /Eat for Health\./);
   assert.match(welcome, /Taste the Comfort of Home\./);
-  assert.match(welcome, /Use current delivery location/);
-  assert.match(welcome, /Current Location/);
+  assert.match(welcome, /Default address/);
+  assert.match(welcome, /Choose default address/);
+  assert.match(welcome, /onManageDefaultAddress/);
   assert.match(welcome, /dishCount/);
+  assert.doesNotMatch(welcome, /Use current delivery location/);
+  assert.doesNotMatch(welcome, /Current Location/);
+
+  assert.match(home, /loadSelectedAddress/);
+  assert.match(home, /default delivery address/);
+  assert.doesNotMatch(home, /navigator\.geolocation/);
+  assert.doesNotMatch(home, /resolveLiveBrowsingLocation/);
+});
+
+test("home rechecks cart availability after default-address changes", () => {
+  assert.match(home, /CartAddressAvailabilityDialog/);
+  assert.match(home, /loadKitchenMenu/);
+  assert.match(home, /unavailableCartItems/);
+  assert.match(home, /removeFromCart/);
+  assert.match(home, /clearCart/);
+  assert.match(cartAddressDialog, /Choose another address/);
+  assert.match(cartAddressDialog, /Remove unavailable items/);
+  assert.match(cartAddressDialog, /Clear cart & browse here/);
+});
+
+test("home cart bar uses a balanced true frosted-glass blur", () => {
+  assert.match(floatingCart, /background:\s*rgba\(255, 255, 255, 0\.5\)/);
+  assert.match(floatingCart, /backdrop-filter:\s*blur\(30px\) saturate\(145%\)/);
+  assert.match(floatingCart, /@supports not/);
 });
 
 test("meal plans keep their previous card layout and navigation flow", () => {

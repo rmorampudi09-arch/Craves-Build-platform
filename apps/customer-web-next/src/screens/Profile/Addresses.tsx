@@ -21,7 +21,12 @@ import {
   type CustomerAddress,
   type CustomerAddressInput,
 } from "@/lib/address-contract";
-import { loadSession } from "@/services/auth/cravesAuth";
+import { clearDishDiscoveryCache } from "@/services/api/dishes";
+import { clearKitchenDiscoveryCache } from "@/services/api/kitchens";
+import {
+  invalidateSelectedAddress,
+  loadSession,
+} from "@/services/auth/cravesAuth";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 
 type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude"> & {
@@ -84,6 +89,12 @@ function recipientLine(address: CustomerAddress): string {
   return [address.recipientName, address.contactPhoneNumber]
     .filter(Boolean)
     .join(" · ");
+}
+
+function invalidateHomeDeliveryContext(): void {
+  invalidateSelectedAddress();
+  clearDishDiscoveryCache();
+  clearKitchenDiscoveryCache();
 }
 
 const addressLabels: Array<{ value: AddressLabel; label: string }> = [
@@ -246,11 +257,16 @@ export default function AddressesPage() {
       const body = await response.json().catch(() => null);
       if (!response.ok)
         throw new Error(body?.message || "Address could not be saved.");
+      invalidateHomeDeliveryContext();
       setOpen(false);
       setEditingId(null);
       setDraft(blank);
       await load();
-      setMessage("Address saved. Select it as default from your saved addresses when you want Home to use it.");
+      setMessage(
+        body?.isDefault
+          ? "Address saved and set as your default delivery address."
+          : "Address saved. Select it as default from your saved addresses when you want Home to use it.",
+      );
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Address could not be saved.",
@@ -284,6 +300,7 @@ export default function AddressesPage() {
       const body = await response.json().catch(() => null);
       if (!response.ok)
         throw new Error(body?.message || "Default address could not be updated.");
+      invalidateHomeDeliveryContext();
       await load();
       setMessage(`${address.addressLabel} is now your default delivery address.`);
     } catch (error) {
@@ -310,6 +327,7 @@ export default function AddressesPage() {
         const body = await response.json().catch(() => null);
         throw new Error(body?.message || "Address could not be deleted.");
       }
+      invalidateHomeDeliveryContext();
       await load();
       setMessage("Address deleted.");
     } catch (error) {

@@ -59,31 +59,39 @@ export function CartAddressAvailabilityDialog({
             <X className="h-4.5 w-4.5" aria-hidden="true" />
           </button>
 
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F62E18]/10 text-[#F62E18]">
-            <ShoppingBag className="h-5.5 w-5.5" aria-hidden="true" />
+          <div className="flex items-center gap-3 pr-12">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#F62E18]/10 text-[#F62E18]">
+              <ShoppingBag className="h-5.5 w-5.5" aria-hidden="true" />
+            </div>
+            <div>
+              <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#6B6B6B]">
+                Address changed
+              </span>
+              <p className="mt-1 text-xs font-bold text-[#6B6B6B]">We rechecked your cart automatically</p>
+            </div>
           </div>
 
           <h2
             id="cart-address-title"
             className="mt-4 pr-10 font-display text-[1.45rem] font-black tracking-[-0.03em] text-[#1A1A1A]"
           >
-            {allUnavailable ? "This cart can’t travel to the new address" : "A few cart items aren’t available here"}
+            {allUnavailable ? "Your cart isn’t available at this address" : "Some cart items aren’t available here"}
           </h2>
           <p
             id="cart-address-description"
             className="mt-2 text-sm font-medium leading-6 text-[#6B6B6B]"
           >
-            We checked your cart against <span className="font-bold text-[#1A1A1A]">{addressLabel}</span>.
+            Your new default delivery address is <span className="font-bold text-[#1A1A1A]">{addressLabel}</span>.
             {" "}
             {allUnavailable
-              ? "The kitchen in your cart is outside this delivery area or its items are no longer available."
-              : `${unavailableQuantity} cart ${unavailableQuantity === 1 ? "item is" : "items are"} unavailable at this address.`}
+              ? "The kitchen in your cart does not serve this area, so you can keep the cart and choose another address or clear it and browse food available here."
+              : `${unavailableQuantity} cart ${unavailableQuantity === 1 ? "item is" : "items are"} unavailable here. The rest of your cart can stay.`}
           </p>
 
           <div className="mt-5 rounded-2xl bg-[#F1F3F5] p-3.5">
             <div className="mb-2.5 flex items-center gap-2 text-xs font-black uppercase tracking-[0.08em] text-[#6B6B6B]">
               <AlertTriangle className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-              Unavailable for this address
+              Unavailable at this default address
             </div>
             <div className="space-y-2">
               {unavailableItems.slice(0, 3).map((item) => (
@@ -111,16 +119,16 @@ export function CartAddressAvailabilityDialog({
               type="button"
               onClick={onChooseAddress}
               disabled={busy}
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl !border !border-[#E5E7EB] !bg-white px-4 text-sm font-black !text-[#1A1A1A] transition-all hover:!border-[#F62E18]/35 hover:!bg-[#F1F3F5] disabled:opacity-50"
+              className={`${allUnavailable ? "!bg-[#F62E18] !text-white shadow-[0_10px_24px_rgba(246,46,24,0.2)]" : "!border !border-[#E5E7EB] !bg-white !text-[#1A1A1A] hover:!border-[#F62E18]/35 hover:!bg-[#F1F3F5]"} inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition-all hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50`}
             >
-              <MapPin className="h-4.5 w-4.5 text-[#F62E18]" aria-hidden="true" />
+              <MapPin className={`h-4.5 w-4.5 ${allUnavailable ? "text-white" : "text-[#F62E18]"}`} aria-hidden="true" />
               Choose another address
             </button>
             <button
               type="button"
               onClick={onResolve}
               disabled={busy}
-              className="min-h-12 rounded-xl !bg-[#F62E18] px-4 text-sm font-black !text-white shadow-[0_10px_24px_rgba(246,46,24,0.2)] transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60"
+              className={`${allUnavailable ? "!border !border-[#E5E7EB] !bg-white !text-[#1A1A1A] hover:!bg-[#F1F3F5]" : "!bg-[#F62E18] !text-white shadow-[0_10px_24px_rgba(246,46,24,0.2)]"} min-h-12 rounded-xl px-4 text-sm font-black transition-all hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60`}
             >
               {busy
                 ? "Updating cart…"

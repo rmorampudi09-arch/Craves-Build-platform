@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
+import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 interface FloatingCartBarProps {
   itemCount: number;
@@ -26,29 +27,44 @@ export function FloatingCartBar({
   if (itemCount <= 0) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-5 z-50 px-4 sm:bottom-6">
+    <div
+      className={`${styles.cartEnter} pointer-events-none fixed inset-x-0 bottom-4 z-50 px-4 sm:bottom-6 md:px-6`}
+    >
       <button
         type="button"
         onClick={onViewCart}
-        className="pointer-events-auto mx-auto flex min-h-16 w-full max-w-md items-center gap-3 rounded-2xl !border !border-[#E5E7EB] !bg-white px-3.5 py-2.5 text-left !text-[#1A1A1A] shadow-[0_10px_30px_rgba(26,26,26,0.14)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(26,26,26,0.17)] sm:px-4"
+        className={`${styles.floatingCartButton} group pointer-events-auto relative isolate mx-auto flex min-h-[4.7rem] w-full max-w-[58rem] items-center gap-4 overflow-hidden rounded-[1.7rem] px-[1.125rem] text-left sm:px-6`}
         aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
       >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F1F3F5] text-[#F62E18]">
-          <CravesCartIcon className="h-[1.15rem] w-[1.15rem]" />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(255,255,255,0.96),rgba(248,249,250,0.88)_48%,rgba(255,255,255,0.96))]"
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-10 top-0 h-px bg-white"
+        />
+
+        <span className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] border border-white bg-white/95 text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,1),0_8px_20px_rgba(26,26,26,0.08)] backdrop-blur-md">
+          <CravesCartIcon className="h-5 w-5" />
         </span>
 
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-black tracking-[-0.01em] text-[#1A1A1A] sm:text-[0.95rem]">
-            {itemCount} {itemCount === 1 ? "item" : "items"} · {formatMoney(total, currency)}
+        <span className="relative z-10 min-w-0 flex-1">
+          <span className="block truncate text-sm font-black text-[#1A1A1A] sm:text-base">
+            {itemCount} {itemCount === 1 ? "item" : "items"} ·{" "}
+            {formatMoney(total, currency)}
           </span>
-          <span className="mt-0.5 block truncate text-xs font-medium text-[#6B6B6B]">
-            Your cart is ready
+          <span className="mt-0.5 block text-[0.68rem] font-semibold text-[#6B6B6B] sm:text-xs">
+            Your Craves cart is ready
           </span>
         </span>
 
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-black text-[#1A1A1A] sm:text-sm">
+        <span className="relative z-10 inline-flex shrink-0 items-center gap-2 rounded-full border border-white bg-white/95 px-3.5 py-2.5 text-xs font-black text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,1)] backdrop-blur-md sm:px-4 sm:text-sm">
           View Cart
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          <ArrowRight
+            className="h-[1.05rem] w-[1.05rem] transition-transform duration-200 group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
         </span>
       </button>
     </div>

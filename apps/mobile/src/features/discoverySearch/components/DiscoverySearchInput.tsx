@@ -25,7 +25,9 @@ interface DiscoverySearchInputProps {
   onChangeText: (value: string) => void;
   onClear: () => void;
   autoFocus?: boolean;
+  iconColor?: string;
   onFocus?: () => void;
+  pill?: boolean;
   showSoftInputOnFocus?: boolean;
   style?: StyleProp<ViewStyle>;
 }
@@ -37,7 +39,9 @@ export function DiscoverySearchInput({
   onChangeText,
   onClear,
   autoFocus = false,
+  iconColor = colors.textSecondary,
   onFocus,
+  pill = false,
   showSoftInputOnFocus = true,
   style,
 }: DiscoverySearchInputProps) {
@@ -46,7 +50,7 @@ export function DiscoverySearchInput({
   return (
     <View style={[styles.container, style]}>
       <View pointerEvents="none" style={styles.searchIcon}>
-        <Icon name="search" size={18} color={colors.textSecondary} />
+        <Icon name="search" size={18} color={iconColor} />
       </View>
       <TextInput
         accessibilityLabel={accessibilityLabel}
@@ -60,7 +64,11 @@ export function DiscoverySearchInput({
         placeholderTextColor={colors.placeholder}
         returnKeyType="search"
         showSoftInputOnFocus={showSoftInputOnFocus}
-        style={[styles.input, clearVisible && styles.inputWithClear]}
+        style={[
+          styles.input,
+          pill && styles.inputPill,
+          clearVisible && styles.inputWithClear,
+        ]}
         value={value}
       />
       {clearVisible ? (
@@ -100,6 +108,9 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     paddingLeft: 40,
     paddingRight: spacing.md,
+  },
+  inputPill: {
+    borderRadius: radius.pill,
   },
   inputWithClear: {
     paddingRight: 68,

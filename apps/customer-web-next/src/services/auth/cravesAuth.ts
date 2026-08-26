@@ -5,7 +5,7 @@ import type {
   CustomerAddress,
   DeliveryReadyAddress,
 } from "@/lib/address-contract";
-import { selectActiveDeliveryAddress } from "@/lib/address-selection";
+import { selectDefaultDeliveryAddress } from "@/lib/address-selection";
 import {
   parseCustomerProfile,
   type CustomerProfile,
@@ -199,7 +199,7 @@ export async function loadSelectedAddress(): Promise<CravesAddress | null> {
   if (!response.ok) throw new Error("Saved delivery addresses could not be loaded.");
   const addresses = (await response.json().catch(() => null)) as CustomerAddress[] | null;
   if (!Array.isArray(addresses)) throw new Error("Saved delivery addresses returned an invalid response.");
-  const selected = selectActiveDeliveryAddress(addresses);
+  const selected = selectDefaultDeliveryAddress(addresses);
   selectedLocation = selected ? fromCustomerAddress(selected) : null;
   return selectedLocation;
 }

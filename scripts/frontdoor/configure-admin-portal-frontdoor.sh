@@ -145,15 +145,15 @@ write_dns_handoff(){
 
 Required public DNS records for the dedicated admin hostname:
 
-- CNAME `admin` -> `$endpoint_host`
-- TXT `_dnsauth.admin` -> `$token`
+- CNAME admin -> $endpoint_host
+- TXT _dnsauth.admin -> $token
 
 Current observed values:
 
-- CNAME `$ADMIN_HOSTNAME` -> `${cname:-<missing>}`
-- TXT `_dnsauth.$ADMIN_HOSTNAME` -> `${txt:-<missing>}`
+- CNAME $ADMIN_HOSTNAME -> ${cname:-<missing>}
+- TXT _dnsauth.$ADMIN_HOSTNAME -> ${txt:-<missing>}
 
-Do not change `craves.in`, `www.craves.in`, or `api.craves.in` for this rollout.
+Do not change craves.in, www.craves.in, or api.craves.in for this rollout.
 DNS
   cat "$OUT/admin-frontdoor-dns-required.md"
 }

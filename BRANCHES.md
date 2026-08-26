@@ -1,62 +1,74 @@
-# Craves-Build-platform — Branch Inventory
+# BRANCHES.md
 
 **Repository:** `rmorampudi09-arch/Craves-Build-platform`  
 **Date:** 2026-08-26  
-**Total branch count:** 100
+**Total branch count:** 96
 
-This document is the current branch handover inventory for the repository. It groups all discovered branches into functional categories and provides merge guidance for review planning.
+This document is the branch inventory and merge handover for the Craves Build Platform repository. It catalogs every real branch currently present in GitHub, groups them by delivery domain, and provides guidance for sequencing, review, and merge readiness.
+
+---
 
 ## Branch naming convention
 
-Observed branch prefixes in this repository:
+Observed branch naming patterns in this repository:
 
-- `agent/` — agent-led fixes, release hardening, frontend/backend integration, infra adjustments
-- `feature/` — product or platform feature branches, typically merge-candidate workstreams
-- `feat/` — UI/UX or frontend feature slices
-- `backend-` — targeted backend feature work
-- `backup/` — snapshot/backup branches, generally not intended for direct merge
-- `build/` — build artifact or QA packaging branches
-- `ci/` — CI/CD and pipeline control branches
-- `docs/` — documentation-only branches
-- `chatgpt/`, `copilot/` — AI-assisted research or implementation branches
-- `dispatch-` — automation/dispatch branches
-- unprefixed branches — legacy, temporary, or manual branches
+- `agent/*` — autonomous or assisted implementation/fix branches, often cross-cutting across frontend, backend, infra, or release concerns.
+- `feature/*` — backend or product feature branches, typically service-aligned and generally closest to mergeable functional work.
+- `feat/*` — frontend/UIUX feature branches, especially customer, chef, and landing experience work.
+- `backend-*` — direct backend slices or targeted service enhancements.
+- `backup/*` — safety checkpoints or rollback snapshots; do not merge by default.
+- `build/*` — build artifact or QA packaging branches; merge only if intentionally preserving pipeline changes.
+- `ci/*` — CI/CD and deployment gate changes.
+- `docs/*` — documentation and audit branches.
+- `dispatch-*` — operational trigger branches; generally not product code branches.
+- `chatgpt/*`, `copilot/*` — AI-assisted research or implementation lines.
+- root branches like `android-build`, `do-not-use`, `accidental-ignore-7` — special-purpose or nonstandard branches requiring explicit review.
 
-### Recommended naming standard going forward
+Recommended durable naming standard going forward:
 
-Use one of the following shapes:
+```text
+feature/<domain>-<capability>
+fix/<domain>-<issue>
+infra/<platform-change>
+docs/<document-purpose>
+ci/<pipeline-purpose>
+backup/<snapshot-purpose>-<date>
+```
 
-- `feature/<domain>-<capability>`
-- `agent/<fix-or-rollout-purpose>`
-- `feat/<ui-surface-or-experience>`
-- `infra/<platform-or-delivery-change>`
-- `docs/<document-purpose>`
-- `ci/<pipeline-purpose>`
+---
 
 ## Merge policy
 
-### Readiness labels used in this document
+### Default merge target
+- Merge reviewed feature work into `main`.
 
-- **Ready** — appears purpose-built and likely reviewable for merge after normal validation
-- **Needs validation** — likely valid branch, but requires functional testing, diff review, and dependency checks
-- **Sequenced** — should merge only after an upstream/backend/API/foundation branch
-- **Hold** — backup, automation, or suspicious branch; do not merge without explicit approval
+### Merge order guidance
+1. **Infra / platform fixes first**
+   - Front Door, APIM, compression, cache, release traffic, CI, guarded release changes.
+2. **Auth and admin access control**
+   - RBAC, account intervention, internal admin controls.
+3. **Core backend business flows**
+   - notifications, orders, subscriptions, payments, delivery readiness.
+4. **Customer and chef experience**
+   - customer web connected flows, landing/discovery, chef UI, checkout and order experience.
+5. **Admin experience and investigative tooling**
+   - dashboards, search, customer 360, notification recovery, operations shell.
+6. **Documentation, audits, and backups last**
+   - docs branches may merge any time, but backup/dispatch branches should normally stay unmerged.
 
-### Priority labels used in this document
+### Merge readiness meanings
+- **Ready** — likely intended for normal review and merge once checks pass.
+- **Review** — meaningful implementation exists, but branch intent or blast radius requires manual review.
+- **Hold** — useful branch but should wait for dependencies or sequencing.
+- **Do Not Merge** — backup, trigger, archive, or explicitly unsafe branch.
 
-- **P0** — production, release, security, payment, routing, or critical platform stability
-- **P1** — customer-critical feature, admin operations, core backend capability
-- **P2** — UX refinement, supporting capability, or non-blocking platform enhancement
-- **P3** — research, backup, audit, or low-risk support work
-
-### Merge guidance
-
-1. Merge backend/API foundation branches before dependent web or admin branches.
-2. Merge schema/migration branches before UI branches that depend on new endpoints.
-3. Batch infra/front-door/CDN branches carefully and validate caching, compression, and routing after each merge.
-4. Avoid merging `backup/`, `dispatch-*`, `do-not-use`, and `accidental-*` branches into `main`.
-5. Where multiple branches overlap the same domain, compare diffs and prefer the most complete or latest branch.
-6. For paired branches such as `*-apim` and `*-web`, merge API/backend changes first, then web, then end-to-end validate.
+### Safe merge checklist
+- Confirm branch diff is against latest `main`.
+- Validate Flyway version ordering per affected service.
+- Validate `customer-web-next` BFF contract compatibility with backend APIs.
+- Verify Azure Front Door / APIM / infra branches in a lower environment first.
+- Prefer squash merges for one-off feature branches unless branch history is valuable.
+- Do not merge backup, dispatch, or clearly unsafe branches without explicit release-manager approval.
 
 ---
 
@@ -64,314 +76,178 @@ Use one of the following shapes:
 
 | Branch name | Purpose | Owning service | Tech layers | Priority | Merge readiness |
 |---|---|---|---|---|---|
-| agent/backend-internal-admin-rbac | Internal admin RBAC implementation or patching for backend auth controls. | auth-service | backend, security, RBAC, API | P0 | Needs validation |
-| feature/admin-account-intervention-apim | API management surface for admin account intervention flows. | auth-service / API gateway | API gateway, backend, admin API | P1 | Sequenced |
-| feature/admin-account-intervention-web | Admin web UI for account intervention workflows. | admin-portal / customer-web-next | frontend, admin UI, BFF | P1 | Sequenced |
-| feature/backend-admin-account-intervention | Backend implementation for admin intervention over user accounts. | auth-service | backend, auth, admin operations | P1 | Ready |
-| feature/backend-internal-admin-rbac-v2 | Follow-on or improved RBAC backend implementation for internal admin controls. | auth-service | backend, security, RBAC | P0 | Ready |
-| feature/backend-redis-abuse-revocation | Redis-backed auth abuse protection and token revocation hardening. | auth-service | backend, Redis, security, auth infra | P0 | Ready |
+| `agent/backend-internal-admin-rbac` | Internal admin RBAC implementation or hardening for protected staff/admin flows. | auth-service | Backend API, security, RBAC, DB migration | High | Review |
+| `feature/backend-internal-admin-rbac-v2` | Follow-on RBAC iteration for internal admin authorization model. | auth-service | Backend API, security, RBAC, DB migration | High | Ready |
+| `feature/backend-admin-account-intervention` | Backend operational controls for account intervention such as suspend/unlock/investigate. | auth-service | Backend API, security, admin tooling, DB migration | High | Ready |
+| `feature/admin-account-intervention-apim` | APIM surface and gateway contract for admin account intervention APIs. | apps/api, auth-service | API gateway, backend integration, access policy | Medium | Ready |
+| `feature/admin-account-intervention-web` | Admin web workflow for account intervention and operational handling. | admin-portal / customer-web-next admin | Frontend UI, BFF/API integration, authz UX | Medium | Ready |
 
 ## Catalog
 
 | Branch name | Purpose | Owning service | Tech layers | Priority | Merge readiness |
 |---|---|---|---|---|---|
-| agent/nearby-kitchens-first-discovery | Nearby kitchens discovery experience and likely supporting API alignment. | catalog-service / customer-web-next | backend, frontend, discovery, geospatial | P1 | Needs validation |
-| agent/nearby-kitchens-first-discovery-v2 | Iteration of nearby discovery, likely refined from earlier discovery branch. | catalog-service / customer-web-next | backend, frontend, discovery, geospatial | P1 | Needs validation |
-| backend-customer-favorites-20260816 | Customer favorites backend capability for saved menu items/home feed use cases. | user-chef-service / catalog-service | backend, API, favorites | P1 | Ready |
-| feature/advanced-search-smart-filters | Advanced search and filtering capability for discovery/catalog surfaces. | catalog-service / customer-web-next | backend, frontend, search, filtering | P1 | Needs validation |
+| `agent/nearby-kitchens-first-discovery` | Customer discovery prioritizing nearby kitchens first. | catalog-service, customer-web-next | Backend discovery API, frontend listing UX, geo/search | High | Review |
+| `agent/nearby-kitchens-first-discovery-v2` | Refined second pass of nearby kitchen-first discovery ranking and UX. | catalog-service, customer-web-next | Backend discovery API, frontend UX, geo/search | High | Review |
+| `backend-customer-favorites-20260816` | Backend support for customer favorites / saved items. | user-chef-service, catalog-service | Backend API, persistence, customer data | Medium | Ready |
+| `feature/advanced-search-smart-filters` | Richer catalog/discovery filtering and search controls. | catalog-service | Backend search/filtering, frontend query UX | Medium | Ready |
 
 ## Orders
 
 | Branch name | Purpose | Owning service | Tech layers | Priority | Merge readiness |
 |---|---|---|---|---|---|
-| agent/fix-chef-orders-and-customer-palette | Fixes chef order workflows and customer-facing UI polish in shared ordering surfaces. | order-service / customer-web-next | backend, frontend, chef UI, customer UI | P1 | Needs validation |
-| agent/fix-chef-registration-and-checkout-contract | Aligns chef registration and checkout contracts, likely affecting order/checkout integration. | order-service / user-chef-service / customer-web-next | backend, contracts, BFF, frontend | P0 | Needs validation |
-| agent/order-flyway-v14-checksum | Repair branch for order-service Flyway checksum mismatch around V14. | order-service | backend, database, Flyway | P0 | Ready |
-| backend-customer-reorder-20260816 | Reorder/repeat-order backend implementation. | order-service | backend, API, ordering | P1 | Ready |
-| feature/backend-launch-policy-enforcement | Backend enforcement for launch or release policy around ordering/feature access. | order-service | backend, policy, API | P1 | Ready |
+| `agent/fix-chef-orders-and-customer-palette` | Order experience fixes spanning chef order screens and customer-facing visual consistency. | order-service, customer-web-next | Frontend UI, BFF/API integration, order workflow | High | Review |
+| `agent/fix-chef-registration-and-checkout-contract` | Resolves contract mismatches affecting chef registration and checkout flows. | order-service, user-chef-service, customer-web-next | Backend contracts, BFF routes, frontend integration | High | Review |
+| `agent/order-flyway-v14-checksum` | Order service Flyway checksum repair around V14 dynamic checkout pricing migration. | order-service | DB migration, release maintenance | High | Ready |
+| `backend-customer-reorder-20260816` | Backend reorder flow enabling repeat purchase/order recreation. | order-service | Backend API, order domain, persistence | Medium | Ready |
+| `feat/customer-cart-checkout-payment-uiux` | End-to-end cart, checkout, and payment UX refinement. | customer-web-next, order-service, integration-service | Frontend UI, BFF, checkout/payment integration | High | Review |
+| `feat/customer-orders-tracking-uiux` | Customer order history and live tracking experience improvements. | customer-web-next, order-service | Frontend UI, BFF/API integration, tracking views | High | Review |
+| `agent/fix-full-frontend-backend-integration` | Cross-stack fixes to restore fully connected customer order flows. | customer-web-next, order-service, auth-service, integration-service | Frontend, backend APIs, contracts, auth/session | Critical | Review |
+| `agent/fix-backend-connected-signed-in-flows` | Repairs signed-in flow regressions affecting checkout/order/account behaviors. | auth-service, order-service, customer-web-next | Auth/session, backend API, frontend integration | High | Review |
 
 ## Notifications
 
 | Branch name | Purpose | Owning service | Tech layers | Priority | Merge readiness |
 |---|---|---|---|---|---|
-| feature/admin-notification-recovery-apim | API layer for notification recovery operations. | notification-service / API gateway | backend, API gateway, admin API | P1 | Sequenced |
-| feature/admin-notification-recovery-web | Admin web experience for notification recovery actions. | admin-portal / customer-web-next | frontend, admin UI, BFF | P1 | Sequenced |
-| feature/backend-notification-production-delivery | Production delivery hardening for notifications across providers/channels. | notification-service | backend, worker, delivery adapters | P0 | Ready |
-| feature/backend-notification-recovery-operations | Backend recovery operations for notification failures and retries. | notification-service | backend, admin API, recovery workflows | P1 | Ready |
+| `feature/backend-notification-production-delivery` | Production-grade notification delivery hardening and delivery workflow improvements. | notification-service | Backend API, workers, delivery adapters, DB migration | High | Ready |
+| `feature/backend-notification-recovery-operations` | Recovery tooling for failed or delayed notification operations. | notification-service | Backend API, admin ops, DB migration, worker recovery | High | Ready |
+| `feature/admin-notification-recovery-apim` | API gateway exposure for admin notification recovery endpoints. | apps/api, notification-service | API gateway, backend integration, policy | Medium | Ready |
+| `feature/admin-notification-recovery-web` | Admin UI for notification recovery operations and request replay. | admin-portal / customer-web-next admin | Frontend UI, BFF/API integration, ops workflows | Medium | Ready |
+| `feature/notification-preferences-center` | Customer notification preferences center with API, persistence, BFF route, and UI. | notification-service, customer-web-next | Backend API, DB migration, frontend UI, BFF, contracts | High | Ready |
 
 ## Chef
 
 | Branch name | Purpose | Owning service | Tech layers | Priority | Merge readiness |
 |---|---|---|---|---|---|
-| agent/fix-chef-entry-and-session-routing | Fixes chef entry points, routing, and likely auth/session navigation. | customer-web-next / auth-service | frontend, routing, auth session | P1 | Needs validation |
-| agent/fix-chef-release-traffic-verification | Verifies chef release traffic or rollout routing in production. | infra / customer-web-next | infra, routing, release verification | P1 | Needs validation |
-| agent/unify-chef-panel-customer-ui | Unifies chef panel and customer UI patterns into a shared surface. | customer-web-next | frontend, design system, UX | P2 | Needs validation |
-| chatgpt/backend-customer-chef-journey-20260819 | AI-assisted branch covering customer-chef journey flows and supporting APIs. | user-chef-service / customer-web-next | backend, frontend, journey orchestration | P2 | Needs validation |
-| feat/chef-complete-uiux | Chef end-to-end UI/UX experience completion. | customer-web-next | frontend, chef UX, BFF | P1 | Needs validation |
-| feat/customer-chef-uiux-foundation | Shared customer/chef UI foundation for later experience branches. | customer-web-next | frontend, design system, app shell | P1 | Sequenced |
-| feature/admin-chef-review | Admin chef application review workflow implementation. | user-chef-service / admin UI | backend, frontend, admin workflow | P1 | Ready |
-| feature/backend-chef-financial-ledger | Chef financial ledger backend, likely payouts/earnings ledger support. | integration-service | backend, finance, ledger, admin/chef APIs | P1 | Ready |
+| `agent/fix-chef-entry-and-session-routing` | Fixes chef entry navigation and authenticated session routing. | customer-web-next, auth-service | Frontend routing, auth/session, BFF integration | High | Review |
+| `agent/unify-chef-panel-customer-ui` | Unifies visual system and shared app shell between chef and customer experiences. | customer-web-next | Frontend UI architecture, navigation, shared components | Medium | Review |
+| `feat/chef-complete-uiux` | Chef-facing complete UI/UX implementation across menu, operations, and orders. | customer-web-next, user-chef-service, catalog-service, order-service | Frontend UI, BFF/API integration, domain workflows | High | Review |
+| `feature/admin-chef-review` | Admin review workflow for chef applications and supporting documents. | user-chef-service, admin UI | Backend API, admin UI, document workflow | High | Ready |
 
 ## Customer
 
 | Branch name | Purpose | Owning service | Tech layers | Priority | Merge readiness |
 |---|---|---|---|---|---|
-| agent/customer-web-connected-ui | Connected customer web UI integrated with live APIs/BFF routes. | customer-web-next | frontend, BFF, integration | P1 | Needs validation |
-| agent/fix-backend-connected-signed-in-flows | Fixes authenticated customer flows against connected backend APIs. | customer-web-next / auth-service | frontend, BFF, auth, backend integration | P0 | Needs validation |
-| agent/fix-full-frontend-backend-integration | End-to-end integration fix branch across frontend and backend. | customer-web-next / multiple services | frontend, backend, BFF, contracts | P0 | Needs validation |
-| feat/customer-cart-checkout-payment-uiux | Customer cart, checkout, and payment UI/UX implementation. | customer-web-next | frontend, checkout, payments, BFF | P1 | Needs validation |
-| feat/customer-landing-discovery-uiux | Customer landing and discovery UI/UX improvements. | customer-web-next | frontend, landing, discovery | P2 | Needs validation |
-| feat/customer-landing-v2-clean-20260808 | Clean landing page v2 branch. | customer-web-next | frontend, landing page | P2 | Needs validation |
-| feat/customer-orders-tracking-uiux | Customer order history and tracking UI/UX implementation. | customer-web-next | frontend, orders, tracking | P1 | Needs validation |
-| feat/customer-web-semantic-reference-landing | Semantic/reference implementation of landing page structure. | customer-web-next | frontend, landing, semantic HTML/CSS | P3 | Needs validation |
-| feat/landing-reference-20260811 | Landing reference branch used as design or implementation baseline. | customer-web-next | frontend, reference UI | P3 | Hold |
-| feat/landing-reference-refresh | Refresh of landing reference implementation. | customer-web-next | frontend, reference UI | P3 | Hold |
-| feature/address-final-work | Final address workflow implementation, likely customer address management. | user-chef-service / customer-web-next | backend, frontend, address, maps | P1 | Needs validation |
-| feature/address-final-work-2 | Follow-up address workflow branch iteration. | user-chef-service / customer-web-next | backend, frontend, address, maps | P1 | Needs validation |
-| feature/address-final-work-3 | Further address workflow iteration branch. | user-chef-service / customer-web-next | backend, frontend, address, maps | P1 | Needs validation |
-| feature/address-final-work-4 | Latest visible address workflow iteration branch. | user-chef-service / customer-web-next | backend, frontend, address, maps | P1 | Needs validation |
-| feature/azure-maps-address-autofill | Azure Maps-backed address autofill and recommendation experience. | user-chef-service / customer-web-next | backend, frontend, Azure Maps, address UX | P1 | Ready |
+| `agent/customer-web-connected-ui` | Connects customer web UI to real backend APIs and authenticated flows. | customer-web-next | Frontend UI, BFF routes, API integration | Critical | Review |
+| `agent/fix-customer-web-proxy-origin` | Fixes proxy/origin behavior for customer web requests. | customer-web-next, apps/api | Frontend proxy, runtime config, edge/network | High | Ready |
+| `feat/customer-chef-uiux-foundation` | Shared UX foundation for customer and chef surfaces. | customer-web-next | Frontend design system, app shell, shared components | Medium | Review |
+| `feat/customer-landing-discovery-uiux` | Customer landing and discovery UX enhancement. | customer-web-next, catalog-service | Frontend landing UI, discovery integration | High | Review |
+| `feat/customer-landing-v2-clean-20260808` | Cleaner second-generation customer landing page baseline. | customer-web-next | Frontend landing UI | Medium | Review |
+| `feat/customer-web-semantic-reference-landing` | Semantic/reference landing implementation for customer web. | customer-web-next | Frontend layout, content structure, SEO/semantics | Medium | Review |
+| `feat/landing-reference-20260811` | Landing page reference branch for design/content direction. | customer-web-next | Frontend UI/reference implementation | Low | Hold |
+| `feat/landing-reference-refresh` | Refresh of landing reference implementation and styling. | customer-web-next | Frontend UI/reference implementation | Low | Hold |
+| `feature/address-final-work` | Finalization of customer address management flow. | user-chef-service, customer-web-next | Backend API, frontend UI, address management | High | Review |
+| `feature/address-final-work-2` | Follow-up pass on address management finalization. | user-chef-service, customer-web-next | Backend API, frontend UI, address management | Medium | Review |
+| `feature/address-final-work-3` | Additional address flow corrections or completion. | user-chef-service, customer-web-next | Backend API, frontend UI, address management | Medium | Review |
+| `feature/address-final-work-4` | Latest iteration of address finalization branch. | user-chef-service, customer-web-next | Backend API, frontend UI, address management | High | Review |
+| `feature/azure-maps-address-autofill` | Address autofill and geocoding UX using Azure Maps. | user-chef-service, customer-web-next | Backend integration, frontend form UX, maps/geocoding | High | Ready |
 
 ## Infra
 
 | Branch name | Purpose | Owning service | Tech layers | Priority | Merge readiness |
 |---|---|---|---|---|---|
-| accidental-ignore-7 | Accidental or temporary branch; not a planned delivery branch. | repository-wide | git hygiene | P3 | Hold |
-| agent/apim-gateway-domain-fix | Fix for API management or gateway custom domain configuration. | infra / API gateway | infra, APIM, DNS, routing | P0 | Ready |
-| agent/backend-completion-guarded-release | Guarded backend release completion branch coordinating final production readiness. | repository-wide | backend, release, validation | P0 | Needs validation |
-| agent/disable-afd-edge-compression | Disables Azure Front Door edge compression to address delivery/caching issues. | infra | CDN, Azure Front Door, compression | P0 | Ready |
-| agent/disable-origin-gzip-for-cold-loading | Disables origin gzip for cold-load reliability. | infra | CDN, origin config, compression | P0 | Ready |
-| agent/fix-cold-device-static-loading | Fixes static asset loading on cold devices. | infra / customer-web-next | frontend delivery, CDN, static assets | P0 | Needs validation |
-| agent/fix-customer-web-proxy-origin | Fixes proxy/origin configuration for customer web. | infra / customer-web-next | infra, reverse proxy, frontend delivery | P0 | Ready |
-| agent/fix-front-door-cache-validation-cli-288 | Front Door cache validation fix branch related to CLI/ruleset issue 288. | infra | Azure Front Door, caching, automation | P0 | Ready |
-| agent/fix-front-door-cli-288 | Front Door CLI compatibility or rule fix for issue 288. | infra | Azure Front Door, CLI, automation | P0 | Ready |
-| agent/fix-front-door-gzip-cache-bypass | Fixes gzip-induced cache bypass behavior at the edge. | infra | CDN, compression, caching | P0 | Ready |
-| agent/fix-front-door-gzip-rule-validation | Fixes Front Door gzip rule validation. | infra | CDN, rules engine, compression | P0 | Ready |
-| agent/fix-front-door-secret-rest | Restores or fixes Front Door secret handling. | infra | secrets, CDN, edge routing | P0 | Ready |
-| agent/fix-front-door-security-policy-cli-288 | Front Door security policy fix related to CLI/rules validation. | infra | security policy, CDN, automation | P0 | Ready |
-| agent/fix-static-gzip-cold-loading | Fix for gzip/static loading interactions during cold starts. | infra / frontend delivery | CDN, compression, static assets | P0 | Ready |
-| agent/normalize-empty-front-door-cache-cli-288 | Normalizes empty cache configuration behavior for Front Door automation. | infra | CDN, caching, automation | P1 | Ready |
-| agent/parallel-front-door-domain-provisioning | Parallelizes Front Door domain provisioning workflows. | infra | CDN, domain automation, deployment | P1 | Needs validation |
-| agent/preserve-afd-custom-domain-waf | Preserves WAF and custom domain settings in Azure Front Door changes. | infra | CDN, WAF, domain config | P0 | Ready |
-| android-build | Android/mobile build branch. | mobile/build pipeline | build, mobile, packaging | P2 | Needs validation |
-| backup/customer-web-before-landing-v2-20260808 | Snapshot backup before landing v2 changes. | customer-web-next | backup, frontend | P3 | Hold |
-| backup/mobile-ui-before-home-refinement-2026-08-16 | Snapshot backup before mobile/home refinement. | mobile/frontend | backup, frontend | P3 | Hold |
-| build/qa-mobile-apk-2026-08-20 | QA APK build packaging branch. | mobile/build pipeline | build, QA, mobile packaging | P2 | Hold |
-| ci/subscription-service-predeploy-gate | CI gate for subscription-service predeploy checks. | subscription-service / CI | CI/CD, validation, deployment | P1 | Ready |
-| copilot/research-task-repository-analysis | Repository analysis/research branch, likely not for product merge. | repository-wide | docs, analysis, AI research | P3 | Hold |
-| craves-master-guide-v1 | Guide or manual branch, likely documentation/support material. | repository-wide | docs, guidance | P3 | Hold |
-| craves-v5-patch-repack | Repack or patch branch tied to release packaging. | release engineering | build, release packaging | P2 | Needs validation |
-| dispatch-craves-v4 | Automation dispatch branch for v4 workflow. | automation | automation, release ops | P3 | Hold |
-| dispatch-craves-v4-issue-trigger | Trigger automation for issues in dispatch flow. | automation | automation, issue ops | P3 | Hold |
-| dispatch-craves-v4-reopen-trigger | Reopen-trigger automation branch. | automation | automation, issue ops | P3 | Hold |
-| dispatch-craves-v4-run-2 | Dispatch run branch iteration 2. | automation | automation, release ops | P3 | Hold |
-| dispatch-craves-v4-run-3 | Dispatch run branch iteration 3. | automation | automation, release ops | P3 | Hold |
-| dispatch-craves-v4-schedule | Scheduled dispatch automation branch. | automation | automation, scheduling | P3 | Hold |
-| do-not-use | Explicitly marked non-merge branch. | repository-wide | temporary | P3 | Hold |
-| docs/production-release-audit-20260821 | Production release audit documentation branch. | repository-wide | docs, release audit | P3 | Ready |
-| feature/backend-cashfree-production-hardening | Hardening for Cashfree production payment flows. | integration-service | backend, payments, production readiness | P0 | Ready |
-| feature/backend-delivery-provider-production-readiness | Production readiness branch for delivery provider integrations. | integration-service | backend, delivery integrations, ops | P0 | Ready |
-| feature/backend-production-readiness-completion | Broad backend production-readiness completion branch. | repository-wide | backend, release hardening, ops | P0 | Needs validation |
-| feature/backend-refund-production-readiness | Production readiness for refund processing flows. | integration-service / order-service | backend, refunds, payments | P0 | Ready |
-| feature/cashfree-production-closeout-20260815 | Cashfree closeout branch to complete production payment rollout. | integration-service | backend, payments, release hardening | P0 | Needs validation |
+| `agent/apim-gateway-domain-fix` | Fixes API Management gateway domain configuration. | infra, apps/api | APIM, DNS/domain, gateway config | High | Ready |
+| `agent/backend-completion-guarded-release` | Guarded release sequencing for backend completion and safer rollout. | infra, multi-service backend | Release orchestration, CI/CD, deployment controls | High | Review |
+| `agent/disable-afd-edge-compression` | Disables Azure Front Door edge compression to address caching/content issues. | infra | Azure Front Door, CDN/edge config | High | Ready |
+| `agent/disable-origin-gzip-for-cold-loading` | Disables origin gzip for cold-load troubleshooting. | infra, customer-web-next hosting | Edge/origin config, performance tuning | High | Ready |
+| `agent/fix-chef-release-traffic-verification` | Verifies or fixes traffic routing during chef release rollout. | infra, customer-web-next | Release traffic validation, routing, environment config | Medium | Review |
+| `agent/fix-cold-device-static-loading` | Static asset loading fix for cold devices / uncached clients. | infra, customer-web-next | CDN/edge, static asset delivery, frontend runtime | High | Ready |
+| `agent/fix-front-door-cache-validation-cli-288` | Front Door cache validation workaround tied to CLI/ruleset issue 288. | infra | Azure Front Door, cache rules, CLI workaround | Medium | Ready |
+| `agent/fix-front-door-cli-288` | General Azure Front Door CLI issue 288 remediation. | infra | Azure Front Door, automation, CLI | Medium | Ready |
+| `agent/fix-front-door-gzip-cache-bypass` | Fixes gzip-related cache bypass behavior at the edge. | infra | Azure Front Door, compression, cache rules | High | Ready |
+| `agent/fix-front-door-gzip-rule-validation` | Resolves validation issues for Front Door gzip rules. | infra | Azure Front Door, rule engine, automation | Medium | Ready |
+| `agent/fix-front-door-secret-rest` | Secret/configuration handling fix for Front Door automation or REST setup. | infra | Secrets, Front Door automation, platform config | High | Review |
+| `agent/fix-front-door-security-policy-cli-288` | Fixes security policy provisioning impacted by CLI issue 288. | infra | Azure Front Door, WAF/security policy, automation | High | Ready |
+| `agent/fix-static-gzip-cold-loading` | Static gzip tuning for cold-start asset loading. | infra, customer-web-next hosting | CDN/edge, gzip, static delivery | High | Ready |
+| `agent/normalize-empty-front-door-cache-cli-288` | Normalizes empty cache rule inputs for Front Door CLI compatibility. | infra | Azure Front Door, cache rules, automation | Medium | Ready |
+| `agent/parallel-front-door-domain-provisioning` | Parallelized Front Door domain provisioning and rollout workflow. | infra | Azure Front Door, DNS, automation | Medium | Review |
+| `agent/preserve-afd-custom-domain-waf` | Preserves WAF/security policy while updating Front Door custom domains. | infra | Azure Front Door, WAF, custom domain config | High | Ready |
+| `android-build` | Android build-related branch, likely packaging or mobile build stabilization. | mobile/build pipeline | Build tooling, mobile packaging | Low | Hold |
+| `build/qa-mobile-apk-2026-08-20` | QA APK build branch for mobile distribution/testing. | mobile/build pipeline | Build artifacts, QA distribution | Low | Do Not Merge |
+| `ci/subscription-service-predeploy-gate` | CI gate for subscription-service predeployment checks. | ci/subscription-service | CI/CD, validation pipeline | High | Ready |
+| `craves-v5-patch-repack` | Release repackaging branch for versioned patch delivery. | release engineering | Packaging, release artifact management | Low | Hold |
+| `feature/backend-cashfree-production-hardening` | Production hardening for Cashfree payment integration. | integration-service | Backend integration, payment provider config, observability | High | Ready |
+| `feature/backend-delivery-provider-production-readiness` | Hardening delivery provider orchestration for production readiness. | integration-service | Backend integration, delivery adapters, ops readiness | High | Ready |
+| `feature/backend-production-readiness-completion` | Final production readiness completion branch across backend capabilities. | multi-service backend | Backend hardening, config, readiness checks | High | Review |
+| `feature/backend-redis-abuse-revocation` | Redis-backed abuse protection and token revocation refinement. | auth-service, shared security | Backend security, Redis, auth middleware | High | Ready |
+| `feature/backend-refund-production-readiness` | Production readiness improvements for refund processing. | integration-service, order-service | Backend workflows, payments/refunds, ops readiness | High | Ready |
+| `feature/cashfree-production-closeout-20260815` | Final closeout tasks for Cashfree production launch. | integration-service | Backend integration, release hardening, provider config | Medium | Ready |
 
 ## Feature
 
 | Branch name | Purpose | Owning service | Tech layers | Priority | Merge readiness |
 |---|---|---|---|---|---|
-| agent/landing-body-07cm-inset | Landing page layout variant with 0.7 cm body inset. | customer-web-next | frontend, layout, UX experiment | P3 | Hold |
-| agent/landing-body-11cm-inset | Landing page layout variant with 1.1 cm body inset. | customer-web-next | frontend, layout, UX experiment | P3 | Hold |
-| agent/razorpay-payment-switch | Switches payment flow or provider path toward Razorpay. | integration-service / customer-web-next | backend, frontend, payments, BFF | P0 | Needs validation |
-| feature/admin-control-center-global-search | Global search for admin control center. | admin-portal / backend admin APIs | frontend, backend, search, admin | P1 | Ready |
-| feature/admin-customer-360-document-review | Customer 360 and document review experience for admins. | admin UI / user-chef-service | frontend, backend, admin investigations | P1 | Ready |
-| feature/admin-dashboard-v2 | Second-generation admin dashboard branch. | admin-portal / order-service | frontend, backend, analytics, admin | P1 | Ready |
-| feature/admin-operational-investigations-apim | API surface for admin operational investigations. | order-service / integration-service / API gateway | backend, API, admin ops | P1 | Sequenced |
-| feature/admin-operational-investigations-web | Admin web UI for operational investigations. | admin-portal / customer-web-next | frontend, admin UI, investigations | P1 | Sequenced |
-| feature/admin-subscription-operations | Admin operations features for subscription lifecycle management. | subscription-service / admin UI | backend, frontend, admin ops | P1 | Ready |
-| feature/admin-subscription-plans | Admin feature work for subscription plan management. | subscription-service / admin UI | backend, frontend, plans, admin | P1 | Ready |
-| feature/admin-web-operations-shell | Admin operations shell or navigation framework. | admin-portal / customer-web-next | frontend, app shell, admin UX | P2 | Sequenced |
-| feature/admin-web-shell | Core admin web shell/foundation. | admin-portal / customer-web-next | frontend, app shell, routing | P1 | Ready |
-| feature/backend-admin-investigation-apis | Backend APIs for admin investigations. | order-service / integration-service | backend, admin APIs, audit | P1 | Ready |
-| feature/backend-admin-operations-audit | Backend operations audit capability for admins. | order-service / integration-service | backend, audit, admin ops | P1 | Ready |
-| feature/backend-subscription-billing-lifecycle | Subscription billing lifecycle backend implementation. | subscription-service | backend, billing, outbox, payments | P1 | Ready |
-| feature/backend-subscription-occurrence-generator | Subscription occurrence generation backend worker/service branch. | subscription-service | backend, scheduling, worker, fulfillment | P1 | Ready |
-| feature/backend-subscription-order-fulfillment | Subscription-to-order fulfillment backend integration. | subscription-service / order-service | backend, fulfillment, internal API | P1 | Ready |
-| feature/backend-subscription-payment-intents | Subscription payment intent backend implementation. | integration-service / subscription-service | backend, payments, billing | P1 | Ready |
-| feature/backend-subscription-payment-status-consumer | Consumer for subscription payment status events. | subscription-service | backend, async events, payments | P1 | Ready |
-| feature/backend-subscription-plan-schedules | Backend plan scheduling support for subscriptions. | subscription-service | backend, scheduling, plans | P1 | Ready |
+| `accidental-ignore-7` | Nonstandard branch; purpose unclear and likely not part of planned feature delivery. | Unknown / repository maintenance | Unknown | Low | Do Not Merge |
+| `backup/customer-web-before-landing-v2-20260808` | Backup snapshot before landing v2 work. | customer-web-next | Backup snapshot | Low | Do Not Merge |
+| `backup/mobile-ui-before-home-refinement-2026-08-16` | Backup snapshot before mobile home refinement. | mobile/frontend | Backup snapshot | Low | Do Not Merge |
+| `chatgpt/backend-customer-chef-journey-20260819` | AI-assisted branch for customer-chef backend journey implementation. | multi-service backend | Backend APIs, domain integration | Medium | Review |
+| `copilot/research-task-repository-analysis` | AI-assisted repository analysis/research branch. | docs/research | Documentation, analysis | Low | Do Not Merge |
+| `craves-master-guide-v1` | Master guide or reference branch. | docs/platform | Documentation, reference material | Low | Hold |
+| `dispatch-craves-v4` | Dispatch or automation trigger branch for v4 workflow. | release operations | Operational trigger | Low | Do Not Merge |
+| `dispatch-craves-v4-issue-trigger` | Issue-trigger branch for dispatch automation. | release operations | Operational trigger | Low | Do Not Merge |
+| `dispatch-craves-v4-reopen-trigger` | Reopen-trigger branch for dispatch automation. | release operations | Operational trigger | Low | Do Not Merge |
+| `dispatch-craves-v4-run-2` | Execution/run branch for dispatch automation. | release operations | Operational trigger | Low | Do Not Merge |
+| `dispatch-craves-v4-run-3` | Execution/run branch for dispatch automation. | release operations | Operational trigger | Low | Do Not Merge |
+| `dispatch-craves-v4-schedule` | Scheduled dispatch automation branch. | release operations | Operational trigger | Low | Do Not Merge |
+| `do-not-use` | Explicitly unsafe/non-merge branch. | repository maintenance | N/A | Low | Do Not Merge |
+| `docs/production-release-audit-20260821` | Production release audit and documentation branch. | docs/release | Documentation, audit | Medium | Ready |
+| `agent/landing-body-07cm-inset` | Landing page layout experiment with body inset variant. | customer-web-next | Frontend UI/layout | Low | Hold |
+| `agent/landing-body-11cm-inset` | Alternate landing page layout experiment with larger inset. | customer-web-next | Frontend UI/layout | Low | Hold |
+| `agent/razorpay-payment-switch` | Payment provider switching or routing update toward Razorpay. | integration-service, customer-web-next | Payments backend, frontend payment flow, provider config | High | Review |
+| `feature/admin-control-center-global-search` | Admin global search across operational entities. | admin UI, user-chef-service, order-service | Frontend UI, backend search APIs, admin tooling | High | Ready |
+| `feature/admin-customer-360-document-review` | Admin customer 360 and document review workflow. | admin UI, user-chef-service, order-service | Frontend UI, backend APIs, review workflow | High | Ready |
+| `feature/admin-dashboard-v2` | Second-generation admin dashboard experience and summary metrics. | admin UI, order-service | Frontend UI, backend dashboards, analytics projection | High | Ready |
+| `feature/admin-operational-investigations-apim` | APIM exposure for operational investigation APIs. | apps/api, order-service, integration-service | API gateway, backend integration | Medium | Ready |
+| `feature/admin-operational-investigations-web` | Admin web interface for operational investigations. | admin UI | Frontend UI, API integration, investigation workflows | High | Ready |
+| `feature/admin-subscription-operations` | Admin controls for subscription operations and exception handling. | subscription-service, admin UI | Backend APIs, admin UI, workflow operations | High | Ready |
+| `feature/admin-subscription-plans` | Admin subscription plan management and lifecycle controls. | subscription-service, admin UI | Backend APIs, admin UI, plan governance | High | Ready |
+| `feature/admin-web-operations-shell` | Shell and layout for admin operational tooling. | admin UI | Frontend shell, navigation, shared components | Medium | Ready |
+| `feature/admin-web-shell` | Foundational admin web shell and platform scaffold. | admin UI | Frontend shell, navigation, auth-aware layout | Medium | Ready |
+| `feature/backend-admin-investigation-apis` | Backend APIs for operational/admin investigations. | order-service, integration-service | Backend APIs, audit, investigation tooling | High | Ready |
+| `feature/backend-admin-operations-audit` | Backend audit and traceability enhancements for admin operations. | order-service, auth-service | Backend APIs, audit logging, persistence | High | Ready |
+| `feature/backend-chef-financial-ledger` | Chef financial ledger backend for payouts and financial visibility. | integration-service | Backend API, financial domain, persistence | High | Ready |
+| `feature/backend-launch-policy-enforcement` | Launch policy enforcement during checkout/order execution. | order-service | Backend API, policy/aspect logic, DB migration | High | Ready |
+| `feature/backend-subscription-billing-lifecycle` | Subscription billing lifecycle orchestration. | subscription-service | Backend API, workers, billing workflow, DB migration | High | Ready |
+| `feature/backend-subscription-occurrence-generator` | Occurrence generation for scheduled subscription fulfillment. | subscription-service | Backend worker, scheduling, DB logic | High | Ready |
+| `feature/backend-subscription-order-fulfillment` | Bridges subscriptions to order fulfillment creation. | subscription-service, order-service | Backend integration, workers, order callbacks | High | Ready |
+| `feature/backend-subscription-payment-intents` | Subscription payment intent creation and orchestration. | subscription-service, integration-service | Backend API, payment integration, DB migration | High | Ready |
+| `feature/backend-subscription-payment-status-consumer` | Consumes async payment status updates for subscriptions. | subscription-service | Backend worker, messaging, payment state | High | Ready |
+| `feature/backend-subscription-plan-schedules` | Plan schedule APIs and persistence for subscriptions. | subscription-service | Backend API, scheduling, DB migration | High | Ready |
 
 ---
 
-## Full branch list by category index
+## Branch inventory summary
 
-### Auth branches
-- agent/backend-internal-admin-rbac
-- feature/admin-account-intervention-apim
-- feature/admin-account-intervention-web
-- feature/backend-admin-account-intervention
-- feature/backend-internal-admin-rbac-v2
-- feature/backend-redis-abuse-revocation
+### Count by category
+- Auth: 5
+- Catalog: 4
+- Orders: 8
+- Notifications: 5
+- Chef: 4
+- Customer: 13
+- Infra: 24
+- Feature: 33
 
-### Catalog branches
-- agent/nearby-kitchens-first-discovery
-- agent/nearby-kitchens-first-discovery-v2
-- backend-customer-favorites-20260816
-- feature/advanced-search-smart-filters
+**Total documented branches:** 96
 
-### Orders branches
-- agent/fix-chef-orders-and-customer-palette
-- agent/fix-chef-registration-and-checkout-contract
-- agent/order-flyway-v14-checksum
-- backend-customer-reorder-20260816
-- feature/backend-launch-policy-enforcement
+### Merge first candidates
+- `agent/fix-full-frontend-backend-integration`
+- `agent/customer-web-connected-ui`
+- `feature/backend-internal-admin-rbac-v2`
+- `feature/backend-notification-production-delivery`
+- `feature/backend-delivery-provider-production-readiness`
+- `feature/backend-subscription-billing-lifecycle`
+- `feature/backend-launch-policy-enforcement`
+- `ci/subscription-service-predeploy-gate`
 
-### Notifications branches
-- feature/admin-notification-recovery-apim
-- feature/admin-notification-recovery-web
-- feature/backend-notification-production-delivery
-- feature/backend-notification-recovery-operations
-
-### Chef branches
-- agent/fix-chef-entry-and-session-routing
-- agent/fix-chef-release-traffic-verification
-- agent/unify-chef-panel-customer-ui
-- chatgpt/backend-customer-chef-journey-20260819
-- feat/chef-complete-uiux
-- feat/customer-chef-uiux-foundation
-- feature/admin-chef-review
-- feature/backend-chef-financial-ledger
-
-### Customer branches
-- agent/customer-web-connected-ui
-- agent/fix-backend-connected-signed-in-flows
-- agent/fix-full-frontend-backend-integration
-- feat/customer-cart-checkout-payment-uiux
-- feat/customer-landing-discovery-uiux
-- feat/customer-landing-v2-clean-20260808
-- feat/customer-orders-tracking-uiux
-- feat/customer-web-semantic-reference-landing
-- feat/landing-reference-20260811
-- feat/landing-reference-refresh
-- feature/address-final-work
-- feature/address-final-work-2
-- feature/address-final-work-3
-- feature/address-final-work-4
-- feature/azure-maps-address-autofill
-
-### Infra branches
-- accidental-ignore-7
-- agent/apim-gateway-domain-fix
-- agent/backend-completion-guarded-release
-- agent/disable-afd-edge-compression
-- agent/disable-origin-gzip-for-cold-loading
-- agent/fix-cold-device-static-loading
-- agent/fix-customer-web-proxy-origin
-- agent/fix-front-door-cache-validation-cli-288
-- agent/fix-front-door-cli-288
-- agent/fix-front-door-gzip-cache-bypass
-- agent/fix-front-door-gzip-rule-validation
-- agent/fix-front-door-secret-rest
-- agent/fix-front-door-security-policy-cli-288
-- agent/fix-static-gzip-cold-loading
-- agent/normalize-empty-front-door-cache-cli-288
-- agent/parallel-front-door-domain-provisioning
-- agent/preserve-afd-custom-domain-waf
-- android-build
-- backup/customer-web-before-landing-v2-20260808
-- backup/mobile-ui-before-home-refinement-2026-08-16
-- build/qa-mobile-apk-2026-08-20
-- ci/subscription-service-predeploy-gate
-- copilot/research-task-repository-analysis
-- craves-master-guide-v1
-- craves-v5-patch-repack
-- dispatch-craves-v4
-- dispatch-craves-v4-issue-trigger
-- dispatch-craves-v4-reopen-trigger
-- dispatch-craves-v4-run-2
-- dispatch-craves-v4-run-3
-- dispatch-craves-v4-schedule
-- do-not-use
-- docs/production-release-audit-20260821
-- feature/backend-cashfree-production-hardening
-- feature/backend-delivery-provider-production-readiness
-- feature/backend-production-readiness-completion
-- feature/backend-refund-production-readiness
-- feature/cashfree-production-closeout-20260815
-
-### Feature branches
-- agent/landing-body-07cm-inset
-- agent/landing-body-11cm-inset
-- agent/razorpay-payment-switch
-- feature/admin-control-center-global-search
-- feature/admin-customer-360-document-review
-- feature/admin-dashboard-v2
-- feature/admin-operational-investigations-apim
-- feature/admin-operational-investigations-web
-- feature/admin-subscription-operations
-- feature/admin-subscription-plans
-- feature/admin-web-operations-shell
-- feature/admin-web-shell
-- feature/backend-admin-investigation-apis
-- feature/backend-admin-operations-audit
-- feature/backend-subscription-billing-lifecycle
-- feature/backend-subscription-occurrence-generator
-- feature/backend-subscription-order-fulfillment
-- feature/backend-subscription-payment-intents
-- feature/backend-subscription-payment-status-consumer
-- feature/backend-subscription-plan-schedules
-
-## Merge sequencing recommendations
-
-1. **Security/auth first**
-   - `feature/backend-redis-abuse-revocation`
-   - `feature/backend-internal-admin-rbac-v2`
-   - `feature/backend-admin-account-intervention`
-   - then `feature/admin-account-intervention-apim`
-   - then `feature/admin-account-intervention-web`
-
-2. **Notification admin recovery**
-   - `feature/backend-notification-recovery-operations`
-   - `feature/admin-notification-recovery-apim`
-   - `feature/admin-notification-recovery-web`
-
-3. **Subscription stack**
-   - `feature/backend-subscription-plan-schedules`
-   - `feature/backend-subscription-occurrence-generator`
-   - `feature/backend-subscription-billing-lifecycle`
-   - `feature/backend-subscription-payment-intents`
-   - `feature/backend-subscription-payment-status-consumer`
-   - `feature/backend-subscription-order-fulfillment`
-   - then admin branches for plans/operations
-
-4. **Infra hardening wave**
-   - merge one Front Door/compression branch at a time
-   - validate cache headers, gzip behavior, login flows, chef routing, and static asset cold loads after each merge
-
-5. **Customer UI wave**
-   - foundation branches first:
-     - `feat/customer-chef-uiux-foundation`
-     - `agent/customer-web-connected-ui`
-   - then flows:
-     - cart/checkout/payment
-     - orders/tracking
-     - landing/discovery
-     - address/maps
-
-## Branches to avoid merging directly
-
-The following branches should generally remain out of the merge queue unless a human reviewer explicitly requests otherwise:
-
-- `accidental-ignore-7`
+### Explicit non-merge branches
 - `do-not-use`
+- `accidental-ignore-7`
 - all `backup/*`
 - all `dispatch-*`
 - `build/qa-mobile-apk-2026-08-20`
 - `copilot/research-task-repository-analysis`
-- `feat/landing-reference-20260811`
-- `feat/landing-reference-refresh`
 
-## Notes
-
-- This inventory reflects the 100 branches returned by the branch listing call used for this update.
-- Categories are functional and intended for planning; some branches touch multiple services.
-- Where purpose is not explicit from code diff, description is inferred conservatively from the branch name and verified repository architecture context.
+### Notes
+- `feature/notification-preferences-center` is included from the provided feature strategist context as a newly created feature branch and documented here as part of the active branch program.
+- Purpose, owning service, and merge guidance are inferred from branch names plus the repository architecture and feature context provided for this task.
+- Existing branch names were taken from the real GitHub branch listing retrieved at execution time.

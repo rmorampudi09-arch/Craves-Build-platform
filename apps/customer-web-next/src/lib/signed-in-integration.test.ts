@@ -212,12 +212,13 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   }
 });
 
-test("customer service navigation is visible only on the signed-in home page without a redundant Discover item", () => {
+test("customer service navigation stays embedded on signed-in home and opted-in detail headers without a redundant Discover item", () => {
   const navigation = source(
     "../components/navigation/PersistentCustomerServiceNav.tsx",
   );
   const layout = source("../app/layout.tsx");
   const homeHeader = source("../components/home/BrowseHeader.tsx");
+  const detailHeader = source("../components/navigation/DetailBrowseHeader.tsx");
 
   for (const route of [
     "/orders",
@@ -232,7 +233,16 @@ test("customer service navigation is visible only on the signed-in home page wit
   assert.doesNotMatch(navigation, /label: "Discover"/);
   assert.doesNotMatch(layout, /PersistentCustomerServiceNav/);
   assert.match(homeHeader, /<PersistentCustomerServiceNav/);
-  assert.match(navigation, /pathname !== "\/home" \|\| !signedIn/);
+  assert.match(
+    navigation,
+    /const canRenderHere = pathname === "\/home" \|\| forceVisible/,
+  );
+  assert.match(
+    navigation,
+    /if \(!canRenderHere \|\| !signedIn\) return null/,
+  );
+  assert.match(homeHeader, /forceVisible=\{forceServiceNav\}/);
+  assert.match(detailHeader, /forceServiceNav/);
   assert.match(navigation, /serviceLinks\.map/);
   assert.doesNotMatch(navigation, /visibleLinks/);
   assert.match(navigation, /data-customer-service-navigation="embedded"/);

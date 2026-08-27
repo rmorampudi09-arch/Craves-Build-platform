@@ -1,29 +1,40 @@
 import { Star } from "lucide-react";
 import type { Dish } from "@/services/api/dishes";
 
-function FoodMark({ veg }: { veg: boolean }) {
-  const accent = veg ? "border-[#6B6B6B]" : "border-[#F62E18]";
-  const dot = veg ? "bg-[#6B6B6B]" : "bg-[#F62E18]";
-  return (
-    <span
-      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 bg-white align-middle ${accent}`}
-      aria-label={veg ? "Vegetarian" : "Non-vegetarian"}
-    >
-      <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
-    </span>
-  );
+function foodMeta(dish: Dish) {
+  const type = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
+  if (type === "VEG") {
+    return { label: "Veg", dot: "bg-[#2E7D32]" };
+  }
+  if (type === "EGG") {
+    return { label: "Egg", dot: "bg-[#D99A00]" };
+  }
+  return { label: "Non-Veg", dot: "bg-[#F62E18]" };
 }
 
 export function DishInfoSummary({ dish }: { dish: Dish }) {
+  const food = foodMeta(dish);
+
   return (
     <div>
-      <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">{dish.category}</p>
-      <h1 className="mt-2 flex items-start gap-2 font-display text-3xl font-black leading-tight tracking-[-0.04em] text-[#1A1A1A] md:text-4xl">
-        <span>{dish.name}</span>
-        <FoodMark veg={dish.veg} />
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-[#F1F3F5] px-3 py-1.5 text-[0.66rem] font-black uppercase tracking-[0.12em] text-[#261A15]">
+          {dish.category}
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F1F3F5] px-3 py-1.5 text-xs font-black text-[#1A1A1A]">
+          <span className={`h-2.5 w-2.5 rounded-full ${food.dot}`} aria-hidden="true" />
+          {food.label}
+        </span>
+      </div>
+
+      <h1 className="mt-4 font-display text-3xl font-black leading-[1.05] tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
+        {dish.name}
       </h1>
-      <p className="mt-3 text-base leading-6 text-[#6B6B6B]">{dish.desc}</p>
-      {dish.rating > 0 && (
+      <p className="mt-3 text-sm leading-6 text-[#6B6B6B] sm:text-[0.95rem]">
+        {dish.desc}
+      </p>
+
+      {dish.rating > 0 ? (
         <p className="mt-3 flex items-center gap-1.5 text-sm text-[#1A1A1A]">
           <Star className="h-4 w-4 fill-[#F62E18] text-[#F62E18]" aria-hidden="true" />
           <span className="font-bold">{dish.rating.toFixed(1)}</span>
@@ -31,7 +42,7 @@ export function DishInfoSummary({ dish }: { dish: Dish }) {
             <span className="text-[#6B6B6B]">· {dish.reviewCount} verified reviews</span>
           ) : null}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

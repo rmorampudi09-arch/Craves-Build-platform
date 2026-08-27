@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Heart, ImageOff, Share2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Heart,
+  ImageOff,
+  Share2,
+} from "lucide-react";
 import {
   customerFavoritesLoaded,
   getCustomerFavoriteIds,
@@ -24,6 +31,21 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
   );
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [favoriteError, setFavoriteError] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const images = Array.from(
+    new Set(
+      (dish.images && dish.images.length > 0 ? dish.images : [dish.img]).filter(
+        (image): image is string => Boolean(image),
+      ),
+    ),
+  );
+  const safeIndex = Math.min(activeIndex, Math.max(images.length - 1, 0));
+  const activeImage = images[safeIndex] ?? dish.img;
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [dish.id]);
 
   useEffect(() => {
     let active = true;
@@ -84,33 +106,38 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
     }
   };
 
-  return (
-    <header className="bg-white pt-4 md:pt-6">
-      <div className="mx-auto max-w-6xl px-4 md:px-6">
-        <div className="relative overflow-hidden rounded-[1.75rem] bg-[#F1F3F5] shadow-[0_10px_30px_rgba(26,26,26,0.08)] md:rounded-[2rem]">
-          <div className="relative aspect-[4/3] sm:aspect-[16/9] lg:aspect-[16/7]">
-            <img
-              src={dish.img}
-              alt={dish.imageIsPlaceholder ? "" : dish.name}
-              aria-hidden={dish.imageIsPlaceholder || undefined}
-              className={
-                dish.imageIsPlaceholder
-                  ? "h-full w-full object-contain p-16 opacity-80 sm:p-20"
-                  : "h-full w-full object-cover object-center"
-              }
-            />
-            {dish.imageIsPlaceholder ? (
-              <span className="absolute bottom-5 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#6B6B6B] shadow-[0_6px_18px_rgba(26,26,26,0.08)]">
-                <ImageOff className="h-4 w-4 text-[#F62E18]" aria-hidden="true" /> Kitchen image not uploaded
-              </span>
-            ) : null}
-          </div>
+  const showPrevious = () => {
+    setActiveIndex((current) =>
+      images.length > 0 ? (current - 1 + images.length) % images.length : 0,
+    );
+  };
 
-          <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4 md:p-5">
+  const showNext = () => {
+    setActiveIndex((current) =>
+      images.length > 0 ? (current + 1) % images.length : 0,
+    );
+  };
+
+  return (
+    <section aria-label={`${dish.name} photos`}>
+      <div className="relative overflow-hidden rounded-[1.65rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-[0_14px_36px_rgba(26,26,26,0.08)] md:rounded-[2rem]">
+        <div className="relative aspect-[4/3]">
+          <img
+            src={activeImage}
+            alt={dish.imageIsPlaceholder ? "" : `${dish.name} photo ${safeIndex + 1}`}
+            aria-hidden={dish.imageIsPlaceholder || undefined}
+            className={
+              dish.imageIsPlaceholder
+                ? "h-full w-full object-contain p-16 opacity-80 sm:p-20"
+                : "h-full w-full object-cover object-center"
+            }
+          />
+
+          <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3.5 sm:p-4">
             <button
               type="button"
               onClick={onBack}
-              className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !bg-white !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] hover:!text-[#F62E18]"
+              className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white/95 !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] !backdrop-blur-md hover:!text-[#F62E18]"
               aria-label="Back to discovery"
             >
               <ArrowLeft className="h-5 w-5" aria-hidden="true" />
@@ -122,13 +149,19 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
                 onClick={() => void handleFavorite()}
                 disabled={!favoritesReady || favoriteBusy}
                 aria-pressed={favorite}
-                aria-label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
+                aria-label={
+                  favorite
+                    ? `Remove ${dish.name} from saved dishes`
+                    : `Save ${dish.name}`
+                }
                 title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
-                className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/70 !bg-white/85 !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] !backdrop-blur-md transition-all hover:!-translate-y-0.5 hover:!text-[#F62E18] disabled:cursor-wait disabled:opacity-60"
+                className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white/95 !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] !backdrop-blur-md transition hover:!-translate-y-0.5 hover:!text-[#F62E18] disabled:cursor-wait disabled:opacity-60"
               >
                 <Heart
                   className={`h-5 w-5 ${
-                    favorite ? "fill-[#F62E18] text-[#F62E18]" : "text-current"
+                    favorite
+                      ? "fill-[#F62E18] text-[#F62E18]"
+                      : "text-current"
                   } ${favoriteBusy ? "animate-pulse" : ""}`}
                   aria-hidden="true"
                 />
@@ -138,7 +171,7 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
                 <button
                   type="button"
                   onClick={() => void handleShare()}
-                  className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !bg-white !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] hover:!text-[#F62E18]"
+                  className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white/95 !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] !backdrop-blur-md hover:!text-[#F62E18]"
                   aria-label="Share this dish"
                 >
                   <Share2 className="h-5 w-5" aria-hidden="true" />
@@ -146,9 +179,66 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
               ) : null}
             </div>
           </div>
+
+          {images.length > 1 ? (
+            <>
+              <button
+                type="button"
+                onClick={showPrevious}
+                className="!absolute !left-3 !top-1/2 !flex !h-10 !w-10 !-translate-y-1/2 !items-center !justify-center !rounded-full !border !border-white/75 !bg-white/92 !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] !backdrop-blur-md hover:!text-[#F62E18]"
+                aria-label="Previous dish photo"
+              >
+                <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={showNext}
+                className="!absolute !right-3 !top-1/2 !flex !h-10 !w-10 !-translate-y-1/2 !items-center !justify-center !rounded-full !border !border-white/75 !bg-white/92 !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] !backdrop-blur-md hover:!text-[#F62E18]"
+                aria-label="Next dish photo"
+              >
+                <ChevronRight className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <span className="absolute bottom-3.5 right-3.5 rounded-full bg-[#1A1A1A]/78 px-2.5 py-1 text-[0.68rem] font-black text-white backdrop-blur-md">
+                {safeIndex + 1} / {images.length}
+              </span>
+            </>
+          ) : null}
+
+          {dish.imageIsPlaceholder ? (
+            <span className="absolute bottom-5 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#6B6B6B] shadow-[0_6px_18px_rgba(26,26,26,0.08)]">
+              <ImageOff className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
+              Kitchen image not uploaded
+            </span>
+          ) : null}
         </div>
       </div>
-    </header>
+
+      {images.length > 1 ? (
+        <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1" aria-label="Dish photo thumbnails">
+          {images.slice(0, 8).map((image, index) => (
+            <button
+              key={`${image}-${index}`}
+              type="button"
+              onClick={() => setActiveIndex(index)}
+              className={`!h-[4.35rem] !w-[5.6rem] shrink-0 overflow-hidden rounded-xl !border !bg-[#F1F3F5] !p-0 transition sm:!h-[4.8rem] sm:!w-[6.4rem] ${
+                index === safeIndex
+                  ? "!border-[#F62E18] !shadow-[0_0_0_2px_rgba(246,46,24,0.12)]"
+                  : "!border-[#E5E7EB] hover:!border-[#F62E18]/45"
+              }`}
+              aria-label={`Show photo ${index + 1} of ${images.length}`}
+              aria-pressed={index === safeIndex}
+            >
+              <img
+                src={image}
+                alt=""
+                className="h-full w-full object-cover"
+                aria-hidden="true"
+              />
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }
 

@@ -5,7 +5,7 @@ import { CravesLogo } from "@/components/brand/CravesLogo";
 export function ChefProfileHeader({ onBack }: { onBack: () => void }) {
   return (
     <header className="sticky top-0 z-30 border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
-      <div className="mx-auto flex min-h-[4.75rem] max-w-5xl items-center gap-3 px-4 md:px-6">
+      <div className="mx-auto flex min-h-[4.5rem] max-w-6xl items-center gap-3 px-4 md:px-6">
         <button
           type="button"
           onClick={onBack}
@@ -16,8 +16,12 @@ export function ChefProfileHeader({ onBack }: { onBack: () => void }) {
         </button>
         <CravesLogo size="sm" />
         <div className="min-w-0">
-          <p className="text-[0.62rem] font-black uppercase tracking-[0.16em] text-[#F62E18]">Craves customer</p>
-          <span className="block truncate font-display text-lg font-black text-[#1A1A1A]">Home kitchen</span>
+          <p className="text-[0.62rem] font-black uppercase tracking-[0.16em] text-[#F62E18]">
+            Craves customer
+          </p>
+          <span className="block truncate font-display text-base font-black text-[#261A15] sm:text-lg">
+            Home kitchen
+          </span>
         </div>
       </div>
     </header>

@@ -28,7 +28,7 @@ export function DishBottomBar({
   disabled = false,
 }: DishBottomBarProps) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white/95 shadow-[0_-8px_32px_rgba(26,26,26,0.08)] backdrop-blur-xl">
+    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white/95 shadow-[0_-8px_32px_rgba(26,26,26,0.08)] backdrop-blur-xl lg:hidden">
       <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-3 px-4 py-3 md:px-6">
         <div className="min-w-[7rem]">
           <p className="text-[0.68rem] font-black uppercase tracking-[0.08em] text-[#6B6B6B]">Item total</p>
@@ -39,7 +39,7 @@ export function DishBottomBar({
             type="button"
             onClick={onDecrease}
             disabled={quantity <= 1 || disabled}
-            className="flex h-11 w-11 items-center justify-center rounded-l-full !bg-transparent !text-[#F62E18] transition-colors hover:!bg-[#E5E7EB] hover:!text-[#F62E18] disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-l-full !bg-transparent !text-[#F62E18] transition-colors hover:!bg-white hover:!text-[#F62E18] disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Decrease quantity"
           >
             <Minus className="h-4 w-4" aria-hidden="true" />
@@ -49,7 +49,7 @@ export function DishBottomBar({
             type="button"
             onClick={onIncrease}
             disabled={disabled}
-            className="flex h-11 w-11 items-center justify-center rounded-r-full !bg-transparent !text-[#F62E18] transition-colors hover:!bg-[#E5E7EB] hover:!text-[#F62E18] disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-r-full !bg-transparent !text-[#F62E18] transition-colors hover:!bg-white hover:!text-[#F62E18] disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Increase quantity"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />

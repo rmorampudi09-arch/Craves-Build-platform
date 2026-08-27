@@ -74,7 +74,7 @@ function buildLiveChef(name: string, dishes: Dish[]): Chef | undefined {
     // exposes them. The UI must hide zero values rather than fabricate them.
     experienceYears: 0,
     ordersDelivered: 0,
-    bio: "",
+    bio: reference.kitchenDescription ?? "",
     specialties,
     reviews: catalogDishes.flatMap((dish) => dish.reviews ?? []),
     activeDishCount: catalogDishes.length,

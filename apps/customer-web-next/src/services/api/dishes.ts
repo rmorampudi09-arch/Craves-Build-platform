@@ -11,7 +11,9 @@ export type Dish = {
   chef: string;
   category: string;
   img: string;
+  images?: string[];
   imageIsPlaceholder?: boolean;
+  detailsLoaded?: boolean;
   price: number;
   rating: number;
   time: string;
@@ -19,6 +21,7 @@ export type Dish = {
   foodType?: "VEG" | "NON_VEG" | "EGG";
   tag?: string;
   desc: string;
+  kitchenDescription?: string;
   ingredients?: string[];
   serves?: string;
   originalPrice?: number;
@@ -52,25 +55,47 @@ function servesLabel(value: number | null): string | undefined {
     : undefined;
 }
 
+function prepTimeLabel(value: number | null | undefined): string {
+  if (!value) return "Prepared after ordering";
+  // Long values are usually catalog-entry mistakes and should not dominate the
+  // customer UI. Keep the item orderable while the source data is corrected.
+  if (value > 240) return "Made to order";
+  return `${value} min`;
+}
+
+function descriptionLabel(
+  description: string | null | undefined,
+  name: string,
+  category: string,
+  kitchenName: string,
+): string {
+  const provided = description?.trim();
+  if (provided) return provided;
+
+  const categoryLabel = category.trim().toLowerCase();
+  return `${name} is a ${categoryLabel} dish from ${kitchenName}, available to order on Craves.`;
+}
+
 function mapNearbyItem(item: NearbyMenuItem): Dish {
+  const chef = item.kitchenDisplayName || item.kitchenName;
   const image = item.primaryImageUrl || PLACEHOLDER_IMAGE;
   return {
     id: item.id,
     kitchenId: item.kitchenId,
     name: item.itemName,
-    chef: item.kitchenDisplayName || item.kitchenName,
+    chef,
     category: item.category,
     img: image,
+    images: item.primaryImageUrl ? [item.primaryImageUrl] : [],
     imageIsPlaceholder: !item.primaryImageUrl,
+    detailsLoaded: false,
     price: item.price,
     currency: item.currency,
     rating: 0,
-    time: item.preparationTimeMinutes
-      ? `${item.preparationTimeMinutes} min`
-      : "Prepared after ordering",
+    time: prepTimeLabel(item.preparationTimeMinutes),
     veg: item.foodType === "VEG",
     foodType: item.foodType,
-    desc: item.description || "Description has not been provided by this kitchen.",
+    desc: descriptionLabel(item.description, item.itemName, item.category, chef),
     serves: servesLabel(item.servesCount),
     spiceLevel: spiceLabel(item.spiceLevel),
     distanceMeters: item.distanceMeters,
@@ -92,29 +117,32 @@ function isPublicDetail(value: unknown): value is PublicMenuItemDetail {
     typeof raw.foodType === "string" &&
     typeof raw.price === "number" &&
     Number.isFinite(raw.price) &&
-    typeof raw.currency === "string"
+    typeof raw.currency === "string" &&
+    Array.isArray(raw.imageUrls)
   );
 }
 
 function mapDetail(item: PublicMenuItemDetail): Dish {
+  const chef = item.kitchenDisplayName || item.kitchenName;
   const image = item.primaryImageUrl || PLACEHOLDER_IMAGE;
   return {
     id: item.id,
     kitchenId: item.kitchenId,
     name: item.itemName,
-    chef: item.kitchenDisplayName || item.kitchenName,
+    chef,
     category: item.category,
     img: image,
+    images: item.imageUrls,
     imageIsPlaceholder: !item.primaryImageUrl,
+    detailsLoaded: true,
     price: item.price,
     currency: item.currency,
     rating: 0,
-    time: item.preparationTimeMinutes
-      ? `${item.preparationTimeMinutes} min`
-      : "Prepared after ordering",
+    time: prepTimeLabel(item.preparationTimeMinutes),
     veg: item.foodType === "VEG",
     foodType: item.foodType,
-    desc: item.description || "Description has not been provided by this kitchen.",
+    desc: descriptionLabel(item.description, item.itemName, item.category, chef),
+    kitchenDescription: item.kitchenDescription ?? undefined,
     serves: servesLabel(item.servesCount),
     spiceLevel: spiceLabel(item.spiceLevel),
     areaName: item.areaName ?? undefined,
@@ -204,7 +232,7 @@ export async function loadKitchenMenu(kitchenId: string): Promise<Dish[]> {
 
 export async function loadDish(id: string): Promise<Dish> {
   const cached = getDish(id);
-  if (cached) return cached;
+  if (cached?.detailsLoaded) return cached;
 
   const response = await fetch(`/api/catalog/menu-items/${encodeURIComponent(id)}`, {
     cache: "no-store",
@@ -243,7 +271,23 @@ export function getDish(id: string): Dish | undefined {
 }
 
 export function getSimilarDishes(dish: Dish, limit = 4): Dish[] {
-  return discoveredDishes
-    .filter((candidate) => candidate.id !== dish.id && candidate.category === dish.category)
+  const sameKitchen = discoveredDishes.filter(
+    (candidate) =>
+      candidate.id !== dish.id &&
+      Boolean(dish.kitchenId) &&
+      candidate.kitchenId === dish.kitchenId,
+  );
+  const sameCategory = discoveredDishes.filter(
+    (candidate) =>
+      candidate.id !== dish.id &&
+      candidate.category === dish.category &&
+      candidate.kitchenId !== dish.kitchenId,
+  );
+
+  return [...sameKitchen, ...sameCategory]
+    .filter(
+      (candidate, index, items) =>
+        items.findIndex((item) => item.id === candidate.id) === index,
+    )
     .slice(0, limit);
 }

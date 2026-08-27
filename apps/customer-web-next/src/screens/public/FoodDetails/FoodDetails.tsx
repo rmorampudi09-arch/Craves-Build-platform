@@ -1,5 +1,5 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapPin, Minus, Plus } from "lucide-react";
 import { hasHomeReturnState } from "@/lib/home-return-state";
 import { loadSession } from "@/services/auth/cravesAuth";
@@ -21,6 +21,10 @@ import { CustomerReviewsSection } from "@/components/order/CustomerReviewsSectio
 import { SimilarDishesSection } from "@/components/order/SimilarDishesSection";
 import { DishBottomBar } from "@/components/order/DishBottomBar";
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
+import {
+  CustomerFloatingCart,
+  useCustomerCartSummary,
+} from "@/components/cart/CustomerFloatingCart";
 
 export const routeMeta = {
   head: ({ params }: { params: { id: string } }) => {
@@ -62,6 +66,9 @@ function DishDetailPage() {
   const [qty, setQty] = useState(1);
   const [message, setMessage] = useState("");
   const [adding, setAdding] = useState(false);
+  const [messageKind, setMessageKind] = useState<"error" | "success" | null>(null);
+  const cartSummary = useCustomerCartSummary();
+  const feedbackTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -74,6 +81,7 @@ function DishDetailPage() {
     }
     setQty(1);
     setMessage("");
+    setMessageKind(null);
 
     void (async () => {
       const session = await loadSession();
@@ -102,6 +110,14 @@ function DishDetailPage() {
       active = false;
     };
   }, [id, navigate]);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current !== null) {
+        window.clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleBack = () => {
     if (
@@ -150,8 +166,13 @@ function DishDetailPage() {
   }
 
   const handleAddToCart = async () => {
+    if (feedbackTimerRef.current !== null) {
+      window.clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = null;
+    }
     setAdding(true);
     setMessage("");
+    setMessageKind(null);
     try {
       await addToCart(
         {
@@ -164,8 +185,21 @@ function DishDetailPage() {
         },
         qty,
       );
-      navigate({ to: "/cart" });
+      const successMessage = `${dish.name} was added to your cart.`;
+      setMessage(successMessage);
+      setMessageKind("success");
+      setQty(1);
+      feedbackTimerRef.current = window.setTimeout(() => {
+        setMessage((currentMessage) =>
+          currentMessage === successMessage ? "" : currentMessage,
+        );
+        setMessageKind((currentKind) =>
+          currentKind === "success" ? null : currentKind,
+        );
+        feedbackTimerRef.current = null;
+      }, 1800);
     } catch (error) {
+      setMessageKind("error");
       setMessage(
         error instanceof Error
           ? error.message
@@ -180,7 +214,7 @@ function DishDetailPage() {
   const itemTotal = dish.price * qty;
 
   return (
-    <div className="min-h-screen bg-white pb-28 text-[#1A1A1A] lg:pb-14">
+    <div className={`min-h-screen bg-white text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "pb-32" : "pb-28 lg:pb-14"}`}>
       <DetailBrowseHeader returnPath={`/dish/${id}`} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
@@ -296,8 +330,12 @@ function DishDetailPage() {
 
             {message ? (
               <p
-                role="alert"
-                className="mt-3 rounded-2xl border border-[#F62E18]/20 bg-[#F1F3F5] p-4 text-sm font-bold text-[#F62E18]"
+                role={messageKind === "error" ? "alert" : "status"}
+                className={`mt-3 rounded-2xl border p-4 text-sm font-bold ${
+                  messageKind === "success"
+                    ? "border-[#E5E7EB] bg-[#F1F3F5] text-[#1A1A1A]"
+                    : "border-[#F62E18]/20 bg-[#F1F3F5] text-[#F62E18]"
+                }`}
               >
                 {message}
               </p>
@@ -310,14 +348,18 @@ function DishDetailPage() {
         </div>
       </main>
 
-      <DishBottomBar
-        price={itemTotal}
-        quantity={qty}
-        onDecrease={() => setQty((value) => Math.max(1, value - 1))}
-        onIncrease={() => setQty((value) => Math.min(50, value + 1))}
-        onAddToCart={() => void handleAddToCart()}
-        disabled={adding}
-      />
+      {cartSummary.itemCount === 0 ? (
+        <DishBottomBar
+          price={itemTotal}
+          quantity={qty}
+          onDecrease={() => setQty((value) => Math.max(1, value - 1))}
+          onIncrease={() => setQty((value) => Math.min(50, value + 1))}
+          onAddToCart={() => void handleAddToCart()}
+          disabled={adding}
+        />
+      ) : null}
+
+      <CustomerFloatingCart />
     </div>
   );
 }

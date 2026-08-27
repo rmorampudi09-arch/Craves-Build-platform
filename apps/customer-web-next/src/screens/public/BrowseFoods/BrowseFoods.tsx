@@ -11,7 +11,7 @@ import { BrowseHeader } from "@/components/home/BrowseHeader";
 import { CartAddressAvailabilityDialog } from "@/components/home/CartAddressAvailabilityDialog";
 import { CustomerSignOutDialog } from "@/components/home/CustomerSignOutDialog";
 import { DishesGrid } from "@/components/home/DishesGrid";
-import { FloatingCartBar } from "@/components/home/FloatingCartBar";
+import { CustomerFloatingCart } from "@/components/cart/CustomerFloatingCart";
 import { HomeBottomSections } from "@/components/home/HomeBottomSections";
 import {
   HomeCategoryRail,
@@ -33,8 +33,6 @@ import {
 import { rememberReturnRoute } from "@/lib/return-navigation";
 import {
   cartCount,
-  cartCurrency,
-  cartTotal,
   clearCart,
   getCart,
   loadCart,
@@ -151,8 +149,6 @@ function BrowseFoodsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(() => cartCount());
-  const [cartSubtotal, setCartSubtotal] = useState(() => cartTotal());
-  const [cartCurrencyCode, setCartCurrencyCode] = useState(() => cartCurrency());
   const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
   const [unavailableCartItems, setUnavailableCartItems] = useState<CartItem[]>([]);
   const [dismissedCartAvailabilityKey, setDismissedCartAvailabilityKey] = useState<string | null>(null);
@@ -354,8 +350,6 @@ function BrowseFoodsPage() {
     const syncCartSummary = () => {
       if (!active) return;
       setCartItemCount(cartCount());
-      setCartSubtotal(cartTotal());
-      setCartCurrencyCode(cartCurrency());
       setCartItems(getCart());
     };
 
@@ -405,8 +399,6 @@ function BrowseFoodsPage() {
       } catch {
         if (active) {
           setCartItemCount(0);
-          setCartSubtotal(0);
-          setCartCurrencyCode("INR");
           setCartItems([]);
         }
       }
@@ -693,12 +685,7 @@ function BrowseFoodsPage() {
         <HomeBottomSections />
       </main>
 
-      <FloatingCartBar
-        itemCount={cartItemCount}
-        total={cartSubtotal}
-        currency={cartCurrencyCode}
-        onViewCart={() => navigate({ to: "/cart" })}
-      />
+      <CustomerFloatingCart />
 
       <CartAddressAvailabilityDialog
         open={cartAvailabilityOpen}

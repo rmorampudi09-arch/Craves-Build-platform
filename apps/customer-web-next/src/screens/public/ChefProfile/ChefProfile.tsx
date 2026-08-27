@@ -20,6 +20,10 @@ import {
 import { DetailBrowseHeader } from "@/components/navigation/DetailBrowseHeader";
 import { ChefDishesGrid } from "@/components/chef/ChefDishesGrid";
 import { CustomerReviewsSection } from "@/components/order/CustomerReviewsSection";
+import {
+  CustomerFloatingCart,
+  useCustomerCartSummary,
+} from "@/components/cart/CustomerFloatingCart";
 
 export const routeMeta = {
   head: ({ params }: { params: { id: string } }) => {
@@ -48,6 +52,7 @@ function ChefProfilePage() {
   const [loading, setLoading] = useState(!chef);
   const [message, setMessage] = useState("");
   const [photoNotice, setPhotoNotice] = useState(false);
+  const cartSummary = useCustomerCartSummary();
 
   useEffect(() => {
     let active = true;
@@ -162,7 +167,7 @@ function ChefProfilePage() {
     : "Explore the home-cooked dishes currently available from this kitchen on Craves.";
 
   return (
-    <div className="min-h-screen bg-white pb-14 text-[#1A1A1A]">
+    <div className={`min-h-screen bg-white text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "pb-32" : "pb-14"}`}>
       <DetailBrowseHeader returnPath={`/kitchen/${id}`} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
@@ -232,6 +237,8 @@ function ChefProfilePage() {
           <CustomerReviewsSection reviews={chef.reviews} />
         ) : null}
       </main>
+
+      <CustomerFloatingCart />
     </div>
   );
 }

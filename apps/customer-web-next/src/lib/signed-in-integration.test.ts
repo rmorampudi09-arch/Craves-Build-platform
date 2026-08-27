@@ -140,6 +140,29 @@ test("dish and customer kitchen detail pages recover live data and return to sav
   assert.match(legacyChefRoute, /redirect\(`\/kitchen\/\$\{encodeURIComponent\(id\)\}`\)/);
 });
 
+test("home kitchen and dish details share one live floating cart without forcing checkout", () => {
+  const sharedCart = source("../components/cart/CustomerFloatingCart.tsx");
+  const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const kitchen = source("../screens/public/ChefProfile/ChefProfile.tsx");
+  const dish = source("../screens/public/FoodDetails/FoodDetails.tsx");
+
+  assert.match(sharedCart, /subscribeCart/);
+  assert.match(sharedCart, /cartCount\(\)/);
+  assert.match(sharedCart, /cartTotal\(\)/);
+  assert.match(sharedCart, /cartCurrency\(\)/);
+
+  for (const surface of [home, kitchen, dish]) {
+    assert.match(surface, /<CustomerFloatingCart \/>/);
+  }
+
+  assert.match(kitchen, /useCustomerCartSummary\(\)/);
+  assert.match(dish, /useCustomerCartSummary\(\)/);
+  assert.match(dish, /cartSummary\.itemCount === 0 \? \(/);
+  assert.match(dish, /messageKind === "success"/);
+  assert.match(dish, /was added to your cart/);
+  assert.doesNotMatch(dish, /navigate\(\{ to: "\/cart" \}\);/);
+});
+
 test("every home-chef call to action opens the live chef registration flow", () => {
   const landing = source("../screens/public/LandingPage/LandingPage.tsx");
   const hero = source("../components/sections/HeroSection.tsx");

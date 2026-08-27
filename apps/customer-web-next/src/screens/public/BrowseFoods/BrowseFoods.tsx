@@ -343,6 +343,12 @@ function BrowseFoodsPage() {
   }, [restoreHomeView]);
 
   useEffect(() => {
+    if (window.sessionStorage.getItem("craves-home-open-search") !== "1") return;
+    window.sessionStorage.removeItem("craves-home-open-search");
+    setSearchOpen(true);
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     const syncCartSummary = () => {

@@ -37,15 +37,18 @@ function isActiveRoute(pathname: string, href: string): boolean {
 
 export function PersistentCustomerServiceNav({
   className = "",
+  forceVisible = false,
 }: {
   className?: string;
+  forceVisible?: boolean;
 }) {
   const pathname = usePathname();
+  const canRenderHere = pathname === "/home" || forceVisible;
   const [signedIn, setSignedIn] = useState(Boolean(getSession()));
   const [savedCount, setSavedCount] = useState(() => getCustomerFavoriteIds().size);
 
   useEffect(() => {
-    if (pathname !== "/home") return;
+    if (!canRenderHere) return;
 
     let active = true;
     const updateFromMemory = () => {
@@ -67,10 +70,10 @@ export function PersistentCustomerServiceNav({
       active = false;
       unsubscribe();
     };
-  }, [pathname]);
+  }, [canRenderHere]);
 
   useEffect(() => {
-    if (pathname !== "/home" || !signedIn) return;
+    if (!canRenderHere || !signedIn) return;
 
     let active = true;
     const syncSavedCount = () => {
@@ -91,9 +94,9 @@ export function PersistentCustomerServiceNav({
       active = false;
       unsubscribe();
     };
-  }, [pathname, signedIn]);
+  }, [canRenderHere, signedIn]);
 
-  if (pathname !== "/home" || !signedIn) return null;
+  if (!canRenderHere || !signedIn) return null;
 
   return (
     <nav

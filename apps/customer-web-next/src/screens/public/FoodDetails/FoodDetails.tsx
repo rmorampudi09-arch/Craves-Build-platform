@@ -1,6 +1,6 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, MapPin, Minus, Plus } from "lucide-react";
+import { MapPin, Minus, Plus } from "lucide-react";
 import { hasHomeReturnState } from "@/lib/home-return-state";
 import { loadSession } from "@/services/auth/cravesAuth";
 import {
@@ -10,7 +10,7 @@ import {
   type Dish,
 } from "@/services/api/dishes";
 import { addToCart } from "@/services/api/cravesCart";
-import { CravesLogo } from "@/components/brand/CravesLogo";
+import { DetailBrowseHeader } from "@/components/navigation/DetailBrowseHeader";
 import { DishImageHeader } from "@/components/order/DishImageHeader";
 import { DishInfoSummary } from "@/components/order/DishInfoSummary";
 import { ChefInfoCard } from "@/components/order/ChefInfoCard";
@@ -119,8 +119,8 @@ function DishDetailPage() {
     return (
       <main className="min-h-screen bg-white px-4 py-12">
         <div className="mx-auto max-w-6xl animate-pulse" aria-hidden="true">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
-            <div className="aspect-[4/3] rounded-[2rem] bg-[#F1F3F5]" />
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,39rem)_23.5rem] lg:justify-center">
+            <div className="aspect-[4/3] rounded-[2rem] bg-[#F1F3F5] md:aspect-[16/10]" />
             <div className="h-[28rem] rounded-[2rem] bg-[#F1F3F5]" />
           </div>
         </div>
@@ -181,30 +181,10 @@ function DishDetailPage() {
 
   return (
     <div className="min-h-screen bg-white pb-28 text-[#1A1A1A] lg:pb-14">
-      <header className="sticky top-0 z-40 border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-[4.5rem] max-w-6xl items-center gap-3 px-4 md:px-6">
-          <button
-            type="button"
-            onClick={handleBack}
-            className="!flex !h-10 !w-10 !items-center !justify-center !rounded-full !bg-[#F1F3F5] !p-0 !text-[#1A1A1A] hover:!text-[#F62E18]"
-            aria-label="Back to browsing"
-          >
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <CravesLogo size="sm" priority />
-          <div className="min-w-0">
-            <p className="text-[0.62rem] font-black uppercase tracking-[0.15em] text-[#F62E18]">
-              Home-cooked on Craves
-            </p>
-            <span className="block truncate text-sm font-black text-[#261A15]">
-              {dish.chef}
-            </span>
-          </div>
-        </div>
-      </header>
+      <DetailBrowseHeader returnPath={`/dish/${id}`} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
-        <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_23.5rem] lg:items-start xl:gap-9">
+        <div className="grid gap-7 lg:grid-cols-[minmax(0,39rem)_23.5rem] lg:items-start lg:justify-center xl:grid-cols-[minmax(0,42rem)_24rem] xl:gap-9">
           <div className="min-w-0">
             <DishImageHeader dish={dish} onBack={handleBack} />
 

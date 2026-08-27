@@ -1,8 +1,7 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  ChevronLeft,
-  ChevronRight,
+  Images,
   MapPin,
   PackageCheck,
   UtensilsCrossed,
@@ -18,7 +17,7 @@ import {
   loadSelectedAddress,
   loadSession,
 } from "@/services/auth/cravesAuth";
-import { ChefProfileHeader } from "@/components/chef/ChefProfileHeader";
+import { DetailBrowseHeader } from "@/components/navigation/DetailBrowseHeader";
 import { ChefDishesGrid } from "@/components/chef/ChefDishesGrid";
 import { CustomerReviewsSection } from "@/components/order/CustomerReviewsSection";
 
@@ -48,7 +47,7 @@ function ChefProfilePage() {
   const [chef, setChef] = useState<Chef | undefined>(() => getChef(id));
   const [loading, setLoading] = useState(!chef);
   const [message, setMessage] = useState("");
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [photoNotice, setPhotoNotice] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -60,7 +59,7 @@ function ChefProfilePage() {
       setLoading(true);
     }
     setMessage("");
-    setActiveImageIndex(0);
+    setPhotoNotice(false);
 
     void (async () => {
       const session = await loadSession();
@@ -101,6 +100,7 @@ function ChefProfilePage() {
       .finally(() => {
         if (active) setLoading(false);
       });
+
     return () => {
       active = false;
     };
@@ -118,25 +118,11 @@ function ChefProfilePage() {
     navigate({ to: "/home" });
   };
 
-  const dishes = chef ? getDishesByChef(chef.name) : [];
-  const galleryImages = Array.from(
-    new Set(
-      dishes.flatMap((dish) =>
-        dish.images && dish.images.length > 0
-          ? dish.images
-          : dish.imageIsPlaceholder
-            ? []
-            : [dish.img],
-      ),
-    ),
-  ).slice(0, 12);
-
   if (loading) {
     return (
       <div className="min-h-screen bg-white px-4 py-10">
         <div className="mx-auto max-w-6xl animate-pulse" aria-hidden="true">
-          <div className="h-[18rem] rounded-[2rem] bg-[#F1F3F5] sm:h-[22rem]" />
-          <div className="mt-5 h-36 rounded-[2rem] bg-[#F1F3F5]" />
+          <div className="h-44 rounded-[2rem] bg-[#F1F3F5]" />
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((item) => (
               <div key={item} className="h-72 rounded-[1.75rem] bg-[#F1F3F5]" />
@@ -170,129 +156,17 @@ function ChefProfilePage() {
     );
   }
 
-  const activeIndex = Math.min(
-    activeImageIndex,
-    Math.max(galleryImages.length - 1, 0),
-  );
-  const activeImage = galleryImages[activeIndex] ?? null;
-  const nextImages = galleryImages.length
-    ? [1, 2].map(
-        (offset) => galleryImages[(activeIndex + offset) % galleryImages.length],
-      )
-    : [];
+  const dishes = getDishesByChef(chef.name);
   const fallbackDescription = chef.specialties.length
     ? `Explore ${chef.specialties.join(", ")} and other home-cooked dishes currently available from this kitchen.`
     : "Explore the home-cooked dishes currently available from this kitchen on Craves.";
 
-  const showPrevious = () => {
-    setActiveImageIndex((current) =>
-      galleryImages.length
-        ? (current - 1 + galleryImages.length) % galleryImages.length
-        : 0,
-    );
-  };
-
-  const showNext = () => {
-    setActiveImageIndex((current) =>
-      galleryImages.length ? (current + 1) % galleryImages.length : 0,
-    );
-  };
-
   return (
     <div className="min-h-screen bg-white pb-14 text-[#1A1A1A]">
-      <ChefProfileHeader onBack={handleBack} />
+      <DetailBrowseHeader returnPath={`/kitchen/${id}`} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
-        <section aria-label={`${chef.name} kitchen gallery`}>
-          <div className="overflow-hidden rounded-[1.75rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-[0_14px_38px_rgba(26,26,26,0.07)] md:rounded-[2rem]">
-            {activeImage ? (
-              <div className="grid h-[17rem] gap-1.5 bg-white sm:h-[21rem] md:grid-cols-[1.7fr_1fr_1fr] lg:h-[24rem]">
-                <div className="relative min-w-0 overflow-hidden">
-                  <img
-                    src={activeImage}
-                    alt={`${chef.name} gallery photo ${activeIndex + 1}`}
-                    className="h-full w-full object-cover"
-                  />
-                  {galleryImages.length > 1 ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={showPrevious}
-                        className="!absolute !left-3 !top-1/2 !flex !h-10 !w-10 !-translate-y-1/2 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white/94 !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.13)] !backdrop-blur-md hover:!text-[#F62E18]"
-                        aria-label="Previous kitchen photo"
-                      >
-                        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={showNext}
-                        className="!absolute !right-3 !top-1/2 !flex !h-10 !w-10 !-translate-y-1/2 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white/94 !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.13)] !backdrop-blur-md hover:!text-[#F62E18] md:!right-4"
-                        aria-label="Next kitchen photo"
-                      >
-                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                      <span className="absolute bottom-3.5 right-3.5 rounded-full bg-[#1A1A1A]/78 px-2.5 py-1 text-[0.68rem] font-black text-white backdrop-blur-md md:hidden">
-                        {activeIndex + 1} / {galleryImages.length}
-                      </span>
-                    </>
-                  ) : null}
-                </div>
-
-                {nextImages.map((image, index) => (
-                  <button
-                    key={`${image}-${index}`}
-                    type="button"
-                    onClick={() =>
-                      setActiveImageIndex(
-                        (activeIndex + index + 1) % galleryImages.length,
-                      )
-                    }
-                    className="!hidden min-w-0 overflow-hidden !border-0 !bg-[#F1F3F5] !p-0 md:!block"
-                    aria-label={`Show kitchen photo ${((activeIndex + index + 1) % galleryImages.length) + 1}`}
-                  >
-                    <img
-                      src={image}
-                      alt=""
-                      aria-hidden="true"
-                      className="h-full w-full object-cover transition duration-500 hover:scale-[1.025]"
-                    />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-[15rem] items-center justify-center px-6 text-center sm:h-[18rem]">
-                <div>
-                  <UtensilsCrossed className="mx-auto h-10 w-10 text-[#F62E18]" aria-hidden="true" />
-                  <p className="mt-3 font-display text-xl font-black text-[#1A1A1A]">Kitchen gallery</p>
-                  <p className="mt-1 text-sm text-[#6B6B6B]">
-                    Photos from this kitchen will appear here when available.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {galleryImages.length > 1 ? (
-            <div className="mt-3 flex items-center justify-center gap-1.5" aria-label="Kitchen gallery position">
-              {galleryImages.slice(0, 8).map((image, index) => (
-                <button
-                  key={`${image}-dot`}
-                  type="button"
-                  onClick={() => setActiveImageIndex(index)}
-                  aria-label={`Show kitchen gallery image ${index + 1}`}
-                  aria-pressed={index === activeIndex}
-                  className={`!h-2 !rounded-full !p-0 transition-all ${
-                    index === activeIndex
-                      ? "!w-7 !bg-[#F62E18]"
-                      : "!w-2 !bg-[#E5E7EB] hover:!bg-[#6B6B6B]"
-                  }`}
-                />
-              ))}
-            </div>
-          ) : null}
-        </section>
-
-        <section className="mt-5 rounded-[1.75rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(26,26,26,0.045)] sm:p-6 md:rounded-[2rem] md:p-7">
+        <section className="rounded-[1.75rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(26,26,26,0.045)] sm:p-6 md:rounded-[2rem] md:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
               <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#F62E18]">
@@ -310,6 +184,24 @@ function ChefProfilePage() {
               <p className="mt-4 max-w-2xl text-sm leading-6 text-[#6B6B6B] sm:text-[0.95rem]">
                 {chef.bio || fallbackDescription}
               </p>
+
+              <button
+                type="button"
+                onClick={() => setPhotoNotice((visible) => !visible)}
+                className="!mt-5 !inline-flex !min-h-11 !items-center !gap-2 !rounded-full !border !border-[#E5E7EB] !bg-white !px-4 !text-sm !font-black !text-[#1A1A1A] !shadow-[0_5px_14px_rgba(26,26,26,0.05)] transition hover:!-translate-y-0.5 hover:!border-[#F62E18]/35 hover:!text-[#F62E18]"
+                aria-expanded={photoNotice}
+              >
+                <Images className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
+                Kitchen photos
+              </button>
+              {photoNotice ? (
+                <p
+                  role="status"
+                  className="mt-2 max-w-md rounded-2xl bg-[#F1F3F5] px-3.5 py-2.5 text-xs font-semibold leading-5 text-[#6B6B6B]"
+                >
+                  Kitchen photos are not available from this kitchen yet.
+                </p>
+              ) : null}
             </div>
 
             <div className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 lg:w-[25rem]">

@@ -14,7 +14,7 @@ import type { CravesUser } from "@/services/auth/cravesAuth";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 interface BrowseHeaderProps {
-  user: CravesUser;
+  user?: CravesUser;
   locationLabel: string;
   onOpenLocation: () => void;
   cartCount: number;
@@ -23,6 +23,8 @@ interface BrowseHeaderProps {
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
   onSearchFocus: () => void;
+  returnPath?: string;
+  forceServiceNav?: boolean;
 }
 
 export function BrowseHeader({
@@ -34,9 +36,11 @@ export function BrowseHeader({
   searchTerm,
   onSearchTermChange,
   onSearchFocus,
+  returnPath = "/home",
+  forceServiceNav = false,
 }: BrowseHeaderProps) {
   const openLocation = () => {
-    rememberReturnRoute("/addresses", "/home");
+    rememberReturnRoute("/addresses", returnPath);
     onOpenLocation();
   };
 
@@ -82,7 +86,7 @@ export function BrowseHeader({
               type="text"
               inputMode="search"
               autoComplete="off"
-              aria-label="Search homemade dishes or kitchens"
+              aria-label="Search homemade dishes or home kitchens"
             />
           </label>
 
@@ -131,7 +135,7 @@ export function BrowseHeader({
               type="text"
               inputMode="search"
               autoComplete="off"
-              aria-label="Search homemade dishes or kitchens"
+              aria-label="Search homemade dishes or home kitchens"
             />
           </label>
         </div>
@@ -151,7 +155,10 @@ export function BrowseHeader({
               <span className="block truncate">{locationLabel}</span>
             </span>
           </button>
-          <PersistentCustomerServiceNav className="ml-auto min-w-0 !gap-1 !pb-0 [&>a]:!min-h-9 [&>a]:!border-0 [&>a]:!px-2.5 [&>a]:!text-xs" />
+          <PersistentCustomerServiceNav
+            forceVisible={forceServiceNav}
+            className="ml-auto min-w-0 !gap-1 !pb-0 [&>a]:!min-h-9 [&>a]:!border-0 [&>a]:!px-2.5 [&>a]:!text-xs"
+          />
         </div>
       </div>
     </header>

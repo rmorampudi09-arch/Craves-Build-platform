@@ -86,11 +86,8 @@ function FoodTypeGlyph({
       <View
         style={[
           styles.glyphDot,
-          {
-            backgroundColor: color,
-            width: selected ? 18 : 14,
-            height: selected ? 18 : 14,
-          },
+          selected ? styles.glyphDotSelected : styles.glyphDotDefault,
+          {backgroundColor: color},
         ]}
       />
     </View>
@@ -308,6 +305,14 @@ const styles = StyleSheet.create({
   },
   glyphDot: {
     borderRadius: radius.pill,
+  },
+  glyphDotDefault: {
+    width: 14,
+    height: 14,
+  },
+  glyphDotSelected: {
+    width: 18,
+    height: 18,
   },
   eggGlyph: {
     width: 15,

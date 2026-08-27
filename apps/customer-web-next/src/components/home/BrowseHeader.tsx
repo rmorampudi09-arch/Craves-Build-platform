@@ -9,7 +9,7 @@ import {
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
 import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
-import { rememberReturnRoute } from "@/lib/return-navigation";
+import { rememberReturnRoute, toCustomerReturnRoute } from "@/lib/return-navigation";
 import type { CravesUser } from "@/services/auth/cravesAuth";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
@@ -40,7 +40,7 @@ export function BrowseHeader({
   forceServiceNav = false,
 }: BrowseHeaderProps) {
   const openLocation = () => {
-    rememberReturnRoute("/addresses", returnPath);
+    rememberReturnRoute("/addresses", toCustomerReturnRoute(returnPath));
     onOpenLocation();
   };
 

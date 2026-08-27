@@ -1,9 +1,26 @@
 const RETURN_ROUTE_PREFIX = "craves:return-route:";
 
-export type CustomerReturnRoute = "/home" | "/profile";
+export type CustomerReturnRoute =
+  | "/home"
+  | "/profile"
+  | `/dish/${string}`
+  | `/kitchen/${string}`;
+
+const DETAIL_RETURN_ROUTE =
+  /^\/(?:dish|kitchen)\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function storageKey(destination: string): string {
   return `${RETURN_ROUTE_PREFIX}${destination}`;
+}
+
+export function toCustomerReturnRoute(
+  value: string,
+  fallback: CustomerReturnRoute = "/home",
+): CustomerReturnRoute {
+  if (value === "/home" || value === "/profile") return value;
+  return DETAIL_RETURN_ROUTE.test(value)
+    ? (value as CustomerReturnRoute)
+    : fallback;
 }
 
 export function rememberReturnRoute(
@@ -24,5 +41,5 @@ export function consumeReturnRoute(
   const saved = window.sessionStorage.getItem(key);
   window.sessionStorage.removeItem(key);
 
-  return saved === "/home" || saved === "/profile" ? saved : fallback;
+  return saved ? toCustomerReturnRoute(saved, fallback) : fallback;
 }

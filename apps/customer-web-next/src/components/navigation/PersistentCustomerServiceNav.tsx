@@ -21,7 +21,7 @@ import {
   loadCustomerFavoriteIds,
   subscribeCustomerFavorites,
 } from "@/services/api/customerFavorites";
-import { rememberReturnRoute } from "@/lib/return-navigation";
+import { rememberReturnRoute, toCustomerReturnRoute } from "@/lib/return-navigation";
 
 const serviceLinks = [
   { href: "/orders", label: "Orders", icon: ClipboardList },
@@ -112,7 +112,7 @@ export function PersistentCustomerServiceNav({
             key={link.href}
             href={link.href}
             onClick={() => {
-              rememberReturnRoute(link.href, pathname);
+              rememberReturnRoute(link.href, toCustomerReturnRoute(pathname));
             }}
             aria-current={active ? "page" : undefined}
             className="group inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-transparent bg-transparent px-3 text-sm font-semibold text-[#1A1A1A] transition-all duration-200 hover:-translate-y-px hover:bg-[#F1F3F5] hover:text-[#F62E18] hover:shadow-[0_6px_18px_rgba(26,26,26,0.08)] focus-visible:bg-[#F1F3F5] focus-visible:text-[#F62E18]"

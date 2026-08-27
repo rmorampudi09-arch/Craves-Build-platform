@@ -16,6 +16,7 @@ import {
 } from "react-icons/fa6";
 import { GiChefToque } from "react-icons/gi";
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 import type { CustomerNotification } from "@/lib/notification-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
 
@@ -160,7 +161,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
-      <header className="border-b border-border bg-white/95">
+      <AutoHideCustomerHeader className="border-b border-border bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
         <div className="relative mx-auto flex max-w-4xl items-start justify-center px-4 pb-5 pt-6 md:px-6 md:pb-6 md:pt-8">
           <Link
             to="/home"
@@ -186,7 +187,7 @@ export default function NotificationsPage() {
             </span>
           </Link>
         </div>
-      </header>
+      </AutoHideCustomerHeader>
 
       <main className="mx-auto max-w-4xl px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
         {!loading && !error && notices.length > 0 ? (

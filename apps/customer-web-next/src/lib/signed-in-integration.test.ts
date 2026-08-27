@@ -212,45 +212,44 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   }
 });
 
-test("customer service navigation stays embedded on signed-in home and opted-in detail headers without a redundant Discover item", () => {
-  const navigation = source(
-    "../components/navigation/PersistentCustomerServiceNav.tsx",
+test("customer headers stay lean and share the same responsive scroll behavior", () => {
+  const autoHide = source(
+    "../components/navigation/AutoHideCustomerHeader.tsx",
   );
-  const layout = source("../app/layout.tsx");
   const homeHeader = source("../components/home/BrowseHeader.tsx");
   const detailHeader = source("../components/navigation/DetailBrowseHeader.tsx");
+  const cartHeader = source("../components/cart/CartHeader.tsx");
+  const checkoutHeader = source("../components/checkout/CheckoutHeader.tsx");
+  const profileHeader = source("../components/profile/ProfileHeader.tsx");
+  const trackingHeader = source("../components/tracking/TrackingHeader.tsx");
+  const orders = source("../screens/OrderHistory/OrderHistory.tsx");
+  const saved = source("../screens/Wishlist/Wishlist.tsx");
+  const notifications = source("../screens/Notifications/Notifications.tsx");
+  const addresses = source("../screens/Profile/Addresses.tsx");
 
-  for (const route of [
-    "/orders",
-    "/wishlist",
-    "/subscriptions",
-    "/notifications",
-    "/chef",
+  assert.doesNotMatch(homeHeader, /PersistentCustomerServiceNav/);
+  assert.doesNotMatch(detailHeader, /forceServiceNav/);
+
+  for (const surface of [
+    homeHeader,
+    cartHeader,
+    checkoutHeader,
+    profileHeader,
+    trackingHeader,
+    orders,
+    saved,
+    notifications,
+    addresses,
   ]) {
-    assert.match(navigation, new RegExp(route.replace("/", "\\/")));
+    assert.match(surface, /AutoHideCustomerHeader/);
   }
 
-  assert.doesNotMatch(navigation, /label: "Discover"/);
-  assert.doesNotMatch(layout, /PersistentCustomerServiceNav/);
-  assert.match(homeHeader, /<PersistentCustomerServiceNav/);
-  assert.match(
-    navigation,
-    /const canRenderHere = pathname === "\/home" \|\| forceVisible/,
-  );
-  assert.match(
-    navigation,
-    /if \(!canRenderHere \|\| !signedIn\) return null/,
-  );
-  assert.match(homeHeader, /forceVisible=\{forceServiceNav\}/);
-  assert.match(detailHeader, /forceServiceNav/);
-  assert.match(navigation, /serviceLinks\.map/);
-  assert.doesNotMatch(navigation, /visibleLinks/);
-  assert.match(navigation, /data-customer-service-navigation="embedded"/);
-  assert.match(navigation, /savedCount/);
-  assert.match(navigation, /border-transparent bg-transparent/);
-  assert.match(navigation, /text-\[#1A1A1A\]/);
-  assert.match(navigation, /hover:bg-\[#F1F3F5\]/);
-  assert.match(navigation, /hover:text-\[#F62E18\]/);
-  assert.doesNotMatch(navigation, /hover:text-white/);
-  assert.doesNotMatch(navigation, /bg-\[#C92716\]/);
+  assert.match(autoHide, /TOP_REVEAL_PX = 24/);
+  assert.match(autoHide, /HIDE_AFTER_PX = 96/);
+  assert.match(autoHide, /delta > HIDE_DELTA_PX/);
+  assert.match(autoHide, /delta < -SHOW_DELTA_PX/);
+  assert.match(autoHide, /requestAnimationFrame/);
+  assert.match(autoHide, /duration-\[240ms\]/);
+  assert.match(autoHide, /motion-reduce:transition-none/);
+  assert.match(autoHide, /onFocusCapture=\{\(\) => setHidden\(false\)\}/);
 });

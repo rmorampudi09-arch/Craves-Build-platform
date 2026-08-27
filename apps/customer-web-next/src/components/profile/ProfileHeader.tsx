@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { FaArrowLeft } from "react-icons/fa6";
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 
 export function ProfileHeader() {
   return (
-    <header className="bg-white">
+    <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
       <div className="relative mx-auto flex max-w-4xl items-start justify-center px-4 pb-5 pt-6 md:px-6 md:pb-6 md:pt-8">
         <Link
           to="/home"
@@ -28,7 +29,7 @@ export function ProfileHeader() {
           </span>
         </Link>
       </div>
-    </header>
+    </AutoHideCustomerHeader>
   );
 }
 

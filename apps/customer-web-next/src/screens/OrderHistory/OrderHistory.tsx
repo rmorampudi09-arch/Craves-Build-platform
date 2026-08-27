@@ -18,6 +18,7 @@ import {
 } from "@/lib/order-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 
 type OrderView = "ACTIVE" | "PAST" | "ALL";
 
@@ -205,7 +206,7 @@ export default function OrdersPage() {
 
   return (
     <div className="min-h-screen bg-white pb-20 text-ink">
-      <header className="border-b border-[#E5E7EB] bg-white">
+      <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-4 md:px-6 md:py-5">
           <Link
             to="/profile"
@@ -232,7 +233,7 @@ export default function OrdersPage() {
             </h1>
           </div>
         </div>
-      </header>
+      </AutoHideCustomerHeader>
 
       <main className="mx-auto max-w-4xl px-4 pb-8 pt-4 md:px-6 md:pb-10 md:pt-5">
         <div className="flex min-h-10 items-center justify-between gap-4">

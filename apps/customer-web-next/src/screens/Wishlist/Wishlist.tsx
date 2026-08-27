@@ -15,6 +15,7 @@ import {
 } from "@/services/api/customerFavorites";
 import { loadDish, type Dish } from "@/services/api/dishes";
 import { loadSession } from "@/services/auth/cravesAuth";
+import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 
 export const routeMeta = {
   head: () => ({
@@ -134,7 +135,7 @@ function WishlistPage() {
 
   return (
     <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]">
-      <header className="border-b border-[#E5E7EB] bg-white">
+      <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 md:px-6">
           <Link
             to="/home"
@@ -147,7 +148,7 @@ function WishlistPage() {
             Saved dishes
           </h1>
         </div>
-      </header>
+      </AutoHideCustomerHeader>
 
       <main className="mx-auto max-w-3xl px-4 py-6 md:px-6">
         {loading ? (

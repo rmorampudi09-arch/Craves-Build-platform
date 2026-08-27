@@ -1,6 +1,6 @@
 import { FaArrowLeft, FaArrowsRotate } from "react-icons/fa6";
 import { CravesLogo } from "@/components/brand/CravesLogo";
-import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
+import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 
 interface TrackingHeaderProps {
   orderId: string;
@@ -16,7 +16,7 @@ export function TrackingHeader({
   refreshing = false,
 }: TrackingHeaderProps) {
   return (
-    <header className="sticky top-0 z-30 border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
+    <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
       <div className="mx-auto flex min-h-[72px] max-w-5xl items-center gap-3 px-4 py-3 md:px-6">
         <button
           type="button"
@@ -52,10 +52,7 @@ export function TrackingHeader({
         </button>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 pb-3 md:px-6">
-        <PersistentCustomerServiceNav />
-      </div>
-    </header>
+    </AutoHideCustomerHeader>
   );
 }
 

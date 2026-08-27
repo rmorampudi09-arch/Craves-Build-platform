@@ -28,6 +28,7 @@ import {
   loadSession,
 } from "@/services/auth/cravesAuth";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
+import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 
 type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude"> & {
   latitude: string;
@@ -346,7 +347,7 @@ export default function AddressesPage() {
 
   return (
     <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
-      <header className="border-b border-[#E5E7EB] bg-white">
+      <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-5 md:px-6 md:py-6">
           <Link
             to="/profile"
@@ -373,7 +374,7 @@ export default function AddressesPage() {
             <span className="sm:hidden">Add</span>
           </button>
         </div>
-      </header>
+      </AutoHideCustomerHeader>
 
       <main className="mx-auto max-w-5xl px-4 pt-7 md:px-6 md:pt-9">
         <div className="mb-6 flex items-start gap-3 rounded-2xl bg-[#F1F3F5] px-4 py-4 md:px-5">

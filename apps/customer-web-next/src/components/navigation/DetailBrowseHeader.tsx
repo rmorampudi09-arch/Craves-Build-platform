@@ -72,7 +72,6 @@ export function DetailBrowseHeader({ returnPath }: DetailBrowseHeaderProps) {
       onSearchTermChange={setSearchTerm}
       onSearchFocus={openSearch}
       returnPath={returnPath}
-      forceServiceNav
     />
   );
 }

@@ -8,7 +8,7 @@ import {
 
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
-import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
+import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 import { rememberReturnRoute, toCustomerReturnRoute } from "@/lib/return-navigation";
 import type { CravesUser } from "@/services/auth/cravesAuth";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
@@ -24,7 +24,6 @@ interface BrowseHeaderProps {
   onSearchTermChange: (value: string) => void;
   onSearchFocus: () => void;
   returnPath?: string;
-  forceServiceNav?: boolean;
 }
 
 export function BrowseHeader({
@@ -37,7 +36,6 @@ export function BrowseHeader({
   onSearchTermChange,
   onSearchFocus,
   returnPath = "/home",
-  forceServiceNav = false,
 }: BrowseHeaderProps) {
   const openLocation = () => {
     rememberReturnRoute("/addresses", toCustomerReturnRoute(returnPath));
@@ -45,7 +43,7 @@ export function BrowseHeader({
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
+    <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
       <div className="mx-auto max-w-[88rem] px-4 md:px-7 lg:px-10">
         <div className="flex min-h-[4.8rem] items-center gap-3 py-2.5 lg:gap-6">
           <Link
@@ -155,13 +153,9 @@ export function BrowseHeader({
               <span className="block truncate">{locationLabel}</span>
             </span>
           </button>
-          <PersistentCustomerServiceNav
-            forceVisible={forceServiceNav}
-            className="ml-auto min-w-0 !gap-1 !pb-0 [&>a]:!min-h-9 [&>a]:!border-0 [&>a]:!px-2.5 [&>a]:!text-xs"
-          />
         </div>
       </div>
-    </header>
+    </AutoHideCustomerHeader>
   );
 }
 

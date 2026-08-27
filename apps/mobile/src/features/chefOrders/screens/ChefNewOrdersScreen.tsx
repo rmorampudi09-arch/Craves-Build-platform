@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
   feedbackError: {backgroundColor: colors.errorSoft},
   feedbackText: {flex: 1, color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.medium},
   feedbackDismiss: {marginLeft: spacing.sm, color: colors.textSecondary, fontSize: typography.tiny, fontWeight: fontWeight.bold},
-  listContent: {paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: spacing.sm},
+  listContent: {paddingHorizontal: spacing.md, paddingBottom: spacing.xxxl, gap: spacing.sm},
   emptyListContent: {flexGrow: 1},
   skeletonList: {flex: 1, paddingHorizontal: spacing.md, gap: spacing.sm},
   skeletonGap: {marginTop: spacing.md, gap: spacing.sm},

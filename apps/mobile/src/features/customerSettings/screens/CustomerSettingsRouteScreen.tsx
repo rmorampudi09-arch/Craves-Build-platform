@@ -70,7 +70,7 @@ export function CustomerSettingsRouteScreen() {
             style={({pressed}) => [styles.headerButton, pressed && styles.rowPressed]}>
             <Icon
               name="arrow-left"
-              size={iconSize.lg}
+              size={iconSize.md}
               color={colors.espressoBrown}
               surface={false}
             />
@@ -164,17 +164,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   header: {
-    minHeight: 88,
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     backgroundColor: colors.white,
   },
   headerButton: {
-    width: touchTarget.comfortable,
-    height: touchTarget.comfortable,
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -186,18 +186,18 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: colors.espressoBrown,
-    fontSize: 32,
-    fontWeight: fontWeight.extrabold,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
   },
   headerSubtitle: {
     marginTop: spacing.xxs,
     color: colors.textSecondary,
-    fontSize: typography.body,
+    fontSize: typography.small,
   },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.md,
-    paddingBottom: 120,
+    paddingBottom: spacing.xl,
     backgroundColor: colors.white,
   },
   content: {
@@ -206,10 +206,10 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   sectionEyebrow: {
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xs,
     color: colors.textSecondary,
-    fontSize: typography.small,
+    fontSize: typography.tiny,
     fontWeight: fontWeight.bold,
     letterSpacing: 0.5,
   },
@@ -221,10 +221,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   row: {
-    minHeight: 86,
+    minHeight: 76,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
@@ -232,8 +232,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   rowIcon: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -251,16 +251,16 @@ const styles = StyleSheet.create({
   rowSubtitle: {
     marginTop: spacing.xxs,
     color: colors.textSecondary,
-    fontSize: typography.small,
+    fontSize: typography.tiny,
   },
   rowValue: {
     color: colors.textSecondary,
-    fontSize: typography.small,
+    fontSize: typography.tiny,
     fontWeight: fontWeight.medium,
   },
   divider: {
     height: borderWidth.standard,
-    marginLeft: 80,
+    marginLeft: 72,
     backgroundColor: colors.border,
   },
 });

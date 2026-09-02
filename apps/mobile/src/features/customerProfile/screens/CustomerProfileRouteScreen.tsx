@@ -1,11 +1,11 @@
 import React, {useCallback} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {resolveRouteChromePolicy} from '../../../app/navigation/navigationPolicy';
 import type {CustomerProfileStackParamList} from '../../../app/navigation/types';
 import {useAppSelector} from '../../../app/store/hooks';
-import {colors, radius, spacing, touchTarget} from '../../../design/tokens';
+import {colors} from '../../../design/tokens';
 import {SharedViewCartOverlay} from '../../cart/components/SharedViewCartOverlay';
 import {
   selectCartFoodSubtotal,
@@ -18,8 +18,8 @@ import {CustomerProfileScreen} from './CustomerProfileScreen';
 const CUSTOMER_PROFILE_ROUTE_POLICY = resolveRouteChromePolicy('Customer', 'Profile');
 
 /**
- * P74 adds an explicit Settings entry point without changing the P58/P59
- * profile hub or its canonical active-cart overlay behavior.
+ * Profile owns the account hub. Settings is exposed from the canonical profile
+ * menu inside CustomerProfileScreen; this route must not add a second shortcut.
  */
 export function CustomerProfileRouteScreen() {
   const navigation =
@@ -39,25 +39,11 @@ export function CustomerProfileRouteScreen() {
     navigation.navigate('CustomerCart');
   }, [navigation]);
 
-  const handleOpenSettings = useCallback(() => {
-    navigation.navigate('CustomerSettings');
-  }, [navigation]);
-
   return (
     <View style={styles.root}>
       <View style={[styles.profile, {paddingBottom: contentBottomInset}]}>
         <CustomerProfileScreen />
       </View>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Open Settings"
-        accessibilityHint="Opens account and preference settings"
-        hitSlop={spacing.xs}
-        onPress={handleOpenSettings}
-        style={({pressed}) => [styles.settingsShortcut, pressed && styles.pressed]}>
-        <Text style={styles.settingsGlyph}>⚙️</Text>
-      </Pressable>
 
       <SharedViewCartOverlay
         routePolicy={CUSTOMER_PROFILE_ROUTE_POLICY}
@@ -70,26 +56,9 @@ export function CustomerProfileRouteScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: colors.white,
   },
   profile: {
     flex: 1,
-  },
-  settingsShortcut: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: touchTarget.minimum + spacing.lg,
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.white,
-    zIndex: 4,
-  },
-  settingsGlyph: {
-    fontSize: 20,
-  },
-  pressed: {
-    opacity: 0.75,
   },
 });

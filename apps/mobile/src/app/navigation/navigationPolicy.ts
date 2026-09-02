@@ -67,6 +67,7 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'CustomerCart',
   'CustomerNotifications',
   'CustomerAddresses',
+  'CustomerSettings',
   'CustomerSettingsNotifications',
   'CustomerSettingsPrivacySecurity',
   'CustomerSettingsChangePassword',
@@ -80,29 +81,16 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'CustomerSettingsLegal',
 ]);
 
-const CUSTOMER_BOTTOM_NAV_NO_CART_ROUTES: ReadonlySet<RegisteredRouteName> =
-  new Set(['CustomerSettings']);
-
 const IMMERSIVE_POLICY: RouteChromePolicy = {
   bottomNavigationVisible: false,
   viewCartEligible: false,
   immersive: true,
 };
 
-const CUSTOMER_BOTTOM_NAV_NO_CART_POLICY: RouteChromePolicy = {
-  bottomNavigationVisible: true,
-  viewCartEligible: false,
-  immersive: false,
-};
-
 export function resolveRouteChromePolicy(
   domain: NavigationDomain,
   routeName?: RegisteredRouteName,
 ): RouteChromePolicy {
-  if (routeName && CUSTOMER_BOTTOM_NAV_NO_CART_ROUTES.has(routeName)) {
-    return CUSTOMER_BOTTOM_NAV_NO_CART_POLICY;
-  }
-
   if (routeName && CURRENT_IMMERSIVE_ROUTES.has(routeName)) {
     return IMMERSIVE_POLICY;
   }

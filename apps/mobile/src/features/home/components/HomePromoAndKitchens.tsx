@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   FlatList,
   Image,
@@ -23,19 +23,16 @@ import {
   spacing,
   typography,
 } from '../../../design/tokens';
-import type {NearbyKitchen} from '../../chefDiscovery/api/nearbyChefDiscoveryApi';
-import {
-  flattenNearbyKitchenPages,
-  formatKitchenDistance,
-} from '../../chefDiscovery/chefDiscoveryPresentation';
-import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefDiscoveryQueries';
+import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
+import type {NearbyDish} from '../api/homeFeedApi';
 import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
+import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 
 declare const require: (path: string) => ImageSourcePropType;
 
 const HOME_RADIUS_METERS = 10_000;
-const TOP_KITCHEN_PAGE_SIZE = 12;
-const MAX_TOP_KITCHENS = 8;
+const TOP_PICKS_PAGE_SIZE = 12;
+const MAX_TOP_PICKS = 8;
 const PROMO_AUTO_ADVANCE_MS = 5_000;
 
 const HOME_PROMO_BANNERS = [
@@ -58,7 +55,12 @@ const HOME_PROMO_BANNERS = [
 
 type PromoBanner = (typeof HOME_PROMO_BANNERS)[number];
 
-function PromoCarousel({width}: {width: number}) {
+type HomeNavigation = NativeStackNavigationProp<
+  CustomerHomeStackParamList,
+  'CustomerHomeRoot'
+>;
+
+function PromoCarousel({width, onPress}: {width: number; onPress: () => void}) {
   const listRef = useRef<FlatList<PromoBanner>>(null);
   const activeIndexRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -70,56 +72,29 @@ function PromoCarousel({width}: {width: number}) {
   };
 
   useEffect(() => {
-    if (width <= 0) {
-      return undefined;
-    }
-
-    listRef.current?.scrollToOffset({
-      offset: activeIndexRef.current * width,
-      animated: false,
-    });
-
-    return undefined;
-  }, [width]);
-
-  useEffect(() => {
-    if (HOME_PROMO_BANNERS.length < 2 || width <= 0) {
-      return undefined;
-    }
-
+    if (width <= 0 || HOME_PROMO_BANNERS.length < 2) return undefined;
     const interval = setInterval(() => {
-      if (isDraggingRef.current) {
-        return;
-      }
-
-      const nextIndex =
-        (activeIndexRef.current + 1) % HOME_PROMO_BANNERS.length;
-
-      listRef.current?.scrollToOffset({
-        offset: nextIndex * width,
-        animated: true,
-      });
+      if (isDraggingRef.current) return;
+      const nextIndex = (activeIndexRef.current + 1) % HOME_PROMO_BANNERS.length;
+      listRef.current?.scrollToOffset({offset: nextIndex * width, animated: true});
       updateActiveIndex(nextIndex);
     }, PROMO_AUTO_ADVANCE_MS);
-
     return () => clearInterval(interval);
   }, [width]);
 
   const handleMomentumScrollEnd = (
     event: NativeSyntheticEvent<NativeScrollEvent>,
   ) => {
-    if (width <= 0) {
-      return;
-    }
-
-    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / width);
-    const safeIndex = Math.max(
+    if (width <= 0) return;
+    const nextIndex = Math.max(
       0,
-      Math.min(HOME_PROMO_BANNERS.length - 1, nextIndex),
+      Math.min(
+        HOME_PROMO_BANNERS.length - 1,
+        Math.round(event.nativeEvent.contentOffset.x / width),
+      ),
     );
-
     isDraggingRef.current = false;
-    updateActiveIndex(safeIndex);
+    updateActiveIndex(nextIndex);
   };
 
   return (
@@ -130,35 +105,29 @@ function PromoCarousel({width}: {width: number}) {
         horizontal
         pagingEnabled
         nestedScrollEnabled
-        decelerationRate="fast"
         showsHorizontalScrollIndicator={false}
         keyExtractor={item => item.id}
-        getItemLayout={(_, index) => ({
-          length: width,
-          offset: width * index,
-          index,
-        })}
+        getItemLayout={(_, index) => ({length: width, offset: width * index, index})}
         onScrollBeginDrag={() => {
           isDraggingRef.current = true;
         }}
-        onScrollEndDrag={() => {
-          isDraggingRef.current = false;
-        }}
         onMomentumScrollEnd={handleMomentumScrollEnd}
         renderItem={({item}) => (
-          <View style={[styles.bannerSlide, {width}]}>
+          <Pressable
+            accessibilityLabel={item.label}
+            accessibilityRole="button"
+            onPress={onPress}
+            style={[styles.bannerSlide, {width}]}>
             <Image
               accessible
               accessibilityIgnoresInvertColors
-              accessibilityLabel={item.label}
               source={item.image}
               resizeMode="cover"
               style={styles.bannerImage}
             />
-          </View>
+          </Pressable>
         )}
       />
-
       <View
         accessibilityLabel={`Banner ${activeIndex + 1} of ${HOME_PROMO_BANNERS.length}`}
         accessibilityRole="text"
@@ -167,10 +136,7 @@ function PromoCarousel({width}: {width: number}) {
         {HOME_PROMO_BANNERS.map((banner, index) => (
           <View
             key={banner.id}
-            style={[
-              styles.paginationDot,
-              index === activeIndex && styles.paginationDotActive,
-            ]}
+            style={[styles.paginationDot, index === activeIndex && styles.paginationDotActive]}
           />
         ))}
       </View>
@@ -178,44 +144,64 @@ function PromoCarousel({width}: {width: number}) {
   );
 }
 
-function KitchenPreviewCard({
-  kitchen,
-  onPress,
-}: {
-  kitchen: NearbyKitchen;
-  onPress: (kitchen: NearbyKitchen) => void;
-}) {
-  const title = kitchen.displayName?.trim() || kitchen.kitchenName.trim();
-  const location = [kitchen.areaName, kitchen.city].filter(Boolean).join(', ');
+function foodTypeLabel(foodType: NearbyDish['foodType']): string {
+  if (foodType === 'NON_VEG') return 'Non Veg';
+  return foodType === 'VEG' ? 'Veg' : 'Egg';
+}
+
+function TopPickCard({dish, onPress}: {dish: NearbyDish; onPress: () => void}) {
+  const kitchenName = dish.kitchenDisplayName?.trim() || dish.kitchenName;
+  const prepTime = dish.preparationTimeMinutes
+    ? `${dish.preparationTimeMinutes} min`
+    : null;
 
   return (
     <Pressable
-      accessibilityHint="Opens this kitchen's public profile"
-      accessibilityLabel={`Open ${title}`}
+      accessibilityLabel={`Open ${dish.itemName} from ${kitchenName}`}
       accessibilityRole="button"
-      onPress={() => onPress(kitchen)}
-      style={({pressed}) => [styles.kitchenCard, pressed && styles.pressed]}>
-      <View style={styles.kitchenBody}>
-        <View style={styles.kitchenHeader}>
-          <CustomerChefAvatar size={46} />
-          <View style={styles.kitchenHeaderCopy}>
-            <Text style={styles.kitchenEyebrow}>HOME KITCHEN</Text>
-            <Text numberOfLines={2} style={styles.kitchenTitle}>
-              {title}
-            </Text>
+      onPress={onPress}
+      style={({pressed}) => [styles.pickCard, pressed && styles.pickPressed]}>
+      <View style={styles.pickImageWrap}>
+        {dish.primaryImageUrl ? (
+          <Image
+            source={{uri: dish.primaryImageUrl}}
+            resizeMode="cover"
+            style={styles.pickImage}
+          />
+        ) : (
+          <View style={styles.pickPlaceholder}>
+            <CustomerChefAvatar size={44} />
           </View>
+        )}
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{foodTypeLabel(dish.foodType)}</Text>
         </View>
-        <Text numberOfLines={2} style={styles.kitchenSubtitle}>
-          {kitchen.description || location || 'Home-cooked meals'}
+        {prepTime ? (
+          <View style={styles.etaBadge}>
+            <Text style={styles.etaText}>{prepTime}</Text>
+          </View>
+        ) : null}
+        <CustomerFavoriteHeartButton
+          favorite={false}
+          disabled
+          onToggle={() => undefined}
+          style={styles.favorite}
+        />
+      </View>
+      <View style={styles.pickBody}>
+        <Text numberOfLines={1} style={styles.pickKitchen}>
+          {kitchenName}
         </Text>
-        <View style={styles.kitchenMetaRow}>
-          <Text numberOfLines={1} style={styles.kitchenMeta}>
-            {formatKitchenDistance(kitchen.distanceMeters)}
+        <Text numberOfLines={2} style={styles.pickName}>
+          {dish.itemName}
+        </Text>
+        <View style={styles.pickMeta}>
+          <Text numberOfLines={1} style={styles.pickCategory}>
+            {dish.category}
           </Text>
           <Text style={styles.metaDot}>•</Text>
-          <Text numberOfLines={1} style={styles.kitchenMeta}>
-            {kitchen.activeMenuItemCount}{' '}
-            {kitchen.activeMenuItemCount === 1 ? 'dish' : 'dishes'}
+          <Text style={styles.pickPrice}>
+            {dish.currency} {dish.price.toFixed(0)}
           </Text>
         </View>
       </View>
@@ -224,53 +210,57 @@ function KitchenPreviewCard({
 }
 
 export function HomePromoAndKitchens() {
-  const navigation = useNavigation<
-    NativeStackNavigationProp<CustomerHomeStackParamList, 'CustomerHomeRoot'>
-  >();
+  const navigation = useNavigation<HomeNavigation>();
   const {width} = useWindowDimensions();
-  const discovery = useNearbyChefDiscoveryQuery({
+  const discovery = useHomeNearbyDishesQuery({
     radiusMeters: HOME_RADIUS_METERS,
-    size: TOP_KITCHEN_PAGE_SIZE,
+    size: TOP_PICKS_PAGE_SIZE,
   });
-  const kitchens = useMemo(
-    () =>
-      flattenNearbyKitchenPages(discovery.data?.pages).slice(
-        0,
-        MAX_TOP_KITCHENS,
-      ),
-    [discovery.data?.pages],
+  const picks = (discovery.data?.pages.flatMap(page => page.menuItems) ?? []).slice(
+    0,
+    MAX_TOP_PICKS,
   );
   const bannerWidth = Math.max(280, width - spacing.md * 2);
-
-  const openKitchen = (kitchen: NearbyKitchen) => {
-    navigation.navigate('CustomerKitchenProfile', {kitchenId: kitchen.id});
-  };
 
   return (
     <View>
       <View style={styles.bannerRow}>
-        <PromoCarousel width={bannerWidth} />
+        <PromoCarousel
+          width={bannerWidth}
+          onPress={() => navigation.navigate('CustomerHomeSearch')}
+        />
       </View>
 
-      {kitchens.length > 0 ? (
-        <View style={styles.kitchensSection}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>
-            Top kitchens near you
-          </Text>
-          <Text style={styles.sectionCaption}>
-            Active home kitchens closest to you
-          </Text>
+      {picks.length > 0 ? (
+        <View style={styles.picksSection}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionCopy}>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>
+                Top Picks for you
+              </Text>
+              <Text style={styles.sectionCaption}>
+                Popular meals available near you
+              </Text>
+            </View>
+            <Pressable
+              accessibilityLabel="See all top picks"
+              accessibilityRole="button"
+              onPress={() => navigation.navigate('CustomerHomeSearch')}
+              hitSlop={spacing.xs}>
+              <Text style={styles.seeAll}>See all</Text>
+            </Pressable>
+          </View>
           <ScrollView
             horizontal
             nestedScrollEnabled
             keyboardShouldPersistTaps="handled"
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.kitchenRow}>
-            {kitchens.map(kitchen => (
-              <KitchenPreviewCard
-                key={kitchen.id}
-                kitchen={kitchen}
-                onPress={openKitchen}
+            contentContainerStyle={styles.pickRow}>
+            {picks.map(dish => (
+              <TopPickCard
+                key={dish.id}
+                dish={dish}
+                onPress={() => navigation.navigate('CustomerDishDetail', {menuItemId: dish.id})}
               />
             ))}
           </ScrollView>
@@ -319,9 +309,19 @@ const styles = StyleSheet.create({
     width: 18,
     backgroundColor: colors.flameRed,
   },
-  kitchensSection: {
+  picksSection: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  sectionCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   sectionTitle: {
     color: colors.espressoBrown,
@@ -333,16 +333,20 @@ const styles = StyleSheet.create({
     fontSize: typography.tiny,
     marginTop: spacing.xxs,
   },
-  kitchenRow: {
+  seeAll: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
+  },
+  pickRow: {
     gap: spacing.sm,
     marginHorizontal: -spacing.md,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
   },
-  kitchenCard: {
-    width: 208,
-    minHeight: 142,
+  pickCard: {
+    width: 190,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -350,50 +354,80 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...elevation.card,
   },
-  pressed: {
+  pickPressed: {
     opacity: 0.88,
     transform: [{scale: 0.99}],
   },
-  kitchenBody: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.md,
+  pickImageWrap: {
+    height: 118,
+    position: 'relative',
+    backgroundColor: '#FFF7F2',
   },
-  kitchenHeader: {
-    minWidth: 0,
-    flexDirection: 'row',
+  pickImage: {
+    width: '100%',
+    height: '100%',
+  },
+  pickPlaceholder: {
+    flex: 1,
     alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'center',
   },
-  kitchenHeaderCopy: {
-    minWidth: 0,
-    flex: 1,
+  badge: {
+    position: 'absolute',
+    left: spacing.xs,
+    bottom: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(0,0,0,0.58)',
   },
-  kitchenEyebrow: {
-    color: colors.flameRedAccessible,
+  badgeText: {
+    color: colors.white,
     fontSize: typography.tiny,
     fontWeight: fontWeight.bold,
-    letterSpacing: 0.5,
   },
-  kitchenTitle: {
+  etaBadge: {
+    position: 'absolute',
+    top: spacing.xs,
+    left: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(0,0,0,0.58)',
+  },
+  etaText: {
+    color: colors.white,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.semibold,
+  },
+  favorite: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+  },
+  pickBody: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  pickKitchen: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.semibold,
+  },
+  pickName: {
     marginTop: spacing.xxs,
     color: colors.espressoBrown,
     fontSize: typography.small,
     fontWeight: fontWeight.bold,
+    lineHeight: 18,
   },
-  kitchenSubtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    marginTop: spacing.sm,
-  },
-  kitchenMetaRow: {
+  pickMeta: {
+    marginTop: spacing.xs,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: spacing.xs,
   },
-  kitchenMeta: {
+  pickCategory: {
     flexShrink: 1,
     color: colors.textSecondary,
     fontSize: typography.tiny,
@@ -401,5 +435,10 @@ const styles = StyleSheet.create({
   metaDot: {
     color: colors.textSecondary,
     fontSize: typography.tiny,
+  },
+  pickPrice: {
+    color: colors.espressoBrown,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
   },
 });

@@ -1,5 +1,12 @@
-import React from 'react';
-import {Modal, Pressable, StyleSheet, View} from 'react-native';
+import React, {useRef} from 'react';
+import {
+  Animated,
+  Modal,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {colors, radius, spacing} from '../../../design/tokens';
 import {CustomerDishDetailLegacyScreen} from './CustomerDishDetailLegacyScreen';
@@ -12,6 +19,38 @@ import {CustomerDishDetailLegacyScreen} from './CustomerDishDetailLegacyScreen';
  */
 export function CustomerDishDetailScreen() {
   const navigation = useNavigation();
+  const translateY = useRef(new Animated.Value(0)).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_event, gesture) =>
+        gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderMove: (_event, gesture) => {
+        translateY.setValue(Math.max(0, gesture.dy));
+      },
+      onPanResponderRelease: (_event, gesture) => {
+        if (gesture.dy > 120 || gesture.vy > 1.2) {
+          navigation.goBack();
+          return;
+        }
+        Animated.spring(translateY, {
+          toValue: 0,
+          damping: 22,
+          stiffness: 260,
+          mass: 0.7,
+          useNativeDriver: true,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateY, {
+          toValue: 0,
+          damping: 22,
+          stiffness: 260,
+          mass: 0.7,
+          useNativeDriver: true,
+        }).start();
+      },
+    }),
+  ).current;
 
   return (
     <Modal
@@ -28,10 +67,12 @@ export function CustomerDishDetailScreen() {
           onPress={() => navigation.goBack()}
           style={styles.backdrop}
         />
-        <View style={styles.sheet}>
+        <Animated.View
+          {...panResponder.panHandlers}
+          style={[styles.sheet, {transform: [{translateY}]}]}>
           <View style={styles.handle} />
           <CustomerDishDetailLegacyScreen />
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

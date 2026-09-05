@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import in.craves.catalog.config.PublicCatalogPrivacyProperties;
 import in.craves.catalog.service.CatalogService;
+import in.craves.catalog.service.PublicMenuBatchResolveService;
 import in.craves.catalog.web.ApiDtos.DiscoveryRadiusResponse;
 import in.craves.catalog.web.ApiDtos.FoodType;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 class PublicCatalogControllerPrivacyTest {
     private final CatalogService catalogService = mock(CatalogService.class);
+    private final PublicMenuBatchResolveService batchResolveService = mock(PublicMenuBatchResolveService.class);
     private PublicCatalogPrivacyProperties privacyProperties;
     private PublicCatalogController controller;
 
@@ -31,14 +33,16 @@ class PublicCatalogControllerPrivacyTest {
     void setUp() {
         privacyProperties = new PublicCatalogPrivacyProperties();
         privacyProperties.setPrivacyEnforcementEnabled(true);
-        controller = new PublicCatalogController(catalogService, privacyProperties);
+        controller = new PublicCatalogController(catalogService, batchResolveService, privacyProperties);
     }
 
     @Test
     void publicKitchenDetailExcludesIdentityContactAddressAndExactCoordinatesWhenActivated() {
         UUID kitchenId = UUID.randomUUID();
         when(catalogService.getPublicKitchen(kitchenId)).thenReturn(kitchen(kitchenId));
+
         var response = controller.getKitchen(kitchenId);
+
         assertThat(response.id()).isEqualTo(kitchenId);
         assertThat(response.identityId()).isNull();
         assertThat(response.areaName()).isEqualTo("Kukatpally");
@@ -56,7 +60,9 @@ class PublicCatalogControllerPrivacyTest {
         KitchenProfileResponse legacy = kitchen(kitchenId);
         when(catalogService.getPublicKitchen(kitchenId)).thenReturn(legacy);
         privacyProperties.setPrivacyEnforcementEnabled(false);
+
         var response = controller.getKitchen(kitchenId);
+
         assertThat(response).isSameAs(legacy);
         assertThat(response.phoneNumber()).isEqualTo("+919999999999");
         assertThat(response.addressLine1()).isEqualTo("12-3-45 Private House");
@@ -69,12 +75,22 @@ class PublicCatalogControllerPrivacyTest {
             new PublicKitchenDiscoveryResponse(
                 new DiscoveryRadiusResponse("Hyderabad", "DEFAULT", BigDecimal.TEN, BigDecimal.valueOf(15)),
                 List.of(new PublicKitchenSummaryResponse(
-                    kitchenId, "Kitchen", "Display", "Description", "Madhapur", "Hyderabad",
-                    new BigDecimal("17.44"), new BigDecimal("78.39"), new BigDecimal("2.30"), 5
+                    kitchenId,
+                    "Kitchen",
+                    "Display",
+                    "Description",
+                    "Madhapur",
+                    "Hyderabad",
+                    new BigDecimal("17.44"),
+                    new BigDecimal("78.39"),
+                    new BigDecimal("2.30"),
+                    5
                 ))
             )
         );
+
         var response = controller.discoverKitchens(null, null, "Hyderabad", null, null);
+
         assertThat(response.kitchens().getFirst().latitude()).isNull();
         assertThat(response.kitchens().getFirst().longitude()).isNull();
         assertThat(response.kitchens().getFirst().distanceKm()).isEqualByComparingTo("2.30");
@@ -94,7 +110,9 @@ class PublicCatalogControllerPrivacyTest {
             MenuItemStatus.ACTIVE, List.of(image), Instant.now(), Instant.now()
         );
         when(catalogService.getPublicMenuItem(itemId)).thenReturn(item);
+
         MenuItemResponse response = controller.getMenuItem(itemId);
+
         assertThat(response.images().getFirst().blobContainer()).isNull();
         assertThat(response.images().getFirst().blobName()).isNull();
         assertThat(response.images().getFirst().publicUrl()).isEqualTo("https://cdn.example/menu.jpg");
@@ -102,11 +120,25 @@ class PublicCatalogControllerPrivacyTest {
 
     private static KitchenProfileResponse kitchen(UUID kitchenId) {
         return new KitchenProfileResponse(
-            kitchenId, UUID.randomUUID(), "Ravi Home Kitchen", "Ravi Inti Vantalu",
-            "Telugu home food", "+919999999999", "chef@example.com", "12-3-45 Private House",
-            "Private Lane", "Private Landmark", "Kukatpally", "Hyderabad", "Telangana", "500072",
-            new BigDecimal("17.4948"), new BigDecimal("78.3996"), KitchenStatus.ACTIVE,
-            Instant.now(), Instant.now()
+            kitchenId,
+            UUID.randomUUID(),
+            "Ravi Home Kitchen",
+            "Ravi Inti Vantalu",
+            "Telugu home food",
+            "+919999999999",
+            "chef@example.com",
+            "12-3-45 Private House",
+            "Private Lane",
+            "Private Landmark",
+            "Kukatpally",
+            "Hyderabad",
+            "Telangana",
+            "500072",
+            new BigDecimal("17.4948"),
+            new BigDecimal("78.3996"),
+            KitchenStatus.ACTIVE,
+            Instant.now(),
+            Instant.now()
         );
     }
 }

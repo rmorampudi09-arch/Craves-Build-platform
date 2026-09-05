@@ -27,10 +27,12 @@ class InternalCatalogAuthorizerTest {
     @Test
     void rejectsWrongSecretWithoutEchoingExpectedValue() {
         properties.setAccessValue("shared-secret-value");
+
         ApiException error = catchThrowableOfType(
             () -> authorizer.requireAuthorized("wrong-value"),
             ApiException.class
         );
+
         assertThat(error.getStatus()).isEqualTo(403);
         assertThat(error.getCode()).isEqualTo("INTERNAL_ACCESS_DENIED");
         assertThat(error.getMessage()).doesNotContain("shared-secret-value");
@@ -42,6 +44,7 @@ class InternalCatalogAuthorizerTest {
             () -> authorizer.requireAuthorized(null),
             ApiException.class
         );
+
         assertThat(error.getStatus()).isEqualTo(503);
         assertThat(error.getCode()).isEqualTo("INTERNAL_ACCESS_NOT_CONFIGURED");
     }

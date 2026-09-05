@@ -18,7 +18,13 @@ steps:
       set -euo pipefail
       cd services/order-service
       mvn -B clean verify
-    displayName: Compile and test Order Service delivery consumer
+    displayName: Compile and test Order Service delivery projection
+
+  - script: |
+      set -euo pipefail
+      cd services/integration-service
+      mvn -B clean verify
+    displayName: Compile and test Integration multi-provider delivery capability
 
   - script: |
       set -euo pipefail
@@ -32,7 +38,19 @@ steps:
         echo "Validating $schema"
         python3 -m json.tool "$schema" >/dev/null
       done
-    displayName: Validate all domain-event schema JSON files
+      python3 -m json.tool contracts/openapi/order-delivery-status-v1.openapi.json >/dev/null
+      python3 -m json.tool contracts/openapi/chef-delivery-status-v1.openapi.json >/dev/null
+    displayName: Validate delivery event and OpenAPI JSON contracts
+
+  - script: |
+      set -euo pipefail
+      bash -n scripts/release/upgrade-order-delivery-stream-filter-v3.sh
+      bash -n scripts/release/rollback-order-delivery-stream-filter-v3.sh
+      bash -n scripts/release/activate-order-delivery-live-location-v1.sh
+      bash -n scripts/release/rollback-order-delivery-live-location-v1.sh
+      bash -n scripts/apim/configure-chef-order-read-apim.sh
+      bash -n scripts/apim/rollback-chef-delivery-status-apim.sh
+    displayName: Validate delivery telemetry release scripts
 
   - script: |
       set -euo pipefail
@@ -46,8 +64,29 @@ steps:
       grep -F 'enabled: ${BORZO_API_ENABLED:false}' \
         services/integration-service/src/main/resources/application.yml
 
-      grep -F 'does not replace the commercial order status' \
-        services/order-service/src/main/resources/db/migration/V9__delivery_status_consumer.sql
+      grep -F 'CRAVES_DELIVERY_LIVE_LOCATION_EXPOSURE_ENABLED:false' \
+        services/order-service/src/main/java/in/craves/order/config/DeliveryTelemetryViewProperties.java
+
+      test -f services/order-service/src/main/resources/db/migration/V17__delivery_telemetry_projection.sql
+      test -f services/order-service/src/main/resources/db/migration/V18__delivery_provider_exact_eta.sql
+      test -f services/integration-service/src/main/resources/db/migration/V112__delivery_telemetry_projection.sql
+      test -f services/integration-service/src/main/resources/db/migration/V113__delivery_provider_exact_eta.sql
+
+      test -f services/integration-service/src/main/java/in/craves/integration/delivery/provider/DeliveryProviderCapabilityRegistry.java
+      test -f services/integration-service/src/main/java/in/craves/integration/delivery/borzo/BorzoDeliveryTelemetryExtractor.java
+      test -f services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket/ShiprocketDeliveryTelemetryExtractor.java
+
+      grep -F 'DELIVERY_TELEMETRY_UPDATED' contracts/events/delivery-telemetry-updated-v1.schema.json
+      grep -F '"1.1"' contracts/events/delivery-telemetry-updated-v1.schema.json
+      grep -F 'trackingExperience' contracts/openapi/order-delivery-status-v1.openapi.json
+      grep -F 'trackingExperience' contracts/openapi/chef-delivery-status-v1.openapi.json
+      grep -F 'DELIVERY_TELEMETRY_UPDATED' scripts/release/upgrade-order-delivery-stream-filter-v3.sh
+      grep -F 'get-my-chef-order-delivery-status' scripts/apim/configure-chef-order-read-apim.sh
+
+      grep -F 'must never be used as a provider ranking table' \
+        services/integration-service/src/main/java/in/craves/integration/delivery/provider/DeliveryProviderCapabilityRegistry.java
+      grep -F 'PRIVATE_CONTRACT_REQUIRED' \
+        services/integration-service/src/main/java/in/craves/integration/delivery/provider/DeliveryProviderCapabilityRegistry.java
 
       grep -F 'scripts/release/deploy-single-service-preserve-runtime.sh' \
         azure-pipelines-order-service.yml
@@ -62,5 +101,5 @@ steps:
         exit 1
       fi
 
-      echo 'SUCCESS: Delivery status source defaults remain fail-closed and routine deployments preserve the live runtime state.'
-    displayName: Verify fail-closed delivery controls and runtime-preserving deployment contract
+      echo 'SUCCESS: Multi-provider delivery capability remains fail-closed where contracts are unverified and routine deployments preserve live runtime state.'
+    displayName: Verify provider-neutral capability, fail-closed contracts and runtime preservation

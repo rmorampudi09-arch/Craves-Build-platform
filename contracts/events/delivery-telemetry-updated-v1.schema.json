@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.craves.in/events/delivery-telemetry-updated-v1.schema.json",
+  "title": "DELIVERY_TELEMETRY_UPDATED v1.x",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "occurredAt",
+    "correlationId",
+    "source",
+    "subject",
+    "data"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "const": "DELIVERY_TELEMETRY_UPDATED" },
+    "eventVersion": { "enum": ["1.0", "1.1"] },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "correlationId": { "type": "string", "format": "uuid" },
+    "causationId": { "type": ["string", "null"], "format": "uuid" },
+    "source": { "const": "integration-service" },
+    "subject": {
+      "type": "string",
+      "pattern": "^delivery-job/[0-9a-fA-F-]{36}$"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deliveryJobId",
+        "orderId",
+        "chefSubOrderId",
+        "providerId",
+        "providerDeliveryId",
+        "status",
+        "observedAt"
+      ],
+      "properties": {
+        "deliveryJobId": { "type": "string", "format": "uuid" },
+        "orderId": { "type": "string", "format": "uuid" },
+        "chefSubOrderId": { "type": "string", "format": "uuid" },
+        "providerId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "providerDeliveryId": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "status": {
+          "enum": [
+            "PENDING",
+            "SEARCHING",
+            "COURIER_ASSIGNED",
+            "COURIER_TO_PICKUP",
+            "AT_PICKUP",
+            "PICKED_UP",
+            "IN_TRANSIT",
+            "AT_DROPOFF",
+            "DELIVERED",
+            "CANCELLED",
+            "DELAYED",
+            "RETURNING",
+            "RETURNED",
+            "FAILED"
+          ]
+        },
+        "courierLatitude": { "type": ["number", "null"], "minimum": -90, "maximum": 90 },
+        "courierLongitude": { "type": ["number", "null"], "minimum": -180, "maximum": 180 },
+        "locationObservedAt": { "type": ["string", "null"], "format": "date-time" },
+        "estimatedPickupAt": { "type": ["string", "null"], "format": "date-time" },
+        "estimatedPickupStartAt": { "type": ["string", "null"], "format": "date-time" },
+        "estimatedPickupEndAt": { "type": ["string", "null"], "format": "date-time" },
+        "estimatedDropoffAt": { "type": ["string", "null"], "format": "date-time" },
+        "estimatedDropoffStartAt": { "type": ["string", "null"], "format": "date-time" },
+        "estimatedDropoffEndAt": { "type": ["string", "null"], "format": "date-time" },
+        "observedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["courierLatitude"], "properties": { "courierLatitude": { "type": "number" } } },
+          "then": {
+            "required": ["courierLongitude", "locationObservedAt"],
+            "properties": { "courierLongitude": { "type": "number" }, "locationObservedAt": { "type": "string" } }
+          }
+        },
+        {
+          "if": { "required": ["courierLongitude"], "properties": { "courierLongitude": { "type": "number" } } },
+          "then": {
+            "required": ["courierLatitude", "locationObservedAt"],
+            "properties": { "courierLatitude": { "type": "number" }, "locationObservedAt": { "type": "string" } }
+          }
+        }
+      ]
+    }
+  }
+}

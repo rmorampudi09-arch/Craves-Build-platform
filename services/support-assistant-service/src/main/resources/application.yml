@@ -1,0 +1,47 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: craves-support-assistant-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/craves_business_db}
+    username: ${SPRING_DATASOURCE_USERNAME:cravesadmin}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:5}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
+      connection-timeout: 30000
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+craves:
+  jwt:
+    issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
+    audience: ${CRAVES_JWT_AUDIENCE:craves-api}
+    verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
+  support-assistant:
+    ai:
+      enabled: ${CRAVES_SUPPORT_AI_ENABLED:false}
+      endpoint: ${CRAVES_SUPPORT_AI_ENDPOINT:}
+      deployment: ${CRAVES_SUPPORT_AI_DEPLOYMENT:}
+      max-output-tokens: ${CRAVES_SUPPORT_AI_MAX_OUTPUT_TOKENS:500}
+      token-timeout: ${CRAVES_SUPPORT_AI_TOKEN_TIMEOUT:5s}
+      request-timeout: ${CRAVES_SUPPORT_AI_REQUEST_TIMEOUT:20s}
+    downstream:
+      order-base-url: ${CRAVES_ORDER_SERVICE_BASE_URL:}
+      user-chef-base-url: ${CRAVES_USER_CHEF_SERVICE_BASE_URL:}
+    knowledge:
+      max-results: ${CRAVES_SUPPORT_KNOWLEDGE_MAX_RESULTS:5}
+      max-chunk-characters: ${CRAVES_SUPPORT_KNOWLEDGE_MAX_CHUNK_CHARACTERS:1800}

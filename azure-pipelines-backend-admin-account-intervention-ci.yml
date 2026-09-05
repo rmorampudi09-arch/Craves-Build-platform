@@ -34,7 +34,7 @@ steps:
         services/auth-service/src/main/java/in/craves/auth/admin/AdminAccountInterventionRepository.java
       grep -F 'UPDATE refresh_session' \
         services/auth-service/src/main/java/in/craves/auth/admin/AdminAccountInterventionRepository.java
-      if grep -R -E 'FIREBASE_SERVICE_ACCOUNT_JSON_BASE64\s*[:=]\s*[^$({ ]' \
+      if grep -R -E 'FIREBASE_SERVICE_ACCOUNT_JSON_BASE64\s*[:=]\s*[^$({}[:space:]]' \
           services/auth-service azure-pipelines-backend-admin-account-intervention*.yml; then
         echo 'Firebase credentials must never be committed.' >&2
         exit 1

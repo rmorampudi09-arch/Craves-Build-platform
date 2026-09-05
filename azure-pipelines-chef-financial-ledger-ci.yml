@@ -1,8 +1,25 @@
 trigger: none
 pr: none
 
+parameters:
+  - name: confirmConfigureChefFinancialRead
+    type: boolean
+    default: false
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: apimName
+    type: string
+    default: apim-craves-prodlow-l3ing6
+  - name: integrationContainerAppName
+    type: string
+    default: ca-craves-integration-service-pr
+
 pool:
   vmImage: ubuntu-latest
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
 
 steps:
   - checkout: self
@@ -27,10 +44,36 @@ steps:
       grep -Fq 'ck_chef_earning_arithmetic' "$migration"
       grep -Fq "financial_allocation_status = 'PENDING_POLICY'" \
         services/order-service/src/main/resources/db/migration/V11__subscription_order_fulfillment.sql
-      grep -Fq '.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")' \
-        services/integration-service/src/main/java/in/craves/integration/config/WebSecurityConfiguration.java
+      security_config='services/integration-service/src/main/java/in/craves/integration/config/WebSecurityConfiguration.java'
+      grep -Fq '.requestMatchers("/api/v1/admin/**").hasAnyRole(' "$security_config"
+      grep -Fq '"PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"' \
+        "$security_config"
       grep -Fq '.requestMatchers("/api/v1/chef/**").hasRole("CHEF")' \
-        services/integration-service/src/main/java/in/craves/integration/config/WebSecurityConfiguration.java
+        "$security_config"
       ! grep -RInE 'cashfree.*payout|bank.*transfer.*execute|auto.*settle' \
         services/integration-service/src/main/java/in/craves/integration/settlement
     displayName: Verify manual-first financial safety
+
+  - bash: |
+      set -euo pipefail
+      bash -n scripts/apim/configure-chef-financial-v1-apim.sh
+      bash -n scripts/apim/rollback-chef-financial-v1-apim.sh
+      python - <<'PY'
+      import xml.etree.ElementTree as ET
+      ET.parse('infra/apim/chef-financial-v1/chef-financial-policy.xml')
+      print('Chef financial APIM policy XML is valid.')
+      PY
+    displayName: Validate chef financial APIM assets
+
+  - ${{ if eq(parameters.confirmConfigureChefFinancialRead, true) }}:
+    - task: AzureCLI@2
+      displayName: Configure and verify chef financial APIM read route
+      inputs:
+        azureSubscription: $(AZURE_SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: scriptPath
+        scriptPath: scripts/apim/configure-chef-financial-v1-apim.sh
+      env:
+        RG: ${{ parameters.resourceGroupName }}
+        APIM: ${{ parameters.apimName }}
+        INTEGRATION_APP: ${{ parameters.integrationContainerAppName }}

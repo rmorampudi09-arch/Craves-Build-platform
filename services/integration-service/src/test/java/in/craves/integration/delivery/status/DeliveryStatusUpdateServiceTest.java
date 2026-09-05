@@ -18,6 +18,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderS
 import in.craves.integration.delivery.provider.DeliveryWebhookNormalizer;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.DeliveryJobState;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.WebhookWorkItem;
+import in.craves.integration.delivery.telemetry.DeliveryTelemetryPublisherService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 class DeliveryStatusUpdateServiceTest {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private final DeliveryTelemetryPublisherService telemetryPublisher = mock(DeliveryTelemetryPublisherService.class);
 
     @Test
     void appliesNewerWebhookAndEnqueuesStatusOutboxTransactionally() {
@@ -73,7 +75,8 @@ class DeliveryStatusUpdateServiceTest {
             repository,
             outbox,
             properties,
-            objectMapper
+            objectMapper,
+            telemetryPublisher
         );
 
         var result = service.processWebhook(workItem);
@@ -150,7 +153,8 @@ class DeliveryStatusUpdateServiceTest {
             repository,
             outbox,
             properties,
-            objectMapper
+            objectMapper,
+            telemetryPublisher
         );
 
         var result = service.processWebhook(workItem);
@@ -222,7 +226,8 @@ class DeliveryStatusUpdateServiceTest {
             repository,
             outbox,
             properties,
-            objectMapper
+            objectMapper,
+            telemetryPublisher
         );
 
         var result = service.processWebhook(workItem);

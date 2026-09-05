@@ -89,13 +89,16 @@ public class ChefAcceptanceResolutionService {
     }
 
     @Transactional
-    public boolean timeoutExpiredOrder(UUID orderId) {
+    public boolean timeoutExpiredOrder(UUID orderId, UUID claimToken) {
         LockedOrder lockedOrder = lockOrder(orderId);
         if (lockedOrder.status() != OrderStatus.CHEF_ACCEPTANCE_PENDING) {
             return false;
         }
         if (lockedOrder.acceptanceExpiresAt() == null
             || lockedOrder.databaseNow().isBefore(lockedOrder.acceptanceExpiresAt())) {
+            return false;
+        }
+        if (claimToken == null || !claimToken.equals(lockedOrder.timeoutClaimToken())) {
             return false;
         }
 
@@ -197,6 +200,9 @@ public class ChefAcceptanceResolutionService {
                     chef_response_note = ?,
                     refund_requested_at = now(),
                     refund_requested_amount = grand_total,
+                    chef_acceptance_timeout_claim_token = NULL,
+                    chef_acceptance_timeout_claimed_at = NULL,
+                    chef_acceptance_timeout_last_error = NULL,
                     updated_at = now()
                 WHERE id = ?
                   AND status = 'CHEF_ACCEPTANCE_PENDING'
@@ -292,6 +298,7 @@ public class ChefAcceptanceResolutionService {
                        chef_acceptance_requested_at, chef_acceptance_expires_at,
                        chef_acceptance_reminder_10_recorded_at,
                        chef_acceptance_reminder_20_recorded_at,
+                       chef_acceptance_timeout_claim_token,
                        now() AS database_now
                 FROM order_schema.customer_order
                 WHERE id = ?
@@ -320,6 +327,7 @@ public class ChefAcceptanceResolutionService {
             instant(resultSet, "chef_acceptance_expires_at"),
             instant(resultSet, "chef_acceptance_reminder_10_recorded_at"),
             instant(resultSet, "chef_acceptance_reminder_20_recorded_at"),
+            resultSet.getObject("chef_acceptance_timeout_claim_token", UUID.class),
             instant(resultSet, "database_now")
         );
     }
@@ -388,6 +396,7 @@ public class ChefAcceptanceResolutionService {
         Instant acceptanceExpiresAt,
         Instant firstReminderRecordedAt,
         Instant secondReminderRecordedAt,
+        UUID timeoutClaimToken,
         Instant databaseNow
     ) {
     }

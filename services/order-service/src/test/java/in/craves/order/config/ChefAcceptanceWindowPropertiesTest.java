@@ -14,6 +14,7 @@ class ChefAcceptanceWindowPropertiesTest {
         assertThat(properties.validatedSecondReminderMinutes()).isEqualTo(20);
         assertThat(properties.isWorkerEnabled()).isFalse();
         assertThat(properties.validatedWorkerBatchSize()).isEqualTo(20);
+        assertThat(properties.validatedTimeoutClaimStaleSeconds()).isEqualTo(300);
     }
 
     @Test
@@ -23,11 +24,21 @@ class ChefAcceptanceWindowPropertiesTest {
         properties.setFirstReminderMinutes(0);
         properties.setSecondReminderMinutes(60);
         properties.setWorkerBatchSize(1000);
+        properties.setTimeoutClaimStaleSeconds(5);
 
         assertThat(properties.validatedFirstReminderMinutes()).isBetween(1, 29);
         assertThat(properties.validatedSecondReminderMinutes())
             .isGreaterThan(properties.validatedFirstReminderMinutes())
             .isLessThan(30);
-        assertThat(properties.validatedWorkerBatchSize()).isEqualTo(100);
+        assertThat(properties.validatedWorkerBatchSize()).isEqualTo(200);
+        assertThat(properties.validatedTimeoutClaimStaleSeconds()).isEqualTo(300);
+    }
+
+    @Test
+    void capsTimeoutClaimRecoveryWindow() {
+        ChefAcceptanceWindowProperties properties = new ChefAcceptanceWindowProperties();
+        properties.setTimeoutClaimStaleSeconds(7200);
+
+        assertThat(properties.validatedTimeoutClaimStaleSeconds()).isEqualTo(3600);
     }
 }

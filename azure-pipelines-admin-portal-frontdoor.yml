@@ -43,6 +43,7 @@ steps:
 
   - bash: |
       set -euo pipefail
+      mkdir -p '$(artifactDir)'
       packages=()
       command -v dig >/dev/null 2>&1 || packages+=(dnsutils)
       command -v jq >/dev/null 2>&1 || packages+=(jq)

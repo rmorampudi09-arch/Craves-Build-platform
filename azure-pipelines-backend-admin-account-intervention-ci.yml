@@ -26,7 +26,7 @@ steps:
         services/auth-service/src/main/resources/application.yml
       grep -F 'firebase-worker-enabled: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED:false}' \
         services/auth-service/src/main/resources/application.yml
-      grep -F 'FOR UPDATE SKIP LOCKED' \
+      grep -E 'FOR UPDATE( OF [[:alnum:]_]+)? SKIP LOCKED' \
         services/auth-service/src/main/java/in/craves/auth/admin/AdminAccountInterventionRepository.java
       grep -F 'revokeRefreshTokens' \
         services/auth-service/src/main/java/in/craves/auth/admin/FirebaseAccountInterventionWorker.java

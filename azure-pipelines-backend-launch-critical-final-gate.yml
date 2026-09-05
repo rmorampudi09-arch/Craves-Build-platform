@@ -95,8 +95,10 @@ steps:
       grep -R -F 'CRAVES_AUTH_RATE_LIMIT_ENABLED:false' services/auth-service >/dev/null
       grep -R -F 'CRAVES_NOTIFICATION_RECOVERY_API_ENABLED:false' services/notification-service >/dev/null
       grep -R -F 'CRAVES_SUPPORT_AI_ENABLED:false' services/support-assistant-service >/dev/null
-      if grep -R -E 'AZURE_OPENAI_API_KEY|OPENAI_API_KEY' services/support-assistant-service >/dev/null 2>&1; then
-        echo 'Support Assistant must not contain model API-key configuration.' >&2
+      if grep -R -E 'AZURE_OPENAI_API_KEY|OPENAI_API_KEY|api-key[[:space:]]*[:=]' \
+          services/support-assistant-service/src/main/java \
+          services/support-assistant-service/src/main/resources >/dev/null 2>&1; then
+        echo 'Support Assistant runtime must not contain model API-key wiring.' >&2
         exit 1
       fi
     displayName: Verify launch-critical controls remain fail-closed

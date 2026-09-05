@@ -1,10 +1,12 @@
 package in.craves.order.web;
 
 import in.craves.order.security.CravesPrincipal;
+import in.craves.order.service.CartPreflightService;
 import in.craves.order.service.OrderService;
 import in.craves.order.web.ApiDtos.AddCartItemRequest;
 import in.craves.order.web.ApiDtos.CartResponse;
 import in.craves.order.web.ApiDtos.UpdateCartItemRequest;
+import in.craves.order.web.CartPreflightDtos.CartPreflightResponse;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,14 +23,21 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/cart")
 public class CartController {
     private final OrderService orderService;
+    private final CartPreflightService cartPreflightService;
 
-    public CartController(OrderService orderService) {
+    public CartController(OrderService orderService, CartPreflightService cartPreflightService) {
         this.orderService = orderService;
+        this.cartPreflightService = cartPreflightService;
     }
 
     @GetMapping
     public CartResponse getCart(@AuthenticationPrincipal CravesPrincipal principal) {
         return orderService.getCart(principal);
+    }
+
+    @GetMapping("/preflight")
+    public CartPreflightResponse preflight(@AuthenticationPrincipal CravesPrincipal principal) {
+        return cartPreflightService.inspect(principal);
     }
 
     @PostMapping("/items")

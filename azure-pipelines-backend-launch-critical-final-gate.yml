@@ -17,12 +17,12 @@ steps:
 
   - bash: |
       set -euo pipefail
-      services=(auth-service user-chef-service catalog-service order-service subscription-service integration-service notification-service)
+      services=(auth-service user-chef-service catalog-service order-service subscription-service integration-service notification-service support-assistant-service)
       for service in "${services[@]}"; do
         echo "========== FINAL VERIFY $service =========="
         (cd "services/$service" && mvn -B -ntp clean verify)
       done
-    displayName: Compile and test all backend services
+    displayName: Compile and test all eight backend services
 
   - bash: |
       set -euo pipefail
@@ -38,6 +38,7 @@ steps:
           Path('services/subscription-service/src/main/resources/db/migration'),
           Path('services/integration-service/src/main/resources/db/migration'),
           Path('services/notification-service/src/main/resources/db/migration'),
+          Path('services/support-assistant-service/src/main/resources/db/migration'),
       ]
       pattern = re.compile(r'^V(\d+)__(.+)\.sql$')
       for root in roots:
@@ -80,6 +81,7 @@ steps:
         CRAVES_TOKEN_REVOCATION_PUBLISHER_ENABLED
         CRAVES_TOKEN_REVOCATION_ENABLED
         CRAVES_AUTH_RATE_LIMIT_ENABLED
+        CRAVES_SUPPORT_AI_ENABLED
       )
       for name in "${required_false[@]}"; do
         if ! grep -R -F "${name}:" services azure-pipelines*.yml >/dev/null 2>&1 && \
@@ -92,6 +94,11 @@ steps:
       grep -R -F 'CRAVES_TOKEN_REVOCATION_ENABLED:false' services >/dev/null
       grep -R -F 'CRAVES_AUTH_RATE_LIMIT_ENABLED:false' services/auth-service >/dev/null
       grep -R -F 'CRAVES_NOTIFICATION_RECOVERY_API_ENABLED:false' services/notification-service >/dev/null
+      grep -R -F 'CRAVES_SUPPORT_AI_ENABLED:false' services/support-assistant-service >/dev/null
+      if grep -R -E 'AZURE_OPENAI_API_KEY|OPENAI_API_KEY' services/support-assistant-service >/dev/null 2>&1; then
+        echo 'Support Assistant must not contain model API-key configuration.' >&2
+        exit 1
+      fi
     displayName: Verify launch-critical controls remain fail-closed
 
   - bash: |
@@ -102,6 +109,8 @@ steps:
       test -s services/notification-service/modules/recovery-operations/README.md
       test -s services/auth-service/modules/admin-account-intervention/README.md
       test -s services/order-service/modules/admin-operations/README.md
+      test -s services/support-assistant-service/README.md
+      test -s azure-pipelines-support-assistant-service.yml
     displayName: Verify final operational handover evidence
 
   - bash: |

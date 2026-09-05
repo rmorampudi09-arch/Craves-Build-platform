@@ -50,8 +50,9 @@ steps:
       scripts/release/validate-dockerfiles.sh . $(modulePath)/Dockerfile
       python3 scripts/release/validate-flyway-migrations.py
       grep -F 'CRAVES_SUPPORT_AI_ENABLED:false' $(modulePath)/src/main/resources/application.yml
-      if grep -R -E 'AZURE_OPENAI_API_KEY|OPENAI_API_KEY|api-key[=:][^$({ ]' $(modulePath); then
-        echo 'ERROR: Support Assistant must use managed identity; model API keys are forbidden.' >&2
+      if grep -R -E 'AZURE_OPENAI_API_KEY|OPENAI_API_KEY|api-key[[:space:]]*[:=]' \
+          $(modulePath)/src/main/java $(modulePath)/src/main/resources; then
+        echo 'ERROR: Support Assistant runtime must use managed identity; model API-key wiring is forbidden.' >&2
         exit 1
       fi
     displayName: Validate support assistant security and release assets

@@ -1,0 +1,201 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmation
+    displayName: Exact Razorpay auto-refund confirmation
+    type: string
+    default: ''
+  - name: expectedExecutableRefundCount
+    type: number
+    default: 0
+  - name: expectedReconcilableRefundCount
+    type: number
+    default: 0
+  - name: expectedProcessingRefundCount
+    type: number
+    default: 0
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  resourceGroup: rg-craves-prodlow-centralindia
+  orderApp: ca-craves-order-service-prodlow
+  integrationApp: ca-craves-integration-service-pr
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+
+  - bash: |
+      set -euo pipefail
+      test -s services/order-service/src/main/resources/db/migration/V20__chef_acceptance_timeout_distributed_claim.sql
+      test -s services/order-service/src/main/java/in/craves/order/service/AutoRefundMetrics.java
+      grep -Fq 'FOR UPDATE SKIP LOCKED' services/order-service/src/main/java/in/craves/order/service/ChefAcceptanceWorkRepository.java
+      grep -Fq 'timeoutExpiredOrder(orderId, claimToken)' services/order-service/src/main/java/in/craves/order/service/ChefAcceptanceWindowWorker.java
+      grep -Fq 'requireRazorpayRouting' services/integration-service/src/main/java/in/craves/integration/refund/RefundRequestService.java
+      grep -Fq "provider = ?" services/integration-service/src/main/java/in/craves/integration/refund/RefundRepository.java
+      grep -Fq 'X-Refund-Idempotency' services/integration-service/src/main/java/in/craves/integration/refund/RazorpayRefundClient.java
+    displayName: Verify Razorpay auto-refund source invariants
+
+  - task: AzureCLI@2
+    displayName: Activate Razorpay-only 30-minute auto refund
+    env:
+      CRAVES_INTERNAL_SMOKE_SECRET: $(CRAVES_INTERNAL_SMOKE_SECRET)
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+
+        [[ '${{ parameters.confirmation }}' == 'ACTIVATE_RAZORPAY_AUTO_REFUND' ]] || {
+          echo 'Type ACTIVATE_RAZORPAY_AUTO_REFUND to activate the 30-minute Razorpay auto-refund chain.' >&2
+          exit 2
+        }
+        [[ -n "${CRAVES_INTERNAL_SMOKE_SECRET:-}" ]] || {
+          echo 'CRAVES_INTERNAL_SMOKE_SECRET must be configured as a secret pipeline variable.' >&2
+          exit 2
+        }
+
+        RG='$(resourceGroup)'
+        ORDER='$(orderApp)'
+        INTEGRATION='$(integrationApp)'
+
+        fail() { echo "ERROR: $*" >&2; exit 2; }
+
+        env_json() {
+          az containerapp show -g "$RG" -n "$1" --query 'properties.template.containers[0].env' -o json --only-show-errors
+        }
+        value() {
+          local json="$1" name="$2"
+          jq -r --arg name "$name" '.[] | select(.name == $name) | (.value // "")' <<<"$json" | tail -1
+        }
+        secret_ref() {
+          local json="$1" name="$2"
+          jq -r --arg name "$name" '.[] | select(.name == $name) | (.secretRef // "")' <<<"$json" | tail -1
+        }
+        wait_ready() {
+          local app="$1" latest ready replicas
+          latest=$(az containerapp show -g "$RG" -n "$app" --query properties.latestRevisionName -o tsv --only-show-errors)
+          [[ -n "$latest" ]] || fail "Could not resolve latest revision for $app"
+          for _ in $(seq 1 60); do
+            ready=$(az containerapp revision show -g "$RG" -n "$app" --revision "$latest" --query properties.provisioningState -o tsv 2>/dev/null || true)
+            replicas=$(az containerapp revision show -g "$RG" -n "$app" --revision "$latest" --query properties.replicas -o tsv 2>/dev/null || echo 0)
+            [[ "$ready" == Provisioned && "$replicas" -ge 1 ]] && return 0
+            sleep 10
+          done
+          fail "$app revision did not become ready"
+        }
+        health() {
+          local app="$1" fqdn
+          fqdn=$(az containerapp show -g "$RG" -n "$app" --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)
+          [[ -n "$fqdn" ]] || fail "$app has no ingress FQDN"
+          curl -fsS --max-time 30 "https://${fqdn}/actuator/health" >/dev/null || fail "$app health check failed"
+        }
+
+        wait_ready "$ORDER"
+        wait_ready "$INTEGRATION"
+        health "$ORDER"
+        health "$INTEGRATION"
+
+        integration_before=$(env_json "$INTEGRATION")
+        [[ "$(value "$integration_before" PAYMENT_PROVIDER_NAME)" == RAZORPAY ]] || fail 'Razorpay must be the active payment provider.'
+        [[ "$(value "$integration_before" RAZORPAY_API_ENABLED)" == true ]] || fail 'RAZORPAY_API_ENABLED must be true.'
+        [[ "$(value "$integration_before" RAZORPAY_ENVIRONMENT)" == PRODUCTION ]] || fail 'Razorpay must already be staged for PRODUCTION.'
+        [[ "$(value "$integration_before" RAZORPAY_PRODUCTION_ACTIVATION_APPROVED)" == true ]] || fail 'Razorpay production configuration approval is missing.'
+        [[ "$(value "$integration_before" RAZORPAY_PRODUCTION_PAYMENT_EXECUTION_ENABLED)" == true ]] || fail 'Controlled Razorpay live-money activation must be completed before automatic production refunds.'
+
+        [[ "$(value "$integration_before" CASHFREE_API_ENABLED)" == false ]] || fail 'Cashfree API must remain disabled.'
+        [[ "$(value "$integration_before" CASHFREE_TRAFFIC_ALLOWED)" == false ]] || fail 'Cashfree traffic must remain disabled.'
+        [[ "$(value "$integration_before" CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED)" == false ]] || fail 'Cashfree webhook ingress must remain disabled.'
+        [[ "$(value "$integration_before" CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED)" == false ]] || fail 'Cashfree webhook worker must remain disabled.'
+
+        for name in RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET; do
+          [[ -n "$(secret_ref "$integration_before" "$name")" ]] || fail "$name must be bound through a Container App secret reference."
+        done
+
+        integration_fqdn=$(az containerapp show -g "$RG" -n "$INTEGRATION" --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)
+        readiness=$(curl -fsS --max-time 30 \
+          -H "X-Craves-Internal-Secret: ${CRAVES_INTERNAL_SMOKE_SECRET}" \
+          "https://${integration_fqdn}/internal/v1/refund-production-readiness") || fail 'Refund production readiness endpoint is unavailable.'
+
+        executable=$(jq -r '.executableRefundCount' <<<"$readiness")
+        reconcilable=$(jq -r '.reconcilableRefundCount' <<<"$readiness")
+        processing=$(jq -r '.processingRefundCount' <<<"$readiness")
+        refund_dead=$(jq -r '.refundDeadLetterCount' <<<"$readiness")
+        status_dead=$(jq -r '.statusOutboxDeadLetterCount' <<<"$readiness")
+        inbox_failed=$(jq -r '.requestInboxFailureCount' <<<"$readiness")
+
+        [[ "$executable" == '${{ parameters.expectedExecutableRefundCount }}' ]] || fail "Unexpected executable refund count: $executable"
+        [[ "$reconcilable" == '${{ parameters.expectedReconcilableRefundCount }}' ]] || fail "Unexpected reconcilable refund count: $reconcilable"
+        [[ "$processing" == '${{ parameters.expectedProcessingRefundCount }}' ]] || fail "Unexpected processing refund count: $processing"
+        [[ "$refund_dead" == 0 && "$status_dead" == 0 && "$inbox_failed" == 0 ]] || fail 'Refund failures/dead letters must be zero before activation.'
+
+        az containerapp update -g "$RG" -n "$INTEGRATION" \
+          --set-env-vars \
+          PAYMENT_PROVIDER_NAME=RAZORPAY \
+          RAZORPAY_API_ENABLED=true \
+          CASHFREE_API_ENABLED=false \
+          CASHFREE_TRAFFIC_ALLOWED=false \
+          CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED=false \
+          CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED=false \
+          CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED=false \
+          CRAVES_REFUND_CONSUMER_ENABLED=true \
+          CRAVES_REFUND_STATUS_PUBLISHER_ENABLED=true \
+          CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED=true \
+          CRAVES_REFUND_RECONCILIATION_ENABLED=true \
+          CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED=true \
+          CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED=true >/dev/null
+
+        wait_ready "$INTEGRATION"
+        health "$INTEGRATION"
+
+        order_before=$(env_json "$ORDER")
+        current_types=$(value "$order_before" CRAVES_DOMAIN_EVENT_ENABLED_TYPES)
+        [[ -n "$current_types" ]] || current_types='CHEF_ACCEPTED_ORDER'
+        enabled_types=$(printf '%s\n' "$current_types" | tr ',' '\n' | sed '/^[[:space:]]*$/d' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | { cat; echo REFUND_REQUESTED; } | awk '!seen[$0]++' | paste -sd, -)
+
+        # Downstream publishing and refund-status consumption are enabled before the timer worker.
+        az containerapp update -g "$RG" -n "$ORDER" \
+          --set-env-vars \
+          CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED=false \
+          CRAVES_CHEF_ACCEPTANCE_TIMEOUT_MINUTES=30 \
+          CRAVES_CHEF_ACCEPTANCE_FIRST_REMINDER_MINUTES=10 \
+          CRAVES_CHEF_ACCEPTANCE_SECOND_REMINDER_MINUTES=20 \
+          CRAVES_CHEF_ACCEPTANCE_TIMEOUT_CLAIM_STALE_SECONDS=300 \
+          CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED=true \
+          CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED=true \
+          CRAVES_DOMAIN_EVENT_ENABLED_TYPES="$enabled_types" \
+          CRAVES_REFUND_STATUS_CONSUMER_ENABLED=true >/dev/null
+
+        wait_ready "$ORDER"
+        health "$ORDER"
+
+        order_mid=$(env_json "$ORDER")
+        [[ "$(value "$order_mid" CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED)" == true ]] || fail 'Order domain-event outbox is not enabled.'
+        [[ "$(value "$order_mid" CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED)" == true ]] || fail 'Order Service Bus publisher is not enabled.'
+        [[ ",$(value "$order_mid" CRAVES_DOMAIN_EVENT_ENABLED_TYPES)," == *",REFUND_REQUESTED,"* ]] || fail 'REFUND_REQUESTED is not enabled in the Order outbox allow-list.'
+        [[ "$(value "$order_mid" CRAVES_REFUND_STATUS_CONSUMER_ENABLED)" == true ]] || fail 'Order refund-status consumer is not enabled.'
+
+        # The timer is deliberately the final switch so no timeout can be generated before the downstream chain is ready.
+        az containerapp update -g "$RG" -n "$ORDER" \
+          --set-env-vars CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED=true >/dev/null
+
+        wait_ready "$ORDER"
+        health "$ORDER"
+
+        order_after=$(env_json "$ORDER")
+        integration_after=$(env_json "$INTEGRATION")
+        [[ "$(value "$order_after" CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED)" == true ]] || fail 'Chef acceptance timeout worker activation failed.'
+        [[ "$(value "$order_after" CRAVES_CHEF_ACCEPTANCE_TIMEOUT_MINUTES)" == 30 ]] || fail 'Chef acceptance timeout must be 30 minutes.'
+        [[ "$(value "$integration_after" CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED)" == true ]] || fail 'Razorpay refund execution activation failed.'
+        [[ "$(value "$integration_after" CRAVES_REFUND_RECONCILIATION_ENABLED)" == true ]] || fail 'Razorpay refund reconciliation activation failed.'
+        [[ "$(value "$integration_after" CASHFREE_TRAFFIC_ALLOWED)" == false ]] || fail 'Cashfree traffic gate changed unexpectedly.'
+
+        echo 'RAZORPAY AUTO REFUND: ACTIVATED'
+        echo 'T+30 chef non-acceptance can now create REFUND_REQUESTED events and only Razorpay refund rows are executable.'
+        echo 'Cashfree remains code-retained but traffic-disabled.'

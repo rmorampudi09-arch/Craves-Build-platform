@@ -18,8 +18,24 @@ failures=0
 for file in "${POLICIES[@]}"; do
   echo "Checking $file"
   xmllint --noout "$file" || { failures=$((failures+1)); continue; }
-  grep -q '<policies' "$file" || { echo "ERROR: $file lacks policies root." >&2; failures=$((failures+1)); }
-  grep -q '<base[[:space:]]*/>' "$file" || { echo "ERROR: $file does not inherit a parent policy with <base />." >&2; failures=$((failures+1)); }
+  root_element="$(xmllint --xpath 'name(/*)' "$file")"
+  case "$root_element" in
+    policies)
+      grep -q '<base[[:space:]]*/>' "$file" || { echo "ERROR: $file does not inherit a parent policy with <base />." >&2; failures=$((failures+1)); }
+      ;;
+    fragment)
+      # Reusable fragments are included inside a policy section; section
+      # wrappers and inheritance belong to the including policy, not here.
+      if [[ "$(xmllint --xpath 'count(//base | //inbound | //backend | //outbound | //on-error | //include-fragment)' "$file")" != 0 ]]; then
+        echo "ERROR: $file contains unsupported fragment nesting or policy sections." >&2
+        failures=$((failures+1))
+      fi
+      ;;
+    *)
+      echo "ERROR: $file requires a policies or fragment root." >&2
+      failures=$((failures+1))
+      ;;
+  esac
   if grep -Eq '<allowed-origin>[[:space:]]*\*[[:space:]]*</allowed-origin>|<origin>[[:space:]]*\*[[:space:]]*</origin>' "$file"; then
     echo "ERROR: wildcard CORS origin in $file." >&2; failures=$((failures+1))
   fi

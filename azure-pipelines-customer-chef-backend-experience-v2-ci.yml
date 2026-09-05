@@ -34,7 +34,7 @@ steps:
       set -euo pipefail
       chmod +x scripts/release/*.sh
       scripts/release/verify-seven-service-deployment-contracts.sh
-    displayName: Verify seven-service deployment contracts
+    displayName: Verify deployed seven-service contracts
 
   - script: |
       set -euo pipefail
@@ -46,12 +46,13 @@ steps:
         subscription-service
         integration-service
         notification-service
+        support-assistant-service
       )
       for service in "${services[@]}"; do
         echo "=== Maven verify: ${service} ==="
         (cd "services/${service}" && mvn -B -ntp clean verify)
       done
-    displayName: Maven verify seven Java backend services
+    displayName: Maven verify eight Java backend services
 
   - script: |
       set -euo pipefail
@@ -64,7 +65,8 @@ steps:
         services/order-service/Dockerfile \
         services/subscription-service/Dockerfile \
         services/integration-service/Dockerfile \
-        services/notification-service/Dockerfile
+        services/notification-service/Dockerfile \
+        services/support-assistant-service/Dockerfile
       python3 scripts/release/validate-flyway-migrations.py
       scripts/release/validate-apim-assets.sh .
       scripts/release/validate-rollback-readiness.sh . \
@@ -75,6 +77,9 @@ steps:
         azure-pipelines-subscription-service.yml \
         azure-pipelines-integration-service.yml \
         azure-pipelines-notification-service.yml
+      test -f azure-pipelines-support-assistant-service.yml
+      grep -F 'default: false' azure-pipelines-support-assistant-service.yml
+      grep -F "default: ''" azure-pipelines-support-assistant-service.yml
     displayName: Validate release source, schemas, APIM and rollback safety
 
   - script: |

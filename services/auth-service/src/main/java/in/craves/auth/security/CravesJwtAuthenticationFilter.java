@@ -7,20 +7,26 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
-import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.servlet.HandlerExceptionResolver;
 
 @Component
 public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
     private final CravesJwtService jwtService;
+    private final HandlerExceptionResolver exceptionResolver;
 
-    public CravesJwtAuthenticationFilter(CravesJwtService jwtService) {
+    public CravesJwtAuthenticationFilter(
+        CravesJwtService jwtService,
+        @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver
+    ) {
         this.jwtService = jwtService;
+        this.exceptionResolver = exceptionResolver;
     }
 
     @Override
@@ -46,14 +52,16 @@ public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
                 .stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
                 .toList();
-            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(currentUser, token, authorities);
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                currentUser,
+                token,
+                authorities
+            );
             SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
         } catch (AuthException ex) {
             SecurityContextHolder.clearContext();
-            response.setStatus(ex.getStatus().value());
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.getWriter().write("{\"code\":\"" + ex.getCode() + "\",\"message\":\"" + ex.getMessage() + "\"}");
+            exceptionResolver.resolveException(request, response, null, ex);
         }
     }
 }

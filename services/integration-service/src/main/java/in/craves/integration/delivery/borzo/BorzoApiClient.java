@@ -8,8 +8,10 @@ import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderProductEligibility;
 import java.math.BigDecimal;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -78,6 +80,29 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
     }
 
     @Override
+    public ProviderProductEligibility productEligibility() {
+        List<String> blockers = new ArrayList<>();
+        if (!properties.isEnabled()) {
+            blockers.add("BORZO_API_DISABLED");
+        }
+        if (!properties.productionReady()) {
+            blockers.add("BORZO_PRODUCTION_CREATE_NOT_READY");
+        }
+        if (!properties.isInstantProductVerified()) {
+            blockers.add("BORZO_INSTANT_PRODUCT_NOT_VERIFIED_FOR_ACCOUNT");
+        }
+        return new ProviderProductEligibility(
+            PROVIDER_ID,
+            "Borzo Business API 1.8 on-demand motorbike delivery",
+            properties.isEnabled(),
+            properties.isEnabled(),
+            properties.productionReady(),
+            properties.isInstantProductVerified(),
+            blockers
+        );
+    }
+
+    @Override
     public ProviderQuote quote(QuoteRequest request) {
         requireApiReady();
         validateQuoteRequest(request);
@@ -92,16 +117,85 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
             warnings.add("parameter_warnings=" + response.path("parameter_warnings"));
         }
 
+        ObjectNode metadata = order.isObject()
+            ? (ObjectNode) order.deepCopy()
+            : objectMapper.createObjectNode();
+        metadata.put("delivery_product_class", "INSTANT_ON_DEMAND_INTRACITY");
+        metadata.put("instant_delivery", true);
+        metadata.put("immediate_dispatch", true);
+        metadata.put("serviceable_for_order", warnings.isEmpty());
+        Double totalEtaMinutes = explicitTotalEtaMinutes(order);
+        if (totalEtaMinutes == null) {
+            warnings.add("Borzo quote did not return a usable provider delivery ETA");
+        } else {
+            metadata.put("total_eta_minutes", totalEtaMinutes);
+            Double pickupEtaMinutes = pickupEtaMinutes(order);
+            if (pickupEtaMinutes != null) {
+                metadata.put("pickup_eta_minutes", pickupEtaMinutes);
+            }
+        }
+
         return new ProviderQuote(
             PROVIDER_ID,
-            warnings.isEmpty(),
+            warnings.isEmpty() && totalEtaMinutes != null,
             money(order, "payment_amount"),
             money(order, "delivery_fee_amount"),
             "INR",
             List.copyOf(warnings),
-            order.deepCopy(),
+            metadata,
             Instant.now()
         );
+    }
+
+    private static Double explicitTotalEtaMinutes(JsonNode order) {
+        for (String field : List.of(
+            "total_eta_minutes",
+            "delivery_eta_minutes",
+            "estimated_delivery_minutes",
+            "eta_minutes"
+        )) {
+            JsonNode value = order.path(field);
+            if (value.isNumber() && value.asDouble() >= 0.0d) {
+                return value.asDouble();
+            }
+            if (value.isTextual()) {
+                try {
+                    double parsed = Double.parseDouble(value.asText());
+                    if (parsed >= 0.0d) {
+                        return parsed;
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Unsupported provider value: remain fail-closed.
+                }
+            }
+        }
+        return etaMinutesBetween(
+            orderCreatedAt(order),
+            pointTimestamp(order, order.path("points").size() - 1, "estimated_arrival_datetime")
+        );
+    }
+
+    private static Double pickupEtaMinutes(JsonNode order) {
+        return etaMinutesBetween(
+            orderCreatedAt(order),
+            pointTimestamp(order, 0, "estimated_arrival_datetime")
+        );
+    }
+
+    private static Instant pointTimestamp(JsonNode order, int index, String field) {
+        JsonNode points = order.path("points");
+        if (!points.isArray() || index < 0 || index >= points.size()) {
+            return null;
+        }
+        return parseTimestamp(points.path(index).path(field).asText(null));
+    }
+
+    private static Double etaMinutesBetween(Instant start, Instant finish) {
+        if (start == null || finish == null || finish.isBefore(start)) {
+            return null;
+        }
+        long seconds = Duration.between(start, finish).getSeconds();
+        return Math.ceil(seconds / 60.0d);
     }
 
     @Override
@@ -447,7 +541,10 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
     }
 
     private static Instant orderCreatedAt(JsonNode order) {
-        String value = order.path("created_datetime").asText(null);
+        return parseTimestamp(order.path("created_datetime").asText(null));
+    }
+
+    private static Instant parseTimestamp(String value) {
         if (!StringUtils.hasText(value)) {
             return null;
         }

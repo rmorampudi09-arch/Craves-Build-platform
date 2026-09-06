@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,6 +27,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderProductEligibility;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -64,6 +66,7 @@ class DeliveryProviderRouterTest {
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setQuoteTimeoutSeconds(4);
         properties.setMaxProviderAttempts(2);
+        properties.setMaxTotalEtaMinutes(60);
 
         UUID fastCandidateId = UUID.randomUUID();
         UUID backupCandidateId = UUID.randomUUID();
@@ -126,6 +129,7 @@ class DeliveryProviderRouterTest {
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setQuoteTimeoutSeconds(4);
         properties.setMaxProviderAttempts(2);
+        properties.setMaxTotalEtaMinutes(60);
 
         AssignmentResponse assignment = assignment(UUID.randomUUID(), UUID.randomUUID());
         when(intelligence.assign(any())).thenReturn(assignment);
@@ -141,6 +145,58 @@ class DeliveryProviderRouterTest {
 
         assertThat(fast.createCalls()).isEqualTo(1);
         assertThat(backup.createCalls()).isZero();
+    }
+
+    @Test
+    void excludesUnverifiedProductBeforeQuoteAndMlRanking() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        DeliveryAssignmentRepository assignments = mock(DeliveryAssignmentRepository.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("parcel"));
+
+        FakeAdapter parcel = new FakeAdapter("parcel", 5, "50.00", CreateBehavior.SUCCESS);
+        parcel.eligibility = ProviderProductEligibility.blocked(
+            "parcel", "Standard next-day parcel", "INSTANT_HYPERLOCAL_PRODUCT_NOT_VERIFIED"
+        );
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setMaxTotalEtaMinutes(60);
+
+        DeliveryProviderRouter router = new DeliveryProviderRouter(
+            List.of(parcel), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
+        );
+
+        assertThatThrownBy(() -> router.route(command()))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class)
+            .hasMessage("Active delivery providers did not return a quote");
+        assertThat(parcel.quoteCalls()).isZero();
+        assertThat(parcel.createCalls()).isZero();
+        verifyNoInteractions(intelligence);
+    }
+
+    @Test
+    void excludesOverLimitEtaBeforeMlRanking() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        DeliveryAssignmentRepository assignments = mock(DeliveryAssignmentRepository.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("slow"));
+
+        FakeAdapter slow = new FakeAdapter("slow", 5, "50.00", CreateBehavior.SUCCESS);
+        slow.totalEtaMinutes = 1440;
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setMaxTotalEtaMinutes(60);
+
+        DeliveryProviderRouter router = new DeliveryProviderRouter(
+            List.of(slow), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
+        );
+
+        assertThatThrownBy(() -> router.route(command()))
+            .isInstanceOf(DeliveryProviderRouter.DeliveryRoutingException.class)
+            .hasMessage("No active delivery provider returned an executable instant-delivery quote");
+        assertThat(slow.quoteCalls()).isEqualTo(1);
+        assertThat(slow.createCalls()).isZero();
+        verifyNoInteractions(intelligence);
     }
 
     @Test
@@ -287,6 +343,8 @@ class DeliveryProviderRouterTest {
         private final AtomicInteger createCalls = new AtomicInteger();
         private final AtomicInteger reconcileCalls = new AtomicInteger();
         private final ObjectMapper objectMapper = new ObjectMapper();
+        private int totalEtaMinutes;
+        private ProviderProductEligibility eligibility;
         private CreateReconciliationResult reconciliationResult =
             CreateReconciliationResult.unsupported("Not configured");
 
@@ -298,6 +356,10 @@ class DeliveryProviderRouterTest {
             this.pickupEtaMinutes = pickupEtaMinutes;
             this.fee = new BigDecimal(fee);
             this.createBehavior = createBehavior;
+            this.totalEtaMinutes = pickupEtaMinutes + 20;
+            this.eligibility = new ProviderProductEligibility(
+                providerId, "Test instant delivery", true, true, true, true, List.of()
+            );
         }
 
         @Override
@@ -306,11 +368,20 @@ class DeliveryProviderRouterTest {
         }
 
         @Override
+        public ProviderProductEligibility productEligibility() {
+            return eligibility;
+        }
+
+        @Override
         public ProviderQuote quote(QuoteRequest request) {
             quoteCalls.incrementAndGet();
             JsonNode metadata = objectMapper.createObjectNode()
                 .put("quote_id", providerId + "-quote")
-                .put("pickup_eta_minutes", pickupEtaMinutes);
+                .put("pickup_eta_minutes", pickupEtaMinutes)
+                .put("total_eta_minutes", totalEtaMinutes)
+                .put("instant_delivery", true)
+                .put("immediate_dispatch", true)
+                .put("serviceable_for_order", true);
             return new ProviderQuote(
                 providerId, true, fee, fee, "INR", List.of(), metadata, Instant.now()
             );

@@ -15,6 +15,19 @@ import java.util.UUID;
 public interface DeliveryProviderAdapter {
     String providerId();
 
+    /**
+     * Declares whether this exact adapter/product is allowed to participate in production food
+     * delivery routing. The default is intentionally blocked: deploying an adapter or activating
+     * a provider catalog row never proves that the underlying product is instant/hyperlocal.
+     */
+    default ProviderProductEligibility productEligibility() {
+        return ProviderProductEligibility.blocked(
+            providerId(),
+            "UNVERIFIED_PRODUCT",
+            "INSTANT_HYPERLOCAL_PRODUCT_NOT_VERIFIED"
+        );
+    }
+
     ProviderQuote quote(QuoteRequest request);
 
     ProviderDelivery create(CreateDeliveryRequest request);
@@ -175,6 +188,44 @@ public interface DeliveryProviderAdapter {
         JsonNode providerMetadata,
         Instant quotedAt
     ) {}
+
+    record ProviderProductEligibility(
+        String providerId,
+        String productName,
+        boolean apiEnabled,
+        boolean quoteReady,
+        boolean productionCreateReady,
+        boolean instantDeliveryEligible,
+        List<String> blockers
+    ) {
+        public ProviderProductEligibility {
+            Objects.requireNonNull(providerId, "providerId is required");
+            Objects.requireNonNull(productName, "productName is required");
+            blockers = blockers == null ? List.of() : List.copyOf(blockers);
+        }
+
+        public boolean preQuoteEligible() {
+            return apiEnabled
+                && quoteReady
+                && productionCreateReady
+                && instantDeliveryEligible
+                && blockers.isEmpty();
+        }
+
+        public static ProviderProductEligibility blocked(String providerId,
+                                                          String productName,
+                                                          String blocker) {
+            return new ProviderProductEligibility(
+                providerId,
+                productName,
+                false,
+                false,
+                false,
+                false,
+                List.of(blocker)
+            );
+        }
+    }
 
     record ProviderDelivery(
         String providerId,

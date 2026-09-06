@@ -21,6 +21,8 @@ public class DeliveryCommandProperties {
     private String queueName = "delivery-command";
     private int leadTimeMinutes = 10;
     private int quoteTimeoutSeconds = 4;
+    /** Zero means unset and therefore blocks every production routing candidate. */
+    private int maxTotalEtaMinutes = 0;
     private int maxProviderAttempts = 3;
     private int maxDeliveryAttempts = 5;
     private int maxConcurrentMessages = 4;
@@ -52,6 +54,14 @@ public class DeliveryCommandProperties {
         }
         if (quoteTimeoutSeconds < 1 || quoteTimeoutSeconds > 30) {
             throw new IllegalStateException("Delivery command quoteTimeoutSeconds must be between 1 and 30");
+        }
+        if (maxTotalEtaMinutes < 0 || maxTotalEtaMinutes > 240) {
+            throw new IllegalStateException("Delivery command maxTotalEtaMinutes must be between 0 and 240");
+        }
+        if (enabled && maxTotalEtaMinutes == 0) {
+            throw new IllegalStateException(
+                "CRAVES_DELIVERY_MAX_TOTAL_ETA_MINUTES must be explicitly approved before delivery routing is enabled"
+            );
         }
         if (maxProviderAttempts < 1 || maxProviderAttempts > 10) {
             throw new IllegalStateException("Delivery command maxProviderAttempts must be between 1 and 10");
@@ -180,6 +190,8 @@ public class DeliveryCommandProperties {
     public void setLeadTimeMinutes(int leadTimeMinutes) { this.leadTimeMinutes = leadTimeMinutes; }
     public int getQuoteTimeoutSeconds() { return quoteTimeoutSeconds; }
     public void setQuoteTimeoutSeconds(int quoteTimeoutSeconds) { this.quoteTimeoutSeconds = quoteTimeoutSeconds; }
+    public int getMaxTotalEtaMinutes() { return maxTotalEtaMinutes; }
+    public void setMaxTotalEtaMinutes(int maxTotalEtaMinutes) { this.maxTotalEtaMinutes = maxTotalEtaMinutes; }
     public int getMaxProviderAttempts() { return maxProviderAttempts; }
     public void setMaxProviderAttempts(int maxProviderAttempts) { this.maxProviderAttempts = maxProviderAttempts; }
     public int getMaxDeliveryAttempts() { return maxDeliveryAttempts; }

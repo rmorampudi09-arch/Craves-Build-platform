@@ -47,6 +47,7 @@ craves:
     queue-name: ${SERVICE_BUS_DELIVERY_COMMAND_QUEUE:delivery-command}
     lead-time-minutes: ${CRAVES_DELIVERY_COMMAND_LEAD_TIME_MINUTES:10}
     quote-timeout-seconds: ${CRAVES_DELIVERY_QUOTE_TIMEOUT_SECONDS:4}
+    max-total-eta-minutes: ${CRAVES_DELIVERY_MAX_TOTAL_ETA_MINUTES:0}
     max-provider-attempts: ${CRAVES_DELIVERY_MAX_PROVIDER_ATTEMPTS:3}
     max-delivery-attempts: ${CRAVES_DELIVERY_MAX_DELIVERY_ATTEMPTS:5}
     retry:
@@ -123,6 +124,7 @@ craves:
       enabled: ${BORZO_API_ENABLED:false}
       environment: ${BORZO_API_ENVIRONMENT:SANDBOX}
       production-activation-approved: ${BORZO_PRODUCTION_ACTIVATION_APPROVED:false}
+      instant-product-verified: ${BORZO_INSTANT_PRODUCT_VERIFIED:false}
       base-url: ${BORZO_API_BASE_URL:https://robotapitest-in.borzodelivery.com/api/business/1.8}
       auth-token: ${BORZO_API_AUTH_TOKEN:}
       callback-secret: ${BORZO_CALLBACK_TOKEN:}
@@ -150,7 +152,7 @@ craves:
       read-timeout-seconds: ${SHIPROCKET_READ_TIMEOUT_SECONDS:20}
       read-retry-attempts: ${SHIPROCKET_READ_RETRY_ATTEMPTS:3}
       auth-refresh-skew-minutes: ${SHIPROCKET_AUTH_REFRESH_SKEW_MINUTES:60}
-      maximum-accepted-eta-minutes: ${SHIPROCKET_MAX_ACCEPTED_ETA_MINUTES:60}
+      maximum-accepted-eta-minutes: ${SHIPROCKET_MAX_ACCEPTED_ETA_MINUTES:0}
 
 management:
   endpoints:

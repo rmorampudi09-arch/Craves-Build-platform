@@ -2,6 +2,7 @@ package in.craves.integration.delivery.command;
 
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentResponse;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderProductEligibility;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
 import java.time.Instant;
@@ -58,6 +59,11 @@ public final class DeliveryCommandModels {
         boolean available,
         Double pickupDistanceKm,
         Integer pickupEtaMinutes,
+        Double totalEtaMinutes,
+        ProviderProductEligibility productEligibility,
+        boolean serviceableForOrder,
+        boolean etaWithinCravesLimit,
+        boolean executableCandidate,
         ProviderQuote quote,
         String error
     ) {}

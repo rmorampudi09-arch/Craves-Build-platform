@@ -161,6 +161,7 @@ class DeliveryProviderReadinessServiceTest {
             "COURIER_ATTRIBUTION_NOT_APPROVED",
             "SHIPROCKET_API_DISABLED",
             "SHIPROCKET_CREATE_DISABLED",
+            "BLOCKED_INSTANT_HYPERLOCAL_API_PRODUCT_NOT_AVAILABLE",
             "PROVIDER_CATALOG_INACTIVE",
             "NO_VERIFIED_CHEF_PICKUP_MAPPING"
         );

@@ -20,6 +20,14 @@ parameters:
   - name: confirmProductionActivation
     type: boolean
     default: false
+  - name: instantProductVerified
+    displayName: Borzo account/product contract has been verified for instant delivery
+    type: boolean
+    default: false
+  - name: maxTotalEtaMinutes
+    displayName: Product-owner-approved maximum total delivery ETA (minutes)
+    type: string
+    default: '0'
   - name: providerBaseUrl
     type: string
     default: https://robotapitest-in.borzodelivery.com/api/business/1.8
@@ -101,6 +109,9 @@ steps:
         stage='${{ parameters.activationStage }}'
         confirm_raw='${{ parameters.confirmProductionActivation }}'
         confirm="${confirm_raw,,}"
+        instant_verified_raw='${{ parameters.instantProductVerified }}'
+        instant_verified="${instant_verified_raw,,}"
+        max_total_eta='${{ parameters.maxTotalEtaMinutes }}'
         base_url='${{ parameters.providerBaseUrl }}'
         callback_url='${{ parameters.callbackUrl }}'
         app_yml='services/integration-service/src/main/resources/application.yml'
@@ -122,6 +133,12 @@ steps:
         [[ "$environment" == 'SANDBOX' || "$environment" == 'PRODUCTION' ]] || fail 'targetEnvironment must be SANDBOX or PRODUCTION.'
         [[ "$enable" == 'true' || "$enable" == 'false' ]] || fail 'enableProvider must resolve to true or false.'
         [[ "$stage" == 'downstream' || "$stage" == 'provider_create' ]] || fail 'activationStage is invalid.'
+
+        if [[ "$enable" == 'true' ]]; then
+          [[ "$instant_verified" == 'true' ]] || fail 'Borzo instant product/account verification is required before routing activation.'
+          [[ "$max_total_eta" =~ ^[0-9]+$ ]] || fail 'maxTotalEtaMinutes must be an explicitly approved positive integer.'
+          (( max_total_eta >= 1 && max_total_eta <= 60 )) || fail 'Launch validation requires maxTotalEtaMinutes in the instant/same-hour class (1..60).'
+        fi
 
         grep -Fq 'enabled: ${BORZO_API_ENABLED:false}' "$app_yml" || fail 'BORZO_API_ENABLED is not fail-closed.'
         grep -Fq 'environment: ${BORZO_API_ENVIRONMENT:SANDBOX}' "$app_yml" || fail 'BORZO environment does not default to SANDBOX.'
@@ -222,12 +239,15 @@ steps:
           az containerapp update -g "$RG" -n "$APP" \
             --set-env-vars \
               BORZO_API_ENABLED=true \
+              BORZO_INSTANT_PRODUCT_VERIFIED=true \
+              CRAVES_DELIVERY_MAX_TOTAL_ETA_MINUTES="$max_total_eta" \
               CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
         elif [[ "$environment" == 'SANDBOX' && "$enable" == 'false' ]]; then
           az containerapp update -g "$RG" -n "$APP" \
             --set-env-vars \
               BORZO_API_ENVIRONMENT=SANDBOX \
               BORZO_PRODUCTION_ACTIVATION_APPROVED=false \
+              BORZO_INSTANT_PRODUCT_VERIFIED=false \
               BORZO_API_ENABLED=false \
               CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
         else
@@ -237,6 +257,7 @@ steps:
             --set-env-vars \
               BORZO_API_ENVIRONMENT="$environment" \
               BORZO_PRODUCTION_ACTIVATION_APPROVED="$approved" \
+              BORZO_INSTANT_PRODUCT_VERIFIED="$instant_verified" \
               BORZO_API_BASE_URL="$base_url" \
               BORZO_CALLBACK_URL="$callback_url" \
               BORZO_API_AUTH_TOKEN=secretref:borzo-api-auth-token \
@@ -246,6 +267,7 @@ steps:
               CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=true \
               CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=true \
               CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=true \
+              CRAVES_DELIVERY_MAX_TOTAL_ETA_MINUTES="$max_total_eta" \
               CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
         fi
         wait_ready "$APP"

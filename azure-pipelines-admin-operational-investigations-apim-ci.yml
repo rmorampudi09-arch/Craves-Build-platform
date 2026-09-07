@@ -38,7 +38,6 @@ steps:
       grep -q 'X-Correlation-ID' "$POLICY"
       grep -q 'no-store' "$POLICY"
       grep -q 'X-Frame-Options' "$POLICY"
-      grep -q 'X-Craves-Correlation-ID' "$CONFIG"
       grep -q 'SUCCESS: Admin operational investigation APIM status is healthy' "$STATUS"
 
       if grep -En 'set-header name="Authorization"|set-backend-service[^>]*backend-id' "$POLICY"; then

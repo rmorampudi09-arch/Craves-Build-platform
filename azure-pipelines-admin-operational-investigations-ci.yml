@@ -28,8 +28,10 @@ steps:
       COMPONENT='apps/customer-web-next/src/components/admin-operational-investigator.tsx'
 
       grep -q 'isSameOrigin' "$ROUTE"
+      grep -q 'randomUUID' "$ROUTE"
       grep -q 'X-Admin-Reason' "$ROUTE"
-      grep -q 'X-Correlation-ID' "$ROUTE"
+      grep -q '"X-Correlation-ID": correlationId' "$ROUTE"
+      grep -q 'INVESTIGATION_CORRELATION_MISMATCH' "$ROUTE"
       grep -q 'no-store' "$ROUTE"
       grep -q 'reason.length < 10' "$CONTRACT"
       grep -q 'Raw provider and webhook payloads are never rendered' "$COMPONENT"

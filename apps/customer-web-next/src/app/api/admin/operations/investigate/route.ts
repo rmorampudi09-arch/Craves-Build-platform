@@ -42,7 +42,8 @@ export async function POST(request: NextRequest) {
       {
         headers: {
           "X-Admin-Reason": input.reason,
-          "X-Correlation-ID": correlationId
+          "X-Correlation-ID": correlationId,
+          "X-Craves-Correlation-ID": correlationId
         }
       },
       15_000
@@ -58,7 +59,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const echoedCorrelationId = upstream.headers.get("X-Correlation-ID")?.trim();
+    const echoedCorrelationId = (
+      upstream.headers.get("X-Craves-Correlation-ID")
+      ?? upstream.headers.get("X-Correlation-ID")
+    )?.trim();
     if (echoedCorrelationId && echoedCorrelationId !== correlationId) {
       return NextResponse.json({ code: "INVESTIGATION_CORRELATION_MISMATCH" }, {
         status: 502,

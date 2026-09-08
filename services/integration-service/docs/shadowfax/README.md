@@ -30,6 +30,25 @@ The repository implementation covers:
 
 Authoritative API contract: [Shadowfax HL Marketplace Orders API](https://sfxhlmarketplaceapi.docs.apiary.io/).
 
+## Verified operation contract
+
+The official Apiary reference was rechecked on 2026-09-08 after an unverified v3 integration
+summary was supplied. The v3 paths in that summary are not present in the official reference and
+must not be introduced into Craves.
+
+| Operation | Official method and path | Craves adapter |
+|---|---|---|
+| Serviceability | `PUT /api/v1/order-serviceability/` | Matched |
+| Create delivery | `POST /api/v2/orders/` | Matched |
+| Track/order details | `GET /api/v2/orders/{sfx_order_id}/status/` | Matched |
+| Cancel delivery | `PUT /api/v2/orders/{sfx_order_id}/cancel/` | Matched |
+| Dispatch ready | `PUT /api/v2/orders/{client_order_id}/dispatch-ready/` | Matched |
+
+The reference documents both `Authorization: Token ...` and OAuth client-credentials/Bearer
+authentication, with credentials issued by the Shadowfax team, plus mandatory client IP
+allowlisting. The account-specific mechanism and entitlement must therefore be proven by an
+authenticated, non-mutating production serviceability request before runtime binding.
+
 ## Credential custody checkpoint
 
 On 2026-09-08, the owner generated a Shadowfax Courier Credits Key from the signed-in
@@ -129,6 +148,8 @@ delete them during rollback.
 ## Verification record
 
 - Contract source inspected on 2026-09-08.
+- Official contract rechecked on 2026-09-08: the supplied `/api/v3/...` summary was rejected;
+  Craves remains aligned to the published v1/v2 operations listed above.
 - Azure DevOps delivery-provider production CI `36446 / 20260908.3`: passed in 1m 29s
   against public source commit `33898ecd`.
 - Azure DevOps Integration Service deployment `36449 / 20260908.3`: passed against public source

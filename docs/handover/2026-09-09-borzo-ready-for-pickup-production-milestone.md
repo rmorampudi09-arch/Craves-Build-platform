@@ -47,9 +47,13 @@ This validates the production rollout introduced through PR #302:
 
 The successful production booking in this milestone was created using Borzo API request `type=standard`.
 
-Craves' product requirement is now to use Borzo `type=hyperlocal` only. A separate code change is being prepared so Borzo quote/create requests send `type=hyperlocal` with **no silent fallback to `standard`**.
+Craves' product requirement is now to use Borzo `type=hyperlocal` only. PR #303 changes Borzo quote/create requests to send `type=hyperlocal` with **no silent fallback to `standard`**.
 
-Previous production diagnostics showed the account/API accepted `standard`, while an explicit `hyperlocal` calculation was rejected. Consequently the hyperlocal code change must not be described as production-ready until Borzo account/product entitlement and a real `type=hyperlocal` production quote/create are verified.
+The Hyperlocal-only code has passed local Integration Service verification and Azure Integration CI run `36469` on commit `1d9dd8dde851146f2816ddda0c807179ecc9aa6f`.
+
+However, a safe production `/calculate-order` request using `type=hyperlocal` returned HTTP `400` with `is_successful=false`. No `/create-order` call was made during that entitlement test, so no courier booking was created by the test.
+
+This confirms the current blocker is external to the Craves code path: Borzo production account/product entitlement or provider-side Hyperlocal enablement is still required. PR #303 must not be deployed until Borzo accepts a production `type=hyperlocal` calculation.
 
 ## Cancellation note
 
@@ -64,16 +68,21 @@ Verified:
 - Service Bus ready-event routing: PASS
 - Integration Service immediate acceleration: PASS
 - one delivery-command attempt: PASS
-- Borzo quote: PASS
-- Borzo production create: PASS
+- Borzo quote using `type=standard`: PASS
+- Borzo production create using `type=standard`: PASS
 - delivery job persistence: PASS
 - Borzo webhook ingress: PASS
 - tracking reconciliation: PASS
 - no duplicate Craves booking observed: PASS
+- Borzo Hyperlocal-only code implementation: PASS
+- local Integration Service tests for Hyperlocal-only adapter: PASS
+- Azure Integration CI run 36469: PASS
 
-Pending:
+Blocked / pending:
 
-- Borzo explicit `type=hyperlocal` product acceptance
+- Borzo production `type=hyperlocal` acceptance: BLOCKED — HTTP 400 from safe `/calculate-order`
+- Borzo Hyperlocal account/product entitlement: provider-side action required
+- PR #303 production deployment: blocked until Hyperlocal calculation passes
 - courier assignment
 - pickup lifecycle
 - in-transit lifecycle
@@ -82,6 +91,8 @@ Pending:
 
 ## Next verification
 
-During a daytime test, create exactly one fresh normal customer order after Borzo hyperlocal entitlement/API support is verified. Confirm the request uses `type=hyperlocal`, then prove:
+After Borzo enables Hyperlocal for the production account, rerun the safe production `/calculate-order` using `type=hyperlocal`. Only after that returns successful should PR #303 be merged and deployed.
+
+Then, during a daytime test, create exactly one fresh normal customer order and prove:
 
 `Order → chef acceptance → early READY_FOR_PICKUP → immediate dispatch → Borzo hyperlocal create → courier assignment → pickup → transit → delivered → normalized Craves delivery status`, with one provider booking only.

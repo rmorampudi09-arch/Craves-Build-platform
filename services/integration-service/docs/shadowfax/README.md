@@ -8,6 +8,10 @@ Craves now has an executable Spring Boot adapter for the published **Shadowfax H
 Orders API**. This is the point-to-point restaurant/store hyperlocal product; it is not Shadowfax
 360 forward parcel shipping, reverse pickup, warehouse delivery, or AWB logistics.
 
+The adapter is deployed in the production Integration Service image `36449` on healthy revision
+`ca-craves-integration-service-pr--0000113`. Runtime configuration was preserved, so Shadowfax
+provider creation remains disabled and no delivery was submitted.
+
 The repository implementation covers:
 
 - `PUT /api/v1/order-serviceability/` for a non-mutating quote, delivery fee, pickup ETA and drop ETA;
@@ -103,10 +107,15 @@ delete them during rollback.
 - Contract source inspected on 2026-09-08.
 - Azure DevOps delivery-provider production CI `36446 / 20260908.3`: passed in 1m 29s
   against public source commit `33898ecd`.
+- Azure DevOps Integration Service deployment `36449 / 20260908.3`: passed against public source
+  commit `17aef1d5`; immutable image `36449` is ready on revision `0000113` with liveness and
+  readiness both `UP`.
 - Integration Service and delivery-provider tests: passed in CI on Java 21.
 - Order Service delivery-event contract tests: passed in CI on Java 21.
 - Fail-closed defaults, activation-neutral database migration, secret backing, and source hygiene:
   passed in CI.
+- Existing applied Flyway `V115` was preserved byte-for-byte; the Shadowfax profile is append-only
+  migration `V116`.
 - Local YAML parsing: passed.
 - Git whitespace/error check: passed.
 - No Shadowfax API token, client code, callback token, phone number, or live order payload is stored in this milestone.

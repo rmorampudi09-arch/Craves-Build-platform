@@ -14,6 +14,39 @@ parameters:
   - name: confirmProductionSwitch
     type: boolean
     default: false
+  - name: confirmDirectIntracityContractVerified
+    type: boolean
+    default: false
+  - name: confirmCredentialModelVerified
+    type: boolean
+    default: false
+  - name: confirmServiceabilitySchemaVerified
+    type: boolean
+    default: false
+  - name: confirmQuoteSchemaVerified
+    type: boolean
+    default: false
+  - name: confirmCreateSchemaVerified
+    type: boolean
+    default: false
+  - name: confirmCancelSchemaVerified
+    type: boolean
+    default: false
+  - name: confirmTrackSchemaVerified
+    type: boolean
+    default: false
+  - name: confirmHyderabadServiceabilityVerified
+    type: boolean
+    default: false
+  - name: confirmWebhookContractVerified
+    type: boolean
+    default: false
+  - name: confirmCreateReconciliationVerified
+    type: boolean
+    default: false
+  - name: contractVersion
+    type: string
+    default: replace-before-run
   - name: providerBaseUrl
     type: string
     default: https://replace-before-run.invalid
@@ -55,6 +88,27 @@ steps:
         enable="${enable_raw,,}"
         confirm_raw='${{ parameters.confirmProductionSwitch }}'
         confirm="${confirm_raw,,}"
+        contract_confirm_raw='${{ parameters.confirmDirectIntracityContractVerified }}'
+        contract_confirm="${contract_confirm_raw,,}"
+        credential_confirm_raw='${{ parameters.confirmCredentialModelVerified }}'
+        credential_confirm="${credential_confirm_raw,,}"
+        serviceability_confirm_raw='${{ parameters.confirmServiceabilitySchemaVerified }}'
+        serviceability_confirm="${serviceability_confirm_raw,,}"
+        quote_confirm_raw='${{ parameters.confirmQuoteSchemaVerified }}'
+        quote_confirm="${quote_confirm_raw,,}"
+        create_confirm_raw='${{ parameters.confirmCreateSchemaVerified }}'
+        create_confirm="${create_confirm_raw,,}"
+        cancel_confirm_raw='${{ parameters.confirmCancelSchemaVerified }}'
+        cancel_confirm="${cancel_confirm_raw,,}"
+        track_confirm_raw='${{ parameters.confirmTrackSchemaVerified }}'
+        track_confirm="${track_confirm_raw,,}"
+        hyderabad_confirm_raw='${{ parameters.confirmHyderabadServiceabilityVerified }}'
+        hyderabad_confirm="${hyderabad_confirm_raw,,}"
+        webhook_confirm_raw='${{ parameters.confirmWebhookContractVerified }}'
+        webhook_confirm="${webhook_confirm_raw,,}"
+        reconciliation_confirm_raw='${{ parameters.confirmCreateReconciliationVerified }}'
+        reconciliation_confirm="${reconciliation_confirm_raw,,}"
+        contract_version='${{ parameters.contractVersion }}'
         base_url='${{ parameters.providerBaseUrl }}'
         secret_name='${{ parameters.authSecretName }}'
         app_yml='services/integration-service/src/main/resources/application.yml'
@@ -74,7 +128,24 @@ steps:
         }
 
         [[ "$environment" == 'SANDBOX' || "$environment" == 'PRODUCTION' ]] || fail 'targetEnvironment must be SANDBOX or PRODUCTION.'
-        [[ "$enable" == 'true' || "$enable" == 'false' ]] || fail 'enableProvider must resolve to true or false.'
+        for pair in \
+          "enableProvider:$enable" \
+          "confirmProductionSwitch:$confirm" \
+          "confirmDirectIntracityContractVerified:$contract_confirm" \
+          "confirmCredentialModelVerified:$credential_confirm" \
+          "confirmServiceabilitySchemaVerified:$serviceability_confirm" \
+          "confirmQuoteSchemaVerified:$quote_confirm" \
+          "confirmCreateSchemaVerified:$create_confirm" \
+          "confirmCancelSchemaVerified:$cancel_confirm" \
+          "confirmTrackSchemaVerified:$track_confirm" \
+          "confirmHyderabadServiceabilityVerified:$hyderabad_confirm" \
+          "confirmWebhookContractVerified:$webhook_confirm" \
+          "confirmCreateReconciliationVerified:$reconciliation_confirm"
+        do
+          name="${pair%%:*}"
+          value="${pair#*:}"
+          [[ "$value" == 'true' || "$value" == 'false' ]] || fail "$name must resolve to true or false."
+        done
 
         runtime_config_present=false
         if grep -Fq 'DELHIVERY_API_ENABLED' "$app_yml" && grep -Fq 'DELHIVERY_API_ENVIRONMENT' "$app_yml"; then
@@ -85,12 +156,22 @@ steps:
           adapter_present=true
         fi
 
-        # The current Delhivery account/API evidence is not an approved Craves intracity food
-        # delivery contract. Only SIMPLE_SANDBOX/fail-closed state is allowed until that product and
-        # a matching Spring adapter are verified.
+        # The public Delhivery API catalogue covers parcel journeys, not the Direct Intracity rider
+        # booking product. A portal token or parcel adapter must never satisfy these gates.
         if [[ "$enable" == 'true' || "$environment" == 'PRODUCTION' ]]; then
-          [[ "$adapter_present" == 'true' ]] || fail 'INTRACITY_API_PRODUCT_NOT_VERIFIED: Delhivery intracity Spring adapter is not implemented.'
-          [[ "$runtime_config_present" == 'true' ]] || fail 'INTRACITY_API_PRODUCT_NOT_VERIFIED: Delhivery intracity runtime configuration is not implemented.'
+          [[ "$contract_confirm" == 'true' ]] || fail 'DIRECT_INTRACITY_CONTRACT_NOT_VERIFIED: vendor-issued transaction contract is required.'
+          [[ "$credential_confirm" == 'true' ]] || fail 'DIRECT_INTRACITY_CREDENTIAL_MODEL_NOT_VERIFIED: prove the credential is scoped to Direct Intracity.'
+          [[ "$serviceability_confirm" == 'true' ]] || fail 'DIRECT_INTRACITY_SERVICEABILITY_SCHEMA_NOT_VERIFIED: coordinate serviceability contract is required.'
+          [[ "$quote_confirm" == 'true' ]] || fail 'DIRECT_INTRACITY_QUOTE_SCHEMA_NOT_VERIFIED: amount, currency, availability and ETA semantics are required.'
+          [[ "$create_confirm" == 'true' ]] || fail 'DIRECT_INTRACITY_CREATE_SCHEMA_NOT_VERIFIED: rider-order create contract is required.'
+          [[ "$cancel_confirm" == 'true' ]] || fail 'DIRECT_INTRACITY_CANCEL_SCHEMA_NOT_VERIFIED: cancellation contract is required.'
+          [[ "$track_confirm" == 'true' ]] || fail 'DIRECT_INTRACITY_TRACK_SCHEMA_NOT_VERIFIED: status and rider-location contract is required.'
+          [[ "$hyderabad_confirm" == 'true' ]] || fail 'DIRECT_INTRACITY_HYDERABAD_NOT_VERIFIED: written Hyderabad quick-delivery coverage is required.'
+          [[ "$webhook_confirm" == 'true' ]] || fail 'DIRECT_INTRACITY_WEBHOOK_NOT_VERIFIED: callback payload and authentication contract are required.'
+          [[ "$reconciliation_confirm" == 'true' ]] || fail 'DIRECT_INTRACITY_CREATE_RECONCILIATION_NOT_VERIFIED: deterministic uncertain-create recovery is required.'
+          [[ -n "$contract_version" && "$contract_version" != 'replace-before-run' ]] || fail 'A reviewed Direct Intracity contractVersion is required.'
+          [[ "$adapter_present" == 'true' ]] || fail 'DIRECT_INTRACITY_ADAPTER_NOT_IMPLEMENTED: Delhivery Direct Intracity Spring adapter is not implemented.'
+          [[ "$runtime_config_present" == 'true' ]] || fail 'DIRECT_INTRACITY_RUNTIME_NOT_IMPLEMENTED: Delhivery Direct Intracity runtime configuration is not implemented.'
           [[ "$base_url" == https://* && "$base_url" != *replace-before-run.invalid* ]] || fail 'Delhivery vendor-issued intracity HTTPS base URL is required.'
           [[ "$environment" != 'PRODUCTION' || "$confirm" == 'true' ]] || fail 'PRODUCTION requires confirmProductionSwitch=true.'
           lower="${base_url,,}"
@@ -116,7 +197,19 @@ steps:
               DELHIVERY_API_ENVIRONMENT="$environment" \
               DELHIVERY_PRODUCTION_ACTIVATION_APPROVED=false \
               DELHIVERY_API_ENABLED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CONTRACT_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CREDENTIAL_MODEL_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_SERVICEABILITY_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_QUOTE_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CREATE_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CANCEL_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_TRACK_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_WEBHOOK_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CREATE_RECONCILIATION_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_HYDERABAD_SERVICEABILITY_VERIFIED=false \
               CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
+          az containerapp update -g "$RG" -n "$APP" \
+            --remove-env-vars CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CONTRACT_VERSION >/dev/null
           wait_ready
         else
           approved=false
@@ -128,6 +221,17 @@ steps:
               DELHIVERY_API_BASE_URL="$base_url" \
               DELHIVERY_API_AUTH_TOKEN="secretref:${secret_name}" \
               DELHIVERY_API_ENABLED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CONTRACT_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CONTRACT_VERSION="$contract_version" \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CREDENTIAL_MODEL_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_SERVICEABILITY_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_QUOTE_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CREATE_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CANCEL_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_TRACK_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_WEBHOOK_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CREATE_RECONCILIATION_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_HYDERABAD_SERVICEABILITY_VERIFIED=true \
               CRAVES_DELIVERY_RECONCILIATION_ENABLED=true \
               CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=true \
               CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=true \

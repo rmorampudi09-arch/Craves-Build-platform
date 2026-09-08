@@ -101,6 +101,12 @@ delete them during rollback.
 ## Verification record
 
 - Contract source inspected on 2026-09-08.
+- Azure DevOps delivery-provider production CI `36446 / 20260908.3`: passed in 1m 29s
+  against public source commit `33898ecd`.
+- Integration Service and delivery-provider tests: passed in CI on Java 21.
+- Order Service delivery-event contract tests: passed in CI on Java 21.
+- Fail-closed defaults, activation-neutral database migration, secret backing, and source hygiene:
+  passed in CI.
 - Local YAML parsing: passed.
 - Git whitespace/error check: passed.
 - No Shadowfax API token, client code, callback token, phone number, or live order payload is stored in this milestone.

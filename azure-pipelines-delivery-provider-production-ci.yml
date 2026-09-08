@@ -218,7 +218,7 @@ steps:
       porter=azure-pipelines-porter-environment.yml
       delhivery=azure-pipelines-delhivery-environment.yml
 
-      for file in "$shadowfax" "$porter" "$delhivery"; do
+      for file in "$porter" "$delhivery"; do
         grep -A4 -F -- '- name: targetEnvironment' "$file" | grep -Fq 'default: SANDBOX'
         grep -A3 -F -- '- name: enableProvider' "$file" | grep -Fq 'default: false'
         grep -Fq 'SET is_active=FALSE' "$file"
@@ -226,8 +226,14 @@ steps:
         grep -Fq 'CRAVES_DELIVERY_COMMAND_ENABLED=false' "$file"
       done
 
+      grep -A4 -F -- '- name: targetEnvironment' "$shadowfax" | grep -Fq 'default: STAGING'
+      grep -A3 -F -- '- name: enableProvider' "$shadowfax" | grep -Fq 'default: false'
+      grep -Fq 'SET is_active=FALSE' "$shadowfax"
+      grep -Fq 'SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE is_active=TRUE' "$shadowfax"
+      grep -Fq 'CRAVES_DELIVERY_COMMAND_ENABLED=false' "$shadowfax"
       grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shadowfax'" "$shadowfax"
-      grep -Fq 'VENDOR_PRIVATE_API_CONTRACT_REQUIRED' "$shadowfax"
+      grep -Fq "https://api.shadowfax.in" "$shadowfax"
+      grep -Fq 'Deterministic uncertain-create reconciliation is required.' "$shadowfax"
       grep -Fq "provider_id='shadowfax' AND is_active=TRUE" "$shadowfax"
 
       grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/porter'" "$porter"

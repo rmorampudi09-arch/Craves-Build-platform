@@ -30,6 +30,23 @@ The repository implementation covers:
 
 Authoritative API contract: [Shadowfax HL Marketplace Orders API](https://sfxhlmarketplaceapi.docs.apiary.io/).
 
+## Credential custody checkpoint
+
+On 2026-09-08, the owner generated a Shadowfax Courier Credits Key from the signed-in
+`delivery.shadowfax.in` account. The value was transferred directly into Azure Key Vault as the
+enabled secret `craves-integration-shadowfax-courier-credits-key`; it was not printed, committed,
+added to a pipeline parameter, or bound to the Integration Service runtime.
+
+This key is described by Shadowfax as a **payment key for Shadowfax Courier API orders**. It is not
+evidence of the HL Marketplace `Authorization: Token ...` credential, `client_code`, callback
+contract, or uncertain-create reconciliation semantics implemented by this adapter. The separate
+Shadowfax 360 account continues to expose production credentials only alongside its Forward and
+Reverse parcel documentation. Those credentials must not be substituted for Hyperlocal Food &
+On-demand credentials without written Shadowfax entitlement and contract confirmation.
+
+Result: credential custody is complete for the Courier Credits Key, while Hyperlocal order creation
+remains fail-closed. No provider secret value appears in this repository or milestone.
+
 ## Source changes
 
 | Area | Files |

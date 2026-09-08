@@ -98,6 +98,11 @@ steps:
         enable_provider="${enable_provider_raw,,}"
         enable_create_raw='${{ parameters.enableCreate }}'
         enable_create="${enable_create_raw,,}"
+
+        if [[ "$enable_create" == 'true' ]]; then
+          echo 'ERROR: BLOCKED — INSTANT/HYPERLOCAL API PRODUCT NOT AVAILABLE. The deployed Shiprocket adapter uses standard ecommerce shipment/AWB APIs and cannot create Craves food deliveries.' >&2
+          exit 2
+        fi
         confirm_raw='${{ parameters.confirmProductionActivation }}'
         confirm="${confirm_raw,,}"
         attribution_raw='${{ parameters.attributionApproved }}'

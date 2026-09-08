@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,7 +18,6 @@ import in.craves.integration.config.ShiprocketProperties;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateDeliveryRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
-import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
@@ -90,14 +90,27 @@ class ShiprocketApiClientTest {
     }
 
     @Test
-    void quoteRejectsEtaBeyondCravesOneHourPromise() throws Exception {
+    void quoteRejectsEtaBeyondConfiguredCravesLimit() throws Exception {
+        properties.setMaximumAcceptedEtaMinutes(45);
         when(transport.get(eq("/courier/serviceability/"), anyMap()))
-            .thenReturn(serviceabilityResponse(77, "rate", "39.00", 75));
+            .thenReturn(serviceabilityResponse(77, "rate", "39.00", 50));
 
         ProviderQuote quote = client.readOnlyQuote(request());
 
         assertThat(quote.available()).isFalse();
-        assertThat(quote.warnings()).anyMatch(value -> value.contains("exceeds Craves maximum 60 minutes"));
+        assertThat(quote.warnings()).anyMatch(value -> value.contains("exceeds Craves maximum 45 minutes"));
+    }
+
+    @Test
+    void quoteFailsClosedWhenEtaLimitIsUnset() throws Exception {
+        properties.setMaximumAcceptedEtaMinutes(0);
+        when(transport.get(eq("/courier/serviceability/"), anyMap()))
+            .thenReturn(serviceabilityResponse(77, "rate", "39.00", 30));
+
+        ProviderQuote quote = client.readOnlyQuote(request());
+
+        assertThat(quote.available()).isFalse();
+        assertThat(quote.warnings()).contains("SHIPROCKET_MAX_ACCEPTED_ETA_MINUTES is not configured");
     }
 
     @Test
@@ -137,71 +150,15 @@ class ShiprocketApiClientTest {
     }
 
     @Test
-    void createUsesExactSelectedCourierVerifiedPickupAndImmutableOrderSnapshot() throws Exception {
+    void standardParcelShipmentCreationIsAlwaysBlockedForCravesFoodOrders() {
         configureProductionCreate();
-        QuoteRequest request = request();
-        ProviderQuote selectedQuote = selectedQuote(77, "41.00");
-        when(pickupLocations.findVerifiedExternalLocation("shiprocket", KITCHEN_ID))
-            .thenReturn(Optional.of("craves-kitchen-hitech-city"));
-        when(transport.mutate(eq("/shipments/create/forward-shipment"), any(JsonNode.class)))
-            .thenReturn(objectMapper.readTree("""
-                {"awb_code":"AWB123","shipment_id":"9001","order_id":"SR-1001","tracking_url":"https://tracking.example/AWB123"}
-                """));
-
-        ProviderDelivery delivery = client.create(
-            new CreateDeliveryRequest("CRAVES-ORDER-123", request, selectedQuote)
-        );
-
-        assertThat(delivery.providerId()).isEqualTo("shiprocket");
-        assertThat(delivery.providerDeliveryId()).isEqualTo("AWB123");
-        assertThat(delivery.status()).isEqualTo(DeliveryStatus.COURIER_ASSIGNED);
-        assertThat(delivery.deliveryFeeAmount()).isEqualByComparingTo("41.00");
-
-        ArgumentCaptor<JsonNode> bodyCaptor = ArgumentCaptor.forClass(JsonNode.class);
-        verify(transport).mutate(eq("/shipments/create/forward-shipment"), bodyCaptor.capture());
-        JsonNode body = bodyCaptor.getValue();
-        assertThat(body.path("order_id").asText()).isEqualTo("CRAVES-ORDER-123");
-        assertThat(body.path("courier_id").asInt()).isEqualTo(77);
-        assertThat(body.path("pickup_location").asText()).isEqualTo("craves-kitchen-hitech-city");
-        assertThat(body.path("payment_method").asText()).isEqualTo("Prepaid");
-        assertThat(body.path("billing_pincode").asText()).isEqualTo("500084");
-        assertThat(body.path("billing_phone").asText()).isEqualTo("9988776655");
-        assertThat(body.path("order_items").size()).isEqualTo(1);
-        assertThat(body.path("order_items").get(0).path("sku").asText()).isEqualTo(MENU_ITEM_ID.toString());
-        assertThat(body.path("order_items").get(0).path("units").asInt()).isEqualTo(2);
-        assertThat(body.path("length").decimalValue()).isEqualByComparingTo("20");
-        assertThat(body.path("breadth").decimalValue()).isEqualByComparingTo("15");
-        assertThat(body.path("height").decimalValue()).isEqualByComparingTo("10");
-    }
-
-    @Test
-    void createWithoutAwbIsTreatedAsUncertainAndRequiresReconciliation() throws Exception {
-        configureProductionCreate();
-        when(pickupLocations.findVerifiedExternalLocation("shiprocket", KITCHEN_ID))
-            .thenReturn(Optional.of("craves-kitchen-hitech-city"));
-        when(transport.mutate(eq("/shipments/create/forward-shipment"), any(JsonNode.class)))
-            .thenReturn(objectMapper.readTree("{\"shipment_id\":\"9001\"}"));
-
         assertThatThrownBy(() -> client.create(
             new CreateDeliveryRequest("CRAVES-ORDER-123", request(), selectedQuote(77, "41.00"))
         ))
-            .isInstanceOf(ProviderCreateUncertainException.class)
-            .satisfies(error -> assertThat(((ProviderCreateUncertainException) error).clientReference())
-                .isEqualTo("CRAVES-ORDER-123"));
-    }
+            .isInstanceOf(ShiprocketApiException.class)
+            .hasMessageContaining("INSTANT/HYPERLOCAL API PRODUCT NOT AVAILABLE");
 
-    @Test
-    void uncertainProviderMutationIsWrappedForReconciliationBeforeFallback() {
-        configureProductionCreate();
-        when(pickupLocations.findVerifiedExternalLocation("shiprocket", KITCHEN_ID))
-            .thenReturn(Optional.of("craves-kitchen-hitech-city"));
-        when(transport.mutate(eq("/shipments/create/forward-shipment"), any(JsonNode.class)))
-            .thenThrow(new ShiprocketApiException(503, "provider timeout", true));
-
-        assertThatThrownBy(() -> client.create(
-            new CreateDeliveryRequest("CRAVES-ORDER-123", request(), selectedQuote(77, "41.00"))
-        ))
-            .isInstanceOf(ProviderCreateUncertainException.class);
+        verify(transport, never()).mutate(any(), any());
     }
 
     @Test

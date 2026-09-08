@@ -30,7 +30,7 @@ steps:
         grep -F '<artifactId>spring-boot-starter-data-redis</artifactId>' "services/$service/pom.xml"
         file=$(find "services/$service/src/main/java" -name RedisTokenRevocationWebConfiguration.java -print -quit)
         test -n "$file"
-        grep -F '${CRAVES_TOKEN_REVOCATION_ENABLED:false}' "$file"
+        grep -E 'CRAVES_TOKEN_REVOCATION_ENABLED:false|@ConditionalOnProperty\(prefix = "craves\.token-revocation", name = "enabled", havingValue = "true"\)' "$file"
         grep -F 'authorization == null' "$file"
         grep -F 'Access token has been revoked' "$file"
       done

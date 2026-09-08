@@ -11,6 +11,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryS
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.TrackingWorkItem;
+import in.craves.integration.delivery.telemetry.DeliveryTelemetryPublisherService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -28,6 +29,9 @@ class DeliveryTrackingReconciliationWorkerTest {
         );
         DeliveryStatusUpdateService statusService = mock(
             DeliveryStatusUpdateService.class
+        );
+        DeliveryTelemetryPublisherService telemetryPublisher = mock(
+            DeliveryTelemetryPublisherService.class
         );
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setTrackingBatchSize(20);
@@ -78,6 +82,7 @@ class DeliveryTrackingReconciliationWorkerTest {
                 repository,
                 leaseRecovery,
                 statusService,
+                telemetryPublisher,
                 properties
             );
 

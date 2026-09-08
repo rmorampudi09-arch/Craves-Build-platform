@@ -3,6 +3,8 @@ package in.craves.order.web;
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.service.ChefAcceptanceResolutionService;
 import in.craves.order.service.ChefAcceptanceService;
+import in.craves.order.service.ChefReadyForPickupService;
+import in.craves.order.service.OrderHistoryService;
 import in.craves.order.service.OrderService;
 import in.craves.order.web.ApiDtos.ChefAcceptRequest;
 import in.craves.order.web.ApiDtos.ChefRejectRequest;
@@ -23,22 +25,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/chef/orders")
 public class ChefOrderController {
     private final OrderService orderService;
+    private final OrderHistoryService orderHistoryService;
     private final ChefAcceptanceService chefAcceptanceService;
     private final ChefAcceptanceResolutionService chefAcceptanceResolutionService;
+    private final ChefReadyForPickupService chefReadyForPickupService;
 
     public ChefOrderController(
         OrderService orderService,
+        OrderHistoryService orderHistoryService,
         ChefAcceptanceService chefAcceptanceService,
-        ChefAcceptanceResolutionService chefAcceptanceResolutionService
+        ChefAcceptanceResolutionService chefAcceptanceResolutionService,
+        ChefReadyForPickupService chefReadyForPickupService
     ) {
         this.orderService = orderService;
+        this.orderHistoryService = orderHistoryService;
         this.chefAcceptanceService = chefAcceptanceService;
         this.chefAcceptanceResolutionService = chefAcceptanceResolutionService;
+        this.chefReadyForPickupService = chefReadyForPickupService;
     }
 
     @GetMapping
     public List<OrderResponse> listChefOrders(@AuthenticationPrincipal CravesPrincipal principal) {
-        return orderService.listChefOrders(principal);
+        return orderHistoryService.listChefOrders(principal, 100, null, null).orders();
     }
 
     @GetMapping("/{orderId}")
@@ -76,6 +84,6 @@ public class ChefOrderController {
 
     @PostMapping("/{orderId}/ready-for-pickup")
     public OrderResponse readyForPickup(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID orderId) {
-        return orderService.markReadyForPickup(principal, orderId);
+        return chefReadyForPickupService.markReady(principal, orderId);
     }
 }

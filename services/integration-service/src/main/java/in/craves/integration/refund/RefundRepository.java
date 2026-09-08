@@ -25,6 +25,7 @@ public class RefundRepository {
 
     @Transactional
     public List<RefundWorkItem> claimBatch(
+        String activeProvider,
         boolean createEnabled,
         boolean reconciliationEnabled,
         int batchSize,
@@ -38,12 +39,12 @@ public class RefundRepository {
                     SELECT id
                     FROM payment_schema.refund
                     WHERE attempt_count < ?
+                      AND provider = ?
                       AND checkout_id IS NOT NULL
                       AND chef_sub_order_id IS NOT NULL
                       AND customer_identity_id IS NOT NULL
                       AND request_event_id IS NOT NULL
                       AND idempotency_key IS NOT NULL
-                      AND provider IN ('CASHFREE', 'RAZORPAY')
                       AND provider_order_id IS NOT NULL
                       AND (provider <> 'RAZORPAY' OR provider_payment_id IS NOT NULL)
                       AND (
@@ -74,6 +75,7 @@ public class RefundRepository {
                 """,
             this::mapWorkItem,
             maxAttempts,
+            activeProvider,
             createEnabled,
             reconciliationEnabled,
             staleLockSeconds,

@@ -78,8 +78,10 @@ public class RefundExecutionWorker {
             return;
         }
 
+        String activeProvider = paymentRoutingProperties.provider();
         UUID lockToken = UUID.randomUUID();
         List<RefundWorkItem> workItems = repository.claimBatch(
+            activeProvider,
             createEnabled,
             reconcileEnabled,
             properties.validatedWorkerBatchSize(),
@@ -88,7 +90,7 @@ public class RefundExecutionWorker {
             lockToken
         );
         for (RefundWorkItem workItem : workItems) {
-            processOne(workItem);
+            processOne(activeProvider, workItem);
         }
     }
 
@@ -98,17 +100,29 @@ public class RefundExecutionWorker {
             : !paymentProviderProperties.sandbox();
     }
 
-    private void processOne(RefundWorkItem workItem) {
+    private void processOne(String activeProvider, RefundWorkItem workItem) {
         try {
+            if (!activeProvider.equalsIgnoreCase(workItem.provider())) {
+                throw new RefundProviderNonRetryableException(
+                    "Refund row provider does not match the active payment provider",
+                    null
+                );
+            }
+
             ProviderRefundResult result;
-            if ("RAZORPAY".equalsIgnoreCase(workItem.provider())) {
+            if ("RAZORPAY".equalsIgnoreCase(activeProvider)) {
                 result = workItem.providerRefundId() == null
                     ? razorpayRefundClient.createRefund(workItem)
                     : razorpayRefundClient.getRefund(workItem);
-            } else {
+            } else if ("CASHFREE".equalsIgnoreCase(activeProvider)) {
                 result = workItem.providerRefundId() == null
                     ? cashfreeRefundClient.createRefund(workItem)
                     : cashfreeRefundClient.getRefund(workItem);
+            } else {
+                throw new RefundProviderNonRetryableException(
+                    "Unsupported active refund provider " + activeProvider,
+                    null
+                );
             }
             applyResult(workItem, result);
         } catch (RefundProviderNonRetryableException exception) {
@@ -168,9 +182,10 @@ public class RefundExecutionWorker {
         );
         if (updated) {
             LOGGER.info(
-                "Refund provider result stored refundId={} chefSubOrderId={} providerStatus={} normalizedStatus={}",
+                "Refund provider result stored refundId={} chefSubOrderId={} provider={} providerStatus={} normalizedStatus={}",
                 workItem.refundId(),
                 workItem.chefSubOrderId(),
+                workItem.provider(),
                 providerStatus,
                 normalizedStatus
             );
@@ -191,9 +206,10 @@ public class RefundExecutionWorker {
             now
         );
         LOGGER.error(
-            "Refund processing failed refundId={} chefSubOrderId={} attempt={} terminal={}",
+            "Refund processing failed refundId={} chefSubOrderId={} provider={} attempt={} terminal={}",
             workItem.refundId(),
             workItem.chefSubOrderId(),
+            workItem.provider(),
             workItem.attemptCount(),
             terminal,
             exception

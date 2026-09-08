@@ -37,7 +37,8 @@ public class ShiprocketProperties {
     private int readTimeoutSeconds = 20;
     private int readRetryAttempts = 3;
     private int authRefreshSkewMinutes = 60;
-    private int maximumAcceptedEtaMinutes = 60;
+    /** Zero means unset; read-only quote validation must fail closed until explicitly configured. */
+    private int maximumAcceptedEtaMinutes = 0;
 
     @PostConstruct
     void validate() {
@@ -57,8 +58,8 @@ public class ShiprocketProperties {
         if (authRefreshSkewMinutes < 5 || authRefreshSkewMinutes > 1440) {
             throw new IllegalStateException("Shiprocket authRefreshSkewMinutes must be between 5 and 1440");
         }
-        if (maximumAcceptedEtaMinutes < 1 || maximumAcceptedEtaMinutes > 240) {
-            throw new IllegalStateException("Shiprocket maximumAcceptedEtaMinutes must be between 1 and 240");
+        if (maximumAcceptedEtaMinutes < 0 || maximumAcceptedEtaMinutes > 240) {
+            throw new IllegalStateException("Shiprocket maximumAcceptedEtaMinutes must be between 0 and 240");
         }
         validateDimensionsAllOrNone();
 

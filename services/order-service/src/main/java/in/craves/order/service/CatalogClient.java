@@ -2,7 +2,9 @@ package in.craves.order.service;
 
 import in.craves.order.config.CatalogClientProperties;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -44,6 +46,20 @@ public class CatalogClient {
         }
     }
 
+    public List<ResolvedCatalogMenuItem> resolveActiveMenuItems(List<UUID> menuItemIds) {
+        if (menuItemIds == null || menuItemIds.isEmpty()) {
+            return List.of();
+        }
+        String internalKey = requireInternalAccess();
+        List<ResolvedCatalogMenuItem> items = restClient.post()
+            .uri("/internal/menu-items/resolve")
+            .header(INTERNAL_HEADER, internalKey)
+            .body(new ResolveMenuItemsRequest(menuItemIds))
+            .retrieve()
+            .body(new ParameterizedTypeReference<List<ResolvedCatalogMenuItem>>() { });
+        return items == null ? List.of() : List.copyOf(items);
+    }
+
     public CatalogKitchen getKitchen(UUID kitchenId) {
         String internalKey = requireInternalAccess();
         try {
@@ -53,10 +69,7 @@ public class CatalogClient {
                 .retrieve()
                 .body(CatalogKitchen.class);
             if (kitchen == null || kitchen.id() == null || kitchen.identityId() == null) {
-                throw new ResponseStatusException(
-                    HttpStatus.BAD_GATEWAY,
-                    "Catalog internal kitchen response is incomplete"
-                );
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Catalog internal kitchen response is incomplete");
             }
             return kitchen;
         } catch (HttpClientErrorException.NotFound ex) {
@@ -72,6 +85,20 @@ public class CatalogClient {
             );
         }
         return internalAccessValue;
+    }
+
+    private record ResolveMenuItemsRequest(List<UUID> menuItemIds) {
+    }
+
+    public record ResolvedCatalogMenuItem(
+        UUID id,
+        UUID kitchenId,
+        String itemName,
+        BigDecimal price,
+        String currency,
+        Integer unitPackageWeightGrams,
+        Boolean thermoboxRequired
+    ) {
     }
 
     public record CatalogMenuItem(

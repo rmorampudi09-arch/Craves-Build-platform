@@ -1,5 +1,6 @@
 package in.craves.integration.delivery.command;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import in.craves.integration.delivery.DeliveryAssignmentRepository;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentCandidateInput;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentRequest;
@@ -19,6 +20,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateRec
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderProductEligibility;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -89,18 +91,29 @@ public class DeliveryProviderRouter {
             DeliveryProviderAdapter adapter = adapters.get(providerId);
             if (adapter == null) {
                 quoteAudit.add(new QuoteAudit(
-                    providerId, false, false, null, null, null,
+                    providerId, false, false, null, null, null, null,
+                    false, false, false, null,
                     "Provider is active in the database but no adapter is deployed"
                 ));
                 continue;
             }
-            tasks.add(() -> quote(adapter, command));
+            ProviderProductEligibility eligibility = adapter.productEligibility();
+            if (eligibility == null || !eligibility.preQuoteEligible()) {
+                quoteAudit.add(new QuoteAudit(
+                    providerId, false, false, null, null, null, eligibility,
+                    false, false, false, null,
+                    eligibility == null
+                        ? "Provider returned no product eligibility declaration"
+                        : String.join(",", eligibility.blockers())
+                ));
+                continue;
+            }
+            tasks.add(() -> quote(adapter, command, eligibility));
         }
 
         List<QuoteOutcome> outcomes = invokeQuotes(tasks, quoteAudit);
-        boolean anyAvailableQuote = outcomes.stream()
-            .anyMatch(outcome -> outcome.quote() != null && outcome.quote().available());
-        if (!anyAvailableQuote) {
+        boolean anyExecutableQuote = outcomes.stream().anyMatch(QuoteOutcome::executableCandidate);
+        if (!anyExecutableQuote) {
             boolean anyProviderResponse = outcomes.stream().anyMatch(outcome -> outcome.quote() != null);
             if (!anyProviderResponse) {
                 throw new DeliveryProviderTemporarilyUnavailableException(
@@ -108,7 +121,7 @@ public class DeliveryProviderRouter {
                 );
             }
             throw new DeliveryRoutingException(
-                "No active delivery provider returned an available quote"
+                "No active delivery provider returned an executable instant-delivery quote"
             );
         }
 
@@ -272,16 +285,57 @@ public class DeliveryProviderRouter {
             ));
     }
 
-    private QuoteOutcome quote(DeliveryProviderAdapter adapter, DeliveryCommandMessage command) {
+    private QuoteOutcome quote(DeliveryProviderAdapter adapter,
+                               DeliveryCommandMessage command,
+                               ProviderProductEligibility eligibility) {
         String providerId = normalize(adapter.providerId());
         try {
             ProviderQuote quote = adapter.quote(command.deliveryRequest());
             if (quote == null) {
-                return new QuoteOutcome(providerId, adapter, null, "Provider returned no quote");
+                return new QuoteOutcome(
+                    providerId, adapter, eligibility, null, false, false, false, null,
+                    "Provider returned no quote"
+                );
             }
-            return new QuoteOutcome(providerId, adapter, quote, null);
+            boolean instantProductEvidence = booleanMetadata(quote, "instant_delivery")
+                && booleanMetadata(quote, "immediate_dispatch");
+            boolean serviceable = booleanMetadata(quote, "serviceable_for_order");
+            Double totalEtaMinutes = doubleMetadata(quote, "total_eta_minutes");
+            int configuredLimit = properties.getMaxTotalEtaMinutes();
+            boolean etaWithinLimit = configuredLimit > 0
+                && totalEtaMinutes != null
+                && totalEtaMinutes >= 0.0d
+                && totalEtaMinutes <= configuredLimit;
+            boolean executable = quote.available()
+                && eligibility.preQuoteEligible()
+                && instantProductEvidence
+                && serviceable
+                && etaWithinLimit;
+            String error = null;
+            if (!executable) {
+                if (!instantProductEvidence) {
+                    error = "Quote lacks instant/immediate-dispatch evidence";
+                } else if (!serviceable) {
+                    error = "Provider quote is not serviceable for this order";
+                } else if (configuredLimit == 0) {
+                    error = "CRAVES_DELIVERY_MAX_TOTAL_ETA_MINUTES is not configured";
+                } else if (totalEtaMinutes == null) {
+                    error = "Provider quote lacks total ETA evidence";
+                } else if (!etaWithinLimit) {
+                    error = "Provider total ETA exceeds the configured Craves limit";
+                } else if (!quote.available()) {
+                    error = "Provider returned an unavailable quote";
+                }
+            }
+            return new QuoteOutcome(
+                providerId, adapter, eligibility, quote, serviceable, etaWithinLimit,
+                executable, totalEtaMinutes, error
+            );
         } catch (RuntimeException ex) {
-            return new QuoteOutcome(providerId, adapter, null, safeMessage(ex));
+            return new QuoteOutcome(
+                providerId, adapter, eligibility, null, false, false, false, null,
+                safeMessage(ex)
+            );
         }
     }
 
@@ -303,7 +357,8 @@ public class DeliveryProviderRouter {
             if (remainingNanos <= 0) {
                 future.cancel(true);
                 quoteAudit.add(new QuoteAudit(
-                    "unknown", false, false, null, null, null,
+                    "unknown", false, false, null, null, null, null,
+                    false, false, false, null,
                     "Quote fan-out timed out"
                 ));
                 continue;
@@ -319,6 +374,11 @@ public class DeliveryProviderRouter {
                     quote != null && quote.available(),
                     quote == null ? null : pickupDistanceKm(quote),
                     pickupEta == null ? null : (int) Math.round(pickupEta),
+                    outcome.totalEtaMinutes(),
+                    outcome.eligibility(),
+                    outcome.serviceableForOrder(),
+                    outcome.etaWithinCravesLimit(),
+                    outcome.executableCandidate(),
                     quote,
                     outcome.error()
                 ));
@@ -328,7 +388,8 @@ public class DeliveryProviderRouter {
             } catch (ExecutionException | TimeoutException ex) {
                 future.cancel(true);
                 quoteAudit.add(new QuoteAudit(
-                    "unknown", false, false, null, null, null,
+                    "unknown", false, false, null, null, null, null,
+                    false, false, false, null,
                     safeMessage(ex)
                 ));
             }
@@ -341,7 +402,7 @@ public class DeliveryProviderRouter {
         List<AssignmentCandidateInput> candidates = new ArrayList<>();
         for (QuoteOutcome outcome : outcomes) {
             ProviderQuote quote = outcome.quote();
-            if (quote == null || !quote.available()) {
+            if (quote == null || !outcome.executableCandidate()) {
                 continue;
             }
             candidates.add(new AssignmentCandidateInput(
@@ -378,7 +439,7 @@ public class DeliveryProviderRouter {
                                                          List<QuoteOutcome> outcomes) {
         Map<String, QuoteOutcome> byProvider = new HashMap<>();
         for (QuoteOutcome outcome : outcomes) {
-            if (outcome.quote() != null && outcome.quote().available()) {
+            if (outcome.quote() != null && outcome.executableCandidate()) {
                 byProvider.put(outcome.providerId(), outcome);
             }
         }
@@ -446,6 +507,15 @@ public class DeliveryProviderRouter {
         }
     }
 
+    private static boolean booleanMetadata(ProviderQuote quote, String field) {
+        if (quote.providerMetadata() == null || quote.providerMetadata().get(field) == null
+            || quote.providerMetadata().get(field).isNull()) {
+            return false;
+        }
+        JsonNode value = quote.providerMetadata().get(field);
+        return value.isBoolean() ? value.asBoolean() : "true".equalsIgnoreCase(value.asText());
+    }
+
     private static String safeMessage(Throwable error) {
         String message = error.getMessage();
         if (message == null || message.isBlank()) {
@@ -478,7 +548,12 @@ public class DeliveryProviderRouter {
     private record QuoteOutcome(
         String providerId,
         DeliveryProviderAdapter adapter,
+        ProviderProductEligibility eligibility,
         ProviderQuote quote,
+        boolean serviceableForOrder,
+        boolean etaWithinCravesLimit,
+        boolean executableCandidate,
+        Double totalEtaMinutes,
         String error
     ) {}
 

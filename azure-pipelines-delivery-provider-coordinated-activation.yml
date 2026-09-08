@@ -21,6 +21,14 @@ parameters:
   - name: activateDelhivery
     type: boolean
     default: false
+  - name: borzoInstantProductVerified
+    displayName: Borzo account/product contract has been verified for instant delivery
+    type: boolean
+    default: false
+  - name: maxTotalEtaMinutes
+    displayName: Product-owner-approved maximum total delivery ETA (minutes)
+    type: string
+    default: '0'
 
   - name: borzoProductionBaseUrl
     type: string
@@ -142,11 +150,16 @@ steps:
         exit 2
       }
 
-      # These three remain deliberately impossible to activate until their authoritative private
+      # These providers remain deliberately impossible to activate until their authoritative private
       # intracity contracts and concrete Spring adapters are committed. A UI checkbox cannot bypass
       # that engineering/vendor gate.
       [[ "${shadowfax,,}" != 'true' ]] || {
         echo 'ERROR: Shadowfax is blocked: VENDOR_PRIVATE_API_CONTRACT_REQUIRED.' >&2
+        exit 2
+      }
+
+      [[ "${shiprocket,,}" != 'true' ]] || {
+        echo 'ERROR: Shiprocket is blocked: INSTANT/HYPERLOCAL API PRODUCT NOT AVAILABLE. Never activate the standard ecommerce shipment API for Craves food orders.' >&2
         exit 2
       }
       [[ "${porter,,}" != 'true' ]] || {
@@ -192,6 +205,9 @@ steps:
         SHIPROCKET_RAW='${{ parameters.activateShiprocket }}'
         BORZO="${BORZO_RAW,,}"
         SHIPROCKET="${SHIPROCKET_RAW,,}"
+        BORZO_INSTANT_VERIFIED_RAW='${{ parameters.borzoInstantProductVerified }}'
+        BORZO_INSTANT_VERIFIED="${BORZO_INSTANT_VERIFIED_RAW,,}"
+        MAX_TOTAL_ETA='${{ parameters.maxTotalEtaMinutes }}'
 
         fail() {
           echo "ERROR: $*" >&2
@@ -206,6 +222,9 @@ steps:
         for tool in az jq psql python3; do
           command -v "$tool" >/dev/null || fail "$tool is required on the agent."
         done
+
+        [[ "$MAX_TOTAL_ETA" =~ ^[0-9]+$ ]] || fail 'maxTotalEtaMinutes must be an explicitly approved positive integer.'
+        (( MAX_TOTAL_ETA >= 1 && MAX_TOTAL_ETA <= 60 )) || fail 'Launch validation requires maxTotalEtaMinutes in the instant/same-hour class (1..60).'
 
         current_app="$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)"
         current_latest="$(jq -r '.properties.latestRevisionName // ""' <<<"$current_app")"
@@ -229,6 +248,7 @@ steps:
         secrets="$(az containerapp secret list -g "$RG" -n "$APP" --query '[].name' -o tsv --only-show-errors)"
 
         if [[ "$BORZO" == 'true' ]]; then
+          [[ "$BORZO_INSTANT_VERIFIED" == 'true' ]] || fail 'Borzo instant product/account verification is required.'
           borzo_base='${{ parameters.borzoProductionBaseUrl }}'
           borzo_callback='${{ parameters.borzoCallbackUrl }}'
           [[ "$borzo_base" == https://* ]] || fail 'Borzo production base URL must use HTTPS.'
@@ -354,12 +374,14 @@ steps:
           CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=true
           CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=true
           CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true
+          CRAVES_DELIVERY_MAX_TOTAL_ETA_MINUTES="$MAX_TOTAL_ETA"
         )
 
         if [[ "$BORZO" == 'true' ]]; then
           env_args+=(
             BORZO_API_ENVIRONMENT=PRODUCTION
             BORZO_PRODUCTION_ACTIVATION_APPROVED=true
+            BORZO_INSTANT_PRODUCT_VERIFIED=true
             BORZO_API_BASE_URL='${{ parameters.borzoProductionBaseUrl }}'
             BORZO_CALLBACK_URL='${{ parameters.borzoCallbackUrl }}'
             BORZO_API_AUTH_TOKEN='secretref:${{ parameters.borzoAuthSecretName }}'

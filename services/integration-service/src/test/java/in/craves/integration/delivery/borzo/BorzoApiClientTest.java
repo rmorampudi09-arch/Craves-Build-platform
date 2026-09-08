@@ -66,9 +66,14 @@ class BorzoApiClientTest {
                 {
                   "is_successful": true,
                   "order": {
+                    "created_datetime": "2026-09-06T12:00:00+05:30",
                     "payment_amount": "125.50",
                     "delivery_fee_amount": "125.50",
-                    "is_thermobox_required": true
+                    "is_thermobox_required": true,
+                    "points": [
+                      {"estimated_arrival_datetime": "2026-09-06T12:08:10+05:30"},
+                      {"estimated_arrival_datetime": "2026-09-06T12:34:01+05:30"}
+                    ]
                   },
                   "warnings": [],
                   "parameter_warnings": {}
@@ -80,6 +85,33 @@ class BorzoApiClientTest {
         assertThat(quote.available()).isTrue();
         assertThat(quote.paymentAmount()).isEqualByComparingTo("125.50");
         assertThat(quote.currency()).isEqualTo("INR");
+        assertThat(quote.providerMetadata().path("pickup_eta_minutes").asDouble()).isEqualTo(9.0d);
+        assertThat(quote.providerMetadata().path("total_eta_minutes").asDouble()).isEqualTo(35.0d);
+        server.verify();
+    }
+
+    @Test
+    void failsClosedWhenQuoteHasNoProviderDeliveryEta() {
+        server.expect(requestTo(BASE_URL + "/calculate-order"))
+            .andRespond(withSuccess("""
+                {
+                  "is_successful": true,
+                  "order": {
+                    "created_datetime": "2026-09-06T12:00:00+05:30",
+                    "payment_amount": "125.50",
+                    "delivery_fee_amount": "125.50",
+                    "points": [{}, {}]
+                  },
+                  "warnings": [],
+                  "parameter_warnings": {}
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        var quote = client.quote(quoteRequest());
+
+        assertThat(quote.available()).isFalse();
+        assertThat(quote.warnings()).contains("Borzo quote did not return a usable provider delivery ETA");
+        assertThat(quote.providerMetadata().has("total_eta_minutes")).isFalse();
         server.verify();
     }
 

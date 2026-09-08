@@ -16,6 +16,7 @@ public class BorzoProperties {
     private boolean enabled = false;
     private String environment = "SANDBOX";
     private boolean productionActivationApproved = false;
+    private boolean instantProductVerified = false;
     private String baseUrl = "https://robotapitest-in.borzodelivery.com/api/business/1.8";
     private String authToken = "";
     private String callbackSecret = "";
@@ -111,6 +112,10 @@ public class BorzoProperties {
     public boolean isProductionActivationApproved() { return productionActivationApproved; }
     public void setProductionActivationApproved(boolean productionActivationApproved) {
         this.productionActivationApproved = productionActivationApproved;
+    }
+    public boolean isInstantProductVerified() { return instantProductVerified; }
+    public void setInstantProductVerified(boolean instantProductVerified) {
+        this.instantProductVerified = instantProductVerified;
     }
     public String getBaseUrl() { return baseUrl; }
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }

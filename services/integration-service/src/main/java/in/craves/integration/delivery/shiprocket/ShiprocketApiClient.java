@@ -9,7 +9,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateDeliveryRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
-import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderProductEligibility;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
@@ -70,6 +70,19 @@ public class ShiprocketApiClient implements DeliveryProviderAdapter {
         return PROVIDER_ID;
     }
 
+    @Override
+    public ProviderProductEligibility productEligibility() {
+        return new ProviderProductEligibility(
+            PROVIDER_ID,
+            "Shiprocket external ecommerce shipment API",
+            properties.isEnabled(),
+            properties.isEnabled(),
+            properties.productionCreateReady(),
+            false,
+            List.of("BLOCKED_INSTANT_HYPERLOCAL_API_PRODUCT_NOT_AVAILABLE")
+        );
+    }
+
     /**
      * Read-only hyperlocal serviceability probe used by readiness checks. It never creates or
      * updates Shiprocket account data.
@@ -110,6 +123,10 @@ public class ShiprocketApiClient implements DeliveryProviderAdapter {
             warnings.add("Shiprocket did not return an explicit minute/hour ETA that Craves can validate");
             return unavailableQuote(warnings, selected);
         }
+        if (properties.getMaximumAcceptedEtaMinutes() == 0) {
+            warnings.add("SHIPROCKET_MAX_ACCEPTED_ETA_MINUTES is not configured");
+            return unavailableQuote(warnings, selected);
+        }
         if (etaMinutes > properties.getMaximumAcceptedEtaMinutes()) {
             warnings.add(
                 "Shiprocket hyperlocal ETA " + etaMinutes + " exceeds Craves maximum "
@@ -134,7 +151,10 @@ public class ShiprocketApiClient implements DeliveryProviderAdapter {
         metadata.put("courier_company_id", courierId);
         metadata.put("courier_name", textField(selected, "courier_name", "courier_company_name"));
         metadata.put("delivery_eta_minutes", etaMinutes);
-        metadata.put("hyperlocal", true);
+        metadata.put("delivery_product_class", "STANDARD_ECOMMERCE_PARCEL");
+        metadata.put("instant_delivery", false);
+        metadata.put("immediate_dispatch", false);
+        metadata.put("serviceable_for_order", false);
         metadata.set("provider_quote", selected.deepCopy());
 
         return new ProviderQuote(
@@ -183,60 +203,11 @@ public class ShiprocketApiClient implements DeliveryProviderAdapter {
     @Override
     public ProviderDelivery create(CreateDeliveryRequest request) {
         Objects.requireNonNull(request, "request is required");
-        if (!properties.productionCreateReady()) {
-            throw new ShiprocketApiException(
-                null,
-                "Shiprocket create is blocked by production readiness gates",
-                false
-            );
-        }
-        QuoteRequest quoteRequest = Objects.requireNonNull(request.quoteRequest(), "quoteRequest is required");
-        validateCreateRequest(quoteRequest);
-        ProviderQuote selectedQuote = Objects.requireNonNull(
-            request.selectedQuote(),
-            "Shiprocket create requires the exact selected quote"
+        throw new ShiprocketApiException(
+            null,
+            "BLOCKED — INSTANT/HYPERLOCAL API PRODUCT NOT AVAILABLE; standard Shiprocket parcel shipment creation is forbidden for Craves food orders",
+            false
         );
-        if (!selectedQuote.available()) {
-            throw new IllegalArgumentException("Shiprocket selected quote is not available");
-        }
-        Integer courierId = metadataInteger(selectedQuote, "courier_company_id");
-        if (courierId == null || courierId <= 0) {
-            throw new IllegalArgumentException("Shiprocket selected quote has no courier_company_id");
-        }
-        UUID pickupReference = Objects.requireNonNull(
-            quoteRequest.pickupLocationReference(),
-            "Shiprocket pickupLocationReference is required"
-        );
-        String pickupLocation = pickupLocations.findVerifiedExternalLocation(PROVIDER_ID, pickupReference)
-            .orElseThrow(() -> new IllegalStateException(
-                "No verified Shiprocket pickup location is mapped to this kitchen"
-            ));
-
-        String clientReference = requireText(request.clientReference(), "clientReference");
-        Instant attemptedAt = Instant.now();
-        JsonNode response;
-        try {
-            response = transport.mutate(
-                "/shipments/create/forward-shipment",
-                buildForwardShipment(clientReference, quoteRequest, pickupLocation, courierId)
-            );
-        } catch (ShiprocketApiException ex) {
-            if (ex.uncertainMutation()) {
-                throw new ProviderCreateUncertainException(PROVIDER_ID, clientReference, attemptedAt, ex);
-            }
-            throw ex;
-        }
-
-        String awb = recursiveText(response, "awb_code", "awb").orElse(null);
-        if (!StringUtils.hasText(awb)) {
-            throw new ProviderCreateUncertainException(
-                PROVIDER_ID,
-                clientReference,
-                attemptedAt,
-                new IllegalStateException("Shiprocket create returned no AWB; reconciliation is required")
-            );
-        }
-        return mapCreatedDelivery(clientReference, awb, selectedQuote, response);
     }
 
     @Override

@@ -90,6 +90,9 @@ public class DeliveryProviderReadinessService {
         if (!borzo.isProductionActivationApproved()) {
             blockers.add("PRODUCTION_ACTIVATION_NOT_APPROVED");
         }
+        if (!borzo.isInstantProductVerified()) {
+            blockers.add("BORZO_INSTANT_PRODUCT_NOT_VERIFIED_FOR_ACCOUNT");
+        }
         if (!StringUtils.hasText(borzo.getAuthToken())) {
             blockers.add("AUTH_TOKEN_SECRET_NOT_BOUND");
         }
@@ -120,8 +123,13 @@ public class DeliveryProviderReadinessService {
         }
         blockers.addAll(sharedDownstreamBlockers());
 
-        boolean createEnabled = borzo.isEnabled() && delivery.isEnabled() && catalogActive("borzo");
-        boolean productionReady = blockers.isEmpty() && borzo.productionReady();
+        boolean createEnabled = borzo.isEnabled()
+            && borzo.isInstantProductVerified()
+            && delivery.isEnabled()
+            && catalogActive("borzo");
+        boolean productionReady = blockers.isEmpty()
+            && borzo.productionReady()
+            && borzo.isInstantProductVerified();
         return new ProviderReadiness(
             "BORZO",
             borzo.normalizedEnvironment(),
@@ -132,12 +140,15 @@ public class DeliveryProviderReadinessService {
             false,
             catalogActive("borzo"),
             0,
+            "Borzo Business API 1.8 on-demand motorbike delivery",
+            borzo.isInstantProductVerified(),
             List.copyOf(blockers)
         );
     }
 
     private ProviderReadiness shiprocketReadiness() {
         List<String> blockers = new ArrayList<>();
+        blockers.add("BLOCKED_INSTANT_HYPERLOCAL_API_PRODUCT_NOT_AVAILABLE");
         if (!"PRODUCTION".equals(shiprocket.executionMode())) {
             blockers.add("SHIPROCKET_API_ENVIRONMENT_NOT_PRODUCTION");
         }
@@ -180,20 +191,19 @@ public class DeliveryProviderReadinessService {
         boolean readOnlyQuoteReady = shiprocket.isEnabled()
             && shiprocket.credentialReady()
             && adapterRegistered("shiprocket");
-        boolean createEnabled = shiprocket.productionCreateReady()
-            && delivery.isEnabled()
-            && catalogActive("shiprocket")
-            && verifiedPickupLocations > 0;
+        boolean createEnabled = false;
         return new ProviderReadiness(
             "SHIPROCKET",
             shiprocket.executionMode(),
             adapterRegistered("shiprocket"),
             readOnlyQuoteReady,
             createEnabled,
-            blockers.isEmpty() && createEnabled,
+            false,
             readOnlyQuoteReady,
             catalogActive("shiprocket"),
             verifiedPickupLocations,
+            "Shiprocket external ecommerce shipment API",
+            false,
             List.copyOf(blockers)
         );
     }
@@ -218,12 +228,17 @@ public class DeliveryProviderReadinessService {
             false,
             catalogActive(providerId),
             pickupLocations.countVerified(providerId),
+            "UNVERIFIED_PRIVATE_PROVIDER_PRODUCT",
+            false,
             List.copyOf(blockers)
         );
     }
 
     private List<String> sharedDownstreamBlockers() {
         List<String> blockers = new ArrayList<>();
+        if (delivery.getMaxTotalEtaMinutes() <= 0) {
+            blockers.add("CRAVES_MAX_TOTAL_ETA_NOT_APPROVED");
+        }
         if (!StringUtils.hasText(delivery.getFullyQualifiedNamespace())
             && !StringUtils.hasText(delivery.getConnectionString())) {
             blockers.add("SERVICE_BUS_NOT_CONFIGURED");
@@ -273,6 +288,8 @@ public class DeliveryProviderReadinessService {
         boolean readOnlyQuoteReady,
         boolean providerCatalogActive,
         int verifiedPickupLocations,
+        String productName,
+        boolean instantDeliveryEligible,
         List<String> blockers
     ) {}
 

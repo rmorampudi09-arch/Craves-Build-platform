@@ -1,38 +1,5 @@
-# Borzo Delivery Provider Adapter
-
-Published-branch CI: **PASS** — Azure DevOps build `36443` / `20260908.1`, source `16a57a0d`.
-
-## Production integration record — 2026-09-08 IST
-
-Change: CRV-INT-BORZO-PROD-002. No credential values are recorded here.
-
-Approved contract:
-
-- Borzo client: 8639738
-- API: Business API 1.8
-- Production base: https://robot-in.borzodelivery.com/api/business/1.8
-- Callback: https://api.craves.in/api/v1/webhooks/delivery/borzo
-- Key Vault secrets: separate production auth and callback secrets; sandbox secrets retained
-
-Execution evidence:
-
-| Gate | Result | Evidence |
-|---|---|---|
-| Current-main CI | PASS | Azure DevOps 36439 / 20260907.1 at e668a313 |
-| Callback route | PASS | APIM has one POST /borzo operation; unsigned POST returns 401 |
-| Database cutover safety | PASS | zero non-terminal Borzo jobs |
-| Broker baseline | OBSERVED | command active 0, scheduled 0, DLQ 6; status active 0, DLQ 1 |
-| Callback cabinet configuration | PASS | callback URL retained after reload and Borzo issued a callback token |
-| Production Key Vault binding | PASS | production secrets created; Container App stable secret references repointed |
-| Production entitlement | PASS | exact production API base returned HTTP 200 and is_successful=true |
-| Fail-closed production stage | PASS | Azure DevOps 36442 / 20260908.1 |
-| Runtime verification | PASS | revision 0000108 ready; environment PRODUCTION; API enabled false; provider row inactive; open jobs 0 |
-| API-token self-service rotation | BLOCKED | Borzo cabinet restored the existing token after save; no supported rotate control is exposed |
-| Provider-create activation | BLOCKED | remains disabled until Borzo rotates the previously exposed API token |
-
-Status: **PRODUCTION STAGED, CREATE DISABLED**. A real booking is a separate billable-operation gate.
-
-
+# 36444
+Borzo Delivery Provider Adapter
 
 This module integrates Borzo Business API 1.8 into the existing Craves Integration Service.
 It is deliberately disabled by default and must remain inactive in the delivery-provider registry
@@ -41,6 +8,70 @@ until sandbox callbacks, commercial onboarding and production KYC are complete.
 Official technical reference:
 
 - https://borzodelivery.com/in/business-api/doc
+
+## Production integration record (2026-09-08 IST)
+
+This section is the execution ledger for change `CRV-INT-BORZO-PROD-002`. It contains no
+credential values.
+
+### Approved production contract
+
+```text
+API version: 1.8
+Production API base URL: https://robot-in.borzodelivery.com/api/business/1.8
+Public callback URL: https://api.craves.in/api/v1/webhooks/delivery/borzo
+```
+
+Production credentials are isolated in Key Vault and are not recorded in source control.
+
+### Preflight evidence
+
+| Check | Result | Evidence |
+|---|---|---|
+| Integration Container App | PASS | `ca-craves-integration-service-pr` is running on ready revision `0000106` |
+| Current Borzo runtime | CONFIRMED SANDBOX | API enabled against `robotapitest-in.borzodelivery.com`; production approval is false |
+| Secret provenance | CONFIRMED SANDBOX | Both stable Container App secret names point to sandbox-named Key Vault secrets |
+| Borzo provider row | PASS | One row exists and is active for the current sandbox runtime |
+| Non-terminal Borzo jobs | PASS | Count is `0` |
+| Public callback route | PASS | Unsigned `POST` returns HTTP `401` (route exists and fails closed) |
+| APIM operation | PASS | Exactly one `POST /borzo` operation exists under `api/v1/webhooks/delivery` |
+| Delivery command queue | OBSERVED | active `0`, scheduled `0`, historical DLQ `6` |
+| Delivery-status subscription | OBSERVED | active `0`, historical DLQ `1` |
+| Current-main production CI | PASS | Azure DevOps build `36439` / `20260907.1`, source `e668a313` |
+| Published-branch production CI | PASS | Azure DevOps build `36443` / `20260908.1`, source `16a57a0d` |
+
+The historical dead letters were inspected read-only and retained. They are not silently deleted
+or replayed during this cutover. The observed counts are the only acceptable activation-pipeline
+inputs unless a fresh observation shows that the broker state changed.
+
+### Source hardening prepared in this change
+
+- Production readiness now accepts only the approved India API 1.8 base URL, rather than merely
+  rejecting hostnames containing `test` or `sandbox`.
+- The stale readiness fixture was corrected from the lookalike `robotapi-in` host to `robot-in`.
+- The stale callback fixture was corrected to `/api/v1/webhooks/delivery/borzo`.
+- Both single-provider and coordinated activation pipelines now use the same exact production
+  endpoint allow-list.
+
+### Cutover status
+
+| Change | Result | Evidence |
+|---|---|---|
+| Borzo callback configuration | PASS | Cabinet retained the approved callback URL after reload |
+| Production credential binding | PASS | Separate production credentials are bound through Key Vault; no credential values are recorded in source control |
+| Production Key Vault binding | PASS | Production auth and callback configuration is isolated from sandbox configuration |
+| Container App binding | PASS | Runtime references were moved to the production Key Vault-backed configuration |
+| Production root authentication | PASS | Exact production API 1.8 base returned HTTP `200` and `is_successful=true` |
+| Fail-closed downstream stage | PASS | Azure DevOps build `36442` / `20260908.1`, with provider create disabled |
+| Provider-create activation | PASS | Guarded production activation build `36444` / `20260908.2` completed successfully with `enableProvider=true`, `activationStage=provider_create` and explicit production approval |
+
+`PRODUCTION ACTIVATED` — the production credentials and callback are bound, the account
+authenticates successfully and the guarded provider-create switch completed in Azure DevOps build
+`36444` / `20260908.2`. No real delivery was booked during activation; a controlled billable pilot
+remains a separate approval and evidence gate.
+Post-activation verification confirmed revision `0000110` as latest and ready, provisioning
+`Succeeded`, runtime `Running`, `BORZO_API_ENABLED=true`, production approval `true`, the Borzo
+provider row active and zero open Borzo delivery jobs.
 
 ## What this module implements
 
@@ -92,8 +123,8 @@ BORZO_READ_TIMEOUT_SECONDS=20
 `BORZO_CALLBACK_TOKEN` is used only to validate the `X-DV-Signature` callback header.
 They must be different secrets and must never be committed to Git.
 
-During the current build stage, use secret-backed Azure Container Apps values. Migrate both
-values to Azure Key Vault references after the adapter stabilizes.
+Production values are stored in Azure Key Vault and consumed by Azure Container Apps through
+Key Vault secret references. Sandbox and production values use separate Key Vault secret names.
 
 ## Internal adapter endpoints
 
@@ -189,5 +220,6 @@ Do not use a real token in automated tests. The API client tests use Spring's mo
   supporting heavier or oversized deliveries.
 - Thermobox request support does not prove rider availability. Written operational confirmation
   from Borzo is still required.
-- Production activation is blocked pending business registration, KYC, commercial terms and a
-  controlled Hyderabad pilot.
+- Production configuration and the provider-create feature gate are active. Business registration,
+  KYC and commercial terms remain operational prerequisites, and a controlled Hyderabad pilot is
+  still required before the integration can be described as end-to-end production accepted.

@@ -4,6 +4,14 @@ import { compactId, formatDateTime, formatPercent } from "@/lib/format";
 import { Database, ExternalLink, MapPin, ShieldCheck, Sparkles, Truck } from "lucide-react";
 import type { ReactNode } from "react";
 
+type LifecycleEvent = {
+  time: string;
+  title: string;
+  detail: string;
+  status: string;
+  source: string;
+};
+
 function EvidenceField({ label, value, mono = false }: { label: string; value: ReactNode; mono?: boolean }) {
   return <div className="evidence-field"><span>{label}</span><strong className={mono ? "mono" : ""}>{value ?? "—"}</strong></div>;
 }
@@ -29,19 +37,21 @@ function DeliveryUnitPanel({ unit, index }: { unit: DeliveryUnitEvidence; index:
   const job = unit.job;
   const command = unit.command;
   const selected = unit.candidates.find(candidate => ["SELECTED", "ACCEPTED"].includes(candidate.status)) ?? unit.candidates[0];
-  const lifecycle = [
-    command && { time: command.createdAt, title: "Command created", detail: command.commandType, status: command.status, source: "COMMAND" },
-    unit.assignment && { time: unit.assignment.createdAt, title: "Candidates ranked", detail: `${unit.candidates.length} stored candidate${unit.candidates.length === 1 ? "" : "s"} · ${unit.assignment.strategy}`, status: unit.assignment.status, source: "RANKING" },
-    selected && { time: selected.createdAt, title: "Candidate evidence", detail: `${selected.providerId} · rank #${selected.candidateRank} · final score ${selected.finalScore.toFixed(2)}`, status: selected.status, source: "SELECTION" },
-    job?.bookedAt && { time: job.bookedAt, title: "Provider booking observed", detail: job.providerDeliveryId ?? job.providerId, status: job.status, source: "CREATE" },
-    ...unit.events.map(event => ({
+  const lifecycle = ([
+    command ? { time: command.createdAt, title: "Command created", detail: command.commandType, status: command.status, source: "COMMAND" } : null,
+    unit.assignment ? { time: unit.assignment.createdAt, title: "Candidates ranked", detail: `${unit.candidates.length} stored candidate${unit.candidates.length === 1 ? "" : "s"} · ${unit.assignment.strategy}`, status: unit.assignment.status, source: "RANKING" } : null,
+    selected ? { time: selected.createdAt, title: "Candidate evidence", detail: `${selected.providerId} · rank #${selected.candidateRank} · final score ${selected.finalScore.toFixed(2)}`, status: selected.status, source: "SELECTION" } : null,
+    job?.bookedAt ? { time: job.bookedAt, title: "Provider booking observed", detail: job.providerDeliveryId ?? job.providerId, status: job.status, source: "CREATE" } : null,
+    ...unit.events.map<LifecycleEvent>(event => ({
       time: event.occurredAt,
       title: event.applied ? "Status evidence applied" : "Status evidence ignored",
       detail: `${event.eventType} · ${event.source}${event.ignoredReason ? ` · ${event.ignoredReason}` : ""}`,
       status: event.normalizedStatus ?? event.providerStatus ?? event.eventType,
       source: event.source,
     })),
-  ].filter(Boolean).sort((a, b) => new Date(a!.time).getTime() - new Date(b!.time).getTime()) as Array<{time:string;title:string;detail:string;status:string;source:string}>;
+  ] satisfies Array<LifecycleEvent | null>)
+    .filter((event): event is LifecycleEvent => event !== null)
+    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
   return (
     <section className="delivery-unit-block">

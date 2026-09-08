@@ -47,6 +47,13 @@ On-demand credentials without written Shadowfax entitlement and contract confirm
 Result: credential custody is complete for the Courier Credits Key, while Hyperlocal order creation
 remains fail-closed. No provider secret value appears in this repository or milestone.
 
+A Shadowfax 360 Client Support request was submitted on 2026-09-08 under
+`Tech / Integration / Panel` -> `API issue`. The portal confirmed `Issue raised successfully`. The
+request asks Shadowfax to provision/confirm the CRAVES Hyperlocal Food & On-demand entitlement and
+provide the production/UAT hosts, authentication and `client_code`, operation schemas,
+uncertain-create/idempotency behavior, Hyderabad serviceability/allowlisting, callback contract,
+status catalogue, and rate limits. No credential value was included in the request.
+
 ## Source changes
 
 | Area | Files |

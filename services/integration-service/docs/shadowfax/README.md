@@ -35,7 +35,7 @@ Authoritative API contract: [Shadowfax HL Marketplace Orders API](https://sfxhlm
 | Status mapping | `delivery/shadowfax/ShadowfaxStatusMapper.java` |
 | Webhook intake | `ShadowfaxWebhookService.java`, `ShadowfaxWebhookInboxRepository.java`, `ShadowfaxWebhookController.java` |
 | Async normalization | `ShadowfaxWebhookNormalizer.java` |
-| Database profile | `V112__shadowfax_hyperlocal_marketplace_contract.sql` |
+| Database profile | `V115__shadowfax_hyperlocal_marketplace_contract.sql` |
 | Azure controls | `azure-pipelines-shadowfax-environment.yml`, `azure-pipelines-delivery-provider-webhooks-apim.yml` |
 | Contract tests | `ShadowfaxApiClientTest.java`, `ShadowfaxStatusMapperTest.java` |
 

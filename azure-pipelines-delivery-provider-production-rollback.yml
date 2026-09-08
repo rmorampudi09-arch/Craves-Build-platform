@@ -32,14 +32,50 @@ steps:
               CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=false \
               CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=false \
               CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED=false \
+              CRAVES_DELIVERY_MAX_TOTAL_ETA_MINUTES=0 \
               BORZO_API_ENABLED=false \
               BORZO_PRODUCTION_ACTIVATION_APPROVED=false \
+              BORZO_INSTANT_PRODUCT_VERIFIED=false \
+              SHIPROCKET_API_ENABLED=false \
+              SHIPROCKET_CREATE_ENABLED=false \
+              SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED=false \
+              SHIPROCKET_ATTRIBUTION_APPROVED=false \
+              SHADOWFAX_API_ENABLED=false \
+              SHADOWFAX_PRODUCTION_ACTIVATION_APPROVED=false \
+              SHADOWFAX_CONTRACT_VERIFIED=false \
+              SHADOWFAX_HYDERABAD_SERVICEABILITY_VERIFIED=false \
+              SHADOWFAX_CALLBACK_REGISTERED=false \
+              SHADOWFAX_CREATE_RECONCILIATION_VERIFIED=false \
+              DELHIVERY_API_ENABLED=false \
+              DELHIVERY_PRODUCTION_ACTIVATION_APPROVED=false \
               CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
           values="$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].env' -o json)"
-          for name in CRAVES_DELIVERY_COMMAND_ENABLED CRAVES_DELIVERY_RECONCILIATION_ENABLED CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED BORZO_API_ENABLED; do
+          for name in \
+            CRAVES_DELIVERY_COMMAND_ENABLED \
+            CRAVES_DELIVERY_RECONCILIATION_ENABLED \
+            CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED \
+            CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED \
+            CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED \
+            BORZO_API_ENABLED \
+            BORZO_PRODUCTION_ACTIVATION_APPROVED \
+            BORZO_INSTANT_PRODUCT_VERIFIED \
+            SHIPROCKET_API_ENABLED \
+            SHIPROCKET_CREATE_ENABLED \
+            SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED \
+            SHIPROCKET_ATTRIBUTION_APPROVED \
+            SHADOWFAX_API_ENABLED \
+            SHADOWFAX_PRODUCTION_ACTIVATION_APPROVED \
+            SHADOWFAX_CONTRACT_VERIFIED \
+            SHADOWFAX_HYDERABAD_SERVICEABILITY_VERIFIED \
+            SHADOWFAX_CALLBACK_REGISTERED \
+            SHADOWFAX_CREATE_RECONCILIATION_VERIFIED \
+            DELHIVERY_API_ENABLED \
+            DELHIVERY_PRODUCTION_ACTIVATION_APPROVED; do
             value="$(jq -r --arg name "$name" '.[] | select(.name == $name) | .value' <<<"$values" | tail -1)"
             [[ "$value" == 'false' ]] || { echo "$name did not return to false." >&2; exit 2; }
           done
+          max_eta="$(jq -r '.[] | select(.name == "CRAVES_DELIVERY_MAX_TOTAL_ETA_MINUTES") | .value' <<<"$values" | tail -1)"
+          [[ "$max_eta" == '0' ]] || { echo 'CRAVES_DELIVERY_MAX_TOTAL_ETA_MINUTES did not return to 0.' >&2; exit 2; }
 
   - ${{ if ne(parameters.confirmDisableDeliveryProvider, true) }}:
     - bash: |

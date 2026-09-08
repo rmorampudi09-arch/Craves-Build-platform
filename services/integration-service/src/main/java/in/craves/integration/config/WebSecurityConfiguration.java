@@ -34,6 +34,9 @@ public class WebSecurityConfiguration {
                 ))
             )
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/v1/admin/operations/delivery-intelligence/**").hasAnyRole(
+                    "ADMIN", "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
+                )
                 .requestMatchers("/api/v1/admin/**").hasAnyRole(
                     "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
                 )

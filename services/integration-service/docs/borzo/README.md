@@ -1,5 +1,7 @@
 # Borzo Delivery Provider Adapter
 
+Published-branch CI: **PASS** — Azure DevOps build `36443` / `20260908.1`, source `16a57a0d`.
+
 ## Production integration record — 2026-09-08 IST
 
 Change: CRV-INT-BORZO-PROD-002. No credential values are recorded here.

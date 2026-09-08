@@ -49,6 +49,19 @@ authentication, with credentials issued by the Shadowfax team, plus mandatory cl
 allowlisting. The account-specific mechanism and entitlement must therefore be proven by an
 authenticated, non-mutating production serviceability request before runtime binding.
 
+## Production credential validation
+
+With the owner's explicit approval, the existing CRAVES Shadowfax 360 production token was sent
+only to the official production serviceability operation on 2026-09-08, using public Hyderabad test
+coordinates and no customer, chef, or order data. Shadowfax returned HTTP `401` with
+`{"detail":"Invalid token."}`.
+
+This proves that the existing Shadowfax 360 credential cannot authenticate the HL Marketplace
+service. It was not stored as `shadowfax-api-token`, was not bound to the Container App, and was
+cleared from the temporary validation session. Shadowfax remains inactive and no delivery was
+created or charged. Activation now requires a Shadowfax-issued HL Marketplace credential and
+`client_code` for the CRAVES account.
+
 ## Credential custody checkpoint
 
 On 2026-09-08, the owner generated a Shadowfax Courier Credits Key from the signed-in
@@ -96,7 +109,7 @@ delivery.
 |---|---|---|
 | Public HL Marketplace schema | Passed | Published contract inspected and implemented |
 | Exact production host | Passed in code | Runtime must equal `https://api.shadowfax.in` |
-| Token credential model | Passed in code | `Authorization: Token ...` bound from Key Vault |
+| Token credential model | Blocked live | Existing Shadowfax 360 token returned HTTP `401 Invalid token`; obtain an HL Marketplace credential |
 | CRAVES Hyperlocal client code | Pending | Shadowfax-issued `client_code`, stored as a secret |
 | Azure outbound IP allowlist | Pending | Shadowfax confirmation that all production egress IPs are allowed |
 | Hyderabad account serviceability | Pending | Authenticated, non-mutating serviceability response for pilot zones |
@@ -150,6 +163,9 @@ delete them during rollback.
 - Contract source inspected on 2026-09-08.
 - Official contract rechecked on 2026-09-08: the supplied `/api/v3/...` summary was rejected;
   Craves remains aligned to the published v1/v2 operations listed above.
+- Non-mutating production serviceability authentication returned HTTP `401 Invalid token` for the
+  existing Shadowfax 360 production credential. The invalid credential was not bound and the
+  provider remains inactive.
 - Azure DevOps delivery-provider production CI `36446 / 20260908.3`: passed in 1m 29s
   against public source commit `33898ecd`.
 - Azure DevOps Integration Service deployment `36449 / 20260908.3`: passed against public source

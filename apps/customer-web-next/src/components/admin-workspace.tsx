@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import {
   BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, LayoutDashboard,
-  Menu, ReceiptText, Search, SearchCheck, ShieldCheck, X
+  Menu, ReceiptText, Route, Search, SearchCheck, ShieldCheck, X
 } from "lucide-react";
 import type { AdminIdentity } from "@/lib/admin-contract";
 import { loadAdminIdentity } from "@/lib/admin-session";
@@ -17,6 +17,7 @@ const navigation = [
   { href: "/admin/search", label: "Global search", icon: Search, group: "Control center" },
   { href: "/admin/chef-reviews", label: "Chef reviews", icon: ChefHat, group: "People & kitchens" },
   { href: "/admin/operations", label: "Order investigations", icon: SearchCheck, group: "Operations" },
+  { href: "/admin/delivery-intelligence", label: "Delivery Intelligence", icon: Route, group: "Operations" },
   { href: "/admin/subscription-plans", label: "Plans", icon: ReceiptText, group: "Subscriptions" },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: ClipboardList, group: "Subscriptions" },
   { href: "/admin/subscription-capacity", label: "Capacity", icon: Gauge, group: "Subscriptions" },
@@ -69,7 +70,7 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
           const Icon = item.icon;
           return <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)} aria-current={selected ? "page" : undefined}
             className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-bold transition ${selected ? "bg-[#6930ca] text-white shadow-lg shadow-black/25" : "text-slate-300 hover:bg-white/8 hover:text-white"}`}>
-            <Icon size={18} strokeWidth={2.2} /><span>{item.label}</span>{item.href === "/admin/search" ? <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[9px]">NEW</span> : null}
+            <Icon size={18} strokeWidth={2.2} /><span>{item.label}</span>{item.href === "/admin/search" ? <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[9px]">NEW</span> : item.href === "/admin/delivery-intelligence" ? <span className="ml-auto rounded-md bg-emerald-400/15 px-1.5 py-0.5 text-[9px] text-emerald-300">LIVE</span> : null}
           </Link>;
         })}</div></div>)}
       </nav>

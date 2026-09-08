@@ -1,0 +1,311 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmProductionDeploy
+    type: boolean
+    default: false
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: acrName
+    type: string
+    default: cravesprodlowacr82121
+  - name: integrationContainerAppName
+    type: string
+    default: ca-craves-integration-service-pr
+  - name: existingAdminContainerAppName
+    type: string
+    default: ca-craves-admin-web-prodlow
+  - name: deliveryIntelligenceContainerAppName
+    type: string
+    default: ca-craves-delivery-intel-prodlow
+  - name: imageTag
+    type: string
+    default: $(Build.BuildId)
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  integrationPath: services/integration-service
+  webPath: apps/delivery-intelligence-admin
+  integrationImageRepository: craves/integration-service
+  webImageRepository: craves/delivery-intelligence-admin
+  cravesApiBaseUrl: https://api.craves.in/api/v1
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    persistCredentials: false
+
+  - script: |
+      set -euo pipefail
+      echo "Build ID: $(Build.BuildId)"
+      echo "Source commit: $(Build.SourceVersion)"
+      echo "Source branch: $(Build.SourceBranch)"
+      CONFIRM='${{ parameters.confirmProductionDeploy }}'
+      if [[ "${CONFIRM,,}" != "true" ]]; then
+        echo 'ERROR: Production deployment is gated. Queue with confirmProductionDeploy=true.' >&2
+        exit 1
+      fi
+      echo 'Production deployment gate accepted.'
+      echo 'WARNING: This run may create the separately billed ca-craves-delivery-intel-prodlow Container App.'
+    displayName: Verify immutable source and production approval
+
+  - task: NodeTool@0
+    displayName: Use Node.js 24
+    inputs:
+      versionSpec: 24.x
+
+  - script: |
+      set -euo pipefail
+      cd $(webPath)
+      npm install --ignore-scripts --no-audit --no-fund
+      npm run lint
+      npm run typecheck
+      npm run test
+      npm run build
+    displayName: Validate Delivery Intelligence Next.js application
+    env:
+      CRAVES_API_BASE_URL: $(cravesApiBaseUrl)
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - script: |
+      set -euo pipefail
+      bash scripts/release/verify-integration-flyway-history.sh
+      grep -Fq '.requestMatchers("/api/v1/admin/operations/delivery-intelligence/**").hasAnyRole(' \
+        services/integration-service/src/main/java/in/craves/integration/config/WebSecurityConfiguration.java
+      grep -Fq '"ADMIN", "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"' \
+        services/integration-service/src/main/java/in/craves/integration/config/WebSecurityConfiguration.java
+      cd $(integrationPath)
+      mvn -B -ntp clean verify
+    displayName: Validate Integration Service and ADMIN authorization
+
+  - script: |
+      set -euo pipefail
+      bash -n scripts/apim/configure-delivery-intelligence-admin-apim.sh
+      bash -n scripts/frontdoor/configure-delivery-intelligence-admin-route.sh
+      test -f services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql
+      test -f services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql.conf
+      grep -Fxq 'executeInTransaction=false' services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql.conf
+      grep -Fq 'CREATE INDEX CONCURRENTLY' services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql
+      ! grep -R -E 'raw_payload|signature_hash|tracking_url|provider_metadata' apps/delivery-intelligence-admin/src || {
+        echo 'ERROR: Frontend source references restricted provider/raw data.' >&2
+        exit 1
+      }
+    displayName: Validate deployment scripts and data-exposure boundary
+
+  - task: AzureCLI@2
+    displayName: Build and push immutable Integration and Delivery Intelligence images
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        ACR='${{ parameters.acrName }}'
+        TAG='${{ parameters.imageTag }}'
+        LOGIN_SERVER="$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)"
+        [[ -n "$LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
+        INTEGRATION_IMAGE="$LOGIN_SERVER/$(integrationImageRepository):$TAG"
+        WEB_IMAGE="$LOGIN_SERVER/$(webImageRepository):$TAG"
+        az acr login --name "$ACR" --only-show-errors
+        docker build --pull -t "$INTEGRATION_IMAGE" "$(integrationPath)"
+        docker push "$INTEGRATION_IMAGE"
+        docker build --pull -f "$(webPath)/Dockerfile" -t "$WEB_IMAGE" .
+        docker push "$WEB_IMAGE"
+        echo "Integration image: $INTEGRATION_IMAGE"
+        echo "Delivery Intelligence image: $WEB_IMAGE"
+
+  - task: AzureCLI@2
+    displayName: Deploy Integration Service read API and Flyway V116
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        RG='${{ parameters.resourceGroupName }}'
+        ACR='${{ parameters.acrName }}'
+        APP='${{ parameters.integrationContainerAppName }}'
+        TAG='${{ parameters.imageTag }}'
+        LOGIN_SERVER="$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)"
+        IMAGE="$LOGIN_SERVER/$(integrationImageRepository):$TAG"
+        READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10 \
+          bash scripts/release/deploy-single-service-preserve-runtime.sh "$RG" "$APP" "$IMAGE" integration
+        APP_FQDN="$(az containerapp show -g "$RG" -n "$APP" --query properties.configuration.ingress.fqdn -o tsv)"
+        curl --silent --show-error --fail --max-time 30 "https://${APP_FQDN}/actuator/health" >/dev/null
+        echo 'Integration Service is ready with the Delivery Intelligence read API.'
+
+  - task: AzureCLI@2
+    displayName: Register read-only Delivery Intelligence APIM operations
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        CONFIRM_APIM_WRITE=true \
+        RG='${{ parameters.resourceGroupName }}' \
+        INTEGRATION_APP='${{ parameters.integrationContainerAppName }}' \
+          bash scripts/apim/configure-delivery-intelligence-admin-apim.sh
+
+  - task: AzureCLI@2
+    displayName: Create or update dedicated Delivery Intelligence Container App
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+        fail() { echo "ERROR: $*" >&2; exit 1; }
+        RG='${{ parameters.resourceGroupName }}'
+        ACR='${{ parameters.acrName }}'
+        APP='${{ parameters.deliveryIntelligenceContainerAppName }}'
+        SOURCE_ADMIN_APP='${{ parameters.existingAdminContainerAppName }}'
+        TAG='${{ parameters.imageTag }}'
+        LOGIN_SERVER="$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)"
+        ACR_ID="$(az acr show --name "$ACR" --query id -o tsv --only-show-errors)"
+        IMAGE="$LOGIN_SERVER/$(webImageRepository):$TAG"
+        [[ -n "$LOGIN_SERVER" && -n "$ACR_ID" ]] || fail 'ACR metadata was not resolved'
+
+        if ! az containerapp show -g "$RG" -n "$APP" >/dev/null 2>&1; then
+          ENVIRONMENT_ID="$(az containerapp show -g "$RG" -n "$SOURCE_ADMIN_APP" --query properties.managedEnvironmentId -o tsv)"
+          [[ -n "$ENVIRONMENT_ID" ]] || fail 'Existing admin Container Apps environment could not be resolved'
+          ENVIRONMENT_NAME="${ENVIRONMENT_ID##*/}"
+          echo "Creating separately billed Delivery Intelligence Container App in existing environment $ENVIRONMENT_NAME"
+          az containerapp create \
+            -g "$RG" \
+            -n "$APP" \
+            --environment "$ENVIRONMENT_NAME" \
+            --image mcr.microsoft.com/azuredocs/containerapps-helloworld:latest \
+            --ingress external \
+            --target-port 80 \
+            --min-replicas 0 \
+            --max-replicas 3 \
+            --cpu 0.5 \
+            --memory 1.0Gi \
+            --only-show-errors >/dev/null
+        fi
+
+        PRINCIPAL_ID="$(az containerapp identity assign -g "$RG" -n "$APP" --system-assigned --query principalId -o tsv)"
+        [[ -n "$PRINCIPAL_ID" ]] || PRINCIPAL_ID="$(az containerapp identity show -g "$RG" -n "$APP" --query principalId -o tsv)"
+        [[ -n "$PRINCIPAL_ID" ]] || fail 'Container App managed identity was not created'
+
+        if ! az role assignment create \
+          --assignee-object-id "$PRINCIPAL_ID" \
+          --assignee-principal-type ServicePrincipal \
+          --role AcrPull \
+          --scope "$ACR_ID" \
+          --only-show-errors >/dev/null 2>&1; then
+          ASSIGNMENTS="$(az role assignment list --scope "$ACR_ID" --query "[?principalId=='${PRINCIPAL_ID}' && roleDefinitionName=='AcrPull'] | length(@)" -o tsv)"
+          [[ "$ASSIGNMENTS" =~ ^[1-9][0-9]*$ ]] || fail 'Could not create or verify AcrPull for Delivery Intelligence managed identity'
+        fi
+
+        az containerapp registry set \
+          -g "$RG" \
+          -n "$APP" \
+          --server "$LOGIN_SERVER" \
+          --identity system \
+          --only-show-errors >/dev/null
+
+        az containerapp ingress update \
+          -g "$RG" \
+          -n "$APP" \
+          --type external \
+          --target-port 3000 \
+          --transport auto \
+          --only-show-errors >/dev/null
+
+        az containerapp update \
+          -g "$RG" \
+          -n "$APP" \
+          --image "$IMAGE" \
+          --min-replicas 0 \
+          --max-replicas 3 \
+          --set-env-vars CRAVES_API_BASE_URL='$(cravesApiBaseUrl)' \
+          --no-wait \
+          --only-show-errors >/dev/null
+
+        for attempt in $(seq 1 120); do
+          JSON="$(az containerapp show -g "$RG" -n "$APP" -o json)"
+          LATEST="$(jq -r '.properties.latestRevisionName // empty' <<<"$JSON")"
+          READY="$(jq -r '.properties.latestReadyRevisionName // empty' <<<"$JSON")"
+          ACTUAL_IMAGE="$(jq -r '.properties.template.containers[0].image // empty' <<<"$JSON")"
+          FQDN="$(jq -r '.properties.configuration.ingress.fqdn // empty' <<<"$JSON")"
+          if [[ -n "$LATEST" && "$LATEST" == "$READY" && "$ACTUAL_IMAGE" == "$IMAGE" && -n "$FQDN" ]]; then
+            if curl --silent --show-error --fail --max-time 30 "https://${FQDN}/delivery-intelligence/api/health" >/dev/null; then
+              echo "SUCCESS: Delivery Intelligence origin is ready at ${FQDN}"
+              exit 0
+            fi
+          fi
+          sleep 10
+        done
+        fail 'Delivery Intelligence Container App did not become healthy in the bounded readiness window'
+
+  - task: AzureCLI@2
+    displayName: Publish Delivery Intelligence path through existing admin Front Door
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        CONFIRM_FRONTDOOR_WRITE=true \
+        RESOURCE_GROUP='${{ parameters.resourceGroupName }}' \
+        DELIVERY_INTELLIGENCE_CONTAINER_APP='${{ parameters.deliveryIntelligenceContainerAppName }}' \
+          bash scripts/frontdoor/configure-delivery-intelligence-admin-route.sh
+
+  - task: AzureCLI@2
+    displayName: Production smoke tests
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        PUBLIC_BASE='https://admin.craves.in/delivery-intelligence'
+        API_BASE='https://api.craves.in/api/v1/admin/operations/delivery-intelligence'
+        HEADERS="$(mktemp)"
+        BODY="$(mktemp)"
+        trap 'rm -f "$HEADERS" "$BODY"' EXIT
+
+        retry_status() {
+          local url="$1" expected="$2" status=''
+          for attempt in $(seq 1 80); do
+            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 "$url" || true)"
+            if [[ "$status" =~ $expected ]]; then
+              printf '%s' "$status"
+              return 0
+            fi
+            sleep 15
+          done
+          printf '%s' "$status"
+          return 1
+        }
+
+        HEALTH_STATUS="$(retry_status "${PUBLIC_BASE}/api/health" '^200$')" || { echo "ERROR: Public health returned ${HEALTH_STATUS}" >&2; exit 1; }
+        PAGE_STATUS="$(retry_status "$PUBLIC_BASE" '^(200|301|302|307|308)$')" || { echo "ERROR: Dashboard returned ${PAGE_STATUS}" >&2; exit 1; }
+        LEGACY_ADMIN_STATUS="$(retry_status 'https://admin.craves.in/admin' '^(200|301|302|307|308)$')" || { echo "ERROR: Existing admin surface returned ${LEGACY_ADMIN_STATUS}" >&2; exit 1; }
+
+        AUTH_STATUS="$(curl --silent --show-error --dump-header "$HEADERS" --output "$BODY" --write-out '%{http_code}' --max-time 30 "${PUBLIC_BASE}/api/admin/me")"
+        [[ "$AUTH_STATUS" == '401' ]] || { echo "ERROR: Signed-out dashboard admin guard returned ${AUTH_STATUS}" >&2; cat "$BODY"; exit 1; }
+        grep -Eiq '^cache-control:.*no-store' "$HEADERS" || { echo 'ERROR: Dashboard admin identity response is cacheable.' >&2; exit 1; }
+
+        API_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 "${API_BASE}/overview")"
+        [[ "$API_STATUS" == '401' ]] || { echo "ERROR: APIM Delivery Intelligence unauthenticated guard returned ${API_STATUS}" >&2; exit 1; }
+
+        curl --silent --show-error --dump-header "$HEADERS" --output /dev/null --max-time 30 "${PUBLIC_BASE}/api/health"
+        grep -qi '^x-azure-ref:' "$HEADERS" || { echo 'ERROR: Public dashboard response is not proven to traverse Azure Front Door.' >&2; exit 1; }
+        grep -Eiq '^strict-transport-security:' "$HEADERS" || { echo 'ERROR: HSTS is missing on Delivery Intelligence route.' >&2; exit 1; }
+
+        echo 'SUCCESS: Delivery Intelligence is deployed, authenticated, routed through Front Door, and the existing admin surface still responds.'

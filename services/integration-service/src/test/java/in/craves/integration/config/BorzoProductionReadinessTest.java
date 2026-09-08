@@ -13,7 +13,17 @@ class BorzoProductionReadinessTest {
 
         assertThatThrownBy(properties::validate)
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("test or sandbox host");
+            .hasMessageContaining("approved India Business API 1.8 endpoint");
+    }
+
+    @Test
+    void productionCannotUseLookalikeHost() {
+        BorzoProperties properties = productionProperties();
+        properties.setBaseUrl("https://robotapi-in.borzodelivery.com/api/business/1.8");
+
+        assertThatThrownBy(properties::validate)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("approved India Business API 1.8 endpoint");
     }
 
     @Test
@@ -38,10 +48,10 @@ class BorzoProductionReadinessTest {
         properties.setEnvironment("PRODUCTION");
         properties.setProductionActivationApproved(true);
         properties.setEnabled(true);
-        properties.setBaseUrl("https://robotapi-in.borzodelivery.com/api/business/1.8");
+        properties.setBaseUrl(BorzoProperties.PRODUCTION_BASE_URL);
         properties.setAuthToken("secret-reference-value");
         properties.setCallbackSecret("callback-secret-reference-value");
-        properties.setCallbackUrl("https://api.craves.in/api/v1/delivery/webhooks/borzo");
+        properties.setCallbackUrl(BorzoProperties.PRODUCTION_CALLBACK_URL);
         return properties;
     }
 }

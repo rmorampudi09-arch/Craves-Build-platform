@@ -13,7 +13,9 @@ public class DomainEventOutboxProperties {
     private int maxAttempts = 10;
     private int retryBaseDelaySeconds = 5;
     private int staleLockSeconds = 300;
-    private Set<String> enabledEventTypes = new LinkedHashSet<>(Set.of("CHEF_ACCEPTED_ORDER"));
+    private Set<String> enabledEventTypes = new LinkedHashSet<>(
+        Set.of("CHEF_ACCEPTED_ORDER", "ORDER_READY_FOR_PICKUP")
+    );
 
     public boolean isEnabled() {
         return enabled;

@@ -3,6 +3,7 @@ package in.craves.integration.delivery.command;
 import in.craves.integration.delivery.command.DeliveryCommandModels.ChefAcceptedOrderData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelope;
+import in.craves.integration.delivery.command.DeliveryCommandModels.OrderReadyForPickupData;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
@@ -14,6 +15,8 @@ import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,7 @@ import org.springframework.util.StringUtils;
 @Service
 @ConditionalOnProperty(prefix = "craves.delivery-command", name = "enabled", havingValue = "true")
 public class DeliveryCommandScheduler {
+    private static final Logger log = LoggerFactory.getLogger(DeliveryCommandScheduler.class);
     private static final ZoneId DELIVERY_CONTEXT_ZONE = ZoneId.of("Asia/Kolkata");
     private static final double EARTH_RADIUS_KM = 6371.0088;
 
@@ -104,6 +108,85 @@ public class DeliveryCommandScheduler {
         return new ScheduleReceipt(
             command.id(), command.message().dispatchAt(), scheduled.sequenceNumber(), false
         );
+    }
+
+    public ReadyAccelerationReceipt accelerateReadyForPickup(
+        EventEnvelope<OrderReadyForPickupData> event
+    ) {
+        validateReadyForPickup(event);
+        OrderReadyForPickupData data = event.data();
+        CommandRecord command = repository.findByChefSubOrderId(data.chefSubOrderId())
+            .orElseThrow(() -> new DeliveryReadyEventNotReadyException(
+                "Delivery command has not been created yet for ready-for-pickup event"
+            ));
+
+        if (!data.orderId().equals(command.orderId())) {
+            throw new DeliveryMessageValidationException(
+                "ORDER_READY_FOR_PICKUP orderId does not match the delivery command"
+            );
+        }
+
+        if (!"SCHEDULED".equals(command.status()) || command.attemptCount() > 0) {
+            return new ReadyAccelerationReceipt(
+                command.id(), command.message().dispatchAt(), false, true
+            );
+        }
+
+        Instant dispatchAt = clock.instant();
+        DeliveryCommandMessage current = command.message();
+        DeliveryCommandMessage accelerated = new DeliveryCommandMessage(
+            current.commandId(),
+            event.eventId(),
+            event.correlationId(),
+            current.orderId(),
+            current.chefSubOrderId(),
+            data.readyAt(),
+            dispatchAt,
+            current.idempotencyKey(),
+            current.distanceKm(),
+            current.area(),
+            current.orderHour(),
+            current.dayOfWeek(),
+            current.deliveryRequest()
+        );
+        String immediateMessageId = "delivery-ready:"
+            + data.chefSubOrderId() + ":" + event.eventId();
+
+        boolean acceleratedInDatabase = repository.accelerateScheduled(
+            command.id(), accelerated, immediateMessageId
+        );
+        if (!acceleratedInDatabase) {
+            CommandRecord winner = repository.findById(command.id())
+                .orElseThrow(() -> new IllegalStateException(
+                    "Delivery command disappeared while accelerating ready-for-pickup"
+                ));
+            if (!"SCHEDULED".equals(winner.status()) || winner.attemptCount() > 0) {
+                return new ReadyAccelerationReceipt(
+                    winner.id(), winner.message().dispatchAt(), false, true
+                );
+            }
+            throw new IllegalStateException(
+                "Delivery command could not be accelerated for ready-for-pickup"
+            );
+        }
+
+        publisher.publishNow(accelerated, immediateMessageId);
+
+        Long oldSequenceNumber = command.scheduledSequenceNumber();
+        if (oldSequenceNumber != null) {
+            try {
+                publisher.cancelScheduled(oldSequenceNumber);
+            } catch (RuntimeException cancellationError) {
+                // Safe to continue: the worker claims the command atomically, so the old scheduled
+                // copy cannot create a second delivery after the immediate copy is processed.
+                log.warn(
+                    "Could not cancel superseded delivery schedule commandId={} sequenceNumber={}",
+                    command.id(), oldSequenceNumber, cancellationError
+                );
+            }
+        }
+
+        return new ReadyAccelerationReceipt(command.id(), dispatchAt, true, false);
     }
 
     private static RoutingContext routingContext(EventEnvelope<ChefAcceptedOrderData> event,
@@ -206,6 +289,33 @@ public class DeliveryCommandScheduler {
         }
     }
 
+    private static void validateReadyForPickup(EventEnvelope<OrderReadyForPickupData> event) {
+        Objects.requireNonNull(event, "event is required");
+        if (event.eventId() == null) {
+            throw new DeliveryMessageValidationException("eventId is required");
+        }
+        if (!DeliveryCommandModels.ORDER_READY_FOR_PICKUP.equals(event.eventType())) {
+            throw new DeliveryMessageValidationException(
+                "eventType must be ORDER_READY_FOR_PICKUP"
+            );
+        }
+        if (!StringUtils.hasText(event.eventVersion())) {
+            throw new DeliveryMessageValidationException("eventVersion is required");
+        }
+        if (event.occurredAt() == null || event.correlationId() == null) {
+            throw new DeliveryMessageValidationException("occurredAt and correlationId are required");
+        }
+        if (!StringUtils.hasText(event.source()) || !StringUtils.hasText(event.subject())) {
+            throw new DeliveryMessageValidationException("source and subject are required");
+        }
+        OrderReadyForPickupData data = Objects.requireNonNull(event.data(), "event data is required");
+        if (data.orderId() == null || data.chefSubOrderId() == null || data.readyAt() == null) {
+            throw new DeliveryMessageValidationException(
+                "orderId, chefSubOrderId and readyAt are required"
+            );
+        }
+    }
+
     private record RoutingContext(double distanceKm, String area, int orderHour, int dayOfWeek) {}
 
     public record ScheduleReceipt(
@@ -215,8 +325,21 @@ public class DeliveryCommandScheduler {
         boolean duplicate
     ) {}
 
+    public record ReadyAccelerationReceipt(
+        UUID commandId,
+        Instant dispatchAt,
+        boolean accelerated,
+        boolean duplicateOrAlreadyProcessing
+    ) {}
+
     public static class DeliveryMessageValidationException extends RuntimeException {
         public DeliveryMessageValidationException(String message) {
+            super(message);
+        }
+    }
+
+    public static class DeliveryReadyEventNotReadyException extends RuntimeException {
+        public DeliveryReadyEventNotReadyException(String message) {
             super(message);
         }
     }

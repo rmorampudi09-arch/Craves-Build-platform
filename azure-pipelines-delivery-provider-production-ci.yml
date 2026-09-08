@@ -241,7 +241,29 @@ steps:
       grep -Fq "provider_id='porter' AND is_active=TRUE" "$porter"
 
       grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/delhivery'" "$delhivery"
-      grep -Fq 'INTRACITY_API_PRODUCT_NOT_VERIFIED' "$delhivery"
+      grep -A3 -F -- '- name: confirmDirectIntracityContractVerified' "$delhivery" | grep -Fq 'default: false'
+      grep -A3 -F -- '- name: confirmCredentialModelVerified' "$delhivery" | grep -Fq 'default: false'
+      grep -A3 -F -- '- name: confirmServiceabilitySchemaVerified' "$delhivery" | grep -Fq 'default: false'
+      grep -A3 -F -- '- name: confirmQuoteSchemaVerified' "$delhivery" | grep -Fq 'default: false'
+      grep -A3 -F -- '- name: confirmCreateSchemaVerified' "$delhivery" | grep -Fq 'default: false'
+      grep -A3 -F -- '- name: confirmCancelSchemaVerified' "$delhivery" | grep -Fq 'default: false'
+      grep -A3 -F -- '- name: confirmTrackSchemaVerified' "$delhivery" | grep -Fq 'default: false'
+      grep -A3 -F -- '- name: confirmHyderabadServiceabilityVerified' "$delhivery" | grep -Fq 'default: false'
+      grep -A3 -F -- '- name: confirmWebhookContractVerified' "$delhivery" | grep -Fq 'default: false'
+      grep -A3 -F -- '- name: confirmCreateReconciliationVerified' "$delhivery" | grep -Fq 'default: false'
+      grep -Fq 'DIRECT_INTRACITY_CONTRACT_NOT_VERIFIED' "$delhivery"
+      grep -Fq 'DIRECT_INTRACITY_CREDENTIAL_MODEL_NOT_VERIFIED' "$delhivery"
+      grep -Fq 'DIRECT_INTRACITY_SERVICEABILITY_SCHEMA_NOT_VERIFIED' "$delhivery"
+      grep -Fq 'DIRECT_INTRACITY_QUOTE_SCHEMA_NOT_VERIFIED' "$delhivery"
+      grep -Fq 'DIRECT_INTRACITY_CREATE_SCHEMA_NOT_VERIFIED' "$delhivery"
+      grep -Fq 'DIRECT_INTRACITY_CANCEL_SCHEMA_NOT_VERIFIED' "$delhivery"
+      grep -Fq 'DIRECT_INTRACITY_TRACK_SCHEMA_NOT_VERIFIED' "$delhivery"
+      grep -Fq 'DIRECT_INTRACITY_HYDERABAD_NOT_VERIFIED' "$delhivery"
+      grep -Fq 'DIRECT_INTRACITY_WEBHOOK_NOT_VERIFIED' "$delhivery"
+      grep -Fq 'DIRECT_INTRACITY_CREATE_RECONCILIATION_NOT_VERIFIED' "$delhivery"
+      grep -Fq 'CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CONTRACT_VERIFIED=false' "$delhivery"
+      grep -Fq 'CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_CREATE_RECONCILIATION_VERIFIED=false' "$delhivery"
+      grep -Fq 'CRAVES_DELIVERY_PROVIDER_CONTRACTS_DELHIVERY_HYDERABAD_SERVICEABILITY_VERIFIED=false' "$delhivery"
       grep -Fq "provider_id='delhivery' AND is_active=TRUE" "$delhivery"
     displayName: Verify gated providers are database fail-closed
 

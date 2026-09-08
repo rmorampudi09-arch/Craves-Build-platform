@@ -41,6 +41,7 @@ steps:
         azure-pipelines-integration-service.yml
         azure-pipelines-delivery-provider-webhooks-apim.yml
         azure-pipelines-delivery-provider-production-activation.yml
+        azure-pipelines-delivery-provider-production-rollback.yml
         azure-pipelines-delivery-provider-coordinated-activation.yml
         azure-pipelines-shadowfax-environment.yml
         azure-pipelines-porter-environment.yml
@@ -151,6 +152,7 @@ steps:
       borzo=azure-pipelines-delivery-provider-production-activation.yml
       coordinated=azure-pipelines-delivery-provider-coordinated-activation.yml
       apim=azure-pipelines-delivery-provider-webhooks-apim.yml
+      rollback=azure-pipelines-delivery-provider-production-rollback.yml
 
       grep -A6 -F -- '- name: targetEnvironment' "$shiprocket" | grep -Fq 'default: READ_ONLY'
       grep -A4 -F -- '- name: enableProvider' "$shiprocket" | grep -Fq 'default: false'
@@ -195,6 +197,19 @@ steps:
       grep -Fq "'/api/v1/webhooks/delivery/p4'" "$apim"
       grep -Fq "'/p4'" "$apim"
       grep -Fq "'/api/v1/webhooks/delivery/borzo'" "$apim"
+
+      for setting in \
+        CRAVES_DELIVERY_COMMAND_ENABLED=false \
+        CRAVES_DELIVERY_MAX_TOTAL_ETA_MINUTES=0 \
+        BORZO_API_ENABLED=false \
+        BORZO_INSTANT_PRODUCT_VERIFIED=false \
+        SHIPROCKET_API_ENABLED=false \
+        SHIPROCKET_CREATE_ENABLED=false \
+        SHADOWFAX_API_ENABLED=false \
+        DELHIVERY_API_ENABLED=false
+      do
+        grep -Fq "$setting" "$rollback"
+      done
 
       if grep -Fq "'/api/v1/webhooks/delivery/shiprocket'" "$apim" || grep -Fq "'/shiprocket'" "$apim"; then
         echo 'ERROR: APIM contains a provider-named Shiprocket public webhook route.' >&2

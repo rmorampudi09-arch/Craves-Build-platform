@@ -4,7 +4,10 @@ trigger:
   paths:
     include:
       - apps/customer-web-next/**
-      - services/order-service/**
+      - services/integration-service/**
+      - scripts/apim/configure-delivery-intelligence-dashboard-apim.sh
+      - infra/apim/admin-operational-investigations/**
+      - scripts/release/**
       - azure-pipelines-admin-dashboard.yml
 
 pr:
@@ -13,7 +16,9 @@ pr:
   paths:
     include:
       - apps/customer-web-next/**
-      - services/order-service/**
+      - services/integration-service/**
+      - scripts/apim/configure-delivery-intelligence-dashboard-apim.sh
+      - azure-pipelines-admin-dashboard.yml
 
 parameters:
   - name: resourceGroupName
@@ -22,7 +27,10 @@ parameters:
   - name: acrName
     type: string
     default: cravesprodlowacr82121
-  - name: containerAppName
+  - name: integrationContainerAppName
+    type: string
+    default: ca-craves-integration-service-pr
+  - name: adminContainerAppName
     type: string
     default: ca-craves-admin-web-prodlow
   - name: imageTag
@@ -30,20 +38,40 @@ parameters:
     default: $(Build.BuildId)
 
 variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
   webPath: apps/customer-web-next
-  orderPath: services/order-service
-  imageRepository: craves/admin-web
+  integrationPath: services/integration-service
+  integrationImageRepository: craves/integration-service
+  adminImageRepository: craves/admin-delivery-intelligence
 
 stages:
   - stage: Validate
-    displayName: Validate admin application
+    displayName: Validate Delivery Intelligence module
     jobs:
-      - job: WebAndBackend
+      - job: ApplicationValidation
         pool:
           vmImage: ubuntu-latest
         steps:
           - checkout: self
             persistCredentials: false
+          - script: |
+              set -euo pipefail
+              echo "Build ID: $(Build.BuildId)"
+              echo "Source commit: $(Build.SourceVersion)"
+              echo "Source branch: $(Build.SourceBranch)"
+            displayName: Show immutable build identity
+          - task: JavaToolInstaller@0
+            displayName: Use Java 21
+            inputs:
+              versionSpec: "21"
+              jdkArchitectureOption: x64
+              jdkSourceOption: PreInstalled
+          - script: |
+              set -euo pipefail
+              bash scripts/release/verify-integration-flyway-history.sh
+              cd $(integrationPath)
+              mvn -B -ntp clean verify
+            displayName: Verify Integration Service, migrations and ADMIN security
           - task: NodeTool@0
             displayName: Use Node.js 24
             inputs:
@@ -56,7 +84,7 @@ stages:
               npm run typecheck
               npm run test
               npm run build
-            displayName: Validate production Next.js application
+            displayName: Verify production Next.js admin application
             env:
               CRAVES_API_BASE_URL: $(CRAVES_API_BASE_URL)
               NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
@@ -65,24 +93,23 @@ stages:
               NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
               NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: $(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
               NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
-              NEXT_PUBLIC_CASHFREE_MODE: $(NEXT_PUBLIC_CASHFREE_MODE)
+              NEXT_PUBLIC_RAZORPAY_MODE: production
+              NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK: "false"
               NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY: $(NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY)
-          - task: JavaToolInstaller@0
-            displayName: Use Java 21
-            inputs:
-              versionSpec: "21"
-              jdkArchitectureOption: x64
-              jdkSourceOption: PreInstalled
           - script: |
               set -euo pipefail
-              cd $(orderPath)
-              mvn -B -ntp -Dtest=AdminDashboardControllerTest test
-            displayName: Verify backend ADMIN role enforcement
+              test -f apps/customer-web-next/src/app/admin/delivery-intelligence/page.tsx
+              test -f apps/customer-web-next/src/app/api/admin/delivery-intelligence/summary/route.ts
+              test -f apps/customer-web-next/src/app/api/admin/delivery-intelligence/investigate/route.ts
+              test -f services/integration-service/src/main/java/in/craves/integration/admin/AdminDeliveryIntelligenceDashboardController.java
+              grep -q 'delivery-intelligence' apps/customer-web-next/src/components/admin-workspace.tsx
+              grep -q 'PAYMENTS_ADMIN' services/integration-service/src/main/java/in/craves/integration/config/WebSecurityConfiguration.java
+            displayName: Verify Delivery Intelligence release surface
 
-  - stage: Image
-    displayName: Build dedicated admin image
+  - stage: Images
+    displayName: Build immutable backend and dashboard images
     dependsOn: Validate
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    condition: succeeded()
     jobs:
       - job: BuildAndPush
         pool:
@@ -91,7 +118,8 @@ stages:
           - checkout: self
             persistCredentials: false
           - task: AzureCLI@2
-            displayName: Build and push immutable admin image
+            name: images
+            displayName: Build and push immutable images
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               scriptType: bash
@@ -101,30 +129,98 @@ stages:
                 set +x
                 ACR='${{ parameters.acrName }}'
                 TAG='${{ parameters.imageTag }}'
-                LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
+                LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
                 [[ -n "$LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
-                IMAGE="$LOGIN_SERVER/$(imageRepository):$TAG"
-                az acr login --name "$ACR"
-                docker build --pull -f "$(webPath)/Dockerfile.admin" \
+                INTEGRATION_IMAGE="$LOGIN_SERVER/$(integrationImageRepository):$TAG"
+                ADMIN_IMAGE="$LOGIN_SERVER/$(adminImageRepository):$TAG"
+                az acr login --name "$ACR" --only-show-errors
+
+                docker build --pull -t "$INTEGRATION_IMAGE" "$(integrationPath)"
+                docker push "$INTEGRATION_IMAGE"
+
+                docker build --pull -f "$(webPath)/Dockerfile.delivery-intelligence-admin" \
                   --build-arg NEXT_PUBLIC_FIREBASE_API_KEY='$(NEXT_PUBLIC_FIREBASE_API_KEY)' \
                   --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN='$(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)' \
                   --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID='$(NEXT_PUBLIC_FIREBASE_PROJECT_ID)' \
                   --build-arg NEXT_PUBLIC_FIREBASE_APP_ID='$(NEXT_PUBLIC_FIREBASE_APP_ID)' \
                   --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID='$(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)' \
                   --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET='$(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)' \
-                  --build-arg NEXT_PUBLIC_CASHFREE_MODE='$(NEXT_PUBLIC_CASHFREE_MODE)' \
+                  --build-arg NEXT_PUBLIC_RAZORPAY_MODE='production' \
+                  --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK='false' \
                   --build-arg NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY='$(NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY)' \
-                  -t "$IMAGE" "$(webPath)"
-                docker push "$IMAGE"
-                echo "##vso[task.setvariable variable=ADMIN_IMAGE;isOutput=true]$IMAGE"
-            name: image
+                  -t "$ADMIN_IMAGE" "$(webPath)"
+                docker push "$ADMIN_IMAGE"
 
-  - stage: Deploy
-    displayName: Deploy admin Container App revision
-    dependsOn: Image
+                echo "##vso[task.setvariable variable=INTEGRATION_IMAGE;isOutput=true]$INTEGRATION_IMAGE"
+                echo "##vso[task.setvariable variable=ADMIN_IMAGE;isOutput=true]$ADMIN_IMAGE"
+                echo "Images pushed with immutable tag $TAG."
+
+  - stage: DeployIntegration
+    displayName: Deploy Delivery Intelligence backend
+    dependsOn: Images
     condition: succeeded()
     variables:
-      ADMIN_IMAGE: $[ stageDependencies.Image.BuildAndPush.outputs['image.ADMIN_IMAGE'] ]
+      INTEGRATION_IMAGE: $[ stageDependencies.Images.BuildAndPush.outputs['images.INTEGRATION_IMAGE'] ]
+    jobs:
+      - deployment: IntegrationContainerApp
+        environment: craves-integration-prodlow
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  persistCredentials: false
+                - task: AzureCLI@2
+                  displayName: Deploy Integration image preserving runtime configuration
+                  inputs:
+                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      IMAGE='$(INTEGRATION_IMAGE)'
+                      [[ "$IMAGE" == */$(integrationImageRepository):* ]] || { echo 'ERROR: Integration image was not resolved.' >&2; exit 1; }
+                      READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10 \
+                        bash scripts/release/deploy-single-service-preserve-runtime.sh \
+                          '${{ parameters.resourceGroupName }}' \
+                          '${{ parameters.integrationContainerAppName }}' \
+                          "$IMAGE" \
+                          integration
+
+  - stage: ConfigureGateway
+    displayName: Publish authenticated Delivery Intelligence APIM operations
+    dependsOn: DeployIntegration
+    condition: succeeded()
+    jobs:
+      - job: APIM
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+            persistCredentials: false
+          - task: AzureCLI@2
+            displayName: Configure and verify existing admin operations API
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                RG='${{ parameters.resourceGroupName }}' \
+                INTEGRATION_APP='${{ parameters.integrationContainerAppName }}' \
+                CONFIRM_APIM_WRITE=true \
+                  bash scripts/apim/configure-delivery-intelligence-dashboard-apim.sh
+
+  - stage: DeployAdmin
+    displayName: Deploy Delivery Intelligence admin image
+    dependsOn:
+      - Images
+      - ConfigureGateway
+    condition: succeeded()
+    variables:
+      ADMIN_IMAGE: $[ stageDependencies.Images.BuildAndPush.outputs['images.ADMIN_IMAGE'] ]
     jobs:
       - deployment: AdminContainerApp
         environment: craves-admin-prodlow
@@ -136,7 +232,7 @@ stages:
               steps:
                 - checkout: none
                 - task: AzureCLI@2
-                  displayName: Update and verify existing admin Container App
+                  displayName: Update existing Admin Container App and smoke test
                   inputs:
                     azureSubscription: $(AZURE_SERVICE_CONNECTION)
                     scriptType: bash
@@ -144,41 +240,65 @@ stages:
                     inlineScript: |
                       set -euo pipefail
                       RG='${{ parameters.resourceGroupName }}'
-                      APP='${{ parameters.containerAppName }}'
+                      APP='${{ parameters.adminContainerAppName }}'
                       IMAGE='$(ADMIN_IMAGE)'
-                      [[ "$IMAGE" == */$(imageRepository):* ]] || { echo 'ERROR: Immutable admin image was not resolved.' >&2; exit 1; }
-                      az containerapp show -g "$RG" -n "$APP" -o none || {
-                        echo 'ERROR: The separately billed admin Container App must be created and approved before deployment.' >&2
+                      [[ "$IMAGE" == */$(adminImageRepository):* ]] || { echo 'ERROR: Admin image was not resolved.' >&2; exit 1; }
+
+                      BEFORE=$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors) || {
+                        echo 'ERROR: Existing Admin Container App was not found. This pipeline will not create a new billable resource.' >&2
                         exit 1
                       }
-                      PREVIOUS_IMAGE=$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].image' -o tsv)
-                      az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" \
-                        --set-env-vars CRAVES_API_BASE_URL='$(CRAVES_API_BASE_URL)' CRAVES_ADMIN_PORTAL=true \
-                        --no-wait -o none
-                      for attempt in $(seq 1 60); do
-                        JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
+                      PREVIOUS_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")
+                      az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --no-wait -o none
+
+                      READY=false
+                      for attempt in $(seq 1 150); do
+                        JSON=$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)
                         LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON")
-                        READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON")
-                        RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$JSON")
-                        ACTUAL_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$JSON")
-                        if [[ "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$ACTUAL_IMAGE" == "$IMAGE" ]]; then
-                          FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON")
-                          BASE_URL="https://$FQDN"
-                          for route in /admin /admin/search /admin/chef-reviews /admin/subscription-plans /admin/subscriptions /admin/subscription-capacity /admin/operations /admin/accounts /admin/notifications; do
-                            STATUS=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 "${BASE_URL}${route}")
-                            [[ "$STATUS" == '200' ]] || { echo "ERROR: ${route} returned HTTP ${STATUS}." >&2; exit 1; }
-                          done
-                          HEADERS=$(mktemp)
-                          BODY=$(mktemp)
-                          trap 'rm -f "$HEADERS" "$BODY"' EXIT
-                          AUTH_STATUS=$(curl --silent --show-error --dump-header "$HEADERS" --output "$BODY" --write-out '%{http_code}' --max-time 30 "${BASE_URL}/api/admin/me")
-                          [[ "$AUTH_STATUS" == '401' ]] || { echo "ERROR: Signed-out admin identity guard returned HTTP ${AUTH_STATUS}." >&2; exit 1; }
-                          grep -Eiq '^cache-control:.*no-store' "$HEADERS" || { echo 'ERROR: Admin identity response is cacheable.' >&2; exit 1; }
-                          jq -e '.code == "AUTHENTICATION_REQUIRED"' "$BODY" >/dev/null || { echo 'ERROR: Admin identity guard returned an unexpected body.' >&2; exit 1; }
-                          echo "SUCCESS: Admin revision and signed-out route matrix are healthy at ${BASE_URL}. Rollback image: $PREVIOUS_IMAGE"
-                          exit 0
+                        REVISION_JSON=''
+                        if [[ -n "$LATEST" ]]; then
+                          REVISION_JSON=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" -o json --only-show-errors 2>/dev/null || true)
+                        fi
+                        ACTUAL_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"${REVISION_JSON:-null}" 2>/dev/null || true)
+                        PROVISIONING=$(jq -r '.properties.provisioningState // ""' <<<"${REVISION_JSON:-null}" 2>/dev/null || true)
+                        HEALTH=$(jq -r '.properties.healthState // ""' <<<"${REVISION_JSON:-null}" 2>/dev/null || true)
+                        ACTIVE=$(jq -r '.properties.active // false' <<<"${REVISION_JSON:-null}" 2>/dev/null || true)
+                        if [[ "$ACTUAL_IMAGE" == "$IMAGE" && "$PROVISIONING" == 'Provisioned' && "$HEALTH" == 'Healthy' && "${ACTIVE,,}" == 'true' ]]; then
+                          READY=true
+                          break
+                        fi
+                        if [[ "$ACTUAL_IMAGE" == "$IMAGE" && ( "$PROVISIONING" == 'Failed' || "$HEALTH" == 'Unhealthy' ) ]]; then
+                          echo "ERROR: New admin revision is unhealthy. Previous image: $PREVIOUS_IMAGE" >&2
+                          az containerapp revision show -g "$RG" -n "$APP" --revision "$LATEST" -o jsonc --only-show-errors || true
+                          exit 1
                         fi
                         sleep 10
                       done
-                      echo "ERROR: Admin revision did not become ready. Roll back to: $PREVIOUS_IMAGE" >&2
-                      exit 1
+                      [[ "$READY" == true ]] || { echo "ERROR: Admin revision readiness timed out. Previous image: $PREVIOUS_IMAGE" >&2; exit 1; }
+
+                      JSON=$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)
+                      FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON")
+                      [[ -n "$FQDN" ]] || { echo 'ERROR: Admin FQDN is missing.' >&2; exit 1; }
+                      BASE_URL="https://$FQDN"
+
+                      for route in /admin /admin/operations /admin/delivery-intelligence; do
+                        STATUS=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 "${BASE_URL}${route}")
+                        [[ "$STATUS" == '200' ]] || { echo "ERROR: ${route} returned HTTP ${STATUS}." >&2; exit 1; }
+                      done
+
+                      HEADERS=$(mktemp); BODY=$(mktemp)
+                      trap 'rm -f "$HEADERS" "$BODY"' EXIT
+                      STATUS=$(curl --silent --show-error --dump-header "$HEADERS" --output "$BODY" --write-out '%{http_code}' --max-time 30 \
+                        "${BASE_URL}/api/admin/delivery-intelligence/summary?windowHours=24")
+                      [[ "$STATUS" == '401' ]] || { echo "ERROR: Signed-out delivery summary guard returned HTTP ${STATUS}." >&2; exit 1; }
+                      grep -Eiq '^cache-control:.*no-store' "$HEADERS" || { echo 'ERROR: Delivery admin API response is cacheable.' >&2; exit 1; }
+                      jq -e '.code == "AUTHENTICATION_REQUIRED"' "$BODY" >/dev/null || { echo 'ERROR: Delivery summary guard returned an unexpected body.' >&2; exit 1; }
+
+                      STATUS=$(curl --silent --show-error --output "$BODY" --write-out '%{http_code}' --max-time 30 \
+                        -H "Origin: ${BASE_URL}" -H 'Content-Type: application/json' \
+                        -d '{"orderId":"00000000-0000-4000-8000-000000000001","reason":"Production deployment smoke check"}' \
+                        "${BASE_URL}/api/admin/delivery-intelligence/investigate")
+                      [[ "$STATUS" == '401' ]] || { echo "ERROR: Signed-out investigation guard returned HTTP ${STATUS}." >&2; exit 1; }
+
+                      echo "SUCCESS: Delivery Intelligence backend, APIM operations and admin dashboard are deployed at ${BASE_URL}/admin/delivery-intelligence"
+                      echo "Rollback admin image if required: $PREVIOUS_IMAGE"

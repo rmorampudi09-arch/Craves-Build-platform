@@ -12,6 +12,8 @@ import org.springframework.util.StringUtils;
 @ConfigurationProperties(prefix = "craves.providers.borzo")
 public class BorzoProperties {
     private static final Set<String> ENVIRONMENTS = Set.of("SANDBOX", "PRODUCTION");
+    static final String PRODUCTION_BASE_URL = "https://robot-in.borzodelivery.com/api/business/1.8";
+    static final String PRODUCTION_CALLBACK_URL = "https://api.craves.in/api/v1/webhooks/delivery/borzo";
 
     private boolean enabled = false;
     private String environment = "SANDBOX";
@@ -28,7 +30,7 @@ public class BorzoProperties {
 
     @PostConstruct
     void validate() {
-        URI uri = parseHttps(baseUrl, "Borzo baseUrl");
+        parseHttps(baseUrl, "Borzo baseUrl");
         String normalizedEnvironment = normalizedEnvironment();
         if (!ENVIRONMENTS.contains(normalizedEnvironment)) {
             throw new IllegalStateException("BORZO_API_ENVIRONMENT must be SANDBOX or PRODUCTION");
@@ -58,9 +60,10 @@ public class BorzoProperties {
             parseHttps(callbackUrl, "Borzo callbackUrl");
         }
         if ("PRODUCTION".equals(normalizedEnvironment)) {
-            String host = uri.getHost().toLowerCase(Locale.ROOT);
-            if (host.contains("test") || host.contains("sandbox")) {
-                throw new IllegalStateException("Borzo production environment cannot use a test or sandbox host");
+            if (!PRODUCTION_BASE_URL.equals(normalizedBaseUrl())) {
+                throw new IllegalStateException(
+                    "Borzo production environment must use the approved India Business API 1.8 endpoint"
+                );
             }
             if (enabled && !productionActivationApproved) {
                 throw new IllegalStateException(
@@ -70,11 +73,14 @@ public class BorzoProperties {
             if (enabled && !StringUtils.hasText(callbackUrl)) {
                 throw new IllegalStateException("BORZO_CALLBACK_URL is required for production activation");
             }
+            if (enabled && !PRODUCTION_CALLBACK_URL.equals(withoutTrailingSlash(callbackUrl))) {
+                throw new IllegalStateException("BORZO_CALLBACK_URL must use the approved Craves Borzo webhook route");
+            }
         }
     }
 
     public String normalizedBaseUrl() {
-        return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        return withoutTrailingSlash(baseUrl);
     }
 
     public String normalizedEnvironment() {
@@ -86,9 +92,12 @@ public class BorzoProperties {
             && productionActivationApproved
             && StringUtils.hasText(authToken)
             && StringUtils.hasText(callbackSecret)
-            && StringUtils.hasText(callbackUrl)
-            && !normalizedBaseUrl().toLowerCase(Locale.ROOT).contains("test")
-            && !normalizedBaseUrl().toLowerCase(Locale.ROOT).contains("sandbox");
+            && PRODUCTION_BASE_URL.equals(normalizedBaseUrl())
+            && PRODUCTION_CALLBACK_URL.equals(withoutTrailingSlash(callbackUrl));
+    }
+
+    private static String withoutTrailingSlash(String value) {
+        return value != null && value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
     private static URI parseHttps(String value, String name) {

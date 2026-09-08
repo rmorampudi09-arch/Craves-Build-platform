@@ -1,5 +1,37 @@
 # Borzo Delivery Provider Adapter
 
+## Production integration record — 2026-09-08 IST
+
+Change: CRV-INT-BORZO-PROD-002. No credential values are recorded here.
+
+Approved contract:
+
+- Borzo client: 8639738
+- API: Business API 1.8
+- Production base: https://robot-in.borzodelivery.com/api/business/1.8
+- Callback: https://api.craves.in/api/v1/webhooks/delivery/borzo
+- Key Vault secrets: separate production auth and callback secrets; sandbox secrets retained
+
+Execution evidence:
+
+| Gate | Result | Evidence |
+|---|---|---|
+| Current-main CI | PASS | Azure DevOps 36439 / 20260907.1 at e668a313 |
+| Callback route | PASS | APIM has one POST /borzo operation; unsigned POST returns 401 |
+| Database cutover safety | PASS | zero non-terminal Borzo jobs |
+| Broker baseline | OBSERVED | command active 0, scheduled 0, DLQ 6; status active 0, DLQ 1 |
+| Callback cabinet configuration | PASS | callback URL retained after reload and Borzo issued a callback token |
+| Production Key Vault binding | PASS | production secrets created; Container App stable secret references repointed |
+| Production entitlement | PASS | exact production API base returned HTTP 200 and is_successful=true |
+| Fail-closed production stage | PASS | Azure DevOps 36442 / 20260908.1 |
+| Runtime verification | PASS | revision 0000108 ready; environment PRODUCTION; API enabled false; provider row inactive; open jobs 0 |
+| API-token self-service rotation | BLOCKED | Borzo cabinet restored the existing token after save; no supported rotate control is exposed |
+| Provider-create activation | BLOCKED | remains disabled until Borzo rotates the previously exposed API token |
+
+Status: **PRODUCTION STAGED, CREATE DISABLED**. A real booking is a separate billable-operation gate.
+
+
+
 This module integrates Borzo Business API 1.8 into the existing Craves Integration Service.
 It is deliberately disabled by default and must remain inactive in the delivery-provider registry
 until sandbox callbacks, commercial onboarding and production KYC are complete.

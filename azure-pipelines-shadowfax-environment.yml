@@ -4,9 +4,9 @@ pr: none
 parameters:
   - name: targetEnvironment
     type: string
-    default: SANDBOX
+    default: STAGING
     values:
-      - SANDBOX
+      - STAGING
       - PRODUCTION
   - name: enableProvider
     type: boolean
@@ -20,6 +20,27 @@ parameters:
   - name: authSecretName
     type: string
     default: shadowfax-api-token
+  - name: clientCodeSecretName
+    type: string
+    default: shadowfax-client-code
+  - name: callbackSecretName
+    type: string
+    default: shadowfax-callback-token
+  - name: maximumAcceptedEtaMinutes
+    type: number
+    default: 0
+  - name: confirmHyperlocalContractVerified
+    type: boolean
+    default: false
+  - name: confirmHyderabadServiceabilityVerified
+    type: boolean
+    default: false
+  - name: confirmCallbackRegistered
+    type: boolean
+    default: false
+  - name: confirmCreateReconciliationVerified
+    type: boolean
+    default: false
   - name: resourceGroupName
     type: string
     default: rg-craves-prodlow-centralindia
@@ -57,6 +78,13 @@ steps:
         confirm="${confirm_raw,,}"
         base_url='${{ parameters.providerBaseUrl }}'
         secret_name='${{ parameters.authSecretName }}'
+        client_code_secret_name='${{ parameters.clientCodeSecretName }}'
+        callback_secret_name='${{ parameters.callbackSecretName }}'
+        maximum_eta='${{ parameters.maximumAcceptedEtaMinutes }}'
+        contract_verified='${{ parameters.confirmHyperlocalContractVerified }}'
+        hyderabad_verified='${{ parameters.confirmHyderabadServiceabilityVerified }}'
+        callback_registered='${{ parameters.confirmCallbackRegistered }}'
+        reconciliation_verified='${{ parameters.confirmCreateReconciliationVerified }}'
         app_yml='services/integration-service/src/main/resources/application.yml'
         adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shadowfax'
 
@@ -73,7 +101,7 @@ steps:
           fail 'Integration Service revision did not become ready.'
         }
 
-        [[ "$environment" == 'SANDBOX' || "$environment" == 'PRODUCTION' ]] || fail 'targetEnvironment must be SANDBOX or PRODUCTION.'
+        [[ "$environment" == 'STAGING' || "$environment" == 'PRODUCTION' ]] || fail 'targetEnvironment must be STAGING or PRODUCTION.'
         [[ "$enable" == 'true' || "$enable" == 'false' ]] || fail 'enableProvider must resolve to true or false.'
 
         runtime_config_present=false
@@ -85,18 +113,21 @@ steps:
           adapter_present=true
         fi
 
-        # Today this intentionally permits only SIMPLE_SANDBOX. Once the vendor-issued private API
-        # contract has been implemented, the exact same pipeline can enable execution because both
-        # source/runtime checks below will become true.
         if [[ "$enable" == 'true' || "$environment" == 'PRODUCTION' ]]; then
-          [[ "$adapter_present" == 'true' ]] || fail 'VENDOR_PRIVATE_API_CONTRACT_REQUIRED: Shadowfax Spring adapter is not implemented.'
-          [[ "$runtime_config_present" == 'true' ]] || fail 'VENDOR_PRIVATE_API_CONTRACT_REQUIRED: Shadowfax runtime configuration is not implemented.'
-          [[ "$base_url" == https://* && "$base_url" != *replace-before-run.invalid* ]] || fail 'Shadowfax vendor-issued HTTPS base URL is required.'
+          [[ "$adapter_present" == 'true' ]] || fail 'Shadowfax Hyperlocal Spring adapter is not implemented.'
+          [[ "$runtime_config_present" == 'true' ]] || fail 'Shadowfax Hyperlocal runtime configuration is not implemented.'
+          [[ "$environment" != 'STAGING' || "$base_url" == 'https://hlbackend.staging.shadowfax.in' ]] || fail 'Shadowfax staging must use the published HL Marketplace host.'
+          [[ "$environment" != 'PRODUCTION' || "$base_url" == 'https://api.shadowfax.in' ]] || fail 'Shadowfax production must use the published HL Marketplace host.'
           [[ "$environment" != 'PRODUCTION' || "$confirm" == 'true' ]] || fail 'Production switch requires confirmProductionActivation=true.'
-          lower="${base_url,,}"
-          [[ "$environment" != 'PRODUCTION' || ( "$lower" != *test* && "$lower" != *sandbox* && "$lower" != *stage* ) ]] || fail 'Shadowfax production cannot use a test/stage/sandbox host.'
+          [[ "$maximum_eta" =~ ^[0-9]+$ && "$maximum_eta" -gt 0 ]] || fail 'maximumAcceptedEtaMinutes must be explicitly configured.'
+          [[ "${contract_verified,,}" == 'true' ]] || fail 'Shadowfax HL Marketplace contract verification is required.'
+          [[ "${hyderabad_verified,,}" == 'true' ]] || fail 'Authenticated Hyderabad serviceability verification is required.'
+          [[ "${callback_registered,,}" == 'true' ]] || fail 'Shadowfax production callback registration is required.'
+          [[ "${reconciliation_verified,,}" == 'true' ]] || fail 'Deterministic uncertain-create reconciliation is required.'
           secrets="$(az containerapp secret list -g "$RG" -n "$APP" --query '[].name' -o tsv --only-show-errors)"
           grep -qx "$secret_name" <<<"$secrets" || fail "Missing Container App secret $secret_name."
+          grep -qx "$client_code_secret_name" <<<"$secrets" || fail "Missing Container App secret $client_code_secret_name."
+          grep -qx "$callback_secret_name" <<<"$secrets" || fail "Missing Container App secret $callback_secret_name."
         fi
 
         db_url="$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].env[?name=='SPRING_DATASOURCE_URL']|[0].value" -o tsv --only-show-errors)"
@@ -115,6 +146,20 @@ steps:
             --set-env-vars \
               SHADOWFAX_API_ENVIRONMENT="$environment" \
               SHADOWFAX_PRODUCTION_ACTIVATION_APPROVED=false \
+              SHADOWFAX_CONTRACT_VERIFIED=false \
+              SHADOWFAX_HYDERABAD_SERVICEABILITY_VERIFIED=false \
+              SHADOWFAX_CALLBACK_REGISTERED=false \
+              SHADOWFAX_CREATE_RECONCILIATION_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CONTRACT_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CREDENTIAL_MODEL_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_SERVICEABILITY_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_QUOTE_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CREATE_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CANCEL_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_TRACK_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_WEBHOOK_SCHEMA_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CREATE_RECONCILIATION_VERIFIED=false \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_HYDERABAD_SERVICEABILITY_VERIFIED=false \
               SHADOWFAX_API_ENABLED=false \
               CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
           wait_ready
@@ -127,6 +172,25 @@ steps:
               SHADOWFAX_PRODUCTION_ACTIVATION_APPROVED="$approved" \
               SHADOWFAX_API_BASE_URL="$base_url" \
               SHADOWFAX_API_AUTH_TOKEN="secretref:${secret_name}" \
+              SHADOWFAX_CLIENT_CODE="secretref:${client_code_secret_name}" \
+              SHADOWFAX_CALLBACK_TOKEN="secretref:${callback_secret_name}" \
+              SHADOWFAX_CALLBACK_URL='https://api.craves.in/api/v1/webhooks/delivery/shadowfax' \
+              SHADOWFAX_MAX_ACCEPTED_ETA_MINUTES="$maximum_eta" \
+              SHADOWFAX_CONTRACT_VERIFIED=true \
+              SHADOWFAX_HYDERABAD_SERVICEABILITY_VERIFIED=true \
+              SHADOWFAX_CALLBACK_REGISTERED=true \
+              SHADOWFAX_CREATE_RECONCILIATION_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CONTRACT_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CONTRACT_VERSION='hl-marketplace-api-v2-2026-09-08' \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CREDENTIAL_MODEL_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_SERVICEABILITY_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_QUOTE_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CREATE_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CANCEL_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_TRACK_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_WEBHOOK_SCHEMA_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_CREATE_RECONCILIATION_VERIFIED=true \
+              CRAVES_DELIVERY_PROVIDER_CONTRACTS_SHADOWFAX_HYDERABAD_SERVICEABILITY_VERIFIED=true \
               SHADOWFAX_API_ENABLED=true \
               CRAVES_DELIVERY_RECONCILIATION_ENABLED=true \
               CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=true \
@@ -161,7 +225,7 @@ steps:
         echo 'SHADOWFAX DELIVERY PROVIDER SWITCH: PASS'
         echo "Environment: $environment"
         echo "Provider enabled: $enable"
-        [[ "$enable" == 'false' ]] && echo 'Mode: SIMPLE_SANDBOX / FAIL_CLOSED'
+        [[ "$enable" == 'false' ]] && echo 'Mode: FAIL_CLOSED'
         echo "Spring adapter detected: $adapter_present"
         echo "Spring runtime configuration detected: $runtime_config_present"
         echo '============================================================'

@@ -16,7 +16,7 @@ No pipeline in this module should invent provider endpoints, rider identities, p
 |---|---|---|---|---|
 | Borzo | Yes, proven | Real Borzo sandbox | Executable in sandbox | Production credentials/endpoint and controlled cutover |
 | Shiprocket | Yes, implemented on the productionization branch | Authenticated `READ_ONLY` validation | Production create remains gated | Manual credentials, webhook, attribution approval, package dimensions and verified chef pickup mapping |
-| Shadowfax | Not yet | `SIMPLE_SANDBOX` only | Blocked | Vendor private API contract/credentials |
+| Shadowfax | HL Marketplace adapter implemented | Fail-closed | Blocked | Client code, IP allowlist, Hyderabad proof, callback, create reconciliation |
 | Porter | Not yet | `SIMPLE_SANDBOX` only | Blocked | Porter Enterprise API onboarding |
 | Delhivery | No verified intracity adapter | `SIMPLE_SANDBOX` only | Blocked | Correct intracity API product/contract is not verified |
 

@@ -119,6 +119,22 @@ craves:
       stale-minutes: ${CRAVES_CASHFREE_WEBHOOK_STALE_MINUTES:5}
       retry-base-seconds: ${CRAVES_CASHFREE_WEBHOOK_RETRY_BASE_SECONDS:5}
   providers:
+    shadowfax:
+      enabled: ${SHADOWFAX_API_ENABLED:false}
+      environment: ${SHADOWFAX_API_ENVIRONMENT:STAGING}
+      production-activation-approved: ${SHADOWFAX_PRODUCTION_ACTIVATION_APPROVED:false}
+      contract-verified: ${SHADOWFAX_CONTRACT_VERIFIED:false}
+      hyderabad-serviceability-verified: ${SHADOWFAX_HYDERABAD_SERVICEABILITY_VERIFIED:false}
+      callback-registered: ${SHADOWFAX_CALLBACK_REGISTERED:false}
+      create-reconciliation-verified: ${SHADOWFAX_CREATE_RECONCILIATION_VERIFIED:false}
+      base-url: ${SHADOWFAX_API_BASE_URL:https://hlbackend.staging.shadowfax.in}
+      auth-token: ${SHADOWFAX_API_AUTH_TOKEN:}
+      client-code: ${SHADOWFAX_CLIENT_CODE:}
+      callback-secret: ${SHADOWFAX_CALLBACK_TOKEN:}
+      callback-url: ${SHADOWFAX_CALLBACK_URL:}
+      maximum-accepted-eta-minutes: ${SHADOWFAX_MAX_ACCEPTED_ETA_MINUTES:0}
+      connect-timeout-seconds: ${SHADOWFAX_CONNECT_TIMEOUT_SECONDS:5}
+      read-timeout-seconds: ${SHADOWFAX_READ_TIMEOUT_SECONDS:20}
     borzo:
       enabled: ${BORZO_API_ENABLED:false}
       environment: ${BORZO_API_ENVIRONMENT:SANDBOX}

@@ -2,7 +2,9 @@
 
 ## Purpose
 
-This module closes the repository-side work that can be completed safely before Craves receives the private transaction contracts for Shadowfax Hyperlocal, Porter Enterprise 2W and Delhivery Direct Intracity.
+This module closes the repository-side work for provider-gated hyperlocal delivery. On 2026-09-08,
+the published Shadowfax HL Marketplace contract was located and implemented. Porter Enterprise 2W
+and Delhivery Direct Intracity still require their vendor transaction contracts.
 
 It does **not** pretend that a provider is executable merely because a Java package, environment variable or Azure DevOps pipeline exists. CRV-ARCH-HLD-002 v2.0 and CRV-FUNC-001 v1.0 require the provider request/response semantics to be verified before a live adapter is enabled.
 
@@ -12,7 +14,7 @@ Borzo and Shiprocket are outside this module because their executable adapters a
 
 | Provider | Craves target product | Hyderabad intent | Executable adapter status |
 |---|---|---|---|
-| Shadowfax | Hyperlocal Marketplace / restaurant-store last mile | Required | Partner transaction contract still required |
+| Shadowfax | Hyperlocal Marketplace / restaurant-store last mile | Implemented | Account entitlement, Hyderabad proof, callback registration, and create reconciliation remain gated |
 | Porter | Enterprise intracity 2-wheeler | Required | Enterprise transaction contract still required |
 | Delhivery | Direct Intracity | Required | Direct Intracity API contract and Hyderabad serviceability still required |
 

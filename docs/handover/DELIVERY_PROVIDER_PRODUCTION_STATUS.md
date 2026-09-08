@@ -1,9 +1,31 @@
 # Delivery Provider Production Status
 
-Last verified: 2026-09-06  
+Last verified: 2026-09-08  
 Release branch: `feature/backend-open-pr-consolidation-20260905`  
 Pull request: #297  
 Routing posture: **fail closed; zero providers production-accepted**
+
+## 2026-09-08 live production re-verification
+
+- Delhivery One shows `Delhivery Local` as active for the Craves Local workspace, but its developer
+  portal exposes only B2C/B2B parcel APIs. Delhivery's official Local instructions place orders in
+  the Delhivery Direct mobile app and list Delhi-NCR, Bengaluru and Ahmedabad as the supported
+  cities. There is no verified Local transaction API or published Hyderabad coverage for Craves.
+- The production integration revision was running with Borzo enabled and the delivery command
+  worker enabled even though the deployed branch predates the explicit
+  `BORZO_INSTANT_PRODUCT_VERIFIED` and global maximum-total-ETA gates. This is not acceptable
+  evidence of an instant-delivery product contract.
+- Shiprocket production authentication was enabled only for read-only validation;
+  `SHIPROCKET_CREATE_ENABLED=false` and attribution approval was false. The standard parcel/AWB API
+  remains ineligible for Craves routing and must be disabled in the final fail-closed state.
+- Delhivery production approval and API execution remained disabled. Shadowfax's published
+  Hyperlocal adapter remained blocked on a valid Marketplace credential and Hyderabad account
+  serviceability evidence.
+
+The production safety action is to remove all provider execution from routing, stop delivery command
+consumption, and set the global maximum total ETA to `0`. Production may be re-enabled only through
+the coordinated activation gate after an account-specific instant product, Hyderabad serviceability,
+live quote ETA, production-create lifecycle, callback and reconciliation evidence all pass.
 
 ## Launch decision
 

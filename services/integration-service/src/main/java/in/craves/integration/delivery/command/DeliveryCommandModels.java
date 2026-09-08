@@ -12,6 +12,7 @@ public final class DeliveryCommandModels {
     private DeliveryCommandModels() {}
 
     public static final String CHEF_ACCEPTED_ORDER = "CHEF_ACCEPTED_ORDER";
+    public static final String ORDER_READY_FOR_PICKUP = "ORDER_READY_FOR_PICKUP";
     public static final String DELIVERY_COMMAND = "DELIVERY_COMMAND";
     public static final String DELIVERY_STATUS_CHANGED = "DELIVERY_STATUS_CHANGED";
 
@@ -34,6 +35,12 @@ public final class DeliveryCommandModels {
         Double distanceKm,
         String area,
         QuoteRequest deliveryRequest
+    ) {}
+
+    public record OrderReadyForPickupData(
+        UUID orderId,
+        UUID chefSubOrderId,
+        Instant readyAt
     ) {}
 
     public record DeliveryCommandMessage(

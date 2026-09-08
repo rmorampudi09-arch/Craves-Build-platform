@@ -16,6 +16,18 @@ class DomainEventOutboxPropertiesTest {
     }
 
     @Test
+    void readyForPickupEventCanBeExplicitlyEnabled() {
+        DomainEventOutboxProperties properties = new DomainEventOutboxProperties();
+        properties.setEnabledEventTypes(new LinkedHashSet<>(Set.of(
+            "CHEF_ACCEPTED_ORDER",
+            "ORDER_READY_FOR_PICKUP"
+        )));
+
+        assertThat(properties.normalizedEnabledEventTypes())
+            .containsExactlyInAnyOrder("CHEF_ACCEPTED_ORDER", "ORDER_READY_FOR_PICKUP");
+    }
+
+    @Test
     void normalizesConfiguredEventTypes() {
         DomainEventOutboxProperties properties = new DomainEventOutboxProperties();
         properties.setEnabledEventTypes(new LinkedHashSet<>(Set.of(

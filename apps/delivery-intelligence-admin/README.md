@@ -76,11 +76,16 @@ The first run may create `ca-craves-delivery-intel-prodlow`, which is a billable
 
 ```text
 services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence/
-services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql
-services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql.conf
+services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql
+services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql.conf
 scripts/apim/configure-delivery-intelligence-admin-apim.sh
 scripts/frontdoor/configure-delivery-intelligence-admin-route.sh
 ```
+
+`V117` is deliberately a startup-safe marker (`ONLINE_INDEX_BUILD_DEFERRED`).
+The bounded dashboard queries run on the existing schema; optional online index
+creation is deferred to a separately monitored database-maintenance operation so
+Container App readiness is never held open by PostgreSQL concurrent-index waits.
 
 ## API contracts
 

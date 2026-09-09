@@ -95,6 +95,10 @@ Obtain the following as one vendor-issued, versioned bundle before implementing 
 
 Use the following request without including any existing token value:
 
+Submitted on 2026-09-09 through Delhivery One under **Tech Support → API / Plugin
+integration**. Delhivery ticket: `J1788941312616666` (open at submission time). No credential
+value was included.
+
 > Subject: Direct Intracity API onboarding for CRAVES LOCAL — Hyderabad
 >
 > We have activated Delhivery Local in our Delhivery One workspace and need a server-to-server

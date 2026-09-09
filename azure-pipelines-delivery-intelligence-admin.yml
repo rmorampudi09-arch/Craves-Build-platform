@@ -90,6 +90,7 @@ steps:
 
   - script: |
       set -euo pipefail
+      bash -n scripts/release/verify-containerapp-acr-pull.sh
       bash -n scripts/apim/configure-delivery-intelligence-admin-apim.sh
       bash -n scripts/frontdoor/configure-delivery-intelligence-admin-route.sh
       test -f services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql
@@ -201,30 +202,12 @@ steps:
             --only-show-errors >/dev/null
         fi
 
-        PRINCIPAL_ID="$(az containerapp identity assign -g "$RG" -n "$APP" --system-assigned --query principalId -o tsv)"
-        [[ -n "$PRINCIPAL_ID" ]] || PRINCIPAL_ID="$(az containerapp identity show -g "$RG" -n "$APP" --query principalId -o tsv)"
-        [[ -n "$PRINCIPAL_ID" ]] || fail 'Container App managed identity was not created'
-
-        ACR_PULL_READY=false
-        for attempt in $(seq 1 30); do
-          if az role assignment create \
-            --assignee-object-id "$PRINCIPAL_ID" \
-            --assignee-principal-type ServicePrincipal \
-            --role AcrPull \
-            --scope "$ACR_ID" \
-            --only-show-errors >/dev/null 2>&1; then
-            ACR_PULL_READY=true
-            break
-          fi
-          ASSIGNMENTS="$(az role assignment list --scope "$ACR_ID" --query "[?principalId=='${PRINCIPAL_ID}' && roleDefinitionName=='AcrPull'] | length(@)" -o tsv)"
-          if [[ "$ASSIGNMENTS" =~ ^[1-9][0-9]*$ ]]; then
-            ACR_PULL_READY=true
-            break
-          fi
-          echo "Waiting for the new managed identity to propagate before AcrPull assignment ($attempt/30)"
-          sleep 10
-        done
-        [[ "$ACR_PULL_READY" == true ]] || fail 'Could not create or verify AcrPull for Delivery Intelligence managed identity'
+        # Reuse the provisioned identity. The deployment connection is a
+        # Contributor, so registry RBAC is an infrastructure prerequisite.
+        # Never hide an authorization error behind a propagation retry loop.
+        PRINCIPAL_ID="$(az containerapp identity show -g "$RG" -n "$APP" --query principalId -o tsv --only-show-errors)"
+        [[ "$PRINCIPAL_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || fail 'Provision a system-assigned identity and registry-scoped AcrPull for this Container App before deployment'
+        bash scripts/release/verify-containerapp-acr-pull.sh "$ACR_ID" "$PRINCIPAL_ID"
 
         az containerapp registry set \
           -g "$RG" \

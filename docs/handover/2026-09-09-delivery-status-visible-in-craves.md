@@ -126,6 +126,33 @@ The production-applied V20 is treated as reserved history. We do not overwrite i
 
 `DeliveryStatusMigrationTest` now guards this by requiring the conflicting V20 delivery-status migration resource to be absent and the new V21 resource to be present.
 
+## Production-applied V20 recovery
+
+Production schema history proved the actual applied V20 was:
+
+`V20__chef_acceptance_timeout_distributed_claim.sql`
+
+with checksum:
+
+`182093619`
+
+The exact historical source was recovered and restored in PR `#307`, and the test suite was strengthened to assert that checksum directly before V21 deployment.
+
+Final pre-deploy validation result:
+
+- 71 tests executed;
+- 0 failures;
+- 0 errors;
+- Java 21 active;
+- production V20 checksum matched `182093619` exactly;
+- V21 present;
+- conflicting delivery V20 absent;
+- clean worktree.
+
+PR `#307` merge commit:
+
+`2f53e437e391d0c7c4502b74301f3d584dae2781`
+
 ## Expected repair for the proven delivered order
 
 After a successful Order Service deployment containing V21, the proven production order should become:
@@ -137,20 +164,89 @@ delivery_status   = DELIVERED
 
 The migration changes only the commercial status and writes audit history when the durable delivery projection proves the fulfillment milestone. Existing provider IDs, webhook evidence, delivery events and delivery-status history remain intact.
 
-## Production validation after corrective deployment
+## Final production acceptance — PASSED
 
-1. Confirm the deployment pipeline uses the exact corrective merge commit.
-2. Confirm the new Order Container App revision becomes healthy.
-3. Confirm Flyway no longer reports a V20 checksum mismatch.
-4. Confirm V21 is recorded as successfully applied in `order_schema.flyway_schema_history`.
-5. Confirm `CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true` remains preserved.
-6. Confirm order `005c348d-dc04-4506-ae45-fda4633232d7` has both commercial and delivery status `DELIVERED`.
-7. Confirm no new Service Bus delivery-status DLQ growth.
-8. On the next real delivery, verify `READY_FOR_PICKUP -> OUT_FOR_DELIVERY -> DELIVERED` appears in Craves without manual database edits.
+Azure DevOps Order Service pipeline:
+
+`36485`
+
+Pipeline commit:
+
+`2f53e437e391d0c7c4502b74301f3d584dae2781`
+
+Pipeline result:
+
+`SUCCEEDED`
+
+New healthy Container App revision:
+
+`ca-craves-order-service-prodlow--0000077`
+
+New production image:
+
+`cravesprodlowacr82121.azurecr.io/craves/order-service:36485`
+
+Runtime state:
+
+- revision active: `true`;
+- health: `Healthy`;
+- running state: `RunningAtMaxScale`;
+- `CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true` preserved.
+
+Flyway validation and application succeeded:
+
+```text
+V20__chef_acceptance_timeout_distributed_claim.sql
+checksum = 182093619
+success  = true
+
+V21__delivery_commercial_status_projection.sql
+checksum = 440090775
+success  = true
+installed_on = 2026-09-09 16:43:31.538095 UTC
+```
+
+The proven delivered Borzo order now has:
+
+```text
+commercial status = DELIVERED
+delivery_status   = DELIVERED
+```
+
+For order `005c348d-dc04-4506-ae45-fda4633232d7`, the commercial-status audit history records:
+
+`READY_FOR_PICKUP -> DELIVERED`
+
+with reason:
+
+`Delivery lifecycle backfill from existing DELIVERED projection`
+
+The Service Bus delivery-status subscription remained healthy from this change:
+
+```text
+active messages     = 0
+dead-letter messages = 1
+previous baseline    = 1
+DLQ growth           = none
+```
+
+### Production acceptance result
+
+`CRAVES DELIVERY STATUS FIX: PRODUCTION PASSED`
+
+This closes the original Craves visibility defect. Existing Customer/Chef experiences that render commercial `order.status` can now show the correct delivered state without a Customer Web deployment for this particular defect.
+
+For future accepted delivery events, Order Service now synchronizes the safe fulfillment milestones:
+
+```text
+READY_FOR_PICKUP -> OUT_FOR_DELIVERY -> DELIVERED
+```
+
+while preserving the more detailed provider-neutral `delivery_status` projection separately.
 
 ## Separate known item
 
-The Service Bus delivery-status subscription had one pre-existing DLQ message during diagnosis. It did not block the successful production order because all eight events for that order were processed. Inspect that DLQ item separately; do not conflate it with this visibility bug or the Flyway V20 collision.
+The Service Bus delivery-status subscription still has one pre-existing DLQ message. It did not block the successful production order because all eight events for that order were processed. Inspect that DLQ item separately; do not conflate it with this visibility bug or the Flyway V20 collision.
 
 ## Hyperlocal separation
 

@@ -4,7 +4,7 @@
 
 This module consumes `DELIVERY_STATUS_CHANGED` v1 events from the Craves domain-event topic and creates an Order-owned delivery projection for each chef-specific sub-order.
 
-It does not call a delivery provider, create a booking, calculate pricing, change commission, decide serviceability or replace the commercial order lifecycle.
+It does not call a delivery provider, create a booking, calculate pricing, change commission or decide serviceability. It owns the provider-neutral delivery projection and, for the two unambiguous fulfillment milestones already represented by the commercial order model, synchronizes `customer_order.status` so existing Customer/Chef APIs show the real fulfillment state.
 
 ## Runtime flow
 
@@ -18,6 +18,10 @@ Integration Service delivery outbox
   -> stale and terminal protection
   -> customer_order delivery projection
   -> append-only order_delivery_status_history
+  -> safe commercial fulfillment projection
+       PICKED_UP/IN_TRANSIT/AT_DROPOFF -> OUT_FOR_DELIVERY
+       DELIVERED                       -> DELIVERED
+  -> append-only order_status_history when commercial status changes
   -> existing Order notification_outbox
   -> existing Notification Service internal API
 ```
@@ -44,6 +48,7 @@ src/main/java/in/craves/order/delivery/DeliveryStatusQueryService.java
 src/main/java/in/craves/order/web/DeliveryStatusController.java
 src/main/java/in/craves/order/web/DeliveryStatusDtos.java
 src/main/resources/db/migration/V9__delivery_status_consumer.sql
+src/main/resources/db/migration/V20__delivery_commercial_status_projection.sql
 ```
 
 ## Configuration
@@ -79,6 +84,13 @@ Flyway V9 adds:
 
 V9 is additive and does not backfill or activate delivery processing.
 
+Flyway V20 repairs only unambiguous already-processed fulfillment states from the durable delivery projection:
+
+- `READY_FOR_PICKUP` + `PICKED_UP`/`IN_TRANSIT`/`AT_DROPOFF` -> `OUT_FOR_DELIVERY`;
+- `READY_FOR_PICKUP` or `OUT_FOR_DELIVERY` + `DELIVERED` -> `DELIVERED`.
+
+V20 also writes `order_status_history` audit entries. It does not touch cancelled, rejected or refund states.
+
 ## Customer API
 
 ```http
@@ -109,6 +121,8 @@ delivery-status-{eventId}
 
 This prevents duplicate in-app notices.
 
+Commercial-status synchronization occurs inside the same database transaction as the accepted delivery projection. The SQL update is conditional on the locked current commercial status, and the associated `order_status_history` row is written in that same transaction.
+
 ## Out-of-order protection
 
 An event is not applied when:
@@ -121,9 +135,16 @@ The corresponding inbox result is `STALE`, `TERMINAL_PROTECTED` or `NO_CHANGE`.
 
 ## Order lifecycle boundary
 
-Provider callbacks update dedicated `delivery_*` columns only.
+The provider-neutral `delivery_*` columns remain the source of truth for courier lifecycle detail.
 
-They do not update `customer_order.status`. This is deliberate: commercial order transitions, refund consequences and support actions require approved product rules and must not be inferred from a provider callback.
+The commercial order status is synchronized only for fulfillment milestones that are already explicit in the existing `OrderStatus` model and are unambiguous from delivery evidence:
+
+```text
+READY_FOR_PICKUP + PICKED_UP/IN_TRANSIT/AT_DROPOFF -> OUT_FOR_DELIVERY
+READY_FOR_PICKUP/OUT_FOR_DELIVERY + DELIVERED       -> DELIVERED
+```
+
+No provider callback is allowed to infer payment, cancellation, rejection, refund or refund-completion decisions. Those remain owned by their existing Order/payment/refund flows.
 
 ## Local tests
 
@@ -131,6 +152,8 @@ They do not update `customer_order.status`. This is deliberate: commercial order
 cd services/order-service
 mvn -B clean verify
 ```
+
+Regression coverage includes `DeliveryCommercialOrderStatusProjectionTest` for the fulfillment mapping above.
 
 ## CI
 
@@ -191,39 +214,22 @@ The subscription is created Disabled first. If Order lacks `Azure Service Bus Da
 ## Deployment and activation order
 
 1. Merge only after branch CI succeeds.
-2. Deploy Order code from merged `main` when required and confirm Flyway V9 is present.
-3. Run `azure-pipelines-delivery-status-rollout-status.yml`.
-4. If the filtered subscription is missing, run `azure-pipelines-order-delivery-status-consumer-enable.yml`.
-5. If the activation pipeline reports missing `Azure Service Bus Data Receiver`, grant that role once to the Order system-assigned managed identity at the printed subscription scope or an approved parent scope, then rerun.
-6. Confirm the Order consumer is healthy and the delivery-status subscription DLQ is empty.
-7. Validate one synthetic `DELIVERY_STATUS_CHANGED` event, including duplicate/stale/terminal behavior.
-8. Run `azure-pipelines-integration-delivery-status-publisher-enable.yml` only after the downstream consumer validation passes.
-9. Add/verify the APIM route for the customer delivery-status endpoint.
-10. Keep webhook processing, tracking reconciliation and Borzo disabled until their later controlled activation stages.
+2. Deploy Order code from merged `main` and confirm Flyway V20 applies successfully.
+3. Confirm `CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true` remains preserved on the new revision.
+4. Verify the known delivered production order now shows commercial `DELIVERED` while its delivery projection remains `DELIVERED`.
+5. Confirm the delivery-status subscription has no new DLQ growth attributable to this change.
+6. Validate a future real order transitions `READY_FOR_PICKUP -> OUT_FOR_DELIVERY -> DELIVERED` from provider-neutral delivery events.
 
 ## Rollback
 
-Run:
+Application rollback can return to the previous Order image if required. Flyway V20 is intentionally narrow and only advances orders whose durable delivery projection already proves the corresponding fulfillment milestone; it does not delete event, inbox, history, notification or provider-audit evidence.
 
-```text
-azure-pipelines-delivery-status-rollback.yml
-```
-
-Rollback disables:
-
-- Order delivery-status consumption;
-- Integration delivery-status publication;
-- Integration webhook/tracking execution;
-- Borzo.
-
-It never deletes durable event, inbox, history, notification or provider-audit data.
-
-The consumer-enable pipeline also has a narrow automatic rollback for its four Order consumer configuration values when the new revision or preservation checks fail. A subscription created by that run is left Disabled rather than deleted so that diagnostic evidence is preserved.
+The existing `azure-pipelines-delivery-status-rollback.yml` remains the emergency switch for disabling Order delivery-status consumption and upstream delivery status publication if the broader delivery-status path must be stopped.
 
 ## Manual steps
 
-- Azure DevOps: register the YAML pipelines if they are not already visible as Azure DevOps Pipeline objects.
-- Azure RBAC: when reported by the activation pipeline, grant `Azure Service Bus Data Receiver` to the Order Container App system-assigned managed identity at the printed Service Bus subscription scope or an approved parent scope.
-- APIM: add/verify the customer delivery-status GET operation only after the Order consumer path is proven.
+- Azure DevOps: run the normal Order CI/deployment pipeline after merge.
+- No new Azure resource or paid SKU is required.
+- No secret, Key Vault, DNS, Firebase, payment or provider credential change is required.
+- Inspect the existing single Service Bus DLQ message separately; the successful Borzo delivery proved it did not block this order.
 - Do not paste secret values into chat, pipeline YAML or Azure DevOps plain-text variables.
-- No new paid Azure SKU is required; the activation uses one subscription inside the existing Service Bus namespace.

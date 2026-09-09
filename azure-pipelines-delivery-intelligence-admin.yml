@@ -142,20 +142,11 @@ steps:
         IMAGE="$LOGIN_SERVER/$(integrationImageRepository):$TAG"
         READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10 \
           bash scripts/release/deploy-single-service-preserve-runtime.sh "$RG" "$APP" "$IMAGE" integration
-        APP_FQDN="$(az containerapp show -g "$RG" -n "$APP" --query properties.configuration.ingress.fqdn -o tsv)"
-        INGRESS_READY=false
-        for attempt in $(seq 1 30); do
-          if curl --silent --show-error --fail --max-time 30 "https://${APP_FQDN}/actuator/health" >/dev/null; then
-            INGRESS_READY=true
-            break
-          fi
-          echo "Waiting for Container App ingress health propagation ($attempt/30)"
-          sleep 5
-        done
-        [[ "$INGRESS_READY" == true ]] || {
-          echo 'ERROR: Integration Service ingress did not become healthy within the bounded readiness window.' >&2
-          exit 1
-        }
+        # deploy-single-service-preserve-runtime.sh already gates on the new
+        # revision being healthy, carrying 100% traffic, and returning UP for
+        # both liveness and readiness. The app's direct public FQDN can be
+        # intentionally unavailable while APIM remains its supported ingress,
+        # so a duplicate direct-FQDN curl is not a valid readiness signal.
         echo 'Integration Service is ready with the Delivery Intelligence read API.'
 
   - task: AzureCLI@2

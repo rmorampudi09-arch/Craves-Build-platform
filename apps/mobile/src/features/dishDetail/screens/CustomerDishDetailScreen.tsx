@@ -9,14 +9,8 @@ import {
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {colors, radius, spacing} from '../../../design/tokens';
-import {CustomerDishDetailLegacyScreen} from './CustomerDishDetailLegacyScreen';
+import {CustomerDishDetailScreen as CustomerDishDetailLegacyScreen} from './CustomerDishDetailLegacyScreen';
 
-/**
- * The detail implementation keeps its existing data/cart/favorite contracts,
- * while this route changes the presentation from a full navigation page to a
- * dismissible bottom sheet. The transparent modal leaves the previous list
- * mounted underneath, so its scroll position is preserved.
- */
 export function CustomerDishDetailScreen() {
   const navigation = useNavigation();
   const translateY = useRef(new Animated.Value(0)).current;
@@ -85,7 +79,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.34)',
   },
   sheet: {

@@ -205,15 +205,26 @@ steps:
         [[ -n "$PRINCIPAL_ID" ]] || PRINCIPAL_ID="$(az containerapp identity show -g "$RG" -n "$APP" --query principalId -o tsv)"
         [[ -n "$PRINCIPAL_ID" ]] || fail 'Container App managed identity was not created'
 
-        if ! az role assignment create \
-          --assignee-object-id "$PRINCIPAL_ID" \
-          --assignee-principal-type ServicePrincipal \
-          --role AcrPull \
-          --scope "$ACR_ID" \
-          --only-show-errors >/dev/null 2>&1; then
+        ACR_PULL_READY=false
+        for attempt in $(seq 1 30); do
+          if az role assignment create \
+            --assignee-object-id "$PRINCIPAL_ID" \
+            --assignee-principal-type ServicePrincipal \
+            --role AcrPull \
+            --scope "$ACR_ID" \
+            --only-show-errors >/dev/null 2>&1; then
+            ACR_PULL_READY=true
+            break
+          fi
           ASSIGNMENTS="$(az role assignment list --scope "$ACR_ID" --query "[?principalId=='${PRINCIPAL_ID}' && roleDefinitionName=='AcrPull'] | length(@)" -o tsv)"
-          [[ "$ASSIGNMENTS" =~ ^[1-9][0-9]*$ ]] || fail 'Could not create or verify AcrPull for Delivery Intelligence managed identity'
-        fi
+          if [[ "$ASSIGNMENTS" =~ ^[1-9][0-9]*$ ]]; then
+            ACR_PULL_READY=true
+            break
+          fi
+          echo "Waiting for the new managed identity to propagate before AcrPull assignment ($attempt/30)"
+          sleep 10
+        done
+        [[ "$ACR_PULL_READY" == true ]] || fail 'Could not create or verify AcrPull for Delivery Intelligence managed identity'
 
         az containerapp registry set \
           -g "$RG" \

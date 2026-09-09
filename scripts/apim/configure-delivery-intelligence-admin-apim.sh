@@ -27,7 +27,10 @@ LATEST="$(jq -r '.properties.latestRevisionName // empty' <<<"$APP_JSON")"
 READY="$(jq -r '.properties.latestReadyRevisionName // empty' <<<"$APP_JSON")"
 RUNNING="$(jq -r '.properties.runningStatus // empty' <<<"$APP_JSON")"
 [[ -n "$INTEGRATION_FQDN" && "$LATEST" == "$READY" && "$RUNNING" == "Running" ]] || fail "Integration Service is not ready"
-curl --silent --show-error --fail --max-time 30 "https://${INTEGRATION_FQDN}/actuator/health" >/dev/null
+# The guarded deployment step has already verified the revision, traffic, and
+# actuator liveness/readiness from the Container Apps control plane. This
+# backend is consumed through APIM and its direct FQDN may reject public build
+# agents, so a direct curl is not a valid APIM-registration prerequisite.
 INTEGRATION_OPERATION_BASE="https://${INTEGRATION_FQDN}/api/v1/admin/operations"
 
 API_MGMT="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis/${API_ID}"

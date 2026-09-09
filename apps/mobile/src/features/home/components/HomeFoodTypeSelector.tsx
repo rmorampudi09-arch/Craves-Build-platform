@@ -11,12 +11,14 @@ import {
 } from '../../../design/tokens';
 import type {DiscoveryDietOption} from '../../discoveryFilters/state/discoveryFilterSlice';
 
+type MaterialIconName = React.ComponentProps<typeof MaterialDesignIcons>['name'];
+
 export type HomeFoodType = 'ALL' | DiscoveryDietOption;
 
 type FoodTypeOption = {
   value: HomeFoodType;
   label: string;
-  icon: string;
+  icon: MaterialIconName;
   color: string;
 };
 
@@ -32,15 +34,9 @@ interface HomeFoodTypeSelectorProps {
   onChange: (value: HomeFoodType) => void;
 }
 
-export function HomeFoodTypeSelector({
-  value,
-  onChange,
-}: HomeFoodTypeSelectorProps) {
+export function HomeFoodTypeSelector({value, onChange}: HomeFoodTypeSelectorProps) {
   return (
-    <View
-      accessibilityLabel="Food preference"
-      accessibilityRole="radiogroup"
-      style={styles.container}>
+    <View accessibilityLabel="Food preference" accessibilityRole="radiogroup" style={styles.container}>
       {FOOD_TYPE_OPTIONS.map(option => {
         const selected = option.value === value;
         return (
@@ -50,25 +46,11 @@ export function HomeFoodTypeSelector({
             accessibilityRole="radio"
             accessibilityState={{selected}}
             onPress={() => onChange(option.value)}
-            style={({pressed}) => [
-              styles.option,
-              selected && styles.optionSelected,
-              pressed && styles.optionPressed,
-            ]}>
-            <View
-              style={[
-                styles.iconWrap,
-                selected && {backgroundColor: option.color},
-              ]}>
-              <MaterialDesignIcons
-                name={option.icon}
-                size={16}
-                color={selected ? colors.white : option.color}
-              />
+            style={({pressed}) => [styles.option, selected && styles.optionSelected, pressed && styles.optionPressed]}>
+            <View style={[styles.iconWrap, selected && {backgroundColor: option.color}]}>
+              <MaterialDesignIcons name={option.icon} size={16} color={selected ? colors.white : option.color} />
             </View>
-            <Text
-              numberOfLines={1}
-              style={[styles.label, selected && styles.labelSelected]}>
+            <Text numberOfLines={1} style={[styles.label, selected && styles.labelSelected]}>
               {option.label}
             </Text>
           </Pressable>
@@ -103,27 +85,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
   },
-  optionSelected: {
-    backgroundColor: colors.espressoBrown,
-  },
-  optionPressed: {
-    opacity: 0.82,
-  },
-  iconWrap: {
-    width: 25,
-    height: 25,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    flexShrink: 1,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
-  },
-  labelSelected: {
-    color: colors.white,
-    fontWeight: fontWeight.bold,
-  },
+  optionSelected: {backgroundColor: colors.espressoBrown},
+  optionPressed: {opacity: 0.82},
+  iconWrap: {width: 25, height: 25, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center'},
+  label: {flexShrink: 1, color: colors.textSecondary, fontSize: typography.tiny, fontWeight: fontWeight.semibold},
+  labelSelected: {color: colors.white, fontWeight: fontWeight.bold},
 });

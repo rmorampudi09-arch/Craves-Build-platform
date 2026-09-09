@@ -1,6 +1,10 @@
 -- Keep the commercial order status visible to existing Customer/Chef APIs while
 -- retaining the provider-neutral delivery_* projection as the source of delivery detail.
 --
+-- IMPORTANT: this is V21, not V20. Production already contains an applied V20 with
+-- a different checksum, so this change must use a new Flyway version and must not
+-- repair or rewrite production Flyway history.
+--
 -- This migration only repairs states that are unambiguous from already-processed
 -- delivery events. Cancellation/refund/rejection states are deliberately untouched.
 
@@ -16,11 +20,11 @@ WITH active_candidates AS (
     )
     SELECT
         (
-            substr(md5(c.id::text || ':v20:out-for-delivery'), 1, 8) || '-' ||
-            substr(md5(c.id::text || ':v20:out-for-delivery'), 9, 4) || '-' ||
-            substr(md5(c.id::text || ':v20:out-for-delivery'), 13, 4) || '-' ||
-            substr(md5(c.id::text || ':v20:out-for-delivery'), 17, 4) || '-' ||
-            substr(md5(c.id::text || ':v20:out-for-delivery'), 21, 12)
+            substr(md5(c.id::text || ':v21:out-for-delivery'), 1, 8) || '-' ||
+            substr(md5(c.id::text || ':v21:out-for-delivery'), 9, 4) || '-' ||
+            substr(md5(c.id::text || ':v21:out-for-delivery'), 13, 4) || '-' ||
+            substr(md5(c.id::text || ':v21:out-for-delivery'), 17, 4) || '-' ||
+            substr(md5(c.id::text || ':v21:out-for-delivery'), 21, 12)
         )::uuid,
         c.id,
         c.status,
@@ -50,11 +54,11 @@ WITH delivered_candidates AS (
     )
     SELECT
         (
-            substr(md5(c.id::text || ':v20:delivered'), 1, 8) || '-' ||
-            substr(md5(c.id::text || ':v20:delivered'), 9, 4) || '-' ||
-            substr(md5(c.id::text || ':v20:delivered'), 13, 4) || '-' ||
-            substr(md5(c.id::text || ':v20:delivered'), 17, 4) || '-' ||
-            substr(md5(c.id::text || ':v20:delivered'), 21, 12)
+            substr(md5(c.id::text || ':v21:delivered'), 1, 8) || '-' ||
+            substr(md5(c.id::text || ':v21:delivered'), 9, 4) || '-' ||
+            substr(md5(c.id::text || ':v21:delivered'), 13, 4) || '-' ||
+            substr(md5(c.id::text || ':v21:delivered'), 17, 4) || '-' ||
+            substr(md5(c.id::text || ':v21:delivered'), 21, 12)
         )::uuid,
         c.id,
         c.status,

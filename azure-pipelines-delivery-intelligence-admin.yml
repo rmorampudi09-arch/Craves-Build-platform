@@ -95,7 +95,8 @@ steps:
       test -f services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql
       test -f services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql.conf
       grep -Fxq 'executeInTransaction=false' services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql.conf
-      grep -Fq 'CREATE INDEX CONCURRENTLY' services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql
+      grep -Fq 'ONLINE_INDEX_BUILD_DEFERRED' services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql
+      ! grep -E '^[[:space:]]*CREATE INDEX' services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql
       ! grep -R -E 'raw_payload|signature_hash|tracking_url|provider_metadata' apps/delivery-intelligence-admin/src || {
         echo 'ERROR: Frontend source references restricted provider/raw data.' >&2
         exit 1
@@ -126,7 +127,7 @@ steps:
         echo "Delivery Intelligence image: $WEB_IMAGE"
 
   - task: AzureCLI@2
-    displayName: Deploy Integration Service read API and Flyway V117
+    displayName: Deploy Integration Service read API and startup-safe Flyway V117
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash

@@ -10,7 +10,7 @@ A separate read-only Delivery Intelligence administration surface was added with
 
 - `apps/delivery-intelligence-admin/` — Next.js 16 / TypeScript / Tailwind dashboard
 - `services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence/` — Spring Boot read API
-- `services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql` — append-only read-path indexes
+- `services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql` — startup-safe migration marker; V116 is already occupied in production by the Shadowfax Hyperlocal contract migration
 - `scripts/apim/configure-delivery-intelligence-admin-apim.sh` — controlled APIM operation registration
 - `azure-pipelines-delivery-intelligence-admin.yml` — single validate/build/deploy/smoke pipeline
 
@@ -54,6 +54,16 @@ The dashboard derives status only from persisted Craves delivery evidence: `deli
 ## New billable resource
 
 The production pipeline can create `ca-craves-delivery-intel-prodlow` if it does not exist. The run is gated by the explicit `confirmProductionDeploy=true` pipeline parameter.
+
+## V117 startup-safety correction
+
+The initial deployment placed `CREATE INDEX CONCURRENTLY` statements in Flyway
+V117. PostgreSQL may wait for existing transactions during a concurrent build,
+so running those statements inside Container App startup exhausted the revision
+activation window even though application and migration-history validation had
+passed. V117 is now a fast marker (`ONLINE_INDEX_BUILD_DEFERRED`). The dashboard's
+bounded queries remain functional on the current schema, while optional indexes
+are reserved for a separately monitored database-maintenance operation.
 
 ## Manual action after merge
 

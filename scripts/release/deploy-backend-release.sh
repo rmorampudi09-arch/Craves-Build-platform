@@ -11,6 +11,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 CONFIRMATION=${CONFIRM_DEPLOYMENT:-}
 BACKUP_CONFIRMATION=${DATABASE_BACKUP_CONFIRMATION:-}
+READY_ATTEMPTS=${READY_ATTEMPTS:-150}
+READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-10}
 
 fail() {
   echo "ERROR: $*" >&2
@@ -21,6 +23,10 @@ fail() {
   || fail 'CONFIRM_DEPLOYMENT must be DEPLOY_SEVEN_SERVICES.'
 [[ "$BACKUP_CONFIRMATION" == 'DATABASE_BACKUP_VERIFIED' ]] \
   || fail 'DATABASE_BACKUP_CONFIRMATION must be DATABASE_BACKUP_VERIFIED.'
+[[ "$READY_ATTEMPTS" =~ ^[0-9]+$ && "$READY_ATTEMPTS" -ge 1 && "$READY_ATTEMPTS" -le 300 ]] \
+  || fail 'READY_ATTEMPTS must be an integer between 1 and 300.'
+[[ "$READY_SLEEP_SECONDS" =~ ^[0-9]+$ && "$READY_SLEEP_SECONDS" -ge 1 && "$READY_SLEEP_SECONDS" -le 60 ]] \
+  || fail 'READY_SLEEP_SECONDS must be an integer between 1 and 60.'
 command -v az >/dev/null || fail 'Azure CLI is required.'
 command -v jq >/dev/null || fail 'jq is required.'
 command -v sha256sum >/dev/null || fail 'sha256sum is required.'
@@ -116,8 +122,8 @@ environment_hash() {
 wait_ready() {
   local app_name=$1
   local expected_image=$2
-  local attempts=${3:-60}
-  local sleep_seconds=${4:-10}
+  local attempts=${3:-$READY_ATTEMPTS}
+  local sleep_seconds=${4:-$READY_SLEEP_SECONDS}
   local attempt current_image latest_revision ready_revision running_status health_state
 
   for ((attempt=1; attempt<=attempts; attempt++)); do
@@ -169,7 +175,7 @@ rollback_updated_services() {
 
     if az containerapp update -g "$RESOURCE_GROUP" -n "$app" \
       --image "$previous_image" --no-wait --only-show-errors >/dev/null; then
-      if rollback_revision=$(wait_ready "$app" "$previous_image" 60 10); then
+      if rollback_revision=$(wait_ready "$app" "$previous_image" "$READY_ATTEMPTS" "$READY_SLEEP_SECONDS"); then
         if [[ "$(environment_hash "$app" "$rollback_revision")" == "${PREVIOUS_ENV_HASH_BY_KEY[$key]}" ]]; then
           record_event "$key" "$app" 'rollback' 'ready' "$previous_image" "$rollback_revision"
         else
@@ -294,7 +300,7 @@ while IFS= read -r service; do
     --image "$target_image" --no-wait --only-show-errors >/dev/null \
     || abort_release "Container App update failed for $app."
 
-  new_revision=$(wait_ready "$app" "$target_image" 60 10) \
+  new_revision=$(wait_ready "$app" "$target_image" "$READY_ATTEMPTS" "$READY_SLEEP_SECONDS") \
     || abort_release "New revision did not become ready for $app."
   record_event "$key" "$app" 'readiness' 'ready' "$target_image" "$new_revision"
 

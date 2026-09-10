@@ -49,7 +49,8 @@ jobs:
           grep -q 'appNoticePage' "$service"
           grep -q 'markAllRead' "$controller"
           grep -q 'unread-count' "$controller"
-          grep -q 'idx_in_app_notification_recipient_created' "$migration"
+          grep -q 'idx_in_app_notification_recipient_cursor' "$migration"
+          grep -q 'idx_in_app_notification_recipient_unread_cursor' "$migration"
           ! grep -R --line-number -E 'raw.*payload|provider.*payload|retry_count|dead.?letter|delivery_address' \
               services/notification-service/src/main/java/in/craves/notification/api/{AppNoticePageResponse,AppNoticeResponse,UnreadCountResponse,AppNotificationController}.java
           ! grep -R --line-number -E 'System\.out|printStackTrace|Authorization: Bearer|client[_-]?secret|password\s*=' \

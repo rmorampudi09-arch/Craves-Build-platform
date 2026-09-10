@@ -31,6 +31,8 @@ steps:
       grep -q 'randomUUID' "$ROUTE"
       grep -q 'X-Admin-Reason' "$ROUTE"
       grep -q '"X-Correlation-ID": correlationId' "$ROUTE"
+      grep -q '"X-Craves-Correlation-ID": correlationId' "$ROUTE"
+      grep -q 'upstream.headers.get("X-Craves-Correlation-ID")' "$ROUTE"
       grep -q 'INVESTIGATION_CORRELATION_MISMATCH' "$ROUTE"
       grep -q 'no-store' "$ROUTE"
       grep -q 'reason.length < 10' "$CONTRACT"

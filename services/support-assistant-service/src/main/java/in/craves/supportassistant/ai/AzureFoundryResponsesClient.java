@@ -10,7 +10,10 @@ import in.craves.supportassistant.config.SupportAssistantProperties;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -20,48 +23,59 @@ import org.springframework.web.client.RestClient;
 
 @Component
 public class AzureFoundryResponsesClient {
-    private static final String FOUNDRY_SCOPE = "https://ai.azure.com/.default";
+    private static final Set<String> ALLOWED_TOKEN_SCOPES = Set.of(
+        "https://cognitiveservices.azure.com/.default",
+        "https://ai.azure.com/.default"
+    );
+    private static final Pattern DEPLOYMENT_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,127}");
+
     private final SupportAssistantProperties properties;
     private final ObjectMapper objectMapper;
     private final TokenCredential credential;
+    private final RestClient restClient;
 
     public AzureFoundryResponsesClient(SupportAssistantProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.credential = new DefaultAzureCredentialBuilder().build();
+
+        HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(properties.getAi().getRequestTimeout())
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+        factory.setReadTimeout(properties.getAi().getRequestTimeout());
+        this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 
     public boolean configured() {
         var ai = properties.getAi();
-        if (!ai.isEnabled() || !StringUtils.hasText(ai.getEndpoint()) || !StringUtils.hasText(ai.getDeployment())) {
-            return false;
-        }
-        try {
-            URI endpoint = URI.create(ai.getEndpoint().trim());
-            return "https".equalsIgnoreCase(endpoint.getScheme()) && StringUtils.hasText(endpoint.getHost());
-        } catch (IllegalArgumentException ex) {
-            return false;
-        }
+        return ai.isEnabled()
+            && StringUtils.hasText(ai.getDeployment())
+            && DEPLOYMENT_NAME.matcher(ai.getDeployment().trim()).matches()
+            && ALLOWED_TOKEN_SCOPES.contains(ai.getTokenScope())
+            && validatedEndpoint(ai.getEndpoint()) != null;
     }
 
     public String answer(String instructions, String input) {
         if (!configured()) {
             throw new IllegalStateException("Support AI is not configured");
         }
-        AccessToken token = credential.getToken(new TokenRequestContext().addScopes(FOUNDRY_SCOPE))
-            .block(properties.getAi().getTokenTimeout());
+        AccessToken token = credential.getToken(
+            new TokenRequestContext().addScopes(properties.getAi().getTokenScope())
+        ).block(properties.getAi().getTokenTimeout());
         if (token == null || !StringUtils.hasText(token.getToken())) {
             throw new IllegalStateException("Managed identity token acquisition failed");
         }
 
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("model", properties.getAi().getDeployment());
+        payload.put("model", properties.getAi().getDeployment().trim());
         payload.put("instructions", instructions);
         payload.put("input", input);
         payload.put("max_output_tokens", properties.getAi().getMaxOutputTokens());
         payload.put("store", false);
 
-        String raw = client().post()
+        String raw = restClient.post()
             .uri(responsesUrl())
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token.getToken())
             .contentType(MediaType.APPLICATION_JSON)
@@ -98,23 +112,50 @@ public class AzureFoundryResponsesClient {
         }
     }
 
-    private RestClient client() {
-        HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(properties.getAi().getRequestTimeout())
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-        factory.setReadTimeout(properties.getAi().getRequestTimeout());
-        return RestClient.builder().requestFactory(factory).build();
+    static boolean isAllowedTokenScope(String scope) {
+        return ALLOWED_TOKEN_SCOPES.contains(scope);
+    }
+
+    static boolean isAllowedEndpoint(String endpoint) {
+        return validatedEndpoint(endpoint) != null;
     }
 
     private String responsesUrl() {
-        String endpoint = properties.getAi().getEndpoint().trim();
-        while (endpoint.endsWith("/")) endpoint = endpoint.substring(0, endpoint.length() - 1);
-        if (!endpoint.endsWith("/openai/v1")) {
-            endpoint = endpoint + "/openai/v1";
+        URI endpoint = validatedEndpoint(properties.getAi().getEndpoint());
+        if (endpoint == null) {
+            throw new IllegalStateException("Support AI endpoint is invalid");
         }
-        return endpoint + "/responses";
+        String value = endpoint.toString();
+        while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+        if (!value.endsWith("/openai/v1")) {
+            value = value + "/openai/v1";
+        }
+        return value + "/responses";
+    }
+
+    private static URI validatedEndpoint(String endpoint) {
+        if (!StringUtils.hasText(endpoint)) return null;
+        try {
+            URI uri = URI.create(endpoint.trim());
+            if (!"https".equalsIgnoreCase(uri.getScheme())) return null;
+            if (!StringUtils.hasText(uri.getHost())) return null;
+            if (uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null) return null;
+            if (uri.getPort() != -1 && uri.getPort() != 443) return null;
+
+            String host = uri.getHost().toLowerCase(Locale.ROOT);
+            if (!host.endsWith(".openai.azure.com") && !host.endsWith(".services.ai.azure.com")) return null;
+
+            String path = uri.getPath();
+            if (StringUtils.hasText(path)
+                && !"/".equals(path)
+                && !"/openai/v1".equals(path)
+                && !"/openai/v1/".equals(path)) {
+                return null;
+            }
+            return uri;
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     private static String text(JsonNode node, String field) {

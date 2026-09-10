@@ -112,6 +112,21 @@ and image provenance.
   authentication.
 - Published verification-only pipeline support in `0601560c`. Run `36497 /
   20260910.2` uses that mode to verify the existing deployment after DNS changes.
+- Superseded run `36497` with diagnostic verification run `36498 / 20260910.3`
+  on `03803987`. It reports each public endpoint's HTTP status without changing
+  application deployments. Dashboard health and page both returned HTTP 200
+  on the first attempt; the existing `/admin` page returned HTTP 404.
+- Found the existing `craves-admin-origin-group` had no associated route.
+  Created and read back `craves-admin-route` (`Enabled`, `Succeeded`) for
+  `admin.craves.in`, pattern `/*`, targeting
+  that existing origin group with HTTPS redirect, HTTPS origin forwarding,
+  caching disabled and `cravesadminsecurityheaders`. The more specific
+  `/delivery-intelligence` route retains the dashboard origin. Customer-domain
+  routes were inspected and left unchanged.
+- Direct browser inspection of the existing admin origin at `/admin` renders
+  `Craves administration` and the administrator sign-in guard. Its deployed
+  image is `craves/admin-web:36288`, revision `0000007`; no image change was
+  needed to restore its missing Front Door association.
 
 ## Figma
 

@@ -131,11 +131,19 @@ and image provenance.
   `36499` added fresh-response probes and was superseded by `36500` on
   `680febdb`, which captures bounded public error diagnostics. All validation
   and authentication expectations remain enforced.
-- The public dashboard browser subsequently reached the mobile OTP sign-in
-  page at `admin.craves.in`; a secure administrator sign-in request is pending.
-  Authenticated dashboard data has not yet been accepted. During the final
-  check Azure DevOps displayed a temporary service-unavailable page, so run
-  `36500` must be read back before claiming final smoke-test success.
+- Final verification run `36500 / 20260910.5`, pinned to `680febdb`, **passed**
+  in 48 seconds. It ran in verification-only mode against image `36495` and
+  required successful dashboard health/page and existing admin responses,
+  signed-out dashboard/API HTTP 401 guards, no-store identity responses,
+  Front Door response evidence and HSTS. This complements the build/test and
+  deployment stages passed by `36495`; no rebuild was needed for DNS/routing.
+- The public dashboard browser reached the mobile OTP sign-in page at
+  `admin.craves.in`. A fresh public-origin check also renders the administrator
+  sign-in guard. The secure authentication handoff was interrupted before
+  completion; authenticated dashboard data remains unverified. No credentials
+  or customer data were published.
+- Azure DevOps briefly displayed a service-unavailable page during inspection;
+  subsequent fresh run-state read-back confirmed `36500` succeeded.
 
 ## Figma
 

@@ -1,0 +1,142 @@
+name: CRAVES Mobile Favorites P3 CI
+
+on:
+  push:
+    branches:
+      - feature/favorites-p3-mobile-habit-20260821
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-favorites-p3-ci.yml'
+  pull_request:
+    branches:
+      - feature/favorites-p2-mobile-home-relationships-20260821
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-favorites-p3-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-favorites-p3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Install locked dependencies
+        working-directory: apps/mobile
+        run: npm ci
+      - name: TypeScript regression gate against P2
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_branch='feature/favorites-p2-mobile-home-relationships-20260821'
+          git fetch --no-tags origin "$base_branch:refs/remotes/origin/p3-mobile-base"
+          candidate_root="$GITHUB_WORKSPACE/apps/mobile"
+          base_root='/tmp/craves-mobile-p3-base'
+          rm -rf "$base_root"
+          git worktree add --detach "$base_root" refs/remotes/origin/p3-mobile-base
+          ln -s "$candidate_root/node_modules" "$base_root/apps/mobile/node_modules"
+          set +e
+          (cd "$base_root/apps/mobile" && npx tsc --noEmit --pretty false) > /tmp/p3-base-tsc.log 2>&1
+          base_status=$?
+          (cd "$candidate_root" && npx tsc --noEmit --pretty false) > /tmp/p3-candidate-tsc.log 2>&1
+          candidate_status=$?
+          set -e
+          echo '--- P2 baseline TypeScript diagnostics ---'
+          cat /tmp/p3-base-tsc.log || true
+          echo '--- P3 candidate TypeScript diagnostics ---'
+          cat /tmp/p3-candidate-tsc.log || true
+          grep -E '^src/.*error TS[0-9]+:' /tmp/p3-base-tsc.log | sort -u > /tmp/p3-base-errors.txt || true
+          grep -E '^src/.*error TS[0-9]+:' /tmp/p3-candidate-tsc.log | sort -u > /tmp/p3-candidate-errors.txt || true
+          comm -13 /tmp/p3-base-errors.txt /tmp/p3-candidate-errors.txt > /tmp/p3-new-errors.txt
+          if [[ -s /tmp/p3-new-errors.txt ]]; then
+            echo 'ERROR: P3 introduces new TypeScript diagnostics:' >&2
+            cat /tmp/p3-new-errors.txt >&2
+            exit 1
+          fi
+          if [[ "$base_status" -eq 0 && "$candidate_status" -ne 0 ]]; then
+            echo 'ERROR: P3 candidate fails TypeScript against a clean base.' >&2
+            exit 1
+          fi
+          git worktree remove --force "$base_root"
+      - name: ESLint
+        working-directory: apps/mobile
+        run: npm run lint -- --max-warnings=0
+      - name: P3 repeat-order and Favorites regression tests
+        working-directory: apps/mobile
+        run: |
+          npm test -- --runInBand --runTestsByPath \
+            src/features/customerOrders/presentation/repeatOrderPresentation.test.ts \
+            src/features/customerOrders/presentation/repeatOrderPresentationApi.test.ts \
+            src/features/customerOrders/presentation/repeatOrderReorderSafety.test.ts \
+            src/features/customerOrders/presentation/repeatOrderPageSafety.test.ts \
+            src/features/customerOrders/customerOrdersActiveCart.test.ts \
+            src/features/cart/cartMutations.test.ts \
+            src/features/favorites/customerFavoritesActiveCart.test.ts \
+            src/features/favorites/customerFavoritesContract.test.ts \
+            src/features/favorites/offline/customerFavoritesOfflineQueue.test.ts \
+            src/features/favorites/query/customerFavoritesOptimisticState.test.ts \
+            src/features/favorites/api/savedCatalogApi.test.ts \
+            src/features/favorites/presentation/savedCatalogPresentation.test.ts \
+            src/features/favorites/api/favoriteHomeFeedApi.test.ts \
+            src/features/favorites/presentation/favoriteHomePresentation.test.ts
+      - name: Production Android JavaScript bundle
+        working-directory: apps/mobile
+        run: |
+          rm -rf build/favorites-p3-bundle
+          mkdir -p build/favorites-p3-bundle
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output build/favorites-p3-bundle/index.android.bundle \
+            --assets-dest build/favorites-p3-bundle/assets
+          test -s build/favorites-p3-bundle/index.android.bundle
+      - name: Enforce mobile-only P3 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin feature/favorites-p2-mobile-home-relationships-20260821:refs/remotes/origin/p3-mobile-base
+          changed="$(git diff --name-only refs/remotes/origin/p3-mobile-base...HEAD)"
+          printf '%s\n' "$changed"
+          disallowed="$(printf '%s\n' "$changed" | grep -Ev '^(apps/mobile/|\.github/workflows/mobile-favorites-p3-ci\.yml$)' || true)"
+          if [[ -n "$disallowed" ]]; then
+            echo 'ERROR: P3 mobile branch contains non-mobile paths:' >&2
+            printf '%s\n' "$disallowed" >&2
+            exit 1
+          fi
+      - name: Package exact P3 mobile source
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P3_Mobile_Source"
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+          git diff --name-only refs/remotes/origin/p3-mobile-base...HEAD | while IFS= read -r path; do
+            [[ -n "$path" && -f "$path" ]] || continue
+            mkdir -p "$package_root/$(dirname "$path")"
+            cp "$path" "$package_root/$path"
+          done
+          cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
+          CRAVES Favorites 2.0 P3 Mobile Habit / Order Like Last Time
+          Base: feature/favorites-p2-mobile-home-relationships-20260821
+          Source only. Reorder validates current catalog before replacing the cart.
+          EOF
+          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P3_Mobile_Source.zip Craves_Favorites_2_0_P3_Mobile_Source)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Craves_Favorites_2_0_P3_Mobile_Source
+          path: ${{ runner.temp }}/Craves_Favorites_2_0_P3_Mobile_Source.zip
+          if-no-files-found: error
+          retention-days: 30

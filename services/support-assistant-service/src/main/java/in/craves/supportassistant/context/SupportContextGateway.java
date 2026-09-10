@@ -5,8 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.supportassistant.config.SupportAssistantProperties;
 import in.craves.supportassistant.web.SupportDtos.Audience;
 import in.craves.supportassistant.web.SupportDtos.ContextSummary;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -16,10 +21,19 @@ import org.springframework.web.client.RestClientResponseException;
 public class SupportContextGateway {
     private final SupportAssistantProperties properties;
     private final ObjectMapper objectMapper;
+    private final RestClient restClient;
 
     public SupportContextGateway(SupportAssistantProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+
+        HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(properties.getDownstream().getRequestTimeout())
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+        factory.setReadTimeout(properties.getDownstream().getRequestTimeout());
+        this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 
     public SupportContext load(
@@ -40,14 +54,17 @@ public class SupportContextGateway {
         String authorization,
         String correlationId
     ) {
-        String baseUrl = properties.getDownstream().getOrderBaseUrl();
-        if (!StringUtils.hasText(baseUrl) || !validBearer(authorization)) {
+        URI baseUri = validatedBaseUri(
+            properties.getDownstream().getOrderBaseUrl(),
+            properties.getDownstream().getAllowedHosts()
+        );
+        if (baseUri == null || !validBearer(authorization)) {
             return OrderContext.unavailable(orderId);
         }
         String path = audience == Audience.CHEF
             ? "/api/v1/chef/orders/" + orderId
             : "/api/v1/orders/" + orderId;
-        JsonNode body = safeGet(baseUrl, path, authorization, correlationId);
+        JsonNode body = safeGet(baseUri, path, authorization, correlationId);
         if (body == null) {
             return OrderContext.unavailable(orderId);
         }
@@ -61,11 +78,14 @@ public class SupportContextGateway {
     }
 
     private CaseContext loadCase(UUID caseId, String authorization, String correlationId) {
-        String baseUrl = properties.getDownstream().getUserChefBaseUrl();
-        if (!StringUtils.hasText(baseUrl) || !validBearer(authorization)) {
+        URI baseUri = validatedBaseUri(
+            properties.getDownstream().getUserChefBaseUrl(),
+            properties.getDownstream().getAllowedHosts()
+        );
+        if (baseUri == null || !validBearer(authorization)) {
             return CaseContext.unavailable(caseId);
         }
-        JsonNode body = safeGet(baseUrl, "/api/v1/support/cases/" + caseId, authorization, correlationId);
+        JsonNode body = safeGet(baseUri, "/api/v1/support/cases/" + caseId, authorization, correlationId);
         if (body == null) {
             return CaseContext.unavailable(caseId);
         }
@@ -73,35 +93,69 @@ public class SupportContextGateway {
         return new CaseContext(caseId, text(summary, "status"), true);
     }
 
-    private JsonNode safeGet(String baseUrl, String path, String authorization, String correlationId) {
+    private JsonNode safeGet(
+        URI baseUri,
+        String path,
+        String authorization,
+        String correlationId
+    ) {
         try {
-            String url = stripTrailingSlash(baseUrl) + path;
-            String raw = RestClient.create()
-                .get()
-                .uri(url)
+            String raw = restClient.get()
+                .uri(baseUri.resolve(path))
                 .header(HttpHeaders.AUTHORIZATION, authorization)
                 .header("X-Correlation-ID", correlationId)
                 .retrieve()
                 .body(String.class);
             return raw == null ? null : objectMapper.readTree(raw);
         } catch (RestClientResponseException ex) {
-            // Deliberately do not log response bodies: provider/user data can be present there.
+            // Deliberately do not log response bodies: customer or chef data can be present there.
             return null;
         } catch (Exception ex) {
             return null;
         }
     }
 
-    private static boolean validBearer(String value) {
-        return StringUtils.hasText(value) && value.startsWith("Bearer ") && value.length() > 20;
+    static URI validatedBaseUri(String value, List<String> allowedHosts) {
+        if (!StringUtils.hasText(value)) return null;
+        try {
+            URI uri = URI.create(value.trim());
+            if (!StringUtils.hasText(uri.getHost())) return null;
+            if (uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null) return null;
+            String path = uri.getPath();
+            if (StringUtils.hasText(path) && !"/".equals(path)) return null;
+
+            String host = uri.getHost().toLowerCase(Locale.ROOT);
+            boolean loopback = isLoopback(host);
+            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+            if (!("https".equals(scheme) || (loopback && "http".equals(scheme)))) return null;
+            if (!loopback && uri.getPort() != -1 && uri.getPort() != 443) return null;
+
+            boolean hostAllowed = loopback || (allowedHosts != null && allowedHosts.stream()
+                .filter(StringUtils::hasText)
+                .map(candidate -> candidate.trim().toLowerCase(Locale.ROOT))
+                .anyMatch(host::equals));
+            if (!hostAllowed) return null;
+
+            return new URI(scheme, null, host, uri.getPort(), "/", null, null);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
-    private static String stripTrailingSlash(String value) {
-        String trimmed = value.trim();
-        while (trimmed.endsWith("/")) {
-            trimmed = trimmed.substring(0, trimmed.length() - 1);
-        }
-        return trimmed;
+    private static boolean isLoopback(String host) {
+        return "localhost".equals(host)
+            || "127.0.0.1".equals(host)
+            || "::1".equals(host)
+            || "0:0:0:0:0:0:0:1".equals(host);
+    }
+
+    private static boolean validBearer(String value) {
+        return StringUtils.hasText(value)
+            && value.startsWith("Bearer ")
+            && value.length() > 20
+            && value.length() <= 8192
+            && value.indexOf('\r') < 0
+            && value.indexOf('\n') < 0;
     }
 
     private static String text(JsonNode node, String name) {

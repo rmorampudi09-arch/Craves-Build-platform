@@ -59,7 +59,22 @@ jq -e '
   and ([.services[].imageRepository] | length == (unique | length))
   and ([.services[].containerApp] | length == (unique | length))
   and ([.services[].deployOrder] == ([.services[].deployOrder] | sort))
+  and (.stepOneDormantFlags | type == "array" and length > 0)
+  and ([.stepOneDormantFlags[].name] | length == (unique | length))
 ' "$PACK" >/dev/null || fail 'backend completion pack structure is invalid'
+
+while IFS= read -r dormant_flag; do
+  service_key=$(jq -r '.serviceKey' <<<"$dormant_flag")
+  flag_name=$(jq -r '.name' <<<"$dormant_flag")
+  [[ "$service_key" =~ ^[A-Za-z][A-Za-z0-9]*$ ]] \
+    || fail "invalid step-one dormant service key: $service_key"
+  [[ "$flag_name" =~ ^[A-Z][A-Z0-9_]*$ ]] \
+    || fail "invalid step-one dormant flag name: $flag_name"
+  service_json=$(jq -c --arg key "$service_key" '.services[] | select(.key == $key)' "$PACK")
+  [[ -n "$service_json" ]] || fail "step-one dormant flag references unknown service: $service_key"
+  jq -e --arg flag "$flag_name" '.defaultFalseFlags | index($flag) != null' <<<"$service_json" >/dev/null \
+    || fail "$flag_name must also be declared in $service_key.defaultFalseFlags"
+done < <(jq -c '.stepOneDormantFlags[]' "$PACK")
 
 [[ "$(jq -r '.azure.resourceGroup' "$PACK")" == "$(jq -r '.resourceGroup' "$INVENTORY")" ]] \
   || fail 'resource group differs from the canonical Azure inventory'
@@ -126,6 +141,10 @@ grep -F 'configuration_hash' "$SINGLE_SERVICE_DEPLOY_SCRIPT" >/dev/null \
   || fail 'single-service deployment must preserve Container App configuration'
 grep -F 'identity_hash' "$SINGLE_SERVICE_DEPLOY_SCRIPT" >/dev/null \
   || fail 'single-service deployment must preserve managed identity state'
+grep -F 'stepOneDormantFlags' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend deployment must verify step-one dormant flags before mutation'
+grep -F 'dormant-flag' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend deployment must record dormant-flag evidence'
 
 for service_pipeline in "${RUNTIME_PRESERVING_PIPELINES[@]}"; do
   grep -F 'scripts/release/deploy-single-service-preserve-runtime.sh' "$service_pipeline" >/dev/null \

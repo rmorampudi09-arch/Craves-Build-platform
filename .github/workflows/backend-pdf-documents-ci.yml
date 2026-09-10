@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   tooling:
-    name: Resolve offline test dependency (no deployment)
+    name: Prepare JUnit runtime (not PDF module acceptance)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -19,17 +19,17 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Resolve Spring-managed XML serialization library
-        run: mvn -B -ntp -f services/notification-service/pom.xml dependency:get -Dartifact=com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.3
-      - name: Package missing dependencies only
+      - name: Run unchanged notification baseline to resolve test runner
+        run: mvn -B -ntp -f services/notification-service/pom.xml test
+      - name: Package test runner cache without credentials
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/pdf-dependency-addon
-          tar -czf /tmp/pdf-dependency-addon/maven-addon.tar.gz -C "$HOME/.m2" repository/com/fasterxml repository/org/codehaus/woodstox repository/com/fasterxml/woodstox
+          mkdir -p /tmp/pdf-test-runtime
+          tar -czf /tmp/pdf-test-runtime/maven-test-runtime.tar.gz -C "$HOME/.m2" repository/org/apache/maven/surefire repository/org/junit repository/org/opentest4j repository/org/apiguardian
       - uses: actions/upload-artifact@v4
         with:
-          name: pdf-dependency-addon
-          path: /tmp/pdf-dependency-addon/
+          name: pdf-test-runtime
+          path: /tmp/pdf-test-runtime/
           retention-days: 1
           if-no-files-found: error

@@ -70,8 +70,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24.x
-          cache: npm
-          cache-dependency-path: apps/delivery-intelligence-admin/package-lock.json
 
       - name: Generate deterministic lock candidate when absent
         working-directory: apps/delivery-intelligence-admin

@@ -103,6 +103,11 @@ jobs:
           CRAVES_API_BASE_URL: https://api.craves.in/api/v1
         run: npm run build
 
+      - name: Verify build did not rewrite tracked source configuration
+        working-directory: apps/delivery-intelligence-admin
+        shell: bash
+        run: git diff --exit-code -- tsconfig.json
+
       - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
@@ -145,8 +150,8 @@ jobs:
             exit 1
           fi
 
-          if grep -REn '(raw_payload|webhook_signature|signature_hash|tracking_url|provider_metadata|access_token|client_secret)' apps/delivery-intelligence-admin/src; then
-            echo 'ERROR: Dashboard frontend references restricted provider or credential data.' >&2
+          if grep -REn '(raw_payload|webhook_signature|signature_hash|tracking_url|provider_metadata|client_secret|provider_api_key)' apps/delivery-intelligence-admin/src; then
+            echo 'ERROR: Dashboard frontend references restricted provider payload, tracking or credential data.' >&2
             exit 1
           fi
 

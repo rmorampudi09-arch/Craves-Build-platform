@@ -140,10 +140,26 @@ and image provenance.
 - The public dashboard browser reached the mobile OTP sign-in page at
   `admin.craves.in`. A fresh public-origin check also renders the administrator
   sign-in guard. The secure authentication handoff was interrupted before
-  completion; authenticated dashboard data remains unverified. No credentials
+  completion; authenticated dashboard data was unverified at that checkpoint. No credentials
   or customer data were published.
 - Azure DevOps briefly displayed a service-unavailable page during inspection;
   subsequent fresh run-state read-back confirmed `36500` succeeded.
+
+## Authenticated verification — 2026-09-10
+
+- Completed administrator mobile OTP authentication through the secure sign-in
+  flow, including the owner-approved CAPTCHA. No authentication values are
+  included in this record.
+- The authenticated public dashboard renders its live overview successfully.
+  The displayed 24-hour window contains zero delivery commands, jobs and
+  provider selections; this is an empty activity window, not sample data.
+- Historical reference lookup successfully resolves a delivery unit to its
+  parent order and renders persisted command, ranking and recovery evidence.
+  The inspected historical Borzo command is dead-lettered after five attempts,
+  with no provider booking reference or delivery job. Provider selection and a
+  quote do not establish a successful production booking or rider assignment.
+- Dashboard read-path acceptance is verified. The historical delivery failure
+  still requires investigation; no old delivery was rebooked or mutated.
 
 ## Figma
 

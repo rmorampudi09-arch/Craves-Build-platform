@@ -293,11 +293,16 @@ steps:
         retry_status() {
           local url="$1" expected="$2" status=''
           for attempt in $(seq 1 80); do
-            status="$(curl --silent --show-error --header 'Cache-Control: no-cache' --output /dev/null --write-out '%{http_code}' --max-time 30 "${url}?deployment_probe=${BUILD_BUILDID}-${attempt}" || true)"
+            status="$(curl --silent --show-error --header 'Cache-Control: no-cache' --dump-header "$HEADERS" --output "$BODY" --write-out '%{http_code}' --max-time 30 "${url}?deployment_probe=${BUILD_BUILDID}-${attempt}" || true)"
             printf 'Probe %s attempt %s: HTTP %s\n' "$url" "$attempt" "$status" >&2
             if [[ "$status" =~ $expected ]]; then
               printf '%s' "$status"
               return 0
+            fi
+            if [[ "$attempt" == 1 ]]; then
+              grep -Ei '^(HTTP/|server:|content-type:|x-azure-ref:|x-cache:|location:)' "$HEADERS" >&2 || true
+              head -c 2000 "$BODY" >&2
+              printf '\n' >&2
             fi
             sleep 15
           done

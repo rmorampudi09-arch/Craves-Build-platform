@@ -1,0 +1,157 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmation
+    displayName: Exact live-money confirmation
+    type: string
+    default: ''
+  - name: enableRefunds
+    type: boolean
+    default: true
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  resourceGroup: rg-craves-prodlow-centralindia
+  integrationApp: ca-craves-integration-service-pr
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+
+  - bash: |
+      set -euo pipefail
+      test -s services/integration-service/modules/razorpay-production/README.md
+      test -s docs/handover/2026-08-20-razorpay-full-scale-production.md
+      test -s services/integration-service/src/main/resources/db/migration/V112__razorpay_webhook_delivery_guard.sql
+      grep -Fq '@Value("${PAYMENT_PROVIDER_NAME:RAZORPAY}")' services/integration-service/src/main/java/in/craves/integration/config/PaymentRoutingProperties.java
+      grep -Fq '@Value("${CASHFREE_TRAFFIC_ALLOWED:false}")' services/integration-service/src/main/java/in/craves/integration/config/PaymentRoutingProperties.java
+      grep -Fq 'X-Refund-Idempotency' services/integration-service/src/main/java/in/craves/integration/refund/RazorpayRefundClient.java
+      grep -Fq 'FOR UPDATE SKIP LOCKED' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayWebhookInboxService.java
+      grep -Fq 'verifyCapturedProviderState' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayWebhookWorker.java
+      grep -Fq 'razorpayWebhookInboxService.accept' services/integration-service/src/main/java/in/craves/integration/web/PaymentController.java
+      grep -Fq 'queryParam("receipt", receipt)' services/integration-service/src/main/java/in/craves/integration/payment/RazorpayPaymentClient.java
+    displayName: Verify Razorpay full-scale source invariants
+
+  - task: AzureCLI@2
+    displayName: Preflight and activate Razorpay live money
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+
+        confirmation='${{ parameters.confirmation }}'
+        refunds='${{ parameters.enableRefunds }}'
+        [[ "$confirmation" == 'ACTIVATE_RAZORPAY_LIVE_MONEY' ]] || {
+          echo 'Type ACTIVATE_RAZORPAY_LIVE_MONEY to activate production payments.' >&2
+          exit 2
+        }
+
+        RG='$(resourceGroup)'
+        APP='$(integrationApp)'
+
+        fail() { echo "ERROR: $*" >&2; exit 2; }
+
+        wait_ready() {
+          local latest ready replicas
+          latest=$(az containerapp show -g "$RG" -n "$APP" --query properties.latestRevisionName -o tsv --only-show-errors)
+          [[ -n "$latest" ]] || fail 'Could not resolve Integration Service revision.'
+          for _ in $(seq 1 60); do
+            ready=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$latest" --query properties.provisioningState -o tsv 2>/dev/null || true)
+            replicas=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$latest" --query properties.replicas -o tsv 2>/dev/null || echo 0)
+            [[ "$ready" == Provisioned && "$replicas" -ge 1 ]] && return 0
+            sleep 10
+          done
+          fail 'Integration Service revision did not become ready.'
+        }
+
+        env_json() {
+          az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].env' -o json --only-show-errors
+        }
+        value() {
+          local json="$1" name="$2"
+          jq -r --arg name "$name" '.[] | select(.name == $name) | (.value // "")' <<<"$json" | tail -1
+        }
+        secret_ref() {
+          local json="$1" name="$2"
+          jq -r --arg name "$name" '.[] | select(.name == $name) | (.secretRef // "")' <<<"$json" | tail -1
+        }
+
+        rollback() {
+          local code=$?
+          trap - ERR
+          echo 'WARN: Razorpay activation failed; restoring fail-closed payment execution.' >&2
+          az containerapp update -g "$RG" -n "$APP" \
+            --set-env-vars \
+            CRAVES_PAYMENT_ORDER_API_ENABLED=false \
+            RAZORPAY_PRODUCTION_PAYMENT_EXECUTION_ENABLED=false \
+            CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED=false \
+            CRAVES_REFUND_RECONCILIATION_ENABLED=false \
+            CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED=false \
+            CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED=false >/dev/null 2>&1 || true
+          exit "$code"
+        }
+        trap rollback ERR
+
+        wait_ready
+        before=$(env_json)
+        [[ "$(value "$before" PAYMENT_PROVIDER_NAME)" == RAZORPAY ]] || fail 'Razorpay is not the selected provider.'
+        [[ "$(value "$before" RAZORPAY_API_ENABLED)" == true ]] || fail 'RAZORPAY_API_ENABLED must be true.'
+        [[ "$(value "$before" RAZORPAY_ENVIRONMENT)" == PRODUCTION ]] || fail 'Run Razorpay environment configuration for PRODUCTION first.'
+        [[ "$(value "$before" RAZORPAY_PRODUCTION_ACTIVATION_APPROVED)" == true ]] || fail 'Production configuration approval is missing.'
+        [[ "$(value "$before" RAZORPAY_PRODUCTION_PAYMENT_EXECUTION_ENABLED)" == false ]] || fail 'Live money should still be disabled before this activation gate.'
+        [[ "$(value "$before" CASHFREE_API_ENABLED)" == false ]] || fail 'Cashfree API must be disabled.'
+        [[ "$(value "$before" CASHFREE_TRAFFIC_ALLOWED)" == false ]] || fail 'Cashfree traffic must be disabled.'
+        [[ "$(value "$before" CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED)" == false ]] || fail 'Cashfree webhook ingress must be disabled.'
+        [[ "$(value "$before" CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED)" == false ]] || fail 'Cashfree webhook worker must be disabled.'
+        [[ "$(value "$before" CRAVES_RAZORPAY_WEBHOOK_INGRESS_ENABLED)" == true ]] || fail 'Razorpay webhook ingress must be enabled.'
+        [[ "$(value "$before" CRAVES_RAZORPAY_WEBHOOK_WORKER_ENABLED)" == true ]] || fail 'Razorpay webhook worker must be enabled.'
+
+        for name in RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET; do
+          ref=$(secret_ref "$before" "$name")
+          [[ -n "$ref" ]] || fail "$name must be a Container App secret reference."
+        done
+
+        fqdn=$(az containerapp show -g "$RG" -n "$APP" --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)
+        curl -fsS --max-time 30 "https://${fqdn}/actuator/health" >/dev/null || fail 'Integration Service health check failed.'
+
+        web_readiness=$(curl -fsS --max-time 30 'https://craves.in/api/readiness/razorpay') || fail 'Public Razorpay customer-web readiness endpoint is unavailable.'
+        [[ "$(jq -r '.razorpayMode // empty' <<<"$web_readiness")" == production ]] || fail 'Customer web is not in Razorpay production mode.'
+        [[ "$(jq -r '.productionEligible // false' <<<"$web_readiness")" == true ]] || fail 'Customer web merchant/legal readiness is not production eligible.'
+
+        webhook_code=$(curl -sS -o /tmp/razorpay-webhook-probe.out -w '%{http_code}' --max-time 30 \
+          -X POST 'https://api.craves.in/api/v1/payments/webhooks/razorpay' \
+          -H 'Content-Type: application/json' \
+          --data '{}') || true
+        case "$webhook_code" in
+          400|401|403) ;;
+          *) fail "Razorpay public webhook negative probe returned HTTP $webhook_code; expected authenticated rejection, not route failure." ;;
+        esac
+
+        az containerapp update -g "$RG" -n "$APP" \
+          --set-env-vars \
+          CRAVES_PAYMENT_ORDER_API_ENABLED=true \
+          RAZORPAY_PRODUCTION_PAYMENT_EXECUTION_ENABLED=true \
+          CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED="$refunds" \
+          CRAVES_REFUND_RECONCILIATION_ENABLED="$refunds" \
+          CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED="$refunds" \
+          CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED="$refunds" >/dev/null
+
+        wait_ready
+        after=$(env_json)
+        [[ "$(value "$after" CRAVES_PAYMENT_ORDER_API_ENABLED)" == true ]] || fail 'Payment order API activation verification failed.'
+        [[ "$(value "$after" RAZORPAY_PRODUCTION_PAYMENT_EXECUTION_ENABLED)" == true ]] || fail 'Razorpay live execution activation verification failed.'
+        [[ "$(value "$after" CASHFREE_TRAFFIC_ALLOWED)" == false ]] || fail 'Cashfree traffic gate changed unexpectedly.'
+
+        curl -fsS --max-time 30 "https://${fqdn}/actuator/health" >/dev/null || fail 'Post-activation health check failed.'
+
+        trap - ERR
+        echo 'RAZORPAY CONTROLLED LIVE-MONEY WINDOW: OPEN'
+        echo 'Cashfree remains code-retained but traffic-disabled.'
+        echo 'Do not ramp broad customer traffic until the controlled live payment/refund certification passes.'

@@ -1,0 +1,76 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmation
+    displayName: Exact auto-refund rollback confirmation
+    type: string
+    default: ''
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  resourceGroup: rg-craves-prodlow-centralindia
+  orderApp: ca-craves-order-service-prodlow
+  integrationApp: ca-craves-integration-service-pr
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: none
+
+  - task: AzureCLI@2
+    displayName: Stop new T+30 refund generation and preserve in-flight Razorpay refunds
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+
+        [[ '${{ parameters.confirmation }}' == 'STOP_RAZORPAY_AUTO_REFUND' ]] || {
+          echo 'Type STOP_RAZORPAY_AUTO_REFUND to stop new 30-minute auto-refund generation.' >&2
+          exit 2
+        }
+
+        RG='$(resourceGroup)'
+        ORDER='$(orderApp)'
+        INTEGRATION='$(integrationApp)'
+
+        # Stop the producer first. Existing REFUND_REQUESTED events/refund rows must continue toward settlement.
+        az containerapp update -g "$RG" -n "$ORDER" \
+          --set-env-vars CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED=false >/dev/null
+
+        # Preserve downstream delivery and reconciliation for refund intents already created before the stop.
+        az containerapp update -g "$RG" -n "$INTEGRATION" \
+          --set-env-vars \
+          PAYMENT_PROVIDER_NAME=RAZORPAY \
+          RAZORPAY_API_ENABLED=true \
+          CASHFREE_API_ENABLED=false \
+          CASHFREE_TRAFFIC_ALLOWED=false \
+          CRAVES_CASHFREE_WEBHOOK_INGRESS_ENABLED=false \
+          CRAVES_CASHFREE_WEBHOOK_WORKER_ENABLED=false \
+          CRAVES_REFUND_CONSUMER_ENABLED=true \
+          CRAVES_REFUND_STATUS_PUBLISHER_ENABLED=true \
+          CRAVES_REFUND_RECONCILIATION_ENABLED=true \
+          CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED=true >/dev/null
+
+        order_json=$(az containerapp show -g "$RG" -n "$ORDER" --query 'properties.template.containers[0].env' -o json --only-show-errors)
+        integration_json=$(az containerapp show -g "$RG" -n "$INTEGRATION" --query 'properties.template.containers[0].env' -o json --only-show-errors)
+        value() {
+          local json="$1" name="$2"
+          jq -r --arg name "$name" '.[] | select(.name == $name) | (.value // "")' <<<"$json" | tail -1
+        }
+
+        [[ "$(value "$order_json" CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED)" == false ]]
+        [[ "$(value "$integration_json" PAYMENT_PROVIDER_NAME)" == RAZORPAY ]]
+        [[ "$(value "$integration_json" CASHFREE_TRAFFIC_ALLOWED)" == false ]]
+        [[ "$(value "$integration_json" CRAVES_REFUND_CONSUMER_ENABLED)" == true ]]
+        [[ "$(value "$integration_json" CRAVES_REFUND_RECONCILIATION_ENABLED)" == true ]]
+
+        echo 'RAZORPAY AUTO REFUND GENERATION: STOPPED'
+        echo 'No new chef-timeout refund intents will be created by the scheduled worker.'
+        echo 'Existing Razorpay refund intents continue through downstream execution/status reconciliation.'
+        echo 'If the provider itself is unsafe, use the separate Razorpay live-money kill switch.'
+        echo 'Cashfree remains disabled and receives no traffic.'

@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 class RefundRequestServiceTest {
     @Test
-    void createsCashfreeCompatibleStableRefundReference() {
+    void createsRazorpaySafeStableRefundReference() {
         UUID orderId = UUID.fromString("12345678-1234-5678-9012-123456789012");
         String reference = RefundRequestService.refundReference(orderId);
 
@@ -18,7 +18,7 @@ class RefundRequestServiceTest {
     }
 
     @Test
-    void createsStableUuidIdempotencyKey() {
+    void createsStableRazorpayIdempotencyKey() {
         UUID orderId = UUID.fromString("12345678-1234-5678-9012-123456789012");
 
         UUID first = RefundRequestService.deterministicIdempotencyKey(orderId);
@@ -26,5 +26,7 @@ class RefundRequestServiceTest {
 
         assertThat(first).isEqualTo(second);
         assertThat(first).isNotEqualTo(orderId);
+        assertThat(first.toString()).hasSizeGreaterThanOrEqualTo(10);
+        assertThat(first.toString()).matches("[A-Za-z0-9_-]+");
     }
 }

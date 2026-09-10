@@ -39,12 +39,15 @@ craves:
       enabled: ${CRAVES_SUPPORT_AI_ENABLED:false}
       endpoint: ${CRAVES_SUPPORT_AI_ENDPOINT:}
       deployment: ${CRAVES_SUPPORT_AI_DEPLOYMENT:}
+      token-scope: ${CRAVES_SUPPORT_AI_TOKEN_SCOPE:https://cognitiveservices.azure.com/.default}
       max-output-tokens: ${CRAVES_SUPPORT_AI_MAX_OUTPUT_TOKENS:500}
       token-timeout: ${CRAVES_SUPPORT_AI_TOKEN_TIMEOUT:5s}
       request-timeout: ${CRAVES_SUPPORT_AI_REQUEST_TIMEOUT:20s}
     downstream:
       order-base-url: ${CRAVES_ORDER_SERVICE_BASE_URL:}
       user-chef-base-url: ${CRAVES_USER_CHEF_SERVICE_BASE_URL:}
+      request-timeout: ${CRAVES_SUPPORT_DOWNSTREAM_REQUEST_TIMEOUT:5s}
+      allowed-hosts: ${CRAVES_SUPPORT_DOWNSTREAM_ALLOWED_HOSTS:api.craves.in}
     knowledge:
       max-results: ${CRAVES_SUPPORT_KNOWLEDGE_MAX_RESULTS:5}
       max-chunk-characters: ${CRAVES_SUPPORT_KNOWLEDGE_MAX_CHUNK_CHARACTERS:1800}

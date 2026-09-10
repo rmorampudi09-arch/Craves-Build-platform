@@ -8,24 +8,39 @@ on:
 permissions:
   contents: read
 jobs:
-  source-contracts:
-    name: Collect source contracts (not a validation or deployment)
+  tooling:
+    name: Prepare isolated Java build tooling (not production validation)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Export tracked backend source and branding
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Resolve current service dependencies
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/craves-pdf-contracts
-          git archive --format=tar HEAD services docs apps/customer-web-next .github/workflows/backend-completion-ci.yml azure-pipelines-backend-completion.yml scripts/release | gzip > /tmp/craves-pdf-contracts/source-contracts.tar.gz
-          git rev-parse HEAD > /tmp/craves-pdf-contracts/source-sha.txt
+          for service in notification-service order-service integration-service subscription-service; do
+            mvn -B -ntp -f services/$service/pom.xml -DskipTests package
+          done
+          mvn -B -ntp -f services/notification-service/pom.xml dependency:get -Dartifact=org.apache.pdfbox:pdfbox:3.0.8
+          mvn -B -ntp -f services/notification-service/pom.xml dependency:get -Dartifact=com.azure:azure-storage-blob:12.27.0
+          mvn -B -ntp -f services/notification-service/pom.xml dependency:build-classpath -Dmdep.outputFile=/tmp/notification-classpath.txt
+      - name: Package dependency cache without credentials or source data
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/craves-pdf-tooling
+          tar -czf /tmp/craves-pdf-tooling/maven-repository.tar.gz -C "$HOME/.m2" repository
+          MAVEN_ROOT="$(dirname "$(dirname "$(readlink -f "$(command -v mvn)")")")"
+          tar -czf /tmp/craves-pdf-tooling/maven-tool.tar.gz -C "$MAVEN_ROOT" .
       - uses: actions/upload-artifact@v4
         with:
-          name: pdf-source-contracts
-          path: /tmp/craves-pdf-contracts/
+          name: pdf-java-tooling
+          path: /tmp/craves-pdf-tooling/
           retention-days: 1
           if-no-files-found: error

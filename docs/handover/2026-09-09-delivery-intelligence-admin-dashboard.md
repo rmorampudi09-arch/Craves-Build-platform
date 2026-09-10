@@ -178,8 +178,15 @@ and image provenance.
 - Administrator authorization and no-store responses remain enforced. No
   delivery creation, cancellation, reassignment or provider activation changed.
 - Local lint, TypeScript, five frontend tests and production build passed.
-  Added backend authorization and date/pagination validation tests. Production
-  deployment and authenticated acceptance are pending the pipeline result.
+  Added backend authorization and date/pagination validation tests.
+- Production run `36501 / 20260910.6`, source `6774d102`, passed frontend,
+  Integration Service, authorization, migration-history and data-boundary
+  validation. Both images built and both container deployments passed, followed
+  by APIM, Front Door and public production smoke checks.
+- The owner tested the deployed dashboard and confirmed it is working on
+  2026-09-10. This is owner-confirmed live acceptance; the agent's previous
+  administrator session had expired before a separate authenticated retest.
+  Further sign-in was unnecessary after the owner's successful check.
 
 ## Figma
 

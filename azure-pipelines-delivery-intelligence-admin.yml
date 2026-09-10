@@ -2,6 +2,9 @@ trigger: none
 pr: none
 
 parameters:
+  - name: verificationOnly
+    type: boolean
+    default: false
   - name: confirmProductionDeploy
     type: boolean
     default: false
@@ -55,6 +58,7 @@ steps:
 
   - task: NodeTool@0
     displayName: Use Node.js 24
+    condition: and(succeeded(), ${{ eq(parameters.verificationOnly, false) }})
     inputs:
       versionSpec: 24.x
 
@@ -67,11 +71,13 @@ steps:
       npm run test
       npm run build
     displayName: Validate Delivery Intelligence Next.js application
+    condition: and(succeeded(), ${{ eq(parameters.verificationOnly, false) }})
     env:
       CRAVES_API_BASE_URL: $(cravesApiBaseUrl)
 
   - task: JavaToolInstaller@0
     displayName: Use Java 21
+    condition: and(succeeded(), ${{ eq(parameters.verificationOnly, false) }})
     inputs:
       versionSpec: '21'
       jdkArchitectureOption: x64
@@ -87,6 +93,7 @@ steps:
       cd $(integrationPath)
       mvn -B -ntp clean verify
     displayName: Validate Integration Service and ADMIN authorization
+    condition: and(succeeded(), ${{ eq(parameters.verificationOnly, false) }})
 
   - script: |
       set -euo pipefail
@@ -103,9 +110,11 @@ steps:
         exit 1
       }
     displayName: Validate deployment scripts and data-exposure boundary
+    condition: and(succeeded(), ${{ eq(parameters.verificationOnly, false) }})
 
   - task: AzureCLI@2
     displayName: Build and push immutable Integration and Delivery Intelligence images
+    condition: and(succeeded(), ${{ eq(parameters.verificationOnly, false) }})
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -129,6 +138,7 @@ steps:
 
   - task: AzureCLI@2
     displayName: Deploy Integration Service read API and startup-safe Flyway V117
+    condition: and(succeeded(), ${{ eq(parameters.verificationOnly, false) }})
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -152,6 +162,7 @@ steps:
 
   - task: AzureCLI@2
     displayName: Register read-only Delivery Intelligence APIM operations
+    condition: and(succeeded(), ${{ eq(parameters.verificationOnly, false) }})
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -165,6 +176,7 @@ steps:
 
   - task: AzureCLI@2
     displayName: Create or update dedicated Delivery Intelligence Container App
+    condition: and(succeeded(), ${{ eq(parameters.verificationOnly, false) }})
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -252,6 +264,7 @@ steps:
 
   - task: AzureCLI@2
     displayName: Publish Delivery Intelligence path through existing admin Front Door
+    condition: and(succeeded(), ${{ eq(parameters.verificationOnly, false) }})
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -306,4 +319,4 @@ steps:
         grep -qi '^x-azure-ref:' "$HEADERS" || { echo 'ERROR: Public dashboard response is not proven to traverse Azure Front Door.' >&2; exit 1; }
         grep -Eiq '^strict-transport-security:' "$HEADERS" || { echo 'ERROR: HSTS is missing on Delivery Intelligence route.' >&2; exit 1; }
 
-        echo 'SUCCESS: Delivery Intelligence is deployed, authenticated, routed through Front Door, and the existing admin surface still responds.'
+        echo 'SUCCESS: Public Delivery Intelligence smoke checks passed: health, page, signed-out guards, Front Door, HSTS, and existing admin response. Authenticated data acceptance is separate.'

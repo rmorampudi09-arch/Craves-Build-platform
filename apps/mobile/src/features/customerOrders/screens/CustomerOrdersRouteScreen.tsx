@@ -12,15 +12,15 @@ import {
 } from '../../cart/state/cartSelectors';
 import {isViewCartOverlayVisible} from '../../cart/viewCartOverlayModel';
 import {resolveCustomerOrdersContentBottomInset} from '../customerOrdersActiveCart';
+import {CustomerYourUsualSection} from '../components/CustomerYourUsualSection';
 import {CustomerOrdersScreen} from './CustomerOrdersScreen';
 
 const CUSTOMER_ORDERS_ROUTE_POLICY = resolveRouteChromePolicy('Customer', 'Orders');
 
 /**
- * P54 keeps the P53 Orders composition as one route and adds only the
- * state-driven active-cart chrome. Cart opening uses the existing real Cart
- * destination; unsupported reorder/cart merge behavior remains fail-closed in
- * the Orders cards until an authoritative contract is available.
+ * Orders keeps the existing status-history screen and layers the P3 `Your usual`
+ * repeat-order surface above it. Repeat-order writes still flow through the
+ * existing atomic cart-reorder contract and current Cart destination.
  */
 export function CustomerOrdersRouteScreen() {
   const navigation =
@@ -45,6 +45,7 @@ export function CustomerOrdersRouteScreen() {
 
   return (
     <View style={styles.root}>
+      <CustomerYourUsualSection />
       <View style={[styles.orders, {paddingBottom: contentBottomInset}]}>
         <CustomerOrdersScreen />
       </View>

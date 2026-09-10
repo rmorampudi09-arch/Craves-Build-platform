@@ -127,6 +127,15 @@ and image provenance.
   `Craves administration` and the administrator sign-in guard. Its deployed
   image is `craves/admin-web:36288`, revision `0000007`; no image change was
   needed to restore its missing Front Door association.
+- Run `36498` finished with the legacy `/admin` HTTP 404 gate failing. Run
+  `36499` added fresh-response probes and was superseded by `36500` on
+  `680febdb`, which captures bounded public error diagnostics. All validation
+  and authentication expectations remain enforced.
+- The public dashboard browser subsequently reached the mobile OTP sign-in
+  page at `admin.craves.in`; a secure administrator sign-in request is pending.
+  Authenticated dashboard data has not yet been accepted. During the final
+  check Azure DevOps displayed a temporary service-unavailable page, so run
+  `36500` must be read back before claiming final smoke-test success.
 
 ## Figma
 

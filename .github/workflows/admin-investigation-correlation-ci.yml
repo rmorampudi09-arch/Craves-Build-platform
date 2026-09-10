@@ -1,0 +1,145 @@
+name: CRAVES Admin Investigation Correlation CI
+
+on:
+  push:
+    branches:
+      - fix/admin-investigation-canonical-correlation-20260908
+    paths:
+      - 'apps/customer-web-next/src/app/api/admin/operations/investigate/route.ts'
+      - 'infra/apim/admin-operational-investigations/authenticated-policy.xml'
+      - 'azure-pipelines-admin-operational-investigations-ci.yml'
+      - 'azure-pipelines-admin-operational-investigations-apim-ci.yml'
+      - '.github/workflows/admin-investigation-correlation-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/customer-web-next/src/app/api/admin/operations/investigate/route.ts'
+      - 'infra/apim/admin-operational-investigations/authenticated-policy.xml'
+      - 'azure-pipelines-admin-operational-investigations-ci.yml'
+      - 'azure-pipelines-admin-operational-investigations-apim-ci.yml'
+      - '.github/workflows/admin-investigation-correlation-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-investigation-correlation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-source-and-apim-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify narrow source scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          changed="$(git diff --name-only refs/remotes/origin/main...HEAD)"
+          printf '%s\n' "$changed"
+          unexpected="$(printf '%s\n' "$changed" | grep -Ev '^((apps/customer-web-next/src/app/api/admin/operations/investigate/route\.ts)|(infra/apim/admin-operational-investigations/authenticated-policy\.xml)|(azure-pipelines-admin-operational-investigations-(apim-)?ci\.yml)|(\.github/workflows/admin-investigation-correlation-ci\.yml))$' || true)"
+          if [[ -n "$unexpected" ]]; then
+            echo 'ERROR: investigation fix contains unrelated source changes:' >&2
+            printf '%s\n' "$unexpected" >&2
+            exit 1
+          fi
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+
+      - name: Install locked customer-web dependencies
+        working-directory: apps/customer-web-next
+        run: npm ci --ignore-scripts
+
+      - name: TypeScript
+        working-directory: apps/customer-web-next
+        run: npm run typecheck
+
+      - name: Tests
+        working-directory: apps/customer-web-next
+        run: npm run test
+
+      - name: Production Next.js build
+        working-directory: apps/customer-web-next
+        run: npm run build
+
+      - name: Install XML validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libxml2-utils
+
+      - name: Validate APIM scripts and policy XML
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/apim/configure-admin-operational-investigations-apim.sh
+          bash -n scripts/apim/status-admin-operational-investigations-apim.sh
+          bash -n scripts/apim/rollback-admin-operational-investigations-apim.sh
+          xmllint --noout infra/apim/admin-operational-investigations/authenticated-policy.xml
+
+      - name: Verify canonical correlation and safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROUTE='apps/customer-web-next/src/app/api/admin/operations/investigate/route.ts'
+          CONTRACT='apps/customer-web-next/src/lib/admin-investigation-contract.ts'
+          COMPONENT='apps/customer-web-next/src/components/admin-operational-investigator.tsx'
+          CONFIG='scripts/apim/configure-admin-operational-investigations-apim.sh'
+          STATUS='scripts/apim/status-admin-operational-investigations-apim.sh'
+          POLICY='infra/apim/admin-operational-investigations/authenticated-policy.xml'
+
+          grep -q 'isSameOrigin' "$ROUTE"
+          grep -q 'randomUUID' "$ROUTE"
+          grep -q 'X-Admin-Reason' "$ROUTE"
+          grep -q '"X-Correlation-ID": correlationId' "$ROUTE"
+          grep -q '"X-Craves-Correlation-ID": correlationId' "$ROUTE"
+          grep -q 'upstream.headers.get("X-Craves-Correlation-ID")' "$ROUTE"
+          grep -q 'INVESTIGATION_CORRELATION_MISMATCH' "$ROUTE"
+          grep -q 'no-store' "$ROUTE"
+          grep -q 'reason.length < 10' "$CONTRACT"
+          grep -q 'Raw provider and webhook payloads are never rendered' "$COMPONENT"
+
+          grep -q 'CONFIRM_APIM_WRITE' "$CONFIG"
+          grep -q 'subscription-required false' "$CONFIG"
+          grep -q 'Multiple APIM APIs own' "$CONFIG"
+          grep -q 'backend-id policy blocks' "$CONFIG"
+          grep -q 'HTTP_STATUS.*401' "$CONFIG"
+          grep -q 'Authorization' "$POLICY"
+          grep -q 'cravesCorrelationId' "$POLICY"
+          grep -q 'X-Craves-Correlation-ID' "$POLICY"
+          grep -q 'X-Correlation-ID' "$POLICY"
+          grep -q 'no-store' "$POLICY"
+          grep -q 'X-Frame-Options' "$POLICY"
+          grep -q 'SUCCESS: Admin operational investigation APIM status is healthy' "$STATUS"
+
+          if grep -REn '(localStorage|sessionStorage|console\.(log|debug))' "$ROUTE" "$CONTRACT" "$COMPONENT"; then
+            echo 'ERROR: investigation runtime contains insecure browser storage or sensitive logging.' >&2
+            exit 1
+          fi
+
+          if grep -REn 'method:[[:space:]]*"(PATCH|PUT|DELETE)"' "$COMPONENT" "$ROUTE"; then
+            echo 'ERROR: read-only investigation module contains a state mutation method.' >&2
+            exit 1
+          fi
+
+          if grep -En 'set-header name="Authorization"|set-backend-service[^>]*backend-id' "$POLICY"; then
+            echo 'ERROR: APIM policy attempts to emit authorization material or use backend-id.' >&2
+            exit 1
+          fi
+
+          echo 'Canonical admin investigation correlation gates passed.'

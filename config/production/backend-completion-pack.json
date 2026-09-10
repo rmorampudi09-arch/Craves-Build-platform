@@ -115,6 +115,16 @@
       ]
     }
   ],
+  "stepOneDormantFlags": [
+    {
+      "serviceKey": "catalog",
+      "name": "CRAVES_DISCOVERY_CACHE_ENABLED"
+    },
+    {
+      "serviceKey": "integration",
+      "name": "CRAVES_SCHEDULED_PAYMENT_GUARD_ENABLED"
+    }
+  ],
   "deploymentSafety": {
     "imageReference": "repository digest from the current pipeline run",
     "environmentPolicy": "preserve every existing Container App environment value and secret reference",

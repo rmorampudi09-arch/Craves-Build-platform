@@ -1,0 +1,22 @@
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Customize your theme here. -->
+        <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+        <item name="android:windowSplashScreenBackground">#FFF7F1</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#FFF7F1</item>
+        <item name="android:alertDialogTheme">@style/CravesAlertDialogTheme</item>
+        <item name="alertDialogTheme">@style/CravesAlertDialogTheme</item>
+    </style>
+
+    <style name="CravesAlertDialogTheme" parent="Theme.AppCompat.Light.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/craves_alert_background</item>
+        <item name="android:colorAccent">#F62E18</item>
+        <item name="colorAccent">#F62E18</item>
+        <item name="android:textColorPrimary">#261A15</item>
+        <item name="android:textColorSecondary">#706864</item>
+    </style>
+
+</resources>

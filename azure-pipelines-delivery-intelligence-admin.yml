@@ -294,6 +294,7 @@ steps:
           local url="$1" expected="$2" status=''
           for attempt in $(seq 1 80); do
             status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 "$url" || true)"
+            printf 'Probe %s attempt %s: HTTP %s\n' "$url" "$attempt" "$status" >&2
             if [[ "$status" =~ $expected ]]; then
               printf '%s' "$status"
               return 0

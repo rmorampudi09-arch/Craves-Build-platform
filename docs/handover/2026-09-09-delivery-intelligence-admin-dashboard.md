@@ -76,6 +76,12 @@ Run the Azure DevOps pipeline from `azure-pipelines-delivery-intelligence-admin.
 on the reviewed repository branch with `confirmProductionDeploy=true`, then
 allow the pipeline smoke tests to finish.
 
+After an external DNS/certificate correction, `verificationOnly=true` runs the
+same public smoke checks without rebuilding images, changing runtime revisions,
+writing APIM policies or updating Front Door. Its result proves those smoke
+checks only; reference the original deployment run separately for build/tests
+and image provenance.
+
 ## Resumed deployment — 2026-09-10
 
 - Preserved the owner's commit `78d4d0e7`, including the read-only registry
@@ -98,8 +104,14 @@ allow the pipeline smoke tests to finish.
   DNS. Admin CNAME and validation TXT changes belong in that Azure zone.
 - Added and read back `admin` CNAME pointing to the existing Front Door endpoint
   and `_dnsauth.admin` TXT with the regenerated Azure verification value in
-  the `craves.in` Azure DNS zone, both with a 300-second TTL. Domain validation
-  and managed-certificate deployment are still pending at this checkpoint.
+  the `craves.in` Azure DNS zone, both with a 300-second TTL. Azure subsequently
+  reported domain validation `Approved` and its managed certificate `Deployed`
+  (181 days to expiry). Public HTTPS propagation is checked independently.
+- Azure Container Apps confirms dashboard revision `0000001` uses
+  `craves/delivery-intelligence-admin:36495` with managed-identity registry
+  authentication.
+- Published verification-only pipeline support in `0601560c`. Run `36497 /
+  20260910.2` uses that mode to verify the existing deployment after DNS changes.
 
 ## Figma
 

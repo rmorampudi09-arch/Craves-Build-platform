@@ -65,9 +65,41 @@ passed. V117 is now a fast marker (`ONLINE_INDEX_BUILD_DEFERRED`). The dashboard
 bounded queries remain functional on the current schema, while optional indexes
 are reserved for a separately monitored database-maintenance operation.
 
-## Manual action after merge
+## Deployment prerequisites
 
-No Azure Portal creation is required. Create/run the Azure DevOps pipeline from `azure-pipelines-delivery-intelligence-admin.yml` on the approved repository branch with `confirmProductionDeploy=true`, then allow the pipeline smoke tests to finish.
+The dashboard Container App needs a system-assigned managed identity with
+registry-scoped `AcrPull`. An infrastructure owner provisions this permission;
+the Contributor deployment connection verifies and reuses it without attempting
+RBAC writes. This assignment was confirmed in Azure Portal on 2026-09-10.
+
+Run the Azure DevOps pipeline from `azure-pipelines-delivery-intelligence-admin.yml`
+on the reviewed repository branch with `confirmProductionDeploy=true`, then
+allow the pipeline smoke tests to finish.
+
+## Resumed deployment — 2026-09-10
+
+- Preserved the owner's commit `78d4d0e7`, including the read-only registry
+  permission prerequisite check.
+- Run `36492` passed frontend/backend validation, immutable image build and
+  Integration Service rollout. APIM operation/policy read-back completed, but
+  the final gateway authentication probe timed out (curl exit 28). Dashboard
+  rollout, Front Door routing and public smoke tests were skipped.
+- Published `39ac1671` to add bounded retries and visible connection errors to
+  that probe. HTTP 401 remains mandatory; a timeout or unexpected response does
+  not pass the deployment gate.
+- Run `36495 / 20260910.1` passed application/backend validation, both image
+  builds, Integration Service rollout, APIM registration, dashboard rollout
+  and Front Door route publication. Public smoke tests failed because
+  `admin.craves.in` could not be resolved. Azure also reported the admin
+  custom-domain validation as timed out and its certificate as needing domain
+  validation. This is a DNS/domain-validation blocker, not a passed public
+  launch.
+- The owner confirmed that the domain's authoritative nameservers are Azure
+  DNS. Admin CNAME and validation TXT changes belong in that Azure zone.
+- Added and read back `admin` CNAME pointing to the existing Front Door endpoint
+  and `_dnsauth.admin` TXT with the regenerated Azure verification value in
+  the `craves.in` Azure DNS zone, both with a 300-second TTL. Domain validation
+  and managed-certificate deployment are still pending at this checkpoint.
 
 ## Figma
 

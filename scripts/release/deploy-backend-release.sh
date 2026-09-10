@@ -11,6 +11,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 CONFIRMATION=${CONFIRM_DEPLOYMENT:-}
 BACKUP_CONFIRMATION=${DATABASE_BACKUP_CONFIRMATION:-}
+READY_ATTEMPTS=${READY_ATTEMPTS:-150}
+READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-10}
 
 fail() {
   echo "ERROR: $*" >&2
@@ -21,6 +23,10 @@ fail() {
   || fail 'CONFIRM_DEPLOYMENT must be DEPLOY_SEVEN_SERVICES.'
 [[ "$BACKUP_CONFIRMATION" == 'DATABASE_BACKUP_VERIFIED' ]] \
   || fail 'DATABASE_BACKUP_CONFIRMATION must be DATABASE_BACKUP_VERIFIED.'
+[[ "$READY_ATTEMPTS" =~ ^[0-9]+$ && "$READY_ATTEMPTS" -ge 1 && "$READY_ATTEMPTS" -le 300 ]] \
+  || fail 'READY_ATTEMPTS must be an integer between 1 and 300.'
+[[ "$READY_SLEEP_SECONDS" =~ ^[0-9]+$ && "$READY_SLEEP_SECONDS" -ge 1 && "$READY_SLEEP_SECONDS" -le 60 ]] \
+  || fail 'READY_SLEEP_SECONDS must be an integer between 1 and 60.'
 command -v az >/dev/null || fail 'Azure CLI is required.'
 command -v jq >/dev/null || fail 'jq is required.'
 command -v sha256sum >/dev/null || fail 'sha256sum is required.'
@@ -116,8 +122,8 @@ environment_hash() {
 wait_ready() {
   local app_name=$1
   local expected_image=$2
-  local attempts=${3:-60}
-  local sleep_seconds=${4:-10}
+  local attempts=${3:-$READY_ATTEMPTS}
+  local sleep_seconds=${4:-$READY_SLEEP_SECONDS}
   local attempt current_image latest_revision ready_revision running_status health_state
 
   for ((attempt=1; attempt<=attempts; attempt++)); do
@@ -169,7 +175,7 @@ rollback_updated_services() {
 
     if az containerapp update -g "$RESOURCE_GROUP" -n "$app" \
       --image "$previous_image" --no-wait --only-show-errors >/dev/null; then
-      if rollback_revision=$(wait_ready "$app" "$previous_image" 60 10); then
+      if rollback_revision=$(wait_ready "$app" "$previous_image" "$READY_ATTEMPTS" "$READY_SLEEP_SECONDS"); then
         if [[ "$(environment_hash "$app" "$rollback_revision")" == "${PREVIOUS_ENV_HASH_BY_KEY[$key]}" ]]; then
           record_event "$key" "$app" 'rollback' 'ready' "$previous_image" "$rollback_revision"
         else
@@ -190,6 +196,50 @@ abort_release() {
   fail "$message"
 }
 
+verify_step_one_dormant_flags() {
+  local dormant service_key flag_name app env_json flag_row flag_value secret_ref normalized
+
+  while IFS= read -r dormant; do
+    service_key=$(jq -r '.serviceKey' <<<"$dormant")
+    flag_name=$(jq -r '.name' <<<"$dormant")
+    [[ "$service_key" =~ ^[A-Za-z][A-Za-z0-9]*$ ]] \
+      || fail "Invalid step-one dormant service key: $service_key"
+    [[ "$flag_name" =~ ^[A-Z][A-Z0-9_]*$ ]] \
+      || fail "Invalid step-one dormant flag name: $flag_name"
+
+    app=$(jq -r --arg key "$service_key" '.services[] | select(.key == $key) | .containerApp' "$PACK_FILE")
+    [[ -n "$app" && "$app" != 'null' ]] \
+      || fail "Step-one dormant flag references an unknown service: $service_key"
+
+    env_json=$(az containerapp show \
+      --resource-group "$RESOURCE_GROUP" \
+      --name "$app" \
+      --query 'properties.template.containers[0].env' \
+      --output json \
+      --only-show-errors)
+    flag_row=$(jq -c --arg name "$flag_name" '[.[]? | select(.name == $name)][0] // null' <<<"$env_json")
+
+    if [[ "$flag_row" == 'null' ]]; then
+      record_event "$service_key" "$app" 'dormant-flag' 'source-default-false' "$flag_name" ''
+      continue
+    fi
+
+    secret_ref=$(jq -r '.secretRef // ""' <<<"$flag_row")
+    [[ -z "$secret_ref" ]] \
+      || fail "Step-one dormant flag $flag_name on $app uses a secret reference and cannot be verified safely."
+    flag_value=$(jq -r '.value // ""' <<<"$flag_row")
+    normalized=$(printf '%s' "$flag_value" | tr '[:upper:]' '[:lower:]' | xargs)
+    case "$normalized" in
+      ''|false|0|no|off)
+        record_event "$service_key" "$app" 'dormant-flag' 'verified-false' "$flag_name" ''
+        ;;
+      *)
+        fail "Step-one dormant flag $flag_name must be absent or false before deployment; current value is not false."
+        ;;
+    esac
+  done < <(jq -c '.stepOneDormantFlags[]' "$PACK_FILE")
+}
+
 # Complete every read-only check before the first Container App mutation.
 while IFS= read -r service; do
   key=$(jq -r '.key' <<<"$service")
@@ -207,6 +257,8 @@ while IFS= read -r service; do
   az acr repository show --name "$ACR_NAME" --image "$repository@$digest" --only-show-errors >/dev/null \
     || fail "Image digest is not present in ACR: $repository@$digest"
 done < <(jq -c '.services[]' "$PACK_FILE")
+
+verify_step_one_dormant_flags
 
 while IFS= read -r service; do
   key=$(jq -r '.key' <<<"$service")
@@ -248,7 +300,7 @@ while IFS= read -r service; do
     --image "$target_image" --no-wait --only-show-errors >/dev/null \
     || abort_release "Container App update failed for $app."
 
-  new_revision=$(wait_ready "$app" "$target_image" 60 10) \
+  new_revision=$(wait_ready "$app" "$target_image" "$READY_ATTEMPTS" "$READY_SLEEP_SECONDS") \
     || abort_release "New revision did not become ready for $app."
   record_event "$key" "$app" 'readiness' 'ready' "$target_image" "$new_revision"
 
@@ -272,18 +324,20 @@ jq -n \
   --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --argjson deploymentEvents "$(cat "$OUTPUT_DIR/deployment-events.json")" \
   --argjson rollbackMap "$(cat "$OUTPUT_DIR/rollback-map.json")" \
-  '{schemaVersion:1,resourceGroup:$resourceGroup,sourceSha:$sourceSha,releaseMode:$releaseMode,expectedDeployCount:$expectedDeployCount,generatedAt:$generatedAt,runtimeEnvironmentPreserved:true,externalProvidersActivated:false,secretsReadOrChanged:false,deploymentEvents:$deploymentEvents,rollbackMap:$rollbackMap}' \
+  '{schemaVersion:1,resourceGroup:$resourceGroup,sourceSha:$sourceSha,releaseMode:$releaseMode,expectedDeployCount:$expectedDeployCount,generatedAt:$generatedAt,runtimeEnvironmentPreserved:true,stepOneDormantFlagsVerified:true,externalProvidersActivated:false,secretsReadOrChanged:false,deploymentEvents:$deploymentEvents,rollbackMap:$rollbackMap}' \
   >"$OUTPUT_DIR/backend-deployment-manifest.json"
 
 jq -e \
   --argjson expectedDeployCount "$EXPECTED_DEPLOY_COUNT" '
   .runtimeEnvironmentPreserved == true
+  and .stepOneDormantFlagsVerified == true
   and .externalProvidersActivated == false
   and .secretsReadOrChanged == false
   and .expectedDeployCount == $expectedDeployCount
   and (.rollbackMap | length == $expectedDeployCount)
   and ([.deploymentEvents[] | select(.phase == "health" and .status == "passed")] | length == $expectedDeployCount)
+  and ([.deploymentEvents[] | select(.phase == "dormant-flag")] | length > 0)
 ' "$OUTPUT_DIR/backend-deployment-manifest.json" >/dev/null \
   || fail 'Final backend deployment evidence validation failed.'
 
-echo 'SUCCESS: seven backend services deployed by digest; runtime configuration was preserved.'
+echo 'SUCCESS: seven backend services deployed by digest; runtime configuration was preserved and step-one dormant flags remained disabled.'

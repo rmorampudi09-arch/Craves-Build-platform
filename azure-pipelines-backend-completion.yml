@@ -266,7 +266,7 @@ stages:
     jobs:
       - job: DeploySevenServices
         displayName: Digest-pinned deployment with full-release rollback
-        timeoutInMinutes: 120
+        timeoutInMinutes: 300
         steps:
           - checkout: self
             persistCredentials: false
@@ -302,6 +302,8 @@ stages:
             env:
               CONFIRM_DEPLOYMENT: ${{ parameters.confirmDeployment }}
               DATABASE_BACKUP_CONFIRMATION: ${{ parameters.databaseBackupConfirmation }}
+              READY_ATTEMPTS: '150'
+              READY_SLEEP_SECONDS: '10'
               SMOKE_ATTEMPTS: '18'
               SMOKE_SLEEP_SECONDS: '10'
           - task: PublishPipelineArtifact@1

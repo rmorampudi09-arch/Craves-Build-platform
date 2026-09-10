@@ -32,7 +32,7 @@ From the repository root:
 
 ```bash
 cd apps/delivery-intelligence-admin
-npm install --ignore-scripts --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 export CRAVES_API_BASE_URL=https://api.craves.in/api/v1
 npm run dev
 ```
@@ -60,22 +60,27 @@ npm run build
 
 No Firebase secret, provider secret, database password, or payment credential belongs in this web container.
 
-## Deployment
+## Canonical deployment status
 
-Use the single Azure DevOps YAML at repository root:
+The source on this branch is intentionally **source-only**. Do not run the old `azure-pipelines-delivery-intelligence-admin.yml` from the long-diverged backend consolidation branch. That pipeline could deploy an unreconciled Integration Service image, apply Flyway, write APIM/Front Door, and create a billable Container App.
 
-```text
-azure-pipelines-delivery-intelligence-admin.yml
-```
+Before any future dashboard deployment:
 
-The production run validates both the Integration Service and this Next.js application, builds immutable images, deploys the Integration Service, publishes the two read-only APIM operations, creates/updates the separate Delivery Intelligence Container App, publishes the `/delivery-intelligence` Front Door route, and performs smoke tests.
+1. map the currently deployed Integration Service image and revision to its exact Git source;
+2. reconcile the complete Integration Service runtime tree against canonical `main`;
+3. verify every applied Flyway version and checksum, including V115 and V116;
+4. create and validate a new main-based immutable-image deployment pipeline;
+5. preserve the current Integration Service and dashboard image references for rollback;
+6. require explicit APIM, Front Door and any billable Container App approvals;
+7. perform an authenticated admin smoke test after deployment.
 
-The first run may create `ca-craves-delivery-intel-prodlow`, which is a billable Azure resource. The pipeline therefore requires `confirmProductionDeploy=true`.
+The established Azure DevOps service connection remains `Craves-Dev-Service-Connection`. No secret value belongs in source control or chat.
 
 ## Backend code paths
 
 ```text
 services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence/
+services/integration-service/src/main/resources/db/migration/V115__razorpay_webhook_delivery_guard.sql
 services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql
 services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql.conf
 scripts/apim/configure-delivery-intelligence-admin-apim.sh

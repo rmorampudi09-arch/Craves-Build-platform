@@ -95,7 +95,10 @@ verify_operation "get-admin-delivery-intelligence-order"
 
 GATEWAY_URL="$(az apim show -g "$RG" -n "$APIM" --query gatewayUrl -o tsv)"
 [[ "$GATEWAY_URL" == https://* ]] || fail "APIM gateway URL was not returned"
-OVERVIEW_STATUS="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 "${GATEWAY_URL%/}/${API_PATH}/delivery-intelligence/overview")"
+OVERVIEW_STATUS="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  --connect-timeout 10 --max-time 30 --retry 4 --retry-delay 5 --retry-max-time 180 \
+  "${GATEWAY_URL%/}/${API_PATH}/delivery-intelligence/overview")" \
+  || fail "APIM gateway authentication check could not complete after bounded retries"
 [[ "$OVERVIEW_STATUS" == "401" ]] || fail "Unauthenticated Delivery Intelligence overview returned HTTP ${OVERVIEW_STATUS}, expected 401"
 
 echo "SUCCESS: Delivery Intelligence APIM operations are configured and protected."

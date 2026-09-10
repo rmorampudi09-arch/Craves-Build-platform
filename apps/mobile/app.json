@@ -1,0 +1,7 @@
+{
+  "name": "CravesMobile",
+  "displayName": "CravesMobile",
+  "plugins": [
+    "expo-secure-store"
+  ]
+}

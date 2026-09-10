@@ -2,11 +2,13 @@
 
 import { InvestigationPanel } from "@/components/investigation-panel";
 import { OverviewPanel } from "@/components/overview-panel";
+import { HistoryFilterBar } from "@/components/history-filters";
+import { DEFAULT_FILTERS, historyQuery, rangeLabel, type HistoryFilters } from "@/lib/history-filters";
 import type { AdminIdentity } from "@/lib/admin-contract";
 import type { DeliveryOverview, OrderInvestigation } from "@/lib/delivery-contract";
 import { AlertTriangle, BarChart3, ChevronRight, CircleHelp, Database, LogIn, Search, ShieldCheck, Truck, X } from "lucide-react";
 import Image from "next/image";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const BASE_PATH = "/delivery-intelligence";
 const POLL_MS = 20_000;
@@ -39,25 +41,64 @@ export function DeliveryIntelligenceApp() {
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [investigationLoading, setInvestigationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<HistoryFilters>({ ...DEFAULT_FILTERS });
+  const [overviewQuery, setOverviewQuery] = useState(() => historyQuery(DEFAULT_FILTERS).toString());
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const overviewRequest = useRef<AbortController | null>(null);
+  const requestSequence = useRef(0);
+  const pageQuery = new URLSearchParams(overviewQuery);
+  const autoRefresh = filters.range !== "custom" && filters.sort === "desc"
+    && Number(pageQuery.get("offset")) === 0 && Number(pageQuery.get("attentionOffset")) === 0;
 
   const loadOverview = useCallback(async () => {
+    overviewRequest.current?.abort();
+    const controller = new AbortController();
+    overviewRequest.current = controller;
+    const sequence = ++requestSequence.current;
     setOverviewLoading(true);
     try {
-      const response = await fetch(`${BASE_PATH}/api/delivery-intelligence/overview?hours=24&limit=35`, {
+      const response = await fetch(`${BASE_PATH}/api/delivery-intelligence/overview?${overviewQuery}`, {
         cache: "no-store",
         credentials: "same-origin",
+        signal: controller.signal,
       });
       if (response.status === 401) return signedOutRedirect();
       if (response.status === 403) throw new Error("ADMIN_ACCESS_REQUIRED");
       const data = await json<DeliveryOverview>(response);
+      if (sequence !== requestSequence.current) return;
       setOverview(data);
       setError(null);
     } catch (cause) {
+      if (controller.signal.aborted || sequence !== requestSequence.current) return;
       setError(cause instanceof Error ? cause.message : "DELIVERY_INTELLIGENCE_UNAVAILABLE");
     } finally {
-      setOverviewLoading(false);
+      if (sequence === requestSequence.current) setOverviewLoading(false);
     }
-  }, []);
+  }, [overviewQuery]);
+
+  const refreshOverview = useCallback(() => {
+    setOverviewQuery(historyQuery(filters).toString());
+    setRefreshVersion(version => version + 1);
+  }, [filters]);
+
+  function applyFilters(next: HistoryFilters) {
+    setFilters(next);
+    setOverview(null);
+    setOverviewQuery(historyQuery(next).toString());
+    setRefreshVersion(version => version + 1);
+  }
+
+  function changePage(section: "activity" | "attention", direction: number) {
+    if (!overview || overviewLoading) return;
+    const params = new URLSearchParams(overviewQuery);
+    // Retain the selected interval while browsing pages; refresh starts a new window.
+    params.set("hours", "0");
+    params.set("from", overview.windowStart);
+    params.set("to", overview.windowEnd);
+    const offset = section === "activity" ? overview.activityOffset : overview.attentionOffset;
+    params.set(section === "activity" ? "offset" : "attentionOffset", String(Math.max(0, offset + direction * overview.pageSize)));
+    setOverviewQuery(params.toString());
+  }
 
   useEffect(() => {
     let active = true;
@@ -69,7 +110,6 @@ export function DeliveryIntelligenceApp() {
         const admin = await json<AdminIdentity>(response);
         if (!active) return;
         setIdentity(admin);
-        await loadOverview();
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : "IDENTITY_UNAVAILABLE");
       } finally {
@@ -77,13 +117,19 @@ export function DeliveryIntelligenceApp() {
       }
     })();
     return () => { active = false; };
-  }, [loadOverview]);
+  }, []);
 
   useEffect(() => {
     if (!identity || view !== "overview") return;
-    const timer = window.setInterval(() => { void loadOverview(); }, POLL_MS);
+    void loadOverview();
+    return () => { overviewRequest.current?.abort(); requestSequence.current += 1; };
+  }, [identity, view, loadOverview, refreshVersion]);
+
+  useEffect(() => {
+    if (!identity || view !== "overview" || !autoRefresh) return;
+    const timer = window.setInterval(refreshOverview, POLL_MS);
     return () => window.clearInterval(timer);
-  }, [identity, loadOverview, view]);
+  }, [identity, refreshOverview, view, autoRefresh]);
 
   const investigate = useCallback(async (reference: string) => {
     const normalized = reference.trim();
@@ -169,12 +215,15 @@ export function DeliveryIntelligenceApp() {
         </header>
 
         <div className="content-area">
+          {view === "overview" && <HistoryFilterBar filters={filters} onApply={applyFilters} loading={overviewLoading} />}
           {error && (
             <div className="error-banner"><AlertTriangle size={17} /><span>{friendlyError(error)}</span><button type="button" onClick={() => setError(null)}><X size={15} /></button></div>
           )}
 
           {view === "overview" && overview ? (
-            <OverviewPanel data={overview} loading={overviewLoading} onRefresh={() => void loadOverview()} onInvestigate={reference => void investigate(reference)} />
+            <OverviewPanel data={overview} loading={overviewLoading} onRefresh={refreshOverview}
+              rangeLabel={rangeLabel(filters)} sort={filters.sort} autoRefresh={autoRefresh}
+              onPage={changePage} onInvestigate={reference => void investigate(reference)} />
           ) : view === "overview" ? (
             <div className="loading-panel"><div className="boot-spinner" /><p>Loading delivery telemetry…</p></div>
           ) : investigation ? (

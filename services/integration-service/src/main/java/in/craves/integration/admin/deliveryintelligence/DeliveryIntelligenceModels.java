@@ -16,7 +16,15 @@ public final class DeliveryIntelligenceModels {
         List<ProviderShare> providerShare,
         RecoveryHealth recoveryHealth,
         List<ActivityItem> recentActivity,
-        List<AttentionItem> attentionQueue
+        List<AttentionItem> attentionQueue,
+        OffsetDateTime windowStart,
+        OffsetDateTime windowEnd,
+        String bucketUnit,
+        int activityOffset,
+        boolean activityHasMore,
+        int attentionOffset,
+        boolean attentionHasMore,
+        int pageSize
     ) {}
 
     public record Metrics(

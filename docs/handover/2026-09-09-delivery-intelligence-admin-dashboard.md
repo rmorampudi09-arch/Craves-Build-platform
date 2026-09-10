@@ -161,6 +161,26 @@ and image provenance.
 - Dashboard read-path acceptance is verified. The historical delivery failure
   still requires investigation; no old delivery was rebooked or mutated.
 
+## Full-history filters — 2026-09-10
+
+- Overview now defaults to all stored history, newest first. Presets cover the
+  last 24 hours, 7 days and 30 days; custom dates include the entire final IST day.
+- Activity supports newest/oldest ordering and 25/50/100 rows per page. Activity
+  and attention queues have independent Previous/Next controls, with stable
+  timestamp/type/ID ordering. Attention retains oldest-first operational priority.
+- Charts aggregate the full selected range by hour, day, week or month; older
+  buckets are no longer dropped. Full dates include years for historical rows.
+- Metrics retain their original creation/receipt timestamp semantics; activity
+  uses its displayed update/event timestamp. Both respect the selected bounds.
+- Paging retains date bounds. Automatic refresh pauses on older pages, custom
+  dates and oldest-first views; Refresh starts again from page one. Existing
+  provider telemetry, recovery details and order investigation are preserved.
+- Administrator authorization and no-store responses remain enforced. No
+  delivery creation, cancellation, reassignment or provider activation changed.
+- Local lint, TypeScript, five frontend tests and production build passed.
+  Added backend authorization and date/pagination validation tests. Production
+  deployment and authenticated acceptance are pending the pipeline result.
+
 ## Figma
 
 Design file: `Craves — Delivery Intelligence Admin Dashboard`.

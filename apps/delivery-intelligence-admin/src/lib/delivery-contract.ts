@@ -61,6 +61,14 @@ export type DeliveryOverview = {
   recoveryHealth: RecoveryHealth;
   recentActivity: ActivityItem[];
   attentionQueue: AttentionItem[];
+  windowStart: string;
+  windowEnd: string;
+  bucketUnit: "hour" | "day" | "week" | "month";
+  activityOffset: number;
+  activityHasMore: boolean;
+  attentionOffset: number;
+  attentionHasMore: boolean;
+  pageSize: number;
 };
 
 export type DeliveryCommandEvidence = {

@@ -35,19 +35,40 @@ public class DeliveryIntelligenceReadRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public OverviewResponse overview(int hours, int limit) {
+    public OverviewResponse overview(int hours, int limit, OffsetDateTime from, OffsetDateTime to,
+                                     int offset, int attentionOffset, String sort) {
         OffsetDateTime generatedAt = OffsetDateTime.now(ZoneOffset.UTC);
-        OffsetDateTime since = generatedAt.minusHours(hours);
+        OffsetDateTime until = to == null || to.isAfter(generatedAt) ? generatedAt : to;
+        OffsetDateTime since = from != null ? from : hours == 0 ? earliestEvidence(until) : until.minusHours(hours);
+        if (!since.isBefore(until)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date range must start before its end");
+        }
+        long days = java.time.Duration.between(since, until).toDays();
+        String bucketUnit = days <= 7 ? "hour" : days <= 180 ? "day" : days <= 730 ? "week" : "month";
+        List<ActivityItem> activity = loadRecentActivity(since, until, limit + 1, offset, sort);
+        List<AttentionItem> attention = loadAttentionQueue(since, until, limit + 1, attentionOffset);
         return new OverviewResponse(
-            generatedAt,
-            hours,
-            loadMetrics(since),
-            loadHourlyActivity(since),
-            loadProviderShare(since),
-            loadRecoveryHealth(since),
-            loadRecentActivity(since, limit),
-            loadAttentionQueue(since, limit)
+            generatedAt, hours, loadMetrics(since, until), loadHourlyActivity(since, until, bucketUnit),
+            loadProviderShare(since, until), loadRecoveryHealth(since, until),
+            List.copyOf(activity.subList(0, Math.min(limit, activity.size()))),
+            List.copyOf(attention.subList(0, Math.min(limit, attention.size()))),
+            since, until, bucketUnit, offset, activity.size() > limit,
+            attentionOffset, attention.size() > limit, limit
         );
+    }
+
+    private OffsetDateTime earliestEvidence(OffsetDateTime until) {
+        OffsetDateTime earliest = jdbcTemplate.queryForObject(
+            """
+            SELECT MIN(first_at) FROM (
+                SELECT MIN(created_at) AS first_at FROM delivery_schema.delivery_command
+                UNION ALL SELECT MIN(created_at) FROM delivery_schema.delivery_job
+                UNION ALL SELECT MIN(created_at) FROM delivery_schema.delivery_assignment
+                UNION ALL SELECT MIN(occurred_at) FROM delivery_schema.delivery_event
+                UNION ALL SELECT MIN(received_at) FROM delivery_schema.delivery_webhook_inbox
+            ) evidence
+            """, OffsetDateTime.class);
+        return earliest == null || !earliest.isBefore(until) ? until.minusHours(24) : earliest;
     }
 
     public OrderInvestigationResponse investigate(String reference, UUID correlationId) {
@@ -104,26 +125,26 @@ public class DeliveryIntelligenceReadRepository {
         );
     }
 
-    private Metrics loadMetrics(OffsetDateTime since) {
+    private Metrics loadMetrics(OffsetDateTime since, OffsetDateTime until) {
         return jdbcTemplate.query(
             """
             SELECT
-                (SELECT COUNT(*) FROM delivery_schema.delivery_command WHERE created_at >= ?) AS command_count,
-                (SELECT COUNT(*) FROM delivery_schema.delivery_command WHERE created_at >= ? AND status = 'COMPLETED') AS completed_command_count,
-                (SELECT COUNT(*) FROM delivery_schema.delivery_job WHERE created_at >= ?) AS delivery_job_count,
-                (SELECT COUNT(*) FROM delivery_schema.delivery_job WHERE created_at >= ? AND status = 'DELIVERED') AS delivered_count,
+                (SELECT COUNT(*) FROM delivery_schema.delivery_command WHERE created_at >= ? AND created_at < ?) AS command_count,
+                (SELECT COUNT(*) FROM delivery_schema.delivery_command WHERE created_at >= ? AND created_at < ? AND status = 'COMPLETED') AS completed_command_count,
+                (SELECT COUNT(*) FROM delivery_schema.delivery_job WHERE created_at >= ? AND created_at < ?) AS delivery_job_count,
+                (SELECT COUNT(*) FROM delivery_schema.delivery_job WHERE created_at >= ? AND created_at < ? AND status = 'DELIVERED') AS delivered_count,
                 (SELECT COUNT(*) FROM delivery_schema.delivery_job
-                  WHERE created_at >= ? AND status NOT IN ('DELIVERED', 'CANCELLED', 'RETURNED', 'FAILED')) AS active_delivery_count,
+                  WHERE created_at >= ? AND created_at < ? AND status NOT IN ('DELIVERED', 'CANCELLED', 'RETURNED', 'FAILED')) AS active_delivery_count,
                 (SELECT COUNT(*) FROM delivery_schema.delivery_command
-                  WHERE created_at >= ? AND (attempt_count > 1 OR provider_wait_attempt_count > 0 OR reconciliation_attempt_count > 0)) AS recovery_command_count,
+                  WHERE created_at >= ? AND created_at < ? AND (attempt_count > 1 OR provider_wait_attempt_count > 0 OR reconciliation_attempt_count > 0)) AS recovery_command_count,
                 ((SELECT COUNT(*) FROM delivery_schema.delivery_command
-                   WHERE created_at >= ? AND status IN ('FAILED', 'DEAD_LETTER', 'WAITING_FOR_PROVIDER', 'RECONCILIATION_PENDING'))
+                   WHERE created_at >= ? AND created_at < ? AND status IN ('FAILED', 'DEAD_LETTER', 'WAITING_FOR_PROVIDER', 'RECONCILIATION_PENDING'))
                  +
                  (SELECT COUNT(*) FROM delivery_schema.delivery_job
-                   WHERE created_at >= ? AND tracking_dead_lettered_at IS NOT NULL)
+                   WHERE created_at >= ? AND created_at < ? AND tracking_dead_lettered_at IS NOT NULL)
                  +
                  (SELECT COUNT(*) FROM delivery_schema.delivery_webhook_inbox
-                   WHERE received_at >= ? AND processing_status IN ('FAILED', 'DEAD_LETTER', 'REJECTED'))) AS attention_count
+                   WHERE received_at >= ? AND received_at < ? AND processing_status IN ('FAILED', 'DEAD_LETTER', 'REJECTED'))) AS attention_count
             """,
             (rs, rowNum) -> new Metrics(
                 rs.getLong("command_count"),
@@ -134,28 +155,28 @@ public class DeliveryIntelligenceReadRepository {
                 rs.getLong("recovery_command_count"),
                 rs.getLong("attention_count")
             ),
-            since, since, since, since, since, since, since, since, since
+            since, until, since, until, since, until, since, until, since, until, since, until, since, until, since, until, since, until
         ).stream().findFirst().orElse(new Metrics(0, 0, 0, 0, 0, 0, 0));
     }
 
-    private List<HourlyActivity> loadHourlyActivity(OffsetDateTime since) {
+    private List<HourlyActivity> loadHourlyActivity(OffsetDateTime since, OffsetDateTime until, String bucketUnit) {
         return jdbcTemplate.query(
             """
-            SELECT date_trunc('hour', observed_at) AS bucket_start,
+            SELECT date_trunc(?, observed_at AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata' AS bucket_start,
                    COUNT(*) FILTER (WHERE kind = 'COMMAND') AS command_count,
                    COUNT(*) FILTER (WHERE kind = 'EVENT') AS delivery_event_count,
                    COUNT(*) FILTER (WHERE kind = 'EVENT' AND status = 'DELIVERED') AS delivered_count
               FROM (
                     SELECT created_at AS observed_at, 'COMMAND'::text AS kind, status
                       FROM delivery_schema.delivery_command
-                     WHERE created_at >= ?
+                     WHERE created_at >= ? AND created_at < ?
                     UNION ALL
                     SELECT occurred_at AS observed_at, 'EVENT'::text AS kind,
                            COALESCE(normalized_status, event_type) AS status
                       FROM delivery_schema.delivery_event
-                     WHERE occurred_at >= ?
+                     WHERE occurred_at >= ? AND occurred_at < ?
                    ) activity
-             GROUP BY date_trunc('hour', observed_at)
+             GROUP BY 1
              ORDER BY bucket_start
             """,
             (rs, rowNum) -> new HourlyActivity(
@@ -164,11 +185,11 @@ public class DeliveryIntelligenceReadRepository {
                 rs.getLong("delivery_event_count"),
                 rs.getLong("delivered_count")
             ),
-            since, since
+            bucketUnit, since, until, since, until
         );
     }
 
-    private List<ProviderShare> loadProviderShare(OffsetDateTime since) {
+    private List<ProviderShare> loadProviderShare(OffsetDateTime since, OffsetDateTime until) {
         List<ProviderCount> counts = jdbcTemplate.query(
             """
             SELECT assignment.selected_provider_id AS provider_id,
@@ -177,7 +198,7 @@ public class DeliveryIntelligenceReadRepository {
               FROM delivery_schema.delivery_assignment assignment
               LEFT JOIN delivery_schema.delivery_provider provider
                 ON provider.provider_id = assignment.selected_provider_id
-             WHERE assignment.created_at >= ?
+             WHERE assignment.created_at >= ? AND assignment.created_at < ?
                AND assignment.selected_provider_id IS NOT NULL
              GROUP BY assignment.selected_provider_id, provider.display_name
              ORDER BY selection_count DESC, assignment.selected_provider_id
@@ -187,7 +208,7 @@ public class DeliveryIntelligenceReadRepository {
                 rs.getString("display_name"),
                 rs.getLong("selection_count")
             ),
-            since
+            since, until
         );
         long total = counts.stream().mapToLong(ProviderCount::selectionCount).sum();
         if (total == 0) {
@@ -203,20 +224,20 @@ public class DeliveryIntelligenceReadRepository {
             .toList();
     }
 
-    private RecoveryHealth loadRecoveryHealth(OffsetDateTime since) {
+    private RecoveryHealth loadRecoveryHealth(OffsetDateTime since, OffsetDateTime until) {
         return jdbcTemplate.query(
             """
             SELECT
                 (SELECT COUNT(*) FROM delivery_schema.delivery_command
-                  WHERE created_at >= ? AND attempt_count > 1) AS retried_command_count,
+                  WHERE created_at >= ? AND created_at < ? AND attempt_count > 1) AS retried_command_count,
                 (SELECT COUNT(*) FROM delivery_schema.delivery_command
-                  WHERE created_at >= ? AND (reconciliation_attempt_count > 0 OR status = 'RECONCILIATION_PENDING')) AS reconciliation_count,
+                  WHERE created_at >= ? AND created_at < ? AND (reconciliation_attempt_count > 0 OR status = 'RECONCILIATION_PENDING')) AS reconciliation_count,
                 (SELECT COUNT(*) FROM delivery_schema.delivery_command
-                  WHERE created_at >= ? AND (provider_wait_attempt_count > 0 OR status = 'WAITING_FOR_PROVIDER')) AS provider_wait_count,
+                  WHERE created_at >= ? AND created_at < ? AND (provider_wait_attempt_count > 0 OR status = 'WAITING_FOR_PROVIDER')) AS provider_wait_count,
                 (SELECT COUNT(*) FROM delivery_schema.delivery_webhook_inbox
-                  WHERE received_at >= ? AND processing_status = 'DEAD_LETTER') AS webhook_dead_letter_count,
+                  WHERE received_at >= ? AND received_at < ? AND processing_status = 'DEAD_LETTER') AS webhook_dead_letter_count,
                 (SELECT COUNT(*) FROM delivery_schema.delivery_job
-                  WHERE created_at >= ? AND tracking_dead_lettered_at IS NOT NULL) AS tracking_dead_letter_count
+                  WHERE created_at >= ? AND created_at < ? AND tracking_dead_lettered_at IS NOT NULL) AS tracking_dead_letter_count
             """,
             (rs, rowNum) -> new RecoveryHealth(
                 rs.getLong("retried_command_count"),
@@ -225,11 +246,11 @@ public class DeliveryIntelligenceReadRepository {
                 rs.getLong("webhook_dead_letter_count"),
                 rs.getLong("tracking_dead_letter_count")
             ),
-            since, since, since, since, since
+            since, until, since, until, since, until, since, until, since, until
         ).stream().findFirst().orElse(new RecoveryHealth(0, 0, 0, 0, 0));
     }
 
-    private List<ActivityItem> loadRecentActivity(OffsetDateTime since, int limit) {
+    private List<ActivityItem> loadRecentActivity(OffsetDateTime since, OffsetDateTime until, int limit, int offset, String sort) {
         return jdbcTemplate.query(
             """
             SELECT activity_id, order_id, chef_sub_order_id, provider_id,
@@ -245,7 +266,7 @@ public class DeliveryIntelligenceReadRepository {
                            command.updated_at AS occurred_at,
                            command.status IN ('FAILED', 'DEAD_LETTER', 'WAITING_FOR_PROVIDER', 'RECONCILIATION_PENDING') AS attention
                       FROM delivery_schema.delivery_command command
-                     WHERE command.updated_at >= ?
+                     WHERE command.updated_at >= ? AND command.updated_at < ?
                     UNION ALL
                     SELECT assignment.id::text,
                            assignment.order_id,
@@ -257,7 +278,7 @@ public class DeliveryIntelligenceReadRepository {
                            assignment.updated_at,
                            assignment.status = 'EXHAUSTED'
                       FROM delivery_schema.delivery_assignment assignment
-                     WHERE assignment.updated_at >= ?
+                     WHERE assignment.updated_at >= ? AND assignment.updated_at < ?
                     UNION ALL
                     SELECT event.id::text,
                            job.order_id,
@@ -270,11 +291,11 @@ public class DeliveryIntelligenceReadRepository {
                            (NOT event.applied) OR COALESCE(event.normalized_status, '') = 'FAILED'
                       FROM delivery_schema.delivery_event event
                       JOIN delivery_schema.delivery_job job ON job.id = event.delivery_job_id
-                     WHERE event.occurred_at >= ?
+                     WHERE event.occurred_at >= ? AND event.occurred_at < ?
                    ) recent
-             ORDER BY occurred_at DESC, activity_id DESC
-             LIMIT ?
-            """,
+             ORDER BY occurred_at %1$s, activity_type %1$s, activity_id %1$s
+             LIMIT ? OFFSET ?
+            """.formatted("asc".equals(sort) ? "ASC" : "DESC"),
             (rs, rowNum) -> new ActivityItem(
                 rs.getString("activity_id"),
                 rs.getObject("order_id", UUID.class),
@@ -286,11 +307,11 @@ public class DeliveryIntelligenceReadRepository {
                 rs.getObject("occurred_at", OffsetDateTime.class),
                 rs.getBoolean("attention")
             ),
-            since, since, since, limit
+            since, until, since, until, since, until, limit, offset
         );
     }
 
-    private List<AttentionItem> loadAttentionQueue(OffsetDateTime since, int limit) {
+    private List<AttentionItem> loadAttentionQueue(OffsetDateTime since, OffsetDateTime until, int limit, int offset) {
         return jdbcTemplate.query(
             """
             SELECT reference_id, order_id, provider_id, kind, status, occurred_at, error_recorded
@@ -303,7 +324,7 @@ public class DeliveryIntelligenceReadRepository {
                            command.updated_at AS occurred_at,
                            command.last_error IS NOT NULL AS error_recorded
                       FROM delivery_schema.delivery_command command
-                     WHERE command.updated_at >= ?
+                     WHERE command.updated_at >= ? AND command.updated_at < ?
                        AND command.status IN ('FAILED', 'DEAD_LETTER', 'WAITING_FOR_PROVIDER', 'RECONCILIATION_PENDING')
                     UNION ALL
                     SELECT job.id::text,
@@ -314,7 +335,7 @@ public class DeliveryIntelligenceReadRepository {
                            COALESCE(job.tracking_dead_lettered_at, job.updated_at),
                            job.last_tracking_error IS NOT NULL
                       FROM delivery_schema.delivery_job job
-                     WHERE job.updated_at >= ?
+                     WHERE job.updated_at >= ? AND job.updated_at < ?
                        AND job.tracking_dead_lettered_at IS NOT NULL
                     UNION ALL
                     SELECT webhook.id::text,
@@ -326,11 +347,11 @@ public class DeliveryIntelligenceReadRepository {
                            webhook.error_message IS NOT NULL
                       FROM delivery_schema.delivery_webhook_inbox webhook
                       LEFT JOIN delivery_schema.delivery_job job ON job.id = webhook.delivery_job_id
-                     WHERE webhook.received_at >= ?
+                     WHERE webhook.received_at >= ? AND webhook.received_at < ?
                        AND webhook.processing_status IN ('FAILED', 'DEAD_LETTER', 'REJECTED')
                    ) attention
-             ORDER BY occurred_at ASC, reference_id
-             LIMIT ?
+             ORDER BY occurred_at ASC, kind, reference_id
+             LIMIT ? OFFSET ?
             """,
             (rs, rowNum) -> new AttentionItem(
                 rs.getString("reference_id"),
@@ -341,7 +362,7 @@ public class DeliveryIntelligenceReadRepository {
                 rs.getObject("occurred_at", OffsetDateTime.class),
                 rs.getBoolean("error_recorded")
             ),
-            since, since, since, limit
+            since, until, since, until, since, until, limit, offset
         );
     }
 

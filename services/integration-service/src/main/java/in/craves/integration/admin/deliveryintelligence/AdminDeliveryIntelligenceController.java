@@ -4,6 +4,8 @@ import in.craves.integration.admin.deliveryintelligence.DeliveryIntelligenceMode
 import in.craves.integration.admin.deliveryintelligence.DeliveryIntelligenceModels.OverviewResponse;
 import in.craves.integration.security.CravesPrincipal;
 import java.util.UUID;
+import java.time.OffsetDateTime;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,8 +21,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/v1/admin/operations/delivery-intelligence")
 public class AdminDeliveryIntelligenceController {
-    private static final int MIN_HOURS = 1;
-    private static final int MAX_HOURS = 168;
+    private static final int MIN_HOURS = 0;
+    private static final int MAX_HOURS = 8760;
     private static final int MIN_LIMIT = 5;
     private static final int MAX_LIMIT = 100;
     private final DeliveryIntelligenceReadRepository repository;
@@ -33,16 +35,27 @@ public class AdminDeliveryIntelligenceController {
     public ResponseEntity<OverviewResponse> overview(
         Authentication authentication,
         @RequestParam(defaultValue = "24") int hours,
-        @RequestParam(defaultValue = "30") int limit
+        @RequestParam(defaultValue = "30") int limit,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+        @RequestParam(defaultValue = "0") int offset,
+        @RequestParam(defaultValue = "0") int attentionOffset,
+        @RequestParam(defaultValue = "desc") String sort
     ) {
         requireAdmin(authentication);
         if (hours < MIN_HOURS || hours > MAX_HOURS) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "hours must be between 1 and 168");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "hours must be between 0 (all time) and 8760");
         }
         if (limit < MIN_LIMIT || limit > MAX_LIMIT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit must be between 5 and 100");
         }
-        return noStore(repository.overview(hours, limit));
+        if (offset < 0 || attentionOffset < 0 || !(sort.equals("asc") || sort.equals("desc"))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid pagination or sort order");
+        }
+        if (from != null && to != null && !from.isBefore(to)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be earlier than to");
+        }
+        return noStore(repository.overview(hours, limit, from, to, offset, attentionOffset, sort));
     }
 
     @GetMapping("/orders/{reference}")

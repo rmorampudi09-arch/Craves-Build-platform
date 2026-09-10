@@ -4,3 +4,12 @@
 @import "./dashboard-c.css";
 @import "./dashboard-d.css";
 @import "./dashboard-e.css";
+
+.history-filter-bar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 18px; margin-bottom: 16px; }
+.history-filter-bar label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; }
+.history-filter-bar select, .history-filter-bar input { border: 1px solid #ddd7e5; border-radius: 8px; padding: 9px 10px; background: white; color: #272135; min-height: 40px; font: inherit; }
+.history-filter-error { color: #b42318; flex-basis: 100%; }
+.history-pagination { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 14px 18px; border-top: 1px solid #eee9f3; font-size: 12px; }
+.history-pagination span { flex: 1; }
+.activity-time { white-space: normal; }
+@media (max-width: 700px) { .history-filter-bar label { flex: 1 1 140px; } .history-filter-bar button { flex: 1; } }

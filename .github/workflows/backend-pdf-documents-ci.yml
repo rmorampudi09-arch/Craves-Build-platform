@@ -1,0 +1,31 @@
+name: Backend PDF Documents CI
+on:
+  push:
+    branches: [feature/backend-pdf-documents-20260911]
+    paths:
+      - '.github/workflows/backend-pdf-documents-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-contracts:
+    name: Collect source contracts (not a validation or deployment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Export tracked backend source and branding
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/craves-pdf-contracts
+          git archive --format=tar HEAD services docs apps/customer-web-next .github/workflows/backend-completion-ci.yml azure-pipelines-backend-completion.yml scripts/release | gzip > /tmp/craves-pdf-contracts/source-contracts.tar.gz
+          git rev-parse HEAD > /tmp/craves-pdf-contracts/source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-source-contracts
+          path: /tmp/craves-pdf-contracts/
+          retention-days: 1
+          if-no-files-found: error

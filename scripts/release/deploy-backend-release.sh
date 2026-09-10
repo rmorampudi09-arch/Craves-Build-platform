@@ -285,7 +285,7 @@ while IFS= read -r service; do
     --arg previousImage "$previous_image" \
     --arg previousReadyRevision "$previous_revision" \
     --arg environmentHash "$previous_env_hash" \
-    '{serviceKey:$serviceKey,containerApp:$containerApp,previousImage:$previousImage,previousReadyRevision:$previousRevision,environmentHash:$environmentHash}' \
+    '{serviceKey:$serviceKey,containerApp:$containerApp,previousImage:$previousImage,previousReadyRevision:$previousReadyRevision,environmentHash:$environmentHash}' \
     >>"$ROLLBACK_MAP"
   record_event "$key" "$app" 'before' 'ready' "$previous_image" "$previous_revision"
 

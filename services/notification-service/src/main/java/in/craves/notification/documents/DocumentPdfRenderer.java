@@ -22,7 +22,7 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.springframework.stereotype.Component;
 
-/** Local assets only. The renderer never interprets HTML, scripts or remote asset URLs. */
+/** Local assets only. Never interprets HTML, scripts or remote image URLs. */
 @Component
 public class DocumentPdfRenderer {
     private final DocumentSettings settings;
@@ -40,14 +40,7 @@ public class DocumentPdfRenderer {
                 try(var input=Files.newInputStream(font)) { regular=PDType0Font.load(pdf,input,true); }
                 bold=regular;
             }
-            PDImageXObject logo=null;
-            try(var asset=getClass().getResourceAsStream("/documents/craves-logo.png")) {
-                if(asset!=null) {
-                    byte[] bytes=asset.readNBytes(131073);
-                    if(bytes.length>131072) throw new IllegalArgumentException("LOGO_SIZE_LIMIT");
-                    logo=PDImageXObject.createFromByteArray(pdf,bytes,"craves-logo");
-                }
-            }
+            PDImageXObject logo=PDImageXObject.createFromByteArray(pdf,DocumentBrand.logo(),"approved-craves-logo");
             try(Layout layout=new Layout(pdf,regular,bold,logo,snapshot,id,timezone)) { layout.render(); }
             ByteArrayOutputStream output=new ByteArrayOutputStream();
             pdf.save(output);
@@ -95,9 +88,9 @@ public class DocumentPdfRenderer {
             if(++page>100) throw new IllegalArgumentException("PDF_PAGE_LIMIT");
             PDPage paper=new PDPage(PDRectangle.A4); pdf.addPage(paper); stream=new PDPageContentStream(pdf,paper);
             stream.setNonStrokingColor(ACCENT); stream.addRect(0,827,596,15); stream.fill();
-            if(logo!=null) stream.drawImage(logo,LEFT,755,46,46);
-            text("CRAVES",logo==null?LEFT:101,778,bold,16,ACCENT);
-            text("Food from home",logo==null?LEFT:101,763,font,9,MUTED);
+            stream.drawImage(logo,LEFT,755,46,46);
+            text("CRAVES",101,778,bold,16,ACCENT);
+            text("Food from home",101,763,font,9,MUTED);
             y=724;
         }
         void table(Table table) throws IOException {
@@ -146,17 +139,23 @@ public class DocumentPdfRenderer {
         static List<String> wrap(String value,PDFont face,float size,float width) throws IOException {
             List<String> result=new ArrayList<>();
             for(String part:value.replace('\r',' ').split("\n",-1)) {
-                StringBuilder line=new StringBuilder();
-                for(int cp:part.codePoints().toArray()) {
-                    String letter=new String(Character.toChars(cp));
-                    String candidate=line+letter;
-                    float length;
-                    try { length=face.getStringWidth(candidate)*size/1000; }
-                    catch(IllegalArgumentException ex) { throw new IllegalArgumentException("UNSUPPORTED_DOCUMENT_GLYPH",ex); }
-                    if(length>width && !line.isEmpty()) { result.add(line.toString()); line.setLength(0); }
-                    line.append(letter);
+                String remaining=part;
+                if(remaining.isEmpty()) { result.add(""); continue; }
+                while(!remaining.isEmpty()) {
+                    int end=0, space=-1;
+                    while(end<remaining.length()) {
+                        int next=end+Character.charCount(remaining.codePointAt(end));
+                        float length;
+                        try { length=face.getStringWidth(remaining.substring(0,next))*size/1000; }
+                        catch(IllegalArgumentException ex) { throw new IllegalArgumentException("UNSUPPORTED_DOCUMENT_GLYPH",ex); }
+                        if(length>width) break;
+                        if(Character.isWhitespace(remaining.codePointAt(end))) space=end;
+                        end=next;
+                    }
+                    if(end==0) throw new IllegalArgumentException("DOCUMENT_COLUMN_TOO_NARROW");
+                    if(end<remaining.length() && space>0) { result.add(remaining.substring(0,space)); remaining=remaining.substring(space+1); }
+                    else { result.add(remaining.substring(0,end)); remaining=remaining.substring(end); }
                 }
-                result.add(line.toString());
             }
             return result;
         }

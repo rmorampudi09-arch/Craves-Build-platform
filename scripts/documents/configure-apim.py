@@ -27,7 +27,7 @@ def az(*args):
     result = subprocess.run(['az', *args, '--only-show-errors', '-o', 'json'], capture_output=True, text=True, timeout=90)
     if result.returncode:
         raise RuntimeError('Azure command failed; inspect the authorized Azure session without publishing credentials')
-    return json.loads(result.stdout) if result.stdout.strip() else {}
+    return json.loads(result.stdout.lstrip('\ufeff')) if result.stdout.strip() else {}
 
 
 def rest(method, url, body=None, absent_ok=False):
@@ -41,7 +41,7 @@ def rest(method, url, body=None, absent_ok=False):
     if result.returncode:
         if absent_ok and re.search(r'\"code\"\s*:\s*\"(?:ResourceNotFound|NotFound)\"|\((?:ResourceNotFound|NotFound)\)|\b404\b', result.stderr): return None
         raise RuntimeError('APIM request failed; no credentials or response body were emitted')
-    return json.loads(result.stdout) if result.stdout.strip() else {}
+    return json.loads(result.stdout.lstrip('\ufeff')) if result.stdout.strip() else {}
 
 
 def policy_safe(value):

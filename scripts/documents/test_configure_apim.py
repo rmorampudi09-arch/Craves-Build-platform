@@ -18,6 +18,11 @@ class ApimPlanTests(unittest.TestCase):
         with patch.object(module.subprocess,'run',return_value=response):
             with self.assertRaises(RuntimeError): module.rest('GET','https://management.azure.com/test',absent_ok=True)
 
+    def test_policy_json_with_utf8_bom(self):
+        response=SimpleNamespace(returncode=0,stdout='\ufeff{"properties":{"value":"<policies/>"}}',stderr='')
+        with patch.object(module.subprocess,'run',return_value=response):
+            self.assertEqual('<policies/>',module.rest('GET','https://management.azure.com/test')['properties']['value'])
+
     def test_route_allowlist_and_queries(self):
         plan=module.plan('example.region.azurecontainerapps.io')
         self.assertEqual(7,len(plan['operations']))

@@ -1,7 +1,7 @@
 package in.craves.notification.documents;
 
 import static in.craves.notification.documents.DocumentModels.*;
-import com.azure.core.http.HttpLogDetailLevel;
+import com.azure.core.http.policy.HttpLogDetailLevel;
 import com.azure.core.http.policy.HttpLogOptions;
 import com.azure.core.util.Context;
 import com.azure.identity.ManagedIdentityCredentialBuilder;

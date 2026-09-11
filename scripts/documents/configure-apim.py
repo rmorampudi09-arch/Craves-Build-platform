@@ -39,7 +39,7 @@ def rest(method, url, body=None, absent_ok=False):
             command += ['--body', '@' + str(file), '--headers', 'Content-Type=application/json']
         result = subprocess.run(command, capture_output=True, text=True, timeout=90)
     if result.returncode:
-        if absent_ok and any(value in result.stderr for value in ['(ResourceNotFound)', '(NotFound)', '404']): return None
+        if absent_ok and re.search(r'\"code\"\s*:\s*\"(?:ResourceNotFound|NotFound)\"|\((?:ResourceNotFound|NotFound)\)|\b404\b', result.stderr): return None
         raise RuntimeError('APIM request failed; no credentials or response body were emitted')
     return json.loads(result.stdout) if result.stdout.strip() else {}
 

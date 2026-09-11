@@ -1,12 +1,23 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 
 spec=importlib.util.spec_from_file_location('pdf_apim',Path(__file__).with_name('configure-apim.py'))
 module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 
 class ApimPlanTests(unittest.TestCase):
+    def test_missing_api_cli_response_is_allowed_only_when_requested(self):
+        response=SimpleNamespace(returncode=1,stdout='',stderr='ERROR: Not Found({"error":{"code":"ResourceNotFound","message":"Api not found."}})')
+        with patch.object(module.subprocess,'run',return_value=response):
+            self.assertIsNone(module.rest('GET','https://management.azure.com/test',absent_ok=True))
+            with self.assertRaises(RuntimeError): module.rest('GET','https://management.azure.com/test')
+        response.stderr='ERROR: Forbidden({"error":{"code":"AuthorizationFailed"}})'
+        with patch.object(module.subprocess,'run',return_value=response):
+            with self.assertRaises(RuntimeError): module.rest('GET','https://management.azure.com/test',absent_ok=True)
+
     def test_route_allowlist_and_queries(self):
         plan=module.plan('example.region.azurecontainerapps.io')
         self.assertEqual(7,len(plan['operations']))

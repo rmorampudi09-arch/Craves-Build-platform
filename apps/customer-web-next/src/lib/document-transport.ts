@@ -1,5 +1,7 @@
 export class DocumentTransportError extends Error {
-  constructor(public status: number, public code: string) { super(code); }
+  public readonly status: number;
+  public readonly code: string;
+  constructor(status: number, code: string) { super(code); this.status = status; this.code = code; }
 }
 
 export async function readDocumentBytes(body: ReadableStream<Uint8Array> | null, limit: number, timeoutMs: number): Promise<Uint8Array> {
@@ -7,7 +9,10 @@ export async function readDocumentBytes(body: ReadableStream<Uint8Array> | null,
   const reader = body.getReader();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => { void reader.cancel().catch(() => undefined); reject(new DocumentTransportError(504, "DOCUMENT_BODY_TIMEOUT")); }, timeoutMs);
+    timer = setTimeout(() => {
+      reject(new DocumentTransportError(504, "DOCUMENT_BODY_TIMEOUT"));
+      void reader.cancel().catch(() => undefined);
+    }, timeoutMs);
   });
   try {
     return await Promise.race([timeout, (async () => {

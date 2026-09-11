@@ -1,0 +1,78 @@
+name: PDF backend verification (no deployment)
+
+on:
+  push:
+    branches: [feature/backend-pdf-documents-20260911]
+    paths: ['.github/workflows/backend-pdf-documents-ci.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pdf-module-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Java 21 - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [notification-service, order-service, integration-service, subscription-service]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pdf_module_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: pdf_test_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DOCUMENT_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/pdf_module_test
+      DOCUMENT_TEST_DB_USER: postgres
+      DOCUMENT_TEST_DB_PASSWORD: pdf_test_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Run full owning-service tests and package
+        run: mvn -B -ntp -f services/${{ matrix.service }}/pom.xml verify
+      - name: Require real document database tests in Notification Service
+        if: matrix.service == 'notification-service'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          root = Path('services/notification-service/target/surefire-reports')
+          files = list(root.glob('TEST-*DocumentRepositoryDbTest.xml'))
+          assert len(files) == 1, 'Document PostgreSQL report missing'
+          suite = ET.parse(files[0]).getroot()
+          assert int(suite.attrib['tests']) >= 10, 'Missing document database tests'
+          assert int(suite.attrib.get('skipped', 0)) == 0, 'Database tests were skipped'
+          assert int(suite.attrib.get('failures', 0)) == 0
+          assert int(suite.attrib.get('errors', 0)) == 0
+          print('Real PostgreSQL document tests executed without skips.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-${{ matrix.service }}-evidence
+          path: |
+            services/${{ matrix.service }}/target/surefire-reports/
+            services/${{ matrix.service }}/target/document-examples/
+          retention-days: 7
+          if-no-files-found: warn

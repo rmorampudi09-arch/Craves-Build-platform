@@ -41,7 +41,13 @@ def rest(method, url, body=None, absent_ok=False):
     if result.returncode:
         if absent_ok and re.search(r'\"code\"\s*:\s*\"(?:ResourceNotFound|NotFound)\"|\((?:ResourceNotFound|NotFound)\)|\b404\b', result.stderr): return None
         raise RuntimeError('APIM request failed; no credentials or response body were emitted')
-    return json.loads(result.stdout.lstrip('\ufeff')) if result.stdout.strip() else {}
+    payload = result.stdout.lstrip('\ufeff').strip()
+    if payload.startswith('<') and '/policies/policy?' in url:
+        root = ET.fromstring(payload)
+        if root.tag != 'policies':
+            raise RuntimeError('Unexpected Azure policy XML response')
+        return {'properties': {'value': payload}}
+    return json.loads(payload) if payload else {}
 
 
 def policy_safe(value):

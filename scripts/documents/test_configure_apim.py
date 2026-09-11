@@ -23,6 +23,14 @@ class ApimPlanTests(unittest.TestCase):
         with patch.object(module.subprocess,'run',return_value=response):
             self.assertEqual('<policies/>',module.rest('GET','https://management.azure.com/test')['properties']['value'])
 
+    def test_raw_policy_xml_response(self):
+        xml='\ufeff<!-- Azure policy -->\n<policies><inbound/><backend><forward-request/></backend><outbound/></policies>'
+        response=SimpleNamespace(returncode=0,stdout=xml,stderr='')
+        with patch.object(module.subprocess,'run',return_value=response):
+            policy=module.rest('GET','https://management.azure.com/service/policies/policy?api-version=2022-08-01')
+            module.policy_safe(policy['properties']['value'])
+            with self.assertRaises(ValueError): module.rest('GET','https://management.azure.com/service/apis?api-version=2022-08-01')
+
     def test_route_allowlist_and_queries(self):
         plan=module.plan('example.region.azurecontainerapps.io')
         self.assertEqual(7,len(plan['operations']))

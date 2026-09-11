@@ -36,8 +36,10 @@ public class AzureDocumentStorage implements DocumentStorage {
                 }
             }
         }
-        var permissions=container.getAccessPolicyWithResponse(null,Duration.ofSeconds(10),Context.NONE).getValue();
-        if(permissions.getBlobAccessType()!=null) throw new IllegalStateException("PDF container must be private");
+        // Container properties expose public access using the approved Data Contributor role.
+        // Reading ACLs requires Data Owner and is unnecessary for this privacy check.
+        var properties=container.getPropertiesWithResponse(null,Duration.ofSeconds(10),Context.NONE).getValue();
+        if(properties.getBlobPublicAccess()!=null) throw new IllegalStateException("PDF container must be private");
         return container;
     }
     @Override public String put(UUID owner,UUID document,byte[] content) {

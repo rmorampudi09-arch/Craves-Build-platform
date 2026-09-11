@@ -25,10 +25,12 @@ The user explicitly approved the container-scoped Storage Blob Data Contributor 
 - Customer web document controls enabled: `ca-craves-web-prodlow--0000080` is latest and ready. Existing Razorpay production readiness remains valid.
 - Both web and APIM document capabilities endpoints reject unauthenticated access with HTTP 401 and private/no-store headers.
 
-## Remaining acceptance and email gates
+## Email enabled; final customer acceptance awaits CAPTCHA
 
-Automatic approval review separately rejected enabling production PDF email capability because the specific approval covered storage access and generation verification. `CRAVES_DOCUMENTS_EMAIL_ENABLED` remains false. No customer email was sent.
+The user explicitly authorized requesting their Craves login OTP, enabling PDF email, and sending one controlled test PDF to their verified Craves account email.
 
-Automatic review also rejected requesting a login OTP without explicit account-login authorization. No OTP was sent. Generation, download byte/hash verification, owned-record correctness and cross-account denial are not yet runtime-accepted; do not infer them from health or CI. Continue through the normal customer sign-in after explicit authorization, then test against an existing owned order without creating a payment or delivery booking.
+`CRAVES_DOCUMENTS_EMAIL_ENABLED=true` is active on Notification revision `--0000039`, confirmed latest=ready and health UP. Generation, worker and web activation remain enabled.
 
-Obtain explicit authorization before enabling PDF email and sending any controlled test attachment to the signed-in account's verified email. Follow the module README for rollout and feature-first rollback; retain V6 tables, issued blobs and audit records.
+Craves displayed an interactive reCAPTCHA before completing the OTP request. Browser guidance requires confirmation at this CAPTCHA step or manual handoff. No CAPTCHA was solved and no OTP delivery was confirmed. Use secure browser authentication for any subsequent sign-in credentials; never request secret codes in chat.
+
+Owned-order generation, saved PDF download/integrity, cross-account isolation and the single approved test email remain unverified. No test PDF email has been sent. The existing authorization for the login and one verified-account test email persists; do not request it again. Continue once the CAPTCHA is completed or permission is given to solve it.

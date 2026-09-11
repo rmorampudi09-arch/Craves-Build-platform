@@ -13,6 +13,8 @@ CONFIRMATION=${CONFIRM_DEPLOYMENT:-}
 BACKUP_CONFIRMATION=${DATABASE_BACKUP_CONFIRMATION:-}
 READY_ATTEMPTS=${READY_ATTEMPTS:-150}
 READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-10}
+SINGLE_SERVICE_DEPLOY="$ROOT/scripts/release/deploy-single-service-preserve-runtime.sh"
+SMOKE_SCRIPT="$ROOT/scripts/release/smoke-containerapp-health.sh"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -30,8 +32,11 @@ fail() {
 command -v az >/dev/null || fail 'Azure CLI is required.'
 command -v jq >/dev/null || fail 'jq is required.'
 command -v sha256sum >/dev/null || fail 'sha256sum is required.'
+command -v sed >/dev/null || fail 'sed is required.'
 [[ -s "$PACK_FILE" ]] || fail "Backend completion pack is missing: $PACK_FILE"
 [[ -s "$IMAGE_MANIFEST" ]] || fail "Image manifest is missing: $IMAGE_MANIFEST"
+[[ -s "$SINGLE_SERVICE_DEPLOY" ]] || fail "Shared single-service deployment helper is missing: $SINGLE_SERVICE_DEPLOY"
+[[ -s "$SMOKE_SCRIPT" ]] || fail "Health smoke helper is missing: $SMOKE_SCRIPT"
 
 EXPECTED_RG=$(jq -r '.azure.resourceGroup' "$PACK_FILE")
 ACR_NAME=$(jq -r '.azure.containerRegistry' "$PACK_FILE")
@@ -64,17 +69,16 @@ case "$RELEASE_MODE" in
     ;;
 esac
 
-mkdir -p "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR/service-logs"
 EVENTS="$OUTPUT_DIR/deployment-events.jsonl"
 ROLLBACK_MAP="$OUTPUT_DIR/rollback-map.jsonl"
 : >"$EVENTS"
 : >"$ROLLBACK_MAP"
 
-declare -a UPDATED_KEYS=()
+declare -a COMPLETED_KEYS=()
 declare -A APP_BY_KEY=()
 declare -A PREVIOUS_IMAGE_BY_KEY=()
 declare -A PREVIOUS_REVISION_BY_KEY=()
-declare -A PREVIOUS_ENV_HASH_BY_KEY=()
 
 record_event() {
   local service_key=$1
@@ -95,105 +99,220 @@ record_event() {
     >>"$EVENTS"
 }
 
-environment_hash() {
-  local app_name=$1
-  local revision_name=$2
+materialize_evidence() {
+  local release_status=$1
+  local failure_reason=${2:-}
+  local events_json rollback_json
 
-  az containerapp revision show \
+  events_json=$(jq -s '.' "$EVENTS" 2>/dev/null || printf '[]')
+  rollback_json=$(jq -s '.' "$ROLLBACK_MAP" 2>/dev/null || printf '[]')
+  printf '%s\n' "$events_json" >"$OUTPUT_DIR/deployment-events.json"
+  printf '%s\n' "$rollback_json" >"$OUTPUT_DIR/rollback-map.json"
+
+  jq -n \
+    --arg resourceGroup "$RESOURCE_GROUP" \
+    --arg sourceSha "$EXPECTED_SOURCE_SHA" \
+    --arg releaseMode "$RELEASE_MODE" \
+    --arg releaseStatus "$release_status" \
+    --arg failureReason "$failure_reason" \
+    --argjson expectedDeployCount "$EXPECTED_DEPLOY_COUNT" \
+    --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson deploymentEvents "$events_json" \
+    --argjson rollbackMap "$rollback_json" \
+    '{
+      schemaVersion:1,
+      resourceGroup:$resourceGroup,
+      sourceSha:$sourceSha,
+      releaseMode:$releaseMode,
+      releaseStatus:$releaseStatus,
+      failureReason:(if $failureReason == "" then null else $failureReason end),
+      expectedDeployCount:$expectedDeployCount,
+      generatedAt:$generatedAt,
+      runtimeConfigurationPreservationEnforced:true,
+      stepOneDormantFlagsVerified:true,
+      externalProvidersActivated:false,
+      secretsReadOrChanged:false,
+      deploymentEvents:$deploymentEvents,
+      rollbackMap:$rollbackMap
+    }' >"$OUTPUT_DIR/backend-deployment-manifest.json"
+}
+
+redact_stream() {
+  sed -E \
+    -e 's/([Aa]uthorization[[:space:]]*[:=][[:space:]]*)[^[:space:],;]+/\1***REDACTED***/g' \
+    -e 's/((password|secret|token|api[-_]?key|client[-_]?key)[[:space:]]*[:=][[:space:]]*)[^[:space:],;]+/\1***REDACTED***/Ig'
+}
+
+show_runtime_diagnostics() {
+  local service_key=$1
+  local app_name=$2
+  local expected_image=$3
+  local app_json revisions_json target_revision latest_revision
+
+  echo "========== SAFE RUNTIME DIAGNOSTICS $service_key -> $app_name ==========" >&2
+  app_json=$(az containerapp show \
     --resource-group "$RESOURCE_GROUP" \
     --name "$app_name" \
-    --revision "$revision_name" \
-    --query 'properties.template.containers[0].env' \
     --output json \
-    --only-show-errors \
-    | jq -S '
-        (. // [])
-        | map({
-            name: .name,
-            value: (.value // null),
-            secretRef: (.secretRef // null)
-          })
-        | sort_by(.name)
-      ' \
-    | sha256sum \
-    | cut -d' ' -f1
+    --only-show-errors 2>/dev/null || true)
+
+  if [[ -n "$app_json" ]] && jq -e . >/dev/null 2>&1 <<<"$app_json"; then
+    jq '{
+      name:.name,
+      provisioningState:.properties.provisioningState,
+      provisioningError:.properties.provisioningError,
+      runningStatus:.properties.runningStatus,
+      activeRevisionsMode:.properties.configuration.activeRevisionsMode,
+      latestRevisionName:.properties.latestRevisionName,
+      latestReadyRevisionName:.properties.latestReadyRevisionName,
+      latestRevisionFqdn:.properties.latestRevisionFqdn,
+      configuredImage:.properties.template.containers[0].image,
+      minReplicas:(.properties.template.scale.minReplicas // 0),
+      maxReplicas:(.properties.template.scale.maxReplicas // 10),
+      ingressExternal:(.properties.configuration.ingress.external // false),
+      ingressTargetPort:.properties.configuration.ingress.targetPort
+    }' <<<"$app_json" >&2 || true
+    latest_revision=$(jq -r '.properties.latestRevisionName // ""' <<<"$app_json")
+  else
+    echo 'Container App control-plane JSON is unavailable.' >&2
+    latest_revision=''
+  fi
+
+  revisions_json=$(az containerapp revision list \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$app_name" \
+    --output json \
+    --only-show-errors 2>/dev/null || true)
+
+  target_revision=''
+  if [[ -n "$revisions_json" ]] && jq -e . >/dev/null 2>&1 <<<"$revisions_json"; then
+    jq '[.[] | {
+      name:.name,
+      createdTime:.properties.createdTime,
+      active:.properties.active,
+      trafficWeight:.properties.trafficWeight,
+      provisioningState:.properties.provisioningState,
+      provisioningError:.properties.provisioningError,
+      runningState:.properties.runningState,
+      runningStateDetails:.properties.runningStateDetails,
+      healthState:.properties.healthState,
+      replicas:.properties.replicas,
+      image:.properties.template.containers[0].image
+    }] | sort_by(.createdTime) | reverse | .[:8]' <<<"$revisions_json" >&2 || true
+    target_revision=$(jq -r --arg image "$expected_image" '
+      [.[] | select(.properties.template.containers[0].image == $image)]
+      | sort_by(.properties.createdTime // "")
+      | last
+      | .name // ""
+    ' <<<"$revisions_json")
+  fi
+
+  [[ -n "$target_revision" ]] || target_revision=$latest_revision
+  if [[ -n "$target_revision" ]]; then
+    echo "Target/latest revision diagnostics: $target_revision" >&2
+    az containerapp revision show \
+      --resource-group "$RESOURCE_GROUP" \
+      --name "$app_name" \
+      --revision "$target_revision" \
+      --query '{
+        name:name,
+        active:properties.active,
+        trafficWeight:properties.trafficWeight,
+        provisioningState:properties.provisioningState,
+        provisioningError:properties.provisioningError,
+        runningState:properties.runningState,
+        runningStateDetails:properties.runningStateDetails,
+        healthState:properties.healthState,
+        replicas:properties.replicas,
+        image:properties.template.containers[0].image,
+        resources:properties.template.containers[0].resources,
+        probes:properties.template.containers[0].probes,
+        scale:properties.template.scale
+      }' \
+      --output jsonc \
+      --only-show-errors >&2 2>/dev/null || true
+
+    echo 'Replica diagnostics:' >&2
+    az containerapp replica list \
+      --resource-group "$RESOURCE_GROUP" \
+      --name "$app_name" \
+      --revision "$target_revision" \
+      --query '[].{
+        name:name,
+        runningState:properties.runningState,
+        runningStateDetails:properties.runningStateDetails,
+        containers:properties.containers[].{name:name,ready:ready,restartCount:restartCount,runningState:runningState,runningStateDetails:runningStateDetails}
+      }' \
+      --output jsonc \
+      --only-show-errors >&2 2>/dev/null || true
+
+    echo 'Sanitized application console logs:' >&2
+    az containerapp logs show \
+      --resource-group "$RESOURCE_GROUP" \
+      --name "$app_name" \
+      --revision "$target_revision" \
+      --type console \
+      --tail 200 \
+      --format text \
+      --only-show-errors 2>/dev/null | redact_stream >&2 || true
+  fi
+
+  echo 'Sanitized Container Apps system logs:' >&2
+  az containerapp logs show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$app_name" \
+    --type system \
+    --tail 100 \
+    --format text \
+    --only-show-errors 2>/dev/null | redact_stream >&2 || true
+  echo "========== END SAFE RUNTIME DIAGNOSTICS $service_key ==========" >&2
 }
 
-wait_ready() {
+ready_revision_snapshot() {
+  local app_name=$1
+  local app_json ready revision_json
+
+  app_json=$(az containerapp show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$app_name" \
+    --output json \
+    --only-show-errors 2>/dev/null || true)
+  [[ -n "$app_json" ]] && jq -e . >/dev/null 2>&1 <<<"$app_json" || return 1
+
+  ready=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$app_json")
+  [[ -n "$ready" ]] || return 1
+
+  revision_json=$(az containerapp revision show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$app_name" \
+    --revision "$ready" \
+    --output json \
+    --only-show-errors 2>/dev/null || true)
+  [[ -n "$revision_json" ]] && jq -e . >/dev/null 2>&1 <<<"$revision_json" || return 1
+
+  jq -cn \
+    --arg revision "$ready" \
+    --arg image "$(jq -r '.properties.template.containers[0].image // ""' <<<"$revision_json")" \
+    --arg health "$(jq -r '.properties.healthState // ""' <<<"$revision_json")" \
+    --arg provisioning "$(jq -r '.properties.provisioningState // ""' <<<"$revision_json")" \
+    --arg active "$(jq -r '.properties.active // false' <<<"$revision_json")" \
+    '{revision:$revision,image:$image,health:$health,provisioning:$provisioning,active:($active|ascii_downcase)}'
+}
+
+is_ready_image() {
   local app_name=$1
   local expected_image=$2
-  local attempts=${3:-$READY_ATTEMPTS}
-  local sleep_seconds=${4:-$READY_SLEEP_SECONDS}
-  local attempt current_image latest_revision ready_revision running_status health_state
+  local snapshot
 
-  for ((attempt=1; attempt<=attempts; attempt++)); do
-    current_image=$(az containerapp show -g "$RESOURCE_GROUP" -n "$app_name" \
-      --query 'properties.template.containers[0].image' -o tsv --only-show-errors 2>/dev/null || true)
-    latest_revision=$(az containerapp show -g "$RESOURCE_GROUP" -n "$app_name" \
-      --query 'properties.latestRevisionName' -o tsv --only-show-errors 2>/dev/null || true)
-    ready_revision=$(az containerapp show -g "$RESOURCE_GROUP" -n "$app_name" \
-      --query 'properties.latestReadyRevisionName' -o tsv --only-show-errors 2>/dev/null || true)
-    running_status=$(az containerapp show -g "$RESOURCE_GROUP" -n "$app_name" \
-      --query 'properties.runningStatus' -o tsv --only-show-errors 2>/dev/null || true)
-    health_state=''
-    if [[ -n "$latest_revision" ]]; then
-      health_state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$app_name" --revision "$latest_revision" \
-        --query properties.healthState -o tsv --only-show-errors 2>/dev/null || true)
-    fi
-
-    if [[ "$current_image" == "$expected_image" \
-      && -n "$latest_revision" \
-      && "$latest_revision" == "$ready_revision" \
-      && "$running_status" == 'Running' \
-      && "$health_state" == 'Healthy' ]]; then
-      printf '%s\n' "$latest_revision"
-      return 0
-    fi
-
-    if [[ "$running_status" == 'Failed' || "$health_state" == 'Unhealthy' ]]; then
-      az containerapp logs show -g "$RESOURCE_GROUP" -n "$app_name" --revision "$latest_revision" \
-        --type console --tail 200 --format text --only-show-errors || true
-      return 1
-    fi
-
-    echo "Waiting for $app_name ($attempt/$attempts): running=$running_status health=$health_state latest=$latest_revision ready=$ready_revision" >&2
-    sleep "$sleep_seconds"
-  done
-  return 1
-}
-
-rollback_updated_services() {
-  local reason=$1
-  local index key app previous_image rollback_revision
-  echo "Rolling back ${#UPDATED_KEYS[@]} updated service(s) in reverse order: $reason" >&2
-
-  for ((index=${#UPDATED_KEYS[@]}-1; index>=0; index--)); do
-    key=${UPDATED_KEYS[$index]}
-    app=${APP_BY_KEY[$key]}
-    previous_image=${PREVIOUS_IMAGE_BY_KEY[$key]}
-    [[ -n "$previous_image" ]] || continue
-
-    if az containerapp update -g "$RESOURCE_GROUP" -n "$app" \
-      --image "$previous_image" --no-wait --only-show-errors >/dev/null; then
-      if rollback_revision=$(wait_ready "$app" "$previous_image" "$READY_ATTEMPTS" "$READY_SLEEP_SECONDS"); then
-        if [[ "$(environment_hash "$app" "$rollback_revision")" == "${PREVIOUS_ENV_HASH_BY_KEY[$key]}" ]]; then
-          record_event "$key" "$app" 'rollback' 'ready' "$previous_image" "$rollback_revision"
-        else
-          record_event "$key" "$app" 'rollback' 'environment-mismatch' "$previous_image" "$rollback_revision"
-        fi
-      else
-        record_event "$key" "$app" 'rollback' 'readiness-failed' "$previous_image" ''
-      fi
-    else
-      record_event "$key" "$app" 'rollback' 'update-failed' "$previous_image" ''
-    fi
-  done
-}
-
-abort_release() {
-  local message=$1
-  rollback_updated_services "$message"
-  fail "$message"
+  snapshot=$(ready_revision_snapshot "$app_name" 2>/dev/null || true)
+  [[ -n "$snapshot" ]] || return 1
+  [[ "$(jq -r '.image' <<<"$snapshot")" == "$expected_image" ]] || return 1
+  [[ "$(jq -r '.health' <<<"$snapshot")" == 'Healthy' ]] || return 1
+  case "$(jq -r '.provisioning' <<<"$snapshot")" in
+    Provisioned|Succeeded) ;;
+    *) return 1 ;;
+  esac
+  [[ "$(jq -r '.active' <<<"$snapshot")" == 'true' ]] || return 1
 }
 
 verify_step_one_dormant_flags() {
@@ -240,6 +359,50 @@ verify_step_one_dormant_flags() {
   done < <(jq -c '.stepOneDormantFlags[]' "$PACK_FILE")
 }
 
+rollback_completed_services() {
+  local reason=$1
+  local index key app previous_image current_snapshot current_revision log_file helper_rc
+  echo "Rolling back ${#COMPLETED_KEYS[@]} completed service(s) in reverse order: $reason" >&2
+
+  for ((index=${#COMPLETED_KEYS[@]}-1; index>=0; index--)); do
+    key=${COMPLETED_KEYS[$index]}
+    app=${APP_BY_KEY[$key]}
+    previous_image=${PREVIOUS_IMAGE_BY_KEY[$key]}
+    log_file="$OUTPUT_DIR/service-logs/${key}-rollback.log"
+
+    if is_ready_image "$app" "$previous_image"; then
+      current_snapshot=$(ready_revision_snapshot "$app")
+      current_revision=$(jq -r '.revision' <<<"$current_snapshot")
+      record_event "$key" "$app" 'rollback' 'already-restored' "$previous_image" "$current_revision"
+      continue
+    fi
+
+    set +e
+    READY_ATTEMPTS="$READY_ATTEMPTS" \
+    READY_SLEEP_SECONDS="$READY_SLEEP_SECONDS" \
+    bash "$SINGLE_SERVICE_DEPLOY" "$RESOURCE_GROUP" "$app" "$previous_image" "$key-rollback" \
+      2>&1 | tee "$log_file"
+    helper_rc=${PIPESTATUS[0]}
+    set -e
+
+    if [[ "$helper_rc" -eq 0 ]] && is_ready_image "$app" "$previous_image"; then
+      current_snapshot=$(ready_revision_snapshot "$app")
+      current_revision=$(jq -r '.revision' <<<"$current_snapshot")
+      record_event "$key" "$app" 'rollback' 'ready' "$previous_image" "$current_revision"
+    else
+      record_event "$key" "$app" 'rollback' 'failed' "$previous_image" ''
+      show_runtime_diagnostics "$key-rollback" "$app" "$previous_image"
+    fi
+  done
+}
+
+abort_release() {
+  local message=$1
+  rollback_completed_services "$message"
+  materialize_evidence 'FAILED' "$message"
+  fail "$message"
+}
+
 # Complete every read-only check before the first Container App mutation.
 while IFS= read -r service; do
   key=$(jq -r '.key' <<<"$service")
@@ -248,6 +411,7 @@ while IFS= read -r service; do
   digest=$(jq -r --arg key "$key" '.images[] | select(.serviceKey == $key) | .digest' "$IMAGE_MANIFEST")
   manifest_repository=$(jq -r --arg key "$key" '.images[] | select(.serviceKey == $key) | .repository' "$IMAGE_MANIFEST")
 
+  echo "Preflight: $key app=$app image=$repository@$digest"
   [[ "$manifest_repository" == "$repository" ]] \
     || fail "Image repository mismatch for $key."
   [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
@@ -272,64 +436,74 @@ while IFS= read -r service; do
 
   digest=$(jq -r --arg key "$key" '.images[] | select(.serviceKey == $key) | .digest' "$IMAGE_MANIFEST")
   target_image="$ACR_LOGIN/$repository@$digest"
-
-  previous_image=$(az containerapp show -g "$RESOURCE_GROUP" -n "$app" \
-    --query 'properties.template.containers[0].image' -o tsv --only-show-errors)
-  previous_revision=$(az containerapp show -g "$RESOURCE_GROUP" -n "$app" \
-    --query 'properties.latestReadyRevisionName' -o tsv --only-show-errors)
-  previous_env_hash=$(environment_hash "$app" "$previous_revision")
+  before_snapshot=$(ready_revision_snapshot "$app") \
+    || abort_release "Previous ready revision could not be resolved for $app."
+  previous_revision=$(jq -r '.revision' <<<"$before_snapshot")
+  previous_image=$(jq -r '.image' <<<"$before_snapshot")
 
   APP_BY_KEY[$key]=$app
   PREVIOUS_IMAGE_BY_KEY[$key]=$previous_image
   PREVIOUS_REVISION_BY_KEY[$key]=$previous_revision
-  PREVIOUS_ENV_HASH_BY_KEY[$key]=$previous_env_hash
-  UPDATED_KEYS+=("$key")
 
   jq -cn \
     --arg serviceKey "$key" \
     --arg containerApp "$app" \
     --arg previousImage "$previous_image" \
     --arg previousReadyRevision "$previous_revision" \
-    --arg environmentHash "$previous_env_hash" \
-    '{serviceKey:$serviceKey,containerApp:$containerApp,previousImage:$previousImage,previousReadyRevision:$previousReadyRevision,environmentHash:$environmentHash}' \
+    '{serviceKey:$serviceKey,containerApp:$containerApp,previousImage:$previousImage,previousReadyRevision:$previousReadyRevision}' \
     >>"$ROLLBACK_MAP"
   record_event "$key" "$app" 'before' 'ready' "$previous_image" "$previous_revision"
 
+  if is_ready_image "$app" "$target_image"; then
+    echo "========== RESUME $key -> target image already ready =========="
+    if ! bash "$SMOKE_SCRIPT" "$RESOURCE_GROUP" "$app"; then
+      show_runtime_diagnostics "$key" "$app" "$target_image"
+      abort_release "Target image was already ready but health smoke failed for $app."
+    fi
+    current_snapshot=$(ready_revision_snapshot "$app")
+    current_revision=$(jq -r '.revision' <<<"$current_snapshot")
+    record_event "$key" "$app" 'readiness' 'already-ready' "$target_image" "$current_revision"
+    record_event "$key" "$app" 'configuration' 'preserved-no-update' "$target_image" "$current_revision"
+    record_event "$key" "$app" 'health' 'passed' "$target_image" "$current_revision"
+    continue
+  fi
+
   echo "========== DEPLOY $key -> $app =========="
-  az containerapp update -g "$RESOURCE_GROUP" -n "$app" \
-    --image "$target_image" --no-wait --only-show-errors >/dev/null \
-    || abort_release "Container App update failed for $app."
+  log_file="$OUTPUT_DIR/service-logs/${key}-deployment.log"
+  set +e
+  READY_ATTEMPTS="$READY_ATTEMPTS" \
+  READY_SLEEP_SECONDS="$READY_SLEEP_SECONDS" \
+  bash "$SINGLE_SERVICE_DEPLOY" "$RESOURCE_GROUP" "$app" "$target_image" "$key" \
+    2>&1 | tee "$log_file"
+  helper_rc=${PIPESTATUS[0]}
+  set -e
 
-  new_revision=$(wait_ready "$app" "$target_image" "$READY_ATTEMPTS" "$READY_SLEEP_SECONDS") \
-    || abort_release "New revision did not become ready for $app."
-  record_event "$key" "$app" 'readiness' 'ready' "$target_image" "$new_revision"
+  if [[ "$helper_rc" -ne 0 ]]; then
+    record_event "$key" "$app" 'deployment' 'failed' "$target_image" ''
+    show_runtime_diagnostics "$key" "$app" "$target_image"
+    abort_release "New revision did not become ready for $app; see the published safe diagnostics and service log."
+  fi
 
-  [[ "$(environment_hash "$app" "$new_revision")" == "$previous_env_hash" ]] \
-    || abort_release "Runtime environment changed unexpectedly for $app."
-  record_event "$key" "$app" 'environment' 'preserved' "$target_image" "$new_revision"
+  if ! is_ready_image "$app" "$target_image"; then
+    record_event "$key" "$app" 'deployment' 'verification-failed' "$target_image" ''
+    show_runtime_diagnostics "$key" "$app" "$target_image"
+    abort_release "Shared deployment helper returned success but the exact target image is not the healthy ready revision for $app."
+  fi
 
-  bash "$ROOT/scripts/release/smoke-containerapp-health.sh" "$RESOURCE_GROUP" "$app" \
-    || abort_release "Health smoke failed for $app."
-  record_event "$key" "$app" 'health' 'passed' "$target_image" "$new_revision"
+  current_snapshot=$(ready_revision_snapshot "$app")
+  current_revision=$(jq -r '.revision' <<<"$current_snapshot")
+  COMPLETED_KEYS+=("$key")
+  record_event "$key" "$app" 'readiness' 'ready' "$target_image" "$current_revision"
+  record_event "$key" "$app" 'configuration' 'preserved' "$target_image" "$current_revision"
+  record_event "$key" "$app" 'health' 'passed' "$target_image" "$current_revision"
 done < <(jq -c '.services[]' "$PACK_FILE")
 
-jq -s '.' "$EVENTS" >"$OUTPUT_DIR/deployment-events.json"
-jq -s '.' "$ROLLBACK_MAP" >"$OUTPUT_DIR/rollback-map.json"
-
-jq -n \
-  --arg resourceGroup "$RESOURCE_GROUP" \
-  --arg sourceSha "$EXPECTED_SOURCE_SHA" \
-  --arg releaseMode "$RELEASE_MODE" \
-  --argjson expectedDeployCount "$EXPECTED_DEPLOY_COUNT" \
-  --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --argjson deploymentEvents "$(cat "$OUTPUT_DIR/deployment-events.json")" \
-  --argjson rollbackMap "$(cat "$OUTPUT_DIR/rollback-map.json")" \
-  '{schemaVersion:1,resourceGroup:$resourceGroup,sourceSha:$sourceSha,releaseMode:$releaseMode,expectedDeployCount:$expectedDeployCount,generatedAt:$generatedAt,runtimeEnvironmentPreserved:true,stepOneDormantFlagsVerified:true,externalProvidersActivated:false,secretsReadOrChanged:false,deploymentEvents:$deploymentEvents,rollbackMap:$rollbackMap}' \
-  >"$OUTPUT_DIR/backend-deployment-manifest.json"
+materialize_evidence 'SUCCEEDED' ''
 
 jq -e \
   --argjson expectedDeployCount "$EXPECTED_DEPLOY_COUNT" '
-  .runtimeEnvironmentPreserved == true
+  .releaseStatus == "SUCCEEDED"
+  and .runtimeConfigurationPreservationEnforced == true
   and .stepOneDormantFlagsVerified == true
   and .externalProvidersActivated == false
   and .secretsReadOrChanged == false
@@ -337,7 +511,8 @@ jq -e \
   and (.rollbackMap | length == $expectedDeployCount)
   and ([.deploymentEvents[] | select(.phase == "health" and .status == "passed")] | length == $expectedDeployCount)
   and ([.deploymentEvents[] | select(.phase == "dormant-flag")] | length > 0)
+  and ([.deploymentEvents[] | select(.phase == "rollback" and (.status == "failed" or .status == "readiness-failed" or .status == "environment-mismatch"))] | length == 0)
 ' "$OUTPUT_DIR/backend-deployment-manifest.json" >/dev/null \
   || fail 'Final backend deployment evidence validation failed.'
 
-echo 'SUCCESS: seven backend services deployed by digest; runtime configuration was preserved and step-one dormant flags remained disabled.'
+echo 'SUCCESS: backend services are on the exact digest-pinned images; the shared runtime-preserving helper proved readiness, configuration preservation and health.'

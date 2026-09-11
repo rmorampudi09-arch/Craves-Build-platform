@@ -72,14 +72,20 @@ def diagnostics_safe(data):
                     raise RuntimeError('APIM sensitive header logging requires correction before apply')
 
 
-def policy_document():
-    return '''<policies><inbound><base />
+def policy_document(sku='Consumption'):
+    document = '''<policies><inbound><base />
 <check-header name="Authorization" failed-check-httpcode="401" failed-check-error-message="Authentication required" ignore-case="true" />
 <rate-limit-by-key calls="60" renewal-period="60" counter-key="@(context.Request.IpAddress)" />
 </inbound><backend><base /></backend><outbound><base />
 <set-header name="Cache-Control" exists-action="override"><value>private, no-store, max-age=0</value></set-header>
 <set-header name="X-Content-Type-Options" exists-action="override"><value>nosniff</value></set-header>
 </outbound><on-error><base /><set-header name="Cache-Control" exists-action="override"><value>private, no-store</value></set-header></on-error></policies>'''
+    if sku.lower() == 'consumption':
+        # Consumption has no rate-limit-by-key; retain application per-owner quotas
+        # and bound PDF backend concurrency using a policy supported on this tier.
+        document = document.replace('<rate-limit-by-key calls="60" renewal-period="60" counter-key="@(context.Request.IpAddress)" />', '')
+        document = document.replace('<backend><base /></backend>', '<backend><limit-concurrency key="craves-pdf-documents-v1" max-count="8"><forward-request timeout="60" /></limit-concurrency></backend>')
+    return document
 
 
 def operation_policy(operation_id, path):
@@ -95,14 +101,14 @@ def operation_policy(operation_id, path):
     return ET.tostring(root, encoding='unicode')
 
 
-def plan(host):
+def plan(host, sku='Consumption'):
     if not re.fullmatch(r'[a-zA-Z0-9.-]+\.azurecontainerapps\.io', host):
         raise ValueError('Expected the existing Notification Container App ingress hostname')
     return {
         'api': {'properties': {'displayName': 'Craves private PDF documents', 'description': MARKER + ' Authenticated saved receipts and statements',
             'path': 'api/v1/documents', 'protocols': ['https'], 'subscriptionRequired': False,
             'serviceUrl': 'https://' + host}},
-        'policy': {'properties': {'format': 'rawxml', 'value': policy_document()}},
+        'policy': {'properties': {'format': 'rawxml', 'value': policy_document(sku)}},
         'operations': [{'id': id, 'body': {'properties': {'displayName': id, 'method': method, 'urlTemplate': path,
             'templateParameters': ([{'name': 'id', 'type': 'string', 'required': True}] if '{id}' in path else []),
             'responses': []}}, 'policy': {'properties': {'format': 'rawxml', 'value': operation_policy(id, path)}}}
@@ -120,7 +126,8 @@ def main():
     subscription = az('account', 'show', '--query', 'id')
     rg, apim = inventory['resourceGroup'], inventory['apiManagement']
     host = az('containerapp', 'show', '-g', rg, '-n', inventory['containerApps']['notification'], '--query', 'properties.configuration.ingress.fqdn')
-    desired = plan(host)
+    sku = az('apim', 'show', '-g', rg, '-n', apim, '--query', 'sku.name')
+    desired = plan(host, sku)
     base = f'https://management.azure.com/subscriptions/{quote(subscription)}/resourceGroups/{quote(rg)}/providers/Microsoft.ApiManagement/service/{quote(apim)}'
     endpoint = lambda path: base + path + '?api-version=' + API_VERSION
     api_path = '/apis/' + API_ID

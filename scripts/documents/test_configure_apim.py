@@ -31,6 +31,13 @@ class ApimPlanTests(unittest.TestCase):
             module.policy_safe(policy['properties']['value'])
             with self.assertRaises(ValueError): module.rest('GET','https://management.azure.com/service/apis?api-version=2022-08-01')
 
+    def test_consumption_uses_supported_concurrency_guard(self):
+        xml=ET.fromstring(module.policy_document('Consumption'))
+        self.assertIsNone(xml.find('./inbound/rate-limit-by-key'))
+        self.assertEqual('8',xml.find('./backend/limit-concurrency').attrib['max-count'])
+        self.assertIsNotNone(xml.find('./backend/limit-concurrency/forward-request'))
+        self.assertIsNotNone(ET.fromstring(module.policy_document('Standard')).find('./inbound/rate-limit-by-key'))
+
     def test_route_allowlist_and_queries(self):
         plan=module.plan('example.region.azurecontainerapps.io')
         self.assertEqual(7,len(plan['operations']))

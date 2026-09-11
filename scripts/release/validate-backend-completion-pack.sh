@@ -141,10 +141,33 @@ grep -F 'configuration_hash' "$SINGLE_SERVICE_DEPLOY_SCRIPT" >/dev/null \
   || fail 'single-service deployment must preserve Container App configuration'
 grep -F 'identity_hash' "$SINGLE_SERVICE_DEPLOY_SCRIPT" >/dev/null \
   || fail 'single-service deployment must preserve managed identity state'
+
+grep -F 'deploy-single-service-preserve-runtime.sh' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'full backend deployment must use the proven runtime-preserving single-service helper'
+grep -F 'show_runtime_diagnostics' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'full backend deployment must emit safe runtime diagnostics on failure'
+grep -F 'properties.provisioningState' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend diagnostics must capture revision provisioning state'
+grep -F 'properties.provisioningError' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend diagnostics must capture provisioning error details'
+grep -F 'properties.runningStateDetails' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend diagnostics must capture revision running-state details'
+grep -F 'az containerapp replica list' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend diagnostics must capture safe replica state'
+grep -F -- '--type system' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend diagnostics must capture Container Apps system logs'
+grep -F 'service-logs' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend deployment must publish one log per service attempt'
+grep -F 'materialize_evidence' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend deployment must publish evidence on both success and failure'
 grep -F 'stepOneDormantFlags' "$DEPLOY_SCRIPT" >/dev/null \
   || fail 'backend deployment must verify step-one dormant flags before mutation'
 grep -F 'dormant-flag' "$DEPLOY_SCRIPT" >/dev/null \
   || fail 'backend deployment must record dormant-flag evidence'
+
+if grep -F 'az containerapp update' "$DEPLOY_SCRIPT" >/dev/null; then
+  fail 'full backend wrapper must not maintain a second direct Container App update implementation'
+fi
 
 for service_pipeline in "${RUNTIME_PRESERVING_PIPELINES[@]}"; do
   grep -F 'scripts/release/deploy-single-service-preserve-runtime.sh' "$service_pipeline" >/dev/null \
@@ -167,4 +190,4 @@ if grep -En ':latest([[:space:]]|$)' "$PIPELINE" "$DEPLOY_SCRIPT" "$SINGLE_SERVI
   fail 'mutable latest image tags are forbidden'
 fi
 
-echo 'SUCCESS: backend completion pack and service deployment preservation contracts passed.'
+echo 'SUCCESS: backend completion pack, diagnostics, and runtime-preserving deployment contracts passed.'

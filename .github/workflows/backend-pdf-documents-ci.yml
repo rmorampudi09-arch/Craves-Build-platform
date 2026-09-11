@@ -8,10 +8,12 @@ on:
       - 'services/**/web/*DocumentSourceController.java'
       - 'services/**/web/*DocumentSource*Test.java'
       - 'services/notification-service/pom.xml'
+      - 'services/notification-service/modules/pdf-documents/**'
       - 'services/notification-service/src/main/resources/db/migration/V6__private_pdf_documents.sql'
       - 'apps/customer-web-next/src/**/document*'
       - 'apps/customer-web-next/src/app/api/documents/**'
       - 'apps/customer-web-next/src/app/chef/statements/**'
+      - 'apps/customer-web-next/src/app/chef/earnings/page.tsx'
       - 'apps/customer-web-next/src/screens/OrderHistory/**'
       - 'scripts/documents/**'
   pull_request:
@@ -54,19 +56,11 @@ jobs:
         with: {distribution: temurin, java-version: '21', cache: maven}
       - name: Full owning-service tests and package
         run: mvn -B -ntp -f services/${{ matrix.service }}/pom.xml verify
-      - name: Require real document database tests
-        if: matrix.service == 'notification-service'
-        run: |
-          python3 - <<'PY'
-          import xml.etree.ElementTree as ET
-          from pathlib import Path
-          reports = list(Path('services/notification-service/target/surefire-reports').glob('TEST-*DocumentRepositoryDbTest.xml'))
-          assert len(reports) == 1, 'Missing database test report'
-          suite = ET.parse(reports[0]).getroot()
-          assert int(suite.attrib['tests']) >= 10
-          assert all(int(suite.attrib.get(x, 0)) == 0 for x in ['skipped','failures','errors'])
-          print('Real PostgreSQL document tests passed without skips.')
-          PY
+      - name: Verify required PDF tests actually executed
+        run: >-
+          python3 scripts/documents/verify-test-evidence.py --service ${{ matrix.service }}
+          --reports services/${{ matrix.service }}/target/surefire-reports
+          --output services/${{ matrix.service }}/target/pdf-test-summary.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -74,6 +68,7 @@ jobs:
           path: |
             services/${{ matrix.service }}/target/surefire-reports/
             services/${{ matrix.service }}/target/document-examples/
+            services/${{ matrix.service }}/target/pdf-test-summary.json
           retention-days: 14
           if-no-files-found: warn
   web:
@@ -94,14 +89,40 @@ jobs:
         working-directory: apps/customer-web-next
         env: {NEXT_TELEMETRY_DISABLED: '1'}
         run: npm run verify
-      - name: Preserve verification output metadata
+      - name: Test APIM routing and privacy plans without Azure access
+        run: python3 -m unittest discover -s scripts/documents -p test_configure_apim.py -v
+      - name: Preserve verification metadata
         run: |
           mkdir -p /tmp/pdf-web-evidence
           git rev-parse HEAD > /tmp/pdf-web-evidence/source-sha.txt
           test -f apps/customer-web-next/.next/BUILD_ID
           cp apps/customer-web-next/.next/BUILD_ID /tmp/pdf-web-evidence/
+          echo 'Full web verification passed for the accompanying source SHA.' > /tmp/pdf-web-evidence/WEB_VERIFY_PASSED.txt
       - uses: actions/upload-artifact@v4
         with:
           name: pdf-web-evidence
           path: /tmp/pdf-web-evidence/
           retention-days: 14
+  delivery:
+    name: Package tested source, examples and full handover
+    needs: [backend, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false, fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install 'reportlab==4.4.3'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pdf-*-evidence
+          path: /tmp/pdf-evidence
+      - name: Build exact source ZIP and 50-plus-page source handover
+        run: python scripts/documents/package-delivery.py --evidence /tmp/pdf-evidence --output /tmp/pdf-delivery
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Craves-PDF-Documents-Delivery
+          path: /tmp/pdf-delivery/
+          retention-days: 30
+          if-no-files-found: error

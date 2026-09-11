@@ -1,0 +1,47 @@
+name: PDF Azure read-only configuration audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/pdf-runtime-preflight.yml']
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Check established OIDC binding presence without exposing values
+        id: binding
+        env:
+          CLIENT: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT: ${{ secrets.AZURE_TENANT_ID }}
+          SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          mkdir -p /tmp/pdf-runtime-audit
+          if test -n "$CLIENT" && test -n "$TENANT" && test -n "$SUBSCRIPTION"; then
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+            echo '{"runtimeAcceptance":"NOT_PERFORMED","reason":"EXISTING_GITHUB_OIDC_BINDING_INCOMPLETE","changes":false}' > /tmp/pdf-runtime-audit/status.json
+            echo 'Existing GitHub OIDC bindings are incomplete; Azure was not accessed or changed.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: azure/login@v2
+        if: steps.binding.outputs.configured == 'true'
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Read only existing application document settings
+        if: steps.binding.outputs.configured == 'true'
+        run: python3 scripts/documents/runtime-preflight.py --output /tmp/pdf-runtime-audit/status.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-runtime-configuration-audit
+          path: /tmp/pdf-runtime-audit/
+          if-no-files-found: warn
+          retention-days: 7

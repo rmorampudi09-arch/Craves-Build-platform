@@ -191,6 +191,6 @@ if grep -En ':latest([[:space:]]|$)' "$PIPELINE" "$DEPLOY_SCRIPT" "$SINGLE_SERVI
 fi
 
 python3 "$ROOT/scripts/release/tests/test-backend-preflight.py"
+python3 "$ROOT/scripts/release/tests/test-backend-image-reuse.py"
 
 echo 'SUCCESS: backend completion pack, diagnostics, and runtime-preserving deployment contracts passed.'
-

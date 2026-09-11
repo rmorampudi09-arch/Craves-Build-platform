@@ -10,6 +10,7 @@ parameters:
       - VERIFY_ONLY
       - BUILD_IMAGES
       - DEPLOY_BACKEND
+      - BUILD_CHANGED_AND_DEPLOY
       - REPAIR_CATALOG_HEALTH_AND_DEPLOY
   - name: confirmBuild
     displayName: Type BUILD_SEVEN_SERVICES for image build modes
@@ -24,7 +25,7 @@ parameters:
     type: string
     default: DATABASE_BACKUP_NOT_VERIFIED
   - name: reuseSourceSha
-    displayName: Verified source SHA whose unchanged service images may be reused by repair mode
+    displayName: Previously verified source SHA for unchanged image reuse
     type: string
     default: d26ce4cd4f501ba7c77d1ab5f89bd15296af69a6
   - name: resourceGroupName
@@ -62,7 +63,7 @@ stages:
               bash scripts/release/validate-backend-completion-pack.sh
               bash scripts/release/validate-internal-admin-rbac.sh
               bash scripts/release/scan-secret-material.sh .
-              python scripts/release/validate-flyway-migrations.py
+              bash scripts/release/verify-integration-flyway-history.sh
               while IFS= read -r service_path; do
                 bash scripts/release/validate-dockerfiles.sh "$service_path"
               done < <(jq -r '.services[].path' '$(backendPack)')
@@ -173,9 +174,9 @@ stages:
                   exit 1
                 }
 
-                if [[ "$mode" == 'REPAIR_CATALOG_HEALTH_AND_DEPLOY' ]]; then
+                if [[ "$mode" == 'REPAIR_CATALOG_HEALTH_AND_DEPLOY' || "$mode" == 'BUILD_CHANGED_AND_DEPLOY' ]]; then
                   [[ "$reuse_source" =~ ^[0-9a-f]{40}$ ]] || {
-                    echo 'ERROR: reuseSourceSha must be a full Git commit SHA in repair mode.' >&2
+                    echo 'ERROR: reuseSourceSha must be a full Git commit SHA in an image reuse mode.' >&2
                     exit 1
                   }
                   git cat-file -e "${reuse_source}^{commit}" || {
@@ -186,7 +187,7 @@ stages:
                   while IFS= read -r service; do
                     key=$(jq -r '.key' <<<"$service")
                     path=$(jq -r '.path' <<<"$service")
-                    if [[ "$key" != 'catalog' ]]; then
+                    if [[ "$mode" == 'REPAIR_CATALOG_HEALTH_AND_DEPLOY' && "$key" != 'catalog' ]]; then
                       git diff --quiet "$reuse_source" "$current_source" -- "$path" || {
                         echo "ERROR: $path changed after $reuse_source and its previous image cannot be reused." >&2
                         exit 1
@@ -206,7 +207,16 @@ stages:
                   repository=$(jq -r '.imageRepository' <<<"$service")
                   image_source="$current_source"
 
+                  reuse_image=false
                   if [[ "$mode" == 'REPAIR_CATALOG_HEALTH_AND_DEPLOY' && "$key" != 'catalog' ]]; then
+                    reuse_image=true
+                  elif [[ "$mode" == 'BUILD_CHANGED_AND_DEPLOY' ]] && git diff --quiet "$reuse_source" "$current_source" -- "$path"; then
+                    # Docker builds use the complete service directory as their context.
+                    # Reuse only when that entire context is identical to the verified source.
+                    reuse_image=true
+                  fi
+
+                  if [[ "$reuse_image" == true ]]; then
                     image_source="$reuse_source"
                     echo "========== REUSE VERIFIED IMAGE $key -> $repository:$image_source =========="
                   else
@@ -262,7 +272,7 @@ stages:
   - stage: DeployBackend
     displayName: Deploy the seven-service backend release
     dependsOn: ImageBuild
-    condition: and(succeeded(), or(eq('${{ parameters.releaseMode }}', 'DEPLOY_BACKEND'), eq('${{ parameters.releaseMode }}', 'REPAIR_CATALOG_HEALTH_AND_DEPLOY')))
+    condition: and(succeeded(), or(eq('${{ parameters.releaseMode }}', 'DEPLOY_BACKEND'), eq('${{ parameters.releaseMode }}', 'REPAIR_CATALOG_HEALTH_AND_DEPLOY'), eq('${{ parameters.releaseMode }}', 'BUILD_CHANGED_AND_DEPLOY')))
     jobs:
       - job: DeploySevenServices
         displayName: Digest-pinned deployment with full-release rollback
@@ -310,5 +320,5 @@ stages:
             condition: always()
             inputs:
               targetPath: $(Build.ArtifactStagingDirectory)/backend-deployment-evidence
-              artifact: backend-deployment-evidence
+              artifact: backend-deployment-evidence-$(System.JobAttempt)
             displayName: Publish deployment and rollback evidence

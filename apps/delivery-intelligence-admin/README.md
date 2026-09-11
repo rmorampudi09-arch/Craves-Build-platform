@@ -81,8 +81,9 @@ The established Azure DevOps service connection remains `Craves-Dev-Service-Conn
 ```text
 services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence/
 services/integration-service/src/main/resources/db/migration/V115__razorpay_webhook_delivery_guard.sql
-services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql
-services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql.conf
+services/integration-service/src/main/resources/db/migration/V116__shadowfax_hyperlocal_marketplace_contract.sql
+services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql
+services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql.conf
 scripts/apim/configure-delivery-intelligence-admin-apim.sh
 scripts/frontdoor/configure-delivery-intelligence-admin-route.sh
 ```
@@ -95,3 +96,5 @@ GET /api/v1/admin/operations/delivery-intelligence/orders/{reference}
 ```
 
 The frontend exposes only same-origin BFF equivalents beneath `/delivery-intelligence/api/...`.
+
+Production migration history: V116 is the Shadowfax contract migration. V117 is the already-applied startup-safe marker; optional online dashboard indexes require a separate maintenance job. Do not renumber or edit these applied migrations.

@@ -101,6 +101,22 @@ def operation_policy(operation_id, path):
     return ET.tostring(root, encoding='unicode')
 
 
+def request_schema():
+    # APIM validate-content resolves the operation's declared representation.
+    # Without it, even application/json is rejected as an unspecified type.
+    nullable = lambda schema: {'anyOf': [schema, {'type': 'null'}]}
+    return {'type': 'object', 'additionalProperties': False, 'required': ['type'],
+        'properties': {
+            'type': {'type': 'string', 'enum': ['ORDER_SUMMARY', 'PAYMENT_RECEIPT',
+                'SUBSCRIPTION_RECEIPT', 'CHEF_ORDER_STATEMENT',
+                'CHEF_EARNINGS_STATEMENT', 'CHEF_SETTLEMENT_STATEMENT']},
+            'sourceId': nullable({'type': 'string', 'format': 'uuid'}),
+            'from': nullable({'type': 'string', 'format': 'date'}),
+            'to': nullable({'type': 'string', 'format': 'date'}),
+            'timezone': nullable({'type': 'string', 'minLength': 1, 'maxLength': 80}),
+            'currency': nullable({'type': 'string', 'pattern': '^[A-Za-z]{3}$'})}}
+
+
 def plan(host, sku='Consumption'):
     if not re.fullmatch(r'[a-zA-Z0-9.-]+\.azurecontainerapps\.io', host):
         raise ValueError('Expected the existing Notification Container App ingress hostname')
@@ -109,7 +125,12 @@ def plan(host, sku='Consumption'):
             'path': 'api/v1/documents', 'protocols': ['https'], 'subscriptionRequired': False,
             'serviceUrl': 'https://' + host}},
         'policy': {'properties': {'format': 'rawxml', 'value': policy_document(sku)}},
+        'schema': {'properties': {'contentType': 'application/vnd.ms-azure-apim.swagger.definitions+json',
+            'document': {'definitions': {'DocumentRequest': request_schema()}}}},
         'operations': [{'id': id, 'body': {'properties': {'displayName': id, 'method': method, 'urlTemplate': path,
+            **({'request': {'representations': [{'contentType': 'application/json',
+                'schemaId': 'craves-document-request-v1', 'typeName': 'DocumentRequest'}]}}
+                if id == 'create-document' else {}),
             'templateParameters': ([{'name': 'id', 'type': 'string', 'required': True}] if '{id}' in path else []),
             'responses': []}}, 'policy': {'properties': {'format': 'rawxml', 'value': operation_policy(id, path)}}}
             for id, method, path in OPERATIONS],
@@ -151,6 +172,7 @@ def main():
     args.output.write_text(json.dumps({'mode': 'apply' if args.apply else 'plan', 'apiId': API_ID, 'desired': desired}, indent=2) + '\n')
     if args.apply:
         rest('PUT', endpoint(api_path), desired['api'])
+        rest('PUT', endpoint(api_path + '/schemas/craves-document-request-v1'), desired['schema'])
         rest('PUT', endpoint(api_path + '/policies/policy'), desired['policy'])
         for operation in desired['operations']:
             path = api_path + '/operations/' + operation['id']

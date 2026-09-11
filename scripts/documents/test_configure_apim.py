@@ -9,6 +9,21 @@ spec=importlib.util.spec_from_file_location('pdf_apim',Path(__file__).with_name(
 module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 
 class ApimPlanTests(unittest.TestCase):
+    def test_create_validation_resolves_declared_json_schema(self):
+        plan=module.plan('example.region.azurecontainerapps.io')
+        create=next(op for op in plan['operations'] if op['id']=='create-document')
+        representation=create['body']['properties']['request']['representations'][0]
+        self.assertEqual('application/json',representation['contentType'])
+        self.assertEqual('craves-document-request-v1',representation['schemaId'])
+        schema=plan['schema']['properties']['document']['definitions'][representation['typeName']]
+        self.assertFalse(schema['additionalProperties'])
+        self.assertEqual(['type'],schema['required'])
+        self.assertEqual(6,len(schema['properties']['type']['enum']))
+        validation=ET.fromstring(create['policy']['properties']['value']).find('./inbound/validate-content')
+        self.assertEqual('prevent',validation.attrib['unspecified-content-type-action'])
+        self.assertEqual('2048',validation.attrib['max-size'])
+        self.assertEqual('prevent',validation.find('content').attrib['action'])
+
     def test_missing_api_cli_response_is_allowed_only_when_requested(self):
         response=SimpleNamespace(returncode=1,stdout='',stderr='ERROR: Not Found({"error":{"code":"ResourceNotFound","message":"Api not found."}})')
         with patch.object(module.subprocess,'run',return_value=response):

@@ -16,15 +16,19 @@
 - Fixed initial APIM provisioning: structured ResourceNotFound errors, UTF-8 BOM, raw policy XML, and Consumption tier support. Eight offline tests passed. Consumption uses bounded backend concurrency; application per-owner quotas remain unchanged.
 - Deployment helper fixes are in `9785027924acf1d322ea980a9a4a4260f2f177ab` and its preceding fixes; these do not change application images.
 
-## Activation blocked — explicit access approval required
+## Approved activation completed
 
-Automatic approval review rejected granting a new Azure role because deployment authorization did not specifically authorize the recipient, role and scope. No workaround or alternative credentials were used.
+The user explicitly approved the container-scoped Storage Blob Data Contributor grant. It was applied to the system-assigned managed identity of `ca-craves-notification-service-p` (object ID `07a4694c-ce0f-4615-a7b6-15341e1dbced`), scoped only to the `pdf-documents` container in `stcravesprodlowl3ing6`.
 
-Requested grant:
-- Recipient: system-assigned managed identity of `ca-craves-notification-service-p`, object ID `07a4694c-ce0f-4615-a7b6-15341e1dbced`.
-- Role: Storage Blob Data Contributor (read/write/delete Blob data).
-- Scope: only `/subscriptions/4f897b61-9b52-44b4-8cf1-bdac281cc1aa/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Storage/storageAccounts/stcravesprodlowl3ing6/blobServices/default/containers/pdf-documents`.
+- Source adapters enabled and healthy: Order revision `--0000080`, Integration `--0000140`, Subscription `--0000040`.
+- Notification generation and worker enabled: `--0000038` is latest and ready, health UP.
+- Customer web document controls enabled: `ca-craves-web-prodlow--0000080` is latest and ready. Existing Razorpay production readiness remains valid.
+- Both web and APIM document capabilities endpoints reject unauthenticated access with HTTP 401 and private/no-store headers.
 
-PDF API generation, worker and email activation flags remain explicitly false. Source and web feature flags remain at their default false. Generation, private download integrity, cross-account isolation and real verified-recipient email have not been runtime-accepted. No live payment, delivery booking or customer email was performed.
+## Remaining acceptance and email gates
 
-After explicit approval, grant only this container-scoped role, enable the existing document source adapters and generation/worker settings, verify with an existing owned record, then activate the web controls and separately verify email. Preserve existing secrets and runtime configuration. Follow the module README for rollback; retain V6 tables, issued blobs and audit records.
+Automatic approval review separately rejected enabling production PDF email capability because the specific approval covered storage access and generation verification. `CRAVES_DOCUMENTS_EMAIL_ENABLED` remains false. No customer email was sent.
+
+Automatic review also rejected requesting a login OTP without explicit account-login authorization. No OTP was sent. Generation, download byte/hash verification, owned-record correctness and cross-account denial are not yet runtime-accepted; do not infer them from health or CI. Continue through the normal customer sign-in after explicit authorization, then test against an existing owned order without creating a payment or delivery booking.
+
+Obtain explicit authorization before enabling PDF email and sending any controlled test attachment to the signed-in account's verified email. Follow the module README for rollout and feature-first rollback; retain V6 tables, issued blobs and audit records.

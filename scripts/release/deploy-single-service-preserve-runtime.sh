@@ -14,6 +14,7 @@ SMOKE_SLEEP_SECONDS=${SMOKE_SLEEP_SECONDS:-5}
 READY_ATTEMPTS=${READY_ATTEMPTS:-60}
 READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-5}
 STATUS_READ_FAILURE_LIMIT=${STATUS_READ_FAILURE_LIMIT:-4}
+DEPLOY_PREFLIGHT_ONLY=${DEPLOY_PREFLIGHT_ONLY:-false}
 
 fail() {
   echo "ERROR: $*" >&2
@@ -24,6 +25,8 @@ command -v az >/dev/null 2>&1 || fail 'Azure CLI is required.'
 command -v jq >/dev/null 2>&1 || fail 'jq is required.'
 command -v sha256sum >/dev/null 2>&1 || fail 'sha256sum is required.'
 command -v curl >/dev/null 2>&1 || fail 'curl is required.'
+[[ "$DEPLOY_PREFLIGHT_ONLY" == true || "$DEPLOY_PREFLIGHT_ONLY" == false ]] \
+  || fail 'DEPLOY_PREFLIGHT_ONLY must be true or false.'
 
 runtime_template_hash() {
   local revision=$1
@@ -366,10 +369,19 @@ PREVIOUS_IMAGE=$(az containerapp revision show \
   --only-show-errors)
 
 [[ -n "$PREVIOUS_IMAGE" ]] || fail 'Previous ready revision image was not resolved. No deployment was attempted.'
-[[ "$PREVIOUS_IMAGE" != "$TARGET_IMAGE" ]] || fail 'Target image is already the current ready image; use a new immutable tag.'
 
 SECRET_META_BEFORE=$(secret_metadata_json)
 verify_active_secret_refs_are_key_vault_backed "$BEFORE" "$SECRET_META_BEFORE"
+
+# The full-release wrapper invokes the same read-only prerequisites for every
+# service before it changes the first image. Keep the Key Vault guard identical
+# here and immediately before deployment; never migrate secrets in this helper.
+if [[ "$DEPLOY_PREFLIGHT_ONLY" == true ]]; then
+  echo "SUCCESS: $SERVICE_KEY deployment preflight passed; no runtime mutation attempted."
+  exit 0
+fi
+
+[[ "$PREVIOUS_IMAGE" != "$TARGET_IMAGE" ]] || fail 'Target image is already the current ready image; use a new immutable tag.'
 
 TEMPLATE_HASH_BEFORE=$(runtime_template_hash "$PREVIOUS_REVISION")
 CONFIG_HASH_BEFORE=$(configuration_hash)

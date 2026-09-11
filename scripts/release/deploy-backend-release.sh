@@ -424,6 +424,30 @@ done < <(jq -c '.services[]' "$PACK_FILE")
 
 verify_step_one_dormant_flags
 
+# Discover incompatible bindings on any service before deploying auth or any
+# other image. A prerequisite failure is not a failed revision and needs no
+# rollback or replica-log collection.
+while IFS= read -r service; do
+  key=$(jq -r '.key' <<<"$service")
+  app=$(jq -r '.containerApp' <<<"$service")
+  repository=$(jq -r '.imageRepository' <<<"$service")
+  if [[ "$RELEASE_MODE" == 'REPAIR_CATALOG_HEALTH_AND_DEPLOY' && "$key" != 'catalog' ]]; then
+    continue
+  fi
+  digest=$(jq -r --arg key "$key" '.images[] | select(.serviceKey == $key) | .digest' "$IMAGE_MANIFEST")
+  target_image="$ACR_LOGIN/$repository@$digest"
+  log_file="$OUTPUT_DIR/service-logs/${key}-preflight.log"
+  if ! DEPLOY_PREFLIGHT_ONLY=true bash "$SINGLE_SERVICE_DEPLOY" \
+    "$RESOURCE_GROUP" "$app" "$target_image" "$key" >"$log_file" 2>&1; then
+    cat "$log_file" >&2
+    record_event "$key" "$app" 'preflight' 'failed' "$target_image" ''
+    materialize_evidence 'FAILED' "Deployment prerequisites failed for $app; no service image was changed."
+    fail "Deployment prerequisites failed for $app; inspect ${key}-preflight.log. No service image was changed."
+  fi
+  cat "$log_file"
+  record_event "$key" "$app" 'preflight' 'passed' "$target_image" ''
+done < <(jq -c '.services[]' "$PACK_FILE")
+
 while IFS= read -r service; do
   key=$(jq -r '.key' <<<"$service")
   app=$(jq -r '.containerApp' <<<"$service")

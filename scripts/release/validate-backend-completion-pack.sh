@@ -190,4 +190,7 @@ if grep -En ':latest([[:space:]]|$)' "$PIPELINE" "$DEPLOY_SCRIPT" "$SINGLE_SERVI
   fail 'mutable latest image tags are forbidden'
 fi
 
+python3 "$ROOT/scripts/release/tests/test-backend-preflight.py"
+
 echo 'SUCCESS: backend completion pack, diagnostics, and runtime-preserving deployment contracts passed.'
+

@@ -119,6 +119,20 @@ craves:
       stale-minutes: ${CRAVES_CASHFREE_WEBHOOK_STALE_MINUTES:5}
       retry-base-seconds: ${CRAVES_CASHFREE_WEBHOOK_RETRY_BASE_SECONDS:5}
   providers:
+    pidge:
+      enabled: ${PIDGE_API_ENABLED:false}
+      create-enabled: ${PIDGE_CREATE_ENABLED:false}
+      production-activation-approved: ${PIDGE_PRODUCTION_ACTIVATION_APPROVED:false}
+      manual-allocation-verified: ${PIDGE_MANUAL_ALLOCATION_VERIFIED:false}
+      webhook-verified: ${PIDGE_WEBHOOK_VERIFIED:false}
+      environment: ${PIDGE_API_ENVIRONMENT:PRODUCTION}
+      base-url: ${PIDGE_API_BASE_URL:https://api.pidge.in}
+      auth-token: ${PIDGE_API_AUTH_TOKEN:}
+      channel: ${PIDGE_CHANNEL:Craves Hyperlocal}
+      webhook-token: ${PIDGE_WEBHOOK_TOKEN:}
+      callback-url: ${PIDGE_CALLBACK_URL:https://api.craves.in/api/v1/webhooks/delivery/pidge}
+      connect-timeout-seconds: ${PIDGE_CONNECT_TIMEOUT_SECONDS:5}
+      read-timeout-seconds: ${PIDGE_READ_TIMEOUT_SECONDS:20}
     borzo:
       enabled: ${BORZO_API_ENABLED:false}
       environment: ${BORZO_API_ENVIRONMENT:SANDBOX}

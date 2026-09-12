@@ -102,7 +102,7 @@ public class AuthService {
             List<String> roles = identityRoleRepository.findRoleCodesByIdentityId(identity.getId());
             saveLoginAttempt(firebaseUid, phoneNumber, true, null, ipAddress, userAgent);
             saveAudit(identity.getId(), "FIREBASE_EXCHANGE", "Firebase phone token exchanged", ipAddress, userAgent);
-            if (AdminSessionService.isAdmin(roles)) {
+            if (Boolean.TRUE.equals(request.adminSession()) && AdminSessionService.isAdmin(roles)) {
                 identityRepository.flush();
                 return adminSessions.create(identity, roles, decodedToken.getClaims().get("auth_time"));
             }
@@ -134,9 +134,6 @@ public class AuthService {
         AuthIdentity identity = identityRepository.findById(session.getIdentityId())
             .orElseThrow(() -> AuthException.unauthorized("IDENTITY_NOT_FOUND", "Identity was not found"));
         assertActive(identity);
-        if (AdminSessionService.isAdmin(identityRoleRepository.findRoleCodesByIdentityId(identity.getId()))) {
-            throw AuthException.unauthorized("ADMIN_REAUTHENTICATION_REQUIRED", "Sign in to start a bounded administrator session");
-        }
 
         String ipAddress = clientIp(httpRequest);
         String userAgent = truncate(httpRequest.getHeader("User-Agent"), 512);
@@ -184,7 +181,7 @@ public class AuthService {
             .orElseThrow(() -> AuthException.unauthorized("IDENTITY_NOT_FOUND", "Identity was not found"));
         assertActive(identity);
         List<String> roles = identityRoleRepository.findRoleCodesByIdentityId(identity.getId());
-        return toIdentityResponse(identity, roles);
+        return toIdentityResponse(identity, roles.stream().filter(currentUser.roles()::contains).toList());
     }
 
     @Transactional(readOnly = true)
@@ -264,6 +261,9 @@ public class AuthService {
     }
 
     private AuthTokenResponse buildTokenResponse(AuthIdentity identity, List<String> roles, String refreshToken, Instant refreshTokenExpiresAt) {
+        // Consumer/mobile sessions keep their existing lifetime and consumer permissions.
+        // Privileged roles are issued only by the bounded administrator session path.
+        roles = AdminSessionService.consumerRoles(roles);
         String accessToken = jwtService.issueAccessToken(identity, roles);
         return AuthTokenResponse.create(
             accessToken,

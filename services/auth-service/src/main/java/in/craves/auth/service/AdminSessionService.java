@@ -143,6 +143,10 @@ public class AdminSessionService {
         if (count == null || count != 1) throw rejected("ADMIN_SESSION_REVOKED");
     }
 
+    public static List<String> consumerRoles(List<String> roles) {
+        return roles.stream().filter(role -> !in.craves.auth.admin.InternalAdminRoles.codes().contains(role)).toList();
+    }
+
     private void lockIdentity(UUID identity) {
         jdbc.queryForObject("SELECT id FROM auth_identity WHERE id = ? FOR UPDATE", UUID.class, identity);
     }

@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const upstream = await fetch(`${apiBaseUrl()}/auth/firebase/exchange`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ firebaseIdToken }),
+      body: JSON.stringify({ firebaseIdToken, adminSession: process.env.CRAVES_ADMIN_PORTAL === "true" }),
       cache: "no-store",
       signal: controller.signal,
     });

@@ -49,4 +49,14 @@ class AdminSessionPolicyTest {
         String tampered = parts[0] + "." + parts[1] + "." + (parts[2].startsWith("A") ? "B" : "A") + parts[2].substring(1);
         assertThrows(AuthException.class, () -> jwt.verifyAccessToken(tampered));
     }
+
+    @Test void consumerAndMobileCredentialsKeepTheirPolicyWithoutPrivilegedRoles() {
+        List<String> allRoles = new java.util.ArrayList<>(in.craves.auth.admin.InternalAdminRoles.codes());
+        allRoles.addAll(List.of("CUSTOMER", "CHEF"));
+        assertEquals(List.of("CUSTOMER", "CHEF"), AdminSessionService.consumerRoles(allRoles));
+        JwtProperties properties = new JwtProperties();
+        assertEquals(java.time.Duration.ofDays(30), properties.getRefreshTokenTtl());
+        assertEquals(java.time.Duration.ofMinutes(15), properties.getAccessTokenTtl());
+        assertEquals(List.of("CUSTOMER", "CHEF"), AdminSessionService.consumerRoles(List.of("CUSTOMER", "CHEF")));
+    }
 }

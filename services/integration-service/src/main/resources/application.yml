@@ -12,6 +12,10 @@ spring:
     table: flyway_schema_history
 
 craves:
+  delivery-feedback:
+    enabled: ${CRAVES_DELIVERY_FEEDBACK_ENABLED:true}
+    batch-size: ${CRAVES_DELIVERY_FEEDBACK_BATCH_SIZE:50}
+    max-attempts: ${CRAVES_DELIVERY_FEEDBACK_MAX_ATTEMPTS:8}
   delivery-intelligence:
     enabled: ${CRAVES_DELIVERY_INTELLIGENCE_ENABLED:false}
     live-window-days: ${CRAVES_DELIVERY_LIVE_WINDOW_DAYS:7}

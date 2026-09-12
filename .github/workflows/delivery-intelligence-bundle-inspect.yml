@@ -12,34 +12,51 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
       - name: Inspect deployed Delivery Intelligence assets
         shell: bash
         run: |
           set -Eeuo pipefail
           BASE='https://admin.craves.in/delivery-intelligence'
+          HOST='https://admin.craves.in'
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
 
-          curl -fsSL --max-time 30 "$BASE" -o "$tmp/page.html"
-          echo '=== HTML asset refs ==='
-          grep -oE 'src="[^"]+\.js[^"]*"' "$tmp/page.html" | sed 's/^src="//;s/"$//' | sort -u | tee "$tmp/assets.txt"
+          curl -fsSL --max-time 10 "$BASE" -o "$tmp/page.html"
+          grep -oE 'src="[^"]+\.js[^"]*"' "$tmp/page.html" | sed 's/^src="//;s/"$//' | sort -u > "$tmp/assets.txt"
+          echo "Found $(wc -l < "$tmp/assets.txt") JavaScript assets"
 
-          : > "$tmp/all.js"
-          while IFS= read -r asset; do
-            [[ -n "$asset" ]] || continue
+          export HOST BASE tmp
+          nl -ba "$tmp/assets.txt" | while read -r idx asset; do
+            printf '%s\t%s\n' "$idx" "$asset"
+          done | xargs -P 16 -n 2 bash -c '
+            idx="$1"; asset="$2"
             case "$asset" in
               http*) url="$asset" ;;
-              /*) url="https://admin.craves.in${asset}" ;;
+              /*) url="${HOST}${asset}" ;;
               *) url="${BASE%/}/${asset}" ;;
             esac
-            echo "FETCH $url"
-            curl -fsSL --max-time 30 "$url" >> "$tmp/all.js" || true
-            printf '\n' >> "$tmp/all.js"
-          done < "$tmp/assets.txt"
+            curl -fsSL --max-time 5 "$url" -o "$tmp/$idx.js" 2>/dev/null || true
+          ' _
 
-          echo '=== Filter UI strings ==='
-          grep -oE '.{0,220}(All time|Date range|Rows per page|Newest first|Apply filters).{0,500}' "$tmp/all.js" | head -80 || true
+          cat "$tmp"/*.js 2>/dev/null > "$tmp/all.js" || true
+          echo "Downloaded $(wc -c < "$tmp/all.js") bytes"
 
-          echo '=== Delivery overview request fragments ==='
-          grep -oE '.{0,350}(delivery-intelligence/overview|hours=|limit=|range|sort|order).{0,700}' "$tmp/all.js" | head -120 || true
+          echo '=== Exact filter/request evidence ==='
+          python3 - "$tmp/all.js" <<'PY'
+          import re, sys
+          text = open(sys.argv[1], encoding='utf-8', errors='ignore').read()
+          needles = [
+              'All time', 'Date range', 'Rows per page', 'Newest first', 'Apply filters',
+              'delivery-intelligence/overview', 'hours=', 'limit=', 'windowHours',
+          ]
+          for needle in needles:
+              print(f'--- {needle} ---')
+              positions = [m.start() for m in re.finditer(re.escape(needle), text, flags=re.I)]
+              print('count=', len(positions))
+              for pos in positions[:12]:
+                  start=max(0,pos-700); end=min(len(text),pos+1400)
+                  print(text[start:end].replace('\n',' ')[:2200])
+                  print()
+          PY

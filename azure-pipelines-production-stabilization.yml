@@ -1,15 +1,9 @@
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - azure-pipelines-production-stabilization.yml
+trigger: none
 pr: none
 
 schedules:
-  - cron: "*/5 * * * *"
-    displayName: Temporary Delivery Intelligence runtime diagnosis
+  - cron: "0 */6 * * *"
+    displayName: Every 6 hours production stabilization verification
     branches:
       include:
         - main
@@ -33,11 +27,6 @@ variables:
   apimExpectedCname: apim-craves-prodlow-l3ing6.azure-api.net
   rollbackWwwHostname: lemon-bay-06f924610.7.azurestaticapps.net
   certMinRemainingDays: 30
-  deliveryIntegrationApp: ca-craves-integration-service-pr
-  deliveryDashboardApp: ca-craves-delivery-intel-prodlow
-  authApp: ca-craves-auth-service-prodlow
-  apimService: apim-craves-prodlow-l3ing6
-  deliveryAdminApiId: craves-admin-operational-investigations-v1
 
 pool:
   vmImage: ubuntu-latest
@@ -46,7 +35,6 @@ steps:
   - checkout: self
     clean: true
     fetchDepth: 1
-    persistCredentials: true
 
   - bash: |
       set -euo pipefail
@@ -93,117 +81,3 @@ steps:
         export CERT_MIN_REMAINING_DAYS='$(certMinRemainingDays)'
 
         bash infra/operations/production-stabilization/check-production.sh
-
-  - task: AzureCLI@2
-    displayName: Diagnose Delivery Intelligence authenticated path
-    inputs:
-      azureSubscription: $(AZURE_SERVICE_CONNECTION)
-      scriptType: bash
-      scriptLocation: inlineScript
-      addSpnToEnvironment: false
-      inlineScript: |
-        set -Eeuo pipefail
-        set +x
-
-        RG='$(resourceGroup)'
-        INTEGRATION='$(deliveryIntegrationApp)'
-        DASHBOARD='$(deliveryDashboardApp)'
-        AUTH='$(authApp)'
-        APIM='$(apimService)'
-        API_ID='$(deliveryAdminApiId)'
-        EVIDENCE='docs/runtime-evidence/delivery-intelligence-runtime.json'
-
-        get_app() {
-          az containerapp show -g "$RG" -n "$1" -o json --only-show-errors
-        }
-        env_value() {
-          local json="$1" name="$2"
-          jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name==$name)][0] | (.value // "")' <<<"$json"
-        }
-        env_secret_ref() {
-          local json="$1" name="$2"
-          jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name==$name)][0] | (.secretRef // "")' <<<"$json"
-        }
-        probe() {
-          local url="$1"
-          curl -sS --max-time 25 -o /tmp/di-body -w '%{http_code}' "$url" 2>/dev/null || printf '000'
-        }
-
-        IJ="$(get_app "$INTEGRATION")"
-        DJ="$(get_app "$DASHBOARD")"
-        AJ="$(get_app "$AUTH")"
-
-        IFQDN="$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$IJ")"
-        DFQDN="$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$DJ")"
-        IREV="$(jq -r '.properties.latestRevisionName // ""' <<<"$IJ")"
-        IREADY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$IJ")"
-        DREV="$(jq -r '.properties.latestRevisionName // ""' <<<"$DJ")"
-        DREADY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$DJ")"
-        AREV="$(jq -r '.properties.latestRevisionName // ""' <<<"$AJ")"
-        AREADY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$AJ")"
-        IIMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$IJ")"
-        DIMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$DJ")"
-        AIMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$AJ")"
-        DBASE="$(env_value "$DJ" CRAVES_API_BASE_URL)"
-        IISS="$(env_value "$IJ" CRAVES_JWT_ISSUER)"
-        IAUD="$(env_value "$IJ" CRAVES_JWT_AUDIENCE)"
-        IPUBREF="$(env_secret_ref "$IJ" CRAVES_JWT_VERIFICATION_PEM_BASE64)"
-        AISS="$(env_value "$AJ" CRAVES_JWT_ISSUER)"
-        AAUD="$(env_value "$AJ" CRAVES_JWT_AUDIENCE)"
-        APUBREF="$(env_secret_ref "$AJ" CRAVES_JWT_PUBLIC_KEY_PEM_BASE64)"
-        APRIVREF="$(env_secret_ref "$AJ" CRAVES_JWT_PRIVATE_KEY_PEM_BASE64)"
-
-        API_JSON="$(az apim api show -g "$RG" --service-name "$APIM" --api-id "$API_ID" -o json --only-show-errors 2>/dev/null || echo '{}')"
-        APATH="$(jq -r '.path // "MISSING"' <<<"$API_JSON")"
-        ASVC="$(jq -r '.serviceUrl // "MISSING"' <<<"$API_JSON")"
-        OP_JSON="$(az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id get-admin-delivery-intelligence-overview -o json --only-show-errors 2>/dev/null || echo '{}')"
-        OTEMPLATE="$(jq -r '.urlTemplate // "MISSING"' <<<"$OP_JSON")"
-
-        SUB="$(az account show --query id -o tsv)"
-        POLICY_URL="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis/${API_ID}/operations/get-admin-delivery-intelligence-overview/policies/policy?api-version=2022-08-01"
-        POLICY="$(az rest --method get --url "$POLICY_URL" --query properties.value -o tsv 2>/dev/null || true)"
-        PBACKEND="$(grep -oE 'base-url="[^"]+"' <<<"$POLICY" | head -1 | sed 's/base-url="//;s/"$//' || true)"
-
-        H_INT="$(probe "https://${IFQDN}/actuator/health")"
-        U_INT="$(probe "https://${IFQDN}/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35")"
-        U_APIM="$(probe 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35')"
-        H_DASH="$(probe "https://${DFQDN}/delivery-intelligence/api/health")"
-        U_DASH="$(probe "https://${DFQDN}/delivery-intelligence/api/delivery-intelligence/overview?hours=24&limit=35")"
-        H_FD="$(probe 'https://admin.craves.in/delivery-intelligence/api/health')"
-        U_FD="$(probe 'https://admin.craves.in/delivery-intelligence/api/delivery-intelligence/overview?hours=24&limit=35')"
-
-        mkdir -p "$(dirname "$EVIDENCE")"
-        jq -n \
-          --arg collectedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-          --arg sourceSha '$(Build.SourceVersion)' \
-          --arg integrationRevision "$IREV" --arg integrationReady "$IREADY" --arg integrationImage "$IIMAGE" \
-          --arg dashboardRevision "$DREV" --arg dashboardReady "$DREADY" --arg dashboardImage "$DIMAGE" \
-          --arg authRevision "$AREV" --arg authReady "$AREADY" --arg authImage "$AIMAGE" \
-          --arg dashboardApiBase "$DBASE" --arg integrationIssuer "$IISS" --arg integrationAudience "$IAUD" \
-          --arg integrationPublicKeySecretRef "$IPUBREF" --arg authIssuer "$AISS" --arg authAudience "$AAUD" \
-          --arg authPublicKeySecretRef "$APUBREF" --arg authPrivateKeySecretRef "$APRIVREF" \
-          --arg apimPath "$APATH" --arg apimServiceUrl "$ASVC" --arg apimTemplate "$OTEMPLATE" --arg policyBackend "$PBACKEND" \
-          --arg integrationHealth "$H_INT" --arg integrationUnauth "$U_INT" --arg apimUnauth "$U_APIM" \
-          --arg dashboardHealth "$H_DASH" --arg dashboardUnauth "$U_DASH" --arg frontDoorHealth "$H_FD" --arg frontDoorUnauth "$U_FD" \
-          '{collectedAt:$collectedAt,sourceSha:$sourceSha,integration:{revision:$integrationRevision,readyRevision:$integrationReady,image:$integrationImage,jwt:{issuer:$integrationIssuer,audience:$integrationAudience,verificationKeySecretRef:$integrationPublicKeySecretRef},health:$integrationHealth,unauthOverview:$integrationUnauth},dashboard:{revision:$dashboardRevision,readyRevision:$dashboardReady,image:$dashboardImage,apiBase:$dashboardApiBase,health:$dashboardHealth,unauthOverview:$dashboardUnauth},auth:{revision:$authRevision,readyRevision:$authReady,image:$authImage,jwt:{issuer:$authIssuer,audience:$authAudience,publicKeySecretRef:$authPublicKeySecretRef,privateKeySecretRef:$authPrivateKeySecretRef}},apim:{path:$apimPath,serviceUrl:$apimServiceUrl,operationTemplate:$apimTemplate,policyBackend:$policyBackend,unauthOverview:$apimUnauth},frontDoor:{health:$frontDoorHealth,unauthOverview:$frontDoorUnauth}}' > "$EVIDENCE"
-
-        cat "$EVIDENCE"
-
-        [[ "$IREV" == "$IREADY" ]] || { echo '##vso[task.logissue type=error]Delivery Intelligence diagnosis: Integration latest revision is not ready.'; exit 1; }
-        [[ "$DREV" == "$DREADY" ]] || { echo '##vso[task.logissue type=error]Delivery Intelligence diagnosis: Dashboard latest revision is not ready.'; exit 1; }
-        [[ "$AREV" == "$AREADY" ]] || { echo '##vso[task.logissue type=error]Delivery Intelligence diagnosis: Auth latest revision is not ready.'; exit 1; }
-
-  - bash: |
-      set -Eeuo pipefail
-      EVIDENCE='docs/runtime-evidence/delivery-intelligence-runtime.json'
-      test -s "$EVIDENCE"
-      git config user.name 'Craves Azure Runtime Bot'
-      git config user.email 'runtime-bot@craves.in'
-      git add "$EVIDENCE"
-      if git diff --cached --quiet; then
-        echo 'No runtime evidence change to persist.'
-        exit 0
-      fi
-      git commit -m 'ops(delivery-intelligence): capture safe production runtime evidence'
-      git push origin HEAD:main
-    displayName: Persist safe Delivery Intelligence runtime evidence

@@ -7,6 +7,7 @@ on:
     paths:
       - 'apps/delivery-intelligence-admin/**'
       - 'services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence/**'
+      - 'services/integration-service/src/test/java/in/craves/integration/admin/deliveryintelligence/**'
       - 'services/integration-service/src/main/java/in/craves/integration/config/WebSecurityConfiguration.java'
       - 'services/integration-service/src/main/resources/db/migration/V115__razorpay_webhook_delivery_guard.sql'
       - 'services/integration-service/src/main/resources/db/migration/V116__shadowfax_hyperlocal_marketplace_contract.sql'
@@ -23,6 +24,7 @@ on:
     paths:
       - 'apps/delivery-intelligence-admin/**'
       - 'services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence/**'
+      - 'services/integration-service/src/test/java/in/craves/integration/admin/deliveryintelligence/**'
       - 'services/integration-service/src/main/java/in/craves/integration/config/WebSecurityConfiguration.java'
       - 'services/integration-service/src/main/resources/db/migration/V115__razorpay_webhook_delivery_guard.sql'
       - 'services/integration-service/src/main/resources/db/migration/V116__shadowfax_hyperlocal_marketplace_contract.sql'
@@ -61,7 +63,7 @@ jobs:
           git fetch --no-tags origin main:refs/remotes/origin/main
           changed="$(git diff --name-only refs/remotes/origin/main...HEAD)"
           printf '%s\n' "$changed"
-          unexpected="$(printf '%s\n' "$changed" | grep -Ev '^((apps/delivery-intelligence-admin/.*)|(services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence/.*)|(services/integration-service/src/main/java/in/craves/integration/config/WebSecurityConfiguration\.java)|(services/integration-service/src/main/resources/db/migration/V115__razorpay_webhook_delivery_guard\.sql)|(services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes\.sql(\.conf)?)|(scripts/apim/configure-delivery-intelligence-admin-apim\.sh)|(scripts/frontdoor/configure-delivery-intelligence-admin-route\.sh)|(scripts/release/verify-integration-flyway-history\.sh)|(\.github/workflows/delivery-intelligence-source-convergence-ci\.yml)|(docs/handover/2026-09-10-delivery-intelligence-source-convergence\.md))$' || true)"
+          unexpected="$(printf '%s\n' "$changed" | grep -Ev '^((apps/delivery-intelligence-admin/.*)|(services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence/.*)|(services/integration-service/src/test/java/in/craves/integration/admin/deliveryintelligence/.*)|(services/integration-service/src/main/java/in/craves/integration/config/WebSecurityConfiguration\.java)|(services/integration-service/src/main/resources/db/migration/V115__razorpay_webhook_delivery_guard\.sql)|(services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes\.sql(\.conf)?)|(scripts/apim/configure-delivery-intelligence-admin-apim\.sh)|(scripts/frontdoor/configure-delivery-intelligence-admin-route\.sh)|(scripts/release/verify-integration-flyway-history\.sh)|(\.github/workflows/delivery-intelligence-source-convergence-ci\.yml)|(docs/handover/2026-09-10-delivery-intelligence-source-convergence\.md))$' || true)"
           if [[ -n "$unexpected" ]]; then
             echo 'ERROR: source convergence includes unrelated files:' >&2
             printf '%s\n' "$unexpected" >&2
@@ -123,7 +125,7 @@ jobs:
           set -euo pipefail
           bash scripts/release/verify-integration-flyway-history.sh
           grep -Fxq 'executeInTransaction=false' services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql.conf
-          grep -Fq 'CREATE INDEX CONCURRENTLY' services/integration-service/src/main/resources/db/migration/V116__delivery_intelligence_admin_read_indexes.sql
+          grep -Fq 'CREATE INDEX CONCURRENTLY' services/integration-service/src/main/resources/db/migration/V117__delivery_intelligence_admin_read_indexes.sql
 
       - name: Verify Integration Service
         working-directory: services/integration-service

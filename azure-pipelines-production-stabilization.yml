@@ -1,27 +1,33 @@
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - azure-pipelines-production-stabilization.yml
+trigger: none
 pr: none
 
 schedules:
-  - cron: "* * * * *"
-    displayName: Temporary Delivery Intelligence backend deployment
+  - cron: "0 */6 * * *"
+    displayName: Every 6 hours production stabilization verification
     branches:
       include:
         - main
     always: true
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  subscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
   resourceGroup: rg-craves-prodlow-centralindia
-  acrName: cravesprodlowacr82121
+  containerAppEnvironmentName: cae-craves-prodlow-l3ing6
+  customerWebAppName: ca-craves-web-prodlow
+  customerWebAppFqdn: ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
+  customerWebStaticIp: 4.187.245.188
+  customerWebCertificateName: craves-web-tls
+  keyVaultName: kvcravesprodlowl3ing6
+  customerApexHostname: craves.in
+  customerWwwHostname: www.craves.in
+  customerDomainVerificationId: 8CBF8092F604318F13145F6181237B80D12FD1336F3F37C199AA8D7099FF5DF1
+  frontDoorProfileName: afd-craves-prodlow
+  frontDoorEndpointHostname: craves-prodlow-4f897b61-d4e6bvhscdbzbgbv.z01.azurefd.net
+  apimHostname: api.craves.in
+  apimExpectedCname: apim-craves-prodlow-l3ing6.azure-api.net
+  rollbackWwwHostname: lemon-bay-06f924610.7.azurestaticapps.net
+  certMinRemainingDays: 30
   integrationAppName: ca-craves-integration-service-pr
-  imageRepository: craves/integration-service
-  modulePath: services/integration-service
 
 pool:
   vmImage: ubuntu-latest
@@ -31,22 +37,23 @@ steps:
     clean: true
     fetchDepth: 1
 
-  - task: JavaToolInstaller@0
-    displayName: Use Java 21
-    inputs:
-      versionSpec: '21'
-      jdkArchitectureOption: x64
-      jdkSourceOption: PreInstalled
-
   - bash: |
-      set -Eeuo pipefail
-      bash scripts/release/verify-integration-flyway-history.sh
-      cd '$(modulePath)'
-      mvn -B -ntp clean verify
-    displayName: Verify Integration source and tests
+      set -euo pipefail
+      packages=()
+      command -v dig >/dev/null 2>&1 || packages+=(dnsutils)
+      command -v jq >/dev/null 2>&1 || packages+=(jq)
+      command -v shellcheck >/dev/null 2>&1 || packages+=(shellcheck)
+      if [[ ${#packages[@]} -gt 0 ]]; then
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends "${packages[@]}"
+      fi
+
+      bash -n infra/operations/production-stabilization/check-production.sh
+      shellcheck infra/operations/production-stabilization/check-production.sh
+    displayName: Validate stabilization script
 
   - task: AzureCLI@2
-    displayName: Build and push immutable Integration image
+    displayName: Verify Craves production stabilization state
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -55,17 +62,29 @@ steps:
       inlineScript: |
         set -Eeuo pipefail
         set +x
-        ACR='$(acrName)'
-        LOGIN="$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)"
-        IMAGE="${LOGIN}/$(imageRepository):$(Build.BuildId)"
-        az acr login --name "$ACR" --only-show-errors
-        docker build --pull -t "$IMAGE" '$(modulePath)'
-        docker push "$IMAGE"
-        echo "##vso[task.setvariable variable=DELIVERY_INTELLIGENCE_IMAGE]$IMAGE"
-        echo "Built immutable Integration image: $IMAGE"
+
+        export SUBSCRIPTION_ID='$(subscriptionId)'
+        export RESOURCE_GROUP='$(resourceGroup)'
+        export CONTAINER_APP_ENVIRONMENT_NAME='$(containerAppEnvironmentName)'
+        export CUSTOMER_WEB_APP_NAME='$(customerWebAppName)'
+        export CUSTOMER_WEB_APP_FQDN='$(customerWebAppFqdn)'
+        export CUSTOMER_WEB_STATIC_IP='$(customerWebStaticIp)'
+        export CUSTOMER_WEB_CERTIFICATE_NAME='$(customerWebCertificateName)'
+        export KEY_VAULT_NAME='$(keyVaultName)'
+        export CUSTOMER_APEX_HOSTNAME='$(customerApexHostname)'
+        export CUSTOMER_WWW_HOSTNAME='$(customerWwwHostname)'
+        export CUSTOMER_DOMAIN_VERIFICATION_ID='$(customerDomainVerificationId)'
+        export FRONT_DOOR_PROFILE_NAME='$(frontDoorProfileName)'
+        export FRONT_DOOR_ENDPOINT_HOSTNAME='$(frontDoorEndpointHostname)'
+        export APIM_HOSTNAME='$(apimHostname)'
+        export APIM_EXPECTED_CNAME='$(apimExpectedCname)'
+        export ROLLBACK_WWW_HOSTNAME='$(rollbackWwwHostname)'
+        export CERT_MIN_REMAINING_DAYS='$(certMinRemainingDays)'
+
+        bash infra/operations/production-stabilization/check-production.sh
 
   - task: AzureCLI@2
-    displayName: Deploy Integration without changing runtime configuration
+    displayName: Verify Integration JWT runtime alignment
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -74,37 +93,24 @@ steps:
       inlineScript: |
         set -Eeuo pipefail
         set +x
-        RG='$(resourceGroup)'
-        APP='$(integrationAppName)'
-        IMAGE='$(DELIVERY_INTELLIGENCE_IMAGE)'
 
-        BEFORE="$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)"
-        BEFORE_ENV_HASH="$(jq -c '.properties.template.containers[0].env | sort_by(.name)' <<<"$BEFORE" | sha256sum | awk '{print $1}')"
-        BEFORE_SECRETS_HASH="$(jq -c '[.properties.configuration.secrets[]? | {name:name,keyVaultUrl:keyVaultUrl,identity:identity}] | sort_by(.name)' <<<"$BEFORE" | sha256sum | awk '{print $1}')"
-        BEFORE_REV="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$BEFORE")"
+        JSON="$(az containerapp show -g '$(resourceGroup)' -n '$(integrationAppName)' -o json --only-show-errors)"
+        ISSUER="$(jq -r '[.properties.template.containers[0].env[]? | select(.name=="CRAVES_JWT_ISSUER")][0].value // ""' <<<"$JSON")"
+        AUDIENCE="$(jq -r '[.properties.template.containers[0].env[]? | select(.name=="CRAVES_JWT_AUDIENCE")][0].value // ""' <<<"$JSON")"
+        LATEST="$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON")"
+        READY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON")"
 
-        READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10 \
-          bash scripts/release/deploy-single-service-preserve-runtime.sh \
-            "$RG" "$APP" "$IMAGE" integration
+        [[ "$LATEST" == "$READY" && -n "$READY" ]] || {
+          echo "ERROR: Integration latest revision is not the ready revision (latest=$LATEST ready=$READY)." >&2
+          exit 1
+        }
+        [[ "$ISSUER" == 'https://api.craves.in/auth' ]] || {
+          echo 'ERROR: Integration CRAVES_JWT_ISSUER drift detected.' >&2
+          exit 1
+        }
+        [[ "$AUDIENCE" == 'craves-api' ]] || {
+          echo 'ERROR: Integration CRAVES_JWT_AUDIENCE drift detected.' >&2
+          exit 1
+        }
 
-        AFTER="$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)"
-        AFTER_ENV_HASH="$(jq -c '.properties.template.containers[0].env | sort_by(.name)' <<<"$AFTER" | sha256sum | awk '{print $1}')"
-        AFTER_SECRETS_HASH="$(jq -c '[.properties.configuration.secrets[]? | {name:name,keyVaultUrl:keyVaultUrl,identity:identity}] | sort_by(.name)' <<<"$AFTER" | sha256sum | awk '{print $1}')"
-        AFTER_REV="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$AFTER")"
-        AFTER_IMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$AFTER")"
-        ISSUER="$(jq -r '[.properties.template.containers[0].env[]? | select(.name=="CRAVES_JWT_ISSUER")][0].value // ""' <<<"$AFTER")"
-        AUDIENCE="$(jq -r '[.properties.template.containers[0].env[]? | select(.name=="CRAVES_JWT_AUDIENCE")][0].value // ""' <<<"$AFTER")"
-        FQDN="$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$AFTER")"
-
-        [[ "$AFTER_IMAGE" == "$IMAGE" ]] || { echo 'ERROR: deployed Integration image does not match build.' >&2; exit 1; }
-        [[ "$AFTER_ENV_HASH" == "$BEFORE_ENV_HASH" ]] || { echo 'ERROR: Integration environment changed during image-only deployment.' >&2; exit 1; }
-        [[ "$AFTER_SECRETS_HASH" == "$BEFORE_SECRETS_HASH" ]] || { echo 'ERROR: Integration secret references changed during image-only deployment.' >&2; exit 1; }
-        [[ "$ISSUER" == 'https://api.craves.in/auth' ]] || { echo 'ERROR: JWT issuer drift detected after deploy.' >&2; exit 1; }
-        [[ "$AUDIENCE" == 'craves-api' ]] || { echo 'ERROR: JWT audience drift detected after deploy.' >&2; exit 1; }
-
-        READINESS="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' "https://${FQDN}/actuator/health/readiness" || true)"
-        APIM_UNSIGNED="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=0&limit=25&sort=desc&offset=0&attentionOffset=0' || true)"
-        [[ "$READINESS" == '200' ]] || { echo "ERROR: Integration readiness returned HTTP $READINESS." >&2; exit 1; }
-        [[ "$APIM_UNSIGNED" == '401' ]] || { echo "ERROR: APIM Delivery Intelligence boundary returned HTTP $APIM_UNSIGNED instead of 401." >&2; exit 1; }
-
-        echo "PASS: Delivery Intelligence backend deployed. revision=$AFTER_REV previous=$BEFORE_REV image=$IMAGE readiness=$READINESS apimUnsigned=$APIM_UNSIGNED"
+        echo "PASS: Integration JWT runtime alignment is healthy on revision $READY."

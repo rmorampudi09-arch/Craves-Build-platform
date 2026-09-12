@@ -25,8 +25,8 @@ test("accepts a valid Craves server session", () => {
   assert.equal(result?.refreshToken, valid.refreshToken);
 });
 
-test("rejects malformed identity and short sessions", () => {
-  assert.equal(parseSessionExchange({ ...valid, expiresIn: 10 }), null);
+test("rejects malformed identity and expired sessions", () => {
+  assert.equal(parseSessionExchange({ ...valid, expiresIn: 0 }), null);
   assert.equal(parseSessionExchange({ ...valid, identity: { ...valid.identity, id: "bad" } }), null);
   assert.equal(parseSessionExchange({ ...valid, identity: { ...valid.identity, roles: [] } }), null);
 });
@@ -40,4 +40,8 @@ test("keeps return paths same-origin", () => {
 test("does not expose upstream error bodies", () => {
   assert.match(publicAuthError(401), /OTP session/i);
   assert.doesNotMatch(publicAuthError(500), /token|provider|stack/i);
+});
+
+test("accepts a server-bounded final second without extending it", () => {
+  assert.equal(parseSessionExchange({ ...valid, expiresIn: 1 })?.expiresIn, 1);
 });

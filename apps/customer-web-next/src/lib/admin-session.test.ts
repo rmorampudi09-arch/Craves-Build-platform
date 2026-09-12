@@ -27,18 +27,9 @@ test("loads a currently authorized administrator", async () => {
   assert.deepEqual(calls, ["/api/admin/me"]);
 });
 
-test("refreshes an expired access token and retries the admin gate", async () => {
-  const calls: string[] = [];
-  const identity = await loadAdminIdentity(async input => {
-    const url = String(input);
-    calls.push(url);
-    if (calls.length === 1) return response(401, { code: "SESSION_EXPIRED" });
-    if (url === "/api/auth/refresh") return response(200, { identity: admin });
-    return response(200, admin);
-  });
-
-  assert.deepEqual(identity, admin);
-  assert.deepEqual(calls, ["/api/admin/me", "/api/auth/refresh", "/api/admin/me"]);
+test("preserves transient identity failures instead of calling them sign-out", async () => {
+  await assert.rejects(loadAdminIdentity(async () => response(503, {})),
+    (error: unknown) => error instanceof AdminSessionError && error.status === 503);
 });
 
 test("reports a signed-out session after refresh is rejected", async () => {

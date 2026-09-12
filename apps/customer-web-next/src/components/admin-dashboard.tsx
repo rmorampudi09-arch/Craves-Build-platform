@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -24,7 +26,7 @@ export function AdminDashboard() {
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      const response = await fetch("/api/admin/dashboard/summary", { cache: "no-store" });
+      const response = await adminFetch("/api/admin/dashboard/summary", { cache: "no-store" });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(response.status === 403 ? "Administrator access is required." : "Live dashboard data is temporarily unavailable.");
       const parsed = parseAdminDashboardSummary(body);

@@ -46,6 +46,7 @@ steps:
   - checkout: self
     clean: true
     fetchDepth: 1
+    persistCredentials: true
 
   - bash: |
       set -euo pipefail
@@ -94,7 +95,7 @@ steps:
         bash infra/operations/production-stabilization/check-production.sh
 
   - task: AzureCLI@2
-    displayName: Diagnose Delivery Intelligence HTTP 400 path
+    displayName: Diagnose Delivery Intelligence authenticated path
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -110,13 +111,18 @@ steps:
         AUTH='$(authApp)'
         APIM='$(apimService)'
         API_ID='$(deliveryAdminApiId)'
+        EVIDENCE='docs/runtime-evidence/delivery-intelligence-runtime.json'
 
         get_app() {
           az containerapp show -g "$RG" -n "$1" -o json --only-show-errors
         }
         env_value() {
           local json="$1" name="$2"
-          jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name==$name)][0] | (.value // (if .secretRef then "secretref:" + .secretRef else "" end) // "")' <<<"$json"
+          jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name==$name)][0] | (.value // "")' <<<"$json"
+        }
+        env_secret_ref() {
+          local json="$1" name="$2"
+          jq -r --arg name "$name" '[.properties.template.containers[0].env[]? | select(.name==$name)][0] | (.secretRef // "")' <<<"$json"
         }
         probe() {
           local url="$1"
@@ -133,13 +139,19 @@ steps:
         IREADY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$IJ")"
         DREV="$(jq -r '.properties.latestRevisionName // ""' <<<"$DJ")"
         DREADY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$DJ")"
+        AREV="$(jq -r '.properties.latestRevisionName // ""' <<<"$AJ")"
+        AREADY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$AJ")"
         IIMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$IJ")"
         DIMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$DJ")"
+        AIMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$AJ")"
         DBASE="$(env_value "$DJ" CRAVES_API_BASE_URL)"
         IISS="$(env_value "$IJ" CRAVES_JWT_ISSUER)"
         IAUD="$(env_value "$IJ" CRAVES_JWT_AUDIENCE)"
+        IPUBREF="$(env_secret_ref "$IJ" CRAVES_JWT_PUBLIC_KEY_PEM_BASE64)"
         AISS="$(env_value "$AJ" CRAVES_JWT_ISSUER)"
         AAUD="$(env_value "$AJ" CRAVES_JWT_AUDIENCE)"
+        APUBREF="$(env_secret_ref "$AJ" CRAVES_JWT_PUBLIC_KEY_PEM_BASE64)"
+        APRIVREF="$(env_secret_ref "$AJ" CRAVES_JWT_PRIVATE_KEY_PEM_BASE64)"
 
         API_JSON="$(az apim api show -g "$RG" --service-name "$APIM" --api-id "$API_ID" -o json --only-show-errors 2>/dev/null || echo '{}')"
         APATH="$(jq -r '.path // "MISSING"' <<<"$API_JSON")"
@@ -160,18 +172,38 @@ steps:
         H_FD="$(probe 'https://admin.craves.in/delivery-intelligence/api/health')"
         U_FD="$(probe 'https://admin.craves.in/delivery-intelligence/api/delivery-intelligence/overview?hours=24&limit=35')"
 
-        DIAG="$(jq -cn \
+        mkdir -p "$(dirname "$EVIDENCE")"
+        jq -n \
+          --arg collectedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          --arg sourceSha '$(Build.SourceVersion)' \
           --arg integrationRevision "$IREV" --arg integrationReady "$IREADY" --arg integrationImage "$IIMAGE" \
           --arg dashboardRevision "$DREV" --arg dashboardReady "$DREADY" --arg dashboardImage "$DIMAGE" \
+          --arg authRevision "$AREV" --arg authReady "$AREADY" --arg authImage "$AIMAGE" \
           --arg dashboardApiBase "$DBASE" --arg integrationIssuer "$IISS" --arg integrationAudience "$IAUD" \
-          --arg authIssuer "$AISS" --arg authAudience "$AAUD" --arg apimPath "$APATH" --arg apimServiceUrl "$ASVC" \
-          --arg apimTemplate "$OTEMPLATE" --arg policyBackend "$PBACKEND" \
+          --arg integrationPublicKeySecretRef "$IPUBREF" --arg authIssuer "$AISS" --arg authAudience "$AAUD" \
+          --arg authPublicKeySecretRef "$APUBREF" --arg authPrivateKeySecretRef "$APRIVREF" \
+          --arg apimPath "$APATH" --arg apimServiceUrl "$ASVC" --arg apimTemplate "$OTEMPLATE" --arg policyBackend "$PBACKEND" \
           --arg integrationHealth "$H_INT" --arg integrationUnauth "$U_INT" --arg apimUnauth "$U_APIM" \
           --arg dashboardHealth "$H_DASH" --arg dashboardUnauth "$U_DASH" --arg frontDoorHealth "$H_FD" --arg frontDoorUnauth "$U_FD" \
-          '{integration:{revision:$integrationRevision,ready:$integrationReady,image:$integrationImage,issuer:$integrationIssuer,audience:$integrationAudience,health:$integrationHealth,unauthOverview:$integrationUnauth},dashboard:{revision:$dashboardRevision,ready:$dashboardReady,image:$dashboardImage,apiBase:$dashboardApiBase,health:$dashboardHealth,unauthOverview:$dashboardUnauth},auth:{issuer:$authIssuer,audience:$authAudience},apim:{path:$apimPath,serviceUrl:$apimServiceUrl,operationTemplate:$apimTemplate,policyBackend:$policyBackend,unauthOverview:$apimUnauth},frontDoor:{health:$frontDoorHealth,unauthOverview:$frontDoorUnauth}}')"
+          '{collectedAt:$collectedAt,sourceSha:$sourceSha,integration:{revision:$integrationRevision,readyRevision:$integrationReady,image:$integrationImage,jwt:{issuer:$integrationIssuer,audience:$integrationAudience,publicKeySecretRef:$integrationPublicKeySecretRef},health:$integrationHealth,unauthOverview:$integrationUnauth},dashboard:{revision:$dashboardRevision,readyRevision:$dashboardReady,image:$dashboardImage,apiBase:$dashboardApiBase,health:$dashboardHealth,unauthOverview:$dashboardUnauth},auth:{revision:$authRevision,readyRevision:$authReady,image:$authImage,jwt:{issuer:$authIssuer,audience:$authAudience,publicKeySecretRef:$authPublicKeySecretRef,privateKeySecretRef:$authPrivateKeySecretRef}},apim:{path:$apimPath,serviceUrl:$apimServiceUrl,operationTemplate:$apimTemplate,policyBackend:$policyBackend,unauthOverview:$apimUnauth},frontDoor:{health:$frontDoorHealth,unauthOverview:$frontDoorUnauth}}' > "$EVIDENCE"
 
-        echo "##vso[task.logissue type=warning]DELIVERY_INTELLIGENCE_DIAG=${DIAG}"
-        echo "$DIAG" | jq .
+        cat "$EVIDENCE"
 
         [[ "$IREV" == "$IREADY" ]] || { echo '##vso[task.logissue type=error]Delivery Intelligence diagnosis: Integration latest revision is not ready.'; exit 1; }
         [[ "$DREV" == "$DREADY" ]] || { echo '##vso[task.logissue type=error]Delivery Intelligence diagnosis: Dashboard latest revision is not ready.'; exit 1; }
+        [[ "$AREV" == "$AREADY" ]] || { echo '##vso[task.logissue type=error]Delivery Intelligence diagnosis: Auth latest revision is not ready.'; exit 1; }
+
+  - bash: |
+      set -Eeuo pipefail
+      EVIDENCE='docs/runtime-evidence/delivery-intelligence-runtime.json'
+      test -s "$EVIDENCE"
+      git config user.name 'Craves Azure Runtime Bot'
+      git config user.email 'runtime-bot@craves.in'
+      git add "$EVIDENCE"
+      if git diff --cached --quiet; then
+        echo 'No runtime evidence change to persist.'
+        exit 0
+      fi
+      git commit -m 'ops(delivery-intelligence): capture safe production runtime evidence'
+      git push origin HEAD:main
+    displayName: Persist safe Delivery Intelligence runtime evidence

@@ -2,6 +2,9 @@ trigger: none
 pr: none
 
 parameters:
+  - name: verifyDeliveryFeedback
+    type: boolean
+    default: false
   - name: resourceGroupName
     type: string
     default: rg-craves-prodlow-centralindia
@@ -77,6 +80,9 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        if [[ '${{ parameters.verifyDeliveryFeedback }}' == 'True' ]]; then
+          python3 scripts/release/verify-delivery-feedback-production.py --phase preflight
+        fi
         RG='${{ parameters.resourceGroupName }}'
         ACR='${{ parameters.acrName }}'
         APP='${{ parameters.containerAppName }}'
@@ -96,3 +102,14 @@ steps:
           "$APP" \
           "$IMAGE" \
           integration
+
+  - ${{ if eq(parameters.verifyDeliveryFeedback, true) }}:
+    - task: AzureCLI@2
+      displayName: Verify durable delivery feedback and Pidge activation
+      inputs:
+        azureSubscription: $(AZURE_SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          python3 scripts/release/verify-delivery-feedback-production.py --phase postflight

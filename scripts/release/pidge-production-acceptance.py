@@ -137,7 +137,7 @@ class Acceptance:
         except HttpFailure as provider_exc:
             self.diagnostic_error("DIRECT_PROVIDER_QUOTE_ERROR", provider_exc, route)
 
-    def check(self):
+    def check(self, require_quote=True):
         state = self.readiness()
         print("READINESS", json.dumps(state), flush=True)
         if state["productionReady"]:
@@ -167,6 +167,8 @@ class Acceptance:
             except HttpFailure as exc:
                 print(label + "_CALLBACK_HTTP", exc.status, flush=True)
                 assert exc.status == expected, "Callback authentication does not match the configured secret"
+        if not require_quote:
+            return route
         try:
             quote = http(self.base + "/internal/v1/delivery-provider-readiness/pidge/quote",
                          {"X-Craves-Internal-Secret": self.internal}, route)
@@ -205,7 +207,9 @@ class Acceptance:
                                                "trips": [trip]})
             order_id = str(response.get("data", {}).get(reference, ""))
             assert re.fullmatch(r"[A-Za-z0-9_-]{1,200}", order_id), "Uncertain create: no Pidge order ID; do not retry"
-        except Exception:
+        except Exception as exc:
+            if isinstance(exc, HttpFailure):
+                self.diagnostic_error("CANARY_CREATE_ERROR", exc, route)
             print("CANARY_CREATE_UNCERTAIN - preserve the journal; do not retry or dispatch", flush=True)
             raise
         self.sql("UPDATE delivery_schema.pidge_booking SET provider_order_id='" + order_id + "',state='CREATED',updated_at=now() WHERE client_reference='" + reference + "'")
@@ -213,6 +217,9 @@ class Acceptance:
         order = self.vendor("/order/" + order_id)["data"]
         assert str(order.get("id")) == order_id
         manual = str(order.get("status")).upper() in ("PENDING", "1")
+        print("PROVIDER_PACKAGE_DEFAULTS", json.dumps({"orderKeys": list(order),
+              "packages": [{k: p.get(k) for k in ("dead_weight", "volumetric_weight", "length", "breadth", "height", "quantity")} for p in order.get("packages", [])],
+              "weight": order.get("weight"), "volumetric_weight": order.get("volumetric_weight")}), flush=True)
         # Cancellation must be confirmed even if the callback is delayed or unavailable.
         self.vendor("/" + order_id + "/cancel", {})
         cancelled = self.vendor("/order/" + order_id)["data"]
@@ -263,14 +270,22 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--resource-group", required=True)
     p.add_argument("--app", required=True)
-    p.add_argument("--operation", choices=("check", "activate"), required=True)
+    p.add_argument("--operation", choices=("check", "inspect-package", "activate"), required=True)
     p.add_argument("--route-command-id", required=True)
     p.add_argument("--confirm-activation", default="false")
     args = p.parse_args()
     assert args.resource_group == "rg-craves-prodlow-centralindia" and args.app == "ca-craves-integration-service-pr", "Unexpected production target"
     if args.operation == "activate":
         assert args.confirm_activation.lower() == "true", "Explicit activation confirmation required"
-    Acceptance(args).activate() if args.operation == "activate" else Acceptance(args).check()
+    acceptance = Acceptance(args)
+    if args.operation == "activate":
+        acceptance.activate()
+    elif args.operation == "inspect-package":
+        route = acceptance.check(require_quote=False)
+        assert route is not None, "Already active; do not create another canary"
+        acceptance.callback_canary(route)
+    else:
+        acceptance.check()
 
 
 if __name__ == "__main__":

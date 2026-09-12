@@ -29,7 +29,7 @@ parameters:
   - name: pidgeOperation
     type: string
     default: none
-    values: [none, check, activate]
+    values: [none, check, inspect-package, activate]
   - name: pidgeRouteCommandId
     type: string
     default: none

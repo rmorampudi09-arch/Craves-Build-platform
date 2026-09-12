@@ -28,6 +28,8 @@ The two web replica settings and disabled revocation flags disagree with assumpt
 
 Academy PR #326 reserves `V7__craves_academy.sql`. This change uses additive `V8__admin_session_families.sql`. **Both must be present in the first deployed Auth image**, with Academy disabled until its separate API/UI/permission acceptance passes. Do not deploy V8 and subsequently attempt to introduce V7 out of order. Neither migration was applied by local work.
 
+The admin deployment gate checks the non-secret Auth `ADMIN_SESSION_V1` runtime capability before replacing its healthy image and pins the existing admin application to min/max 1/1.
+
 Use the existing Auth, dedicated `Dockerfile.admin` and Delivery Intelligence pipelines with `Craves-Dev-Service-Connection`. Record exact tested/deployed SHA, immutable images, ready revisions and one-replica limits. Check inherited gateway cookie/no-cache policies and downstream revocation readiness. Preserve Pidge, payments, orders, database configuration and unrelated flags.
 
 Local Java dependency resolution was unavailable in this workspace; the dedicated GitHub CI provisions disposable PostgreSQL 16 for actual transaction, replay, revocation and concurrency checks. Controlled-clock tests are not an eight-hour browser soak. Neither a green build nor a health response substitutes for authenticated production acceptance.

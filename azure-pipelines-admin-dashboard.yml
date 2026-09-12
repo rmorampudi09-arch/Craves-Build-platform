@@ -152,7 +152,18 @@ stages:
                         exit 1
                       }
                       PREVIOUS_IMAGE=$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].image' -o tsv)
-                      az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" \
+                      # Keep the healthy UI until its required Auth capability is deployed.
+                      # This also protects automatic main-branch runs during the paired release.
+                      AUTH_FQDN=$(az containerapp show -g "$RG" -n ca-craves-auth-service-prodlow --query 'properties.configuration.ingress.fqdn' -o tsv --only-show-errors)
+                      POLICY=$(curl --fail --silent --show-error --max-time 30 "https://${AUTH_FQDN}/api/v1/auth/session-policy") || {
+                        echo 'ERROR: Deploy the reviewed Auth session release before this admin image. Existing admin image preserved.' >&2
+                        exit 1
+                      }
+                      jq -e '.version == "ADMIN_SESSION_V1" and .adminAbsoluteSeconds == 28800 and .accessTokenSeconds > 0 and .accessTokenSeconds <= 900' <<<"$POLICY" >/dev/null || {
+                        echo 'ERROR: Required short-token/eight-hour Auth policy is not active. Existing admin image preserved.' >&2
+                        exit 1
+                      }
+                      az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --min-replicas 1 --max-replicas 1 \
                         --set-env-vars CRAVES_API_BASE_URL='$(CRAVES_API_BASE_URL)' CRAVES_ADMIN_PORTAL=true \
                         --no-wait -o none
                       for attempt in $(seq 1 60); do

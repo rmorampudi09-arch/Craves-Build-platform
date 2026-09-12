@@ -60,11 +60,11 @@ public class AdminSessionService {
         Instant now = clock.instant();
         Instant end = deadline(authenticationTime, now);
         lockIdentity(identity.getId());
-        var previous = jdbc.query("SELECT id, revoked_at FROM admin_session_family WHERE identity_id = ? AND authenticated_at = ?",
-            (rs, row) -> new Object[] {rs.getObject("id", UUID.class), rs.getTimestamp("revoked_at")}, identity.getId(), Timestamp.from(end.minus(ABSOLUTE_WINDOW)));
+        var previous = jdbc.query("SELECT id, revoked_at, token_version FROM admin_session_family WHERE identity_id = ? AND authenticated_at = ?",
+            (rs, row) -> new Object[] {rs.getObject("id", UUID.class), rs.getTimestamp("revoked_at"), rs.getLong("token_version")}, identity.getId(), Timestamp.from(end.minus(ABSOLUTE_WINDOW)));
         UUID family;
         if (!previous.isEmpty()) {
-            if (previous.getFirst()[1] != null) throw rejected("ADMIN_REAUTHENTICATION_REQUIRED");
+            if (previous.getFirst()[1] != null || !Long.valueOf(identity.getTokenVersion()).equals(previous.getFirst()[2])) throw rejected("ADMIN_REAUTHENTICATION_REQUIRED");
             family = (UUID) previous.getFirst()[0];
         } else {
         family = UUID.randomUUID();

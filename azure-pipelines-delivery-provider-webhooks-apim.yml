@@ -26,6 +26,16 @@ parameters:
   - name: enablePidgeRoute
     type: boolean
     default: false
+  - name: pidgeOperation
+    type: string
+    default: none
+    values: [none, check, activate]
+  - name: pidgeRouteCommandId
+    type: string
+    default: ''
+  - name: confirmPidgeActivation
+    type: boolean
+    default: false
 
 variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
@@ -265,7 +275,23 @@ steps:
           echo 'Raw webhook body transformation: DISABLED'
           echo '============================================================'
 
-  - ${{ if ne(parameters.confirmApimWrite, true) }}:
+  - ${{ if ne(parameters.pidgeOperation, 'none') }}:
+    - task: AzureCLI@2
+      displayName: Verify or activate Pidge with durable production evidence
+      inputs:
+        azureSubscription: $(AZURE_SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          python3 scripts/release/pidge-production-acceptance.py \
+            --resource-group '${{ parameters.resourceGroupName }}' \
+            --app '${{ parameters.integrationContainerAppName }}' \
+            --operation '${{ parameters.pidgeOperation }}' \
+            --route-command-id '${{ parameters.pidgeRouteCommandId }}' \
+            --confirm-activation '${{ parameters.confirmPidgeActivation }}'
+
+  - ${{ if and(ne(parameters.confirmApimWrite, true), eq(parameters.pidgeOperation, 'none')) }}:
     - bash: |
         echo 'ERROR: confirmApimWrite must be true for APIM changes.' >&2
         exit 2

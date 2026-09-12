@@ -25,6 +25,8 @@ Only same-city, prepaid food orders with measured weight and complete contact/ad
 
 The channel must be **Manual Allocation**, **Forward**, without partial-delivery or FIFO options. Do not enable auto manifest on this channel: the adapter explicitly fulfils the selected partner after the pending order is created. If serviceability changes or the price increases, cancellation must be confirmed before another provider can be tried.
 
+The live Pidge dashboard requires a package-size default despite presenting that field as optional. The Craves channel uses **M (Laptop)** as its fallback parcel category. This is a channel setting, not measured package dimensions; actual order weight is always supplied by Craves and partner pricing is revalidated before dispatch. Token generation returns a dedicated username/password, which must be exchanged at `POST /login` for the bearer token used by the adapter. All three are stored in the existing Key Vault; the app binds only the bearer token and callback secret.
+
 ## Files
 
 - `config/PidgeProperties.java`: fail-closed environment and activation gates.
@@ -89,6 +91,8 @@ For local startup, use the existing service database/Redis/JWT/internal-secret c
 
 Readiness: `GET /internal/v1/delivery-provider-readiness/pidge`, with the existing `X-Craves-Internal-Secret`.
 Explicit chargeable quote diagnostic: `POST /internal/v1/delivery-provider-readiness/pidge/quote` with the canonical `QuoteRequest` JSON and same authorization.
+
+The existing webhook pipeline also supports `pidgeOperation=check` or `activate`, with an explicit `pidgeRouteCommandId` from Craves. These modes can run with `confirmApimWrite=false` and do not modify APIM. `check` verifies callback authentication and makes one chargeable quote for that real Hyderabad route. `activate` additionally requires `confirmPidgeActivation=true`, zero pending commands, and a new independently identified manual-allocation canary. The canary never calls fulfil/dispatch, must be confirmed cancelled, and must produce an authenticated provider-origin callback before the script enables creation and activates the Pidge catalog row. Uncertain create is journaled and never retried. The pipeline preserves the current application image. Full delivery acceptance still requires observing the first real order through delivery.
 
 ## Rollback and recovery
 

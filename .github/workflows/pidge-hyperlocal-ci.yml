@@ -6,6 +6,7 @@ on:
       - 'services/integration-service/**'
       - 'azure-pipelines-delivery-provider-webhooks-apim.yml'
       - '.github/workflows/pidge-hyperlocal-ci.yml'
+      - 'scripts/release/*pidge*'
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,6 +16,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Pidge activation failure handling
+        run: python3 scripts/release/test_pidge_production_acceptance.py
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

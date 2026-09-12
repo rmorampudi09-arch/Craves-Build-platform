@@ -1,28 +1,32 @@
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - azure-pipelines-production-stabilization.yml
+trigger: none
 pr: none
 
 schedules:
-  - cron: "*/5 * * * *"
-    displayName: Temporary Delivery Intelligence JWT fingerprint capture
+  - cron: "0 */6 * * *"
+    displayName: Every 6 hours production stabilization verification
     branches:
       include:
         - main
     always: true
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  subscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
   resourceGroup: rg-craves-prodlow-centralindia
-  integrationApp: ca-craves-integration-service-pr
-  authApp: ca-craves-auth-service-prodlow
-  dashboardApp: ca-craves-delivery-intel-prodlow
-  apimService: apim-craves-prodlow-l3ing6
-  apimApiId: craves-admin-operational-investigations-v1
+  containerAppEnvironmentName: cae-craves-prodlow-l3ing6
+  customerWebAppName: ca-craves-web-prodlow
+  customerWebAppFqdn: ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
+  customerWebStaticIp: 4.187.245.188
+  customerWebCertificateName: craves-web-tls
+  keyVaultName: kvcravesprodlowl3ing6
+  customerApexHostname: craves.in
+  customerWwwHostname: www.craves.in
+  customerDomainVerificationId: 8CBF8092F604318F13145F6181237B80D12FD1336F3F37C199AA8D7099FF5DF1
+  frontDoorProfileName: afd-craves-prodlow
+  frontDoorEndpointHostname: craves-prodlow-4f897b61-d4e6bvhscdbzbgbv.z01.azurefd.net
+  apimHostname: api.craves.in
+  apimExpectedCname: apim-craves-prodlow-l3ing6.azure-api.net
+  rollbackWwwHostname: lemon-bay-06f924610.7.azurestaticapps.net
+  certMinRemainingDays: 30
 
 pool:
   vmImage: ubuntu-latest
@@ -31,10 +35,24 @@ steps:
   - checkout: self
     clean: true
     fetchDepth: 1
-    persistCredentials: true
+
+  - bash: |
+      set -euo pipefail
+      packages=()
+      command -v dig >/dev/null 2>&1 || packages+=(dnsutils)
+      command -v jq >/dev/null 2>&1 || packages+=(jq)
+      command -v shellcheck >/dev/null 2>&1 || packages+=(shellcheck)
+      if [[ ${#packages[@]} -gt 0 ]]; then
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends "${packages[@]}"
+      fi
+
+      bash -n infra/operations/production-stabilization/check-production.sh
+      shellcheck infra/operations/production-stabilization/check-production.sh
+    displayName: Validate stabilization script
 
   - task: AzureCLI@2
-    displayName: Capture secret-safe Delivery Intelligence runtime evidence
+    displayName: Verify Craves production stabilization state
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -44,92 +62,22 @@ steps:
         set -Eeuo pipefail
         set +x
 
-        RG='$(resourceGroup)'
-        INTEGRATION='$(integrationApp)'
-        AUTH='$(authApp)'
-        DASHBOARD='$(dashboardApp)'
-        APIM='$(apimService)'
-        API_ID='$(apimApiId)'
-        EVIDENCE='docs/runtime-evidence/delivery-intelligence-runtime.json'
+        export SUBSCRIPTION_ID='$(subscriptionId)'
+        export RESOURCE_GROUP='$(resourceGroup)'
+        export CONTAINER_APP_ENVIRONMENT_NAME='$(containerAppEnvironmentName)'
+        export CUSTOMER_WEB_APP_NAME='$(customerWebAppName)'
+        export CUSTOMER_WEB_APP_FQDN='$(customerWebAppFqdn)'
+        export CUSTOMER_WEB_STATIC_IP='$(customerWebStaticIp)'
+        export CUSTOMER_WEB_CERTIFICATE_NAME='$(customerWebCertificateName)'
+        export KEY_VAULT_NAME='$(keyVaultName)'
+        export CUSTOMER_APEX_HOSTNAME='$(customerApexHostname)'
+        export CUSTOMER_WWW_HOSTNAME='$(customerWwwHostname)'
+        export CUSTOMER_DOMAIN_VERIFICATION_ID='$(customerDomainVerificationId)'
+        export FRONT_DOOR_PROFILE_NAME='$(frontDoorProfileName)'
+        export FRONT_DOOR_ENDPOINT_HOSTNAME='$(frontDoorEndpointHostname)'
+        export APIM_HOSTNAME='$(apimHostname)'
+        export APIM_EXPECTED_CNAME='$(apimExpectedCname)'
+        export ROLLBACK_WWW_HOSTNAME='$(rollbackWwwHostname)'
+        export CERT_MIN_REMAINING_DAYS='$(certMinRemainingDays)'
 
-        app_json() { az containerapp show -g "$RG" -n "$1" -o json --only-show-errors; }
-        env_value() {
-          jq -r --arg n "$2" '[.properties.template.containers[0].env[]? | select(.name==$n)][0].value // ""' <<<"$1"
-        }
-        env_ref() {
-          jq -r --arg n "$2" '[.properties.template.containers[0].env[]? | select(.name==$n)][0].secretRef // ""' <<<"$1"
-        }
-        secret_fingerprint() {
-          local secrets_json="$1" ref="$2" value
-          if [[ -z "$ref" ]]; then printf 'MISSING'; return; fi
-          value="$(jq -r --arg n "$ref" '[.[] | select(.name==$n)][0].value // ""' <<<"$secrets_json")"
-          if [[ -z "$value" ]]; then printf 'UNRESOLVED'; return; fi
-          printf '%s' "$value" | sha256sum | awk '{print $1}'
-        }
-        probe() {
-          curl -sS --max-time 25 -o /dev/null -w '%{http_code}' "$1" 2>/dev/null || printf '000'
-        }
-
-        IJ="$(app_json "$INTEGRATION")"
-        AJ="$(app_json "$AUTH")"
-        DJ="$(app_json "$DASHBOARD")"
-        ISECRETS="$(az containerapp secret list -g "$RG" -n "$INTEGRATION" --show-values -o json --only-show-errors)"
-        ASECRETS="$(az containerapp secret list -g "$RG" -n "$AUTH" --show-values -o json --only-show-errors)"
-
-        IREF="$(env_ref "$IJ" CRAVES_JWT_VERIFICATION_PEM_BASE64)"
-        APUBREF="$(env_ref "$AJ" CRAVES_JWT_PUBLIC_KEY_PEM_BASE64)"
-        APRIVREF="$(env_ref "$AJ" CRAVES_JWT_PRIVATE_KEY_PEM_BASE64)"
-        IHASH="$(secret_fingerprint "$ISECRETS" "$IREF")"
-        APUBHASH="$(secret_fingerprint "$ASECRETS" "$APUBREF")"
-
-        IFQDN="$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$IJ")"
-        DFQDN="$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$DJ")"
-        IISS="$(env_value "$IJ" CRAVES_JWT_ISSUER)"
-        IAUD="$(env_value "$IJ" CRAVES_JWT_AUDIENCE)"
-        AISS="$(env_value "$AJ" CRAVES_JWT_ISSUER)"
-        AAUD="$(env_value "$AJ" CRAVES_JWT_AUDIENCE)"
-        DBASE="$(env_value "$DJ" CRAVES_API_BASE_URL)"
-
-        API_JSON="$(az apim api show -g "$RG" --service-name "$APIM" --api-id "$API_ID" -o json --only-show-errors 2>/dev/null || echo '{}')"
-        APATH="$(jq -r '.path // ""' <<<"$API_JSON")"
-        ASVC="$(jq -r '.serviceUrl // ""' <<<"$API_JSON")"
-        OP_JSON="$(az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id get-admin-delivery-intelligence-overview -o json --only-show-errors 2>/dev/null || echo '{}')"
-        OTEMPLATE="$(jq -r '.urlTemplate // ""' <<<"$OP_JSON")"
-
-        mkdir -p "$(dirname "$EVIDENCE")"
-        jq -n \
-          --arg collectedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-          --arg sourceSha '$(Build.SourceVersion)' \
-          --arg integrationRevision "$(jq -r '.properties.latestRevisionName // ""' <<<"$IJ")" \
-          --arg integrationReady "$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$IJ")" \
-          --arg integrationImage "$(jq -r '.properties.template.containers[0].image // ""' <<<"$IJ")" \
-          --arg integrationIssuer "$IISS" --arg integrationAudience "$IAUD" --arg integrationVerificationRef "$IREF" --arg integrationVerificationHash "$IHASH" \
-          --arg authRevision "$(jq -r '.properties.latestRevisionName // ""' <<<"$AJ")" \
-          --arg authReady "$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$AJ")" \
-          --arg authImage "$(jq -r '.properties.template.containers[0].image // ""' <<<"$AJ")" \
-          --arg authIssuer "$AISS" --arg authAudience "$AAUD" --arg authPublicRef "$APUBREF" --arg authPublicHash "$APUBHASH" --arg authPrivateRef "$APRIVREF" \
-          --arg dashboardRevision "$(jq -r '.properties.latestRevisionName // ""' <<<"$DJ")" \
-          --arg dashboardReady "$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$DJ")" \
-          --arg dashboardImage "$(jq -r '.properties.template.containers[0].image // ""' <<<"$DJ")" --arg dashboardApiBase "$DBASE" \
-          --arg apimPath "$APATH" --arg apimServiceUrl "$ASVC" --arg apimTemplate "$OTEMPLATE" \
-          --arg integrationHealth "$(probe "https://${IFQDN}/actuator/health")" \
-          --arg integrationUnauth "$(probe "https://${IFQDN}/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35")" \
-          --arg apimUnauth "$(probe 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35')" \
-          --arg dashboardHealth "$(probe "https://${DFQDN}/delivery-intelligence/api/health")" \
-          --arg frontDoorHealth "$(probe 'https://admin.craves.in/delivery-intelligence/api/health')" \
-          '{collectedAt:$collectedAt,sourceSha:$sourceSha,integration:{revision:$integrationRevision,readyRevision:$integrationReady,image:$integrationImage,jwt:{issuer:$integrationIssuer,audience:$integrationAudience,verificationSecretRef:$integrationVerificationRef,verificationFingerprint:$integrationVerificationHash},health:$integrationHealth,unauthOverview:$integrationUnauth},auth:{revision:$authRevision,readyRevision:$authReady,image:$authImage,jwt:{issuer:$authIssuer,audience:$authAudience,publicSecretRef:$authPublicRef,publicFingerprint:$authPublicHash,privateSecretRef:$authPrivateRef}},dashboard:{revision:$dashboardRevision,readyRevision:$dashboardReady,image:$dashboardImage,apiBase:$dashboardApiBase,health:$dashboardHealth},apim:{path:$apimPath,serviceUrl:$apimServiceUrl,operationTemplate:$apimTemplate,unauthOverview:$apimUnauth},frontDoor:{health:$frontDoorHealth},parity:{issuer:($integrationIssuer==$authIssuer),audience:($integrationAudience==$authAudience),publicKey:($integrationVerificationHash==$authPublicHash and $integrationVerificationHash!="MISSING" and $integrationVerificationHash!="UNRESOLVED")}}' > "$EVIDENCE"
-
-        cat "$EVIDENCE"
-
-  - bash: |
-      set -Eeuo pipefail
-      EVIDENCE='docs/runtime-evidence/delivery-intelligence-runtime.json'
-      BRANCH='ops/delivery-intelligence-runtime-evidence'
-      test -s "$EVIDENCE"
-      git config user.name 'Craves Azure Runtime Bot'
-      git config user.email 'runtime-bot@craves.in'
-      git checkout -B "$BRANCH"
-      git add "$EVIDENCE"
-      git commit -m 'ops(delivery-intelligence): capture safe production JWT fingerprints'
-      git push --force origin "HEAD:refs/heads/${BRANCH}"
-    displayName: Persist evidence to isolated Git branch
+        bash infra/operations/production-stabilization/check-production.sh

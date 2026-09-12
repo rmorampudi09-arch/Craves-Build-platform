@@ -1,0 +1,38 @@
+name: Delivery Intelligence Health Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/delivery-intelligence-health-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe Integration health and Delivery Intelligence boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          FQDN='ca-craves-integration-service-pr.happysand-aedc7165.centralindia.azurecontainerapps.io'
+          probe() {
+            label="$1"; url="$2"
+            body="$(mktemp)"
+            status="$(curl -sS --max-time 30 -o "$body" -w '%{http_code}' "$url" || true)"
+            echo "=== ${label}: HTTP ${status} ==="
+            head -c 2000 "$body" || true
+            echo
+            rm -f "$body"
+          }
+          probe overall "https://${FQDN}/actuator/health"
+          probe readiness "https://${FQDN}/actuator/health/readiness"
+          probe liveness "https://${FQDN}/actuator/health/liveness"
+          probe db "https://${FQDN}/actuator/health/db"
+          probe redis "https://${FQDN}/actuator/health/redis"
+          probe payments "https://${FQDN}/actuator/health/payments"
+          probe token_revocation "https://${FQDN}/actuator/health/token-revocation"
+          probe direct_unsigned_overview "https://${FQDN}/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35"
+          probe apim_unsigned_overview 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35'

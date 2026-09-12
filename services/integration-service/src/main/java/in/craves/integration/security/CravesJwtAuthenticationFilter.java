@@ -21,6 +21,14 @@ public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // This exact webhook authenticates its provider Bearer credential in PidgeWebhookService.
+        // It must not be interpreted as a customer/admin Craves JWT.
+        return "POST".equals(request.getMethod())
+            && "/api/v1/webhooks/delivery/pidge".equals(request.getServletPath());
+    }
+
+    @Override
     protected void doFilterInternal(
         HttpServletRequest request,
         HttpServletResponse response,

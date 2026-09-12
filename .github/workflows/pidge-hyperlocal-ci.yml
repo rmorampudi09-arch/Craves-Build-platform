@@ -1,0 +1,33 @@
+name: Pidge hyperlocal integration CI
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/integration-service/**'
+      - 'azure-pipelines-delivery-provider-webhooks-apim.yml'
+      - '.github/workflows/pidge-hyperlocal-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/integration-service/pom.xml
+      - name: Compile and verify integration contracts
+        working-directory: services/integration-service
+        run: mvn -B -ntp verify
+      - name: Publish test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pidge-integration-tests
+          path: services/integration-service/target/surefire-reports
+          retention-days: 14

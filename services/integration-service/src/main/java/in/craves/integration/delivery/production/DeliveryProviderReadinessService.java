@@ -2,6 +2,7 @@ package in.craves.integration.delivery.production;
 
 import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.config.ShiprocketProperties;
+import in.craves.integration.config.PidgeProperties;
 import in.craves.integration.delivery.DeliveryProviderRepository;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -23,6 +25,7 @@ public class DeliveryProviderReadinessService {
     private final DeliveryProviderRepository providerRepository;
     private final DeliveryProviderPickupLocationRepository pickupLocations;
     private final Set<String> commandAdapterIds;
+    private final PidgeProperties pidge;
 
     public DeliveryProviderReadinessService(BorzoProperties borzo,
                                             ShiprocketProperties shiprocket,
@@ -30,7 +33,16 @@ public class DeliveryProviderReadinessService {
                                             DeliveryProviderRepository providerRepository,
                                             DeliveryProviderPickupLocationRepository pickupLocations,
                                             List<DeliveryProviderAdapter> commandAdapters) {
+        this(borzo, shiprocket, delivery, providerRepository, pickupLocations, commandAdapters, new PidgeProperties());
+    }
+
+    @Autowired
+    public DeliveryProviderReadinessService(BorzoProperties borzo, ShiprocketProperties shiprocket,
+        DeliveryCommandProperties delivery, DeliveryProviderRepository providerRepository,
+        DeliveryProviderPickupLocationRepository pickupLocations, List<DeliveryProviderAdapter> commandAdapters,
+        PidgeProperties pidge) {
         this.borzo = borzo;
+        this.pidge = pidge;
         this.shiprocket = shiprocket;
         this.delivery = delivery;
         this.providerRepository = providerRepository;
@@ -65,6 +77,7 @@ public class DeliveryProviderReadinessService {
             List.of(
                 borzoReadiness(),
                 shiprocketReadiness(),
+                pidgeReadiness(),
                 vendorBlocked(
                     "SHADOWFAX",
                     "VENDOR_PRIVATE_API_CONTRACT_REQUIRED"
@@ -134,6 +147,23 @@ public class DeliveryProviderReadinessService {
             0,
             List.copyOf(blockers)
         );
+    }
+
+    private ProviderReadiness pidgeReadiness() {
+        List<String> blockers = new ArrayList<>(sharedDownstreamBlockers());
+        if (!pidge.isEnabled()) blockers.add("PIDGE_API_DISABLED");
+        if (!pidge.isCreateEnabled()) blockers.add("PIDGE_CREATE_DISABLED");
+        if (!pidge.credentialReady()) blockers.add("API_CREDENTIALS_NOT_BOUND");
+        if (!pidge.isProductionActivationApproved()) blockers.add("PRODUCTION_ACTIVATION_NOT_APPROVED");
+        if (!pidge.isManualAllocationVerified()) blockers.add("MANUAL_ALLOCATION_NOT_VERIFIED");
+        if (!pidge.isWebhookVerified()) blockers.add("AUTHENTICATED_WEBHOOK_NOT_VERIFIED");
+        if (!StringUtils.hasText(pidge.getWebhookToken())) blockers.add("WEBHOOK_TOKEN_NOT_BOUND");
+        if (!catalogActive("pidge")) blockers.add("PROVIDER_CATALOG_INACTIVE");
+        if (!adapterRegistered("pidge")) blockers.add("COMMAND_ADAPTER_NOT_REGISTERED");
+        boolean create = pidge.productionCreateReady() && delivery.isEnabled() && catalogActive("pidge");
+        return new ProviderReadiness("PIDGE", pidge.getEnvironment(), adapterRegistered("pidge"),
+            pidge.isEnabled(), create, blockers.isEmpty() && create,
+            pidge.isEnabled() && pidge.credentialReady(), catalogActive("pidge"), 0, List.copyOf(blockers));
     }
 
     private ProviderReadiness shiprocketReadiness() {

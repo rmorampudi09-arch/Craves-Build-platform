@@ -66,10 +66,11 @@ public class AdminSessionRevocationWebConfiguration implements WebMvcConfigurer 
                 try {
                     HttpRequest verification = HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(5))
                         .header("Authorization", authorization).header("Accept", "application/json").GET().build();
-                    int status = client.send(verification, HttpResponse.BodyHandlers.discarding()).statusCode();
+                    var reply = client.send(verification, HttpResponse.BodyHandlers.discarding());
+                    int status = reply.statusCode();
                     if (status == 401 || status == 403)
                         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Administrator session has ended or access was revoked");
-                    if (status != 200) throw unavailable();
+                    if (status != 200 || !reply.headers().firstValue("X-Craves-Admin-Session").orElse("").equals("verified-v1")) throw unavailable();
                     return true;
                 } catch (InterruptedException error) {
                     Thread.currentThread().interrupt(); throw unavailable();

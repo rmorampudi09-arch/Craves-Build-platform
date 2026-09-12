@@ -41,11 +41,22 @@ class AdminSessionRevocationWebConfigurationTest {
     @Test void eachInternalRoleChecksLiveAuthBeforeTheController() throws Exception {
         var client = mock(HttpClient.class);
         @SuppressWarnings("unchecked") HttpResponse<Void> reply = mock(HttpResponse.class);
-        when(reply.statusCode()).thenReturn(200); when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(reply);
+        when(reply.statusCode()).thenReturn(200);
+        when(reply.headers()).thenReturn(HttpHeaders.of(java.util.Map.of("X-Craves-Admin-Session", List.of("verified-v1")), (a,b) -> true)); when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(reply);
         var gate = configuration(client, new Semaphore(16)).interceptor();
         for (String role : List.of("PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "CHEF_ADMIN", "COMPLIANCE_ADMIN", "SUBSCRIPTION_ADMIN", "NOTIFICATION_ADMIN", "AUDIT_ADMIN"))
             assertTrue(gate.preHandle(request(role), new MockHttpServletResponse(), new Object()));
         verify(client, times(9)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+    }
+    @Test void genericSuccessWithoutVerifiedSessionMarkerNeverGrantsAccess() throws Exception {
+        var client = mock(HttpClient.class);
+        @SuppressWarnings("unchecked") HttpResponse<Void> reply = mock(HttpResponse.class);
+        when(reply.statusCode()).thenReturn(200);
+        when(reply.headers()).thenReturn(HttpHeaders.of(java.util.Map.of(), (a,b) -> true));
+        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(reply);
+        var failure = assertThrows(ResponseStatusException.class, () -> configuration(client, new Semaphore(16)).interceptor()
+            .preHandle(request("PLATFORM_ADMIN"), new MockHttpServletResponse(), new Object()));
+        assertEquals(503, failure.getStatusCode().value());
     }
     @Test void revokedSessionAndRoleReturn401AndTransientFailuresReturn503() throws Exception {
         for (int status : new int[]{401,403,429,500,502,503}) {

@@ -11,6 +11,7 @@ import type { AdminIdentity } from "@/lib/admin-contract";
 import { loadAdminIdentity } from "@/lib/admin-session";
 import { SyncfusionLicense } from "@/components/syncfusion-license";
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { AcademyWorkspace } from "@/components/academy-workspace";
 
 const navigation = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, group: "Control center" },
@@ -38,6 +39,10 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
       .catch(error => active && setMessage(error instanceof Error ? error.message : "Administrator access is unavailable."));
     return () => { active = false; };
   }, []);
+
+  if (pathname === "/admin/academy" || pathname.startsWith("/admin/academy/")) {
+    return <AcademyWorkspace identity={identity} message={message}>{children}</AcademyWorkspace>;
+  }
 
   if (!identity) {
     return <main className="flex min-h-screen items-center justify-center bg-[#0b1426] px-5">

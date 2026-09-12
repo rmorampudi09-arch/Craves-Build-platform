@@ -8,6 +8,7 @@ on:
       - 'apps/customer-web-next/src/**/academy/**'
       - 'apps/customer-web-next/src/lib/academy-*'
       - 'apps/customer-web-next/src/components/admin-workspace.tsx'
+      - 'apps/customer-web-next/src/components/academy-workspace.tsx'
       - 'scripts/academy/**'
       - '.github/workflows/craves-academy-ci.yml'
 permissions:
@@ -66,10 +67,15 @@ jobs:
           cache: npm
           cache-dependency-path: apps/customer-web-next/package-lock.json
       - run: npm ci
-      - run: node --test --experimental-strip-types src/lib/academy-route-policy.test.ts
-      - run: npx eslint src/app/admin/academy src/app/api/admin/academy src/lib/academy-route-policy.ts --max-warnings=0
+      - run: node --test --experimental-strip-types src/lib/academy-*.test.ts
+      - run: npx eslint src/app/admin/academy src/app/api/admin/academy src/lib/academy-route-policy.ts src/lib/academy-ux-state.ts src/components/academy-workspace.tsx --max-warnings=0
       - run: npm run typecheck
       - run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=6144
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academy-canonical-brand-logo
+          path: apps/customer-web-next/public/brand/craves-logo-20260805.png
+          if-no-files-found: error
 # Intentionally no Azure deployment, payments, provider calls or production credentials.

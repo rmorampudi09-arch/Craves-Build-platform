@@ -28,6 +28,10 @@ public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
         throws ServletException, IOException {
+        if (request.getRequestURI().startsWith("/api/v1/auth/")) {
+            response.setHeader("Cache-Control", "private, no-store");
+            response.setHeader("Vary", "Authorization");
+        }
         String authorization = request.getHeader("Authorization");
         if (!StringUtils.hasText(authorization) || !authorization.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
@@ -38,6 +42,9 @@ public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             AccessTokenClaims claims = jwtService.verifyAccessToken(token);
             adminSessions.validate(claims);
+            if ("/api/v1/auth/me".equals(request.getRequestURI()) && claims.adminSessionId() != null) {
+                response.setHeader("X-Craves-Admin-Session", "verified-v1");
+            }
             CurrentUser currentUser = new CurrentUser(
                 claims.identityId(),
                 claims.firebaseUid(),

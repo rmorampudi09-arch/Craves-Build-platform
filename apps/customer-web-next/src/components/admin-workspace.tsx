@@ -34,13 +34,15 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    let authorizationGeneration = 0;
     const stop = observeAdminSession(state => {
+      const generation = ++authorizationGeneration;
       setSessionState(state);
       if (state === "ended") { setIdentity(null); setMessage("Your administrator session has ended. Please sign in again."); }
       if (state === "reconnecting") setMessage("Reconnecting securely. Please keep this tab open.");
       if (state === "ready") void loadAdminIdentity()
-        .then(admin => { if (active) { setIdentity(admin); setMessage(""); } })
-        .catch(error => { if (active) setMessage(error instanceof Error ? error.message : "Administrator access is unavailable."); });
+        .then(admin => { if (active && generation === authorizationGeneration) { setIdentity(admin); setMessage(""); } })
+        .catch(error => { if (active && generation === authorizationGeneration) setMessage(error instanceof Error ? error.message : "Administrator access is unavailable."); });
     });
     return () => { active = false; stop(); };
   }, []);

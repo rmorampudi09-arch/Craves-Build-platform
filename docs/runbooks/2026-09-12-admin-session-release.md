@@ -37,3 +37,13 @@ Local Java dependency resolution was unavailable in this workspace; the dedicate
 ## Rollback
 
 Restore the recorded healthy image/revision for each affected existing application. Keep additive schema and session records. Disable Academy if any Academy acceptance gate fails. Retain prior gateway policy for restoration. Do not drop data or reset production clocks/TTLs as a test.
+
+## Final review refinements
+
+The admin portal BFF explicitly requests an administrator session. Consumer/mobile exchanges and ordinary refresh credentials retain 15-minute access/30-day refresh policy even for a staff identity; these credentials carry only consumer roles. Privileged roles require the bounded admin session. `/auth/me` returns the intersection of live and credential-scoped roles. Legacy internal-role access credentials need one fresh portal sign-in.
+
+Auth responses are private/no-store. A successful, validated family on `/auth/me` carries the nonsecret `X-Craves-Admin-Session: verified-v1` marker; downstream interceptors require it as well as status 200, avoiding authorization from a generic proxy success. They preserve ordinary customer/chef and provider callback processing. All six owning services must deploy after Auth.
+
+Existing Azure definition 119 referenced a pipeline file missing from main and an older branch. The restored maintenance pipeline uses that same filename, updates only the already-existing DI web app, preserves runtime settings, pins one replica, checks Auth policy before deployment, and restores its prior image on failure. It performs no API, Front Door, role-assignment or resource-creation writes. Definition 33 remains the dedicated admin Dockerfile pipeline.
+
+Figma was rechecked in this session and is still blocked by the Starter MCP limit. No canvas import or visual acceptance is claimed. Use the supplied development-plugin manifest in Figma Desktop, then choose design.json inside the plugin.

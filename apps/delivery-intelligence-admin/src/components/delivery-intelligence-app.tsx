@@ -8,7 +8,7 @@ import type { AdminIdentity } from "@/lib/admin-contract";
 import type { DeliveryOverview, OrderInvestigation } from "@/lib/delivery-contract";
 import { AlertTriangle, BarChart3, ChevronRight, CircleHelp, Database, LogIn, Search, ShieldCheck, Truck, X } from "lucide-react";
 import Image from "next/image";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const BASE_PATH = "/delivery-intelligence";
 const POLL_MS = 20_000;
@@ -32,6 +32,7 @@ function signedOutRedirect() {
 }
 
 export function DeliveryIntelligenceApp() {
+  const sessionEpoch = useRef(0);
   const [sessionState, setSessionState] = useState<SessionState>("checking");
   const [identity, setIdentity] = useState<AdminIdentity | null>(null);
   const [overview, setOverview] = useState<DeliveryOverview | null>(null);
@@ -44,6 +45,7 @@ export function DeliveryIntelligenceApp() {
   const [error, setError] = useState<string | null>(null);
 
   const loadOverview = useCallback(async () => {
+    const epoch = sessionEpoch.current;
     setOverviewLoading(true);
     try {
       const response = await adminFetch(`${BASE_PATH}/api/delivery-intelligence/overview?hours=24&limit=35`, {
@@ -53,6 +55,7 @@ export function DeliveryIntelligenceApp() {
       if (response.status === 401) return signedOutRedirect();
       if (response.status === 403) throw new Error("ADMIN_ACCESS_REQUIRED");
       const data = await json<DeliveryOverview>(response);
+      if (epoch !== sessionEpoch.current) return;
       setOverview(data);
       setError(null);
     } catch (cause) {
@@ -65,6 +68,7 @@ export function DeliveryIntelligenceApp() {
   useEffect(() => {
     let active = true;
     const stop = observeAdminSession(state => {
+      const epoch = ++sessionEpoch.current;
       setSessionState(state);
       if (state === "ended") {
         setIdentity(null); setOverview(null); setInvestigation(null); setQuery("");
@@ -77,11 +81,11 @@ export function DeliveryIntelligenceApp() {
           const response = await adminFetch(`${BASE_PATH}/api/admin/me`, { cache: "no-store", credentials: "same-origin" });
           if (response.status === 401 || response.status === 403) throw new Error("ADMIN_ACCESS_REQUIRED");
           const admin = await json<AdminIdentity>(response);
-          if (!active) return;
+          if (!active || epoch !== sessionEpoch.current) return;
           setIdentity(admin); setError(null);
           await loadOverview();
         } catch (cause) {
-          if (active) setError(cause instanceof Error ? cause.message : "IDENTITY_UNAVAILABLE");
+          if (active && epoch === sessionEpoch.current) setError(cause instanceof Error ? cause.message : "IDENTITY_UNAVAILABLE");
         } finally { if (active) setAuthLoading(false); }
       })();
     });
@@ -95,6 +99,7 @@ export function DeliveryIntelligenceApp() {
   }, [identity, loadOverview, view]);
 
   const investigate = useCallback(async (reference: string) => {
+    const epoch = sessionEpoch.current;
     const normalized = reference.trim();
     if (!normalized) return;
     setInvestigationLoading(true);
@@ -108,6 +113,7 @@ export function DeliveryIntelligenceApp() {
       if (response.status === 404) throw new Error("DELIVERY_REFERENCE_NOT_FOUND");
       if (response.status === 403) throw new Error("ADMIN_ACCESS_REQUIRED");
       const data = await json<OrderInvestigation>(response);
+      if (epoch !== sessionEpoch.current) return;
       setInvestigation(data);
       setQuery(normalized);
       setView("investigation");
@@ -142,7 +148,7 @@ export function DeliveryIntelligenceApp() {
   }
 
   return (
-    <><div hidden={sessionState === "reconnecting"} className="app-shell">
+    <><div hidden={sessionState !== "ready"} style={sessionState !== "ready" ? { display: "none" } : undefined} className="app-shell">
       <aside className="sidebar">
         <div className="brand-lockup">
           <Image src="/delivery-intelligence/brand/craves-logo-20260805.png" alt="Craves" width={44} height={44} priority />

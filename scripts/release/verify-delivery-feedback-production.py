@@ -16,6 +16,8 @@ def main():
     args = parser.parse_args()
     rg, app_name = "rg-craves-prodlow-centralindia", "ca-craves-integration-service-pr"
     app = json.loads(ops.az("containerapp", "show", "-g", rg, "-n", app_name, "-o", "json"))
+    scale = app["properties"]["template"].get("scale", {})
+    assert scale.get("minReplicas") == 1 and scale.get("maxReplicas") == 1, "Owner requires exactly one replica"
     env = {e["name"]: e for e in app["properties"]["template"]["containers"][0]["env"]}
     assert env.get("CRAVES_DELIVERY_INTELLIGENCE_ENABLED", {}).get("value") == "true", "Delivery intelligence must already be enabled"
     assert env.get("CRAVES_DELIVERY_FEEDBACK_ENABLED", {}).get("value", "true") == "true", "Feedback runtime override is disabled"

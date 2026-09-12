@@ -17,3 +17,7 @@ The Pidge CI workflow requires a disposable PostgreSQL 16 database, exercises th
 Release through existing Integration pipeline with verifyDeliveryFeedback=true. The preflight checks the existing intelligence flag; postflight checks authentication, capture trigger, an advancing worker heartbeat, no dead letters and preserved Pidge activation. No new Azure resource, provider credential, payment or rider dispatch is needed.
 
 Rollback: disable CRAVES_DELIVERY_FEEDBACK_ENABLED or restore the previous application image. Keep the additive migration and durable queue so outcomes remain recoverable. Do not delete production receipts, rewrite provider scores, or drop the capture trigger during an incident without evidence review.
+
+Production remains at exactly one replica at the owner’s request. No scale rule or replica limit is changed. The multiworker test proves duplicate/concurrency behavior in the disposable database; it does not claim production has eight workers or equivalent throughput.
+
+Routing regression fixes: honor the intelligence-selected candidate before ranked fallbacks (including stochastic exploration) and exclude SKIPPED/FAILED candidates from fallback. The original router sorted all candidates only by rank, which could ignore exploration and reintroduce ineligible providers.

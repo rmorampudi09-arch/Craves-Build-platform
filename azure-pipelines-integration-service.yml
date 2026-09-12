@@ -80,7 +80,8 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
-        if [[ '${{ parameters.verifyDeliveryFeedback }}' == 'True' ]]; then
+        VERIFY_FEEDBACK='${{ parameters.verifyDeliveryFeedback }}'
+        if [[ "${VERIFY_FEEDBACK,,}" == true ]]; then
           python3 scripts/release/verify-delivery-feedback-production.py --phase preflight
         fi
         RG='${{ parameters.resourceGroupName }}'

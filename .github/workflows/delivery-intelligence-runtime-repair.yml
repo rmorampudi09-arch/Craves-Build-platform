@@ -30,7 +30,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Probe public Delivery Intelligence path
+        id: public_probe
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          probe() {
+            local label="$1" url="$2" expected="$3" body headers status
+            body="$(mktemp)"; headers="$(mktemp)"
+            status="$(curl -sS --max-time 30 -D "$headers" -o "$body" -w '%{http_code}' "$url" || true)"
+            echo "PROBE ${label}: HTTP ${status} expected ${expected}"
+            echo 'Headers:'
+            grep -Ei '^(HTTP/|content-type:|cache-control:|x-correlation-id:|x-craves-correlation-id:|server:|via:|x-azure-ref:)' "$headers" || true
+            echo 'Body:'
+            head -c 1600 "$body" || true
+            echo
+            echo "${label}=${status}" >> "$GITHUB_OUTPUT"
+            rm -f "$body" "$headers"
+          }
+          probe 'apim_overview' 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35' '401'
+          probe 'frontdoor_health' 'https://admin.craves.in/delivery-intelligence/api/health' '200'
+          probe 'frontdoor_admin_me' 'https://admin.craves.in/delivery-intelligence/api/admin/me' '401'
+          probe 'frontdoor_overview' 'https://admin.craves.in/delivery-intelligence/api/delivery-intelligence/overview?hours=24&limit=35' '401'
+
+      - name: Summarize public path
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "### Delivery Intelligence live public probes" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Hop | Actual | Expected |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---:|---:|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| APIM overview | ${{ steps.public_probe.outputs.apim_overview }} | 401 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Front Door health | ${{ steps.public_probe.outputs.frontdoor_health }} | 200 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Front Door admin identity | ${{ steps.public_probe.outputs.frontdoor_admin_me }} | 401 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Front Door overview BFF | ${{ steps.public_probe.outputs.frontdoor_overview }} | 401 |" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Azure login using existing OIDC binding
+        id: azure_login
+        continue-on-error: true
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -38,6 +75,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Inspect production runtime without writes
+        if: steps.azure_login.outcome == 'success'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -49,49 +87,21 @@ jobs:
           echo '=== Integration Service ==='
           INTEGRATION_JSON="$(az containerapp show -g "$RG" -n "$INTEGRATION_APP" -o json)"
           jq '{latestRevisionName:.properties.latestRevisionName,latestReadyRevisionName:.properties.latestReadyRevisionName,runningStatus:.properties.runningStatus,fqdn:.properties.configuration.ingress.fqdn,image:.properties.template.containers[0].image}' <<<"$INTEGRATION_JSON"
-          INTEGRATION_FQDN="$(jq -r '.properties.configuration.ingress.fqdn // empty' <<<"$INTEGRATION_JSON")"
 
           echo '=== Delivery Intelligence dashboard app ==='
           DASHBOARD_JSON="$(az containerapp show -g "$RG" -n "$DASHBOARD_APP" -o json)"
           jq '{latestRevisionName:.properties.latestRevisionName,latestReadyRevisionName:.properties.latestReadyRevisionName,runningStatus:.properties.runningStatus,fqdn:.properties.configuration.ingress.fqdn,image:.properties.template.containers[0].image,env:[.properties.template.containers[0].env[]? | select(.name=="CRAVES_API_BASE_URL") | {name,value}]}' <<<"$DASHBOARD_JSON"
-          DASHBOARD_FQDN="$(jq -r '.properties.configuration.ingress.fqdn // empty' <<<"$DASHBOARD_JSON")"
 
           echo '=== APIM API ownership and backend ==='
           az apim api show -g "$RG" --service-name "$APIM" --api-id "$APIM_API_ID" --query '{name:name,path:path,serviceUrl:serviceUrl,subscriptionRequired:subscriptionRequired}' -o json || true
           az apim api operation list -g "$RG" --service-name "$APIM" --api-id "$APIM_API_ID" --query '[].{name:name,method:method,urlTemplate:urlTemplate}' -o json || true
 
-          echo '=== APIM Delivery Intelligence operation policy backend target ==='
-          SUB="$(az account show --query id -o tsv)"
-          API_MGMT="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis/${APIM_API_ID}"
-          az rest --method get --url "${API_MGMT}/operations/get-admin-delivery-intelligence-overview/policies/policy?api-version=2022-08-01" --query properties.value -o tsv 2>/dev/null | sed -n '1,120p' || true
-
           echo '=== Front Door route/origin ==='
           az extension add -n cdn --upgrade --yes --only-show-errors >/dev/null
+          SUB="$(az account show --query id -o tsv)"
           SUFFIX="$(tr -d '-' <<<"$SUB" | cut -c1-8 | tr '[:upper:]' '[:lower:]')"
           ENDPOINT="craves-prodlow-${SUFFIX}"
           az afd route show -g "$RG" --profile-name "$AFD_PROFILE" --endpoint-name "$ENDPOINT" --route-name "$AFD_ROUTE" --query '{enabledState:enabledState,patternsToMatch:patternsToMatch,originGroup:id,customDomains:customDomains}' -o json || true
           az afd origin show -g "$RG" --profile-name "$AFD_PROFILE" --origin-group-name "$AFD_ORIGIN_GROUP" --origin-name "$AFD_ORIGIN" --query '{enabledState:enabledState,hostName:hostName,originHostHeader:originHostHeader}' -o json || true
 
-          probe() {
-            local label="$1" url="$2" expected="$3" body headers status
-            body="$(mktemp)"; headers="$(mktemp)"
-            status="$(curl -sS --max-time 30 -D "$headers" -o "$body" -w '%{http_code}' "$url" || true)"
-            echo "PROBE ${label}: HTTP ${status} expected ${expected}"
-            echo 'Headers:'
-            grep -Ei '^(HTTP/|content-type:|x-correlation-id:|x-craves-correlation-id:|server:|via:|x-azure-ref:)' "$headers" || true
-            echo 'Body:'
-            head -c 1200 "$body" || true
-            echo
-            rm -f "$body" "$headers"
-          }
-
-          echo '=== HTTP probes (unauthenticated by design) ==='
-          [[ -n "$INTEGRATION_FQDN" ]] && probe 'integration-health' "https://${INTEGRATION_FQDN}/actuator/health" '200'
-          [[ -n "$INTEGRATION_FQDN" ]] && probe 'integration-direct-overview' "https://${INTEGRATION_FQDN}/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35" '401'
-          probe 'apim-overview' 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35' '401'
-          [[ -n "$DASHBOARD_FQDN" ]] && probe 'dashboard-health-direct' "https://${DASHBOARD_FQDN}/delivery-intelligence/api/health" '200'
-          [[ -n "$DASHBOARD_FQDN" ]] && probe 'dashboard-bff-direct' "https://${DASHBOARD_FQDN}/delivery-intelligence/api/delivery-intelligence/overview?hours=24&limit=35" '401'
-          probe 'dashboard-health-frontdoor' 'https://admin.craves.in/delivery-intelligence/api/health' '200'
-          probe 'dashboard-bff-frontdoor' 'https://admin.craves.in/delivery-intelligence/api/delivery-intelligence/overview?hours=24&limit=35' '401'
-
-          echo 'DIAGNOSTIC_COMPLETE'
+          echo 'AZURE_RUNTIME_INSPECTION_COMPLETE'

@@ -1,0 +1,45 @@
+name: Delivery Intelligence Bundle Inspect
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/delivery-intelligence-bundle-inspect.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect deployed Delivery Intelligence assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          BASE='https://admin.craves.in/delivery-intelligence'
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          curl -fsSL --max-time 30 "$BASE" -o "$tmp/page.html"
+          echo '=== HTML asset refs ==='
+          grep -oE 'src="[^"]+\.js[^"]*"' "$tmp/page.html" | sed 's/^src="//;s/"$//' | sort -u | tee "$tmp/assets.txt"
+
+          : > "$tmp/all.js"
+          while IFS= read -r asset; do
+            [[ -n "$asset" ]] || continue
+            case "$asset" in
+              http*) url="$asset" ;;
+              /*) url="https://admin.craves.in${asset}" ;;
+              *) url="${BASE%/}/${asset}" ;;
+            esac
+            echo "FETCH $url"
+            curl -fsSL --max-time 30 "$url" >> "$tmp/all.js" || true
+            printf '\n' >> "$tmp/all.js"
+          done < "$tmp/assets.txt"
+
+          echo '=== Filter UI strings ==='
+          grep -oE '.{0,220}(All time|Date range|Rows per page|Newest first|Apply filters).{0,500}' "$tmp/all.js" | head -80 || true
+
+          echo '=== Delivery overview request fragments ==='
+          grep -oE '.{0,350}(delivery-intelligence/overview|hours=|limit=|range|sort|order).{0,700}' "$tmp/all.js" | head -120 || true

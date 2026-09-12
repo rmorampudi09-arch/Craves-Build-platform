@@ -3,7 +3,7 @@ pr: none
 
 schedules:
   - cron: "*/5 * * * *"
-    displayName: Temporary Delivery Intelligence post-repair inspection
+    displayName: Temporary Delivery Intelligence minimal JWT repair
     branches:
       include:
         - main
@@ -13,7 +13,6 @@ variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia
   integrationApp: ca-craves-integration-service-pr
-  authApp: ca-craves-auth-service-prodlow
   evidenceBranch: ops/delivery-intelligence-repair-evidence
 
 pool:
@@ -26,7 +25,7 @@ steps:
     persistCredentials: true
 
   - task: AzureCLI@2
-    displayName: Inspect current Integration JWT runtime
+    displayName: Apply minimal Delivery Intelligence JWT repair
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -37,56 +36,70 @@ steps:
         set +x
 
         RG='$(resourceGroup)'
-        INTEGRATION='$(integrationApp)'
-        AUTH='$(authApp)'
-        EVIDENCE='docs/runtime-evidence/delivery-intelligence-post-repair.json'
+        APP='$(integrationApp)'
+        EXPECTED_ISSUER='https://api.craves.in/auth'
+        EXPECTED_AUDIENCE='craves-api'
+        EVIDENCE='docs/runtime-evidence/delivery-intelligence-minimal-repair.json'
 
-        IJ="$(az containerapp show -g "$RG" -n "$INTEGRATION" -o json --only-show-errors)"
-        AJ="$(az containerapp show -g "$RG" -n "$AUTH" -o json --only-show-errors)"
+        BEFORE="$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)"
+        BEFORE_IMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")"
+        BEFORE_READY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$BEFORE")"
+        BEFORE_OTHER_ENV_HASH="$(jq -c '[.properties.template.containers[0].env[]? | select(.name != "CRAVES_JWT_ISSUER" and .name != "CRAVES_JWT_AUDIENCE")] | sort_by(.name)' <<<"$BEFORE" | sha256sum | awk '{print $1}')"
 
-        value() {
-          local json="$1" name="$2"
-          jq -r --arg n "$name" '[.properties.template.containers[0].env[]? | select(.name==$n)][0].value // ""' <<<"$json"
-        }
-        ref() {
-          local json="$1" name="$2"
-          jq -r --arg n "$name" '[.properties.template.containers[0].env[]? | select(.name==$n)][0].secretRef // ""' <<<"$json"
-        }
-        probe() {
-          local body status
-          body="$(mktemp)"
-          status="$(curl -sS --max-time 30 -o "$body" -w '%{http_code}' "$1" || true)"
-          printf '%s' "$status"
-          rm -f "$body"
-        }
+        az containerapp update -g "$RG" -n "$APP" \
+          --set-env-vars \
+            "CRAVES_JWT_ISSUER=${EXPECTED_ISSUER}" \
+            "CRAVES_JWT_AUDIENCE=${EXPECTED_AUDIENCE}" \
+          --only-show-errors >/dev/null
 
-        IFQDN="$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$IJ")"
+        READY=false
+        for attempt in $(seq 1 150); do
+          CURRENT="$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)"
+          LATEST="$(jq -r '.properties.latestRevisionName // ""' <<<"$CURRENT")"
+          READY_REV="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$CURRENT")"
+          RUNNING="$(jq -r '.properties.runningStatus // ""' <<<"$CURRENT")"
+          if [[ -n "$LATEST" && "$LATEST" == "$READY_REV" && "$RUNNING" == 'Running' ]]; then
+            READY=true
+            break
+          fi
+          sleep 10
+        done
+        [[ "$READY" == true ]] || { echo 'ERROR: repaired Integration revision did not become ready.' >&2; exit 1; }
+
+        AFTER="$CURRENT"
+        AFTER_IMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$AFTER")"
+        AFTER_READY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$AFTER")"
+        AFTER_ISSUER="$(jq -r '[.properties.template.containers[0].env[]? | select(.name=="CRAVES_JWT_ISSUER")][0].value // ""' <<<"$AFTER")"
+        AFTER_AUDIENCE="$(jq -r '[.properties.template.containers[0].env[]? | select(.name=="CRAVES_JWT_AUDIENCE")][0].value // ""' <<<"$AFTER")"
+        AFTER_OTHER_ENV_HASH="$(jq -c '[.properties.template.containers[0].env[]? | select(.name != "CRAVES_JWT_ISSUER" and .name != "CRAVES_JWT_AUDIENCE")] | sort_by(.name)' <<<"$AFTER" | sha256sum | awk '{print $1}')"
+        FQDN="$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$AFTER")"
+
+        [[ "$AFTER_IMAGE" == "$BEFORE_IMAGE" ]] || { echo 'ERROR: Integration image changed unexpectedly.' >&2; exit 1; }
+        [[ "$AFTER_OTHER_ENV_HASH" == "$BEFORE_OTHER_ENV_HASH" ]] || { echo 'ERROR: unrelated Integration environment changed.' >&2; exit 1; }
+        [[ "$AFTER_ISSUER" == "$EXPECTED_ISSUER" ]] || { echo 'ERROR: issuer repair did not persist.' >&2; exit 1; }
+        [[ "$AFTER_AUDIENCE" == "$EXPECTED_AUDIENCE" ]] || { echo 'ERROR: audience repair did not persist.' >&2; exit 1; }
+
+        HEALTH="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' "https://${FQDN}/actuator/health" || true)"
+        APIM_UNAUTH="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35' || true)"
+
         mkdir -p "$(dirname "$EVIDENCE")"
         jq -n \
-          --arg collectedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-          --arg integrationRevision "$(jq -r '.properties.latestRevisionName // ""' <<<"$IJ")" \
-          --arg integrationReady "$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$IJ")" \
-          --arg integrationRunning "$(jq -r '.properties.runningStatus // ""' <<<"$IJ")" \
-          --arg integrationImage "$(jq -r '.properties.template.containers[0].image // ""' <<<"$IJ")" \
-          --arg integrationIssuer "$(value "$IJ" CRAVES_JWT_ISSUER)" \
-          --arg integrationAudience "$(value "$IJ" CRAVES_JWT_AUDIENCE)" \
-          --arg integrationVerifyRef "$(ref "$IJ" CRAVES_JWT_VERIFICATION_PEM_BASE64)" \
-          --arg authIssuer "$(value "$AJ" CRAVES_JWT_ISSUER)" \
-          --arg authAudience "$(value "$AJ" CRAVES_JWT_AUDIENCE)" \
-          --arg health "$(probe "https://${IFQDN}/actuator/health")" \
-          --arg unauthDirect "$(probe "https://${IFQDN}/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35")" \
-          --arg unauthApim "$(probe 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35')" \
-          '{collectedAt:$collectedAt,integration:{revision:$integrationRevision,readyRevision:$integrationReady,runningStatus:$integrationRunning,image:$integrationImage,jwt:{issuer:$integrationIssuer,audience:$integrationAudience,verificationSecretRef:$integrationVerifyRef},health:$health,unauthenticatedDirectOverview:$unauthDirect},auth:{jwt:{issuer:$authIssuer,audience:$authAudience}},apim:{unauthenticatedOverview:$unauthApim},parity:{issuer:($integrationIssuer==$authIssuer and $integrationIssuer!=""),audience:($integrationAudience==$authAudience and $integrationAudience!="")}}' > "$EVIDENCE"
+          --arg repairedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          --arg beforeRevision "$BEFORE_READY" --arg afterRevision "$AFTER_READY" \
+          --arg image "$AFTER_IMAGE" --arg issuer "$AFTER_ISSUER" --arg audience "$AFTER_AUDIENCE" \
+          --arg environmentHashBefore "$BEFORE_OTHER_ENV_HASH" --arg environmentHashAfter "$AFTER_OTHER_ENV_HASH" \
+          --arg health "$HEALTH" --arg apimUnauth "$APIM_UNAUTH" \
+          '{repairedAt:$repairedAt,integration:{beforeRevision:$beforeRevision,afterRevision:$afterRevision,image:$image,jwt:{issuer:$issuer,audience:$audience},unrelatedEnvironmentHashBefore:$environmentHashBefore,unrelatedEnvironmentHashAfter:$environmentHashAfter,health:$health},apim:{unauthenticatedOverview:$apimUnauth},result:{issuerRepaired:($issuer=="https://api.craves.in/auth"),audienceRepaired:($audience=="craves-api"),imagePreserved:($image!=""),unrelatedEnvironmentPreserved:($environmentHashBefore==$environmentHashAfter)}}' > "$EVIDENCE"
         cat "$EVIDENCE"
 
   - bash: |
       set -Eeuo pipefail
-      EVIDENCE='docs/runtime-evidence/delivery-intelligence-post-repair.json'
+      EVIDENCE='docs/runtime-evidence/delivery-intelligence-minimal-repair.json'
       BRANCH='$(evidenceBranch)'
       git config user.name 'Craves Azure Runtime Bot'
       git config user.email 'runtime-bot@craves.in'
       git checkout -B "$BRANCH"
       git add "$EVIDENCE"
-      git commit -m 'ops(delivery-intelligence): capture post-repair production state'
+      git commit -m 'ops(delivery-intelligence): capture minimal JWT repair evidence'
       git push --force origin "HEAD:refs/heads/${BRANCH}"
-    displayName: Persist post-repair evidence
+    displayName: Persist minimal repair evidence

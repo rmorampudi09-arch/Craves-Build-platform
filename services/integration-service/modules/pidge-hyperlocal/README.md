@@ -25,6 +25,10 @@ Only same-city, prepaid food orders with measured weight and complete contact/ad
 
 The channel must be **Manual Allocation**, **Forward**, without partial-delivery or FIFO options. Do not enable auto manifest on this channel: the adapter explicitly fulfils the selected partner after the pending order is created. If serviceability changes or the price increases, cancellation must be confirmed before another provider can be tried.
 
+The live Pidge dashboard requires a package-size default despite presenting that field as optional. The Craves channel uses **M (Laptop)** as its fallback parcel category. This is a channel setting, not measured package dimensions; actual order weight is always supplied by Craves and partner pricing is revalidated before dispatch. Token generation returns a dedicated username/password, which must be exchanged at `POST /login` for the bearer token used by the adapter. All three are stored in the existing Key Vault; the app binds only the bearer token and callback secret.
+
+Production acceptance on 12 September 2026 established that `/quote` requires `attributes.volumetric_weight`. A manual canary (`178924303010162BT3SG1`) showed that Pidge assigns **900 g volumetric weight** to this channel's M fallback. The canary was confirmed cancelled and its authenticated provider callback reached the durable inbox in Azure run [38875](https://dev.azure.com/ravitejamorampudi7777/Craves/_build/results?buildId=38875). Quotes and bookings now explicitly use that same configurable minimum. This minimum is a Pidge parcel category, not a measurement of each food package. Businesses changing packaging or the channel minimum must update this setting consistently; route-specific dimensions are not currently in the canonical request.
+
 ## Files
 
 - `config/PidgeProperties.java`: fail-closed environment and activation gates.
@@ -59,6 +63,7 @@ Java paths above are relative to `services/integration-service/src/main/java/in/
 | `PIDGE_WEBHOOK_VERIFIED` | `false` until a provider-origin authenticated callback is verified |
 | `PIDGE_CONNECT_TIMEOUT_SECONDS` | `5` |
 | `PIDGE_READ_TIMEOUT_SECONDS` | `20` |
+| `PIDGE_DEFAULT_VOLUMETRIC_WEIGHT_GRAMS` | `900`; verified Pidge M channel minimum, used in both quote and booking |
 
 Do not paste secrets into chat or Git. Pidge tokens can expire after inactivity or account configuration changes. The adapter surfaces HTTP 401 without retrying chargeable calls; replace the secret using Pidge's supported credential renewal flow, then restart/revise the app. Automated username/password login is not included in this token-based module.
 
@@ -89,6 +94,10 @@ For local startup, use the existing service database/Redis/JWT/internal-secret c
 
 Readiness: `GET /internal/v1/delivery-provider-readiness/pidge`, with the existing `X-Craves-Internal-Secret`.
 Explicit chargeable quote diagnostic: `POST /internal/v1/delivery-provider-readiness/pidge/quote` with the canonical `QuoteRequest` JSON and same authorization.
+
+The existing webhook pipeline also supports `pidgeOperation=check` or `activate`, with an explicit `pidgeRouteCommandId` from Craves. These modes can run with `confirmApimWrite=false` and do not modify APIM. `check` verifies callback authentication and makes one chargeable quote for that real Hyderabad route. `activate` additionally requires `confirmPidgeActivation=true`, zero pending commands, and a new independently identified manual-allocation canary. The canary never calls fulfil/dispatch, must be confirmed cancelled, and must produce an authenticated provider-origin callback before the script enables creation and activates the Pidge catalog row. Uncertain create is journaled and never retried. The pipeline preserves the current application image. Full delivery acceptance still requires observing the first real order through delivery.
+
+`inspectPidgePackageDefaults=true` is available only with `pidgeOperation=check`. It creates and cancels the manual canary to inspect Pidge's effective parcel fields and verify its callback without quoting or enabling routing. A failed quote can also trigger one direct provider diagnostic quote; errors are stripped of credentials and request strings. The checks require Order Service's delivery-status consumer to be enabled.
 
 ## Rollback and recovery
 

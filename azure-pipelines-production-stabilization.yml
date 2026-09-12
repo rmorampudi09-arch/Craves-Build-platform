@@ -147,7 +147,7 @@ steps:
         DBASE="$(env_value "$DJ" CRAVES_API_BASE_URL)"
         IISS="$(env_value "$IJ" CRAVES_JWT_ISSUER)"
         IAUD="$(env_value "$IJ" CRAVES_JWT_AUDIENCE)"
-        IPUBREF="$(env_secret_ref "$IJ" CRAVES_JWT_PUBLIC_KEY_PEM_BASE64)"
+        IPUBREF="$(env_secret_ref "$IJ" CRAVES_JWT_VERIFICATION_PEM_BASE64)"
         AISS="$(env_value "$AJ" CRAVES_JWT_ISSUER)"
         AAUD="$(env_value "$AJ" CRAVES_JWT_AUDIENCE)"
         APUBREF="$(env_secret_ref "$AJ" CRAVES_JWT_PUBLIC_KEY_PEM_BASE64)"
@@ -185,7 +185,7 @@ steps:
           --arg apimPath "$APATH" --arg apimServiceUrl "$ASVC" --arg apimTemplate "$OTEMPLATE" --arg policyBackend "$PBACKEND" \
           --arg integrationHealth "$H_INT" --arg integrationUnauth "$U_INT" --arg apimUnauth "$U_APIM" \
           --arg dashboardHealth "$H_DASH" --arg dashboardUnauth "$U_DASH" --arg frontDoorHealth "$H_FD" --arg frontDoorUnauth "$U_FD" \
-          '{collectedAt:$collectedAt,sourceSha:$sourceSha,integration:{revision:$integrationRevision,readyRevision:$integrationReady,image:$integrationImage,jwt:{issuer:$integrationIssuer,audience:$integrationAudience,publicKeySecretRef:$integrationPublicKeySecretRef},health:$integrationHealth,unauthOverview:$integrationUnauth},dashboard:{revision:$dashboardRevision,readyRevision:$dashboardReady,image:$dashboardImage,apiBase:$dashboardApiBase,health:$dashboardHealth,unauthOverview:$dashboardUnauth},auth:{revision:$authRevision,readyRevision:$authReady,image:$authImage,jwt:{issuer:$authIssuer,audience:$authAudience,publicKeySecretRef:$authPublicKeySecretRef,privateKeySecretRef:$authPrivateKeySecretRef}},apim:{path:$apimPath,serviceUrl:$apimServiceUrl,operationTemplate:$apimTemplate,policyBackend:$policyBackend,unauthOverview:$apimUnauth},frontDoor:{health:$frontDoorHealth,unauthOverview:$frontDoorUnauth}}' > "$EVIDENCE"
+          '{collectedAt:$collectedAt,sourceSha:$sourceSha,integration:{revision:$integrationRevision,readyRevision:$integrationReady,image:$integrationImage,jwt:{issuer:$integrationIssuer,audience:$integrationAudience,verificationKeySecretRef:$integrationPublicKeySecretRef},health:$integrationHealth,unauthOverview:$integrationUnauth},dashboard:{revision:$dashboardRevision,readyRevision:$dashboardReady,image:$dashboardImage,apiBase:$dashboardApiBase,health:$dashboardHealth,unauthOverview:$dashboardUnauth},auth:{revision:$authRevision,readyRevision:$authReady,image:$authImage,jwt:{issuer:$authIssuer,audience:$authAudience,publicKeySecretRef:$authPublicKeySecretRef,privateKeySecretRef:$authPrivateKeySecretRef}},apim:{path:$apimPath,serviceUrl:$apimServiceUrl,operationTemplate:$apimTemplate,policyBackend:$policyBackend,unauthOverview:$apimUnauth},frontDoor:{health:$frontDoorHealth,unauthOverview:$frontDoorUnauth}}' > "$EVIDENCE"
 
         cat "$EVIDENCE"
 

@@ -179,6 +179,7 @@ class Acceptance:
         assert pending == 0, "Pending command backlog requires review before activation"
         self.callback_canary(route)
         original_image = self.app["properties"]["template"]["containers"][0]["image"]
+        previous_revision = self.app["properties"]["latestRevisionName"]
         az("containerapp", "update", "-g", self.args.resource_group, "-n", self.args.app,
            "--set-env-vars", "PIDGE_WEBHOOK_VERIFIED=true", "PIDGE_CREATE_ENABLED=true",
            "PIDGE_PRODUCTION_ACTIVATION_APPROVED=true", "--no-wait", "-o", "none")
@@ -186,7 +187,7 @@ class Acceptance:
             self.refresh()
             props = self.app["properties"]
             assert props["template"]["containers"][0]["image"] == original_image, "Concurrent application deployment detected"
-            if props["latestReadyRevisionName"] == props["latestRevisionName"] and self.env.get("PIDGE_CREATE_ENABLED", {}).get("value") == "true":
+            if props["latestRevisionName"] != previous_revision and props["latestReadyRevisionName"] == props["latestRevisionName"] and self.env.get("PIDGE_CREATE_ENABLED", {}).get("value") == "true":
                 break
             time.sleep(10)
         else:

@@ -32,7 +32,7 @@ parameters:
     values: [none, check, activate]
   - name: pidgeRouteCommandId
     type: string
-    default: ''
+    default: none
   - name: confirmPidgeActivation
     type: boolean
     default: false

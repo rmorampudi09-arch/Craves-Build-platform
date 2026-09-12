@@ -5,15 +5,20 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.server.ResponseStatusException;
 
 @Component
 public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
+    private static final String INVALID_ACCESS_TOKEN_RESPONSE =
+        "{\"code\":\"INVALID_ACCESS_TOKEN\",\"message\":\"Invalid access token\"}";
+
     private final JwtVerifier jwtVerifier;
 
     public CravesJwtAuthenticationFilter(JwtVerifier jwtVerifier) {
@@ -36,7 +41,22 @@ public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         String header = request.getHeader("Authorization");
         if (StringUtils.hasText(header) && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
-            CravesPrincipal principal = jwtVerifier.verify(header.substring(7));
+            CravesPrincipal principal;
+            try {
+                principal = jwtVerifier.verify(header.substring(7));
+            } catch (ResponseStatusException exception) {
+                if (exception.getStatusCode() != HttpStatus.UNAUTHORIZED) {
+                    throw exception;
+                }
+                SecurityContextHolder.clearContext();
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.setCharacterEncoding("UTF-8");
+                response.setHeader("Cache-Control", "no-store");
+                response.getWriter().write(INVALID_ACCESS_TOKEN_RESPONSE);
+                return;
+            }
+
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 principal,
                 null,

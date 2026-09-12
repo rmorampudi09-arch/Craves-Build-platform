@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
         { code: upstream.status === 401 ? "SESSION_EXPIRED" : "IDENTITY_UNAVAILABLE" },
         { status: upstream.status, headers: { "Cache-Control": "no-store" } },
       );
-      if (upstream.status === 401) response.cookies.delete("craves_access_token");
       return response;
     }
     const identity = parseAdminIdentity(body);

@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Inspect deployed Delivery Intelligence assets
+      - name: Extract deployed Delivery Intelligence query contract
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -25,38 +25,24 @@ jobs:
 
           curl -fsSL --max-time 10 "$BASE" -o "$tmp/page.html"
           grep -oE 'src="[^"]+\.js[^"]*"' "$tmp/page.html" | sed 's/^src="//;s/"$//' | sort -u > "$tmp/assets.txt"
-          echo "Found $(wc -l < "$tmp/assets.txt") JavaScript assets"
-
           export HOST BASE tmp
-          nl -ba "$tmp/assets.txt" | while read -r idx asset; do
-            printf '%s\t%s\n' "$idx" "$asset"
-          done | xargs -P 16 -n 2 bash -c '
-            idx="$1"; asset="$2"
-            case "$asset" in
-              http*) url="$asset" ;;
-              /*) url="${HOST}${asset}" ;;
-              *) url="${BASE%/}/${asset}" ;;
-            esac
-            curl -fsSL --max-time 5 "$url" -o "$tmp/$idx.js" 2>/dev/null || true
-          ' _
-
+          nl -ba "$tmp/assets.txt" | while read -r idx asset; do printf '%s\t%s\n' "$idx" "$asset"; done \
+          | xargs -P 16 -n 2 bash -c '
+              idx="$1"; asset="$2"
+              case "$asset" in http*) url="$asset";; /*) url="${HOST}${asset}";; *) url="${BASE%/}/${asset}";; esac
+              curl -fsSL --max-time 5 "$url" -o "$tmp/$idx.js" 2>/dev/null || true
+            ' _
           cat "$tmp"/*.js 2>/dev/null > "$tmp/all.js" || true
-          echo "Downloaded $(wc -c < "$tmp/all.js") bytes"
 
-          echo '=== Exact filter/request evidence ==='
           python3 - "$tmp/all.js" <<'PY'
           import re, sys
-          text = open(sys.argv[1], encoding='utf-8', errors='ignore').read()
-          needles = [
-              'All time', 'Date range', 'Rows per page', 'Newest first', 'Apply filters',
-              'delivery-intelligence/overview', 'hours=', 'limit=', 'windowHours',
-          ]
+          text=open(sys.argv[1], encoding='utf-8', errors='ignore').read()
+          needles=['attentionOffset','range:"all"','range:"24"','sort:"desc"','offset:"0"','URLSearchParams','function T','hours","0"','from",','to",']
           for needle in needles:
-              print(f'--- {needle} ---')
-              positions = [m.start() for m in re.finditer(re.escape(needle), text, flags=re.I)]
-              print('count=', len(positions))
-              for pos in positions[:12]:
-                  start=max(0,pos-700); end=min(len(text),pos+1400)
-                  print(text[start:end].replace('\n',' ')[:2200])
-                  print()
+              print(f'=== {needle} ===')
+              pos=[m.start() for m in re.finditer(re.escape(needle), text)]
+              print('count=',len(pos))
+              for p in pos[:10]:
+                  print(text[max(0,p-1600):min(len(text),p+2600)].replace('\n',' '))
+                  print('\n---\n')
           PY

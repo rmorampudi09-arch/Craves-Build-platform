@@ -87,6 +87,56 @@ class Acceptance:
         return http("https://api.pidge.in/v1.0/store/channel/vendor" + path,
                     {"Authorization": token}, body)
 
+    def diagnostic_error(self, label, exc, route):
+        # Only error messages/codes are reported, with all request strings and secrets removed.
+        try:
+            data = json.loads(exc.body)
+        except ValueError:
+            data = {}
+        messages = []
+        def collect(value):
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    if key in ("message", "code", "error", "description") and isinstance(item, (str, int)):
+                        messages.append(str(item))
+                    elif isinstance(item, (dict, list)):
+                        collect(item)
+            elif isinstance(value, list):
+                for item in value:
+                    collect(item)
+        collect(data)
+        result = " | ".join(messages)
+        def redact(value):
+            nonlocal result
+            if isinstance(value, str) and len(value) > 2:
+                result = result.replace(value, "[redacted]")
+            elif isinstance(value, dict):
+                for item in value.values():
+                    redact(item)
+            elif isinstance(value, list):
+                for item in value:
+                    redact(item)
+        redact(route)
+        for secret in (self.internal, self.webhook, self.token):
+            result = result.replace(secret, "[redacted]")
+        result = re.sub(r"[A-Za-z0-9_.+-]+@[A-Za-z0-9.-]+|[0-9]{6,}|[A-Za-z0-9_-]{40,}", "[redacted]", result)
+        print(label, exc.status, result[:700], flush=True)
+
+    def diagnose_quote(self, route, exc):
+        self.diagnostic_error("INTEGRATION_QUOTE_ERROR", exc, route)
+        print("ROUTE_REQUIREMENTS", json.dumps({"thermoboxRequired": route.get("thermoboxRequired"),
+              "totalWeightGrams": route.get("totalWeightGrams"), "paymentCollectionMode": route.get("paymentCollectionMode")}), flush=True)
+        def location(stop):
+            return {"coordinates": {"latitude": stop["latitude"], "longitude": stop["longitude"]}, "pincode": stop["postalCode"]}
+        try:
+            response = self.vendor("/quote", {"pickup": location(route["pickup"]), "drop": [{"ref": "craves-pidge-diagnostic",
+                "location": location(route["dropoff"]), "attributes": {"cod_amount": 0, "weight": route["totalWeightGrams"]}}]})
+            items = response.get("data", {}).get("items", [])
+            print("DIRECT_PROVIDER_QUOTE", json.dumps({"dataKeys": list(response.get("data", {})),
+                  "items": [{k: i.get(k) for k in ("network_id", "service", "pickup_now", "quote")} for i in items]}), flush=True)
+        except HttpFailure as provider_exc:
+            self.diagnostic_error("DIRECT_PROVIDER_QUOTE_ERROR", provider_exc, route)
+
     def check(self):
         state = self.readiness()
         print("READINESS", json.dumps(state), flush=True)
@@ -98,6 +148,10 @@ class Acceptance:
                      "CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED", "CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED",
                      "CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED", "PIDGE_MANUAL_ALLOCATION_VERIFIED"):
             assert self.env.get(name, {}).get("value") == "true", name + " is not enabled"
+        consumer = az("containerapp", "show", "-g", self.args.resource_group, "-n", "ca-craves-order-service-prodlow",
+                      "--query", "properties.template.containers[0].env[?name=='CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED'].value | [0]", "-o", "tsv")
+        print("ORDER_STATUS_CONSUMER_ENABLED", consumer, flush=True)
+        assert consumer == "true", "Order Service delivery status consumer is not enabled"
         command_id = str(uuid.UUID(self.args.route_command_id))
         data = self.sql("SELECT payload->'deliveryRequest' FROM delivery_schema.delivery_command WHERE id='" + command_id + "'")
         assert data, "Selected real Craves route is unavailable"
@@ -113,8 +167,12 @@ class Acceptance:
             except HttpFailure as exc:
                 print(label + "_CALLBACK_HTTP", exc.status, flush=True)
                 assert exc.status == expected, "Callback authentication does not match the configured secret"
-        quote = http(self.base + "/internal/v1/delivery-provider-readiness/pidge/quote",
-                     {"X-Craves-Internal-Secret": self.internal}, route)
+        try:
+            quote = http(self.base + "/internal/v1/delivery-provider-readiness/pidge/quote",
+                         {"X-Craves-Internal-Secret": self.internal}, route)
+        except HttpFailure as exc:
+            self.diagnose_quote(route, exc)
+            raise
         print("LIVE_QUOTE", json.dumps({k: quote.get(k) for k in ("available", "deliveryFeeAmount", "currency", "warnings", "providerMetadata")}), flush=True)
         assert quote["available"] and quote["providerMetadata"].get("pickup_now") is True, "No immediate Pidge partner is available"
         return route

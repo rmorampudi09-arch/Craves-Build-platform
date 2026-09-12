@@ -22,16 +22,19 @@ export function createAdminRenewal(deps: Dependencies) {
   const accept = async (response: Response) => {
     const body = await response.json().catch(() => null);
     const value = body?.timing;
+    const serverNow = Number.isFinite(value?.serverTime) ? value.serverTime : deps.now();
     if (!value || !Number.isFinite(value.accessExpiresAt) || !Number.isFinite(value.sessionExpiresAt)
-      || value.accessExpiresAt > value.sessionExpiresAt || value.sessionExpiresAt <= deps.now()) {
+      || value.accessExpiresAt > value.sessionExpiresAt || value.sessionExpiresAt <= serverNow) {
       throw new RenewalError(503, "Session verification is temporarily unavailable.");
     }
-    timing = value;
+    const offset = deps.now() - serverNow;
+    timing = { accessExpiresAt: value.accessExpiresAt + offset, sessionExpiresAt: value.sessionExpiresAt + offset };
   };
 
   const ensure = (force = false): Promise<void> => {
     if (ended) return Promise.reject(new RenewalError(401, "Administrator sign-in is required."));
-    if (timing && timing.sessionExpiresAt <= deps.now()) { end(); return Promise.reject(new RenewalError(401, "Your eight-hour session has ended.")); }
+    // A client clock jump can trigger verification, but only the server can terminate authentication.
+    if (timing && timing.sessionExpiresAt <= deps.now()) force = true;
     if (!force && timing && timing.accessExpiresAt - deps.now() > 60_000) return Promise.resolve();
     if (inflight) return inflight;
     const started = generation;

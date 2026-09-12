@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAdminRenewal, type SessionState } from "./admin-renewal.ts";
+import { createAdminRenewal, RenewalError, type SessionState } from "./admin-renewal.ts";
 import { refreshFailure } from "./refresh-policy.ts";
 
 function fixture() {
@@ -22,6 +22,7 @@ function fixture() {
     }
     if (path === "/api/auth/refresh") {
       refreshes++;
+      if (now >= started + 28_800_000) return Response.json({}, { status: 401 });
       if (refreshStatus !== 200) return Response.json({}, { status: refreshStatus, headers: { "retry-after": "5" } });
       accessEnd = Math.min(now + 900_000, started + 28_800_000);
       return Response.json({});
@@ -42,7 +43,7 @@ test("active admin renews before 15 minutes without extending the original eight
   assert.equal(f.counts().refreshes, 1);
   f.advance(28_800_000 - 840_000 - 1000); await f.client.ensure();
   assert.equal(f.counts().refreshes, 2);
-  f.advance(1000); await assert.rejects(f.client.ensure(), /eight-hour/);
+  f.advance(1000); await assert.rejects(f.client.ensure(), (error: unknown) => error instanceof RenewalError && error.status === 401);
   assert.equal(f.states.at(-1), "ended");
   f.advance(1000); await assert.rejects(f.client.ensure(), /sign-in/);
 });
@@ -126,4 +127,16 @@ test("BFF only clears cookies on definitive auth rejection", () => {
   for (const status of [429, 500, 502, 503, 504, 200, 400]) assert.equal(refreshFailure(status).terminal, false);
   for (const status of [401, 403]) assert.equal(refreshFailure(status).terminal, true);
   assert.equal(refreshFailure(429, "99999").retryAfter, "300");
+});
+
+test("client clock skew and clock jumps cannot independently expire a server-valid session", async () => {
+  let clientNow = 99_000_000;
+  const states: SessionState[] = [];
+  const client = createAdminRenewal({ now: () => clientNow, lock: work => work(), notify: state => states.push(state), fetcher: async () =>
+    Response.json({ timing: { serverTime: 1000, accessExpiresAt: 901000, sessionExpiresAt: 28_801_000 } }) });
+  await client.ensure();
+  clientNow += 40_000_000;
+  await client.ensure();
+  assert.ok(!states.includes("ended"));
+  assert.equal(states.at(-1), "ready");
 });

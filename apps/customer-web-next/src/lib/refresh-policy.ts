@@ -8,11 +8,11 @@ export function refreshFailure(status: number, retryAfter: string | null = null)
 }
 
 // Server-only timing extraction AFTER Auth Service validates the credential; never authorizes a request.
-export function sessionTiming(accessToken: string): { accessExpiresAt: number; sessionExpiresAt: number | null } | null {
+export function sessionTiming(accessToken: string): { accessExpiresAt: number; sessionExpiresAt: number | null; serverTime: number } | null {
   try {
     const claims = JSON.parse(Buffer.from(accessToken.split(".")[1], "base64url").toString("utf8")) as Record<string, unknown>;
     if (typeof claims.exp !== "number" || !Number.isFinite(claims.exp)) return null;
-    return { accessExpiresAt: claims.exp * 1000,
+    return { accessExpiresAt: claims.exp * 1000, serverTime: Date.now(),
       sessionExpiresAt: typeof claims.admin_session_exp === "number" ? claims.admin_session_exp * 1000 : null };
   } catch { return null; }
 }

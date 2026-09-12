@@ -6,11 +6,11 @@ type Result = { session: CravesSessionExchange } | { failure: RefreshFailure };
 const pending = new Map<string, { expires: number; result: Promise<Result> }>();
 
 // Bounded server memory only. Cookie hashes are keys; credentials are never logged or persisted.
-// Coalesces requests carrying the same old cookie, including tabs without Web Locks.
+// Coalesces copies of the same receipt and old cookie; different receipts still reach replay detection.
 export async function renewServerSession(base: string, token: string, requestId: string): Promise<Result> {
   const now = Date.now();
   for (const [key, value] of pending) if (value.expires <= now) pending.delete(key);
-  const key = createHash("sha256").update(token).digest("hex");
+  const key = createHash("sha256").update(token).digest("hex") + ":" + requestId;
   const existing = pending.get(key);
   if (existing) return existing.result;
   if (pending.size >= 256) return { failure: refreshFailure(503) };
@@ -32,5 +32,6 @@ export async function renewServerSession(base: string, token: string, requestId:
 }
 
 export function forgetServerRefresh(token: string): void {
-  pending.delete(createHash("sha256").update(token).digest("hex"));
+  const prefix = createHash("sha256").update(token).digest("hex") + ":";
+  for (const key of pending.keys()) if (key.startsWith(prefix)) pending.delete(key);
 }

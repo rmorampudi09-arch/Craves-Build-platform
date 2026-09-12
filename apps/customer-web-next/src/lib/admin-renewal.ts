@@ -98,6 +98,7 @@ export function createAdminRenewal(deps: Dependencies) {
 
 const listeners = new Set<(state: SessionState) => void>();
 let channel: BroadcastChannel | null = null;
+let sharedReceipt: string | null = null;
 let client: ReturnType<typeof createAdminRenewal> | null = null;
 
 function instance() {
@@ -106,14 +107,17 @@ function instance() {
       lock: async work => typeof navigator !== "undefined" && navigator.locks ? await navigator.locks.request("craves-admin-session", work) : await work(),
       notify: state => { for (const listener of listeners) listener(state); },
       receipt: {
-        get: () => { try { const value = localStorage.getItem("craves.admin.refresh-receipt.v1"); return value && /^[0-9a-f-]{36}$/.test(value) ? value : null; } catch { return null; } },
-        set: value => { try { localStorage.setItem("craves.admin.refresh-receipt.v1", value); } catch { /* Server coalescing remains available. */ } },
-        clear: () => { try { localStorage.removeItem("craves.admin.refresh-receipt.v1"); } catch { /* No credentials are stored here. */ } },
+        get: () => sharedReceipt,
+        set: value => { sharedReceipt = value; channel?.postMessage({ type: "refresh-receipt", id: value }); },
+        clear: () => { sharedReceipt = null; channel?.postMessage({ type: "refresh-receipt", id: null }); },
       },
     });
     if (typeof window !== "undefined" && typeof BroadcastChannel !== "undefined") {
       channel = new BroadcastChannel("craves-admin-session");
-      channel.onmessage = event => { if (event.data === "signed-out") client?.end(); };
+      channel.onmessage = event => {
+        if (event.data === "signed-out") { sharedReceipt = null; client?.end(); }
+        if (event.data?.type === "refresh-receipt" && (event.data.id === null || (typeof event.data.id === "string" && /^[0-9a-f-]{36}$/.test(event.data.id)))) sharedReceipt = event.data.id;
+      };
     }
   }
   return client;

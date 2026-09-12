@@ -1,4 +1,5 @@
 import { parseAdminIdentity } from "./admin-contract.ts";
+import { apiTarget } from "./api-target.ts";
 import { NextRequest } from "next/server";
 
 export class SessionRequiredError extends Error {}
@@ -34,7 +35,7 @@ export async function authenticatedApiFetch(
       if (!identity) return Response.json({ code: "IDENTITY_UNAVAILABLE" }, { status: 502 });
       if (!identity.adminEnabled) return Response.json({ code: "ADMIN_ACCESS_REQUIRED" }, { status: 403 });
     }
-    return await fetch(`${apiBaseUrl()}${path}`, {
+    return await fetch(apiTarget(apiBaseUrl(), path), {
       ...init,
       headers: {
         Accept: "application/json",

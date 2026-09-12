@@ -1,0 +1,81 @@
+name: Craves Academy CI
+on:
+  push:
+    branches: [feat/craves-academy-20260913]
+  pull_request:
+    paths:
+      - 'services/auth-service/**'
+      - 'apps/customer-web-next/src/**/academy/**'
+      - 'apps/customer-web-next/src/lib/academy-*'
+      - 'apps/customer-web-next/src/components/admin-workspace.tsx'
+      - 'apps/customer-web-next/src/components/academy-workspace.tsx'
+      - 'scripts/academy/**'
+      - '.github/workflows/craves-academy-ci.yml'
+permissions:
+  contents: read
+concurrency:
+  group: academy-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: craves_academy_ci
+          POSTGRES_USER: academy_ci
+          POSTGRES_PASSWORD: academy_disposable_ci_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ACADEMY_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/craves_academy_ci
+      ACADEMY_TEST_DB_USER: academy_ci
+      ACADEMY_TEST_DB_PASSWORD: academy_disposable_ci_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: python3 scripts/academy/verify-curriculum.py --git
+      - run: mvn -B -f services/auth-service/pom.xml -Dtest=AcademyCoreTest,AcademyPersistenceTest test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: academy-backend-test-reports
+          path: services/auth-service/target/surefire-reports
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/customer-web-next
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - run: npm ci
+      - run: node --test --experimental-strip-types src/lib/academy-*.test.ts
+      - run: npx eslint src/app/admin/academy src/app/api/admin/academy src/lib/academy-route-policy.ts src/lib/academy-ux-state.ts src/components/academy-workspace.tsx --max-warnings=0
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academy-canonical-brand-logo
+          path: apps/customer-web-next/public/brand/craves-logo-20260805.png
+          if-no-files-found: error
+# Intentionally no Azure deployment, payments, provider calls or production credentials.

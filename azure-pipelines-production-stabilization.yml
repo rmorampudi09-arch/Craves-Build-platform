@@ -8,8 +8,8 @@ trigger:
 pr: none
 
 schedules:
-  - cron: "0 */6 * * *"
-    displayName: Every 6 hours production stabilization verification
+  - cron: "*/5 * * * *"
+    displayName: Temporary Delivery Intelligence runtime diagnosis
     branches:
       include:
         - main

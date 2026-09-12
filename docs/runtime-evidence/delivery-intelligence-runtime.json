@@ -1,0 +1,50 @@
+{
+  "collectedAt": "2026-09-12T17:21:54Z",
+  "sourceSha": "d951cc13867b43ee9bd42a655d4e7bec86cbda7c",
+  "integration": {
+    "revision": "ca-craves-integration-service-pr--0000141",
+    "readyRevision": "ca-craves-integration-service-pr--0000141",
+    "image": "cravesprodlowacr82121.azurecr.io/craves/integration-service:38852",
+    "jwt": {
+      "issuer": "",
+      "audience": "",
+      "verificationSecretRef": "jwt-verify-pem",
+      "verificationFingerprint": "bbc59217dd4dc039ba4765f2066720463bf9908a5cec5b4321e8f30e4bfd62ed"
+    },
+    "health": "503",
+    "unauthOverview": "403"
+  },
+  "auth": {
+    "revision": "ca-craves-auth-service-prodlow--0000035",
+    "readyRevision": "ca-craves-auth-service-prodlow--0000035",
+    "image": "cravesprodlowacr82121.azurecr.io/craves/auth-service@sha256:d3729d7873c2586c6500e212b2e4a16c667ccebc4f91d3066098998e128dae61",
+    "jwt": {
+      "issuer": "https://api.craves.in/auth",
+      "audience": "craves-api",
+      "publicSecretRef": "",
+      "publicFingerprint": "MISSING",
+      "privateSecretRef": "kv-jwt-private-key"
+    }
+  },
+  "dashboard": {
+    "revision": "ca-craves-delivery-intel-prodlow--0000002",
+    "readyRevision": "ca-craves-delivery-intel-prodlow--0000002",
+    "image": "cravesprodlowacr82121.azurecr.io/craves/delivery-intelligence-admin:36501",
+    "apiBase": "https://api.craves.in/api/v1",
+    "health": "200"
+  },
+  "apim": {
+    "path": "api/v1/admin/operations",
+    "serviceUrl": "https://ca-craves-integration-service-pr.happysand-aedc7165.centralindia.azurecontainerapps.io/api/v1/admin/operations",
+    "operationTemplate": "/delivery-intelligence/overview",
+    "unauthOverview": "401"
+  },
+  "frontDoor": {
+    "health": "200"
+  },
+  "parity": {
+    "issuer": false,
+    "audience": false,
+    "publicKey": false
+  }
+}

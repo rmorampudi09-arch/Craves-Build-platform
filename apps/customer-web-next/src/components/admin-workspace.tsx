@@ -8,6 +8,7 @@ import {
   Menu, ReceiptText, Search, SearchCheck, ShieldCheck, X
 } from "lucide-react";
 import type { AdminIdentity } from "@/lib/admin-contract";
+import { observeAdminSession, logoutAdminSession, type SessionState } from "@/lib/admin-renewal";
 import { loadAdminIdentity } from "@/lib/admin-session";
 import { SyncfusionLicense } from "@/components/syncfusion-license";
 import { CravesLogo } from "@/components/brand/CravesLogo";
@@ -30,18 +31,26 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [identity, setIdentity] = useState<AdminIdentity | null>(null);
   const [message, setMessage] = useState("Verifying administrator access…");
+  const [sessionState, setSessionState] = useState<SessionState>("checking");
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
-    loadAdminIdentity()
-      .then(admin => { if (active) { setIdentity(admin); setMessage(""); } })
-      .catch(error => active && setMessage(error instanceof Error ? error.message : "Administrator access is unavailable."));
-    return () => { active = false; };
+    let authorizationGeneration = 0;
+    const stop = observeAdminSession(state => {
+      const generation = ++authorizationGeneration;
+      setSessionState(state);
+      if (state === "ended") { setIdentity(null); setMessage("Your administrator session has ended. Please sign in again."); }
+      if (state === "reconnecting") setMessage("Reconnecting securely. Please keep this tab open.");
+      if (state === "ready") void loadAdminIdentity()
+        .then(admin => { if (active && generation === authorizationGeneration) { setIdentity(admin); setMessage(""); } })
+        .catch(error => { if (active && generation === authorizationGeneration) setMessage(error instanceof Error ? error.message : "Administrator access is unavailable."); });
+    });
+    return () => { active = false; stop(); };
   }, []);
 
   if (pathname === "/admin/academy" || pathname.startsWith("/admin/academy/")) {
-    return <AcademyWorkspace identity={identity} message={message}>{children}</AcademyWorkspace>;
+    return <AcademyWorkspace identity={identity} message={message} sessionState={sessionState}>{children}</AcademyWorkspace>;
   }
 
   if (!identity) {
@@ -50,6 +59,7 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
         <CravesLogo size="lg" className="mx-auto" priority />
         <h1 className="mt-5 text-2xl font-black text-[#251b35]">Craves administration</h1>
         <p className="mt-3 text-sm text-[#71677d]" role="status">{message}</p>
+        {sessionState !== "ended" && <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-xl border px-5 py-3">Retry connection</button>}
         <Link href={`/sign-in?returnTo=${encodeURIComponent(pathname)}`} className="mt-6 inline-flex rounded-xl bg-[#6930ca] px-5 py-3 text-sm font-black text-white">Administrator sign in</Link>
       </section>
     </main>;
@@ -57,7 +67,7 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
 
   const groups = [...new Set(navigation.map(item => item.group))];
 
-  return <div className="min-h-screen bg-[#f7f5fb] text-[#251b35]">
+  return <><div hidden={sessionState === "reconnecting"} className="min-h-screen bg-[#f7f5fb] text-[#251b35]">
     <SyncfusionLicense />
     {menuOpen && <button aria-label="Close navigation overlay" className="fixed inset-0 z-40 bg-[#0b1426]/60 lg:hidden" onClick={() => setMenuOpen(false)} />}
     <aside className={`fixed inset-y-0 left-0 z-50 flex w-[292px] flex-col bg-[#0b1426] text-white shadow-2xl transition-transform lg:translate-x-0 ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}>
@@ -80,6 +90,7 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
         })}</div></div>)}
       </nav>
 
+      <button type="button" onClick={() => { void logoutAdminSession(); }} className="mx-4 rounded-xl border border-white/20 px-4 py-2">Sign out</button>
       <div className="m-4 rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="flex items-center gap-3"><CircleUserRound className="text-[#f6b545]" /><div className="min-w-0"><p className="truncate text-sm font-black">{identity.displayName || "Administrator"}</p><p className="truncate text-xs text-slate-400">{identity.email || "Role verified"}</p></div></div>
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-400/10 px-3 py-2 text-[10px] font-black text-emerald-300"><ShieldCheck size={13}/>ADMIN ROLE VERIFIED</div>
@@ -96,5 +107,5 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
       </header>
       <main className="mx-auto max-w-[1640px] p-5 sm:p-8">{children}</main>
     </div>
-  </div>;
+  </div>{sessionState === "reconnecting" && <main className="grid min-h-screen place-items-center bg-[#f9f7f5] text-[#111111]"><section className="rounded-2xl bg-white p-8 text-center"><CravesLogo size="lg" className="mx-auto" /><h1 className="mt-4 text-xl font-bold">Reconnecting securely</h1><p role="status" className="mt-3">Your work is kept in this tab. We’ll continue when your session is verified.</p></section></main>}</>;
 }

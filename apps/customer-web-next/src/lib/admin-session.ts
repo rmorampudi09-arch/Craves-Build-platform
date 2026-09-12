@@ -1,3 +1,4 @@
+import { adminFetch } from "./admin-renewal.ts";
 import { parseAdminIdentity, type AdminIdentity } from "./admin-contract.ts";
 
 type Fetcher = typeof fetch;
@@ -17,17 +18,9 @@ async function readAdminIdentity(fetcher: Fetcher): Promise<{ response: Response
   return { response, body: await response.json().catch(() => null) };
 }
 
-export async function loadAdminIdentity(fetcher: Fetcher = fetch): Promise<AdminIdentity> {
-  let result = await readAdminIdentity(fetcher);
+export async function loadAdminIdentity(fetcher: Fetcher = adminFetch): Promise<AdminIdentity> {
+  const result = await readAdminIdentity(fetcher);
 
-  if (result.response.status === 401) {
-    const refresh = await fetcher("/api/auth/refresh", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-    });
-    if (refresh.ok) result = await readAdminIdentity(fetcher);
-  }
 
   if (result.response.status === 401) {
     throw new AdminSessionError("Sign in with an administrator account.", 401);

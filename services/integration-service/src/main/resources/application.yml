@@ -12,6 +12,10 @@ spring:
     table: flyway_schema_history
 
 craves:
+  delivery-feedback:
+    enabled: ${CRAVES_DELIVERY_FEEDBACK_ENABLED:true}
+    batch-size: ${CRAVES_DELIVERY_FEEDBACK_BATCH_SIZE:50}
+    max-attempts: ${CRAVES_DELIVERY_FEEDBACK_MAX_ATTEMPTS:8}
   delivery-intelligence:
     enabled: ${CRAVES_DELIVERY_INTELLIGENCE_ENABLED:false}
     live-window-days: ${CRAVES_DELIVERY_LIVE_WINDOW_DAYS:7}
@@ -133,6 +137,7 @@ craves:
       callback-url: ${PIDGE_CALLBACK_URL:https://api.craves.in/api/v1/webhooks/delivery/pidge}
       connect-timeout-seconds: ${PIDGE_CONNECT_TIMEOUT_SECONDS:5}
       read-timeout-seconds: ${PIDGE_READ_TIMEOUT_SECONDS:20}
+      default-volumetric-weight-grams: ${PIDGE_DEFAULT_VOLUMETRIC_WEIGHT_GRAMS:900}
     borzo:
       enabled: ${BORZO_API_ENABLED:false}
       environment: ${BORZO_API_ENVIRONMENT:SANDBOX}

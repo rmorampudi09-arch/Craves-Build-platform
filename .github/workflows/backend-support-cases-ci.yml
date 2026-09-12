@@ -39,7 +39,10 @@ jobs:
           grep -q 'support_case_message' services/user-chef-service/src/main/resources/db/migration/V7__support_case_domain.sql
           grep -q 'internal_note' services/user-chef-service/src/main/resources/db/migration/V7__support_case_domain.sql
           grep -q 'requester_identity_id' services/user-chef-service/src/main/java/in/craves/userchef/service/SupportCaseService.java
-          grep -q 'internalNote' services/user-chef-service/src/main/java/in/craves/userchef/web/RequesterSupportView.java
+          # Internal notes are excluded by the requester SQL projection; the DTO view
+          # separately redacts staff identities and status notes, verified by Maven below.
+          grep -q 'AND internal_note = false' services/user-chef-service/src/main/java/in/craves/userchef/service/SupportCaseService.java
+          test -s services/user-chef-service/src/test/java/in/craves/userchef/web/RequesterSupportViewTest.java
           ! grep -R --line-number -E 'System\.out|printStackTrace|Authorization: Bearer|client[_-]?secret|password\s*=' services/user-chef-service/src/main/java/in/craves/userchef/{service,support,web}/SupportCase* services/user-chef-service/src/main/java/in/craves/userchef/web/{AdminSupportCaseController,RequesterSupportView}.java
       - name: Maven clean verify — User/Chef Service
         working-directory: services/user-chef-service

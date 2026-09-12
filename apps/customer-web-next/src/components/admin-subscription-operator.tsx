@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useCallback, useEffect, useState } from "react";
 import type {
   AdminSubscriptionHistory,
@@ -39,7 +41,7 @@ export function AdminSubscriptionOperator() {
       query.set("afterCreatedAt", activeCursor.createdAt);
       query.set("afterId", activeCursor.id);
     }
-    const response = await fetch(`/api/admin/subscriptions?${query.toString()}`, { cache: "no-store" });
+    const response = await adminFetch(`/api/admin/subscriptions?${query.toString()}`, { cache: "no-store" });
     const body = await response.json().catch(() => null);
     if (response.status === 401) throw new Error("Administrator session expired.");
     if (response.status === 403) throw new Error("Subscription operations access is required.");
@@ -67,7 +69,7 @@ export function AdminSubscriptionOperator() {
 
   async function selectSubscription(subscription: AdminSubscriptionSummary) {
     setSelected(subscription); setNextStatus(subscription.status); setReason(""); setMessage("");
-    const response = await fetch(`/api/admin/subscriptions/${subscription.id}/history?limit=100`, { cache: "no-store" });
+    const response = await adminFetch(`/api/admin/subscriptions/${subscription.id}/history?limit=100`, { cache: "no-store" });
     if (response.ok) setHistory(await response.json() as AdminSubscriptionHistory[]); else setHistory([]);
   }
 
@@ -76,7 +78,7 @@ export function AdminSubscriptionOperator() {
     if (!window.confirm(`Change subscription ${selected.id} from ${selected.status} to ${nextStatus}? This action is audited.`)) return;
     setBusy(true); setMessage("");
     try {
-      const response = await fetch(`/api/admin/subscriptions/${selected.id}/status`, {
+      const response = await adminFetch(`/api/admin/subscriptions/${selected.id}/status`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus, reason: reason.trim() }),
       });
@@ -84,7 +86,7 @@ export function AdminSubscriptionOperator() {
       setSelected(current => current ? { ...current, status: nextStatus, updatedAt: new Date().toISOString() } : current);
       setItems(current => current.map(item => item.id === selected.id ? { ...item, status: nextStatus, updatedAt: new Date().toISOString() } : item));
       setReason("");
-      const historyResponse = await fetch(`/api/admin/subscriptions/${selected.id}/history?limit=100`, { cache: "no-store" });
+      const historyResponse = await adminFetch(`/api/admin/subscriptions/${selected.id}/history?limit=100`, { cache: "no-store" });
       if (historyResponse.ok) setHistory(await historyResponse.json() as AdminSubscriptionHistory[]);
       setMessage("Subscription status updated and audited.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Subscription status update failed."); }

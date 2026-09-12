@@ -6,6 +6,7 @@ on:
       - 'services/integration-service/**'
       - 'azure-pipelines-delivery-provider-webhooks-apim.yml'
       - '.github/workflows/pidge-hyperlocal-ci.yml'
+      - 'scripts/release/*pidge*'
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,8 +14,24 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: delivery_feedback_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: feedback_local_ci_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 12
+    env:
+      DELIVERY_FEEDBACK_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/delivery_feedback_test
+      DELIVERY_FEEDBACK_TEST_DB_PASSWORD: feedback_local_ci_only
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Pidge activation failure handling
+        run: python3 scripts/release/test_pidge_production_acceptance.py
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

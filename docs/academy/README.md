@@ -73,3 +73,13 @@ Disable `CRAVES_ACADEMY_ENABLED`, revoke/disable the new APIM surface, and route
 ## Maintaining courses
 
 Update `curriculum.json` in a reviewed pull request; verify every source at a new immutable commit, recheck lesson assertions against source/tests and increment the content version for changed assessment semantics. The source viewer deliberately does not fetch arbitrary `main` files. Prerequisites are recommended study order, not privileged operational permissions. Future plans are edited in the protected runtime UI, not in this manifest. Automatic AI course regeneration and repository change detection are not implemented in this release.
+
+## September 12 session-release integration
+
+PR328 supplies secure administrator renewal; PR329 covers Delivery Intelligence and PR330 live downstream revocation. Academy calls `adminFetch`, preserves its in-memory answers and receipt during temporary renewal, hides learning data until verification completes, and removes it on logout. The first Auth deployment must contain both V7 and V8.
+
+Routing was corrected against inspected production configuration: `CRAVES_API_BASE_URL` ends in `/api/v1`, while the approved Academy API is `/academy`. The BFF resolves Academy paths at the same gateway origin and preserves the `/api/v1` base for every other service. Both the default APIM hostname and `api.craves.in` are covered by a regression test.
+
+The new API policy calls the existing Auth verifier with a five-second timeout, requires its validated-family marker, caps authorization and backend concurrency at eight each, limits requests to 600/minute per IP and bodies to 16 KiB, and sets no-store on successes and errors. Operation-specific platform/audit permissions remain in Java. No token or response body is traced or cached. Preflight found no global/Auth API caching policies and zero diagnostic configurations; recheck the new API scope after creation. Official policy contracts: https://learn.microsoft.com/en-us/azure/api-management/send-request-policy and https://learn.microsoft.com/en-us/azure/api-management/limit-concurrency-policy.
+
+Production acceptance, real browser boundary observation and eight-hour soak remain unclaimed until separately recorded.

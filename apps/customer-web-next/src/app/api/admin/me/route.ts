@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
         { code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "ADMIN_ACCESS_REQUIRED" : "IDENTITY_UNAVAILABLE" },
         { status: upstream.status, headers: { "Cache-Control": "no-store" } },
       );
-      if (upstream.status === 401) response.cookies.delete("craves_access_token");
       return response;
     }
     const identity = parseAdminIdentity(body);
@@ -23,7 +22,6 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     if (error instanceof SessionRequiredError) {
       const response = NextResponse.json({ code: "AUTHENTICATION_REQUIRED" }, { status: 401, headers: { "Cache-Control": "no-store" } });
-      response.cookies.delete("craves_access_token");
       return response;
     }
     return NextResponse.json({ code: "IDENTITY_UNAVAILABLE" }, { status: 503, headers: { "Cache-Control": "no-store" } });

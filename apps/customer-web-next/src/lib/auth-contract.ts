@@ -55,7 +55,7 @@ export function parseSessionExchange(value: unknown): CravesSessionExchange | nu
     ? Math.floor(body.expiresIn)
     : 0;
   const identity = parseIdentity(body.identity);
-  if (!accessToken || !refreshToken || !refreshTokenExpiresAt || Number.isNaN(Date.parse(refreshTokenExpiresAt)) || expiresIn < 60 || !identity) return null;
+  if (!accessToken || !refreshToken || !refreshTokenExpiresAt || Number.isNaN(Date.parse(refreshTokenExpiresAt)) || expiresIn < 1 || !identity) return null;
   return {
     accessToken,
     expiresIn: Math.min(expiresIn, 60 * 60),

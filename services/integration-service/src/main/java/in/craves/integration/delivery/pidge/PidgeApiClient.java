@@ -50,6 +50,7 @@ public class PidgeApiClient implements DeliveryProviderAdapter {
         metadata.put("network_name", selected.path("network_name").asText());
         metadata.put("pickup_now", true);
         metadata.put("hyperlocal", true);
+        metadata.put("parcel_minimum_volumetric_weight_grams", properties.getDefaultVolumetricWeightGrams());
         metadata.put("route_fingerprint", fingerprint(body.toString()));
         metadata.put("quote_id", "pidge:" + selected.path("network_id").asText() + ":" + Instant.now().toEpochMilli());
         JsonNode eta = selected.path("quote").path("eta");
@@ -196,7 +197,8 @@ public class PidgeApiClient implements DeliveryProviderAdapter {
         body.set("pickup", quoteLocation(request.pickup()));
         ObjectNode drop = body.putArray("drop").addObject().put("ref", "craves-drop");
         drop.set("location", quoteLocation(request.dropoff()));
-        drop.putObject("attributes").put("cod_amount", 0).put("weight", request.totalWeightGrams());
+        drop.putObject("attributes").put("cod_amount", 0).put("weight", request.totalWeightGrams())
+            .put("volumetric_weight", properties.getDefaultVolumetricWeightGrams());
         return body;
     }
 
@@ -210,7 +212,8 @@ public class PidgeApiClient implements DeliveryProviderAdapter {
             .put("cod_amount", 0).put("bill_amount", request.declaredGoodsValue());
         if (request.pickup().requiredStart() != null) trip.put("promised_prep_time", request.pickup().requiredStart().toInstant().toString());
         trip.putArray("packages").addObject().put("label", required(request.matter(), "package description"))
-            .put("quantity", 1).put("dead_weight", request.totalWeightGrams());
+            .put("quantity", 1).put("dead_weight", request.totalWeightGrams())
+            .put("volumetric_weight", properties.getDefaultVolumetricWeightGrams());
         var products = trip.putArray("products");
         for (ShipmentItem item : request.items()) products.addObject().put("name", item.itemName())
             .put("sku", item.menuItemId() == null ? item.itemName() : item.menuItemId().toString())

@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useState } from "react";
 import type {
   AdminInvestigationResource,
@@ -55,7 +57,7 @@ export function AdminOperationalInvestigator() {
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/admin/operations/investigate", {
+      const response = await adminFetch("/api/admin/operations/investigate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resource, resourceId, reason: normalizedReason }),

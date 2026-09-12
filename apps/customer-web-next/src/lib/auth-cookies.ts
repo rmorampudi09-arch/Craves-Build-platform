@@ -13,7 +13,7 @@ export function setSessionCookies(response: NextResponse, session: CravesSession
     path: "/",
     maxAge: session.expiresIn,
   });
-  const remaining = Math.max(60, Math.floor((Date.parse(session.refreshTokenExpiresAt) - Date.now()) / 1000));
+  const remaining = Math.max(0, Math.floor((Date.parse(session.refreshTokenExpiresAt) - Date.now()) / 1000));
   response.cookies.set(REFRESH_COOKIE, session.refreshToken, {
     httpOnly: true,
     secure,

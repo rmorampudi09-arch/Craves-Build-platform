@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useState } from "react";
 import {
   parseNotificationBacklog,
@@ -49,7 +51,7 @@ export function AdminNotificationRecovery() {
     setBusy(true);
     setResult(null);
     try {
-      const response = await fetch(
+      const response = await adminFetch(
         `/api/admin/notifications/recovery?status=${statusFilter}&limit=50`,
         { cache: "no-store" }
       );
@@ -84,7 +86,7 @@ export function AdminNotificationRecovery() {
     if (confirmation !== "RETRY") return setMessage("Type RETRY exactly to confirm requeueing.");
     setBusy(true);
     try {
-      const response = await fetch(`/api/admin/notifications/recovery/${selected.requestId}`, {
+      const response = await adminFetch(`/api/admin/notifications/recovery/${selected.requestId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

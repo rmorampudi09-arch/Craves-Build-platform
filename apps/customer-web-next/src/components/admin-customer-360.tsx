@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, CreditCard, PackageSearch, RefreshCw, RotateCcw, Search, Truck, X } from "lucide-react";
 import {
@@ -110,7 +112,7 @@ export function AdminCustomer360({ identityId, reason }: { identityId: string; r
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/admin/customer-360", {
+      const response = await adminFetch("/api/admin/customer-360", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(customer360Payload("all", identityId, reason, activeFilters)),
@@ -160,7 +162,7 @@ export function AdminCustomer360({ identityId, reason }: { identityId: string; r
     setLoadingMore(resource);
     setMessage("");
     try {
-      const response = await fetch("/api/admin/customer-360", {
+      const response = await adminFetch("/api/admin/customer-360", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(customer360Payload(resource, identityId, reason, filters, cursor)),
@@ -191,7 +193,7 @@ export function AdminCustomer360({ identityId, reason }: { identityId: string; r
     setEvidenceBusyId(resourceId);
     setMessage("");
     try {
-      const response = await fetch("/api/admin/operations/investigate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resource, resourceId, reason }), cache: "no-store" });
+      const response = await adminFetch("/api/admin/operations/investigate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resource, resourceId, reason }), cache: "no-store" });
       const body = await response.json().catch(() => null) as AdminInvestigationResult | null;
       if (!response.ok || !body || typeof body.title !== "string" || !Array.isArray(body.summary) || !Array.isArray(body.timeline)) throw new Error("Full operational evidence could not be opened.");
       setEvidence(body);

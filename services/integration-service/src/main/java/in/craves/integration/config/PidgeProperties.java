@@ -22,6 +22,8 @@ public class PidgeProperties {
     private String callbackUrl = "https://api.craves.in/api/v1/webhooks/delivery/pidge";
     private int connectTimeoutSeconds = 5;
     private int readTimeoutSeconds = 20;
+    // Pidge's configured M parcel minimum, verified with a cancelled production canary.
+    private int defaultVolumetricWeightGrams = 900;
 
     @PostConstruct
     public void validate() {
@@ -38,6 +40,8 @@ public class PidgeProperties {
             throw new IllegalStateException("Pidge API token and channel must be configured");
         if (connectTimeoutSeconds < 1 || connectTimeoutSeconds > 10 || readTimeoutSeconds < 1 || readTimeoutSeconds > 30)
             throw new IllegalStateException("Pidge request timeouts are out of bounds");
+        if (defaultVolumetricWeightGrams <= 0)
+            throw new IllegalStateException("Pidge volumetric parcel minimum must be positive");
         if (createEnabled && !productionCreateReady())
             throw new IllegalStateException("Pidge production creation prerequisites are incomplete");
     }
@@ -74,4 +78,6 @@ public class PidgeProperties {
     public void setConnectTimeoutSeconds(int value) { connectTimeoutSeconds = value; }
     public int getReadTimeoutSeconds() { return readTimeoutSeconds; }
     public void setReadTimeoutSeconds(int value) { readTimeoutSeconds = value; }
+    public int getDefaultVolumetricWeightGrams() { return defaultVolumetricWeightGrams; }
+    public void setDefaultVolumetricWeightGrams(int value) { defaultVolumetricWeightGrams = value; }
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { CheckCircle2, CircleAlert, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AdminChefApplication } from "@/lib/admin-chef-review-contract";
@@ -36,8 +38,8 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
 
   const load = useCallback(async () => {
     const [response, documentResponse] = await Promise.all([
-      fetch(`/api/admin/chef-reviews/${applicationId}`, { cache: "no-store" }),
-      fetch(`/api/admin/chef-reviews/${applicationId}/evidence-status`, { cache: "no-store" }),
+      adminFetch(`/api/admin/chef-reviews/${applicationId}`, { cache: "no-store" }),
+      adminFetch(`/api/admin/chef-reviews/${applicationId}/evidence-status`, { cache: "no-store" }),
     ]);
     const body = await response.json().catch(() => null);
     if (response.status === 401) throw new Error("Administrator session expired.");
@@ -82,7 +84,7 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch(`/api/admin/chef-reviews/${applicationId}/${action}`, {
+      const response = await adminFetch(`/api/admin/chef-reviews/${applicationId}/${action}`, {
         method: "POST",
         headers: action === "reject" ? { "Content-Type": "application/json" } : undefined,
         body: action === "reject" ? JSON.stringify({ reason: applicationReason }) : undefined,
@@ -111,7 +113,7 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
     setBusyDocumentId(document.id);
     setMessage("");
     try {
-      const response = await fetch(
+      const response = await adminFetch(
         `/api/admin/chef-reviews/${applicationId}/documents/${document.id}/${action}`,
         {
           method: "POST",

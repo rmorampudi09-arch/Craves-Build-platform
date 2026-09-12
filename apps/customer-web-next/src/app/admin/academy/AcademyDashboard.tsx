@@ -3,13 +3,14 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, Code2, Flame, GraduationCap, Layers3, Lightbulb, LockKeyhole, Play, Pause, Search, ShieldCheck, Sparkles, Target, Trophy, Volume2, RefreshCw, WifiOff } from "lucide-react";
 import { AcademyRequestError, parseRetryAfter } from "@/lib/academy-ux-state";
+import { adminFetch } from "@/lib/admin-renewal";
 import { AcademyDeleteDialog, AcademyErrorState, AcademyNotice, AcademySkeleton, useAcademyConnection } from "./academy-ui";
 import type { Catalog, Course, Learner, Lesson, Plan, QuizResult, Report } from "./academy-types";
 
 async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 15000);
   try {
-    const response = await fetch(`/api/admin/academy/${path}`, { method, credentials: "same-origin", cache: "no-store", signal: controller.signal,
+    const response = await adminFetch(`/api/admin/academy/${path}`, { method, credentials: "same-origin", cache: "no-store", signal: controller.signal,
       headers: body === undefined ? {} : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
     const data = await response.json().catch(() => null);
     if (!response.ok) throw new AcademyRequestError(response.status, parseRetryAfter(response.headers.get("Retry-After")));

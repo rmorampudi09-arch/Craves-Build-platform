@@ -27,6 +27,7 @@ variables:
   apimExpectedCname: apim-craves-prodlow-l3ing6.azure-api.net
   rollbackWwwHostname: lemon-bay-06f924610.7.azurestaticapps.net
   certMinRemainingDays: 30
+  integrationAppName: ca-craves-integration-service-pr
 
 pool:
   vmImage: ubuntu-latest
@@ -81,3 +82,35 @@ steps:
         export CERT_MIN_REMAINING_DAYS='$(certMinRemainingDays)'
 
         bash infra/operations/production-stabilization/check-production.sh
+
+  - task: AzureCLI@2
+    displayName: Verify Integration JWT runtime alignment
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      addSpnToEnvironment: false
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+
+        JSON="$(az containerapp show -g '$(resourceGroup)' -n '$(integrationAppName)' -o json --only-show-errors)"
+        ISSUER="$(jq -r '[.properties.template.containers[0].env[]? | select(.name=="CRAVES_JWT_ISSUER")][0].value // ""' <<<"$JSON")"
+        AUDIENCE="$(jq -r '[.properties.template.containers[0].env[]? | select(.name=="CRAVES_JWT_AUDIENCE")][0].value // ""' <<<"$JSON")"
+        LATEST="$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON")"
+        READY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON")"
+
+        [[ "$LATEST" == "$READY" && -n "$READY" ]] || {
+          echo "ERROR: Integration latest revision is not the ready revision (latest=$LATEST ready=$READY)." >&2
+          exit 1
+        }
+        [[ "$ISSUER" == 'https://api.craves.in/auth' ]] || {
+          echo 'ERROR: Integration CRAVES_JWT_ISSUER drift detected.' >&2
+          exit 1
+        }
+        [[ "$AUDIENCE" == 'craves-api' ]] || {
+          echo 'ERROR: Integration CRAVES_JWT_AUDIENCE drift detected.' >&2
+          exit 1
+        }
+
+        echo "PASS: Integration JWT runtime alignment is healthy on revision $READY."

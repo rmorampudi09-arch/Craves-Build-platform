@@ -51,6 +51,7 @@ public class AuthService {
     private final CravesJwtService jwtService;
     private final RefreshTokenGenerator refreshTokenGenerator;
     private final TokenHasher tokenHasher;
+    private final AdminSessionService adminSessions;
 
     public AuthService(
         FirebaseApp firebaseApp,
@@ -63,7 +64,8 @@ public class AuthService {
         AuthAuditRepository authAuditRepository,
         CravesJwtService jwtService,
         RefreshTokenGenerator refreshTokenGenerator,
-        TokenHasher tokenHasher
+        TokenHasher tokenHasher,
+        AdminSessionService adminSessions
     ) {
         this.firebaseApp = firebaseApp;
         this.jwtProperties = jwtProperties;
@@ -76,6 +78,7 @@ public class AuthService {
         this.jwtService = jwtService;
         this.refreshTokenGenerator = refreshTokenGenerator;
         this.tokenHasher = tokenHasher;
+        this.adminSessions = adminSessions;
     }
 
     @Transactional
@@ -99,6 +102,10 @@ public class AuthService {
             List<String> roles = identityRoleRepository.findRoleCodesByIdentityId(identity.getId());
             saveLoginAttempt(firebaseUid, phoneNumber, true, null, ipAddress, userAgent);
             saveAudit(identity.getId(), "FIREBASE_EXCHANGE", "Firebase phone token exchanged", ipAddress, userAgent);
+            if (AdminSessionService.isAdmin(roles)) {
+                identityRepository.flush();
+                return adminSessions.create(identity, roles, decodedToken.getClaims().get("auth_time"));
+            }
             return issueTokenPair(identity, roles, userAgent, ipAddress);
         } catch (FirebaseAuthException ex) {
             saveLoginAttempt(null, null, false, "FIREBASE_TOKEN_INVALID", ipAddress, userAgent);
@@ -106,9 +113,10 @@ public class AuthService {
         }
     }
 
-    @Transactional
-    public AuthTokenResponse refresh(String refreshToken, HttpServletRequest httpRequest) {
+    @Transactional(noRollbackFor = AuthException.class)
+    public AuthTokenResponse refresh(String refreshToken, UUID requestId, HttpServletRequest httpRequest) {
         String hash = tokenHasher.sha256Base64Url(refreshToken);
+        if (adminSessions.handles(hash)) return adminSessions.refresh(refreshToken, requestId);
         RefreshSession session = refreshSessionRepository.findByRefreshTokenHash(hash)
             .orElseThrow(() -> AuthException.unauthorized("INVALID_REFRESH_TOKEN", "Refresh token is invalid"));
 
@@ -126,6 +134,9 @@ public class AuthService {
         AuthIdentity identity = identityRepository.findById(session.getIdentityId())
             .orElseThrow(() -> AuthException.unauthorized("IDENTITY_NOT_FOUND", "Identity was not found"));
         assertActive(identity);
+        if (AdminSessionService.isAdmin(identityRoleRepository.findRoleCodesByIdentityId(identity.getId()))) {
+            throw AuthException.unauthorized("ADMIN_REAUTHENTICATION_REQUIRED", "Sign in to start a bounded administrator session");
+        }
 
         String ipAddress = clientIp(httpRequest);
         String userAgent = truncate(httpRequest.getHeader("User-Agent"), 512);
@@ -153,6 +164,7 @@ public class AuthService {
     @Transactional
     public void logout(String refreshToken, HttpServletRequest httpRequest) {
         String hash = tokenHasher.sha256Base64Url(refreshToken);
+        if (adminSessions.handles(hash)) { adminSessions.logout(hash); return; }
         Optional<RefreshSession> optionalSession = refreshSessionRepository.findByRefreshTokenHash(hash);
         if (optionalSession.isEmpty()) {
             return;

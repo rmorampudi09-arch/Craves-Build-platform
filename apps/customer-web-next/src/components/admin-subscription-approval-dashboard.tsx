@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, CheckCircle2, CircleAlert, Gauge, ShieldCheck } from "lucide-react";
 import type { AdminSubscriptionPlan } from "@/lib/admin-subscription-plan-contract";
@@ -163,8 +165,8 @@ export function AdminSubscriptionApprovalDashboard({ plan }: { plan: AdminSubscr
       return;
     }
     const [scheduleResponse, capacityResponse] = await Promise.all([
-      fetch(`/api/admin/subscription-plans/${plan.id}/schedule`, { cache: "no-store" }),
-      fetch(`/api/admin/subscription-capacity/chefs/${plan.chefIdentityId}`, { cache: "no-store" }),
+      adminFetch(`/api/admin/subscription-plans/${plan.id}/schedule`, { cache: "no-store" }),
+      adminFetch(`/api/admin/subscription-capacity/chefs/${plan.chefIdentityId}`, { cache: "no-store" }),
     ]);
     const [scheduleRaw, capacityRaw] = await Promise.all([
       scheduleResponse.json().catch(() => null),

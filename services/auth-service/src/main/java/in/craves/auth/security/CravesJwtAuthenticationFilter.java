@@ -18,9 +18,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
     private final CravesJwtService jwtService;
+    private final in.craves.auth.service.AdminSessionService adminSessions;
 
-    public CravesJwtAuthenticationFilter(CravesJwtService jwtService) {
+    public CravesJwtAuthenticationFilter(CravesJwtService jwtService, in.craves.auth.service.AdminSessionService adminSessions) {
         this.jwtService = jwtService;
+        this.adminSessions = adminSessions;
     }
 
     @Override
@@ -35,6 +37,7 @@ public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
         String token = authorization.substring("Bearer ".length()).trim();
         try {
             AccessTokenClaims claims = jwtService.verifyAccessToken(token);
+            adminSessions.validate(claims);
             CurrentUser currentUser = new CurrentUser(
                 claims.identityId(),
                 claims.firebaseUid(),

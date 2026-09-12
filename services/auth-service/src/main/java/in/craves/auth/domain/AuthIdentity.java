@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(name = "auth_identity")
 public class AuthIdentity {
     @Id

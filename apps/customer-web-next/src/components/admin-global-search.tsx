@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -81,7 +83,7 @@ export function AdminGlobalSearch() {
   const canSearch=useMemo(()=>query.trim().length>=2&&reason.trim().length>=10&&!busy,[query,reason,busy]);
 
   async function call(payload: Record<string,string>) {
-    const response=await fetch("/api/admin/directory",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),cache:"no-store"});
+    const response=await adminFetch("/api/admin/directory",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),cache:"no-store"});
     const body=await response.json().catch(()=>null);
     if(!response.ok) throw new Error(
       response.status===401?"Your administrator session expired. Sign in again.":

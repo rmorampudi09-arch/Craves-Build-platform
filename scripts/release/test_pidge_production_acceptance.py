@@ -70,6 +70,18 @@ class CanaryTest(unittest.TestCase):
         self.assertIn("/canary-123/cancel", self.calls)
         self.assertTrue(any("state='CANCELLED'" in q for q in self.sql_calls))
 
+    def test_failed_initial_status_read_still_cancels_known_canary(self):
+        vendor = self.client.vendor
+        def failing_read(path, body=None):
+            if path == "/order/canary-123" and "/canary-123/cancel" not in self.calls:
+                raise TimeoutError("Status read failed")
+            return vendor(path, body)
+        self.client.vendor = failing_read
+        with self.assertRaisesRegex(TimeoutError, "Status read"):
+            self.client.callback_canary(self.route)
+        self.assertIn("/canary-123/cancel", self.calls)
+        self.assertTrue(any("state='CANCELLED'" in q for q in self.sql_calls))
+
 
 if __name__ == "__main__":
     unittest.main()

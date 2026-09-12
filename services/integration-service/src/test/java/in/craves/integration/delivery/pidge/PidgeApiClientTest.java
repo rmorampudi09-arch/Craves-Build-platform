@@ -63,9 +63,16 @@ class PidgeApiClientTest {
         var body = client.buildOrder("ref-1", request());
         assertEquals("food", body.at("/trips/0/order_category").asText());
         assertEquals(500, body.at("/trips/0/packages/0/dead_weight").asInt());
-        assertFalse(body.at("/trips/0/packages/0").has("volumetric_weight"));
+        assertEquals(900, body.at("/trips/0/packages/0/volumetric_weight").asInt());
         assertEquals(0, body.at("/trips/0/cod_amount").asInt());
         assertEquals("9000000001", body.at("/sender_detail/mobile").asText());
+    }
+    @Test void quoteAndBookingUseTheSameConfiguredParcelMinimum() {
+        properties.setDefaultVolumetricWeightGrams(1200);
+        var request = request();
+        assertEquals(500, client.buildQuote(request).at("/drop/0/attributes/weight").asInt());
+        assertEquals(1200, client.buildQuote(request).at("/drop/0/attributes/volumetric_weight").asInt());
+        assertEquals(1200, client.buildOrder("ref-1", request).at("/trips/0/packages/0/volumetric_weight").asInt());
     }
     @Test void createsThenConfirmsSelectedPartner() throws Exception {
         QuoteRequest request = request();

@@ -133,6 +133,7 @@ craves:
       callback-url: ${PIDGE_CALLBACK_URL:https://api.craves.in/api/v1/webhooks/delivery/pidge}
       connect-timeout-seconds: ${PIDGE_CONNECT_TIMEOUT_SECONDS:5}
       read-timeout-seconds: ${PIDGE_READ_TIMEOUT_SECONDS:20}
+      default-volumetric-weight-grams: ${PIDGE_DEFAULT_VOLUMETRIC_WEIGHT_GRAMS:900}
     borzo:
       enabled: ${BORZO_API_ENABLED:false}
       environment: ${BORZO_API_ENVIRONMENT:SANDBOX}

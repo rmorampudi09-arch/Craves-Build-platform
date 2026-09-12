@@ -130,7 +130,8 @@ class Acceptance:
             return {"coordinates": {"latitude": stop["latitude"], "longitude": stop["longitude"]}, "pincode": stop["postalCode"]}
         try:
             response = self.vendor("/quote", {"pickup": location(route["pickup"]), "drop": [{"ref": "craves-pidge-diagnostic",
-                "location": location(route["dropoff"]), "attributes": {"cod_amount": 0, "weight": route["totalWeightGrams"]}}]})
+                "location": location(route["dropoff"]), "attributes": {"cod_amount": 0, "weight": route["totalWeightGrams"],
+                "volumetric_weight": int(self.env.get("PIDGE_DEFAULT_VOLUMETRIC_WEIGHT_GRAMS", {}).get("value", "900"))}}]})
             items = response.get("data", {}).get("items", [])
             print("DIRECT_PROVIDER_QUOTE", json.dumps({"dataKeys": list(response.get("data", {})),
                   "items": [{k: i.get(k) for k in ("network_id", "service", "pickup_now", "quote")} for i in items]}), flush=True)
@@ -197,7 +198,8 @@ class Acceptance:
                 "reference_id": reference, "order_category": "food", "cod_amount": 0,
                 "bill_amount": route["declaredGoodsValue"],
                 "packages": [{"label": "CRAVES API VERIFICATION - DO NOT DISPATCH", "quantity": 1,
-                              "dead_weight": route["totalWeightGrams"]}],
+                              "dead_weight": route["totalWeightGrams"],
+                              "volumetric_weight": int(self.env.get("PIDGE_DEFAULT_VOLUMETRIC_WEIGHT_GRAMS", {}).get("value", "900"))}],
                 "products": [{"name": i["itemName"], "sku": str(i.get("menuItemId") or i["itemName"]),
                               "price": i["unitPrice"], "quantity": i["quantity"]} for i in route["items"]]}
         print("CANARY_REFERENCE", reference, flush=True)
@@ -214,17 +216,19 @@ class Acceptance:
             raise
         self.sql("UPDATE delivery_schema.pidge_booking SET provider_order_id='" + order_id + "',state='CREATED',updated_at=now() WHERE client_reference='" + reference + "'")
         print("CANARY_ORDER_ID", order_id, flush=True)
-        order = self.vendor("/order/" + order_id)["data"]
-        assert str(order.get("id")) == order_id
-        manual = str(order.get("status")).upper() in ("PENDING", "1")
-        print("PROVIDER_PACKAGE_DEFAULTS", json.dumps({"orderKeys": list(order),
-              "packages": [{k: p.get(k) for k in ("dead_weight", "volumetric_weight", "length", "breadth", "height", "quantity")} for p in order.get("packages", [])],
-              "weight": order.get("weight"), "volumetric_weight": order.get("volumetric_weight")}), flush=True)
-        # Cancellation must be confirmed even if the callback is delayed or unavailable.
-        self.vendor("/" + order_id + "/cancel", {})
-        cancelled = self.vendor("/order/" + order_id)["data"]
-        assert str(cancelled.get("id")) == order_id and str(cancelled.get("status")).upper() in ("CANCELLED", "0"), "Canary cancellation not confirmed"
-        self.sql("UPDATE delivery_schema.pidge_booking SET state='CANCELLED',updated_at=now() WHERE client_reference='" + reference + "'")
+        try:
+            order = self.vendor("/order/" + order_id)["data"]
+            assert str(order.get("id")) == order_id
+            manual = str(order.get("status")).upper() in ("PENDING", "1")
+            print("PROVIDER_PACKAGE_DEFAULTS", json.dumps({"orderKeys": list(order),
+                  "packages": [{k: p.get(k) for k in ("dead_weight", "volumetric_weight", "length", "breadth", "height", "quantity")} for p in order.get("packages", [])],
+                  "weight": order.get("weight"), "volumetric_weight": order.get("volumetric_weight")}), flush=True)
+        finally:
+            # A known canary is cancelled even if its initial status read fails.
+            self.vendor("/" + order_id + "/cancel", {})
+            cancelled = self.vendor("/order/" + order_id)["data"]
+            assert str(cancelled.get("id")) == order_id and str(cancelled.get("status")).upper() in ("CANCELLED", "0"), "Canary cancellation not confirmed"
+            self.sql("UPDATE delivery_schema.pidge_booking SET state='CANCELLED',updated_at=now() WHERE client_reference='" + reference + "'")
         assert manual, "Channel auto-allocation was detected; canary cancelled and activation blocked"
         for _ in range(18):
             count = int(self.sql("SELECT count(*) FROM delivery_schema.delivery_webhook_inbox WHERE provider_id='pidge' AND raw_payload->>'id'='" + order_id + "' AND received_at>now()-interval '10 minutes'"))

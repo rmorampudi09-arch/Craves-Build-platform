@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import {
-  BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, LayoutDashboard,
+  BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap, LayoutDashboard,
   Menu, ReceiptText, Search, SearchCheck, ShieldCheck, X
 } from "lucide-react";
 import type { AdminIdentity } from "@/lib/admin-contract";
@@ -15,6 +15,7 @@ import { CravesLogo } from "@/components/brand/CravesLogo";
 const navigation = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, group: "Control center" },
   { href: "/admin/search", label: "Global search", icon: Search, group: "Control center" },
+  { href: "/admin/academy", label: "Craves Academy", icon: GraduationCap, group: "Knowledge & learning" },
   { href: "/admin/chef-reviews", label: "Chef reviews", icon: ChefHat, group: "People & kitchens" },
   { href: "/admin/operations", label: "Order investigations", icon: SearchCheck, group: "Operations" },
   { href: "/admin/subscription-plans", label: "Plans", icon: ReceiptText, group: "Subscriptions" },

@@ -1,0 +1,9 @@
+export type Question = { id: string; prompt: string; options: string[] };
+export type Lesson = { id: string; title: string; overview: string; steps: { label: string; detail: string }[]; example: string; lab: string; pitfall: string; questions: Question[] };
+export type Course = { id: string; service: string; title: string; level: string; minutes: number; description: string; sources: string[]; prerequisites: string[]; lessons: Lesson[] };
+export type Catalog = { version: string; sourceRevision: string; reviewedOn: string; evidenceLabel: string; courses: Course[] };
+export type Progress = { courseId: string; lessonId: string; bestScore: number; attempts: number; mastery: number; completedAt: string | null; lastAttemptAt: string | null };
+export type Learner = { xp: number; level: number; progress: Progress[]; personalized: boolean; streakDays: number; activeDays: string[]; activeSeconds: number; canManage: boolean; canReport: boolean; modelVersion: string; modelNotice: string; telemetryNotice: string; recommendations: { courseId: string; lessonId: string; title: string; reason: string; mastery: number }[] };
+export type QuizResult = { score: number; passed: boolean; earnedXp: number; mastery: number | null; feedback: { questionId: string; correct: boolean; answer: number; explanation: string }[] };
+export type Plan = { id: string; title: string; service: string; details: string; status: string; revision: number; updatedAt: string };
+export type Report = { totalLearners: number; totalXp: number; completedSections: number; page: number; pageSize: number; learners: { learner: string; xp: number; completed: number; lastPractice: string | null }[]; daily: { day: string; events: number; activeSeconds: number }[]; notice: string };

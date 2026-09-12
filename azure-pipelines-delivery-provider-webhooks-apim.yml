@@ -29,7 +29,10 @@ parameters:
   - name: pidgeOperation
     type: string
     default: none
-    values: [none, check, inspect-package, activate]
+    values: [none, check, activate]
+  - name: inspectPidgePackageDefaults
+    type: boolean
+    default: false
   - name: pidgeRouteCommandId
     type: string
     default: none
@@ -284,10 +287,16 @@ steps:
         scriptLocation: inlineScript
         inlineScript: |
           set -euo pipefail
+          PIDGE_OPERATION='${{ parameters.pidgeOperation }}'
+          INSPECT_PACKAGE='${{ parameters.inspectPidgePackageDefaults }}'
+          if [[ "${INSPECT_PACKAGE,,}" == true ]]; then
+            [[ "$PIDGE_OPERATION" == check ]] || { echo 'Package inspection requires check mode.' >&2; exit 2; }
+            PIDGE_OPERATION='inspect-package'
+          fi
           python3 scripts/release/pidge-production-acceptance.py \
             --resource-group '${{ parameters.resourceGroupName }}' \
             --app '${{ parameters.integrationContainerAppName }}' \
-            --operation '${{ parameters.pidgeOperation }}' \
+            --operation "$PIDGE_OPERATION" \
             --route-command-id '${{ parameters.pidgeRouteCommandId }}' \
             --confirm-activation '${{ parameters.confirmPidgeActivation }}'
 

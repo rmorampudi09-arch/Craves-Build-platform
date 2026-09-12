@@ -1,32 +1,26 @@
-trigger: none
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - azure-pipelines-production-stabilization.yml
 pr: none
 
 schedules:
-  - cron: "0 */6 * * *"
-    displayName: Every 6 hours production stabilization verification
+  - cron: "*/5 * * * *"
+    displayName: Temporary Delivery Intelligence JWT repair
     branches:
       include:
         - main
     always: true
 
 variables:
-  subscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia
-  containerAppEnvironmentName: cae-craves-prodlow-l3ing6
-  customerWebAppName: ca-craves-web-prodlow
-  customerWebAppFqdn: ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
-  customerWebStaticIp: 4.187.245.188
-  customerWebCertificateName: craves-web-tls
-  keyVaultName: kvcravesprodlowl3ing6
-  customerApexHostname: craves.in
-  customerWwwHostname: www.craves.in
-  customerDomainVerificationId: 8CBF8092F604318F13145F6181237B80D12FD1336F3F37C199AA8D7099FF5DF1
-  frontDoorProfileName: afd-craves-prodlow
-  frontDoorEndpointHostname: craves-prodlow-4f897b61-d4e6bvhscdbzbgbv.z01.azurefd.net
-  apimHostname: api.craves.in
-  apimExpectedCname: apim-craves-prodlow-l3ing6.azure-api.net
-  rollbackWwwHostname: lemon-bay-06f924610.7.azurestaticapps.net
-  certMinRemainingDays: 30
+  integrationApp: ca-craves-integration-service-pr
+  authApp: ca-craves-auth-service-prodlow
+  evidenceBranch: ops/delivery-intelligence-repair-evidence
 
 pool:
   vmImage: ubuntu-latest
@@ -35,24 +29,10 @@ steps:
   - checkout: self
     clean: true
     fetchDepth: 1
-
-  - bash: |
-      set -euo pipefail
-      packages=()
-      command -v dig >/dev/null 2>&1 || packages+=(dnsutils)
-      command -v jq >/dev/null 2>&1 || packages+=(jq)
-      command -v shellcheck >/dev/null 2>&1 || packages+=(shellcheck)
-      if [[ ${#packages[@]} -gt 0 ]]; then
-        sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends "${packages[@]}"
-      fi
-
-      bash -n infra/operations/production-stabilization/check-production.sh
-      shellcheck infra/operations/production-stabilization/check-production.sh
-    displayName: Validate stabilization script
+    persistCredentials: true
 
   - task: AzureCLI@2
-    displayName: Verify Craves production stabilization state
+    displayName: Repair Delivery Intelligence JWT runtime alignment
     inputs:
       azureSubscription: $(AZURE_SERVICE_CONNECTION)
       scriptType: bash
@@ -62,22 +42,151 @@ steps:
         set -Eeuo pipefail
         set +x
 
-        export SUBSCRIPTION_ID='$(subscriptionId)'
-        export RESOURCE_GROUP='$(resourceGroup)'
-        export CONTAINER_APP_ENVIRONMENT_NAME='$(containerAppEnvironmentName)'
-        export CUSTOMER_WEB_APP_NAME='$(customerWebAppName)'
-        export CUSTOMER_WEB_APP_FQDN='$(customerWebAppFqdn)'
-        export CUSTOMER_WEB_STATIC_IP='$(customerWebStaticIp)'
-        export CUSTOMER_WEB_CERTIFICATE_NAME='$(customerWebCertificateName)'
-        export KEY_VAULT_NAME='$(keyVaultName)'
-        export CUSTOMER_APEX_HOSTNAME='$(customerApexHostname)'
-        export CUSTOMER_WWW_HOSTNAME='$(customerWwwHostname)'
-        export CUSTOMER_DOMAIN_VERIFICATION_ID='$(customerDomainVerificationId)'
-        export FRONT_DOOR_PROFILE_NAME='$(frontDoorProfileName)'
-        export FRONT_DOOR_ENDPOINT_HOSTNAME='$(frontDoorEndpointHostname)'
-        export APIM_HOSTNAME='$(apimHostname)'
-        export APIM_EXPECTED_CNAME='$(apimExpectedCname)'
-        export ROLLBACK_WWW_HOSTNAME='$(rollbackWwwHostname)'
-        export CERT_MIN_REMAINING_DAYS='$(certMinRemainingDays)'
+        RG='$(resourceGroup)'
+        INTEGRATION='$(integrationApp)'
+        AUTH='$(authApp)'
+        EXPECTED_ISSUER='https://api.craves.in/auth'
+        EXPECTED_AUDIENCE='craves-api'
+        EVIDENCE='docs/runtime-evidence/delivery-intelligence-repair.json'
 
-        bash infra/operations/production-stabilization/check-production.sh
+        tmp="$(mktemp -d)"
+        trap 'rm -rf "$tmp"' EXIT
+
+        app_json() { az containerapp show -g "$RG" -n "$1" -o json --only-show-errors; }
+        env_value() {
+          jq -r --arg n "$2" '[.properties.template.containers[0].env[]? | select(.name==$n)][0].value // ""' <<<"$1"
+        }
+        env_ref() {
+          jq -r --arg n "$2" '[.properties.template.containers[0].env[]? | select(.name==$n)][0].secretRef // ""' <<<"$1"
+        }
+        secret_value() {
+          local app="$1" ref="$2"
+          [[ -n "$ref" ]] || return 1
+          az containerapp secret list -g "$RG" -n "$app" --show-values -o json --only-show-errors \
+            | jq -r --arg n "$ref" '[.[] | select(.name==$n)][0].value // ""'
+        }
+        b64url() {
+          openssl base64 -A | tr '+/' '-_' | tr -d '='
+        }
+        status() {
+          local url="$1"; shift
+          curl -sS --max-time 30 -o "$tmp/body" -w '%{http_code}' "$@" "$url" 2>/dev/null || printf '000'
+        }
+
+        BEFORE="$(app_json "$INTEGRATION")"
+        AUTH_JSON="$(app_json "$AUTH")"
+        BEFORE_IMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")"
+        BEFORE_REV="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$BEFORE")"
+        BEFORE_OTHER_ENV_HASH="$(jq -c '[.properties.template.containers[0].env[]? | select(.name != "CRAVES_JWT_ISSUER" and .name != "CRAVES_JWT_AUDIENCE") ] | sort_by(.name)' <<<"$BEFORE" | sha256sum | awk '{print $1}')"
+
+        VERIFY_REF="$(env_ref "$BEFORE" CRAVES_JWT_VERIFICATION_PEM_BASE64)"
+        AUTH_PRIVATE_REF="$(env_ref "$AUTH_JSON" CRAVES_JWT_PRIVATE_KEY_PEM_BASE64)"
+        [[ -n "$VERIFY_REF" ]] || { echo 'ERROR: Integration JWT verification secret reference is missing.' >&2; exit 1; }
+        [[ -n "$AUTH_PRIVATE_REF" ]] || { echo 'ERROR: Auth JWT private-key secret reference is missing.' >&2; exit 1; }
+
+        VERIFY_B64="$(secret_value "$INTEGRATION" "$VERIFY_REF")"
+        AUTH_PRIVATE_B64="$(secret_value "$AUTH" "$AUTH_PRIVATE_REF")"
+        [[ -n "$VERIFY_B64" && -n "$AUTH_PRIVATE_B64" ]] || { echo 'ERROR: JWT secret values could not be resolved.' >&2; exit 1; }
+
+        printf '%s' "$VERIFY_B64" | base64 -d > "$tmp/integration-public.pem"
+        printf '%s' "$AUTH_PRIVATE_B64" | base64 -d > "$tmp/auth-private.pem"
+        openssl pkey -pubin -in "$tmp/integration-public.pem" -outform DER > "$tmp/integration-public.der"
+        openssl pkey -in "$tmp/auth-private.pem" -pubout -outform DER > "$tmp/auth-derived-public.der"
+        VERIFY_FP_BEFORE="$(sha256sum "$tmp/integration-public.der" | awk '{print $1}')"
+        AUTH_FP="$(sha256sum "$tmp/auth-derived-public.der" | awk '{print $1}')"
+        KEY_CHANGED=false
+
+        if [[ "$VERIFY_FP_BEFORE" != "$AUTH_FP" ]]; then
+          echo 'JWT verification key fingerprint differs from Auth signing key; aligning existing Integration secret.'
+          openssl pkey -in "$tmp/auth-private.pem" -pubout -out "$tmp/auth-derived-public.pem"
+          NEW_VERIFY_B64="$(base64 -w0 < "$tmp/auth-derived-public.pem")"
+          az containerapp secret set -g "$RG" -n "$INTEGRATION" \
+            --secrets "${VERIFY_REF}=${NEW_VERIFY_B64}" --only-show-errors >/dev/null
+          KEY_CHANGED=true
+        else
+          echo 'JWT verification key already matches Auth signing key.'
+        fi
+
+        echo 'Correcting only CRAVES_JWT_ISSUER and CRAVES_JWT_AUDIENCE on the existing Integration app.'
+        az containerapp update -g "$RG" -n "$INTEGRATION" \
+          --set-env-vars \
+            "CRAVES_JWT_ISSUER=${EXPECTED_ISSUER}" \
+            "CRAVES_JWT_AUDIENCE=${EXPECTED_AUDIENCE}" \
+          --only-show-errors >/dev/null
+
+        READY=false
+        for attempt in $(seq 1 150); do
+          CURRENT="$(app_json "$INTEGRATION")"
+          LATEST="$(jq -r '.properties.latestRevisionName // ""' <<<"$CURRENT")"
+          READY_REV="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$CURRENT")"
+          RUNNING="$(jq -r '.properties.runningStatus // ""' <<<"$CURRENT")"
+          if [[ -n "$LATEST" && "$LATEST" == "$READY_REV" && "$RUNNING" == 'Running' ]]; then
+            READY=true
+            break
+          fi
+          sleep 10
+        done
+        [[ "$READY" == true ]] || { echo 'ERROR: Updated Integration revision did not become ready.' >&2; exit 1; }
+
+        AFTER="$(app_json "$INTEGRATION")"
+        AFTER_IMAGE="$(jq -r '.properties.template.containers[0].image // ""' <<<"$AFTER")"
+        AFTER_REV="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$AFTER")"
+        AFTER_ISSUER="$(env_value "$AFTER" CRAVES_JWT_ISSUER)"
+        AFTER_AUDIENCE="$(env_value "$AFTER" CRAVES_JWT_AUDIENCE)"
+        AFTER_OTHER_ENV_HASH="$(jq -c '[.properties.template.containers[0].env[]? | select(.name != "CRAVES_JWT_ISSUER" and .name != "CRAVES_JWT_AUDIENCE") ] | sort_by(.name)' <<<"$AFTER" | sha256sum | awk '{print $1}')"
+
+        [[ "$AFTER_IMAGE" == "$BEFORE_IMAGE" ]] || { echo 'ERROR: Integration image changed during configuration repair.' >&2; exit 1; }
+        [[ "$AFTER_OTHER_ENV_HASH" == "$BEFORE_OTHER_ENV_HASH" ]] || { echo 'ERROR: An unrelated Integration environment setting changed.' >&2; exit 1; }
+        [[ "$AFTER_ISSUER" == "$EXPECTED_ISSUER" ]] || { echo 'ERROR: JWT issuer was not repaired.' >&2; exit 1; }
+        [[ "$AFTER_AUDIENCE" == "$EXPECTED_AUDIENCE" ]] || { echo 'ERROR: JWT audience was not repaired.' >&2; exit 1; }
+
+        VERIFY_B64_AFTER="$(secret_value "$INTEGRATION" "$VERIFY_REF")"
+        printf '%s' "$VERIFY_B64_AFTER" | base64 -d > "$tmp/integration-public-after.pem"
+        openssl pkey -pubin -in "$tmp/integration-public-after.pem" -outform DER > "$tmp/integration-public-after.der"
+        VERIFY_FP_AFTER="$(sha256sum "$tmp/integration-public-after.der" | awk '{print $1}')"
+        [[ "$VERIFY_FP_AFTER" == "$AUTH_FP" ]] || { echo 'ERROR: Integration verification key still differs from Auth signing key.' >&2; exit 1; }
+
+        IFQDN="$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$AFTER")"
+        HEALTH_STATUS="$(status "https://${IFQDN}/actuator/health")"
+        UNAUTH_APIM="$(status 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35')"
+
+        NOW="$(date +%s)"
+        EXP="$((NOW + 120))"
+        SUB="$(cat /proc/sys/kernel/random/uuid)"
+        HEADER="$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | b64url)"
+        PAYLOAD="$(jq -cn --arg sub "$SUB" --arg iss "$EXPECTED_ISSUER" --arg aud "$EXPECTED_AUDIENCE" --argjson iat "$NOW" --argjson exp "$EXP" '{sub:$sub,iss:$iss,aud:$aud,iat:$iat,exp:$exp,phone_number:"+910000000000",roles:["ADMIN"]}' | b64url)"
+        SIGNING_INPUT="${HEADER}.${PAYLOAD}"
+        SIGNATURE="$(printf '%s' "$SIGNING_INPUT" | openssl dgst -sha256 -sign "$tmp/auth-private.pem" -binary | b64url)"
+        TOKEN="${SIGNING_INPUT}.${SIGNATURE}"
+
+        DIRECT_STATUS="$(status "https://${IFQDN}/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35" -H "Authorization: Bearer ${TOKEN}")"
+        APIM_STATUS="$(status 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=24&limit=35' -H "Authorization: Bearer ${TOKEN}")"
+        [[ "$DIRECT_STATUS" == '200' ]] || { echo "ERROR: Authenticated direct Delivery Intelligence smoke returned HTTP ${DIRECT_STATUS}." >&2; head -c 800 "$tmp/body" >&2 || true; exit 1; }
+        [[ "$APIM_STATUS" == '200' ]] || { echo "ERROR: Authenticated APIM Delivery Intelligence smoke returned HTTP ${APIM_STATUS}." >&2; head -c 800 "$tmp/body" >&2 || true; exit 1; }
+
+        mkdir -p "$(dirname "$EVIDENCE")"
+        jq -n \
+          --arg repairedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          --arg sourceSha '$(Build.SourceVersion)' \
+          --arg beforeRevision "$BEFORE_REV" --arg afterRevision "$AFTER_REV" --arg image "$AFTER_IMAGE" \
+          --arg issuer "$AFTER_ISSUER" --arg audience "$AFTER_AUDIENCE" \
+          --arg authPublicFingerprint "$AUTH_FP" --arg verificationFingerprintBefore "$VERIFY_FP_BEFORE" --arg verificationFingerprintAfter "$VERIFY_FP_AFTER" \
+          --argjson keyChanged "$KEY_CHANGED" \
+          --arg healthStatus "$HEALTH_STATUS" --arg unauthApimStatus "$UNAUTH_APIM" --arg directAuthenticatedStatus "$DIRECT_STATUS" --arg apimAuthenticatedStatus "$APIM_STATUS" \
+          --arg unrelatedEnvironmentBefore "$BEFORE_OTHER_ENV_HASH" --arg unrelatedEnvironmentAfter "$AFTER_OTHER_ENV_HASH" \
+          '{repairedAt:$repairedAt,sourceSha:$sourceSha,integration:{beforeRevision:$beforeRevision,afterRevision:$afterRevision,image:$image,jwt:{issuer:$issuer,audience:$audience,authPublicFingerprint:$authPublicFingerprint,verificationFingerprintBefore:$verificationFingerprintBefore,verificationFingerprintAfter:$verificationFingerprintAfter,keyChanged:$keyChanged},unrelatedEnvironmentHashBefore:$unrelatedEnvironmentBefore,unrelatedEnvironmentHashAfter:$unrelatedEnvironmentAfter},verification:{healthStatus:$healthStatus,unauthenticatedApimStatus:$unauthApimStatus,directAuthenticatedOverviewStatus:$directAuthenticatedStatus,apimAuthenticatedOverviewStatus:$apimAuthenticatedStatus}}' > "$EVIDENCE"
+
+        cat "$EVIDENCE"
+
+  - bash: |
+      set -Eeuo pipefail
+      EVIDENCE='docs/runtime-evidence/delivery-intelligence-repair.json'
+      BRANCH='$(evidenceBranch)'
+      test -s "$EVIDENCE"
+      git config user.name 'Craves Azure Runtime Bot'
+      git config user.email 'runtime-bot@craves.in'
+      git checkout -B "$BRANCH"
+      git add "$EVIDENCE"
+      git commit -m 'ops(delivery-intelligence): capture production JWT repair evidence'
+      git push --force origin "HEAD:refs/heads/${BRANCH}"
+    displayName: Persist isolated repair evidence

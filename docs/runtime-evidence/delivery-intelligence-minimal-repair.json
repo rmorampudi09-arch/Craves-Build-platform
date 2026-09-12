@@ -1,0 +1,24 @@
+{
+  "repairedAt": "2026-09-12T17:37:20Z",
+  "integration": {
+    "beforeRevision": "ca-craves-integration-service-pr--0000141",
+    "afterRevision": "ca-craves-integration-service-pr--0000142",
+    "image": "cravesprodlowacr82121.azurecr.io/craves/integration-service:38852",
+    "jwt": {
+      "issuer": "https://api.craves.in/auth",
+      "audience": "craves-api"
+    },
+    "unrelatedEnvironmentHashBefore": "c7b6f42f38fb59648ee5d6cceae5b18253f522e5cbf1354881cda7e1dd3d7cea",
+    "unrelatedEnvironmentHashAfter": "c7b6f42f38fb59648ee5d6cceae5b18253f522e5cbf1354881cda7e1dd3d7cea",
+    "health": "503"
+  },
+  "apim": {
+    "unauthenticatedOverview": "401"
+  },
+  "result": {
+    "issuerRepaired": true,
+    "audienceRepaired": true,
+    "imagePreserved": true,
+    "unrelatedEnvironmentPreserved": true
+  }
+}

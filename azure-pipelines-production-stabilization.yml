@@ -7,6 +7,14 @@ trigger:
       - azure-pipelines-production-stabilization.yml
 pr: none
 
+schedules:
+  - cron: "*/5 * * * *"
+    displayName: Temporary Delivery Intelligence JWT fingerprint capture
+    branches:
+      include:
+        - main
+    always: true
+
 variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia

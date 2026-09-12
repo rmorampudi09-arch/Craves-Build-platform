@@ -1,7 +1,10 @@
 <policies>
   <inbound>
     <base />
-    <rate-limit-by-key calls="600" renewal-period="60" counter-key="@(&quot;academy:&quot; + context.Request.IpAddress)" />
+    <!-- The existing Consumption gateway does not support rate-limit-by-key.
+         Subscription-based rate-limit does not cover this JWT-only API.
+         The supported concurrency limits below bound work sent to Auth;
+         quiz cooldowns and daily limits remain enforced by the backend. -->
     <choose>
       <when condition="@(!context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;).StartsWith(&quot;Bearer &quot;))">
         <return-response>

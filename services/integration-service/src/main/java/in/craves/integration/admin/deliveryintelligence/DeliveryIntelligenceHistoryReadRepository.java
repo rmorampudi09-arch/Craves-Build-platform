@@ -275,7 +275,8 @@ public class DeliveryIntelligenceHistoryReadRepository {
                       JOIN delivery_schema.delivery_job job ON job.id = event.delivery_job_id
                      WHERE event.occurred_at >= ? AND event.occurred_at < ?
                    ) recent
-             ORDER BY occurred_at """ + direction + ", activity_id " + direction + "\n LIMIT ? OFFSET ?";
+             ORDER BY occurred_at
+            """.stripTrailing() + " " + direction + ", activity_id " + direction + "\n LIMIT ? OFFSET ?";
 
         List<ActivityItem> rows = jdbcTemplate.query(
             sql,
@@ -344,7 +345,8 @@ public class DeliveryIntelligenceHistoryReadRepository {
                      WHERE webhook.received_at >= ? AND webhook.received_at < ?
                        AND webhook.processing_status IN ('FAILED', 'DEAD_LETTER', 'REJECTED')
                    ) attention
-             ORDER BY occurred_at """ + direction + ", reference_id " + direction + "\n LIMIT ? OFFSET ?";
+             ORDER BY occurred_at
+            """.stripTrailing() + " " + direction + ", reference_id " + direction + "\n LIMIT ? OFFSET ?";
 
         List<AttentionItem> rows = jdbcTemplate.query(
             sql,

@@ -1,18 +1,18 @@
 {
   "version": "academy-2026-09-13-v2",
-  "sourceRevision": "83ff61240a33db8fd9d9acc1e4861e928172a119",
+  "sourceRevision": "9cf4aea069fa6a077fdef111bf2df4eeada696fc",
   "reviewedOn": "2026-09-13",
-  "evidenceLabel": "Repository-reviewed engineering training pinned to an immutable Craves revision. Lessons explain implementation and release practice but do not grant production permissions or replace runtime acceptance evidence.",
+  "readingEdition": "enterprise-practica-2026-09-13",
+  "evidenceLabel": "Enterprise practicum edition: all 10 courses and 50 lessons include source walkthroughs, failure analysis, local labs and reviewer-assessed feature exercises. Existing v2 assessment IDs, questions, grading and XP remain unchanged. Source is pinned to an inspected repository snapshot, not a claim of live deployment. Lab completion requires actual evidence; quizzes and practice signals are not certification or production permission.",
   "enhancements": [
-    "auth.json",
-    "people.json",
-    "catalog.json",
-    "orders.json",
-    "payments.json",
-    "delivery.json",
-    "subscriptions.json",
-    "notifications.json",
-    "web.json"
+    "auth.json", "people.json", "catalog.json", "orders.json", "payments.json",
+    "delivery.json", "subscriptions.json", "notifications.json", "web.json"
   ],
-  "newCourses": ["platform.json"]
+  "newCourses": ["platform.json"],
+  "readingPacks": [
+    "enterprise-auth.json", "enterprise-people.json", "enterprise-catalog.json",
+    "enterprise-orders.json", "enterprise-payments.json", "enterprise-delivery.json",
+    "enterprise-subscriptions.json", "enterprise-notifications.json", "enterprise-web.json",
+    "enterprise-platform.json"
+  ]
 }

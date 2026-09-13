@@ -1,0 +1,69 @@
+{
+  "courseId": "payments",
+  "minutesAdded": 90,
+  "addSources": [
+    "services/integration-service/src/main/java/in/craves/integration/web/PaymentController.java"
+  ],
+  "lessons": [
+    {
+      "id": "payments-engineering-map",
+      "title": "Trace payment creation, verification and order notification",
+      "overview": "Payment code crosses a high-risk trust boundary. PaymentController accepts customer or provider-facing requests, PaymentService resolves the owned checkout and stored payment order, a provider client performs the external operation or verification, and only verified server-side evidence can advance Craves payment state. A browser callback, provider webhook and database transition can all describe the same payment but they are not equivalent evidence and may arrive more than once.",
+      "steps": [
+        {"label": "Start with checkout ownership", "detail": "Trace how PaymentService obtains the authenticated customer checkout and validates server-owned amount and currency."},
+        {"label": "Locate the provider boundary", "detail": "Identify the configured provider client and which fields leave Craves versus remain internal."},
+        {"label": "Trace stored identifiers", "detail": "Map Craves payment/order IDs to provider order/payment IDs so callbacks cannot be matched by guesswork."},
+        {"label": "Trace verification", "detail": "Follow signature, amount, currency and identifier checks before PAID can be recorded."},
+        {"label": "Trace idempotency", "detail": "Find the guarded status transition or inbox key that prevents a duplicate callback from becoming a second payment event."},
+        {"label": "Trace Order notification", "detail": "Identify how a newly accepted paid transition is propagated to Order and what happens if that propagation must be retried."}
+      ],
+      "example": "If the browser verification request and a provider webhook arrive close together, both can be valid inputs but only one new PAID transition should be recorded and propagated.",
+      "lab": "With mocked provider data, draw checkout → PaymentController → PaymentService → provider verification → guarded PAID transition → Order notification. Mark every identifier and trust boundary.",
+      "pitfall": "Never let client-supplied amount, currency or success text override the server-owned checkout and verified provider result.",
+      "questions": [
+        {"id": "payments-engineering-map-q1", "prompt": "What should determine the expected payable amount?", "options": ["The owned server checkout", "A browser input field", "A webhook log message", "An Academy answer"], "answer": 0, "explanation": "The checkout is the server-owned source for the payment amount."},
+        {"id": "payments-engineering-map-q2", "prompt": "Why can two valid payment signals still produce one transition?", "options": ["Because payment state changes must be idempotent", "Because the browser owns the database", "Because signatures are optional", "Because amounts are ignored"], "answer": 0, "explanation": "Duplicate valid signals must not duplicate the business transition."}
+      ]
+    },
+    {
+      "id": "payments-build-feature",
+      "title": "Extend payments through the adapter and state model",
+      "overview": "A payment feature must preserve provider isolation and the Craves state model. Add provider-specific behavior inside the provider client/adapter instead of scattering it through controllers. Define the Craves-side state transition first, keep credentials in secret-backed runtime configuration, map provider failures into stable internal outcomes, and make every externally retryable request idempotent. Commercial rules such as refunds, fees or settlements require an approved product/finance contract before implementation.",
+      "steps": [
+        {"label": "Define the internal outcome", "detail": "Specify the Craves payment state or capability independent of provider-specific status names."},
+        {"label": "Extend the adapter", "detail": "Place provider request/response mapping, authentication and signature handling in the provider boundary."},
+        {"label": "Keep secrets external", "detail": "Reference configured secret names; never commit merchant keys or copy them into Academy content."},
+        {"label": "Make retries deterministic", "detail": "Use stored Craves/provider identifiers and idempotency rules before creating or changing external state."},
+        {"label": "Persist before propagation", "detail": "Record the accepted internal transition before notifying Order or other downstream consumers."},
+        {"label": "Obtain policy approval", "detail": "Do not invent refund, commission, settlement or pricing behavior as an engineering default."}
+      ],
+      "example": "If a new provider capability is approved, map it behind the existing payment abstraction and keep PaymentService authoritative for ownership and state. Do not add a second controller path that trusts raw provider JSON directly.",
+      "lab": "Design a generic provider capability using a fake provider. Specify adapter method, internal state, idempotency key, failure mapping, secret references, tests and rollback. Leave all commercial policy explicitly undefined unless supplied.",
+      "pitfall": "Provider API documentation defines transport behavior, not Craves commercial policy.",
+      "questions": [
+        {"id": "payments-build-feature-q1", "prompt": "Where should provider-specific HTTP and signature logic live?", "options": ["Provider client/adapter boundary", "Random React components", "Order database migrations", "Academy progress service"], "answer": 0, "explanation": "Provider isolation keeps the internal payment model stable."},
+        {"id": "payments-build-feature-q2", "prompt": "Who should define a new refund or fee rule?", "options": ["Authorized product/finance owners", "The HTTP client library", "The Academy quiz", "A CSS component"], "answer": 0, "explanation": "Commercial payment rules are product/finance decisions, not defaults to invent in code."}
+      ]
+    },
+    {
+      "id": "payments-test-release-recover",
+      "title": "Prove money-path safety before production",
+      "overview": "Payment validation must cover invalid signatures, wrong amount/currency, identifier mismatch, cross-customer access, provider timeout, duplicate create, duplicate webhook and repeated verification. Use mocks or provider sandbox for automated tests. Production release evidence should verify configuration and routing without exposing secret values, then use the minimum explicitly approved real transaction only when live validation is required. Recovery should reconcile stored Craves state with provider evidence before issuing any new external action.",
+      "steps": [
+        {"label": "Test tampering", "detail": "Reject modified signatures, wrong identifiers, wrong amount/currency and cross-customer checkout access."},
+        {"label": "Test duplicates", "detail": "Repeat create, verify and webhook inputs and assert one durable business transition."},
+        {"label": "Test timeouts", "detail": "Simulate provider uncertainty and confirm retries inspect existing state rather than blindly recreating external objects."},
+        {"label": "Verify release wiring", "detail": "Check API route, runtime provider mode and secret references while keeping secret values out of logs/evidence."},
+        {"label": "Reconcile before recovery", "detail": "Compare Craves payment record, checkout and provider record before deciding whether a retry is safe."},
+        {"label": "Protect rollback", "detail": "Do not roll back in a way that forgets provider IDs or already-captured payment state."}
+      ],
+      "example": "After a timeout, an external provider order may already exist. A recovery path first searches the stored relationship or provider evidence; creating another order immediately can duplicate customer-facing payment attempts.",
+      "lab": "Build a mocked payment test plan with invalid signature, wrong amount, timeout-after-create, duplicate webhook and duplicate verify. Define the expected Craves state and external-call count for each case.",
+      "pitfall": "Never use an Academy lab as authorization to run live charges or refunds.",
+      "questions": [
+        {"id": "payments-test-release-recover-q1", "prompt": "What should happen after an uncertain provider timeout?", "options": ["Reconcile existing state before recreating", "Always create a second order", "Mark PAID from the browser", "Disable signatures"], "answer": 0, "explanation": "Uncertain outcomes require reconciliation to avoid duplicate external state."},
+        {"id": "payments-test-release-recover-q2", "prompt": "Which values belong in release evidence?", "options": ["Provider mode, route and secret-reference presence without secret values", "Full merchant secret", "Customer card data", "Webhook signing secret"], "answer": 0, "explanation": "Evidence should prove configuration without disclosing credentials or payment data."}
+      ]
+    }
+  ]
+}

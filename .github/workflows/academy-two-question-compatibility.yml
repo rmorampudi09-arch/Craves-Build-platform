@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feat/academy-enterprise-completion-20260913
-      - name: Keep the deployed two-question contract without losing teaching material
+      - name: Preserve deployed quiz wording and all additional reasoning exercises
         shell: bash
         run: |
           set -euo pipefail

@@ -1,0 +1,80 @@
+name: Academy Azure read-only preflight
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/academy-azure-preflight.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: academy-azure-readonly-preflight
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check existing OIDC configuration without exposing values
+        shell: bash
+        env:
+          CLIENT: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          set -euo pipefail
+          set +x
+          if [[ -z "$CLIENT" || -z "$TENANT" ]]; then
+            echo '::error::Existing GitHub Azure OIDC client/tenant configuration is incomplete. No external change was attempted.'
+            exit 1
+          fi
+
+      - name: Authenticate to Entra using the existing GitHub OIDC identity
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Test read-only Azure DevOps access
+        id: devops
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          token=$(az account get-access-token \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --query accessToken -o tsv 2>/dev/null || true)
+          if [[ -z "$token" ]]; then
+            echo '::error::Could not acquire an Azure DevOps Entra access token. No DevOps action was attempted.'
+            exit 1
+          fi
+          code=$(curl --silent --show-error \
+            -H "Authorization: Bearer $token" \
+            -H 'Accept: application/json' \
+            -o "$RUNNER_TEMP/pipelines.json" \
+            -w '%{http_code}' \
+            'https://dev.azure.com/ravitejamorampudi7777/Craves/_apis/pipelines?api-version=7.1')
+          unset token
+          if [[ "$code" != 200 ]]; then
+            rm -f "$RUNNER_TEMP/pipelines.json"
+            echo "::error::Azure DevOps read-only pipeline lookup returned HTTP $code. No pipeline was queued or changed."
+            exit 1
+          fi
+          python3 - "$RUNNER_TEMP/pipelines.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          matches=[]
+          for item in data.get('value', []):
+              name=str(item.get('name',''))
+              if 'auth' in name.lower() or 'academy' in name.lower():
+                  matches.append({'id':item.get('id'),'name':name})
+          print(json.dumps({'authorized': True, 'matchingPipelines': matches}, indent=2))
+          if not matches:
+              raise SystemExit('No Auth/Academy pipeline name was visible; no deployment can be queued safely.')
+          PY
+          rm -f "$RUNNER_TEMP/pipelines.json"
+          echo 'Read-only Azure DevOps access succeeded. No pipeline was queued or changed.'

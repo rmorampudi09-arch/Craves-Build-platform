@@ -32,6 +32,7 @@ class AcademyPersistenceTest {
     private <T>T run(Supplier<T> f){return tx.execute(s->f.get());}
     private List<Integer> answers(String course,String lesson){return StreamSupport.stream(catalog.lesson(course,lesson).path("questions").spliterator(),false).map(q->q.path("answer").asInt()).toList();}
     private JsonNode pass(UUID id,UUID receipt,String course,String lesson){return run(()->service.submit(id,receipt,course,lesson,catalog.version(),answers(course,lesson)));}
+    private List<String> lessonIds(String course){return StreamSupport.stream(catalog.course(course).path("lessons").spliterator(),false).map(l->l.path("id").asText()).toList();}
     @Test void retryIsIdempotentAndAnswersCannotBeChangedUnderSameReceipt(){
         UUID id=UUID.randomUUID(),receipt=UUID.randomUUID();var first=pass(id,receipt,"auth","auth-identity");
         assertEquals(40,first.path("earnedXp").asInt());assertEquals(first,pass(id,receipt,"auth","auth-identity"));
@@ -40,11 +41,15 @@ class AcademyPersistenceTest {
         assertEquals(40L,run(()->service.state(id)).get("xp"));
     }
     @Test void courseBonusAwardedOnceAndLearnersRemainIsolated(){
-        UUID id=UUID.randomUUID();pass(id,UUID.randomUUID(),"auth","auth-identity");
-        assertEquals(160,pass(id,UUID.randomUUID(),"auth","auth-roles").path("earnedXp").asInt());
+        UUID id=UUID.randomUUID();var lessons=lessonIds("auth");
+        assertTrue(lessons.size()>=2);
+        for(int i=0;i<lessons.size()-1;i++)assertEquals(40,pass(id,UUID.randomUUID(),"auth",lessons.get(i)).path("earnedXp").asInt());
+        String finalLesson=lessons.get(lessons.size()-1);
+        assertEquals(160,pass(id,UUID.randomUUID(),"auth",finalLesson).path("earnedXp").asInt());
         db.update("UPDATE academy_schema.attempt SET created_at=now()-interval '1 minute'");
-        assertEquals(0,pass(id,UUID.randomUUID(),"auth","auth-roles").path("earnedXp").asInt());
-        assertEquals(200L,run(()->service.state(id)).get("xp"));assertEquals(0L,run(()->service.state(UUID.randomUUID())).get("xp"));
+        assertEquals(0,pass(id,UUID.randomUUID(),"auth",finalLesson).path("earnedXp").asInt());
+        assertEquals(lessons.size()*40L+120L,run(()->service.state(id)).get("xp"));
+        assertEquals(0L,run(()->service.state(UUID.randomUUID())).get("xp"));
     }
     @Test void concurrentDuplicateRequestsCannotDuplicateXp() throws Exception {
         UUID id=UUID.randomUUID(),receipt=UUID.randomUUID();
@@ -76,7 +81,7 @@ class AcademyPersistenceTest {
         run(()->{service.savePlan(actor,plan,"Example plan","platform","Reviewed test","APPROVED",1);return null;});
         assertThrows(ResponseStatusException.class,()->run(()->{service.deletePlan(actor,plan,1);return null;}));
         pass(actor,UUID.randomUUID(),"auth","auth-identity");
-        run(()->{service.event(actor,UUID.randomUUID(),"auth","auth-identity","LESSON_OPEN");return null;});
+        run(()->{service.event(actor,UUID.random.randomUUID(),"auth","auth-identity","LESSON_OPEN");return null;});
         db.update("UPDATE academy_schema.activity SET created_at=now()-interval '91 days'");
         db.update("UPDATE academy_schema.attempt SET created_at=now()-interval '366 days'");
         run(()->{service.retention();return null;});

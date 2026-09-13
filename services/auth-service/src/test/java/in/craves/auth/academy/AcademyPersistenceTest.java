@@ -81,7 +81,7 @@ class AcademyPersistenceTest {
         run(()->{service.savePlan(actor,plan,"Example plan","platform","Reviewed test","APPROVED",1);return null;});
         assertThrows(ResponseStatusException.class,()->run(()->{service.deletePlan(actor,plan,1);return null;}));
         pass(actor,UUID.randomUUID(),"auth","auth-identity");
-        run(()->{service.event(actor,UUID.random.randomUUID(),"auth","auth-identity","LESSON_OPEN");return null;});
+        run(()->{service.event(actor,UUID.randomUUID(),"auth","auth-identity","LESSON_OPEN");return null;});
         db.update("UPDATE academy_schema.activity SET created_at=now()-interval '91 days'");
         db.update("UPDATE academy_schema.attempt SET created_at=now()-interval '366 days'");
         run(()->{service.retention();return null;});

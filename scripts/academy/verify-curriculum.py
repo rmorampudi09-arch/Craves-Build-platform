@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Validate the actual merged Academy catalog and its existing API/source-viewer bounds.
+"""Validate the exact Academy catalog projection and existing transport bounds.
 
---git verifies every source at the immutable teaching revision. Without --git,
-structural validation is useful locally but is not source-provenance evidence.
---output writes the answer-stripped catalog for private review or size analysis.
+--git verifies source existence at the immutable teaching revision.
+--output writes the answer-stripped, UI-compatible catalog for independent review.
+Source files can retain an extra question as an explicitly ungraded reasoning step.
 """
 import argparse
 import copy
@@ -14,12 +14,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ACADEMY = ROOT / 'services/auth-service/src/main/resources/academy'
-EXPECTED = ('academy-2026-09-13-v3', 15, 75, 175)
+EXPECTED = ('academy-2026-09-13-v3', 15, 75, 150)
 SOURCE_PATTERN = re.compile(
     r'(?:(?:services|apps)/[A-Za-z0-9_./-]+\.(?:java|ts|tsx|md)|'
     r'\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml|scripts/academy/[A-Za-z0-9_.-]+\.py)'
 )
 NEW_COURSES = {'java-engineering', 'mobile-engineering', 'data-engineering', 'document-engineering', 'service-labs'}
+CHECKPOINT = 'Reasoning checkpoint (ungraded)'
 
 
 def require(condition, message):
@@ -41,6 +42,32 @@ def load(path):
 
 def text(value, label):
     require(isinstance(value, str) and bool(value.strip()), f'Missing text: {label}')
+
+
+def project_assessments(data, limit):
+    require(type(limit) is int and limit == 2, 'Unsupported deployed assessment contract')
+    ids = set()
+    for course in data['courses']:
+        for lesson in course['lessons']:
+            require(len(lesson['questions']) in (2, 3), f'Unexpected question bank: {lesson["id"]}')
+            for question in lesson['questions']:
+                qid = question['id']
+                require(qid not in ids, f'Duplicate source question: {qid}')
+                ids.add(qid)
+                require(len(question['options']) == 4 and len(set(question['options'])) == 4, f'Invalid options: {qid}')
+                require(type(question['answer']) is int and 0 <= question['answer'] < 4, f'Invalid source answer: {qid}')
+                text(question.get('prompt'), f'{qid}.prompt')
+                text(question.get('explanation'), f'{qid}.explanation')
+                for option in question['options']:
+                    text(option, f'{qid}.option')
+            if len(lesson['questions']) > limit:
+                q = lesson['questions'].pop(limit)
+                lesson['steps'].append({
+                    'label': CHECKPOINT,
+                    'detail': q['prompt'] + ' Explain your answer before reading the resolution. Resolution: '
+                              + q['options'][q['answer']] + '. ' + q['explanation'],
+                })
+    return data
 
 
 def merge_catalog():
@@ -72,13 +99,14 @@ def merge_catalog():
                 require(course['id'] not in by_id, f'Duplicate new course: {course["id"]}')
                 data['courses'].append(course)
                 by_id[course['id']] = course
-    return data
+    return project_assessments(data, index.get('gradedQuestionsPerLesson'))
 
 
 def validate(data, verify_git=False):
     require(re.fullmatch(r'[a-f0-9]{40}', data['sourceRevision']), 'Unpinned source revision')
     require(re.fullmatch(r'[a-z0-9-]{1,64}', data['version']), 'Invalid content version')
     courses, lessons, questions, sources = {}, set(), set(), set()
+    checkpoints = 0
     for course in data['courses']:
         cid = course['id']
         require(re.fullmatch(r'[a-z0-9-]{1,80}', cid) and cid not in courses, f'Invalid/duplicate course: {cid}')
@@ -98,13 +126,13 @@ def validate(data, verify_git=False):
             lessons.add(lid)
             for field in ('title', 'overview', 'example', 'lab', 'pitfall'):
                 text(lesson.get(field), f'{lid}.{field}')
-            require(len(lesson['steps']) >= 2, f'Insufficient steps: {lid}')
-            require(len(lesson['questions']) in (2, 3), f'Unexpected assessment size: {lid}')
+            require(len(lesson['steps']) >= 2 and len(lesson['questions']) == 2, f'Invalid lesson contract: {lid}')
             for step in lesson['steps']:
                 text(step.get('label'), f'{lid}.step.label')
                 text(step.get('detail'), f'{lid}.step.detail')
+                checkpoints += step['label'] == CHECKPOINT
             if cid in NEW_COURSES:
-                require(len(lesson['steps']) >= 6 and len(lesson['questions']) == 3, f'Incomplete applied lesson: {lid}')
+                require(len(lesson['steps']) >= 7, f'Incomplete applied lesson: {lid}')
                 prose = ' '.join([lesson['overview'], lesson['example'], lesson['lab'], lesson['pitfall']] + [s['detail'] for s in lesson['steps']])
                 require(len(prose.split()) >= 350, f'Applied lesson lacks substantive teaching: {lid}')
             for question in lesson['questions']:
@@ -133,7 +161,7 @@ def validate(data, verify_git=False):
     for cid in courses:
         visit(cid)
     require((data['version'], len(courses), len(lessons), len(questions)) == EXPECTED, 'Curriculum version/count contract changed')
-    require(NEW_COURSES <= courses.keys(), 'Missing applied engineering track')
+    require(checkpoints == 25 and NEW_COURSES <= courses.keys(), 'Missing applied reasoning material')
     source_bytes = {}
     if verify_git:
         for source in sorted(sources):
@@ -156,9 +184,10 @@ def validate(data, verify_git=False):
         versions.add(version)
     return public, {
         'version': data['version'], 'courses': len(courses), 'sections': len(lessons),
-        'questions': len(questions), 'reviewedSourceFiles': len(sources),
-        'revision': data['sourceRevision'], 'sourceFilesVerifiedInGit': verify_git,
-        'publicCatalogBytes': size, 'maximumReviewedSourceBytes': max(source_bytes.values(), default=None),
+        'questions': len(questions), 'ungradedReasoningCheckpoints': checkpoints,
+        'reviewedSourceFiles': len(sources), 'revision': data['sourceRevision'],
+        'sourceFilesVerifiedInGit': verify_git, 'publicCatalogBytes': size,
+        'maximumReviewedSourceBytes': max(source_bytes.values(), default=None),
         'prerequisiteGraphAcyclic': True, 'firstCompletionXp': len(lessons) * 40 + len(courses) * 120,
     }
 

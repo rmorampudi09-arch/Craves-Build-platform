@@ -10,6 +10,8 @@ on:
       - 'apps/customer-web-next/src/components/admin-workspace.tsx'
       - 'apps/customer-web-next/src/components/academy-workspace.tsx'
       - 'scripts/academy/**'
+      - 'docs/academy/**'
+      - 'azure-pipelines-auth-service.yml'
       - '.github/workflows/craves-academy-ci.yml'
 permissions:
   contents: read
@@ -29,7 +31,7 @@ jobs:
           POSTGRES_PASSWORD: academy_disposable_ci_only
         ports: ['5432:5432']
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U academy_ci -d craves_academy_ci"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -41,13 +43,42 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - run: python3 scripts/academy/verify-curriculum.py --git
+      - name: Curriculum provenance, projection and release-scope gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/academy-delivery"
+          python3 scripts/academy/verify-curriculum.py --git --output "$RUNNER_TEMP/academy-delivery/curriculum-public.json" | tee "$RUNNER_TEMP/academy-delivery/verification.json"
+          python3 scripts/academy/test-release-guard.py
+          python3 scripts/academy/release-guard.py source | tee "$RUNNER_TEMP/academy-delivery/release-scope.json"
+          git rev-parse HEAD > "$RUNNER_TEMP/academy-delivery/source-sha.txt"
       - run: mvn -B -f services/auth-service/pom.xml -Dtest=AcademyCoreTest,AcademyPersistenceTest test
+      - name: Package the complete tracked Academy module and its existing release helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output="$RUNNER_TEMP/academy-delivery/academy-source.zip" HEAD \
+            services/auth-service/src/main/resources/academy \
+            services/auth-service/src/main/java/in/craves/auth/academy \
+            services/auth-service/src/test/java/in/craves/auth/academy \
+            scripts/academy docs/academy azure-pipelines-auth-service.yml \
+            .github/workflows/craves-academy-ci.yml \
+            scripts/release/deploy-single-service-preserve-runtime.sh
+          cp -R services/auth-service/target/surefire-reports "$RUNNER_TEMP/academy-delivery/test-reports"
+          cd "$RUNNER_TEMP/academy-delivery"
+          sha256sum academy-source.zip > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academy-curriculum-delivery
+          path: ${{ runner.temp }}/academy-delivery/
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -61,6 +92,8 @@ jobs:
         working-directory: apps/customer-web-next
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -78,4 +111,4 @@ jobs:
           name: academy-canonical-brand-logo
           path: apps/customer-web-next/public/brand/craves-logo-20260805.png
           if-no-files-found: error
-# Intentionally no Azure deployment, payments, provider calls or production credentials.
+# No Azure deployment, source-writing job, payments or external provider calls.

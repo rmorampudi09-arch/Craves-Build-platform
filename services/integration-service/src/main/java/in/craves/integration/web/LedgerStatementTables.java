@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** Additive source tables for the existing authenticated PDF pipeline. Never infer legacy opening balances. */
+/** Additive authenticated document data. Legacy balances are never silently reconstructed. */
 final class LedgerStatementTables {
     private LedgerStatementTables() {}
     static List<Map<String,Object>> read(JdbcTemplate jdbc,UUID chef,Instant from,Instant to,String currency,String zone,boolean earnings) {
@@ -28,9 +28,16 @@ final class LedgerStatementTables {
         }
         BigDecimal opening=jdbc.queryForObject("SELECT coalesce(sum(l.credit_amount-l.debit_amount),0) FROM payment_schema.ledger_line l JOIN payment_schema.ledger_transaction t ON t.id=l.transaction_id WHERE l.chef_identity_id=? AND l.account_code='CHEF_PAYABLE' AND t.posted_at<?",BigDecimal.class,chef,Timestamp.from(from));
         var movements=jdbc.queryForMap("SELECT coalesce(sum(l.credit_amount),0) AS credits,coalesce(sum(l.debit_amount),0) AS debits FROM payment_schema.ledger_line l JOIN payment_schema.ledger_transaction t ON t.id=l.transaction_id WHERE l.chef_identity_id=? AND l.account_code='CHEF_PAYABLE' AND t.posted_at>=? AND t.posted_at<?",chef,Timestamp.from(from),Timestamp.from(to));
-        BigDecimal credits=(BigDecimal)movements.get("credits"),debits=(BigDecimal)movements.get("debits");
-        tables.add(ChefDocumentSourceController.table("New-ledger outstanding liability reconciliation (INR)",List.of("Movement","Amount"),List.of(
-            List.of("Opening recorded outstanding",money(opening)),List.of("Liability increases in period",money(credits)),List.of("Liability decreases in period",money(debits)),List.of("Closing recorded outstanding",money(opening.add(credits).subtract(debits)))));
+        BigDecimal credits=(BigDecimal)movements.get("credits");
+        BigDecimal debits=(BigDecimal)movements.get("debits");
+        BigDecimal closing=opening.add(credits).subtract(debits);
+        List<List<String>> summary=List.of(
+            List.of("Opening recorded outstanding",money(opening)),
+            List.of("Liability increases in period",money(credits)),
+            List.of("Liability decreases in period",money(debits)),
+            List.of("Closing recorded outstanding",money(closing))
+        );
+        tables.add(ChefDocumentSourceController.table("New-ledger outstanding liability reconciliation (INR)",List.of("Movement","Amount"),summary));
         return tables;
     }
     static void checkTotal(List<Map<String,Object>> tables) {

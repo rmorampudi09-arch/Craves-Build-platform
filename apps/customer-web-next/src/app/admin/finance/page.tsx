@@ -1,3 +1,4 @@
 import { FinanceControlCenter } from "@/components/finance-control-center";
 import { FinanceReconciliationPanel } from "@/components/finance-reconciliation-panel";
-export default function FinancePage() {return <><FinanceControlCenter /><FinanceReconciliationPanel /></>;}
+import { ChefTaxProfilePanel } from "@/components/chef-tax-profile-panel";
+export default function FinancePage() {return <><FinanceControlCenter /><ChefTaxProfilePanel /><FinanceReconciliationPanel /></>;}

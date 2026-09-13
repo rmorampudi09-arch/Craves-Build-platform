@@ -66,6 +66,16 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress -f services/order-service/pom.xml verify
       - name: Signed Order-to-Integration-to-payout round trip
         run: bash scripts/finance/test-source-roundtrip.sh
+      - name: Validate read-only release checks against the disposable round-trip database
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: chef_ledger_test
+          PGUSER: ledger_ci
+          PGPASSWORD: ledger_ci_local_only
+        run: |
+          psql -X --set=ON_ERROR_STOP=1 --file=scripts/finance/verify-integration-source-accounting.sql > target/finance-roundtrip/integration-readonly-check.txt
+          psql -X --set=ON_ERROR_STOP=1 --set=ledger_start_utc='2026-09-13T18:30:00Z' --file=scripts/finance/verify-order-source-accounting.sql > target/finance-roundtrip/order-readonly-check.txt
       - name: Require every finance suite and connected round trip without skips
         run: |
           python3 - <<'PY'
@@ -89,6 +99,7 @@ jobs:
           report=json.loads(pathlib.Path('target/finance-roundtrip/report.json').read_text())
           assert report['status']=='PASS' and report['checkCount']>=20
           assert report['net']=='338.52'
+          json.loads(pathlib.Path('contracts/finance/order-source-v1.schema.json').read_text())
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -98,4 +109,5 @@ jobs:
             services/integration-service/target/surefire-reports
             services/order-service/target/surefire-reports
             target/finance-roundtrip/report.json
+            target/finance-roundtrip/*-readonly-check.txt
           retention-days: 14

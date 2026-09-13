@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:craves:finance:order-source:1.0",
+  "title": "Craves authoritative order financial lifecycle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "schemaVersion", "source", "kind", "sourceVersion", "snapshotId", "snapshotHash", "chefOrderId", "checkoutId", "orderTotal", "checkoutTotal", "commercialStatus", "deliveryStatus", "deliveryJobId", "deliveredAt", "chefAcceptedAt"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "schemaVersion": {"const": "1.0"},
+    "source": {"const": "order-service"},
+    "kind": {"enum": ["BOUND", "DELIVERED", "CANCELLED"]},
+    "sourceVersion": {"type": "integer", "enum": [1, 2]},
+    "snapshotId": {"type": "string", "format": "uuid"},
+    "snapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "chefOrderId": {"type": "string", "format": "uuid"},
+    "checkoutId": {"type": "string", "format": "uuid"},
+    "orderTotal": {"type": "string", "pattern": "^[0-9]{1,14}\\.[0-9]{2}$"},
+    "checkoutTotal": {"type": "string", "pattern": "^[0-9]{1,14}\\.[0-9]{2}$"},
+    "commercialStatus": {"type": "string"},
+    "deliveryStatus": {"type": ["string", "null"]},
+    "deliveryJobId": {"type": ["string", "null"], "format": "uuid"},
+    "deliveredAt": {"type": ["string", "null"], "format": "date-time"},
+    "chefAcceptedAt": {"type": ["string", "null"], "format": "date-time"}
+  },
+  "allOf": [
+    {"if": {"properties": {"kind": {"const": "BOUND"}}}, "then": {"properties": {"sourceVersion": {"const": 1}, "commercialStatus": {"const": "PAYMENT_PENDING"}}}},
+    {"if": {"properties": {"kind": {"const": "DELIVERED"}}}, "then": {"properties": {"sourceVersion": {"const": 2}, "commercialStatus": {"const": "DELIVERED"}, "deliveryStatus": {"const": "DELIVERED"}, "deliveryJobId": {"type": "string"}, "deliveredAt": {"type": "string"}, "chefAcceptedAt": {"type": "string"}}}},
+    {"if": {"properties": {"kind": {"const": "CANCELLED"}}}, "then": {"properties": {"sourceVersion": {"const": 2}, "commercialStatus": {"enum": ["CHEF_REJECTED", "CANCELLED", "REFUND_PENDING", "REFUNDED"]}}}}
+  ]
+}

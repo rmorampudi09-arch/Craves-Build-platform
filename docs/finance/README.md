@@ -1,203 +1,202 @@
-# Craves finance automation — current implementation and release gate
+# Craves finance — connected order source and chef tax treatment
 
-Updated 14 September 2026, Asia/Kolkata. Repository: `rmorampudi09-arch/Craves-Build-platform`. Development branch: `feat/chef-ledger-controls-20260913`, draft PR **#340**. Main baseline: `1715746c6d2f3e38c59eef9a8bfe41bdd82529ea`.
+Updated **14 September 2026**, Asia/Kolkata. Repository `rmorampudi09-arch/Craves-Build-platform`, feature branch `feat/chef-ledger-controls-20260913`, PR **340**. Main baseline for this release is `1715746c6d2f3e38c59eef9a8bfe41bdd82529ea`; always refresh it before merging. Exact final-head build evidence is recorded in the PR and release bundle.
 
-This is the current guide. `CHEF_LEDGER_IMPLEMENTATION.md` records the earlier foundation milestone; its old test counts and descriptions of missing UI/payout classes are historical, not the current implementation inventory.
+This guide supersedes the earlier statement that the normal order source is unimplemented. `CHEF_LEDGER_IMPLEMENTATION.md` is historical foundation documentation, not current completion status.
 
-## Plain-language release status
+## Implemented scope and activation status
 
-The branch contains a working, tested **policy/admin/payout engine**. It is **not a production-activated end-to-end ledger**. A payout instruction is a reserved obligation, not a bank confirmation. A policy switch is configuration, not proof that an upstream order was paid and delivered. The worker cannot use arbitrary administrator-entered earnings as available money.
+The current **on-demand, prepaid Razorpay, reviewed Telangana restaurant** path now has a source connection:
 
-The missing accepted-order snapshot and authoritative captured-payment/delivered-order producer remain an engineering release blocker. `recordDeliveredPayable` is an internal integration hook and is exercised with database fixtures; no live order consumer calls it yet. Existing production chef earnings therefore do not automatically appear in the new balance screen. Do not make a manual INSERT or turn a certification flag on to bypass this dependency.
+**actual checkout transaction -> immutable binding quote -> authoritative delivered-order outbox -> verified local payment capture -> balanced earning journal + earning projection + payout eligibility -> available chef balance -> existing once-daily/manual or 48-hour automatic payout engine.**
 
-No production payout, refund, delivery booking, Azure deployment, replica change, resource creation or secret rotation was performed. The separate local-only fee worktree was not imported: the repository implementation remains the chosen development path. There is no need to ask the operator to locate that worktree merely to continue development. A deployment must still check whether a different V121 was ever applied to the actual database.
+The Order Service and Integration Service source code is connected, rather than leaving `recordDeliveredPayable` as an unused hook. The existing chef PDF source now includes new-engine earnings, fee GST, transfers and a journal-based opening/movement/closing reconciliation. Admin tax-profile and runtime-evidence screens have been added.
 
-## User decisions now represented
+**Code and CI are not a production activation.** No live Azure revision, APIM operation, merchant account, bank transfer, customer refund or existing payment credential was changed in this development session. Main remains unchanged unless a later recorded release says otherwise. New source and payout switches default off. The requested economic start remains 2026-09-14 00:00 Asia/Kolkata; no claim is made that production orders have been accounted for since that time.
 
-| Decision | Implemented interpretation | Runtime boundary |
-|---|---|---|
-| Ledger starts today | Requested economic start is **2026-09-14 00:00:00 Asia/Kolkata**, equivalent to **2026-09-13T18:30:00Z**. The first activated start date is immutable even through off/on policy changes. | This does not assert that production records have been posted since midnight. Capture-only scope, historic outstanding liabilities and missing snapshots cannot be fabricated. |
-| Automatic settlement in 48 hours | A delivered payable snapshots its due time as **delivery time + 48 elapsed hours**. A worker reserves matured unpaid amounts per chef and submits an instruction when configured and certified. | This is submission eligibility, not a guarantee of bank credit within exactly 48 hours, nor a gateway T+2 settlement setting. |
-| Chef may request available balance once daily | The chef requests the full eligible, unreserved balance. Default manual availability delay is zero after successful delivery. One accepted manual request per chef per **India calendar day**. Automatic payouts do not consume that quota. | Capture, delivery, beneficiary verification, holds and source certification still apply. A definitive failure does not erase the day's accepted manual request. |
-| Admin numbers and switches | Versioned finance policies, exact hash/revision activation, fee/tax fields, payout hours, cancellation seconds, subscription quote switch, beneficiary binding/hold controls and payout recovery screens. | Runtime certification and provider credentials are independent of UI switches. There is no claim of effective-dated city/chef overrides or a completed statutory accounting engine. |
-| One-minute customer cancellation and full refund for eligible system cancellations | Pure rule helper allows customer cancellation for elapsed seconds **0 through 59**, not at 60. Authoritative chef rejection/acceptance timeout or final provider-caused order cancellation qualifies for the remaining full captured amount. | Existing order cancellation and refund execution have not been connected to this helper. A failed provider booking with safe fallback is not automatically final cancellation of the customer's order. |
-| Subscription chef quotes and inclusive total | Preview uses explicit occurrence IDs and chef food bases, customer food prices, delivery estimates, component taxes and a platform fee allocated once across the purchase. | It is a simulation. Provider quote acquisition, accepted purchase persistence, occurrence allocation, consumption/refund handling and live subscription earning creation remain to be wired. |
+The broader reference also describes subscription financial allocation, dynamic provider-quoted checkout pricing, cumulative refunds/compensation, provider billing and bank close. Those are separate workflows, not automatically completed by the connected on-demand earning path. The exact remaining boundaries appear below; do not label this a completed statutory accounting system or complete public-launch certification.
 
-The user approved full **customer refunds** for eligible cancellations. This must not silently be interpreted as approval to pay a chef a separate 50% or 100% cancellation compensation amount. Any chef compensation path remains separate from customer refund execution and the normal delivered earning.
+## GST: what changes for small chefs
 
-## Tax verification, separated from product decisions
+### Registration threshold is not the same as tax on a purchased platform service
 
-Public sources reviewed on 14 September 2026:
+For the supported Telangana service case, section 22(1) of the Telangana GST Act states a general **20-lakh aggregate annual turnover registration threshold**, subject to compulsory-registration and other applicable provisions. It is not a blanket 10-lakh rule. Aggregate turnover is assessed across the relevant PAN and supplies, not just receipts through Craves.
 
-1. **CBIC Circular 167/23/2021-GST**, 17 December 2021: restaurant supplies through an e-commerce operator are addressed under section 9(5), including supplies by unregistered restaurants. It distinguishes the operator's own commission services and states that the operator issues the restaurant-service invoice. It does not make every component of an order subject to one tax rate. Source: https://cbic-gst.gov.in/pdf/Circular-167-17-12-2021-GST.pdf
-2. **Ministry of Finance FAQ, 16 September 2025**, questions 15–17: local delivery is stated as taxable at 18%; who pays depends on the supplier/ECO relationship and registration status. Source: https://www.pib.gov.in/PressReleasePage.aspx?PRID=2167151
-3. **CBIC Circular 164/20/2021-GST**, cloud/central kitchen clarification: cooking and supplying food through those models is treated as restaurant service at 5% without ITC. The published classification must be matched to the actual Craves supply; packaged goods or different supplies cannot inherit it automatically.
+Official state Act, published on India Code and consolidated through Amendment Act 7 of 2025: https://www.indiacode.nic.in/bitstream/123456789/8685/3/23_of_2017.pdf — sections 2(6), 22–24. This is the published text inspected during research, not a government verification of an individual chef.
 
-The draft's 5% restaurant and 18% service-component values are **candidate configuration**, not a statutory determination that all Craves contracts use those classifications. An actual delivery quote may already include provider tax. Never add that same procurement tax twice, confuse procurement cost with the customer delivery charge, or silently make provider tax part of chef commission.
+For **qualifying restaurant supplies through an e-commerce operator under section 9(5)**, CBIC Circular 167/23/2021-GST clarifies that the operator pays restaurant GST even when the restaurant is unregistered. It also says GST TCS under section 52 is not collected on those restaurant supplies. Therefore:
 
-Customer food GST and GST on Craves' fee to a chef are different components. The instruction that GST is collected separately from the customer does not establish whether the advertised **7% chef fee** includes its own GST. Both paths are implemented and tested, and neither is silently activated:
+- Customer restaurant GST is recorded as a **Craves ECO liability**.
+- Do **not** deduct that same customer food GST again from chef earnings.
+- Do **not** deduct GST TCS on this supported section 9(5) restaurant flow.
+- Crossing a turnover threshold creates a registration-review issue, not authority to debit an arbitrary percentage of a chef's food earnings.
 
-- Illustration at 18% fee tax, chef gross 369.00, **7% inclusive**: fee revenue 21.89, fee tax 3.94, total deduction 25.83, payable 343.17.
-- Same illustration, **7% exclusive**: base fee 25.83, fee tax 4.65, payable 338.52.
+CBIC source: https://cbic-gst.gov.in/pdf/Circular-167-17-12-2021-GST.pdf — questions 1, 3–7 and 9.
 
-These are exact arithmetic examples, not authorization to deduct either amount from real chefs. Finance must confirm classification, invoice ownership, whether the chef fee is inclusive/exclusive, CGST/SGST versus IGST, and applicable withholding. The current calculator does not implement a complete withholding or GST-return engine.
+Cooking and supply by qualifying cloud/central kitchens is clarified as restaurant service at 5% without ITC in Circular 164/20/2021-GST: https://gstcouncil.gov.in/sites/default/files/2024-06/circular_20no._20164_2021_gst.pdf — section 3. This classification is not automatically extended to packaged goods, other supplies or other jurisdictions.
 
-The requested customer experience can emphasize one tax-inclusive total on subscription cards. Retain the constituent prices and tax amounts in the accepted quote and show a transparent pre-payment detail/invoice view. The current admin simulation displays the total with an expandable breakdown; the actual customer subscription checkout remains unchanged.
+### GST on Craves' 7% service fee is separate
 
-## Razorpay verification and boundaries
+Craves supplies a platform/intermediary service and charges its own fee. The chef's small-business registration threshold does not automatically exempt that purchased service from GST. The code keeps **Craves service-fee revenue** and **GST on that fee** separate from customer restaurant GST and separate from income-tax withholding.
 
-The adapter targets RazorpayX bank payouts, not customer payment collection:
+The latest user instruction permits applicable tax deductions in addition to 7%. The supported configured treatment is **EXCLUSIVE** when the accepted chef terms and finance classification establish 7% plus the applicable GST on that fee. It must not be activated merely because a checkbox says the chef is registered. The inclusive option remains available for a different explicitly accepted commercial policy; no existing order is repriced.
 
-- `POST https://api.razorpay.com/v1/payouts` with a persisted instruction UUID in `X-Payout-Idempotency`, INR integer paise, the merchant's source account and a verified fund account.
-- `GET https://api.razorpay.com/v1/payouts/{id}` for original-payout reconciliation.
-- `GET https://api.razorpay.com/v1/fund_accounts/{id}` for provider identity/active-state checks. Active fund-account status is **not** proof of bank ownership or chef KYC.
-- Signed payout webhook receiver: backend **`/api/v1/webhooks/razorpayx/payouts`**. APIM/public registration has not been deployed.
+Illustration at a reviewed 18% fee-GST rate:
 
-Official references: https://razorpay.com/docs/api/x/payouts ; https://razorpay.com/docs/api/x/payout-idempotency ; https://www.postman.com/razorpaydev/razorpay-public-workspace/request/mxsn0rr/create-payout-bank-account
+| Component | Gross 369.00 | Gross 1000.00 |
+|---|---:|---:|
+| Chef food gross | 369.00 | 1000.00 |
+| Craves fee at 7% | 25.83 | 70.00 |
+| GST on that fee | 4.65 | 12.60 |
+| Net before separately reviewed withholding | 338.52 | 917.40 |
+| Additional deduction of customer food GST | 0.00 | 0.00 |
+| GST TCS on the supported restaurant flow | 0.00 | 0.00 |
 
-Razorpay's current indexed API documentation requires payout idempotency and IP allowlisting. Public documentation establishes API capability, not permission on **Craves' merchant account**. No connected Razorpay account or Azure execution tool was available to inspect or activate those merchant/runtime settings in this session; plugin discovery returned no matching connector. Existing customer LIVE payment success is not evidence of RazorpayX activation, funding or permission for marketplace chef disbursements.
+This is **18% of the 7% fee**, not 18% of the full chef food gross. At 1000.00, the combined fee/tax deduction is 8.26% before other separately applicable items. Exact-paise rounding is part of the frozen calculation.
 
-Razorpay Route linked-account settlements are a different flow from RazorpayX payouts. This release does not create Route transfers or debit both products for the same earning. Confirm that the merchant's approved payout/funding arrangement supports the Craves marketplace use case before activating the existing adapter. No new checkout payment key, key rotation or live payment test is required merely to inspect that arrangement.
+A tax invoice and statutory returns require the correct Craves registration, service classification, place/time of supply, CGST/SGST or IGST split, invoice numbering, credit notes and return mapping. The operational journal and chef statement do not claim to implement that entire statutory layer. Invoice-component rounding must be reconciled before statutory invoicing; the current journal stores the configured total component tax, not a completed GST-return export.
 
-## What the code actually does
+Income-tax withholding is not GST. Each approved chef profile requires an explicit withholding assessment reference, including when its configured rate is zero. The software does not assert that all chefs below 10 or 20 lakh are exempt from income-tax withholding.
 
-### Policy and tax arithmetic
+For local delivery, the Ministry of Finance's 16 September 2025 clarification discusses 18% and registration-dependent liability: https://www.pib.gov.in/PressReleasePage.aspx?PRID=2167151 . Provider procurement tax already included in a quote must not be added again. This release preserves the existing customer delivery base and does not turn the dispatch-time provider quote into a pre-payment pricing guarantee.
 
-`services/integration-service/src/main/java/in/craves/integration/finance/FinancePolicy.java` validates complete settings, supplies the requested launch draft, and derives IST cutover/manual availability/automatic due times.
+## Actual source transaction and identifiers
 
-`FinancePolicyService.java` persists immutable versions, hashes content, serializes activation by revision and records actor/reason. Source certification, journal enablement and payout account certification are checked separately. V127 also preserves the original start date across disabling/re-enabling.
+`services/order-service/src/main/java/in/craves/order/finance/FinancialCheckoutTransactionAspect.java` provides an explicit outer database transaction around the existing `OrderService.checkout`. The original checkout joins it. A failed financial quote or ownership/hash check rolls back order creation, checkout totals and cart deletion together. After-commit order notification reloads the bound total so it cannot advertise the prior estimated tax total.
 
-`FinanceCalculations.java` calculates separate chef service-fee tax, per-occurrence subscription components, deterministic checkout-level platform/tax allocation, cancellation eligibility and full remaining refundable amount. These functions do not themselves cancel orders, call payment/refund APIs or prove an actual provider quote.
+`OrderFinancialBindingService.java` reads the actual kitchen owner and authoritative checkout item prices. It sends explicit chef-base and customer-unit values. The current catalog has one price, so those two unit values are explicitly equal in this supported path; **no uplift or historical chef base is invented**. The return quote must match the checkout, customer, chef order, kitchen, chef, item IDs, quantities, source totals and canonical SHA-256 hash.
 
-### Payouts and recovery
+The binding quote captures the complete approved finance policy, chef tax-profile version, item values, tax components, fee basis and net payable. Future policy/profile changes do not modify it. Accepted order, checkout, item money/quantity and snapshot records are guarded against mutation.
 
-`payout/ChefPayoutService.java` owns delivered-payable registration, owner-scoped balances, holds, per-day withdrawal quota, immutable beneficiary versions, concurrent reservations and worker leases. Its payable must match an immutable `CHEF_ORDER_EARNING` journal. Original money cannot be manually adjusted in place.
+Canonical IDs remain distinct: checkout ID is the customer aggregate; chef-order ID is `order_schema.customer_order.id`; chef identity is not kitchen ID. The actual delivery event's `orderId` is checkout ID and `chefSubOrderId` is chef-order ID. Multi-chef tests verify two distinct earnings and one capture for one checkout.
 
-`payout/RazorpayXPayoutClient.java` uses Basic authentication only server-side, exact paise, a stable idempotency key, fixed Razorpay host, bounded timeouts and no HTTP redirects. Responses must match instruction reference, fund account, amount, currency and allowed state.
+Order migrations V24/V25 enqueue BOUND and terminal lifecycle events **inside the transaction that changes the authoritative order**. The existing `DeliveryStatusUpdateService` must accept the delivered transition with accepted timestamp, delivery job and observed delivery time before the financial DELIVERED event exists. A raw provider webhook cannot directly supply an arbitrary earning amount.
 
-`payout/ChefPayoutWorker.java` is default-off. It reserves due chef balances and submits/reconciles in bounded passes. No network call occurs inside the reservation transaction. A lost response without a known provider ID remains `REVIEW_REQUIRED`; it is never resent using a fresh instruction. Known provider IDs can be polled. Low-balance queuing is currently false, IMPS is the current rail, and worker cadence is 30 seconds; those are implementation choices, not a throughput or bank-availability guarantee.
+`FinanceSourceOutboxService` preserves the original event ID and payload through leases/retries, validates acknowledgement identity/state/journal evidence, retries temporary errors with bounded exponential delay plus jitter, and leaves exhausted/conflicting work visible as DEAD. There is no silent fresh-event-key workaround.
 
-`payout/RazorpayXPayoutWebhookService.java` checks HMAC-SHA256 over raw bytes and event replay/content integrity. A verified callback can attach the original provider ID and enqueue GET reconciliation. A callback alone does not directly clear chef liability. Old intermediate notifications cannot regress PAID. A conflicting terminal event holds the chef and retains evidence.
+`FinanceSourceClient` sends exact serialized bytes with a dedicated HMAC-SHA256 signature to a configured HTTPS Integration service origin. The receiver limits the raw request to 512 KiB and verifies its signature before parsing. These private endpoints must not be exposed as unauthenticated public APIM operations. No customer or chef API allows posting an arbitrary journal.
 
-`payout/FinancePayoutReconciliationService.java` adds finance-admin recovery using an **existing** payout ID. It makes a provider GET, rechecks state/identity under locks, refuses to override an active lease, and never contains a provider POST path. Confirmed success clears liability once. A confirmed post-payment reversal creates the exact linked inverse journal, preserves the original settlement reference, restores the outstanding liability and leaves the chef on hold before another payout.
+## Finalization and money movement
 
-### Database migration inventory
+Integration's `OrderFinancialQuoteService` persists the issued quote independently. An orphan issued quote after an Order rollback is **not** accepted customer funds, revenue or a chef payable. Only the authenticated Order binding/lifecycle completes that evidence.
 
-All migrations are additive relative to main V120. Never edit a migration already applied to any real environment.
+`OrderFinancialFinalizationService` checks the issued snapshot hash and identities, accepted source version and actual local payment evidence. For the supported prepaid path it requires exactly one matching PAID Razorpay payment record, a captured/paid provider status, valid original payment reference, INR, correct customer and exact checkout amount. Existing payment verification owns that record; the financial event's own assertion of payment is insufficient.
 
-| Migration | Purpose |
+A captured-but-undelivered order posts gateway clearing against customer funds only. Delivery before capture remains waiting; the worker finishes it when verified capture arrives. Successful fulfillment posts the chef net, service fee, fee GST, separately approved withholding, customer tax and other customer components in one balanced transaction. The earning projection and payout eligibility are committed atomically with it.
+
+Duplicate delivery messages, new transport IDs carrying identical economics, crash/replay and late BOUND events cannot create another earning. Reusing an event/version with changed content records an exception. Review state holds the chef and is not hidden by replaying an earlier success.
+
+The existing payout engine receives the real finalized net. It freezes delivery +48 elapsed hours for automatic eligibility; a manually requested available balance uses the configured manual delay and one accepted request per India calendar day. Every transfer reserves eligible money before the provider call. Unknown, already-paid and actively reserved amounts cannot be paid again by a competing manual/automatic path.
+
+Active refunds or contradictory order evidence hold payout exposure. Releasing a general admin hold alone cannot bypass the database's source/refund dispatch check. That guard is not a replacement for a full approved post-payment refund-responsibility adjustment workflow.
+
+RazorpayX submission, signed callbacks, original-payout GET recovery and linked confirmed reversal are implemented in the earlier payout engine. Public API support does not establish Craves' merchant entitlement, approved marketplace funding arrangement, available funds or verified beneficiaries. No live payout was executed by these tests.
+
+## Admin and chef surfaces
+
+- `/admin/finance`: existing versioned numbers/switches and payout controls, plus **Chef tax classification and fee terms** and **Order-to-ledger runtime evidence**.
+- A chef profile records GST registration/GSTIN where applicable, declared aggregate turnover, dated financial year, supply regime, fee-terms evidence and separate withholding evidence. New quotes require a current-year reviewed profile. Historical order snapshots retain their original version.
+- An unregistered Telangana profile over the general 20-lakh threshold is flagged for review; the system does not invent a GST debit or treat the declaration as government validation.
+- `/chef/finance`: available balance, withdrawal requests and dated earnings/settlement statements.
+- `/chef/statements`: existing PDF generation and email flow now consumes the enhanced authenticated Integration statement source. New-engine entries are separated from legacy manual allocations.
+- New statement lines show gross, service fee, GST on that fee, withholding, net, posting date and fee rate. Payout history shows original amount/status and bank/journal evidence. Liability opening + credits - debits = closing is computed from immutable journals, not a mutable available-balance field.
+- Only the authenticated chef's rows are returned. The customer identity and provider procurement costs are not exposed. Combined document size above 1000 rows is rejected with a reduce-period instruction instead of silently omitting rows.
+
+Backend/BFF contracts:
+
+| Method and backend path | Access / behavior |
 |---|---|
-| V121 | Immutable balanced financial journal, accounts, inbox/outbox and conflicts. |
-| V122 | Legacy settled-history protection, single-beneficiary batch guard and historical reservation release. |
-| V123 | INSERT/SELECT-only journal writer compatibility. |
-| V124 | Immutable policy versions and activation audit. |
-| V125 | Beneficiary versions, payables, instructions, allocations, daily manual quota and audit. |
-| V126 | Signed webhook inbox, deferred instruction-allocation balance and legacy/new-engine overlap guard. |
-| V127 | Persistent cutover date, journal-backed payable validation, beneficiary ownership and payout state/proof guards. |
-| V128 | Explicit null-safe failure evidence and consistent settlement/reversal proof fields. |
+| POST `/internal/v1/finance/quotes` | Dedicated internal signature; immutable quote request |
+| POST `/internal/v1/finance/events` | Dedicated internal signature; authoritative lifecycle |
+| GET/POST `/api/v1/admin/finance/chefs/{chef}/tax-profile` | Finance role; read or create immutable reviewed version |
+| GET `/api/v1/admin/finance/source-status` | Finance/audit read; actual source counters and recent exceptions |
+| GET `/api/v1/document-sources/chef/earnings` | Chef-owned dated source, including new journal earnings |
+| GET `/api/v1/document-sources/chef/settlements` | Chef-owned dated payout source and liability reconciliation |
+| GET `/api/chef/finance/statement` | Same-session web BFF; bounded India-time period, validated source response |
 
-### Screens and API paths
+The older finance policy, payout, beneficiary, hold and recovery APIs remain in place. New web writes use same-origin checks and bounded JSON; responses retain decimal-string money and no-store headers.
 
-- Admin entry: `apps/customer-web-next/src/app/admin/finance/page.tsx`, linked from `/admin`.
-- Main controls: `src/components/finance-control-center.tsx`.
-- Safe recovery: `src/components/finance-reconciliation-panel.tsx`.
-- Chef balance: `src/app/chef/finance/page.tsx`, linked from `/chef/earnings`.
-- Withdrawal panel: `src/components/chef-withdrawal-panel.tsx`.
-- Existing BFF allowlist: `src/lib/finance-contract.ts` and `finance-bff.ts`.
-- Recovery BFF: `src/app/api/admin/finance/payouts/[id]/reconcile/route.ts` and `src/lib/finance-reconciliation-contract.ts`.
+## Code and migration map
 
-Backend reads/writes exist under `/api/v1/admin/finance/settings`, `/policies`, `/policies/{id}/activate`, `/subscription-preview`, `/payouts`, `/chefs/{chef}/beneficiary`, `/chefs/{chef}/hold`, `/payouts/{id}/reconcile`, `/api/v1/chef/finance/balance` and `/withdrawals`. See controllers for method/DTO contracts. BFF mutations require same-origin JSON, bound request sizes, authenticated upstream access and validated responses. Money stays in decimal strings.
+| Area | Exact location |
+|---|---|
+| Order binding, signing, outbox and checkout transaction | `services/order-service/src/main/java/in/craves/order/finance/` |
+| Order immutable snapshots and source events | `services/order-service/src/main/resources/db/migration/V24__financial_snapshot_source_outbox.sql` and `V25__financial_source_immutability_guards.sql` |
+| Integration quote, chef tax review, source validation and finalization | `services/integration-service/src/main/java/in/craves/integration/finance/source/` |
+| Integration source/tax/projection/hold migrations | `V129__order_financial_source.sql` and `V130__source_replay_and_payout_holds.sql` under Integration migration resources |
+| Enhanced existing PDF statement source | `services/integration-service/src/main/java/in/craves/integration/web/ChefDocumentSourceController.java` and `LedgerStatementTables.java` |
+| Tax/source admin controls | `apps/customer-web-next/src/components/chef-tax-profile-panel.tsx` |
+| Chef statement panel | `apps/customer-web-next/src/components/chef-ledger-statement-panel.tsx` |
+| Typed web source contracts and tests | `apps/customer-web-next/src/lib/finance-source-contract.ts` and `finance-source.vitest.ts` |
+| Connected two-service acceptance harness | `tests/finance/FinanceSourceRoundTrip.java` and `scripts/finance/test-source-roundtrip.sh` |
 
-Admin recovery cannot mark money paid just by typing a reference: it must fetch matching provider evidence and produce the correct journal. No public generic journal-write endpoint was added. Existing chef historical earning and PDF-statement paths remain separate; they do not magically become new-engine statements after this change.
+V121–V128 from the earlier branch are retained. No applied migration has been edited. The read-only preflight must inspect actual Flyway histories; never overwrite a separately applied local V121 or force repair to disguise different SQL.
 
-## Tests and evidence
+## Verification and how to reproduce
 
-Tests execute in GitHub Actions against an isolated PostgreSQL 16 container, Java 21 and Maven. Local container network restrictions prevented a separate Maven dependency download here; do not describe CI execution as a local or production test.
+The dedicated GitHub workflow runs Java21/Maven Integration verification and Order verification against disposable PostgreSQL16, explicitly refusing missing/skipped required finance suites. The new suites cover actual checkout rollback, actual delivery consumer output, immutable items, two-chef allocation, capture mismatch, policy change, duplicate/concurrent finalization, source aliases, refund holds, owner-isolated statements and administrative source counters.
 
-The earlier saved interruption head `f9f08e9d7ae208a2d6783bbb92a1ef72440aeaf4` had **309 Integration tests, 296 passing, no failures/errors and 13 existing skips**. Its 106 finance tests all passed. The recovery continuation adds ten database tests plus six web proxy tests. The exact final-head counts and workflow IDs belong in the PR and downloaded evidence, not in an invented success claim.
+A connected acceptance harness runs both actual domain implementations with real PostgreSQL and signed serialized request/event bytes across **separate transactions**. It takes an actual checkout through the authoritative delivery consumer, real finalizer, actual available-balance reservation and payout worker. It uses controlled Catalog/address, notification, initial capture and Razorpay network fixtures. It is not a bank, APIM or Azure deployment test. Its JSON report explicitly states those boundaries.
 
-`Chef Ledger CI` now fails if any required finance class is missing or skipped, including signed-webhook recovery, new payout recovery and property tests. Two property methods exercise 10,000 distinct fee bases in both fee-GST modes and 10,000 deterministic allocation examples. Those are data cases inside two methods, not 20,000 separately executed test methods.
-
-Coverage includes manual/automatic reservation races, stale client balances, ownership denial, one accepted request/day, failed/unknown/crashed payouts, raw webhook signature tampering, wrong amount/beneficiary/reference, late and out-of-order callbacks, unchanged paid history, linked reversals, restricted-role journal writes, whole migration chains, historical failed-batch upgrade, and off/on attempts to move the cutover date.
-
-Not covered by these passing checks: merchant-authorized live payout execution, real bank/gateway statements, production APIM ingress, authenticated live browser acceptance, sustained load/chaos across the full platform, authoritative source wiring, actual customer cancellations/refunds or actual subscription checkout. No finite test suite proves zero possible future errors.
-
-## Local verification — isolated test database only
-
-Requirements: Java 21, Maven, Node 24, npm and a local Docker engine. Start a disposable database:
+From the repository root, using only an isolated disposable local database:
 
 ```bash
-docker run --rm -d --name craves-finance-test -p 127.0.0.1:55432:5432 -e POSTGRES_DB=chef_ledger_test -e POSTGRES_USER=ledger_ci -e POSTGRES_PASSWORD=ledger_ci_local_only postgres:16
+export LEDGER_TEST_JDBC_URL=jdbc:postgresql://localhost:55432/chef_ledger_test
+export LEDGER_TEST_DB_USER=ledger_ci
+export LEDGER_TEST_DB_PASSWORD=ledger_ci_local_only
+mvn -B -ntp -f services/integration-service/pom.xml verify
+mvn -B -ntp -f services/order-service/pom.xml verify
+bash scripts/finance/test-source-roundtrip.sh
 ```
 
-PowerShell from the repository root:
+Provision that **local** disposable container with `docker run --rm -d --name craves-finance-test -p 127.0.0.1:55432:5432 -e POSTGRES_DB=chef_ledger_test -e POSTGRES_USER=ledger_ci -e POSTGRES_PASSWORD=ledger_ci_local_only postgres:16`. The displayed password is a non-secret test value. These tests DROP schemas. Never point an allowed-looking localhost tunnel at production.
 
-```powershell
-$env:LEDGER_TEST_JDBC_URL = 'jdbc:postgresql://localhost:55432/chef_ledger_test'
-$env:LEDGER_TEST_DB_USER = 'ledger_ci'
-$env:LEDGER_TEST_DB_PASSWORD = 'ledger_ci_local_only'
-mvn --batch-mode --no-transfer-progress -f services/integration-service/pom.xml verify
-```
+Web: inside `apps/customer-web-next`, run `npm ci --ignore-scripts --no-audit --no-fund`, `npm run lint`, `npm run typecheck`, `npm run test` and `npm run build` using the existing build environment. Test counts and exact run IDs are reported from final artifacts, not inferred from files or a previous green revision.
 
-Tests deliberately DROP and recreate schemas in **this disposable database**. The URL guard refuses other host/database patterns. Do not point this at a tunnel to production, even with an allowed-looking localhost URL. The displayed password is a non-secret local fixture, not an Azure credential.
+## Manual release steps and safe order
 
-For web checks:
+### Before enabling any source or money movement
 
-```powershell
-Set-Location apps/customer-web-next
-npm ci --ignore-scripts --no-audit --no-fund
-npm run lint
-npm run typecheck
-npm run test
-$env:CRAVES_API_BASE_URL = 'https://example.invalid/api/v1'
-npm run build
-```
+1. Review the exact PR head and CI evidence; verify Integration and Order database histories and active legacy settlements. Keep the original financial history. Agree the treatment of any order already created without a binding snapshot; do not invent its historic policy.
+2. Record the actual Craves GST classification/registration and the chef's accepted 7%-plus-applicable-fee-GST terms and withholding assessment in the admin configuration. This is a classification/recording task, not a new arbitrary chef GST charge.
+3. Verify RazorpayX's merchant permission, funding/source account, bank ownership, payout limits/fees and outbound IP allowlisting. This cannot be inferred from customer checkout success.
+4. Wire the service-to-service key and approved Integration origin, private routing and the public finance/document-source APIM operations. Keep the `/internal/v1/finance/*` endpoints out of public API products. An existing Azure login in another tool does not establish access in this session.
+5. Deploy **Integration, then Order, then the changed Next.js web**, retaining existing one-replica targets and `Craves-Dev-Service-Connection`. The existing service pipelines are `azure-pipelines-integration-service.yml` and `azure-pipelines-order-service.yml`; they preserve non-image runtime configuration. Their runs alone do not enable the new flags or wire APIM. Use the reviewed existing web release pipeline for the actual target.
+6. Verify authenticated read/denial behavior, quote totals, one captured-undelivered record, one delivered earning, journal/projection equality, statement isolation and source replay in an approved non-production acceptance environment. Enable production payout execution only after merchant and financial acceptance evidence.
 
-The example build URL does not support an interactive finance session. A local interactive session needs the repository's existing auth and approved local service configuration. Do not paste API secrets into chat or commit them. After tests, stop only the disposable container: `docker rm -f craves-finance-test`.
+No new Azure resource or replica is required by this module. A build/registry/deployment can incur normal existing-service usage charges; this development session provisioned no paid resources. No DNS, Firebase provider, mobile signing or app-store action is needed for the web/backend change.
 
-## Manual steps required before a future release
+### Exact runtime settings
 
-### Finance and merchant account
-
-- Confirm the actual GST/invoice classifications and inclusive/exclusive treatment of the 7% chef fee. Confirm applicable withholding; the code does not assume it is zero by law.
-- Verify RazorpayX account entitlement for Craves chef payouts, source-account funding, transaction limits/fees, beneficiary bank ownership and the account's approval workflow. A provider dashboard may require the account owner to perform KYC/activation.
-- Confirm approved outbound IPs before configuring Razorpay allowlisting. Do not replace working network/allowlist settings without checking the existing customer-payment traffic.
-
-### Secrets and runtime configuration
-
-Only once the release is approved, use existing Azure Key Vault/runtime secret references for these exact **new** keys:
-
-| Key | Value source |
+| Service / key | Purpose and safe default |
 |---|---|
-| `CRAVES_RAZORPAYX_KEY_ID` | Authorized merchant payout API key ID. Do not assume a working checkout key proves payout authorization. |
-| `CRAVES_RAZORPAYX_KEY_SECRET` | Matching payout secret in approved secret storage. |
-| `CRAVES_RAZORPAYX_ACCOUNT_NUMBER` | Merchant funding/source account reference, not a chef bank number. |
-| `CRAVES_RAZORPAYX_WEBHOOK_SECRET` | Secret for the payout webhook registration. |
+| Both: `CRAVES_FINANCE_INTERNAL_KEY` | Dedicated random secret of at least32characters; store in existing Key Vault/runtime references, not source/chat |
+| Order: `CRAVES_FINANCE_INTEGRATION_BASE_URL` | Approved HTTPS origin of the existing Integration service, no path, query or credentials |
+| Order: `CRAVES_FINANCE_SOURCE_ENABLED` | Enables binding checkout transaction; default false |
+| Order: `CRAVES_FINANCE_SOURCE_DISPATCH_ENABLED` | Runs durable Order source delivery; default false |
+| Integration: `CRAVES_FINANCE_FINALIZATION_ENABLED` | Enables authenticated financial event processing and late-capture finalizer; default false |
+| Integration: `CRAVES_FINANCE_AUTHORITATIVE_SOURCE_READY` | Existing release certification gate, default false; set only after this actual connection is validated |
+| Integration: `CRAVES_LEDGER_POSTING_ENABLED` | Existing journal write gate, default false |
+| Integration: `CRAVES_DOCUMENTS_SOURCES_ENABLED` | Existing authenticated PDF/statement source flag; retain its reviewed current value |
+| Integration: `CRAVES_RAZORPAYX_PRODUCTION_APPROVED` | Merchant/account acceptance gate, default false |
+| Integration: `CRAVES_RAZORPAYX_WORKER_ENABLED` | New payout submissions/reconciliation worker, default false |
+| Integration: `CRAVES_RAZORPAYX_KEY_ID`, `CRAVES_RAZORPAYX_KEY_SECRET`, `CRAVES_RAZORPAYX_ACCOUNT_NUMBER`, `CRAVES_RAZORPAYX_WEBHOOK_SECRET` | Existing branch payout credentials; do not rotate or replace customer payment keys |
 
-Current safe flags remain `CRAVES_FINANCE_AUTHORITATIVE_SOURCE_READY=false`, `CRAVES_LEDGER_POSTING_ENABLED=false`, `CRAVES_RAZORPAYX_PRODUCTION_APPROVED=false`, and `CRAVES_RAZORPAYX_WORKER_ENABLED=false`. Flipping a flag is not a substitute for implementing/certifying the source path. `CRAVES_RAZORPAYX_POLL_INTERVAL_MS` defaults to 30000.
+Default source/finalization polling is5seconds; payout polling is30seconds. These internal application worker intervals are unrelated to ChatGPT scheduled tasks. Do not enable source checkout before reviewed policies/profiles/private connectivity exist: the intended failure behavior is to block and roll back an unpriceable checkout, not create unaccountable earnings.
 
-### Azure, APIM and GitHub release
+## Deliberate remaining boundaries
 
-Use the existing `Craves-Dev-Service-Connection`; do not recreate it. Keep the existing one-replica/resource targets. No new Azure resources or scaling scripts are part of this change. A future container build/registry/deployment can incur normal usage charges; this continuation provisioned nothing.
+The highlighted **normal on-demand source connection is implemented**. The following are not claimed complete by it:
 
-Review and merge only after completing the engineering release blockers. Run the read-only `scripts/finance/chef-ledger-preflight.sql`, check actual Flyway checksums through V128 and resolve any separately applied local V121. Review active multi-chef legacy batches against actual transfer outcomes. Never label UNKNOWN as FAILED just to make a migration pass.
+- Subscription financial quote acceptance, funded discounts/occurrence accounting, skip/refund allocations and automatic subscription earnings. The earlier subscription calculator remains a preview; `PENDING_POLICY` legacy occurrences are not reclassified as normal orders.
+- Live one-minute customer cancellation wiring and a comprehensive cumulative refund, chef compensation/adjustment and bank-settlement accounting workflow. Existing operational refund clients remain; new source holds protect affected earnings, not synthesize responsibility decisions.
+- Dynamic provider-quoted customer delivery pricing, separate catalog uplift publication, promotion budgets and provider invoice/charge matching. Current supported source freezes existing catalog/customer-delivery base values explicitly.
+- Statutory tax invoice/return/export, automatic all-channel turnover monitoring and automatic income-tax withholding eligibility. A dated reviewed profile is not real-time government registration verification.
+- Historical opening balances/import/replay for orders with no binding snapshot, and general accounting period close/bank reconciliation.
+- Provider sandbox/live merchant acceptance, deployed APIM/private networking, authenticated browser acceptance, sustained load/chaos testing and production activation. No finite test suite proves no future defect; the synchronous quote call inside checkout is bounded but still needs production traffic/latency evaluation before higher-volume promises.
 
-Register the new finance API operations in the existing APIM with existing finance/chef authorization rules and the exact raw-byte payout webhook route. Do not register or claim a working public webhook URL until deployed ingress has been verified. Then deploy only the reviewed services whose source changed, under the existing release controls; no seven-service blanket deployment is requested here.
+## Rollback
 
-No DNS/domain, Firebase provider, mobile app-store, signing-certificate or paid Azure resource action is required for this branch milestone.
+Stop new source creation and new payout submissions in a controlled maintenance window; retain the ability to reconcile transfers already sent. Disabling binding for new orders means those new legacy orders are outside this source path, so do not silently keep sales open and later fabricate snapshots. Preserve Order snapshots/outbox payloads, Integration receipts, capture and earning journals, beneficiary versions, confirmed transfers and linked reversals.
 
-## Engineering work still required — not manual work assigned to the user
-
-1. Binding order-time financial snapshots containing separate chef/customer food prices, tax ownership, full approved policy and canonical chef identity.
-2. An authoritative Order Service finalization producer/consumer verifying payment capture and delivered state, atomically posting the normal journal and payout eligibility. Current `recordDeliveredPayable` fixtures are not that producer.
-3. A canonical opening-scope/cutover/replay process and complete new-engine chef statements that reconcile to journals; no invented historical revenue or payable.
-4. Hook the new cancellation decision into the actual order workflow and cumulative refund reservation/provider execution. Add separately approved compensation, chargeback/refund holds, adjustments and recovery offsets.
-5. Wire validated chef subscription quotes and provider delivery estimates into accepted customer purchases, actual occurrences, skips/credits/refunds and finalization. Preserve a total-led customer experience with transparent component evidence.
-6. Provider/gateway/bank statement reconciliation, funded payout clearing, transaction-fee/tax recognition, operating exception monitoring and accounting/export mapping. A successful payout API response is not an end-of-day bank reconciliation.
-7. Scope the environment/merchant release, validate APIM/authenticated browser behavior and run controlled provider sandbox acceptance before authorizing production disbursements. The adapter's current safety gate only permits certified live-key configuration; a dedicated safe provider-sandbox mode remains to be added before that sandbox exercise.
-
-## Rollback and interruption recovery
-
-Resume from the actual branch head and exact CI artifacts, not from a previous green SHA. Compare main before updating the branch; do not force-push over other work. Download source and reports promptly while artifact retention applies.
-
-Rollback stops new source producers/submission workers while continuing controlled reconciliation for money already sent. Preserve journals, audit, beneficiary versions, original payout instructions, successful settlements, linked reversals and historical allocations. Never delete financial records, restore the old global batch-item uniqueness after rebatching, or reissue an uncertain transfer with a fresh key.
+Never delete committed money records, change historical taxes/fees in place, relabel unknown transfers as failed, restore the old globally unique legacy batch membership after legitimate rebatching, or resend a payout under a fresh key merely to make it succeed. Source replay retains the original event and economic key; an actual conflict requires reviewed resolution, not a new event ID.

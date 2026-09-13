@@ -23,11 +23,20 @@ public class AcademySources {
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(4))
         .followRedirects(HttpClient.Redirect.NEVER).build();
     private static final Pattern SECRET = Pattern.compile("(?s)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:AKIA|ASIA)[A-Z0-9]{16}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|(?i:AccountKey|client_secret|password|api_key)\\s*[:=]\\s*[\"'][A-Za-z0-9+/=_-]{24,}[\"']");
+    private static final Pattern REVIEWED_PATH = Pattern.compile(
+        "(?:(?:services|apps)/[A-Za-z0-9_./-]+\\.(?:java|ts|tsx|md)|\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml|scripts/academy/[A-Za-z0-9_.-]+\\.py)"
+    );
+
     public AcademySources(AcademyCatalog catalog) { this.catalog = catalog; }
+
+    static boolean isReviewedPath(String path) {
+        return path != null && !path.contains("..") && REVIEWED_PATH.matcher(path).matches();
+    }
+
     public Map<String, String> read(String courseId, int index) {
         String path = catalog.sourcePath(courseId, index);
         if (cache.containsKey(path)) return cache.get(path);
-        if (!path.matches("(?:services|apps)/[A-Za-z0-9_./-]+\\.(?:java|ts|tsx|md)") || path.contains("..")) {
+        if (!isReviewedPath(path)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Source is outside the reviewed allowlist");
         }
         String revision = catalog.sourceRevision();
@@ -48,7 +57,11 @@ public class AcademySources {
             cache.put(path, result);
             return result;
         } catch (ResponseStatusException e) { throw e;
-        } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Source is temporarily unavailable");
-        } catch (Exception e) { throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Pinned source is unavailable; lesson text remains available"); }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Source is temporarily unavailable");
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Pinned source is unavailable; lesson text remains available");
+        }
     }
 }

@@ -51,8 +51,7 @@ class FinancialCheckoutDatabaseTest {
         var ds=new DriverManagerDataSource(url,System.getenv("LEDGER_TEST_DB_USER"),System.getenv("LEDGER_TEST_DB_PASSWORD"));
         jdbc=new JdbcTemplate(ds);var manager=new DataSourceTransactionManager(ds);tx=new TransactionTemplate(manager);
         jdbc.execute("DROP SCHEMA IF EXISTS order_schema CASCADE");
-        // Existing V16 explicitly depends on this shared-business-database Catalog ownership contract.
-        // This is a fixture for that dependency, not a claim to test the Catalog migration chain.
+        // V16 depends on the shared business database's Catalog ownership contract. This is its test fixture.
         jdbc.execute("CREATE SCHEMA IF NOT EXISTS catalog_schema");
         jdbc.execute("CREATE TABLE IF NOT EXISTS catalog_schema.kitchen_profile(id UUID PRIMARY KEY,identity_id UUID NOT NULL UNIQUE)");
         jdbc.update("INSERT INTO catalog_schema.kitchen_profile(id,identity_id) VALUES (?,?)",kitchen,chef);
@@ -62,7 +61,7 @@ class FinancialCheckoutDatabaseTest {
         when(catalog.getActiveMenuItem(menu)).thenReturn(new CatalogMenuItem(menu,kitchen,"Test meal","Test meal","MEAL","VEG",new BigDecimal("369.00"),"INR",1,20,"MILD",500,false,true,"ACTIVE"));
         when(catalog.getKitchen(kitchen)).thenReturn(new CatalogKitchen(kitchen,chef,"Test kitchen","Test chef","Test", "9000000000","test@example.invalid","Test pickup",null,null,"Test area","Hyderabad","Telangana","500001",new BigDecimal("17.40"),new BigDecimal("78.40"),"ACTIVE"));
         when(addresses.getActiveOwnedAddress(customer,address)).thenReturn(new CustomerAddress(address,customer,"Home","Test customer","9000000001","Test dropoff",null,null,"Test area","Hyderabad","Telangana","500001",new BigDecimal("17.41"),new BigDecimal("78.41"),true,true,Instant.now(),Instant.now()));
-        when(finance.quote(any())).thenAnswer(invocation->quote(invocation.getArgument(0)));
+        doAnswer(invocation->quote(invocation.getArgument(0))).when(finance).quote(any());
         context=new AnnotationConfigApplicationContext();context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("finance-test",Map.of("CRAVES_FINANCE_SOURCE_ENABLED","true")));
         context.register(Config.class);context.registerBean(JdbcTemplate.class,()->jdbc);context.registerBean(ObjectMapper.class,()->json);
         context.registerBean(DataSourceTransactionManager.class,()->manager);context.registerBean(CatalogClient.class,()->catalog);context.registerBean(CustomerAddressClient.class,()->addresses);
@@ -98,17 +97,19 @@ class FinancialCheckoutDatabaseTest {
         verify(notifications).recordOrderCreated(argThat(value->value.grandTotal().compareTo(new BigDecimal("433.47"))==0));
     }
     @Test void quoteFailureRollsBackOrdersAndPreservesCart(){
-        when(finance.quote(any())).thenThrow(new IllegalStateException("Finance not reachable"));assertThrows(RuntimeException.class,this::checkout);
+        doThrow(new IllegalStateException("Finance not reachable")).when(finance).quote(any());assertThrows(RuntimeException.class,this::checkout);
         assertEquals(0,count("customer_order"));assertEquals(0,count("checkout"));assertEquals(0,count("finance_source_outbox"));assertEquals(1,count("cart_item"));verifyNoInteractions(notifications);
     }
     @Test void changedQuoteIdentityRollsBackInsteadOfChargingWrongMoney(){
-        when(finance.quote(any())).thenAnswer(invocation->{var result=quote(invocation.getArgument(0));result.put("checkoutId",UUID.randomUUID().toString());return result;});
+        doAnswer(invocation->{var result=quote(invocation.getArgument(0));result.put("checkoutId",UUID.randomUUID().toString());return result;}).when(finance).quote(any());
         assertThrows(RuntimeException.class,this::checkout);assertEquals(0,count("checkout"));assertEquals(1,count("cart_item"));
     }
-    @Test void acceptedMoneyAndSnapshotCannotBeRewritten(){
+    @Test void acceptedMoneySnapshotAndItemsCannotBeRewritten(){
         checkout();assertThrows(RuntimeException.class,()->jdbc.execute("UPDATE order_schema.customer_order SET grand_total=1"));
         assertThrows(RuntimeException.class,()->jdbc.execute("UPDATE order_schema.checkout SET tax_amount=0"));
         assertThrows(RuntimeException.class,()->jdbc.execute("UPDATE order_schema.order_financial_snapshot SET snapshot_hash=repeat('a',64)"));
+        assertThrows(RuntimeException.class,()->jdbc.execute("UPDATE order_schema.order_item SET quantity=2"));
+        assertThrows(RuntimeException.class,()->jdbc.execute("DELETE FROM order_schema.order_item"));
     }
     EventEnvelope<DeliveryStatusChangedData> delivered(CheckoutResponse checkout){
         UUID job=UUID.randomUUID(),id=checkout.orders().getFirst().id();Instant now=Instant.now();
@@ -131,8 +132,9 @@ class FinancialCheckoutDatabaseTest {
         assertThrows(RuntimeException.class,()->tx.execute(s->{service.accept(event,payload);throw new IllegalStateException("Crash before commit");}));
         assertEquals("READY_FOR_PICKUP",jdbc.queryForObject("SELECT status FROM order_schema.customer_order",String.class));assertEquals(1,count("finance_source_outbox"));assertEquals(0,count("delivery_status_inbox"));
     }
-    @Test void outboxRetryUsesOriginalPayloadAndFencesStaleWorkers(){
+    @Test void outboxRetryPreservesEvidenceAndRejectsFalseAcknowledgement(){
         checkout();var outbox=new FinanceSourceOutboxService(jdbc);var work=tx.execute(s->outbox.claim());assertNotNull(work);assertNull(tx.execute(s->outbox.claim()));
+        assertThrows(RuntimeException.class,()->tx.execute(s->{outbox.complete(work,json.createObjectNode().put("chefOrderId",work.orderId().toString()).put("result","POSTED"));return null;}));
         tx.execute(s->{outbox.retry(work);return null;});assertEquals(work.payload(),jdbc.queryForObject("SELECT payload::text FROM order_schema.finance_source_outbox WHERE event_id=?",String.class,work.eventId()));
         assertThrows(RuntimeException.class,()->jdbc.execute("UPDATE order_schema.finance_source_outbox SET payload='{}'::jsonb"));
     }

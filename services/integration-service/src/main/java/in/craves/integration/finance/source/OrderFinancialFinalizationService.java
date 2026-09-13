@@ -22,7 +22,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The signed Order Service lifecycle, issued snapshot and local verified payment must all agree. */
+/** The signed Order lifecycle, issued immutable quote and local verified capture must all agree. */
 @Service
 public class OrderFinancialFinalizationService {
     public record Receipt(UUID chefOrderId,String result,UUID earningJournalId) {}
@@ -34,29 +34,36 @@ public class OrderFinancialFinalizationService {
         if(!enabled)throw new IllegalStateException("Financial finalization is disabled");
         UUID eventId=id(event,"eventId"),order=id(event,"chefOrderId"),snapshotId=id(event,"snapshotId");
         String kind=text(event,"kind");long version=event.path("sourceVersion").asLong(-1);
-        if(!"order-service".equals(text(event,"source")) || !"1.0".equals(text(event,"schemaVersion")) || !Set.of("BOUND","DELIVERED","CANCELLED").contains(kind)
-            || (kind.equals("BOUND")?version!=1:version!=2))throw new IllegalArgumentException("Unsupported financial lifecycle contract");
-        var eventContent=event.deepCopy();((ObjectNode)eventContent).remove("eventId");String hash=FinancialJson.hash(eventContent,json);
-        var issued=jdbc.queryForList("SELECT payload::text,snapshot_hash,chef_identity_id FROM payment_schema.finance_issued_snapshot WHERE id=? AND chef_order_id=?",snapshotId,order);
+        if(!event.path("sourceVersion").isIntegralNumber() || !"order-service".equals(text(event,"source")) || !"1.0".equals(text(event,"schemaVersion"))
+            || !Set.of("BOUND","DELIVERED","CANCELLED").contains(kind) || (kind.equals("BOUND")?version!=1:version!=2))throw new IllegalArgumentException("Unsupported financial lifecycle contract");
+        ObjectNode eventContent=event.deepCopy();eventContent.remove("eventId");String hash=FinancialJson.hash(eventContent,json);
+        lock("finance-event/"+eventId);
+        var receipts=jdbc.queryForList("SELECT chef_order_id,payload_hash FROM payment_schema.finance_source_receipt WHERE event_id=?",eventId);
+        if(!receipts.isEmpty() && (!order.equals(receipts.getFirst().get("chef_order_id")) || !hash.equals(receipts.getFirst().get("payload_hash"))))
+            return exception(eventId,order,hash,"TRANSPORT_EVENT_CONTENT_CHANGED");
+        var issued=jdbc.queryForList("SELECT payload::text FROM payment_schema.finance_issued_snapshot WHERE id=? AND chef_order_id=?",snapshotId,order);
         if(issued.isEmpty())return exception(eventId,order,hash,"UNISSUED_FINANCIAL_SNAPSHOT");
-        JsonNode snapshot=parse(issued.getFirst().get("payload").toString());UUID chef=id(snapshot,"chefIdentityId");lock("chef-payout/"+chef);lock("finance-source/"+order);
+        JsonNode snapshot=parse(issued.getFirst().get("payload").toString());UUID chef=id(snapshot,"chefIdentityId");
+        lock("chef-payout/"+chef);lock("finance-source/"+order);
         if(!text(snapshot,"hash").equals(text(event,"snapshotHash")) || !id(snapshot,"checkoutId").equals(id(event,"checkoutId"))
             || !text(snapshot,"customerTotal").equals(text(event,"orderTotal")))return exception(eventId,order,hash,"SOURCE_SNAPSHOT_CONTEXT_CHANGED");
         String checkoutTotal=jdbc.queryForObject("SELECT response->>'total' FROM payment_schema.finance_checkout_quote WHERE checkout_id=?",String.class,id(snapshot,"checkoutId"));
         if(!checkoutTotal.equals(text(event,"checkoutTotal")))return exception(eventId,order,hash,"CHECKOUT_AMOUNT_CHANGED");
-        var prior=jdbc.queryForList("SELECT event_id,payload_hash,chef_order_id FROM payment_schema.finance_source_event WHERE event_id=? OR (chef_order_id=? AND source_version=?)",eventId,order,version);
+        var prior=jdbc.queryForList("SELECT payload_hash FROM payment_schema.finance_source_event WHERE chef_order_id=? AND source_version=?",order,version);
         if(!prior.isEmpty()) {
-            for(var row:prior)if(!order.equals(row.get("chef_order_id")) || !hash.equals(row.get("payload_hash")))return exception(eventId,order,hash,"SOURCE_VERSION_OR_EVENT_CONFLICT");
-            return finish(order);
+            if(!hash.equals(prior.getFirst().get("payload_hash")))return exception(eventId,order,hash,"SOURCE_VERSION_OR_EVENT_CONFLICT");
+            receive(eventId,order,hash);return finish(order);
         }
+        if(kind.equals("BOUND") && !"PAYMENT_PENDING".equals(text(event,"commercialStatus")))return exception(eventId,order,hash,"INVALID_BINDING_STATE");
+        if(kind.equals("CANCELLED") && !Set.of("CHEF_REJECTED","CANCELLED","REFUND_PENDING","REFUNDED").contains(text(event,"commercialStatus")))return exception(eventId,order,hash,"INVALID_CANCELLATION_STATE");
         Instant delivered=null;UUID job=null;
         if(kind.equals("DELIVERED")) {
             if(!"DELIVERED".equals(text(event,"commercialStatus")) || !"DELIVERED".equals(text(event,"deliveryStatus")))return exception(eventId,order,hash,"DELIVERY_NOT_AUTHORITATIVE");
-            delivered=Instant.parse(text(event,"deliveredAt"));job=id(event,"deliveryJobId");
-            Instant accepted=Instant.parse(text(event,"chefAcceptedAt"));
+            delivered=Instant.parse(text(event,"deliveredAt"));job=id(event,"deliveryJobId");Instant accepted=Instant.parse(text(event,"chefAcceptedAt"));
             if(delivered.isBefore(Instant.parse(text(snapshot,"pricedAt"))) || delivered.isBefore(accepted) || delivered.isAfter(Instant.now().plusSeconds(300)))return exception(eventId,order,hash,"INVALID_DELIVERY_TIME");
         }
         jdbc.update("INSERT INTO payment_schema.finance_source_event(event_id,chef_order_id,kind,source_version,payload_hash,payload) VALUES (?,?,?,?,?,CAST(? AS jsonb))",eventId,order,kind,version,hash,event.toString());
+        receive(eventId,order,hash);
         jdbc.update("INSERT INTO payment_schema.finance_order_binding(chef_order_id,snapshot_id,state,source_version,delivery_job_id,delivered_at) VALUES (?,?,?,?,?,?) ON CONFLICT(chef_order_id) DO UPDATE SET state=EXCLUDED.state,source_version=EXCLUDED.source_version,delivery_job_id=EXCLUDED.delivery_job_id,delivered_at=EXCLUDED.delivered_at,updated_at=now() WHERE payment_schema.finance_order_binding.source_version<EXCLUDED.source_version",
             order,snapshotId,kind,version,job,delivered==null?null:Timestamp.from(delivered));
         return finish(order);
@@ -68,11 +75,12 @@ public class OrderFinancialFinalizationService {
     @Transactional
     public Receipt finish(UUID order) {
         if(!enabled)throw new IllegalStateException("Financial finalization is disabled");
-        var rows=jdbc.queryForList("SELECT s.payload::text,s.chef_identity_id FROM payment_schema.finance_order_binding b JOIN payment_schema.finance_issued_snapshot s ON s.id=b.snapshot_id WHERE b.chef_order_id=?",order);
+        var rows=jdbc.queryForList("SELECT s.payload::text FROM payment_schema.finance_order_binding b JOIN payment_schema.finance_issued_snapshot s ON s.id=b.snapshot_id WHERE b.chef_order_id=?",order);
         if(rows.isEmpty())return new Receipt(order,"NO_BINDING",null);
         JsonNode snapshot=parse(rows.getFirst().get("payload").toString());UUID chef=id(snapshot,"chefIdentityId"),checkout=id(snapshot,"checkoutId");
         lock("chef-payout/"+chef);lock("finance-source/"+order);
         var binding=jdbc.queryForMap("SELECT * FROM payment_schema.finance_order_binding WHERE chef_order_id=? FOR UPDATE",order);
+        if("REVIEW_REQUIRED".equals(binding.get("state")))return new Receipt(order,"SOURCE_REVIEW_REQUIRED",(UUID)binding.get("earning_journal_id"));
         if(binding.get("earning_journal_id")!=null)return new Receipt(order,"POSTED",(UUID)binding.get("earning_journal_id"));
         if(!Set.of("BOUND","DELIVERED").contains(binding.get("state").toString()))return result(order,"INELIGIBLE_SOURCE_STATE");
         var captured=capture(checkout,id(snapshot,"customerIdentityId"));
@@ -111,11 +119,11 @@ public class OrderFinancialFinalizationService {
         lock("finance-capture/"+checkout);
         var paid=jdbc.queryForList("SELECT * FROM payment_schema.payment_order WHERE checkout_id=? AND status='PAID' ORDER BY id FOR UPDATE",checkout);
         if(paid.size()!=1)return null;var payment=paid.getFirst();
-        String ref=(String)payment.get("provider_payment_id");String provider=(String)payment.get("provider");String providerStatus=(String)payment.get("provider_status");
+        String ref=(String)payment.get("provider_payment_id"),provider=(String)payment.get("provider"),providerStatus=(String)payment.get("provider_status");
         if(!customer.equals(payment.get("customer_identity_id")) || !"INR".equals(payment.get("currency")) || !"RAZORPAY".equals(provider)
             || ref==null || !ref.matches("pay_[A-Za-z0-9]+") || providerStatus==null || !Set.of("captured","paid").contains(providerStatus.toLowerCase(java.util.Locale.ROOT)))return null;
         BigDecimal expected=new BigDecimal(jdbc.queryForObject("SELECT response->>'total' FROM payment_schema.finance_checkout_quote WHERE checkout_id=?",String.class,checkout));
-        if(expected.compareTo((BigDecimal)payment.get("amount"))!=0)return null;
+        if(expected.signum()<=0 || expected.compareTo((BigDecimal)payment.get("amount"))!=0)return null;
         var existing=jdbc.queryForList("SELECT * FROM payment_schema.finance_capture WHERE checkout_id=?",checkout);
         if(!existing.isEmpty()) {
             var prior=existing.getFirst();if(!payment.get("id").equals(prior.get("payment_order_id")) || !ref.equals(prior.get("provider_payment_id")))return null;return prior;
@@ -128,6 +136,7 @@ public class OrderFinancialFinalizationService {
         jdbc.update("INSERT INTO payment_schema.finance_capture(checkout_id,payment_order_id,provider_payment_id,captured_amount,currency,journal_id) VALUES (?,?,?,?,'INR',?)",checkout,paymentId,ref,expected,posted.transactionId());
         return jdbc.queryForMap("SELECT * FROM payment_schema.finance_capture WHERE checkout_id=?",checkout);
     }
+    private void receive(UUID event,UUID order,String hash){jdbc.update("INSERT INTO payment_schema.finance_source_receipt(event_id,chef_order_id,payload_hash) VALUES (?,?,?) ON CONFLICT(event_id) DO NOTHING",event,order,hash);}
     private Receipt exception(UUID event,UUID order,String hash,String reason) {
         jdbc.update("INSERT INTO payment_schema.finance_source_exception(id,event_id,chef_order_id,reason,attempted_hash) VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",UUID.randomUUID(),event,order,reason,hash);
         jdbc.update("UPDATE payment_schema.finance_order_binding SET state='REVIEW_REQUIRED',last_result=?,updated_at=now() WHERE chef_order_id=?",reason,order);
@@ -138,7 +147,7 @@ public class OrderFinancialFinalizationService {
     private void credit(List<LedgerJournal.Line> lines,String account,BigDecimal amount,UUID chef,UUID payment){if(amount.signum()>0)lines.add(new LedgerJournal.Line(account,"INR","0.00",LedgerMoney.text(amount),chef,null,null,payment,null,null));}
     private void debit(List<LedgerJournal.Line> lines,String account,BigDecimal amount,UUID chef,UUID payment){if(amount.signum()>0)lines.add(new LedgerJournal.Line(account,"INR",LedgerMoney.text(amount),"0.00",chef,null,null,payment,null,null));}
     private static BigDecimal money(JsonNode value,String field){return LedgerMoney.parse(text(value,field));}
-    private static String text(JsonNode value,String field){if(!value.path(field).isTextual())throw new IllegalArgumentException("Missing financial field: "+field);return value.path(field).asText();}
+    private static String text(JsonNode value,String field){if(value==null || !value.path(field).isTextual())throw new IllegalArgumentException("Missing financial field: "+field);return value.path(field).asText();}
     private static UUID id(JsonNode value,String field){return UUID.fromString(text(value,field));}
     private static UUID stable(String key){return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8));}
     private JsonNode parse(String value){try{return json.readTree(value);}catch(Exception e){throw new IllegalStateException("Invalid financial evidence",e);}}

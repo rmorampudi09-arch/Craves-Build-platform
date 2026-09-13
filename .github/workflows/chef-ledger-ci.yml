@@ -10,6 +10,7 @@ on:
       - 'contracts/**finance**'
       - 'docs/finance/**'
       - 'scripts/finance/**'
+      - 'tests/finance/**'
       - '.github/workflows/chef-ledger-ci.yml'
       - 'apps/customer-web-next/src/**/finance*'
       - 'apps/customer-web-next/src/**/finance/**'
@@ -63,10 +64,12 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress -f services/integration-service/pom.xml verify
       - name: Actual Order checkout and delivery consumer database tests
         run: mvn --batch-mode --no-transfer-progress -f services/order-service/pom.xml verify
-      - name: Require every finance suite to execute without skips
+      - name: Signed Order-to-Integration-to-payout round trip
+        run: bash scripts/finance/test-source-roundtrip.sh
+      - name: Require every finance suite and connected round trip without skips
         run: |
           python3 - <<'PY'
-          import pathlib, xml.etree.ElementTree as E
+          import json, pathlib, xml.etree.ElementTree as E
           required={'FinancialPostingDatabaseTest':9,'ChefSettlementHistoryDatabaseTest':7,
                     'FinancialFullMigrationDatabaseTest':2,'FinancialPostingPrivilegesDatabaseTest':3,
                     'LedgerMoneyAndPolicyTest':19,'ChefFeePreviewServiceTest':4,
@@ -74,7 +77,7 @@ jobs:
                     'FinancePolicyDatabaseTest':5,'ChefPayoutDatabaseTest':14,'RazorpayXPayoutClientTest':11,
                     'ChefPayoutWebhookDatabaseTest':8,'FinanceArithmeticPropertyTest':2,'FinanceRecoveryDatabaseTest':10,
                     'OrderFinancialFinalizationDatabaseTest':18,'FinancialSourceSignatureTest':3,
-                    'FinancialCheckoutDatabaseTest':7}
+                    'FinancialCheckoutDatabaseTest':7,'FinancialSourceCompletionDatabaseTest':8}
           roots=[pathlib.Path('services/'+s+'/target/surefire-reports') for s in ['integration-service','order-service']]
           for name, minimum in required.items():
               files=[p for root in roots for p in root.glob('TEST-*.'+name+'.xml')]
@@ -83,6 +86,9 @@ jobs:
               assert int(r.attrib['tests'])>=minimum, 'Missing test cases: '+name
               assert int(r.attrib.get('skipped','0'))==0, 'Skipped required finance tests: '+name
               assert int(r.attrib.get('failures','0'))==0 and int(r.attrib.get('errors','0'))==0, name
+          report=json.loads(pathlib.Path('target/finance-roundtrip/report.json').read_text())
+          assert report['status']=='PASS' and report['checkCount']>=20
+          assert report['net']=='338.52'
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -91,4 +97,5 @@ jobs:
           path: |
             services/integration-service/target/surefire-reports
             services/order-service/target/surefire-reports
+            target/finance-roundtrip/report.json
           retention-days: 14

@@ -1,0 +1,53 @@
+name: Academy curriculum package
+
+on:
+  push:
+    branches: [main, 'feat/academy-*']
+    paths:
+      - 'services/auth-service/src/main/resources/academy/**'
+      - 'scripts/academy/**'
+      - 'docs/academy/**'
+      - '.github/workflows/academy-curriculum-package.yml'
+  pull_request:
+    paths:
+      - 'services/auth-service/src/main/resources/academy/**'
+      - 'scripts/academy/**'
+      - 'docs/academy/**'
+      - '.github/workflows/academy-curriculum-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: academy-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify curriculum source provenance
+        run: python3 scripts/academy/verify-curriculum.py --git
+      - name: Package tracked source for reproducible training review
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/academy-package"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/source-sha.txt"
+          git ls-tree -r HEAD > "$out/source-tree.txt"
+          git archive --format=zip --output="$out/academy-source-snapshot.zip" HEAD
+          (cd "$out" && sha256sum academy-source-snapshot.zip > SHA256SUMS)
+          printf '%s\n' 'Source snapshot only. Not a deployment, runtime acceptance or production permission grant.' > "$out/STATUS.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academy-reviewed-source-${{ github.sha }}
+          path: ${{ runner.temp }}/academy-package/
+          if-no-files-found: error
+          retention-days: 7

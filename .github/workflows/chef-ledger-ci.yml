@@ -1,0 +1,48 @@
+name: Chef Ledger CI
+
+on:
+  push:
+    branches: [feat/chef-ledger-controls-20260913]
+  pull_request:
+    paths:
+      - 'services/integration-service/**'
+      - 'services/order-service/**'
+      - 'docs/finance/**'
+      - '.github/workflows/chef-ledger-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chef-ledger-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package reviewed source evidence
+        run: git archive --format=zip --output=craves-ledger-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chef-ledger-source-${{ github.sha }}
+          path: craves-ledger-source.zip
+          retention-days: 3
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/integration-service/pom.xml
+      - name: Integration service regression tests
+        run: mvn --batch-mode --no-transfer-progress -f services/integration-service/pom.xml verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chef-ledger-test-evidence-${{ github.sha }}
+          path: services/integration-service/target/surefire-reports
+          retention-days: 14

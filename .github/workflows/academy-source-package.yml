@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Package tracked public repository source only
+      - name: Package v3 tracked public source for local curriculum and document review
         shell: bash
         run: |
           set -euo pipefail

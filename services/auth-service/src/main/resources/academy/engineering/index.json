@@ -1,18 +1,8 @@
 {
-  "version": "academy-2026-09-13-v2",
-  "sourceRevision": "83ff61240a33db8fd9d9acc1e4861e928172a119",
+  "version": "academy-2026-09-13-v3",
+  "sourceRevision": "9cf4aea069fa6a077fdef111bf2df4eeada696fc",
   "reviewedOn": "2026-09-13",
-  "evidenceLabel": "Repository-reviewed engineering training pinned to an immutable Craves revision. Lessons explain implementation and release practice but do not grant production permissions or replace runtime acceptance evidence.",
-  "enhancements": [
-    "auth.json",
-    "people.json",
-    "catalog.json",
-    "orders.json",
-    "payments.json",
-    "delivery.json",
-    "subscriptions.json",
-    "notifications.json",
-    "web.json"
-  ],
-  "newCourses": ["platform.json"]
+  "evidenceLabel": "Source-grounded Craves engineering training: 15 courses, 75 lessons and 175 explained questions. Practical laboratories require separate implementation and peer-review evidence; quiz completion does not certify production access or deployment. Source examples are an immutable repository snapshot, not a statement of current runtime activation.",
+  "enhancements": ["auth.json", "people.json", "catalog.json", "orders.json", "payments.json", "delivery.json", "subscriptions.json", "notifications.json", "web.json"],
+  "newCourses": ["platform.json", "java-engineering.json", "mobile-engineering.json", "data-engineering.json", "document-engineering.json", "service-labs.json"]
 }

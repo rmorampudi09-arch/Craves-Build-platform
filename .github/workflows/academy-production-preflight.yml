@@ -1,0 +1,57 @@
+name: Academy production preflight (read only)
+on:
+  push:
+    branches: [main, 'feat/academy-enterprise-practica-20260913']
+    paths: ['.github/workflows/academy-production-preflight.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    environment: prodlow
+    timeout-minutes: 10
+    steps:
+      - name: Check existing connection without printing credentials
+        env:
+          CLIENT: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT: ${{ secrets.AZURE_TENANT_ID }}
+          SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/academy-preflight"
+          printf '%s\n' '{"status":"BLOCKED","reason":"AZURE_ACCESS_NOT_YET_VERIFIED","productionChanged":false}' > "$RUNNER_TEMP/academy-preflight/status.json"
+          if [[ -z "$CLIENT" || -z "$TENANT" || -z "$SUBSCRIPTION" ]]; then
+            printf '%s\n' '{"status":"BLOCKED","reason":"EXISTING_GITHUB_OIDC_BINDING_INCOMPLETE","productionChanged":false}' > "$RUNNER_TEMP/academy-preflight/status.json"
+            echo 'Academy publication blocked: established GitHub OIDC binding is incomplete. No Azure resources were accessed or changed.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Read only the existing Auth deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          az containerapp show --resource-group rg-craves-prodlow-centralindia --name ca-craves-auth-service-prodlow --query '{app:name,latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName,mode:properties.configuration.activeRevisionsMode,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas,image:properties.template.containers[0].image}' --output json --only-show-errors > "$RUNNER_TEMP/academy-preflight/auth.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          out = Path(os.environ['RUNNER_TEMP']) / 'academy-preflight'
+          app = json.loads((out / 'auth.json').read_text())
+          safe = bool(app['latest']) and app['latest'] == app['ready'] and str(app['mode']).lower() == 'single' and app['min'] == 1 and app['max'] == 1
+          (out / 'status.json').write_text(json.dumps({'status': 'READ_ONLY_PREFLIGHT_PASSED' if safe else 'BLOCKED', 'reason': 'Runtime shape checked; authenticated Academy content acceptance remains required.' if safe else 'EXPECTED_HEALTHY_SINGLE_REPLICA_SHAPE_NOT_CONFIRMED', 'productionChanged': False}, indent=2))
+          if not safe:
+              raise SystemExit('Auth preflight refused; no Azure changes made.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: academy-production-preflight
+          path: ${{ runner.temp }}/academy-preflight/
+          if-no-files-found: error
+          retention-days: 7

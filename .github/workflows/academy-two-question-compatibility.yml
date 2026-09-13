@@ -1,0 +1,58 @@
+name: Academy one-time curriculum compatibility edit
+on:
+  push:
+    branches: [feat/academy-enterprise-completion-20260913]
+    paths: ['.github/workflows/academy-two-question-compatibility.yml']
+permissions:
+  contents: write
+jobs:
+  edit:
+    if: github.repository == 'rmorampudi09-arch/Craves-Build-platform' && github.ref == 'refs/heads/feat/academy-enterprise-completion-20260913'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/academy-enterprise-completion-20260913
+      - name: Keep the deployed two-question contract without losing teaching material
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('services/auth-service/src/main/resources/academy/engineering')
+          names = ['java-engineering', 'mobile-engineering', 'data-engineering', 'document-engineering', 'service-labs']
+          for name in names:
+              path = root / (name + '.json')
+              data = json.loads(path.read_text())
+              for lesson in data['course']['lessons']:
+                  assert len(lesson['questions']) == 3, 'Refuse unexpected or repeated transformation'
+                  question = lesson['questions'].pop()
+                  lesson['steps'].append({'label': 'Reasoning checkpoint (ungraded)', 'detail': question['prompt'] + ' Explain your answer before reading the resolution. Resolution: ' + question['options'][question['answer']] + '. ' + question['explanation']})
+              path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+          path = root / 'index.json'
+          data = json.loads(path.read_text())
+          data['evidenceLabel'] = data['evidenceLabel'].replace('175 explained questions', '150 graded questions plus 25 ungraded reasoning checkpoints')
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+          path = Path('scripts/academy/verify-curriculum.py')
+          value = path.read_text()
+          for old, new in [("15, 75, 175)", "15, 75, 150)"), ("len(lesson['questions']) in (2, 3)", "len(lesson['questions']) == 2"), ("len(lesson['questions']) == 3", "len(lesson['questions']) == 2")]:
+              assert old in value, old
+              value = value.replace(old, new)
+          path.write_text(value)
+          path = Path('services/auth-service/src/test/java/in/craves/auth/academy/AcademyCoreTest.java')
+          value = path.read_text()
+          for old, new in [('assertEquals(175,questions)', 'assertEquals(150,questions)'), ('assertEquals(3,lesson.path("questions").size())', 'assertEquals(2,lesson.path("questions").size())')]:
+              assert old in value, old
+              value = value.replace(old, new)
+          path.write_text(value)
+          PY
+          python3 scripts/academy/verify-curriculum.py
+          python3 scripts/academy/test-release-guard.py
+          git diff --check
+          git add services/auth-service/src/main/resources/academy/engineering/{java-engineering,mobile-engineering,data-engineering,document-engineering,service-labs,index}.json scripts/academy/verify-curriculum.py services/auth-service/src/test/java/in/craves/auth/academy/AcademyCoreTest.java
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(academy): retain all reasoning exercises within deployed quiz contract'
+          git push origin HEAD:refs/heads/feat/academy-enterprise-completion-20260913

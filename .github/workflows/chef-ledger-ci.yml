@@ -65,7 +65,8 @@ jobs:
           required={'FinancialPostingDatabaseTest':9,'ChefSettlementHistoryDatabaseTest':7,
                     'FinancialFullMigrationDatabaseTest':2,'FinancialPostingPrivilegesDatabaseTest':3,
                     'LedgerMoneyAndPolicyTest':19,'ChefFeePreviewServiceTest':4,
-                    'ChefFinancialConflictAdviceTest':3}
+                    'ChefFinancialConflictAdviceTest':3,'FinanceCalculationsTest':19,
+                    'FinancePolicyDatabaseTest':5,'ChefPayoutDatabaseTest':14,'RazorpayXPayoutClientTest':11}
           for name, minimum in required.items():
               files=list(root.glob('TEST-*.'+name+'.xml'))
               assert len(files)==1, 'Missing finance test report: '+name

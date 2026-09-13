@@ -5,3 +5,15 @@
 @media (max-width: 640px) {
   .delivery-unit-heading { align-items: flex-start; flex-direction: column; }
 }
+.history-controls { display:flex; flex-wrap:wrap; align-items:end; gap:14px; padding:16px; margin-bottom:16px; }
+.history-controls label { display:grid; gap:6px; font-size:11px; font-weight:700; color:var(--ink); }
+.history-controls select,.history-controls input { min-height:40px; border:1px solid var(--line); border-radius:8px; background:#fff; padding:7px 10px; color:inherit; font:inherit; }
+.history-controls :focus-visible,.history-pagination :focus-visible { outline:2px solid var(--craves-red); outline-offset:3px; }
+.history-filter-error { width:100%; color:var(--craves-red); font-size:12px; }
+.history-window { font-size:11px; color:var(--muted); margin:10px 0; }
+.history-pagination { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:12px 16px; border-top:1px solid var(--line); font-size:10px; }
+.activity-row { grid-template-columns:115px 118px minmax(170px,1fr) 88px 106px 16px; }
+.activity-time { white-space:normal; line-height:1.5; }
+.activity-list { overflow-x:auto; }
+.chart-axis span { max-width:105px; text-align:center; font-size:8px; }
+@media(max-width:640px) { .history-controls label { flex:1 1 140px; }.history-controls .primary-button { width:100%; }.history-pagination { padding:10px; }.activity-row { min-width:700px; } }

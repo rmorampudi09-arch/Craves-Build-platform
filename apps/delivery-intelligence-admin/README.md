@@ -4,15 +4,25 @@ Read-only operational dashboard for Craves delivery orchestration. The applicati
 
 ## What it shows
 
-- recent delivery command/job/event volume
+- delivery command/job/event volume across all persisted history by default
 - delivered and active delivery counts
 - provider-selection share from persisted `delivery_assignment` evidence
 - retry, reconciliation, provider-wait and dead-letter indicators
-- newest-first operational activity
+- newest-first or oldest-first activity, with independent activity and attention pagination
 - order investigation by Craves order ID, chef sub-order ID, delivery command/job/assignment ID, provider delivery reference, or linked provider event reference
 - candidate ranking/scoring, selected provider, command recovery state, normalized tracking/webhook events, and provider-neutral courier/ETA telemetry
 
 The UI is intentionally read-only. It does not cancel, dispatch, retry, reassign, activate, or switch delivery providers.
+
+## History controls
+
+The dashboard supports all history, the last 24 hours, seven days, thirty days, and custom calendar dates in IST. Both custom dates include their full day. Apply filters reloads the first page of both lists. Pages contain 5, 25, 50 or 100 records; the default is 25. No attention items are hidden behind a separate six-item display cap.
+
+Moving through either list preserves the other list's offset and the selected time boundary. Automatic polling pauses while browsing that history window; Show latest returns both lists to the first page with the same filters. This stabilizes pagination against newly timestamped events, not late-arriving records or changes to existing operational evidence. Filters remain in memory while opening and leaving order investigation.
+
+The activity chart groups longer histories into at most 48 groups while preserving every returned command/event count. It does not discard all but the last 24 hourly buckets. Timestamps include dates, years and IST so older records remain distinguishable.
+
+Regression checks in `src/lib/delivery-history.test.ts` cover all-history defaults, presets, inclusive IST dates, invalid inputs, independent offsets, fixed paging windows and whole-period chart totals. Run `npm test`, `npm run lint`, `npm run typecheck` and `npm run build` before release.
 
 ## Security
 
@@ -62,17 +72,9 @@ No Firebase secret, provider secret, database password, or payment credential be
 
 ## Canonical deployment status
 
-The source on this branch is intentionally **source-only**. Do not run the old `azure-pipelines-delivery-intelligence-admin.yml` from the long-diverged backend consolidation branch. That pipeline could deploy an unreconciled Integration Service image, apply Flyway, write APIM/Front Door, and create a billable Container App.
+The canonical main-based maintenance pipeline is now Azure definition 119, `azure-pipelines-delivery-intelligence-admin.yml`. It validates the exact source and live Auth session policy, builds a digest-pinned image and updates only the existing Delivery Intelligence app with min/max replicas one. It preserves the previous image for rollback and requires `confirmProductionDeploy=true`. It does not deploy Integration Service or modify APIM, Front Door or provider settings. The older consolidation-branch pipeline must not be used.
 
-Before any future dashboard deployment:
-
-1. map the currently deployed Integration Service image and revision to its exact Git source;
-2. reconcile the complete Integration Service runtime tree against canonical `main`;
-3. verify every applied Flyway version and checksum, including V115 and V116;
-4. create and validate a new main-based immutable-image deployment pipeline;
-5. preserve the current Integration Service and dashboard image references for rollback;
-6. require explicit APIM, Front Door and any billable Container App approvals;
-7. perform an authenticated admin smoke test after deployment.
+The previous production acceptance, including successful run 38899, is recorded in `docs/runbooks/2026-09-13-admin-portal-repair.md`. That deployment restored authenticated access but exposed the older fixed-24-hour frontend. This history correction connects the current UI to the already-present history API. Auth session renewal and operation permissions are preserved.
 
 The established Azure DevOps service connection remains `Craves-Dev-Service-Connection`. No secret value belongs in source control or chat.
 

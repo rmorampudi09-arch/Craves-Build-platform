@@ -3,7 +3,9 @@
 import { adminFetch, observeAdminSession, type SessionState } from "@/lib/admin-renewal";
 
 import { InvestigationPanel } from "@/components/investigation-panel";
+import { HistoryControls } from "@/components/history-controls";
 import { OverviewPanel } from "@/components/overview-panel";
+import { DEFAULT_HISTORY_FILTERS, historyPage, historyQuery, type HistoryFilters, type HistoryRequest } from "@/lib/delivery-history";
 import type { AdminIdentity } from "@/lib/admin-contract";
 import type { DeliveryOverview, OrderInvestigation } from "@/lib/delivery-contract";
 import { AlertTriangle, BarChart3, ChevronRight, CircleHelp, Database, LogIn, Search, ShieldCheck, Truck, X } from "lucide-react";
@@ -43,25 +45,43 @@ export function DeliveryIntelligenceApp() {
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [investigationLoading, setInvestigationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const historyRequest = useRef<HistoryRequest>({ filters: DEFAULT_HISTORY_FILTERS, activityOffset: 0, attentionOffset: 0 });
+  const [displayedRequest, setDisplayedRequest] = useState<HistoryRequest>({ filters: DEFAULT_HISTORY_FILTERS, activityOffset: 0, attentionOffset: 0 });
+  const overviewController = useRef<AbortController | null>(null);
+  const overviewGeneration = useRef(0);
 
-  const loadOverview = useCallback(async () => {
+  const loadOverview = useCallback(async (request = historyRequest.current, background = false) => {
+    if (background && (overviewController.current || request.snapshot || document.hidden)) return;
     const epoch = sessionEpoch.current;
+    const generation = ++overviewGeneration.current;
+    overviewController.current?.abort();
+    const controller = new AbortController();
+    overviewController.current = controller;
+    historyRequest.current = request;
     setOverviewLoading(true);
     try {
-      const response = await adminFetch(`${BASE_PATH}/api/delivery-intelligence/overview?hours=24&limit=35`, {
+      const response = await adminFetch(`${BASE_PATH}/api/delivery-intelligence/overview?${historyQuery(request)}`, {
         cache: "no-store",
         credentials: "same-origin",
+        signal: controller.signal,
       });
+      if (controller.signal.aborted || generation !== overviewGeneration.current || epoch !== sessionEpoch.current) return;
       if (response.status === 401) return signedOutRedirect();
       if (response.status === 403) throw new Error("ADMIN_ACCESS_REQUIRED");
       const data = await json<DeliveryOverview>(response);
-      if (epoch !== sessionEpoch.current) return;
+      if (controller.signal.aborted || generation !== overviewGeneration.current || epoch !== sessionEpoch.current) return;
       setOverview(data);
+      setDisplayedRequest(request);
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "DELIVERY_INTELLIGENCE_UNAVAILABLE");
+      if (!controller.signal.aborted && generation === overviewGeneration.current && epoch === sessionEpoch.current) {
+        setError(cause instanceof Error ? cause.message : "DELIVERY_INTELLIGENCE_UNAVAILABLE");
+      }
     } finally {
-      setOverviewLoading(false);
+      if (generation === overviewGeneration.current) {
+        overviewController.current = null;
+        setOverviewLoading(false);
+      }
     }
   }, []);
 
@@ -71,6 +91,7 @@ export function DeliveryIntelligenceApp() {
       const epoch = ++sessionEpoch.current;
       setSessionState(state);
       if (state === "ended") {
+        overviewController.current?.abort();
         setIdentity(null); setOverview(null); setInvestigation(null); setQuery("");
         setError("ADMIN_ACCESS_REQUIRED"); setAuthLoading(false); return;
       }
@@ -89,14 +110,22 @@ export function DeliveryIntelligenceApp() {
         } finally { if (active) setAuthLoading(false); }
       })();
     });
-    return () => { active = false; stop(); };
+    return () => { active = false; stop(); overviewController.current?.abort(); };
   }, [loadOverview]);
 
   useEffect(() => {
     if (!identity || view !== "overview") return;
-    const timer = window.setInterval(() => { void loadOverview(); }, POLL_MS);
+    const timer = window.setInterval(() => { void loadOverview(historyRequest.current, true); }, POLL_MS);
     return () => window.clearInterval(timer);
   }, [identity, loadOverview, view]);
+
+  const applyFilters = (filters: HistoryFilters) => {
+    void loadOverview({ filters, activityOffset: 0, attentionOffset: 0 });
+  };
+
+  const changePage = (list: "activity" | "attention", direction: -1 | 1) => {
+    if (overview && !overviewLoading) void loadOverview(historyPage(displayedRequest, overview, list, direction));
+  };
 
   const investigate = useCallback(async (reference: string) => {
     const epoch = sessionEpoch.current;
@@ -185,11 +214,13 @@ export function DeliveryIntelligenceApp() {
 
         <div className="content-area">
           {error && (
-            <div className="error-banner"><AlertTriangle size={17} /><span>{friendlyError(error)}</span><button type="button" onClick={() => setError(null)}><X size={15} /></button></div>
+            <div className="error-banner" role="alert"><AlertTriangle size={17} /><span>{friendlyError(error)}</span><button type="button" onClick={() => setError(null)} aria-label="Dismiss error"><X size={15} /></button></div>
           )}
 
+          <div hidden={view !== "overview"}><HistoryControls loading={overviewLoading} onApply={applyFilters} /></div>
+
           {view === "overview" && overview ? (
-            <OverviewPanel data={overview} loading={overviewLoading} onRefresh={() => void loadOverview()} onInvestigate={reference => void investigate(reference)} />
+            <OverviewPanel data={overview} loading={overviewLoading} request={displayedRequest} onRefresh={() => void loadOverview(displayedRequest)} onLatest={() => applyFilters(displayedRequest.filters)} onPage={changePage} onInvestigate={reference => void investigate(reference)} />
           ) : view === "overview" ? (
             <div className="loading-panel"><div className="boot-spinner" /><p>Loading delivery telemetry…</p></div>
           ) : investigation ? (

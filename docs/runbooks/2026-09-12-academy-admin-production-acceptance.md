@@ -1,5 +1,7 @@
 # Academy and administrator session release evidence
 
+Historical checkpoint: the interrupted-access status below is superseded by [the September 13 portal repair and authenticated acceptance record](2026-09-13-admin-portal-repair.md). Retain this document for the original migration, gateway, backend and rollback evidence.
+
 Status: backend and main admin deployed and verified; Delivery Intelligence run 38899 was queued, but its final deployment result is unverified after the cloud session expired. Academy remains disabled pending authenticated acceptance. The secure Craves sign-in request was interrupted; a fresh browser check still showed signed-out access. Azure Portal and Azure DevOps now require account sign-in. Do not interpret queued runs, public health or fixtures as full release completion.
 
 ## Source

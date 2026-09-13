@@ -5,6 +5,13 @@ export type AdminIdentity = {
   adminEnabled: boolean;
 };
 
+// Java Auth's authoritative internal roles. ADMIN is not an internal role.
+// Individual APIs still enforce their narrower operation permissions.
+const INTERNAL_ADMIN_ROLES = new Set([
+  "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN",
+  "CHEF_ADMIN", "COMPLIANCE_ADMIN", "SUBSCRIPTION_ADMIN", "NOTIFICATION_ADMIN", "AUDIT_ADMIN",
+]);
+
 function text(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
   const result = value.trim();
@@ -49,6 +56,6 @@ export function parseAdminIdentity(value: unknown): AdminIdentity | null {
     displayName: text(raw.displayName, 160),
     email: text(raw.email, 320),
     status,
-    adminEnabled: status === "ACTIVE" && roles.includes("ADMIN")
+    adminEnabled: status === "ACTIVE" && roles.some(role => INTERNAL_ADMIN_ROLES.has(role))
   };
 }

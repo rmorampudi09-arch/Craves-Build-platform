@@ -15,6 +15,7 @@ class AcademyCoreTest {
     private Authentication actor(List<String> roles) {
         return new UsernamePasswordAuthenticationToken(new CurrentUser(UUID.randomUUID(),"test","test",roles,1),"unused",List.of());
     }
+
     @Test void correctEvidenceRaisesMasteryAndWrongEvidenceLowersIt() {
         assertTrue(AcademyLearningModel.update(.25,true)>.25);
         assertTrue(AcademyLearningModel.update(.8,false)<.8);
@@ -22,23 +23,39 @@ class AcademyCoreTest {
             double next=AcademyLearningModel.update(p,answer); assertTrue(next>=.01 && next<=.99);
         }
     }
+
     @Test void invalidModelInputsAreRejected() {
         for(double p:new double[]{-1,2,Double.NaN,Double.POSITIVE_INFINITY}) assertThrows(IllegalArgumentException.class,()->AcademyLearningModel.update(p,true));
         assertEquals(100,AcademyLearningModel.score(2,2));assertEquals(50,AcademyLearningModel.score(1,2));
         assertThrows(IllegalArgumentException.class,()->AcademyLearningModel.score(1,0));
     }
-    @Test void catalogContainsNineGroundedCoursesAndNoPublicAnswerKeys() throws Exception {
+
+    @Test void catalogContainsEngineeringCurriculumAndNoPublicAnswerKeys() throws Exception {
         var catalog=new AcademyCatalog(new ObjectMapper());var view=catalog.publicCatalog();
-        assertEquals(9,view.path("courses").size());assertTrue(catalog.sourceRevision().matches("[a-f0-9]{40}"));
+        assertEquals("academy-2026-09-13-v2", catalog.version());
+        assertEquals(10,view.path("courses").size());assertTrue(catalog.sourceRevision().matches("[a-f0-9]{40}"));
         int sections=0,questions=0;
         for(var course:view.path("courses"))for(var lesson:course.path("lessons")){
             sections++;for(var q:lesson.path("questions")){questions++;assertFalse(q.has("answer"));assertFalse(q.has("explanation"));}
         }
-        assertEquals(18,sections);assertEquals(36,questions);
+        assertEquals(50,sections);assertEquals(100,questions);
         assertTrue(catalog.courses().get(0).path("lessons").get(0).path("questions").get(0).has("answer"));
+        assertEquals("platform-engineering", catalog.course("platform-engineering").path("id").asText());
         assertThrows(ResponseStatusException.class,()->catalog.course("unknown"));
         assertThrows(ResponseStatusException.class,()->catalog.sourcePath("auth",999));
     }
+
+    @Test void reviewedSourceAllowlistSupportsPinnedEngineeringEvidenceOnly() {
+        assertTrue(AcademySources.isReviewedPath("services/auth-service/src/main/java/in/craves/auth/web/AuthController.java"));
+        assertTrue(AcademySources.isReviewedPath("apps/customer-web-next/src/lib/server-api.ts"));
+        assertTrue(AcademySources.isReviewedPath(".github/workflows/craves-academy-ci.yml"));
+        assertTrue(AcademySources.isReviewedPath("scripts/academy/verify-curriculum.py"));
+        assertFalse(AcademySources.isReviewedPath("../../etc/passwd"));
+        assertFalse(AcademySources.isReviewedPath(".github/workflows/../secret.yml"));
+        assertFalse(AcademySources.isReviewedPath("config/production/secret.json"));
+        assertFalse(AcademySources.isReviewedPath("services/auth-service/.env"));
+    }
+
     @Test void everyExplicitInternalAdminCanLearnButCustomersCannot() {
         for(String role:InternalAdminRoles.codes())assertNotNull(AcademyController.requireAdmin(actor(List.of(role))));
         for(List<String> roles:List.of(List.of("CUSTOMER"),List.of("CHEF"),List.of("ADMIN"),List.of("made_up_admin"))) {
@@ -47,6 +64,7 @@ class AcademyCoreTest {
         assertEquals(HttpStatus.UNAUTHORIZED,assertThrows(ResponseStatusException.class,()->AcademyController.requireAdmin(null)).getStatusCode());
         assertThrows(ResponseStatusException.class,()->AcademyController.requireAdmin(actor(null)));
     }
+
     @Test void roleBoundariesAndMalformedClaimsFailClosed() {
         assertNotNull(AcademyController.requireManager(actor(List.of("PLATFORM_ADMIN"))));
         assertNotNull(AcademyController.requireReporter(actor(List.of("AUDIT_ADMIN"))));

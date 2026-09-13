@@ -12,15 +12,30 @@ on:
 
 permissions:
   contents: read
-
 concurrency:
   group: chef-ledger-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chef_ledger_test
+          POSTGRES_USER: ledger_ci
+          POSTGRES_PASSWORD: ledger_ci_local_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      LEDGER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/chef_ledger_test
+      LEDGER_TEST_DB_USER: ledger_ci
+      LEDGER_TEST_DB_PASSWORD: ledger_ci_local_only
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,8 +53,18 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: services/integration-service/pom.xml
-      - name: Integration service regression tests
+      - name: Integration regression and real PostgreSQL ledger tests
         run: mvn --batch-mode --no-transfer-progress -f services/integration-service/pom.xml verify
+      - name: Require database tests to have actually executed
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as E
+          files=list(pathlib.Path('services/integration-service/target/surefire-reports').glob('TEST-*FinancialPostingDatabaseTest.xml'))
+          assert len(files)==1, 'Missing ledger database test report'
+          r=E.parse(files[0]).getroot()
+          assert int(r.attrib['tests'])>=9 and int(r.attrib.get('skipped','0'))==0, 'Database tests were skipped'
+          assert int(r.attrib.get('failures','0'))==0 and int(r.attrib.get('errors','0'))==0
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:

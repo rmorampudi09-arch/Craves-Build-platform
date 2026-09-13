@@ -7,7 +7,9 @@ on:
     paths:
       - 'services/integration-service/**'
       - 'services/order-service/**'
+      - 'contracts/openapi/chef-fee-preview-v1.yaml'
       - 'docs/finance/**'
+      - 'scripts/finance/**'
       - '.github/workflows/chef-ledger-ci.yml'
 
 permissions:
@@ -55,15 +57,22 @@ jobs:
           cache-dependency-path: services/integration-service/pom.xml
       - name: Integration regression and real PostgreSQL ledger tests
         run: mvn --batch-mode --no-transfer-progress -f services/integration-service/pom.xml verify
-      - name: Require database tests to have actually executed
+      - name: Require every finance suite and every database test to execute
         run: |
           python3 - <<'PY'
           import pathlib, xml.etree.ElementTree as E
-          files=list(pathlib.Path('services/integration-service/target/surefire-reports').glob('TEST-*FinancialPostingDatabaseTest.xml'))
-          assert len(files)==1, 'Missing ledger database test report'
-          r=E.parse(files[0]).getroot()
-          assert int(r.attrib['tests'])>=9 and int(r.attrib.get('skipped','0'))==0, 'Database tests were skipped'
-          assert int(r.attrib.get('failures','0'))==0 and int(r.attrib.get('errors','0'))==0
+          root=pathlib.Path('services/integration-service/target/surefire-reports')
+          required={'FinancialPostingDatabaseTest':9,'ChefSettlementHistoryDatabaseTest':7,
+                    'FinancialFullMigrationDatabaseTest':2,'FinancialPostingPrivilegesDatabaseTest':3,
+                    'LedgerMoneyAndPolicyTest':19,'ChefFeePreviewServiceTest':4,
+                    'ChefFinancialConflictAdviceTest':3}
+          for name, minimum in required.items():
+              files=list(root.glob('TEST-*.'+name+'.xml'))
+              assert len(files)==1, 'Missing finance test report: '+name
+              r=E.parse(files[0]).getroot()
+              assert int(r.attrib['tests'])>=minimum, 'Missing test cases: '+name
+              assert int(r.attrib.get('skipped','0'))==0, 'Skipped finance tests: '+name
+              assert int(r.attrib.get('failures','0'))==0 and int(r.attrib.get('errors','0'))==0, name
           PY
       - uses: actions/upload-artifact@v4
         if: always()

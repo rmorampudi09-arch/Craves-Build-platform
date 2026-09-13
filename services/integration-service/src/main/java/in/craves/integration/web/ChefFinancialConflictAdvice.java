@@ -15,7 +15,8 @@ public class ChefFinancialConflictAdvice {
     public ProblemDetail financialConflict(DataAccessException exception) {
         Throwable cause=exception;
         while(cause!=null) {
-            if(cause instanceof SQLException sql && Set.of("23505","23514","55000","40001","40P01").contains(sql.getSQLState())) {
+            if(cause instanceof SQLException sql && sql.getSQLState()!=null
+                && Set.of("23505","23514","55000","40001","40P01").contains(sql.getSQLState())) {
                 var detail=ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
                     "The financial state cannot accept this operation. Preserve settled history, use one beneficiary per legacy batch, and refresh the current reservation state.");
                 detail.setTitle("Financial state conflict");

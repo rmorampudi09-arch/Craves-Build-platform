@@ -29,7 +29,9 @@ public class RazorpayXPayoutWebhookService {
         try {
             var root=json.readTree(body);String type=root.path("event").asText();
             if(!Set.of("payout.processed","payout.reversed","payout.failed","payout.updated","payout.pending","payout.queued","payout.initiated","payout.rejected").contains(type)) return "IGNORED_EVENT";
-            var entity=root.path("payload").path("payout").path("entity");UUID instruction=UUID.fromString(entity.path("reference_id").asText());
+            var entity=root.path("payload").path("payout").path("entity");String reference=entity.path("reference_id").asText();
+            if(!reference.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) return "IGNORED_UNRELATED_PAYOUT";
+            UUID instruction=UUID.fromString(reference);
             String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(body));
             var prior=jdbc.query("SELECT payload_hash FROM payment_schema.finance_payout_webhook_inbox WHERE event_id=?",(rs,n)->rs.getString(1),eventId);
             if(!prior.isEmpty()) {if(!prior.getFirst().equals(hash)) throw error(HttpStatus.CONFLICT,"Provider event content changed");return "REPLAY";}
@@ -43,15 +45,17 @@ public class RazorpayXPayoutWebhookService {
                 if(!hash.equals(existing)) throw error(HttpStatus.CONFLICT,"Provider event content changed");return "REPLAY";
             }
             String state=current.get("status").toString();
-            if("PAID".equals(state) && !"processed".equals(receipt.status())) {
-                // Never release paid money for a second transfer based only on a later state notification.
+            boolean terminalConflict=("PAID".equals(state) && Set.of("reversed","failed","cancelled","rejected").contains(receipt.status()))
+                || (Set.of("FAILED","REVERSED").contains(state) && "processed".equals(receipt.status()));
+            if(terminalConflict) {
                 jdbc.update("UPDATE payment_schema.finance_chef_payout_control SET on_hold=true,hold_reason='Late terminal payout change: clearing correction review required',updated_at=now() WHERE chef_identity_id=?",chef);
                 jdbc.update("UPDATE payment_schema.finance_payout_instruction SET last_error='LATE_TERMINAL_CHANGE_REVIEW_REQUIRED',updated_at=now() WHERE id=?",instruction);
                 jdbc.update("INSERT INTO payment_schema.finance_payout_audit(id,instruction_id,chef_identity_id,action,actor,evidence_reference) VALUES (?,?,?,'LATE_TERMINAL_CHANGE','razorpayx-webhook',?)",UUID.randomUUID(),instruction,chef,"event/"+eventId);
-                return "PAID_HISTORY_HELD_FOR_REVIEW";
+                return "TERMINAL_HISTORY_HELD_FOR_REVIEW";
             }
-            if(!Set.of("PAID","FAILED","REVERSED").contains(state))
-                jdbc.update("UPDATE payment_schema.finance_payout_instruction SET provider_id=?,status='PROCESSING',provider_status=?,lease_id=NULL,lease_until=NULL,next_attempt_at=now(),updated_at=now() WHERE id=?",receipt.payoutId(),receipt.status(),instruction);
+            // Delayed queued/processing events cannot regress an already completed transfer.
+            if(Set.of("PAID","FAILED","REVERSED").contains(state)) return "TERMINAL_HISTORY_PRESERVED";
+            jdbc.update("UPDATE payment_schema.finance_payout_instruction SET provider_id=?,status='PROCESSING',provider_status=?,lease_id=NULL,lease_until=NULL,next_attempt_at=now(),updated_at=now() WHERE id=?",receipt.payoutId(),receipt.status(),instruction);
             return "RECONCILIATION_QUEUED";
         } catch(ResponseStatusException known) {throw known;}
         catch(IllegalArgumentException malformed) {throw error(HttpStatus.BAD_REQUEST,"Invalid payout webhook context");}

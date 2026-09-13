@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -43,6 +44,8 @@ public class ChefPayoutService {
     public void recordDeliveredPayable(UUID chef,UUID order,UUID journal,Instant deliveredAt,FinancePolicy frozenPolicy) {
         lockChef(chef);
         if(!frozenPolicy.ledgerEnabled() || deliveredAt==null) throw conflict("Verified enabled financial snapshot is required");
+        // PostgreSQL timestamps preserve microseconds, not Java nanoseconds. Normalize before both writing and comparing.
+        deliveredAt=deliveredAt.truncatedTo(ChronoUnit.MICROS);
         var source=jdbc.query("SELECT coalesce(sum(l.credit_amount-l.debit_amount),0) FROM payment_schema.ledger_transaction t JOIN payment_schema.ledger_line l ON l.transaction_id=t.id WHERE t.id=? AND t.chef_order_id=? AND t.event_type='CHEF_ORDER_EARNING' AND l.account_code='CHEF_PAYABLE' AND l.chef_identity_id=? GROUP BY t.id",
             (rs,n)->rs.getBigDecimal(1),journal,order,chef);
         if(source.size()!=1 || source.getFirst().signum()<=0) throw conflict("Verified earning journal does not establish this chef payable");
@@ -63,7 +66,7 @@ public class ChefPayoutService {
         return new Balance(LedgerMoney.text(held?BigDecimal.ZERO:available),LedgerMoney.text(total.subtract(paidTotal(id))),LedgerMoney.text(allocated),held,used,
             date.plusDays(1).atStartOfDay(FinancePolicy.ZONE).toInstant().toString(),listForChef(id),policies.current().settings().manualWithdrawalsEnabled() && provider.ready());
     }
-    private BigDecimal paidTotal(UUID chef) {return jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? AND status='PAID'",BigDecimal.class,chef);}
+    private BigDecimal paidTotal(UUID chef) {return jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? AND settlement_journal_id IS NOT NULL AND reversal_journal_id IS NULL",BigDecimal.class,chef);}
     private List<Payout> listForChef(UUID chef) {return jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? ORDER BY created_at DESC,id DESC LIMIT 100",this::map,chef);}
     public List<Payout> listAdmin(CravesPrincipal actor) {FinancePolicyService.reader(actor);return jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction ORDER BY created_at DESC,id DESC LIMIT 100",this::map);}
     @Transactional
@@ -101,13 +104,12 @@ public class ChefPayoutService {
         LedgerMoney.amount(amount);UUID id=UUID.randomUUID();
         jdbc.update("INSERT INTO payment_schema.finance_payout_instruction(id,chef_identity_id,beneficiary_id,request_key,mode,amount,status,policy_revision) VALUES (?,?,?,?,?,?,'RESERVED',?)",id,chef,control.getFirst()[0],key,mode,amount,revision);
         for(var item:payables) jdbc.update("INSERT INTO payment_schema.finance_payout_allocation(instruction_id,payable_id) VALUES (?,?)",id,item.id());
-        audit(id,chef,"RESERVED",mode,"policy-revision/"+revision);
-        return get(id);
+        audit(id,chef,"RESERVED",mode,"policy-revision/"+revision);return get(id);
     }
     @Transactional
     public void bindVerifiedBeneficiary(CravesPrincipal actor,UUID chef,Binding request) {
-        FinancePolicyService.operator(actor);FinancePolicyService.reason(request.reason());
-        String evidence=FinancePolicyService.reason(request.bankOwnershipEvidence());if(evidence.length()>240) throw conflict("Evidence reference is too long");
+        FinancePolicyService.operator(actor);FinancePolicyService.reason(request.reason());String evidence=FinancePolicyService.reason(request.bankOwnershipEvidence());
+        if(evidence.length()>240 || request.fundAccountId()==null || !request.fundAccountId().matches("fa_[A-Za-z0-9]+") || request.contactId()==null || !request.contactId().matches("cont_[A-Za-z0-9]+")) throw new IllegalArgumentException("Valid beneficiary identifiers and evidence are required");
         // The controller performs provider reads before entering this local transaction.
         lockChef(chef);UUID id=UUID.randomUUID();
         jdbc.update("INSERT INTO payment_schema.finance_beneficiary_version(id,chef_identity_id,fund_account_id,contact_id,verification_reference,verified_by) VALUES (?,?,?,?,?,?)",id,chef,request.fundAccountId(),request.contactId(),evidence,actor.identityId());
@@ -142,7 +144,12 @@ public class ChefPayoutService {
             var lines=List.of(new LedgerJournal.Line("CHEF_PAYABLE","INR",amount.toPlainString(),"0.00",work.chef(),null,null,null,null,work.id()),
                 new LedgerJournal.Line("PAYOUT_CLEARING","INR","0.00",amount.toPlainString(),work.chef(),null,null,null,null,work.id()));
             var posted=ledger.post(new LedgerJournal.Entry("chef-payout/"+work.id()+"/confirmed",work.id(),"razorpayx","CHEF_PAYOUT_CONFIRMED",null,null,"INR",Instant.now(),"razorpayx/"+receipt.payoutId(),null,"SERVICE","chef-payout-worker",lines));
-            if(posted.outcome()==LedgerJournal.Outcome.CONFLICT) throw conflict("Payout posting conflict; retain reservation for review");journal=posted.transactionId();
+            if(posted.outcome()==LedgerJournal.Outcome.CONFLICT) {
+                jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status='REVIEW_REQUIRED',last_error='PAYOUT_POSTING_CONFLICT',lease_id=NULL,lease_until=NULL,updated_at=now() WHERE id=?",work.id());
+                jdbc.update("UPDATE payment_schema.finance_chef_payout_control SET on_hold=true,hold_reason='Payout posting conflict',updated_at=now() WHERE chef_identity_id=?",work.chef());
+                return; // Commit the conflict evidence without clearing or reissuing the reserved funds.
+            }
+            journal=posted.transactionId();
         }
         jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status=?,provider_id=?,provider_status=?,transfer_reference=?,settlement_journal_id=coalesce(?,settlement_journal_id),lease_id=NULL,lease_until=NULL,next_attempt_at=now()+interval '60 seconds',last_error=NULL,updated_at=now() WHERE id=?",
             target,receipt.payoutId(),receipt.status(),receipt.transferReference(),journal,work.id());
@@ -155,7 +162,7 @@ public class ChefPayoutService {
     @Transactional
     public void uncertain(Work work) {
         jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status=CASE WHEN provider_id IS NULL THEN 'REVIEW_REQUIRED' ELSE 'UNKNOWN' END,last_error='PROVIDER_OUTCOME_UNCONFIRMED',lease_id=NULL,lease_until=NULL,next_attempt_at=now()+interval '120 seconds',updated_at=now() WHERE id=? AND lease_id=?",work.id(),work.leaseId());
-        // No automatic second POST after losing the payout ID. An idempotent same-key recovery requires a reviewed provider retention contract.
+        // Signed webhook recovery can attach the original provider ID. Never issue a fresh transfer for an unknown result.
     }
     @Transactional
     public void recoverStaleSubmissions() {

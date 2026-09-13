@@ -55,6 +55,13 @@ export type AttentionItem = {
 export type DeliveryOverview = {
   generatedAt: string;
   windowHours: number;
+  windowStart: string;
+  windowEnd: string;
+  pageSize: number;
+  activityOffset: number;
+  attentionOffset: number;
+  activityHasMore: boolean;
+  attentionHasMore: boolean;
   metrics: DeliveryMetrics;
   hourlyActivity: HourlyActivity[];
   providerShare: ProviderShare[];

@@ -1,0 +1,69 @@
+{
+  "courseId": "delivery",
+  "minutesAdded": 92,
+  "addSources": [],
+  "lessons": [
+    {
+      "id": "delivery-engineering-map",
+      "title": "Trace readiness, candidate ranking and provider job creation",
+      "overview": "Delivery starts from a chef-specific order and its readiness facts, not directly from customer payment. The integration layer receives an eligible delivery command, determines the real capabilities and availability of configured providers, builds genuine candidates such as quotes or riders when an adapter actually supplies them, ranks those candidates, persists the assignment decision, and creates or reuses the external provider job. Outcome evidence later updates delivery state and learning signals without replaying the assignment.",
+      "steps": [
+        {"label": "Start from the sub-order", "detail": "Identify chef acceptance, preparation time, ready_at and the chefSubOrderId that forms the fulfilment boundary."},
+        {"label": "Check provider eligibility", "detail": "Trace configured provider status, adapter capability and required pickup/drop/package facts before ranking."},
+        {"label": "Build real candidates", "detail": "Use actual quotes, ETAs or rider data returned by adapters; never synthesize unavailable provider evidence."},
+        {"label": "Rank", "detail": "Follow DeliveryIntelligenceService scoring inputs and distinguish configured/model state from factual provider availability."},
+        {"label": "Persist assignment", "detail": "Record the selected decision keyed to the sub-order so retries can reuse it."},
+        {"label": "Create and observe", "detail": "Map the decision to the provider create call, store provider identifiers and process later status/outcome evidence independently."}
+      ],
+      "example": "If one adapter only returns a quote and another returns ETA plus rider information, the ranking layer may compare supported real fields but must not invent rider coordinates for the quote-only provider.",
+      "lab": "Trace a mocked chef sub-order from ready_at through candidate creation, DeliveryIntelligenceService, persisted assignment and provider-create response. Label every fact as order-owned, Craves-derived or provider-supplied.",
+      "pitfall": "A registered provider, a successful API health check and a successfully created production job are different levels of evidence.",
+      "questions": [
+        {"id": "delivery-engineering-map-q1", "prompt": "What is the delivery assignment boundary in the reviewed design?", "options": ["Chef-specific sub-order", "Academy user", "Whole customer account", "Home-page session"], "answer": 0, "explanation": "Delivery assignment is tied to the chef-specific sub-order."},
+        {"id": "delivery-engineering-map-q2", "prompt": "What should happen when an adapter does not provide rider coordinates?", "options": ["Do not fabricate them", "Generate random coordinates", "Use the customer IP address", "Copy another provider's rider"], "answer": 0, "explanation": "Ranking must respect the real capability of each adapter."}
+      ]
+    },
+    {
+      "id": "delivery-build-provider",
+      "title": "Integrate a hyperlocal provider as a production-grade adapter",
+      "overview": "A new delivery provider should enter through the existing provider abstraction instead of leaking provider-specific fields throughout Order or web code. Confirm the provider's real hyperlocal product and production API contract, model capability truthfully, map Craves pickup/drop/package data into the provider request, normalize quote/create/status responses, verify callbacks, persist provider identifiers, and implement idempotent create/retry behavior. Credentials and webhook secrets stay in secure runtime configuration.",
+      "steps": [
+        {"label": "Confirm product contract", "detail": "Use the provider's approved hyperlocal production endpoints, authentication and account permissions; do not substitute an unrelated e-commerce API."},
+        {"label": "Define capabilities", "detail": "Declare only what the adapter can really supply: quote, ETA, job create, cancel, tracking, rider details or webhook events."},
+        {"label": "Map Craves facts", "detail": "Use stored order pickup/drop snapshots and package facts; keep provider DTOs inside the adapter boundary."},
+        {"label": "Normalize results", "detail": "Convert provider-specific success/error/status responses into stable Craves delivery outcomes."},
+        {"label": "Make create idempotent", "detail": "Persist the relationship between chefSubOrderId, assignment and provider job so retries do not create duplicates."},
+        {"label": "Secure callbacks", "detail": "Validate webhook/callback authentication as supported and deduplicate repeated terminal outcomes."},
+        {"label": "Prove production", "detail": "After non-production tests, require explicit authorized production evidence before marking the provider active for real assignments."}
+      ],
+      "example": "Adding Pidge, Shadowfax, Delhivery or another hyperlocal provider should produce an adapter with normalized Craves behavior. Provider-specific request fields should not become fields on every Order controller.",
+      "lab": "Using a fake provider contract, design an adapter capability matrix, quote/create/status DTO mapping, idempotency key, callback verification and failure normalization. Do not use real credentials or create a live delivery.",
+      "pitfall": "Do not mark a provider production-enabled because code exists or CI is green; runtime credentials, production product access and a real accepted job are separate evidence.",
+      "questions": [
+        {"id": "delivery-build-provider-q1", "prompt": "Where should provider-specific delivery DTOs be concentrated?", "options": ["Inside the provider adapter boundary", "Across every Order controller", "Inside Academy progress tables", "Inside the customer CSS"], "answer": 0, "explanation": "Adapter isolation protects the Craves delivery model from provider-specific churn."},
+        {"id": "delivery-build-provider-q2", "prompt": "What proves a provider is usable for production orders?", "options": ["Approved production configuration plus successful runtime evidence", "Only a source file", "Only a green CI run", "Only a dashboard logo"], "answer": 0, "explanation": "Production capability requires runtime evidence, not source presence alone."}
+      ]
+    },
+    {
+      "id": "delivery-test-release-recover",
+      "title": "Test duplicates, provider outages and assignment recovery",
+      "overview": "Delivery failures often occur after a decision has already been made. Tests must cover no candidates, provider quote failure, create timeout, duplicate create request, duplicate callback, terminal outcome replay and provider unavailability after ranking. Recovery should inspect the persisted assignment and provider job before reranking or recreating. If the selected provider is genuinely unavailable and policy permits reassignment, the new decision must be explicit and auditable rather than silently overwriting history.",
+      "steps": [
+        {"label": "Test no-candidate behavior", "detail": "Verify the system reports an actionable unavailable state instead of fabricating a delivery option."},
+        {"label": "Test uncertain create", "detail": "Simulate timeout after provider acceptance and require lookup/reconciliation before another create call."},
+        {"label": "Test assignment retry", "detail": "Repeat the same sub-order assignment request and assert the persisted decision is reused."},
+        {"label": "Test callback replay", "detail": "Send the same terminal outcome more than once and assert one state/score update."},
+        {"label": "Test provider isolation", "detail": "A failure in one adapter should not corrupt another provider's credentials, state or candidate data."},
+        {"label": "Validate production safely", "detail": "Use the smallest explicitly authorized real test and retain provider job ID, Craves sub-order ID and outcome without exposing secrets."},
+        {"label": "Recover transparently", "detail": "Preserve the original assignment and failure evidence when an authorized reassignment occurs."}
+      ],
+      "example": "A create call times out after the provider accepted the job. The next request first checks the stored/provider relationship. Blindly creating again can result in two riders for one sub-order.",
+      "lab": "Build a mocked failure suite for quote timeout, create timeout-after-accept, duplicate assignment, duplicate delivered callback and provider-down-after-ranking. Define expected external-call counts and persisted records.",
+      "pitfall": "Rerandomizing on every retry defeats durable assignment idempotency and makes incidents difficult to reconstruct.",
+      "questions": [
+        {"id": "delivery-test-release-recover-q1", "prompt": "What should a retry do when an assignment already exists?", "options": ["Reuse/reconcile the persisted decision", "Always rerank", "Always create a second provider job", "Delete the original evidence"], "answer": 0, "explanation": "Persisted assignment is the idempotency boundary."},
+        {"id": "delivery-test-release-recover-q2", "prompt": "How should a repeated terminal callback affect scoring?", "options": ["Exactly one accepted outcome update", "One update per retry", "No signature check", "A new assignment every time"], "answer": 0, "explanation": "Terminal outcome processing must be deduplicated."}
+      ]
+    }
+  ]
+}

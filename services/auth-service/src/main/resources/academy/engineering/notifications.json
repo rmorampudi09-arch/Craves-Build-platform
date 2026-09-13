@@ -1,0 +1,69 @@
+{
+  "courseId": "notifications",
+  "minutesAdded": 80,
+  "addSources": [
+    "services/notification-service/src/main/java/in/craves/notification/api/NotificationDeliveryController.java"
+  ],
+  "lessons": [
+    {
+      "id": "notifications-engineering-map",
+      "title": "Trace event, request, template, channel and delivery evidence",
+      "overview": "Notification work should be reasoned about as a pipeline. An owning Craves service produces an event or internal request, Notification Service validates the caller and request key, persists notification/audit state, renders an approved template, selects an enabled channel adapter, records the delivery attempt and later exposes evidence of success or failure. In-app persistence and external provider acceptance are different stages, and phone authentication OTP remains outside this transactional-notification boundary.",
+      "steps": [
+        {"label": "Identify the source event", "detail": "Start with the business event and source service rather than with an email/SMS provider."},
+        {"label": "Trace internal authorization", "detail": "Follow the internal notification controller and service-authentication requirements."},
+        {"label": "Trace persistence", "detail": "Locate request key, recipient reference, inbox/audit record and attempt state."},
+        {"label": "Trace rendering", "detail": "Identify the template and variables that turn the event into channel-specific content."},
+        {"label": "Trace the adapter", "detail": "Follow only the configured channel provider and its normalized success/failure result."},
+        {"label": "Separate evidence", "detail": "Distinguish request recorded, provider accepted, delivered/read and any retry attempt."}
+      ],
+      "example": "An in-app notification can exist while an email attempt is pending or failed. Support should inspect each channel attempt instead of inferring email delivery from the inbox row.",
+      "lab": "Trace one synthetic internal notification from source event to InternalNotificationController, persisted request, template, provider attempt and result. Mark which stage proves what.",
+      "pitfall": "Do not route Firebase phone-OTP troubleshooting through the transactional notification inbox just because both involve messages.",
+      "questions": [
+        {"id": "notifications-engineering-map-q1", "prompt": "What does a persisted notification request prove?", "options": ["That the request was recorded", "That every external channel delivered", "That the user read it", "That payment succeeded"], "answer": 0, "explanation": "Provider acceptance and end delivery require separate evidence."},
+        {"id": "notifications-engineering-map-q2", "prompt": "Where does phone authentication OTP belong?", "options": ["Firebase Authentication and Auth boundary", "Transactional inbox", "Delivery ranking", "Subscription scheduler"], "answer": 0, "explanation": "Authentication OTP and transactional notifications have different ownership."}
+      ]
+    },
+    {
+      "id": "notifications-build-feature",
+      "title": "Add a notification type without coupling the source service to providers",
+      "overview": "A new notification should begin with an approved business event and stable internal contract, not provider-specific payload code in the source service. Define an event/request key, recipient semantics, template variables and allowed channels; implement or update the template and Notification Service handling; keep provider mapping inside channel adapters; then add observability and retry behavior. Do not include sensitive customer data in logs, idempotency keys or Academy examples.",
+      "steps": [
+        {"label": "Define the event", "detail": "Name the source event, recipient type and stable fields needed to render the message."},
+        {"label": "Define idempotency", "detail": "Choose a request/event key so retries do not create uncontrolled duplicate notifications."},
+        {"label": "Add template", "detail": "Create approved content variables and keep presentation separate from the source service's domain transaction."},
+        {"label": "Select channels", "detail": "Use enabled channel adapters and preference rules rather than hard-coding a provider call in the producer."},
+        {"label": "Record attempts", "detail": "Persist normalized attempt outcome and provider correlation data needed for support."},
+        {"label": "Expose safe status", "detail": "Return or display only the delivery information the caller is authorized to see."}
+      ],
+      "example": "Order can emit an approved order-ready notification request containing the minimal event facts; Notification Service decides how to render and send it through configured channels.",
+      "lab": "Design a fictional notification type with event key, minimal payload, template variables, channel choices, duplicate handling, attempt states and tests. Use fake recipients only.",
+      "pitfall": "Putting an email-provider SDK directly into every business service creates duplicated secrets, retry logic and failure behavior.",
+      "questions": [
+        {"id": "notifications-build-feature-q1", "prompt": "Where should channel-provider mapping live?", "options": ["Notification provider adapter", "Every source service", "Customer CSS", "Order snapshot"], "answer": 0, "explanation": "Central provider adapters keep source services independent from channel vendors."},
+        {"id": "notifications-build-feature-q2", "prompt": "What should make a retried notification request safe?", "options": ["Stable request/event idempotency", "Random recipient changes", "Deleting previous attempts", "Ignoring source events"], "answer": 0, "explanation": "A stable request key allows the service to detect and control retries."}
+      ]
+    },
+    {
+      "id": "notifications-test-release-recover",
+      "title": "Test channel failures, privacy and replay-safe recovery",
+      "overview": "Notification tests should include duplicate internal requests, template-variable errors, disabled channels, provider timeout, provider rejection and repeated recovery. Assertions must verify both customer-visible behavior and retained attempt evidence. Production release checks confirm provider configuration and templates without sending uncontrolled messages. Recovery begins with the original request key and failure reason; it must not rewrite the source business event or leak customer contact data into diagnostics.",
+      "steps": [
+        {"label": "Test duplicates", "detail": "Replay the same request key and verify the configured duplicate behavior."},
+        {"label": "Test rendering errors", "detail": "Remove or invalidate a required synthetic template variable and assert a controlled failure."},
+        {"label": "Test provider failure", "detail": "Simulate timeout/rejection and confirm attempt state remains diagnosable and retryable."},
+        {"label": "Test privacy", "detail": "Ensure logs and Academy-facing diagnostics do not expose message bodies, real emails, phone numbers or secrets."},
+        {"label": "Smoke configuration", "detail": "Verify enabled channels/templates and provider connectivity through the approved non-destructive method."},
+        {"label": "Recover by request key", "detail": "Retry the failed delivery path using original event correlation rather than recreating the business action."}
+      ],
+      "example": "If an approval email fails after chef approval, use the notification request and attempt evidence to recover the email; do not repeat the chef approval transaction.",
+      "lab": "Build a fake-notification failure matrix for duplicate request, missing template variable, provider timeout, disabled channel and retry. Record expected request and attempt states.",
+      "pitfall": "Copying full production message payloads into tickets or training material can turn an operational fix into a privacy incident.",
+      "questions": [
+        {"id": "notifications-test-release-recover-q1", "prompt": "What should recovery start from?", "options": ["Original request/event correlation and failure evidence", "A brand-new business event", "A customer password", "A random message body"], "answer": 0, "explanation": "Correlation preserves causality and prevents duplicate business actions."},
+        {"id": "notifications-test-release-recover-q2", "prompt": "Which data should not appear in Academy diagnostics?", "options": ["Real contact details and message bodies", "Course ID", "Lesson ID", "Synthetic attempt status"], "answer": 0, "explanation": "Training and diagnostics do not require customer message content or PII."}
+      ]
+    }
+  ]
+}

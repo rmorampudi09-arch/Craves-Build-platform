@@ -1,0 +1,122 @@
+{
+  "course": {
+    "id": "platform-engineering",
+    "service": "platform",
+    "title": "Platform engineering: build, verify, release & recover Craves features",
+    "level": "Advanced",
+    "minutes": 155,
+    "description": "A hands-on engineering playbook for turning an approved Craves requirement into a secure Spring/Next.js change, proving it in CI, releasing it through the established Azure path and recovering safely.",
+    "sources": [
+      "services/auth-service/src/main/java/in/craves/auth/academy/AcademyCatalog.java",
+      "apps/customer-web-next/src/lib/server-api.ts",
+      ".github/workflows/craves-academy-ci.yml",
+      "scripts/academy/verify-curriculum.py"
+    ],
+    "lessons": [
+      {
+        "id": "platform-own-the-change",
+        "title": "Find the owning service before writing code",
+        "overview": "Craves is a set of bounded services and clients, not one shared database application. Before implementing a feature, identify the domain owner, the caller, any cross-service contracts and the historical data boundary. Authentication belongs to Auth, customer/chef profile data to User-Chef, catalog facts to Catalog, checkout/order state to Order, payments and delivery integrations to Integration, subscriptions to Subscription, and transactional messaging to Notification. The web BFF orchestrates browser access but does not become the owner of backend business state.",
+        "steps": [
+          {"label": "Write one-sentence ownership", "detail": "State which service owns the new durable fact or transition and why."},
+          {"label": "List callers", "detail": "Identify customer, chef, admin, internal service or provider callbacks and the authentication required for each."},
+          {"label": "List contracts", "detail": "Record every API/event read or write crossing the owner boundary."},
+          {"label": "Mark historical data", "detail": "Decide which mutable source facts must be snapshotted when an order/payment/subscription event occurs."},
+          {"label": "Separate product decisions", "detail": "Flag pricing, commissions, delivery policy, compliance and other business rules for authorized owners instead of inventing them."},
+          {"label": "Choose the smallest change", "detail": "Prefer extending the owning module and existing patterns over creating a new service for a single field or endpoint."}
+        ],
+        "example": "A new customer profile preference starts in User-Chef. If checkout needs to preserve its historical value, Order receives an explicit contract and snapshot; the field does not justify a new microservice.",
+        "lab": "Take a fictional approved feature and produce an ownership map: owner, callers, cross-service dependencies, historical snapshot needs and policy questions. No code until the map is coherent.",
+        "pitfall": "Starting in the UI and then searching for somewhere to store the data commonly produces duplicated business logic and broken ownership.",
+        "questions": [
+          {"id": "platform-own-the-change-q1", "prompt": "What is the first architecture question for a new feature?", "options": ["Which service owns the durable fact or transition?", "Which button color?", "Which provider logo?", "Which Academy badge?"], "answer": 0, "explanation": "Ownership determines where validation, persistence and authorization belong."},
+          {"id": "platform-own-the-change-q2", "prompt": "What should happen to an unresolved pricing or compliance rule?", "options": ["Escalate it to the authorized business owner", "Guess a sensible value", "Copy a competitor", "Hide it in the frontend"], "answer": 0, "explanation": "Engineering must not silently create product or compliance policy."}
+        ]
+      },
+      {
+        "id": "platform-build-vertical-slice",
+        "title": "Build a vertical slice in Spring Boot and Next.js",
+        "overview": "A complete Craves feature normally travels through contract, database migration when needed, domain/service logic, controller authorization, tests, BFF/client parsing and UI states. Build from the owning backend outward. Keep controllers thin, use the service layer for transactional rules, use forward migrations for schema, expose DTOs rather than database internals, and let the Next.js BFF forward the existing authenticated session through controlled routes. Mobile clients should consume the same approved API contract instead of gaining separate business rules.",
+        "steps": [
+          {"label": "Define acceptance criteria", "detail": "Write expected success, denial, validation, retry and failure behavior before implementation."},
+          {"label": "Change schema safely", "detail": "When persistence changes, add a backward-compatible migration and define null/default behavior for existing rows."},
+          {"label": "Implement service first", "detail": "Put business validation, state transition and transaction semantics in the owning Java service."},
+          {"label": "Expose the controller", "detail": "Add request/response DTOs and explicit ownership/role/internal authorization."},
+          {"label": "Add automated tests", "detail": "Cover success plus wrong-role/owner, invalid payload, duplicate request and dependency failure where applicable."},
+          {"label": "Add BFF/client", "detail": "Create a constrained same-origin route or server call, validate runtime JSON and model every important UI state."},
+          {"label": "Document rollback", "detail": "Explain how the old version will read data written by the new version and how to disable the feature safely."}
+        ],
+        "example": "An admin-only field update is incomplete if only the React form exists. The secure vertical slice includes backend role enforcement, validation, persistence, tests, BFF policy, typed parsing and error/denied UI.",
+        "lab": "Write a file-by-file implementation plan for a synthetic feature using the actual Craves folder structure. Include migration, Java layers, tests, Next.js route/component and rollback compatibility.",
+        "pitfall": "Do not create a second Node.js business backend to implement a new feature; Craves backend modules are intentionally Spring Boot/Java.",
+        "questions": [
+          {"id": "platform-build-vertical-slice-q1", "prompt": "Where should transactional business rules normally live?", "options": ["Owning Spring service layer", "CSS", "Browser localStorage", "GitHub issue title"], "answer": 0, "explanation": "The service layer is the authoritative reusable transactional boundary."},
+          {"id": "platform-build-vertical-slice-q2", "prompt": "What makes a schema migration rollback-friendly?", "options": ["Backward-compatible changes that old code can tolerate", "Dropping old columns immediately", "Editing production tables manually", "Putting schema in React state"], "answer": 0, "explanation": "Compatibility allows code rollback without destructive data rollback."}
+        ]
+      },
+      {
+        "id": "platform-quality-gates",
+        "title": "Turn requirements into tests and CI gates",
+        "overview": "CI should prove properties that matter, not just compilation. Each feature needs tests nearest to its risk: security and state tests in Java, BFF/parser/component-policy tests in TypeScript, and repository checks for source integrity. The Academy workflow demonstrates this pattern by verifying curriculum provenance, running Java tests, running Node tests, linting, typechecking and producing a Next.js build without accessing production credentials or providers.",
+        "steps": [
+          {"label": "Map risk to test", "detail": "For every acceptance criterion, choose unit, integration, contract or smoke coverage that can actually detect its failure."},
+          {"label": "Add negative cases", "detail": "Security, ownership, duplicate request and malformed upstream response tests are mandatory for protected features."},
+          {"label": "Keep CI isolated", "detail": "Use disposable databases/mocks/sandboxes; CI must not charge customers, create riders or depend on production secrets."},
+          {"label": "Run static gates", "detail": "Use compiler/typecheck, lint and build to catch integration errors outside individual tests."},
+          {"label": "Pin provenance", "detail": "Record the commit/revision under test so evidence can be tied to exactly what was built."},
+          {"label": "Fail loudly", "detail": "A failing verification must stop promotion rather than being converted into an informational warning for convenience."}
+        ],
+        "example": "A delivery adapter unit test proves response normalization; a duplicate-create integration test proves idempotency; an authorized staging smoke proves the deployed route and credentials are wired. None replaces the others.",
+        "lab": "For a fictional feature, write six CI checks: one happy path, two negative/security cases, one duplicate/concurrency case, one static/type gate and one build/contract gate. State which production risk each catches.",
+        "pitfall": "A pipeline that always exits zero produces green badges, not trustworthy release evidence.",
+        "questions": [
+          {"id": "platform-quality-gates-q1", "prompt": "What should CI avoid?", "options": ["Production charges, deliveries and secrets", "Disposable test databases", "Unit tests", "Type checking"], "answer": 0, "explanation": "CI must be deterministic and non-destructive."},
+          {"id": "platform-quality-gates-q2", "prompt": "What does a passing build prove?", "options": ["The configured build checks passed for that source revision", "Production is automatically accepted", "Every provider is live", "Every migration is deployed"], "answer": 0, "explanation": "Build evidence is necessary but distinct from deployment/runtime acceptance."}
+        ]
+      },
+      {
+        "id": "platform-release-evidence",
+        "title": "Release through the established Azure path with evidence",
+        "overview": "A release has several evidence stages: reviewed source SHA, successful CI, immutable artifact/image identity, target environment configuration, database migration, Azure revision health, APIM or public routing, feature flags and authenticated smoke tests. The Academy CI intentionally does not deploy; production promotion must use the established Craves release pipeline and service connection. Keep credentials in approved secret stores/pipeline variables and never paste them into source, training or chat logs.",
+        "steps": [
+          {"label": "Freeze the source", "detail": "Identify the exact commit being released and ensure required review/CI is complete."},
+          {"label": "Identify the artifact", "detail": "Record image/build identifier so runtime evidence can be tied to the same tested code."},
+          {"label": "Check migration/config", "detail": "Verify schema migration, environment variables, feature flags and secret references before traffic depends on them."},
+          {"label": "Check Azure revision", "detail": "Confirm the intended service revision is healthy and receiving the expected traffic without changing topology unnecessarily."},
+          {"label": "Check routing", "detail": "Verify APIM/domain/BFF paths reach the intended backend revision."},
+          {"label": "Smoke positive and negative", "detail": "Run one authorized success and one denied/invalid case for the changed protected capability."},
+          {"label": "Record rollback point", "detail": "Keep the previous known-good artifact/revision and the trigger for reverting."}
+        ],
+        "example": "A GitHub Actions build can pass while APIM still points to an old backend revision. Release status stays incomplete until the routed authenticated request proves the intended runtime path.",
+        "lab": "Prepare a release-evidence sheet for a synthetic feature: commit, CI run, artifact, migration, config references, Azure revision, route, positive smoke, negative smoke and rollback target. Do not provision paid Azure resources in the exercise.",
+        "pitfall": "Do not rotate working secrets or redeploy unrelated services simply to make release evidence look newer.",
+        "questions": [
+          {"id": "platform-release-evidence-q1", "prompt": "Which item connects tested code to the running release?", "options": ["Immutable commit/artifact/revision evidence", "A screenshot alone", "A course score", "A browser bookmark"], "answer": 0, "explanation": "Traceable immutable identifiers connect source, build and runtime."},
+          {"id": "platform-release-evidence-q2", "prompt": "Does Craves Academy CI deploy production?", "options": ["No; it intentionally performs validation only", "Yes; every quiz deploys", "Yes; on every page view", "Only when a learner scores 100"], "answer": 0, "explanation": "The Academy CI is intentionally non-deploying and production promotion uses established release controls."}
+        ]
+      },
+      {
+        "id": "platform-operate-recover",
+        "title": "Operate, investigate and roll back without destroying evidence",
+        "overview": "Production engineering continues after deployment. When a feature fails, establish correlation identifiers and the exact failing boundary, compare expected versus actual state, inspect logs/metrics/provider evidence without exposing secrets, and choose the narrowest recovery. Prefer feature disablement or compatible code rollback over manual data edits. If durable customer/order/payment data is wrong, preserve the original evidence and use an approved correction path. Scaling or provisioning changes are separate operational decisions and should not be used as a reflexive fix for logic errors.",
+        "steps": [
+          {"label": "Define the symptom", "detail": "Capture exact endpoint/action, timestamp, correlation/resource ID and expected versus actual result."},
+          {"label": "Locate the boundary", "detail": "Determine whether failure is browser/BFF, APIM/routing, Java service, database, provider or asynchronous recovery path."},
+          {"label": "Protect evidence", "detail": "Retain relevant IDs/status transitions while redacting credentials and personal data."},
+          {"label": "Stop further harm", "detail": "Disable the narrow feature or provider when supported rather than broad platform shutdown or unreviewed data mutation."},
+          {"label": "Recover idempotently", "detail": "Reconcile existing state before replaying payments, deliveries, notifications or scheduler work."},
+          {"label": "Roll back compatibly", "detail": "Return to the previous known-good artifact only after confirming it can read state written by the failed release."},
+          {"label": "Close the loop", "detail": "Add a regression test/runbook update so the same failure becomes detectable before the next release."}
+        ],
+        "example": "If a delivery-create call times out, investigate the persisted assignment and provider job before replaying. If a web page alone is broken, do not restart payment or delivery services to fix it.",
+        "lab": "Run a tabletop incident with a fake resource ID. Produce symptom, boundary hypothesis, evidence, containment, reconciliation, rollback check and regression-test action. No real customer/provider actions are allowed.",
+        "pitfall": "Manual production database edits can erase the very evidence needed to reconcile money, delivery or customer history.",
+        "questions": [
+          {"id": "platform-operate-recover-q1", "prompt": "What should happen before replaying an uncertain external action?", "options": ["Reconcile existing internal and external state", "Delete the audit trail", "Generate a new customer", "Increase replicas automatically"], "answer": 0, "explanation": "Reconciliation prevents duplicate external effects."},
+          {"id": "platform-operate-recover-q2", "prompt": "What is the preferred first recovery for a narrowly broken feature when available?", "options": ["Disable or roll back the narrow capability while preserving evidence", "Manually rewrite all related database rows", "Rotate every secret", "Rebuild the entire platform"], "answer": 0, "explanation": "Narrow reversible recovery reduces blast radius and preserves evidence."}
+        ]
+      }
+    ],
+    "prerequisites": ["auth", "web"]
+  }
+}

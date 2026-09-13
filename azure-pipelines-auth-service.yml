@@ -15,9 +15,25 @@ parameters:
     type: string
     default: ca-craves-auth-service-prodlow
   - name: imageTag
-    displayName: Immutable image tag
+    displayName: Immutable image tag (Academy mode uses the exact source SHA)
     type: string
     default: $(Build.BuildId)
+  - name: academyPublication
+    displayName: Guarded Academy-only curriculum publication
+    type: boolean
+    default: false
+  - name: expectedReleaseSha
+    displayName: Exact reviewed commit for Academy publication
+    type: string
+    default: NOT_SELECTED
+  - name: academyBaselineSourceSha
+    displayName: Source of the last accepted Auth runtime (must match the baseline image)
+    type: string
+    default: 6691aa2ff663e51a257407b9b1f4b5b7b4ba87d5
+  - name: academyExpectedCurrentImage
+    displayName: Expected current Auth image; refuse an unexpectedly newer baseline
+    type: string
+    default: cravesprodlowacr82121.azurecr.io/craves/auth-service@sha256:ffdeb9a3fabc532a4b0bcd6baeff36b5b11188a036d7e353f5a7317150606070
 
 variables:
   modulePath: services/auth-service
@@ -28,6 +44,26 @@ pool:
 
 steps:
   - checkout: self
+    fetchDepth: 0
+    persistCredentials: false
+
+  - ${{ if eq(parameters.academyPublication, true) }}:
+    - bash: |
+        set -euo pipefail
+        python3 scripts/academy/verify-curriculum.py --git
+        python3 scripts/academy/test-release-guard.py
+        python3 scripts/academy/release-guard.py source --baseline "$ACADEMY_BASELINE_SOURCE"
+        test "$ACADEMY_EXPECTED_SOURCE" = "$(git rev-parse HEAD)"
+        test "$TARGET_RG" = rg-craves-prodlow-centralindia
+        test "$TARGET_ACR" = cravesprodlowacr82121
+        test "$TARGET_APP" = ca-craves-auth-service-prodlow
+      displayName: Verify Academy source, exact commit and fixed target
+      env:
+        ACADEMY_BASELINE_SOURCE: ${{ parameters.academyBaselineSourceSha }}
+        ACADEMY_EXPECTED_SOURCE: ${{ parameters.expectedReleaseSha }}
+        TARGET_RG: ${{ parameters.resourceGroupName }}
+        TARGET_ACR: ${{ parameters.acrName }}
+        TARGET_APP: ${{ parameters.containerAppName }}
 
   - task: JavaToolInstaller@0
     displayName: Use Java 21
@@ -42,6 +78,24 @@ steps:
       mvn -B -ntp clean verify
     displayName: Maven build and tests
 
+  - ${{ if eq(parameters.academyPublication, true) }}:
+    - task: AzureCLI@2
+      displayName: Read-only Academy runtime and backup preflight
+      inputs:
+        azureSubscription: $(AZURE_SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          set +x
+          python3 scripts/academy/release-guard.py preflight --baseline "$ACADEMY_BASELINE_SOURCE" --evidence "$(Build.ArtifactStagingDirectory)/academy-release"
+          DEPLOY_PREFLIGHT_ONLY=true bash scripts/release/deploy-single-service-preserve-runtime.sh \
+            rg-craves-prodlow-centralindia ca-craves-auth-service-prodlow "$ACADEMY_EXPECTED_IMAGE" auth
+      env:
+        ACADEMY_BASELINE_SOURCE: ${{ parameters.academyBaselineSourceSha }}
+        ACADEMY_EXPECTED_SOURCE: ${{ parameters.expectedReleaseSha }}
+        ACADEMY_EXPECTED_IMAGE: ${{ parameters.academyExpectedCurrentImage }}
+
   - task: AzureCLI@2
     displayName: Build and push immutable Auth image
     inputs:
@@ -53,6 +107,7 @@ steps:
         ACR='${{ parameters.acrName }}'
         TAG='${{ parameters.imageTag }}'
         IMAGE_REPOSITORY='$(imageRepository)'
+        if [[ "$ACADEMY_PUBLICATION" == True || "$ACADEMY_PUBLICATION" == true ]]; then TAG='$(Build.SourceVersion)'; fi
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
         [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
@@ -60,6 +115,8 @@ steps:
         docker build --pull -t "$IMAGE" "$(modulePath)"
         docker push "$IMAGE"
         echo "Image pushed: $IMAGE"
+    env:
+      ACADEMY_PUBLICATION: ${{ parameters.academyPublication }}
 
   - task: AzureCLI@2
     displayName: Deploy Auth image without changing runtime configuration
@@ -69,22 +126,39 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        set +x
         RG='${{ parameters.resourceGroupName }}'
         ACR='${{ parameters.acrName }}'
         APP='${{ parameters.containerAppName }}'
         TAG='${{ parameters.imageTag }}'
+        if [[ "$ACADEMY_PUBLICATION" == True || "$ACADEMY_PUBLICATION" == true ]]; then TAG='$(Build.SourceVersion)'; fi
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
         [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
-
-        # Craves prod-low has documented healthy Container App revisions taking
-        # more than ten minutes to converge. Preserve fail-fast terminal-state
-        # checks but use the proven bounded 25-minute observation window.
+        if [[ "$ACADEMY_PUBLICATION" == True || "$ACADEMY_PUBLICATION" == true ]]; then
+          DIGEST=$(az acr repository show --name "$ACR" --image "$(imageRepository):$TAG" --query digest -o tsv --only-show-errors)
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'ERROR: Missing immutable image digest.' >&2; exit 1; }
+          IMAGE="$ACR_LOGIN_SERVER/$(imageRepository)@$DIGEST"
+          # Recheck the baseline immediately before the image mutation.
+          python3 scripts/academy/release-guard.py preflight --baseline "$ACADEMY_BASELINE_SOURCE" --evidence "$(Build.ArtifactStagingDirectory)/academy-release"
+        fi
         echo 'Auth Container App readiness window: 1500 seconds (150 x 10s).'
-        READY_ATTEMPTS=150 \
-        READY_SLEEP_SECONDS=10 \
-        bash scripts/release/deploy-single-service-preserve-runtime.sh \
-          "$RG" \
-          "$APP" \
-          "$IMAGE" \
-          auth
+        READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10 \
+        bash scripts/release/deploy-single-service-preserve-runtime.sh "$RG" "$APP" "$IMAGE" auth
+        if [[ "$ACADEMY_PUBLICATION" == True || "$ACADEMY_PUBLICATION" == true ]]; then
+          ACADEMY_EXPECTED_IMAGE="$IMAGE" python3 scripts/academy/release-guard.py postflight \
+            --baseline "$ACADEMY_BASELINE_SOURCE" --evidence "$(Build.ArtifactStagingDirectory)/academy-release"
+        fi
+    env:
+      ACADEMY_PUBLICATION: ${{ parameters.academyPublication }}
+      ACADEMY_BASELINE_SOURCE: ${{ parameters.academyBaselineSourceSha }}
+      ACADEMY_EXPECTED_SOURCE: ${{ parameters.expectedReleaseSha }}
+      ACADEMY_EXPECTED_IMAGE: ${{ parameters.academyExpectedCurrentImage }}
+
+  - ${{ if eq(parameters.academyPublication, true) }}:
+    - task: PublishPipelineArtifact@1
+      condition: always()
+      displayName: Publish sanitized Academy release evidence
+      inputs:
+        targetPath: $(Build.ArtifactStagingDirectory)/academy-release
+        artifact: academy-release-evidence

@@ -27,22 +27,40 @@ class AcademyCoreTest {
     @Test void invalidModelInputsAreRejected() {
         for(double p:new double[]{-1,2,Double.NaN,Double.POSITIVE_INFINITY}) assertThrows(IllegalArgumentException.class,()->AcademyLearningModel.update(p,true));
         assertEquals(100,AcademyLearningModel.score(2,2));assertEquals(50,AcademyLearningModel.score(1,2));
+        assertEquals(67,AcademyLearningModel.score(2,3));
         assertThrows(IllegalArgumentException.class,()->AcademyLearningModel.score(1,0));
     }
 
     @Test void catalogContainsEngineeringCurriculumAndNoPublicAnswerKeys() throws Exception {
-        var catalog=new AcademyCatalog(new ObjectMapper());var view=catalog.publicCatalog();
-        assertEquals("academy-2026-09-13-v2", catalog.version());
-        assertEquals(10,view.path("courses").size());assertTrue(catalog.sourceRevision().matches("[a-f0-9]{40}"));
+        var mapper=new ObjectMapper();var catalog=new AcademyCatalog(mapper);var view=catalog.publicCatalog();
+        assertEquals("academy-2026-09-13-v3",catalog.version());
+        assertEquals(15,view.path("courses").size());
+        assertEquals("9cf4aea069fa6a077fdef111bf2df4eeada696fc",catalog.sourceRevision());
         int sections=0,questions=0;
         for(var course:view.path("courses"))for(var lesson:course.path("lessons")){
             sections++;for(var q:lesson.path("questions")){questions++;assertFalse(q.has("answer"));assertFalse(q.has("explanation"));}
         }
-        assertEquals(50,sections);assertEquals(100,questions);
+        assertEquals(75,sections);assertEquals(175,questions);
+        assertTrue(mapper.writeValueAsBytes(view).length<=900000,"Keep headroom below the existing one-MiB BFF bound");
         assertTrue(catalog.courses().get(0).path("lessons").get(0).path("questions").get(0).has("answer"));
-        assertEquals("platform-engineering", catalog.course("platform-engineering").path("id").asText());
+        assertEquals("platform-engineering",catalog.course("platform-engineering").path("id").asText());
         assertThrows(ResponseStatusException.class,()->catalog.course("unknown"));
         assertThrows(ResponseStatusException.class,()->catalog.sourcePath("auth",999));
+    }
+
+    @Test void appliedTracksHaveCompleteTeachingAndFitExistingSourceRoutes() throws Exception {
+        var catalog=new AcademyCatalog(new ObjectMapper());
+        for(String id:List.of("java-engineering","mobile-engineering","data-engineering","document-engineering","service-labs")){
+            var course=catalog.course(id);
+            assertEquals(id.equals("service-labs")?9:4,course.path("lessons").size());
+            assertTrue(course.path("sources").size()<=10);
+            for(int i=0;i<course.path("sources").size();i++)assertTrue(AcademySources.isReviewedPath(catalog.sourcePath(id,i)));
+            for(var lesson:course.path("lessons")){
+                assertTrue(lesson.path("steps").size()>=6);
+                assertEquals(3,lesson.path("questions").size());
+                for(String field:List.of("overview","example","lab","pitfall"))assertFalse(lesson.path(field).asText().isBlank());
+            }
+        }
     }
 
     @Test void reviewedSourceAllowlistSupportsPinnedEngineeringEvidenceOnly() {

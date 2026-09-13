@@ -1,0 +1,34 @@
+name: Academy source package
+
+on:
+  push:
+    branches: [feat/academy-enterprise-completion-20260913]
+    paths: ['.github/workflows/academy-source-package.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package v3 tracked public source for local curriculum and document review
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/academy-package"
+          git rev-parse HEAD > "$RUNNER_TEMP/academy-package/source-sha.txt"
+          git archive --format=zip --output="$RUNNER_TEMP/academy-package/craves-source.zip" HEAD
+          cd "$RUNNER_TEMP/academy-package"
+          sha256sum craves-source.zip > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academy-immutable-source
+          path: ${{ runner.temp }}/academy-package/
+          retention-days: 1
+          if-no-files-found: error

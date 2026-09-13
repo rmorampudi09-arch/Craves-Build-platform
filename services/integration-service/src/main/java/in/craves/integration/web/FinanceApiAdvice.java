@@ -6,7 +6,8 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes={FinancePolicyController.class,ChefPayoutController.class,RazorpayXPayoutWebhookController.class})
+@RestControllerAdvice(assignableTypes={FinancePolicyController.class,ChefPayoutController.class,
+    RazorpayXPayoutWebhookController.class,FinancePayoutReconciliationController.class})
 public class FinanceApiAdvice {
     @ExceptionHandler({IllegalArgumentException.class,NullPointerException.class})
     public ProblemDetail invalid(RuntimeException exception) {

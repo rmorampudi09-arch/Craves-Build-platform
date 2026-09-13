@@ -1,2 +1,3 @@
 import { FinanceControlCenter } from "@/components/finance-control-center";
-export default function FinancePage() {return <FinanceControlCenter />;}
+import { FinanceReconciliationPanel } from "@/components/finance-reconciliation-panel";
+export default function FinancePage() {return <><FinanceControlCenter /><FinanceReconciliationPanel /></>;}

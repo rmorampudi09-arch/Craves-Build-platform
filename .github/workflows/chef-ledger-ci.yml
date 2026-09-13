@@ -11,6 +11,8 @@ on:
       - 'docs/finance/**'
       - 'scripts/finance/**'
       - '.github/workflows/chef-ledger-ci.yml'
+      - 'apps/customer-web-next/src/**/finance*'
+      - 'apps/customer-web-next/src/**/finance/**'
 
 permissions:
   contents: read
@@ -66,7 +68,8 @@ jobs:
                     'FinancialFullMigrationDatabaseTest':2,'FinancialPostingPrivilegesDatabaseTest':3,
                     'LedgerMoneyAndPolicyTest':19,'ChefFeePreviewServiceTest':4,
                     'ChefFinancialConflictAdviceTest':3,'FinanceCalculationsTest':19,
-                    'FinancePolicyDatabaseTest':5,'ChefPayoutDatabaseTest':14,'RazorpayXPayoutClientTest':11}
+                    'FinancePolicyDatabaseTest':5,'ChefPayoutDatabaseTest':14,'RazorpayXPayoutClientTest':11,
+                    'ChefPayoutWebhookDatabaseTest':8,'FinanceArithmeticPropertyTest':2,'FinanceRecoveryDatabaseTest':10}
           for name, minimum in required.items():
               files=list(root.glob('TEST-*.'+name+'.xml'))
               assert len(files)==1, 'Missing finance test report: '+name

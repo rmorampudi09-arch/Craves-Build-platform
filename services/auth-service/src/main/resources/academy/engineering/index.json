@@ -1,6 +1,6 @@
 {
   "version": "academy-2026-09-13-v2",
-  "sourceRevision": "8f37ae6e040e0a31ec90a743d60d1242cf37f32f",
+  "sourceRevision": "83ff61240a33db8fd9d9acc1e4861e928172a119",
   "reviewedOn": "2026-09-13",
   "evidenceLabel": "Repository-reviewed engineering training pinned to an immutable Craves revision. Lessons explain implementation and release practice but do not grant production permissions or replace runtime acceptance evidence.",
   "enhancements": [

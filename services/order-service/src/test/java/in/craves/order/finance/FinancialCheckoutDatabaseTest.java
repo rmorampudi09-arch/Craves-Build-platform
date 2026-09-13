@@ -51,6 +51,11 @@ class FinancialCheckoutDatabaseTest {
         var ds=new DriverManagerDataSource(url,System.getenv("LEDGER_TEST_DB_USER"),System.getenv("LEDGER_TEST_DB_PASSWORD"));
         jdbc=new JdbcTemplate(ds);var manager=new DataSourceTransactionManager(ds);tx=new TransactionTemplate(manager);
         jdbc.execute("DROP SCHEMA IF EXISTS order_schema CASCADE");
+        // Existing V16 explicitly depends on this shared-business-database Catalog ownership contract.
+        // This is a fixture for that dependency, not a claim to test the Catalog migration chain.
+        jdbc.execute("CREATE SCHEMA IF NOT EXISTS catalog_schema");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS catalog_schema.kitchen_profile(id UUID PRIMARY KEY,identity_id UUID NOT NULL UNIQUE)");
+        jdbc.update("INSERT INTO catalog_schema.kitchen_profile(id,identity_id) VALUES (?,?)",kitchen,chef);
         var flyway=Flyway.configure().dataSource(ds).defaultSchema("order_schema").schemas("order_schema").locations("classpath:db/migration").load();flyway.migrate();flyway.validate();assertEquals(0,flyway.migrate().migrationsExecuted);
         jdbc.update("UPDATE order_schema.charge_policy SET delivery_fee_flat=39 WHERE is_active=true");
         catalog=mock(CatalogClient.class);var addresses=mock(CustomerAddressClient.class);finance=mock(FinanceSourceClient.class);notifications=mock(NotificationOutboxService.class);

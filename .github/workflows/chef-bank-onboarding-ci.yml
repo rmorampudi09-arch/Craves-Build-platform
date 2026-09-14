@@ -9,6 +9,8 @@ on:
       - 'apps/customer-web-next/**'
       - 'scripts/finance/**'
       - 'docs/finance/**'
+      - 'contracts/openapi/chef-bank-onboarding-v1.yaml'
+      - 'azure-pipelines-chef-bank-configuration.yml'
       - '.github/workflows/chef-bank-onboarding-ci.yml'
 permissions:
   contents: read
@@ -53,16 +55,22 @@ jobs:
           cache-dependency-path: |
             services/integration-service/pom.xml
             services/user-chef-service/pom.xml
+      - name: Configuration guards without Azure writes or provider calls
+        run: |
+          set -euo pipefail
+          mkdir -p bank-evidence
+          python3 -m unittest discover -s scripts/finance -p 'test_configure_bank_*.py' -v 2>&1 | tee bank-evidence/configuration-tests.txt
       - name: Integration bank state, encryption, provider contract and regression tests
         run: mvn -B -ntp -f services/integration-service/pom.xml verify
       - name: User Chef identity signature and regression tests
         run: mvn -B -ntp -f services/user-chef-service/pom.xml verify
-      - name: Require bank tests without skips
+      - name: Require every bank test suite without skips
         run: |
           python3 - <<'PY'
           import pathlib, xml.etree.ElementTree as E
-          required={'BankOnboardingDatabaseTest':16,'BankDataCipherTest':6,
-                    'RazorpayBankValidationClientTest':14,'BankIdentitySignatureTest':5}
+          required={'BankOnboardingDatabaseTest':16,'BankAutomationSafetyDatabaseTest':9,
+                    'BankDataCipherTest':6,'RazorpayBankValidationClientTest':14,
+                    'BankOnboardingSecurityTest':5,'BankIdentitySignatureTest':5}
           for name,minimum in required.items():
               files=list(pathlib.Path('services').glob('*/target/surefire-reports/TEST-*.'+name+'.xml'))
               assert len(files)==1, name
@@ -77,4 +85,5 @@ jobs:
           path: |
             services/integration-service/target/surefire-reports
             services/user-chef-service/target/surefire-reports
+            bank-evidence
           retention-days: 14

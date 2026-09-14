@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
+import { Request as RuntimeRequest } from "next/dist/compiled/@edge-runtime/primitives";
 import { boundBffRequest } from "./bff-request-limits";
 
 afterEach(() => vi.useRealTimers());
@@ -16,6 +17,24 @@ describe("BFF actual-stream request limits", () => {
     expect(bounded.cookies.get("craves_access_token")?.value).toBe("fixture-only");
     expect(bounded.nextUrl.pathname).toBe("/api/cart/items");
     expect(await bounded.json()).toEqual({ quantity: 2 });
+  });
+  it("accepts a request from the framework runtime without losing its method", async () => {
+    const controller = new AbortController();
+    const input = new RuntimeRequest("https://admin.craves.in/api/auth/session?returnTo=%2Fadmin", {
+      method: "POST", body: JSON.stringify({ firebaseIdToken: "fixture-token" }), signal: controller.signal,
+      headers: { Origin: "https://admin.craves.in", "Content-Type": "application/json", Cookie: "craves_refresh_token=fixture-only" },
+    });
+    expect(input).not.toBeInstanceOf(Request);
+    const output = await boundBffRequest(input as unknown as NextRequest);
+    expect(output).toBeInstanceOf(NextRequest);
+    const bounded = output as NextRequest;
+    expect(bounded.method).toBe("POST");
+    expect(bounded.nextUrl.pathname).toBe("/api/auth/session");
+    expect(bounded.nextUrl.searchParams.get("returnTo")).toBe("/admin");
+    expect(bounded.cookies.get("craves_refresh_token")?.value).toBe("fixture-only");
+    expect(await bounded.json()).toEqual({ firebaseIdToken: "fixture-token" });
+    controller.abort();
+    expect(bounded.signal.aborted).toBe(true);
   });
   it("does not reopen a consumed empty request", async () => {
     const output = await boundBffRequest(request(""));

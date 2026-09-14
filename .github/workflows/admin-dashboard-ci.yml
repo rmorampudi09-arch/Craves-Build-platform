@@ -69,6 +69,8 @@ jobs:
         env:
           CRAVES_API_BASE_URL: https://example.invalid/api/v1
           NEXT_PUBLIC_CASHFREE_MODE: sandbox
+      - name: Verify sign-in in the built server runtime
+        run: node scripts/verify-signin-runtime.mjs
 
   order-service:
     name: Order-service admin checks

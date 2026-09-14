@@ -11,7 +11,7 @@ APIM="${APIM:-apim-craves-prodlow-l3ing6}"
 fail(){ echo "ERROR: $* Existing admin image preserved." >&2; exit 1; }
 [[ "${EXPECTED_RELEASE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'Exact reviewed source SHA is required.'
 [[ "$(git -C "$ROOT" rev-parse HEAD)" == "$EXPECTED_RELEASE_SHA" ]] || fail 'Readiness checkout differs from reviewed source.'
-for tool in az jq curl python3 rg; do command -v "$tool" >/dev/null || fail "$tool is required."; done
+for tool in az jq curl python3; do command -v "$tool" >/dev/null || fail "$tool is required."; done
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 SUB=$(az account show --query id -o tsv)
@@ -28,7 +28,7 @@ python3 "$ROOT/scripts/admin-explorer/verify-runtime-policy.py" inherited "$TMP/
 optional_policy(){
   if az rest --method get --url "$1" --query properties.value -o tsv >"$2" 2>"$TMP/policy-error"; then
     python3 "$ROOT/scripts/admin-explorer/verify-runtime-policy.py" inherited "$2"
-  elif rg -q '\(ResourceNotFound\)|Code: ResourceNotFound' "$TMP/policy-error"; then
+  elif python3 -c 'import pathlib,re,sys; sys.exit(0 if re.search(r"\(ResourceNotFound\)|Code: ResourceNotFound",pathlib.Path(sys.argv[1]).read_text()) else 1)' "$TMP/policy-error"; then
     : # An absent scoped policy inherits its already checked parent.
   else fail 'Inherited policy inventory is incomplete.'; fi
 }

@@ -115,7 +115,7 @@ The user subsequently requested activation. The compatibility implementation is 
 ## Compatibility implementation follow-up
 
 The isolated activation branch is based on main `7e9ac18ed5b59a76197f2a2879553f7daaa261e4`.
-New Flyway allocations are Auth V12, User/Chef V13 and Order V27; existing migrations
+New Flyway allocations are Auth V9.1, User/Chef V11.1 and Order V26.1; existing migrations
 are unchanged. The limiter uses nonblocking PostgreSQL transaction advisory locks,
 READ COMMITTED database-time admission in REQUIRES_NEW, a separate counter table,
 and a 20-request rolling-minute dataset budget. The frontend propagates only bounded

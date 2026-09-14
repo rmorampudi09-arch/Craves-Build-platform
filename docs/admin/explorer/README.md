@@ -164,7 +164,7 @@ This replaces the unsupported APIM `rate-limit-by-key` element. Keep the reviewe
 Bearer guard, 8 KB body limit, routing and no-store policies. Ordinary APIM `rate-limit`
 requires a subscription key and is not a substitute for these subscription-free
 routes. No tier, secret, database connection or Azure resource change is needed.
-Verify additive admission migrations **Auth V12, User/Chef V13 and Order V27**, as well
+Verify additive admission migrations **Auth V9.1, User/Chef V11.1 and Order V26.1**, as well
 as the existing audit migrations V9/V11/V26 and their guards, before activation.
 See [keyed throttling](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-by-key-policy)
 and [subscription throttling](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-policy).
@@ -268,3 +268,16 @@ exact backend release and complete migration/index evidence before approving the
 admin environment. Do not extract owner cookies or put access tokens into CI.
 The command-fixture tests exercise these inventory guards without Azure calls;
 actual runtime acceptance still belongs to the approved release.
+
+## Independently reviewed backend maintenance source
+
+The admin production run remains a manual exact-SHA release from main, with its
+existing environment approval. `backend-release.json` fixes the three backend images
+to the independently tested maintenance candidate from PR #350. The runtime gate
+requires that immutable commit in the admin release ancestry, identical Explorer
+implementation/migrations in both sources, and no unrelated backend delta from the
+recorded deployed baseline. No runtime SHA override is accepted. Registry digest
+checks use this verified backend SHA; admin image provenance still uses the exact
+main SHA. This keeps the pending email-verification and cart changes out of these
+three backend deployments. V9.1/V11.1/V26.1 leave later migration numbers available.
+Require successful exact-head CI on both #350 and #349 before production promotion.

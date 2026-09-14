@@ -12,13 +12,13 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SHA = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
 AZ = r'''#!/usr/bin/env python3
 import json, os, sys, pathlib
-a=sys.argv[1:]; case=os.environ['READINESS_CASE']; sha=os.environ['EXPECTED_RELEASE_SHA']; digest='sha256:'+'a'*64
+a=sys.argv[1:]; case=os.environ['READINESS_CASE']; sha=os.environ['EXPECTED_RELEASE_SHA']; digest='sha256:'+'a'*64; backend_sha=os.environ['BACKEND_FIXTURE_SHA']
 assert not any(x in a for x in ['update','create','put','delete','patch','login']), 'A readiness check attempted a mutation'
 def emit(value): print(json.dumps(value) if isinstance(value,(dict,list)) else value)
 if a[:2]==['account','show']: emit('00000000-0000-0000-0000-000000000001')
 elif a[:2]==['acr','show']: emit('fixture.azurecr.io')
 elif a[:3]==['acr','repository','show']:
- image=a[a.index('--image')+1]; emit('sha256:'+'b'*64 if case=='digest' and image.endswith(':'+sha) else digest)
+ image=a[a.index('--image')+1]; emit('sha256:'+'b'*64 if case=='digest' and image.endswith(':'+backend_sha) else digest)
 elif a[:3]==['apim','api','list']:
  result=[{'path':'api/v1/admin/explorer','name':'craves-admin-explorer-v1'}]* (2 if case=='duplicate-api' else 1)
  result.append({'path':'api/v1','name':'legacy'})
@@ -69,6 +69,7 @@ class ReadinessTest(unittest.TestCase):
                 file.write_text(content)
                 file.chmod(0o700)
             env = os.environ.copy()
+            env['BACKEND_FIXTURE_SHA']=json.loads((ROOT/'docs/admin/explorer/backend-release.json').read_text())['source']
             env.update(PATH=str(path)+os.pathsep+env['PATH'], EXPECTED_RELEASE_SHA=sha, READINESS_CASE=case, READINESS_POLICY=str(ROOT/'infra/apim/admin-explorer/authenticated-policy.xml'))
             if configure:
                 # The gateway fixture represents an already-reviewed clean checkout.

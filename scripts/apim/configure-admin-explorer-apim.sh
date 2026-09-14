@@ -25,7 +25,7 @@ apps=("${AUTH_APP:-ca-craves-auth-service-prodlow}" "${USER_CHEF_APP:-ca-craves-
 domains=(users chefs orders)
 backends=()
 for app in "${apps[@]}"; do
-  app_json=$(az containerapp show -g "$RG" -n "$app" -o json)
+  app_json=$(az containerapp show -g "$RG" -n "$app" --query '{properties:{latestRevisionName:properties.latestRevisionName,latestReadyRevisionName:properties.latestReadyRevisionName,runningStatus:properties.runningStatus,configuration:{ingress:{fqdn:properties.configuration.ingress.fqdn}}}}' -o json)
   fqdn=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$app_json")
   [[ "$fqdn" =~ ^[a-z0-9][a-z0-9.-]+\.azurecontainerapps\.io$ ]] || fail "$app has an unexpected ingress hostname"
   [[ "$(jq -r '.properties.latestRevisionName' <<<"$app_json")" == "$(jq -r '.properties.latestReadyRevisionName' <<<"$app_json")" ]] || fail "$app latest revision is not ready"

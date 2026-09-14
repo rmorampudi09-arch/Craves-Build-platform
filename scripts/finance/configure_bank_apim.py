@@ -26,7 +26,7 @@ def pages(url: str) -> list[dict]:
     for _ in range(100):
         if not url.startswith("https://management.azure.com/"):
             raise GuardError("Unexpected management pagination origin")
-        value = az("rest", "--method", "get", "--url", url)
+        value = az("rest", "--method", "get", "--url", url, "--headers", "Accept=application/json")
         result.extend(value.get("value", []))
         url = value.get("nextLink")
         if not url: return result
@@ -74,6 +74,26 @@ def policy_text(backend: str, path: str) -> str:
     ET.SubElement(ET.SubElement(root, "on-error"), "base")
     return ET.tostring(root, encoding="unicode")
 
+def policy_structure(text: str) -> tuple:
+    """Compare policy meaning without depending on Azure's XML formatting."""
+    try:
+        root = ET.fromstring(text)
+    except (ET.ParseError, TypeError) as exc:
+        raise GuardError("Bank policy XML cannot be inspected safely") from exc
+    if root.tag != "policies":
+        raise GuardError("Unexpected bank policy XML root")
+
+    def content(value):
+        # Only indentation/empty text is insignificant. Do not strip expressions
+        # or header values, or reorder child policies: their order is meaningful.
+        return value if value and value.strip() else None
+
+    def node(value):
+        return (value.tag, tuple(sorted(value.attrib.items())), content(value.text),
+                tuple(node(child) for child in value), content(value.tail))
+
+    return node(root)
+
 def check_existing(apis: list[dict], api_id: str, path: str) -> dict | None:
     matches = [a for a in apis if a.get("name", "").split(";")[0] == api_id or a.get("properties", {}).get("path", "").strip("/") == path]
     if len(matches) > 1: raise GuardError("API path or revision ownership is ambiguous")
@@ -87,8 +107,32 @@ def check_existing(apis: list[dict], api_id: str, path: str) -> dict | None:
 def put(url_value: str, body: dict, create: bool = False) -> None:
     with tempfile.TemporaryDirectory(prefix="craves-apim-") as folder:
         path = Path(folder) / "body.json"; path.write_text(json.dumps(body))
-        extra = ["--headers", "If-None-Match=*"] if create else []
-        az("rest", "--method", "put", "--url", url_value, "--body", "@" + str(path), *extra)
+        headers = ["Content-Type=application/json"]
+        if create: headers.append("If-None-Match=*")
+        # Policy PUT may return XML. Ignore mutation output and require separate
+        # JSON resource/collection readbacks before removing subscription gating.
+        az("rest", "--method", "put", "--url", url_value, "--body", "@" + str(path),
+           "--headers", *headers, output="none")
+
+def check_operations(api_base: str, operations: list[dict], complete: bool = False) -> None:
+    names = [operation.get("name") for operation in operations]
+    if len(names) != len(set(names)) or (complete and set(names) != {"bank-get", "bank-post"}):
+        raise GuardError("Bank operations read-back differs; leaf API is not released")
+    for operation in operations:
+        props = operation["properties"]
+        if operation["name"] not in ("bank-get", "bank-post") or props.get("method") != operation["name"].removeprefix("bank-").upper() or props.get("urlTemplate") != "/":
+            raise GuardError("Unexpected operation in owned leaf API")
+        if pages(url(api_base, "/operations/" + operation["name"] + "/policies")):
+            raise GuardError("Unexpected operation policy could override bank privacy or authorization")
+
+def check_api(api_base: str, api_id: str, path: str, backend: str, subscription_required: bool) -> None:
+    actual = az("rest", "--method", "get", "--url", url(api_base, ""), "--headers", "Accept=application/json")
+    if check_existing([actual], api_id, path) is None:
+        raise GuardError("Bank API ownership read-back differs; leaf API is not released")
+    properties = actual.get("properties", {})
+    if (properties.get("serviceUrl") != backend or properties.get("protocols") != ["https"]
+            or properties.get("subscriptionRequired") is not subscription_required):
+        raise GuardError("Bank API configuration read-back differs; leaf API is not released")
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl): return None
@@ -126,15 +170,10 @@ def main(argv=None) -> int:
         privacy_guard(policies, diagnostics)
         expected_policy = policy_text(backend, path)
         for item in policies:
-            if item["properties"].get("value") != expected_policy:
+            if policy_structure(item["properties"].get("value")) != policy_structure(expected_policy):
                 raise GuardError("Existing leaf policy differs from this release; no overwrite performed")
         operations = pages(url(base, "/apis/" + api_id + "/operations")) if existing else []
-        for operation in operations:
-            props = operation["properties"]
-            if operation["name"] not in ("bank-get", "bank-post") or props.get("method") != operation["name"].removeprefix("bank-").upper() or props.get("urlTemplate") != "/":
-                raise GuardError("Unexpected operation in owned leaf API")
-            if pages(url(base, "/apis/" + api_id + "/operations/" + operation["name"] + "/policies")):
-                raise GuardError("Unexpected operation policy could override bank privacy or authorization")
+        check_operations(base + "/apis/" + api_id, operations)
         planned.append((api_id, path, existing, operations, expected_policy))
     Path(args.output).write_text(json.dumps({"mode": "APPLY" if args.apply else "PLAN_ONLY", "sourceSha": head,
         "apim": args.apim, "backendOrigin": backend, "routes": ROUTES, "privatePostingEndpointsPublished": False,
@@ -153,13 +192,21 @@ def main(argv=None) -> int:
                 put(url(api_base, "/operations/" + oid), {"properties": {"displayName": "Bank " + method,
                     "method": method, "urlTemplate": "/", "templateParameters": [], "responses": []}}, create=True)
         if not existing or not pages(url(api_base, "/policies")):
-            put(url(api_base, "/policies/policy"), {"properties": {"format": "rawxml", "value": policy}}, create=True)
+            # ElementTree XML-encodes expression attributes. rawxml would preserve
+            # those entities inside the expression instead of decoding the XML.
+            put(url(api_base, "/policies/policy"), {"properties": {"format": "xml", "value": policy}}, create=True)
         actual = pages(url(api_base, "/policies"))
-        if len(actual) != 1 or actual[0]["properties"].get("value") != policy:
+        if len(actual) != 1 or policy_structure(actual[0]["properties"].get("value")) != policy_structure(policy):
             raise GuardError("Bank policy read-back differs; leaf API is not released")
+        check_operations(api_base, pages(url(api_base, "/operations")), complete=True)
+        subscription_required = True if not existing else existing["properties"].get("subscriptionRequired")
+        if not isinstance(subscription_required, bool):
+            raise GuardError("Bank API subscription protection is not explicit")
+        check_api(api_base, api_id, path, backend, subscription_required)
         if not existing or existing["properties"].get("subscriptionRequired") is True:
             properties["subscriptionRequired"] = False
             put(url(api_base, ""), {"properties": properties})
+        check_api(api_base, api_id, path, backend, False)
         protected_status(service["gatewayUrl"].rstrip("/") + "/" + path)
     print("Bank leaf API routes configured; authenticated acceptance and provider activation remain separate.")
     return 0

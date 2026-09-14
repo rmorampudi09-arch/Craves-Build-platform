@@ -2,7 +2,7 @@
 import Link from "next/link";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {ArrowLeft,ArrowRight,Copy,Download,Filter,RefreshCw,Search,ShieldCheck,SlidersHorizontal,X} from "lucide-react";
-import {adminFetch} from "@/lib/admin-renewal";
+import {adminFetch,observeAdminSession} from "@/lib/admin-renewal";
 import {DATASETS,EMPTY_FILTERS,META,aggregateCsv,explorerHref,parseExplorerRequest,parseExplorerResult,presetDates,type Dataset,type Filters,type ExplorerResult,type ExplorerRow} from "@/lib/admin-explorer";
 import {formatAdminTimestamp,readableAdminStatus} from "@/lib/admin-navigation";
 import {ExplorerPurpose,useExplorerSession} from "@/components/admin-explorer-session";
@@ -33,7 +33,9 @@ export function AdminRecordExplorer({dataset,initial}:{dataset:Dataset;initial:F
   }catch(e){if(seq===sequence.current&&!controller.signal.aborted)setError(e instanceof Error?e.message:'Report unavailable.');}
   finally{if(seq===sequence.current)setBusy(false);}
  },[dataset]);
- useEffect(()=>{void load(initial,initialReason.current);return()=>{sequence.current++;active.current?.abort();};},[initial,load]);
+ const cancelPending=useCallback(()=>{sequence.current++;active.current?.abort();},[]);
+ useEffect(()=>{void load(initial,initialReason.current);return cancelPending;},[initial,load,cancelPending]);
+ useEffect(()=>observeAdminSession(state=>{if(state!=="ready"){drawer.current?.close();setSelected(null);}}),[]);
  function apply(f:Filters,scroll=false){
   pendingScroll.current=scroll;setDraft(f);setCursors([undefined]);setFeedback('');void load(f,reason,undefined,scroll?data?.boundary:undefined);
  }

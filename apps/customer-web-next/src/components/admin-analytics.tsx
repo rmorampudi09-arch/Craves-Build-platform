@@ -26,7 +26,8 @@ export function AdminAnalytics(){
    }catch(e){if(seq===sequence.current&&!controller.signal.aborted)setErrors(prev=>({...prev,[dataset]:e instanceof Error?e.message:'Report unavailable.'}));}
   }));if(seq===sequence.current)setBusy(false);
  },[]);
- useEffect(()=>{void load(EMPTY_FILTERS);return()=>{sequence.current++;active.current?.abort();};},[load]);
+ const cancelPending=useCallback(()=>{sequence.current++;active.current?.abort();},[]);
+ useEffect(()=>{void load(EMPTY_FILTERS);return cancelPending;},[load,cancelPending]);
  function apply(f:Filters){setFilters(f);setDraft(f);void load(f);}
  return <div className="ex-workspace"><header className="ex-hero"><div><p className="cr-eyebrow"><BarChart3 size={14}/> Marketplace analytics</p><h1>See the whole picture.<br/><span>Go straight to the records.</span></h1><p>People, home chefs and every order — connected to the lists behind the numbers.</p></div><button className="cr-button" disabled={busy} onClick={()=>void load(filters)}><RefreshCw size={16} className={busy?'cr-spin':''}/>{busy?'Refreshing…':'Refresh all'}</button></header>
  <form className="ex-toolbar" onSubmit={e=>{e.preventDefault();apply(draft);}}><div className="ex-presets">{[0,7,30,90].map(days=><button type="button" key={days} onClick={()=>apply({...EMPTY_FILTERS,...presetDates(days)})}>{days===0?'All time':`${days} days`}</button>)}</div>

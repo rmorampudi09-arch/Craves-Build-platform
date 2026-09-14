@@ -9,10 +9,10 @@ function ringPath(start:number,end:number){
   return `M${a.join(',')} A88 88 0 ${large} 1 ${b.join(',')} L${c.join(',')} A62 62 0 ${large} 0 ${d.join(',')} Z`;
 }
 export function StatusChart({result,onSelect,selected=""}:{result:ExplorerResult;onSelect:(status:string)=>void;selected?:string}){
-  let progress=0;const populated=result.statuses.filter(s=>s.count>0);
+  const populated=result.statuses.filter(s=>s.count>0);
   return <div className="ex-status-chart"><svg viewBox="0 0 220 220" className="ex-donut" aria-label="Current status distribution" role="group">
     <circle cx="110" cy="110" r="75" fill="none" stroke="#eadfdd" strokeWidth="26"/>
-    {populated.map((s,i)=>{const start=progress;progress+=s.count/result.populationTotal*Math.PI*2;
+    {populated.map((s,i)=>{const start=populated.slice(0,i).reduce((total,item)=>total+item.count,0)/result.populationTotal*Math.PI*2;const progress=start+s.count/result.populationTotal*Math.PI*2;
       const gap=Math.min(.008,(progress-start)*.12);
       const label=`${readableAdminStatus(s.key)}: ${s.count.toLocaleString('en-IN')}. Open matching records.`;
       const props={fill:tones[i%tones.length],role:"button",tabIndex:0,"aria-label":label,"aria-pressed":selected===s.key,onClick:()=>onSelect(s.key),onKeyDown:(e:KeyboardEvent<SVGElement>)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(s.key);}}};

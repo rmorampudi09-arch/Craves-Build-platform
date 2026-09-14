@@ -72,6 +72,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -146,8 +148,11 @@ export default function ProfilePage() {
   }, [navigate]);
 
   async function logout() {
-    await clearSession();
-    navigate({ to: "/" });
+    if (logoutBusy) return;
+    setLogoutBusy(true); setLogoutError("");
+    try { await clearSession(); navigate({ to: "/" }); }
+    catch { setLogoutError("Sign-out could not be confirmed. You are still signed in. Please try again."); }
+    finally { setLogoutBusy(false); }
   }
 
   if (loading || !user) {
@@ -248,13 +253,15 @@ export default function ProfilePage() {
           />
         </section>
 
+        {logoutError && <p role="alert" className="mt-6 text-sm text-contrast-red">{logoutError}</p>}
         <button
           type="button"
           onClick={() => void logout()}
+          disabled={logoutBusy}
           className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-contrast-red bg-white px-4 text-sm font-semibold text-contrast-red transition-colors hover:bg-secondary"
         >
           <LogOut className="h-4 w-4" aria-hidden="true" />
-          Sign out
+          {logoutBusy ? "Signing out…" : logoutError ? "Retry sign out" : "Sign out"}
         </button>
       </main>
 

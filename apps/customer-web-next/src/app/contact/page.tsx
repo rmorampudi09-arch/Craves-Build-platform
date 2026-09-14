@@ -46,9 +46,7 @@ export default function ContactPage() {
             </a>
           </p>
         ) : (
-          <p data-craves-contact-phone-status="pending" className="font-semibold text-[#B54708]">
-            The public support phone is pending production configuration. Razorpay live activation remains blocked until it is configured.
-          </p>
+          <p>Email our support team for help with your Craves account or order.</p>
         )}
         <p>Please include your Craves order reference when one is available. Never send a card number, CVV, UPI PIN, OTP, password, or API secret by email.</p>
       </PolicySection>
@@ -61,11 +59,9 @@ export default function ContactPage() {
           </a>.
         </p>
         {businessName ? (
-          <p>Registered business / merchant name: <strong>{businessName}</strong></p>
+          <p>Marketplace brand: <strong>{businessName}</strong></p>
         ) : (
-          <p data-craves-business-name-status="pending" className="font-semibold text-[#B54708]">
-            The registered merchant name is pending production configuration. Razorpay live activation remains blocked until it is configured.
-          </p>
+          <p>Craves connects customers with home chefs in Hyderabad.</p>
         )}
       </PolicySection>
 

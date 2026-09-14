@@ -1,3 +1,4 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOrigin } from "@/lib/request-security";
 import { reverseGeocodeWithAzureMaps } from "@/lib/server/azure-maps";
@@ -31,6 +32,10 @@ function allowRequest(key: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) {
     return NextResponse.json(
       { error: "ORIGIN_REJECTED", message: "Reverse geocoding is only available from Craves." },

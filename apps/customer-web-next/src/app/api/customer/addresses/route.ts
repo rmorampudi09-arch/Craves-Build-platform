@@ -1,3 +1,4 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import {
   parseAddressInput,
@@ -76,6 +77,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) {
     return NextResponse.json({
       error: "ORIGIN_REJECTED",

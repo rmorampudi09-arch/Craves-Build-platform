@@ -1,6 +1,7 @@
 import { parseAdminIdentity } from "./admin-contract.ts";
 import { apiTarget } from "./api-target.ts";
 import { NextRequest } from "next/server";
+import { boundedFetch } from "./bounded-fetch";
 
 export class SessionRequiredError extends Error {}
 
@@ -15,6 +16,7 @@ export async function authenticatedApiFetch(
   path: string,
   init: RequestInit = {},
   timeoutMs = 10_000,
+  maxResponseBytes?: number,
 ): Promise<Response> {
   const token = request.cookies.get("craves_access_token")?.value;
   if (!token) throw new SessionRequiredError("Customer session is required");
@@ -26,16 +28,18 @@ export async function authenticatedApiFetch(
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     if (request.nextUrl.pathname.startsWith("/api/admin/") && path !== "/auth/me") {
-      const verified = await fetch(`${apiBaseUrl()}/auth/me`, {
+      const verified = await boundedFetch(`${apiBaseUrl()}/auth/me`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         cache: "no-store", signal: controller.signal,
-      });
+      }, timeoutMs, 64 * 1024);
       if (!verified.ok) return verified;
       const identity = parseAdminIdentity(await verified.json().catch(() => null));
       if (!identity) return Response.json({ code: "IDENTITY_UNAVAILABLE" }, { status: 502 });
       if (!identity.adminEnabled) return Response.json({ code: "ADMIN_ACCESS_REQUIRED" }, { status: 403 });
     }
-    return await fetch(apiTarget(apiBaseUrl(), path), {
+    const maxBytes = maxResponseBytes ?? (/^\/backoffice\/chef-reviews\/[^/]+\/documents\/[^/]+\/content$/.test(path)
+      ? 10 * 1024 * 1024 : 2 * 1024 * 1024);
+    return await boundedFetch(apiTarget(apiBaseUrl(), path), {
       ...init,
       headers: {
         Accept: "application/json",
@@ -44,7 +48,7 @@ export async function authenticatedApiFetch(
       },
       cache: "no-store",
       signal: controller.signal,
-    });
+    }, timeoutMs, maxBytes);
   } finally {
     clearTimeout(timeout);
   }

@@ -1,3 +1,4 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseIdentity } from "@/lib/auth-contract";
 import { parsePaymentCreateInput, parsePaymentSession } from "@/lib/payment-contract";
@@ -5,6 +6,10 @@ import { isSameOrigin } from "@/lib/request-security";
 import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
 
 export async function POST(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return NextResponse.json({ error: "ORIGIN_REJECTED", message: "Invalid payment request origin." }, { status: 403 });
   const input = parsePaymentCreateInput(await request.json().catch(() => null));
   if (!input) return NextResponse.json({ error: "INVALID_CHECKOUT_ID", message: "A valid checkout id is required." }, { status: 400 });

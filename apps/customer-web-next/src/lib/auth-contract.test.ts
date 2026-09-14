@@ -35,6 +35,11 @@ test("keeps return paths same-origin", () => {
   assert.equal(safeReturnPath("/orders/123/tracking"), "/orders/123/tracking");
   assert.equal(safeReturnPath("https://evil.example"), "/");
   assert.equal(safeReturnPath("//evil.example"), "/");
+  for (const value of ["/\\evil.example", "/\t/evil.example", "/\n/evil.example", "/\u0000evil", "/\\\\evil.example"]) {
+    assert.equal(safeReturnPath(value), "/");
+    assert.equal(new URL(safeReturnPath(value), "https://craves.in").origin, "https://craves.in");
+  }
+  assert.equal(safeReturnPath("/orders?status=PAID#recent"), "/orders?status=PAID#recent");
 });
 
 test("does not expose upstream error bodies", () => {

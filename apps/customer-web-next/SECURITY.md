@@ -3,10 +3,12 @@
 - Authentication tokens are server-only, HTTP-only cookies.
 - Mutating BFF routes require same-origin requests.
 - Razorpay secrets and Firebase Admin credentials do not belong in this repository or its environment files.
-- `sharp` is pinned and overridden to `0.35.3` so Next.js uses the patched libvips dependency.
+- `sharp` is pinned and overridden to `0.35.4`; Next.js and its ESLint configuration are pinned to `16.3.5`.
 
-## Current upstream audit exception
+## September 2026 dependency review
 
-As of 2 August 2026, `npm audit --omit=dev` reports one high and one moderate advisory for the PostCSS copy bundled inside the current Next.js `16.2.12` release. npm offers no non-breaking fixed Next.js version and its suggested forced action would downgrade Next.js to `9.3.3`, which is not acceptable.
+The former August PostCSS exception is closed. Next.js 16.3.5 contains a patched PostCSS version; the reviewed lockfile also updates affected nanoid and baseline-browser-mapping dependencies. Run `npm ci` and `npm audit --omit=dev` against the exact release lockfile and retain their actual results.
 
-Risk is constrained here because PostCSS runs during the controlled application build and processes only repository-owned CSS; customers cannot upload CSS or source maps into the build. Re-check the audit when upgrading Next.js and remove this exception as soon as an upstream fixed release is available.
+The upgrade also addresses the [Next.js AVIF image-optimization advisory](https://github.com/vercel/next.js/security/advisories/GHSA-2xp9-vwfh-vxw4) and the [sharp/libheif advisory](https://github.com/lovell/sharp/security/advisories/GHSA-rgj7-g3m4-5g8c). The sharp issue can affect Linux image processing; a Linux deployment does not make that advisory inapplicable.
+
+No exploit payload is needed for production acceptance. Verify the deployed image came from the reviewed lockfile, normal image rendering works, and the final dependency audit passes. Recheck advisories for each release instead of treating this snapshot as permanent assurance.

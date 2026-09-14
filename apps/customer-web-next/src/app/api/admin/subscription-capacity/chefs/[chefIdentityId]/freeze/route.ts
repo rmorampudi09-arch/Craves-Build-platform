@@ -1,9 +1,14 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefCapacitySummary } from "@/lib/admin-subscription-capacity-contract";
 import { isSameOrigin } from "@/lib/request-security";
 import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ chefIdentityId: string }> }) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const { chefIdentityId } = await context.params;
   if (!isUuid(chefIdentityId)) return NextResponse.json({ code: "INVALID_CHEF_ID" }, { status: 400 });

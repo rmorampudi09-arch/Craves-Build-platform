@@ -1,3 +1,4 @@
+import { boundedFetch } from "@/lib/bounded-fetch";
 import { NextRequest, NextResponse } from "next/server";
 import {
   isCanonicalUuid,
@@ -36,7 +37,7 @@ export async function POST(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const upstream = await fetch(
+    const upstream = await boundedFetch(
       `${apiBaseUrl()}/chef/orders/${encodeURIComponent(orderId)}/ready-for-pickup`,
       {
         method: "POST",
@@ -46,7 +47,7 @@ export async function POST(
         },
         cache: "no-store",
         signal: controller.signal,
-      },
+      }, 40_000
     );
     if (!upstream.ok) {
       const response = NextResponse.json(

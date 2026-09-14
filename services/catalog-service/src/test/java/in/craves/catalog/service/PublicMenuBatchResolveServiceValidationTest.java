@@ -21,7 +21,7 @@ class PublicMenuBatchResolveServiceValidationTest {
     @BeforeEach
     void setUp() {
         jdbc = mock(NamedParameterJdbcTemplate.class);
-        service = new PublicMenuBatchResolveService(jdbc);
+        service = new PublicMenuBatchResolveService(jdbc, org.mockito.Mockito.mock(in.craves.catalog.finance.CatalogFinanceEligibility.class));
     }
 
     @Test

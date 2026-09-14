@@ -1,5 +1,7 @@
 package in.craves.catalog.web;
 
+import in.craves.catalog.finance.CatalogFinanceEligibility;
+
 import in.craves.catalog.config.PublicCatalogPrivacyProperties;
 import in.craves.catalog.service.DiscoveryCacheService;
 import in.craves.catalog.service.DiscoveryCriteria;
@@ -24,15 +26,18 @@ public class NearbyDiscoveryController {
     private final NearbyDiscoveryService nearbyDiscoveryService;
     private final DiscoveryCacheService discoveryCacheService;
     private final PublicCatalogPrivacyProperties privacyProperties;
+    private final CatalogFinanceEligibility financeEligibility;
 
     public NearbyDiscoveryController(
         NearbyDiscoveryService nearbyDiscoveryService,
         DiscoveryCacheService discoveryCacheService,
-        PublicCatalogPrivacyProperties privacyProperties
+        PublicCatalogPrivacyProperties privacyProperties,
+        CatalogFinanceEligibility financeEligibility
     ) {
         this.nearbyDiscoveryService = nearbyDiscoveryService;
         this.discoveryCacheService = discoveryCacheService;
         this.privacyProperties = privacyProperties;
+        this.financeEligibility = financeEligibility;
     }
 
     @GetMapping("/kitchens")
@@ -54,9 +59,11 @@ public class NearbyDiscoveryController {
         DiscoveryCriteria criteria = new DiscoveryCriteria(
             query, category, foodType, minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel
         );
+        nearbyDiscoveryService.validateInputs(latitude, longitude, radiusMeters, criteria, page, size);
+        var eligibility = financeEligibility.current();
         boolean privacyEnabled = privacyProperties.isPrivacyEnforcementEnabled();
         String cacheKey = key(
-            "kitchens", privacyEnabled, latitude, longitude, radiusMeters, query, category, foodType,
+            "kitchens", eligibility.hash(), privacyEnabled, latitude, longitude, radiusMeters, query, category, foodType,
             minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel, sort, page, size
         );
         return discoveryCacheService.getOrLoad(
@@ -64,7 +71,7 @@ public class NearbyDiscoveryController {
             NearbyKitchenDiscoveryResponse.class,
             () -> applyPrivacy(
                 nearbyDiscoveryService.discoverKitchens(
-                    latitude, longitude, radiusMeters, criteria, sort, page, size
+                    latitude, longitude, radiusMeters, criteria, sort, page, size, eligibility
                 ),
                 privacyEnabled
             )
@@ -90,9 +97,11 @@ public class NearbyDiscoveryController {
         DiscoveryCriteria criteria = new DiscoveryCriteria(
             query, category, foodType, minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel
         );
+        nearbyDiscoveryService.validateInputs(latitude, longitude, radiusMeters, criteria, page, size);
+        var eligibility = financeEligibility.current();
         boolean privacyEnabled = privacyProperties.isPrivacyEnforcementEnabled();
         String cacheKey = key(
-            "menu-items", privacyEnabled, latitude, longitude, radiusMeters, query, category, foodType,
+            "menu-items", eligibility.hash(), privacyEnabled, latitude, longitude, radiusMeters, query, category, foodType,
             minPrice, maxPrice, maxPreparationTimeMinutes, spiceLevel, sort, page, size
         );
         return discoveryCacheService.getOrLoad(
@@ -100,7 +109,7 @@ public class NearbyDiscoveryController {
             NearbyMenuItemDiscoveryResponse.class,
             () -> applyPrivacy(
                 nearbyDiscoveryService.discoverMenuItems(
-                    latitude, longitude, radiusMeters, criteria, sort, page, size
+                    latitude, longitude, radiusMeters, criteria, sort, page, size, eligibility
                 ),
                 privacyEnabled
             )

@@ -1,3 +1,4 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseCustomerProfile, parseProfileInput } from "@/lib/profile-contract";
 import { isSameOrigin } from "@/lib/request-security";
@@ -21,6 +22,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return NextResponse.json({ error: "ORIGIN_REJECTED", message: "Invalid profile request origin." }, { status: 403 });
   const input = parseProfileInput(await request.json().catch(() => null));
   if (!input) return NextResponse.json({ error: "INVALID_PROFILE", message: "Enter a valid first name, last name and optional email." }, { status: 400 });

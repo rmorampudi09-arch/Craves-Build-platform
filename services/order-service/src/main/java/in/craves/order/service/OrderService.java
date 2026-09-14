@@ -77,15 +77,24 @@ public class OrderService {
     @Transactional
     public CartResponse addCartItem(CravesPrincipal principal, AddCartItemRequest request) {
         requireCustomer(principal);
+        requireCartQuantity(request.quantity());
         CatalogMenuItem item = catalogClient.getActiveMenuItem(request.menuItemId());
         CatalogKitchen kitchen = catalogClient.getKitchen(item.kitchenId());
         UUID cartId = getOrCreateCartId(principal.identityId());
-        jdbcTemplate.update(
+        lockCart(cartId);
+        Integer itemCount = jdbcTemplate.queryForObject("SELECT count(*) FROM order_schema.cart_item WHERE cart_id = ?", Integer.class, cartId);
+        Boolean alreadyPresent = jdbcTemplate.queryForObject("SELECT EXISTS (SELECT 1 FROM order_schema.cart_item WHERE cart_id = ? AND menu_item_id = ?)", Boolean.class, cartId, item.id());
+        if (itemCount != null && itemCount >= 200 && !Boolean.TRUE.equals(alreadyPresent)) {
+            throw OrderApiException.badRequest("CART_ITEM_LIMIT", "A cart can contain at most 200 different dishes.");
+        }
+        int updated = jdbcTemplate.update(
             "INSERT INTO order_schema.cart_item (id, cart_id, menu_item_id, kitchen_id, item_name_snapshot, kitchen_name_snapshot, unit_price_snapshot, currency_snapshot, quantity, created_at, updated_at) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now()) " +
-                "ON CONFLICT (cart_id, menu_item_id) DO UPDATE SET quantity = order_schema.cart_item.quantity + EXCLUDED.quantity, kitchen_id = EXCLUDED.kitchen_id, item_name_snapshot = EXCLUDED.item_name_snapshot, kitchen_name_snapshot = EXCLUDED.kitchen_name_snapshot, unit_price_snapshot = EXCLUDED.unit_price_snapshot, currency_snapshot = EXCLUDED.currency_snapshot, updated_at = now()",
+                "ON CONFLICT (cart_id, menu_item_id) DO UPDATE SET quantity = order_schema.cart_item.quantity + EXCLUDED.quantity, kitchen_id = EXCLUDED.kitchen_id, item_name_snapshot = EXCLUDED.item_name_snapshot, kitchen_name_snapshot = EXCLUDED.kitchen_name_snapshot, unit_price_snapshot = EXCLUDED.unit_price_snapshot, currency_snapshot = EXCLUDED.currency_snapshot, updated_at = now() " +
+                "WHERE order_schema.cart_item.quantity <= 100 - EXCLUDED.quantity",
             UUID.randomUUID(), cartId, item.id(), item.kitchenId(), item.itemName(), displayKitchenName(kitchen), item.price(), currency(item.currency()), request.quantity()
         );
+        if (updated == 0) throw OrderApiException.badRequest("CART_QUANTITY_LIMIT", "A dish quantity must be between 1 and 100.");
         touchCart(cartId);
         return mapCart(cartId, principal.identityId());
     }
@@ -93,7 +102,9 @@ public class OrderService {
     @Transactional
     public CartResponse updateCartItem(CravesPrincipal principal, UUID cartItemId, UpdateCartItemRequest request) {
         requireCustomer(principal);
+        requireCartQuantity(request.quantity());
         UUID cartId = requireCartId(principal.identityId());
+        lockCart(cartId);
         int updated = jdbcTemplate.update(
             "UPDATE order_schema.cart_item SET quantity = ?, updated_at = now() WHERE id = ? AND cart_id = ?",
             request.quantity(), cartItemId, cartId
@@ -109,6 +120,7 @@ public class OrderService {
     public CartResponse removeCartItem(CravesPrincipal principal, UUID cartItemId) {
         requireCustomer(principal);
         UUID cartId = requireCartId(principal.identityId());
+        lockCart(cartId);
         jdbcTemplate.update("DELETE FROM order_schema.cart_item WHERE id = ? AND cart_id = ?", cartItemId, cartId);
         touchCart(cartId);
         return mapCart(cartId, principal.identityId());
@@ -118,6 +130,7 @@ public class OrderService {
     public CartResponse clearCart(CravesPrincipal principal) {
         requireCustomer(principal);
         UUID cartId = getOrCreateCartId(principal.identityId());
+        lockCart(cartId);
         jdbcTemplate.update("DELETE FROM order_schema.cart_item WHERE cart_id = ?", cartId);
         touchCart(cartId);
         return mapCart(cartId, principal.identityId());
@@ -134,12 +147,16 @@ public class OrderService {
         if (historicalOrder.items() == null || historicalOrder.items().isEmpty()) {
             throw OrderApiException.badRequest("ORDER_HAS_NO_ITEMS", "This order has no items to reorder.");
         }
+        if (historicalOrder.items().size() > 200) {
+            throw OrderApiException.badRequest("CART_ITEM_LIMIT", "This historical order exceeds the current cart item limit.");
+        }
 
         // Resolve and validate every historical menu item before touching the existing cart.
         // Any unavailable item fails the transaction with the current cart unchanged.
         record ReorderResolvedItem(CatalogMenuItem item, CatalogKitchen kitchen, int quantity) {}
         List<ReorderResolvedItem> resolved = new ArrayList<>();
         for (OrderItemResponse historicalItem : historicalOrder.items()) {
+            requireCartQuantity(historicalItem.quantity());
             if (historicalItem.menuItemId() == null || historicalItem.quantity() < 1) {
                 throw OrderApiException.badRequest("ORDER_ITEM_INVALID", "This historical order cannot be reordered.");
             }
@@ -149,6 +166,7 @@ public class OrderService {
         }
 
         UUID cartId = getOrCreateCartId(principal.identityId());
+        lockCart(cartId);
         jdbcTemplate.update("DELETE FROM order_schema.cart_item WHERE cart_id = ?", cartId);
         for (ReorderResolvedItem replacement : resolved) {
             CatalogMenuItem item = replacement.item();
@@ -174,6 +192,7 @@ public class OrderService {
     public CartResponse validateCart(CravesPrincipal principal) {
         requireCustomer(principal);
         UUID cartId = getOrCreateCartId(principal.identityId());
+        lockCart(cartId);
         List<CartItemResponse> current = listCartItems(cartId);
         for (CartItemResponse cartItem : current) {
             CatalogMenuItem item = catalogClient.getActiveMenuItem(cartItem.menuItemId());
@@ -509,9 +528,21 @@ public class OrderService {
             .findFirst()
             .orElseGet(() -> {
                 UUID id = UUID.randomUUID();
-                jdbcTemplate.update("INSERT INTO order_schema.cart (id, customer_identity_id, currency, created_at, updated_at) VALUES (?, ?, ?, now(), now())", id, customerIdentityId, INR);
-                return id;
+                return jdbcTemplate.queryForObject(
+                    "INSERT INTO order_schema.cart (id, customer_identity_id, currency, created_at, updated_at) VALUES (?, ?, ?, now(), now()) " +
+                    "ON CONFLICT (customer_identity_id) DO UPDATE SET customer_identity_id = EXCLUDED.customer_identity_id RETURNING id",
+                    UUID.class, id, customerIdentityId, INR);
             });
+    }
+
+    private void lockCart(UUID cartId) {
+        jdbcTemplate.queryForObject("SELECT id FROM order_schema.cart WHERE id = ? FOR UPDATE", UUID.class, cartId);
+    }
+
+    private static void requireCartQuantity(int quantity) {
+        if (quantity < 1 || quantity > 100) {
+            throw OrderApiException.badRequest("CART_QUANTITY_LIMIT", "A dish quantity must be between 1 and 100.");
+        }
     }
 
     private UUID requireCartId(UUID customerIdentityId) {

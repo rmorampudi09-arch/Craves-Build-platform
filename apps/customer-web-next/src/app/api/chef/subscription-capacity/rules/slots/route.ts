@@ -1,9 +1,14 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseSlotRuleInput } from "@/lib/chef-subscription-capacity-contract";
 import { isSameOrigin } from "@/lib/request-security";
 import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
 
 export async function PUT(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const input = parseSlotRuleInput(await request.json().catch(() => null));
   if (!input) return NextResponse.json({ code: "INVALID_CAPACITY_RULE" }, { status: 400 });

@@ -1,9 +1,14 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseCustomerSubscription, parseSubscriptionReason } from "@/lib/subscription-contract";
 import { isSameOrigin } from "@/lib/request-security";
 import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ subscriptionId: string }> }) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const { subscriptionId } = await context.params;
   if (!isUuid(subscriptionId)) return NextResponse.json({ code: "INVALID_SUBSCRIPTION_ID" }, { status: 400 });

@@ -94,15 +94,17 @@ class PostgresAuthRateLimiterDbTest {
         resetPublicExplorerFixture(jdbc);
         jdbc.execute("DROP SCHEMA IF EXISTS "+CLEAN_SCHEMA+" CASCADE");
         var clean=Flyway.configure().dataSource(data).schemas(CLEAN_SCHEMA).defaultSchema(CLEAN_SCHEMA).load();
-        assertEquals(11,clean.migrate().migrationsExecuted);clean.validate();assertEquals(0,clean.migrate().migrationsExecuted);
+        assertEquals(12,clean.migrate().migrationsExecuted);clean.validate();assertEquals(0,clean.migrate().migrationsExecuted);
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('"+CLEAN_SCHEMA+".auth_rate_limit_counter')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('"+CLEAN_SCHEMA+".auth_rate_limit_expiry')::text",String.class));
         assertEquals(11,jdbc.queryForObject("SELECT count(*) FROM "+CLEAN_SCHEMA+".flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('academy_schema.learner')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_audit')::text",String.class));
+        assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_admission')::text",String.class));
     }
     private static void resetPublicExplorerFixture(JdbcTemplate database) {
         // V9 deliberately uses public, outside the test's default schema. The caller has passed the strict disposable DB guard.
+        database.execute("DROP TABLE IF EXISTS public.admin_explorer_admission CASCADE");
         database.execute("DROP TABLE IF EXISTS public.admin_explorer_audit CASCADE");
         database.execute("DROP FUNCTION IF EXISTS public.reject_admin_explorer_audit_mutation()");
     }

@@ -2,37 +2,58 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
-  BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap, LayoutDashboard,
-  Menu, ReceiptText, Search, SearchCheck, ShieldCheck, X
+  ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
+  LayoutDashboard, LogOut, Menu, ReceiptText, Search, SearchCheck, ShieldCheck, Truck, X
 } from "lucide-react";
 import type { AdminIdentity } from "@/lib/admin-contract";
 import { observeAdminSession, logoutAdminSession, type SessionState } from "@/lib/admin-renewal";
 import { loadAdminIdentity } from "@/lib/admin-session";
+import { ADMIN_MODULES, matchesAdminRoute, searchAdminModules } from "@/lib/admin-navigation";
+import { AdminModuleLink } from "@/components/admin-module-link";
 import { SyncfusionLicense } from "@/components/syncfusion-license";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { AcademyWorkspace } from "@/components/academy-workspace";
+import "@/styles/admin-control.css";
 
-const navigation = [
-  { href: "/admin", label: "Overview", icon: LayoutDashboard, group: "Control center" },
-  { href: "/admin/search", label: "Global search", icon: Search, group: "Control center" },
-  { href: "/admin/academy", label: "Craves Academy", icon: GraduationCap, group: "Knowledge & learning" },
-  { href: "/admin/chef-reviews", label: "Chef reviews", icon: ChefHat, group: "People & kitchens" },
-  { href: "/admin/operations", label: "Order investigations", icon: SearchCheck, group: "Operations" },
-  { href: "/admin/subscription-plans", label: "Plans", icon: ReceiptText, group: "Subscriptions" },
-  { href: "/admin/subscriptions", label: "Subscriptions", icon: ClipboardList, group: "Subscriptions" },
-  { href: "/admin/subscription-capacity", label: "Capacity", icon: Gauge, group: "Subscriptions" },
-  { href: "/admin/accounts", label: "Account security", icon: ShieldCheck, group: "Trust & recovery" },
-  { href: "/admin/notifications", label: "Notification recovery", icon: BellRing, group: "Trust & recovery" }
-];
+const icons = {
+  overview: LayoutDashboard, search: Search, modules: Menu, operations: SearchCheck,
+  delivery: Truck, chefs: ChefHat, accounts: ShieldCheck, finance: ReceiptText,
+  plans: ReceiptText, subscriptions: ClipboardList, capacity: Gauge,
+  notifications: BellRing, academy: GraduationCap
+};
+
+function Navigation({ pathname, close }: { pathname: string; close?: () => void }) {
+  const groups = [...new Set(ADMIN_MODULES.map(module => module.group))];
+  return <nav className="cr-navigation" aria-label="Administration modules">
+    {groups.map(group => <div className="cr-nav-group" key={group}><p className="cr-nav-label">{group}</p>
+      {ADMIN_MODULES.filter(module => module.group === group).map(module => {
+        const Icon = icons[module.id as keyof typeof icons] ?? LayoutDashboard;
+        return <AdminModuleLink key={module.id} module={module} className="cr-nav-link" current={matchesAdminRoute(pathname, module.href)} onNavigate={close}>
+          <Icon size={18} aria-hidden="true"/><span>{module.label}</span>{module.externalApp && <ArrowRight size={14} aria-hidden="true"/>}
+        </AdminModuleLink>;
+      })}
+    </div>)}
+  </nav>;
+}
+
+function Brand() {
+  return <Link href="/admin" className="cr-brand"><CravesLogo size="md" priority/><span><strong>Craves</strong><small>ADMIN CONTROL CENTER</small></span></Link>;
+}
 
 export function AdminWorkspace({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [identity, setIdentity] = useState<AdminIdentity | null>(null);
   const [message, setMessage] = useState("Verifying administrator access…");
   const [sessionState, setSessionState] = useState<SessionState>("checking");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const menu = useRef<HTMLDialogElement>(null);
+  const commands = useRef<HTMLDialogElement>(null);
+  const commandInput = useRef<HTMLInputElement>(null);
+  const allowInteraction = sessionState === "ready" && identity !== null && message === "";
 
   useEffect(() => {
     let active = true;
@@ -40,72 +61,105 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
     const stop = observeAdminSession(state => {
       const generation = ++authorizationGeneration;
       setSessionState(state);
+      menu.current?.close(); commands.current?.close();
       if (state === "ended") { setIdentity(null); setMessage("Your administrator session has ended. Please sign in again."); }
-      if (state === "reconnecting") setMessage("Reconnecting securely. Please keep this tab open.");
-      if (state === "ready") void loadAdminIdentity()
-        .then(admin => { if (active && generation === authorizationGeneration) { setIdentity(admin); setMessage(""); } })
-        .catch(error => { if (active && generation === authorizationGeneration) setMessage(error instanceof Error ? error.message : "Administrator access is unavailable."); });
+      if (state === "reconnecting") setMessage("Reconnecting securely. Your open workspace is kept in this tab.");
+      if (state === "ready") {
+        setMessage("Verifying administrator access…");
+        void loadAdminIdentity()
+          .then(admin => { if (active && generation === authorizationGeneration) { setIdentity(admin); setMessage(""); } })
+          .catch(error => {
+            if (active && generation === authorizationGeneration) {
+              // Never retain an earlier authorization after a failed re-check.
+              setIdentity(null);
+              setMessage(error instanceof Error ? error.message : "Administrator access is unavailable.");
+            }
+          });
+      }
     });
     return () => { active = false; stop(); };
   }, []);
 
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if (allowInteraction && !event.isComposing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        commands.current?.showModal();
+        commandInput.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [allowInteraction]);
+
+  async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setLogoutError("");
+    try { await logoutAdminSession(); }
+    catch { setLogoutError("Sign out did not complete. Please try again."); }
+    finally { setSigningOut(false); }
+  }
+
+  // Academy keeps its purpose-built, already Craves-branded learning workspace.
   if (pathname === "/admin/academy" || pathname.startsWith("/admin/academy/")) {
     return <AcademyWorkspace identity={identity} message={message} sessionState={sessionState}>{children}</AcademyWorkspace>;
   }
 
-  if (!identity) {
-    return <main className="flex min-h-screen items-center justify-center bg-[#0b1426] px-5">
-      <section className="w-full max-w-lg rounded-[32px] border border-white/10 bg-[#fff8ec] p-8 text-center shadow-[0_24px_70px_-42px_rgba(0,0,0,0.8)]">
-        <CravesLogo size="lg" className="mx-auto" priority />
-        <h1 className="mt-5 text-2xl font-black text-[#251b35]">Craves administration</h1>
-        <p className="mt-3 text-sm text-[#71677d]" role="status">{message}</p>
-        {sessionState !== "ended" && <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-xl border px-5 py-3">Retry connection</button>}
-        <Link href={`/sign-in?returnTo=${encodeURIComponent(pathname)}`} className="mt-6 inline-flex rounded-xl bg-[#6930ca] px-5 py-3 text-sm font-black text-white">Administrator sign in</Link>
-      </section>
-    </main>;
-  }
-
-  const groups = [...new Set(navigation.map(item => item.group))];
-
-  return <><div hidden={sessionState === "reconnecting"} className="min-h-screen bg-[#f7f5fb] text-[#251b35]">
-    <SyncfusionLicense />
-    {menuOpen && <button aria-label="Close navigation overlay" className="fixed inset-0 z-40 bg-[#0b1426]/60 lg:hidden" onClick={() => setMenuOpen(false)} />}
-    <aside className={`fixed inset-y-0 left-0 z-50 flex w-[292px] flex-col bg-[#0b1426] text-white shadow-2xl transition-transform lg:translate-x-0 ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}>
-      <div className="flex h-24 items-center justify-between border-b border-white/10 px-6">
-        <Link href="/admin" className="flex items-center gap-3" onClick={() => setMenuOpen(false)}>
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff8ec]"><CravesLogo size="md" priority /></div>
-          <span><strong className="block text-xl font-black tracking-tight">Craves</strong><small className="text-[9px] font-black uppercase tracking-[0.22em] text-[#f6b545]">Admin control</small></span>
-        </Link>
-        <button className="rounded-xl p-2 hover:bg-white/10 lg:hidden" onClick={() => setMenuOpen(false)} aria-label="Close navigation"><X size={20} /></button>
+  const current = ADMIN_MODULES.find(module => matchesAdminRoute(pathname, module.href));
+  const results = searchAdminModules(query);
+  const accessScreen = <main className="cr-admin cr-session-screen">
+    <section className="cr-session-card"><CravesLogo size="lg" priority/><p className="cr-eyebrow">Craves administration</p>
+      <h1>{sessionState === "reconnecting" ? "Reconnecting securely" : "Your control center starts here"}</h1>
+      <p className="cr-muted" role="status">{message}</p>
+      <div className="cr-actions">
+        {sessionState !== "ended" && <button type="button" className="cr-button" onClick={() => window.location.reload()}>Retry connection</button>}
+        <Link className="cr-button cr-primary" href={`/sign-in?returnTo=${encodeURIComponent(pathname)}`}>Administrator sign in<ArrowRight size={16} aria-hidden="true"/></Link>
       </div>
+      <p className="cr-footnote">Only accounts approved by Craves can access administration.</p>
+    </section>
+  </main>;
 
-      <nav className="flex-1 overflow-y-auto px-4 py-5" aria-label="Administrator modules">
-        {groups.map(group => <div key={group} className="mb-5"><p className="mb-2 px-3 text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">{group}</p><div className="space-y-1">{navigation.filter(item => item.group === group).map(item => {
-          const selected = item.href === "/admin" ? pathname === item.href : pathname.startsWith(item.href);
-          const Icon = item.icon;
-          return <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)} aria-current={selected ? "page" : undefined}
-            className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-bold transition ${selected ? "bg-[#6930ca] text-white shadow-lg shadow-black/25" : "text-slate-300 hover:bg-white/8 hover:text-white"}`}>
-            <Icon size={18} strokeWidth={2.2} /><span>{item.label}</span>{item.href === "/admin/search" ? <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[9px]">NEW</span> : null}
-          </Link>;
-        })}</div></div>)}
-      </nav>
+  if (!identity) return accessScreen;
 
-      <button type="button" onClick={() => { void logoutAdminSession(); }} className="mx-4 rounded-xl border border-white/20 px-4 py-2">Sign out</button>
-      <div className="m-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-        <div className="flex items-center gap-3"><CircleUserRound className="text-[#f6b545]" /><div className="min-w-0"><p className="truncate text-sm font-black">{identity.displayName || "Administrator"}</p><p className="truncate text-xs text-slate-400">{identity.email || "Role verified"}</p></div></div>
-        <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-400/10 px-3 py-2 text-[10px] font-black text-emerald-300"><ShieldCheck size={13}/>ADMIN ROLE VERIFIED</div>
+  return <>
+    <div className="cr-admin cr-admin-shell" hidden={!allowInteraction}>
+      <SyncfusionLicense/>
+      <a className="cr-skip" href="#cr-admin-content">Skip to workspace</a>
+      <aside className="cr-sidebar">
+        <Brand/><Navigation pathname={pathname}/>
+        <div className="cr-sidebar-account"><div className="cr-person"><CircleUserRound size={28} aria-hidden="true"/><div><strong>{identity.displayName || "Administrator"}</strong><span>{identity.email || "Craves administrator"}</span></div></div>
+          <span className="cr-badge"><ShieldCheck size={13} aria-hidden="true"/>Admin access verified</span>
+          <button type="button" className="cr-button cr-signout" onClick={() => void signOut()} disabled={signingOut}><LogOut size={16} aria-hidden="true"/>{signingOut ? "Signing out…" : "Sign out"}</button>
+          {logoutError && <p role="alert" className="cr-error-text">{logoutError}</p>}
+        </div>
+      </aside>
+      <div className="cr-main-area">
+        <header className="cr-topbar">
+          <button type="button" className="cr-icon-button cr-mobile-menu" aria-label="Open navigation" onClick={() => menu.current?.showModal()}><Menu size={20}/></button>
+          <div className="cr-page-context"><span>{current?.group || "Administration"}</span><strong>{current?.label || "Admin workspace"}</strong></div>
+          <button type="button" className="cr-command-trigger" aria-label="Find a module or task" onClick={() => { commands.current?.showModal(); commandInput.current?.focus(); }}><Search size={17} aria-hidden="true"/><span>Find a module or task…</span><kbd>Ctrl / ⌘ K</kbd></button>
+          <Link className="cr-icon-button" href="/admin/notifications" aria-label="Open notification recovery" title="Notification recovery"><BellRing size={19}/></Link>
+        </header>
+        <main id="cr-admin-content" tabIndex={-1} className="cr-content">{children}</main>
+        <footer className="cr-workspace-footer"><span>Craves administration</span><span>Authorized workflows · Timestamps labelled in IST</span></footer>
       </div>
-    </aside>
-
-    <div className="lg:pl-[292px]">
-      <header className="sticky top-0 z-30 flex min-h-20 items-center gap-4 border-b border-[#e8e1ee] bg-white/94 px-5 py-3 backdrop-blur-xl sm:px-8">
-        <button className="rounded-xl border border-[#e9e2ef] p-2.5 lg:hidden" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><Menu size={20} /></button>
-        <Link href="/admin/search" className="group flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-[#e5ddeb] bg-[#faf8fc] px-4 py-3 transition hover:border-[#c7b3e3] hover:bg-white">
-          <Search size={18} className="shrink-0 text-[#6930ca]"/><span className="truncate text-sm font-semibold text-[#7d7086]">Search mobile, email, customer/chef ID, order, payment, refund or delivery…</span><span className="ml-auto hidden rounded-lg border border-[#e4dceb] bg-white px-2 py-1 text-[10px] font-black text-[#8d7b99] sm:inline">GLOBAL SEARCH</span>
-        </Link>
-        <div className="hidden items-center gap-2 text-xs font-black text-[#34734f] xl:flex"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Live backend data</div>
-      </header>
-      <main className="mx-auto max-w-[1640px] p-5 sm:p-8">{children}</main>
+      <dialog ref={menu} className="cr-dialog cr-menu-dialog" aria-label="Admin navigation" onClick={event => { if (event.target === event.currentTarget) menu.current?.close(); }}>
+        <div className="cr-menu-inner"><div className="cr-dialog-heading"><Brand/><button className="cr-icon-button" onClick={() => menu.current?.close()} aria-label="Close navigation"><X size={20}/></button></div>
+          <Navigation pathname={pathname} close={() => menu.current?.close()}/>
+          <button className="cr-button" onClick={() => void signOut()} disabled={signingOut}><LogOut size={16} aria-hidden="true"/>{signingOut ? "Signing out…" : "Sign out"}</button>
+          {logoutError && <p role="alert" className="cr-error-text">{logoutError}</p>}
+        </div>
+      </dialog>
+      <dialog ref={commands} className="cr-dialog cr-command-dialog" aria-labelledby="cr-command-title" onClick={event => { if (event.target === event.currentTarget) commands.current?.close(); }}>
+        <div className="cr-command-inner"><div className="cr-dialog-heading"><h2 id="cr-command-title">Where do you need to go?</h2><button className="cr-icon-button" onClick={() => commands.current?.close()} aria-label="Close module search"><X size={20}/></button></div>
+          <label className="cr-search-field"><Search size={18} aria-hidden="true"/><span className="cr-sr-only">Search module names and tasks</span><input ref={commandInput} type="search" placeholder="Try orders, finance, chefs, training…" value={query} onChange={event => setQuery(event.target.value)} maxLength={100}/></label>
+          <p className="cr-footnote">This searches workspace names. Use Global search for customers, chefs or transaction references.</p>
+          <div className="cr-command-results">{results.map(module => <AdminModuleLink key={module.id} module={module} className="cr-command-result" onNavigate={() => { commands.current?.close(); setQuery(""); }}><span><strong>{module.label}</strong><small>{module.description}</small></span><ArrowRight size={18} aria-hidden="true"/></AdminModuleLink>)}</div>
+          {results.length === 0 && <p className="cr-empty" role="status">No matching module. Try a different task.</p>}
+        </div>
+      </dialog>
     </div>
-  </div>{sessionState === "reconnecting" && <main className="grid min-h-screen place-items-center bg-[#f9f7f5] text-[#111111]"><section className="rounded-2xl bg-white p-8 text-center"><CravesLogo size="lg" className="mx-auto" /><h1 className="mt-4 text-xl font-bold">Reconnecting securely</h1><p role="status" className="mt-3">Your work is kept in this tab. We’ll continue when your session is verified.</p></section></main>}</>;
+    {!allowInteraction && accessScreen}
+  </>;
 }

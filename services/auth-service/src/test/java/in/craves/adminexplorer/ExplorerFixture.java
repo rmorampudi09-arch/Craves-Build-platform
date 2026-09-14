@@ -5,6 +5,7 @@ final class ExplorerFixture {
  static final int FACET_COUNT=1;
  static final String FUNCTION="public.reject_admin_explorer_audit_mutation()";
  static final String MIGRATION="/db/migration/V9__admin_explorer_audit.sql";
+ static final String ADMISSION_MIGRATION="/db/migration/V9_1__admin_explorer_admission.sql";
  static final String DDL="""
 CREATE TABLE auth_identity(id UUID PRIMARY KEY,display_name TEXT,status TEXT,created_at TIMESTAMPTZ,updated_at TIMESTAMPTZ,phone_number TEXT,email TEXT);
  CREATE TABLE auth_identity_role(identity_id UUID,role_code TEXT,PRIMARY KEY(identity_id,role_code));

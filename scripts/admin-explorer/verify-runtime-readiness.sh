@@ -12,6 +12,8 @@ fail(){ echo "ERROR: $* Existing admin image preserved." >&2; exit 1; }
 [[ "${EXPECTED_RELEASE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'Exact reviewed source SHA is required.'
 [[ "$(git -C "$ROOT" rev-parse HEAD)" == "$EXPECTED_RELEASE_SHA" ]] || fail 'Readiness checkout differs from reviewed source.'
 for tool in az jq curl python3; do command -v "$tool" >/dev/null || fail "$tool is required."; done
+APIM_SKU=$(az apim show -g "$RG" --name "$APIM" --query sku.name -o tsv --only-show-errors)
+[[ -n "$APIM_SKU" ]] || fail 'APIM tier could not be verified.'
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 SUB=$(az account show --query id -o tsv)

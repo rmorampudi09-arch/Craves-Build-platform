@@ -19,7 +19,7 @@ class BankAutomationSafetyDatabaseTest {
         var request=b.submit();
         when(b.identities.fetch(b.f.chef.identityId())).thenThrow(new IllegalStateException("source timeout"));
         b.banks.processOne();assertEquals("QUEUED",b.banks.status(b.f.chef).state());verify(b.provider,never()).create(any(),any());
-        when(b.identities.fetch(b.f.chef.identityId())).thenReturn(b.identity("APPROVED"));
+        doReturn(b.identity("APPROVED")).when(b.identities).fetch(b.f.chef.identityId());
         when(b.provider.create(any(),any())).thenReturn(b.success("resumed"));b.due();b.banks.processOne();
         assertEquals("VERIFIED",b.banks.status(b.f.chef).state());verify(b.provider,times(1)).create(eq(request.id()),any());
     }
@@ -41,8 +41,7 @@ class BankAutomationSafetyDatabaseTest {
     @Test void bankUnvalidatedMeansUnavailableNotMissingEarnings() {
         b.submit();b.f.earning(Instant.now().minusSeconds(172900));
         var balance=b.f.service.balance(b.f.chef);assertEquals("343.17",balance.outstanding());
-        assertEquals("0.00",balance.available());assertTrue(balance.onHold());assertFalse(balance.executionEnabled());
-        assertTrue(b.f.service.dueChefs().isEmpty());
+        assertEquals("0.00",balance.available());assertTrue(balance.onHold());assertFalse(balance.executionEnabled());assertTrue(b.f.service.dueChefs().isEmpty());
     }
     @Test void adminCannotReplaceAutomaticallyManagedBeneficiary() {
         b.verified();

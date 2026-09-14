@@ -19,7 +19,7 @@ SUB=$(az account show --query id -o tsv)
 [[ "$SUB" =~ ^[a-fA-F0-9-]{36}$ ]] || fail 'Azure subscription unavailable'
 BASE="https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.ApiManagement/service/$APIM"
 API="$BASE/apis/$API_ID"
-GLOBAL=$(az rest --method get --url "$BASE/policies/policy?api-version=$API_VERSION" --query properties.value -o tsv)
+GLOBAL=$(az rest --method get --url "$BASE/policies/policy?api-version=$API_VERSION&format=rawxml" --query properties.value -o tsv)
 [[ "$GLOBAL" != *'backend-id='* ]] || fail 'Inherited backend-id needs a separate reviewed routing change'
 apps=("${AUTH_APP:-ca-craves-auth-service-prodlow}" "${USER_CHEF_APP:-ca-craves-user-chef-service-prod}" "${ORDER_APP:-ca-craves-order-service-prodlow}")
 domains=(users chefs orders)
@@ -59,7 +59,7 @@ pathlib.Path(sys.argv[2]).write_text(json.dumps({'properties':{'format':'rawxml'
 PY
   az rest --method put --url "$API/operations/$op?api-version=$API_VERSION" --body @"$TMP/op.json" -o none
   az rest --method put --url "$API/operations/$op/policies/policy?api-version=$API_VERSION" --body @"$TMP/policy.json" -o none
-  policy=$(az rest --method get --url "$API/operations/$op/policies/policy?api-version=$API_VERSION" --query properties.value -o tsv)
+  policy=$(az rest --method get --url "$API/operations/$op/policies/policy?api-version=$API_VERSION&format=rawxml" --query properties.value -o tsv)
   [[ "$policy" == *"$backend"* && "$policy" == *no-store* && "$policy" == *CRAVES_ADMIN_EXPLORER_V1* ]] || fail "$domain policy readback failed"
 done
 GATEWAY=$(az apim show -g "$RG" --name "$APIM" --query gatewayUrl -o tsv)

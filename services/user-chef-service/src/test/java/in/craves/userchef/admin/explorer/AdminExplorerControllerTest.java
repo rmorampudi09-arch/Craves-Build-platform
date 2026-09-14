@@ -9,6 +9,8 @@ import org.springframework.security.core.Authentication;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 class AdminExplorerControllerTest {
+ @Test void exhaustedBudgetReturnsBoundedRetryAfter(){var e=mock(ExplorerEngine.class);when(e.read(any(),any())).thenThrow(new in.craves.adminexplorer.ExplorerRateLimiter.Limited(37));var r=new AdminExplorerController(e,true).query(actor("PLATFORM_ADMIN"),ExplorerQueryTest.normal());assertEquals(429,r.getStatusCode().value());assertEquals("37",r.getHeaders().getFirst("Retry-After"));assertEquals("no-store",r.getHeaders().getCacheControl());}
+
  Authentication actor(String role){Authentication a=mock(Authentication.class);when(a.isAuthenticated()).thenReturn(true);when(a.getPrincipal()).thenReturn(new CurrentUser(UUID.randomUUID(),"test-uid","+919999999999",List.of(role)));return a;}
  @Test void rejectsUnauthenticatedBeforeAnyDatabaseWork(){var e=mock(ExplorerEngine.class);var c=new AdminExplorerController(e,true);assertEquals(401,c.query(null,ExplorerQueryTest.normal()).getStatusCode().value());verifyNoInteractions(e);}
  @Test void rejectsCustomerChefAndLegacyAdmin(){for(String role:List.of("CUSTOMER","CHEF","ADMIN","SUPPORT_ADMIN")){var e=mock(ExplorerEngine.class);assertEquals(403,new AdminExplorerController(e,true).query(actor(role),ExplorerQueryTest.normal()).getStatusCode().value());verifyNoInteractions(e);}}

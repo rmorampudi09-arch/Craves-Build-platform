@@ -5,6 +5,7 @@ final class ExplorerFixture {
  static final int FACET_COUNT=32;
  static final String FUNCTION="order_schema.reject_admin_explorer_audit_mutation()";
  static final String MIGRATION="/db/migration/V26__admin_explorer_audit.sql";
+ static final String ADMISSION_MIGRATION="/db/migration/V27__admin_explorer_admission.sql";
  static final String DDL="""
 CREATE SCHEMA IF NOT EXISTS order_schema;
  CREATE TABLE order_schema.customer_order(id UUID PRIMARY KEY,customer_identity_id UUID,chef_identity_id UUID,kitchen_id UUID,checkout_id UUID,kitchen_name_snapshot TEXT,status TEXT,created_at TIMESTAMPTZ,updated_at TIMESTAMPTZ,order_source TEXT,grand_total NUMERIC(10,2),currency TEXT);

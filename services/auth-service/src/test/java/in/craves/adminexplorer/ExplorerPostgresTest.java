@@ -17,6 +17,8 @@ class ExplorerPostgresTest {
   jdbc.execute("CREATE SCHEMA IF NOT EXISTS order_schema; DROP TABLE IF EXISTS auth_identity_role, auth_identity, chef_application, order_schema.customer_order CASCADE; DROP TABLE IF EXISTS "+ExplorerDomain.AUDIT+" CASCADE; DROP FUNCTION IF EXISTS "+ExplorerFixture.FUNCTION+" CASCADE");
   jdbc.execute(ExplorerFixture.DDL);
   try(var stream=getClass().getResourceAsStream(ExplorerFixture.MIGRATION)){assertNotNull(stream);jdbc.execute(new String(stream.readAllBytes(),StandardCharsets.UTF_8));}
+  jdbc.execute("DROP TABLE IF EXISTS "+ExplorerRateLimiter.TABLE);
+  try(var stream=getClass().getResourceAsStream(ExplorerFixture.ADMISSION_MIGRATION)){assertNotNull(stream);jdbc.execute(new String(stream.readAllBytes(),StandardCharsets.UTF_8));}
   engine=new ExplorerEngine(ds);
  }
  ExplorerQuery q(String status,String cursor,String search,String facet,String sort){return ExplorerQuery.parse(ExplorerQueryTest.request("","",status,search,facet,25,sort,"records",ExplorerQueryTest.NOW.toString(),cursor,"Review fixture records for quality"),ExplorerDomain.DATASET,ExplorerQueryTest.NOW);}

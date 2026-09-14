@@ -27,7 +27,9 @@ elif a[:3]==['apim','api','list']:
 elif a[:4]==['apim','api','operation','list']:
  if a[a.index('--api-id')+1]=='legacy':emit([{'method':'POST','urlTemplate':'/*' if case=='ancestor-wildcard' else '/admin/explorer/users/query' if case=='ancestor-exact' else '/auth/sign-in'}])
  else:emit([{'method':'POST','urlTemplate':'/'+d+'/query'} for d in ['users','chefs','orders']]+([{'method':'POST','urlTemplate':'/*'}] if case=='wildcard' else []))
-elif a[:2]==['apim','show']: emit({'gatewayUrl':'https://fixture.azure-api.net','hostnameConfigurations':[{'type':'Proxy','hostName':'api.example.test'}]})
+elif a[:2]==['apim','show']:
+ sku='Consumption' if case=='consumption' else '' if case=='missing-sku' else 'Developer'
+ emit(sku if '--query' in a and a[a.index('--query')+1]=='sku.name' else {'sku':{'name':sku},'gatewayUrl':'https://fixture.azure-api.net','hostnameConfigurations':[{'type':'Proxy','hostName':'api.example.test'}]})
 elif a[:3]==['containerapp','replica','list']:emit([{}])
 elif a[:2]==['containerapp','show']:
  name=a[a.index('-n')+1]; admin='admin-web' in name
@@ -59,7 +61,7 @@ else: print('{}')
 '''
 
 class ReadinessTest(unittest.TestCase):
-    def run_case(self, case, sha=SHA):
+    def run_case(self, case, sha=SHA, configure=False):
         with tempfile.TemporaryDirectory(prefix='craves-readiness-fixture-') as folder:
             path = pathlib.Path(folder)
             for name, content in [('az', AZ), ('curl', CURL)]:
@@ -68,8 +70,26 @@ class ReadinessTest(unittest.TestCase):
                 file.chmod(0o700)
             env = os.environ.copy()
             env.update(PATH=str(path)+os.pathsep+env['PATH'], EXPECTED_RELEASE_SHA=sha, READINESS_CASE=case, READINESS_POLICY=str(ROOT/'infra/apim/admin-explorer/authenticated-policy.xml'))
-            return subprocess.run(['bash', str(ROOT/'scripts/admin-explorer/verify-runtime-readiness.sh')],
+            if configure:
+                # The gateway fixture represents an already-reviewed clean checkout.
+                git = path/'git'
+                git.write_text('#!/usr/bin/env python3\nimport os,sys\na=sys.argv[1:]\nif a[:1]==["-C"]:a=a[2:]\nif a==["rev-parse","HEAD"]:print(os.environ["EXPECTED_RELEASE_SHA"])\nelif a!=["status","--porcelain","--untracked-files=no"]:raise AssertionError(a)\n')
+                git.chmod(0o700)
+                env['CONFIRM_APIM_WRITE']='true'
+            script='scripts/apim/configure-admin-explorer-apim.sh' if configure else 'scripts/admin-explorer/verify-runtime-readiness.sh'
+            return subprocess.run(['bash', str(ROOT/script)],
                                   cwd=ROOT, env=env, capture_output=True, text=True, timeout=30)
+
+    def test_consumption_tier_passes_with_source_linked_backend_admission(self):
+        result=self.run_case('consumption')
+        self.assertEqual(0,result.returncode,result.stderr)
+
+    def test_unverified_gateway_tier_fails_closed(self):
+        for configure in [False, True]:
+            with self.subTest(configure=configure):
+                result=self.run_case('missing-sku',configure=configure)
+                self.assertNotEqual(0,result.returncode)
+                self.assertIn('tier could not be verified',result.stderr)
 
     def test_complete_source_linked_custom_domain_inventory_passes(self):
         result = self.run_case('ready')

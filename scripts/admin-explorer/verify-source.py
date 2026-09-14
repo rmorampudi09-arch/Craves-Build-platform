@@ -5,7 +5,7 @@ import hashlib
 import xml.etree.ElementTree as ET
 root=Path(__file__).resolve().parents[2]
 services=['auth','user-chef','order']
-for relative in ['src/main/java/in/craves/adminexplorer/ExplorerQuery.java','src/main/java/in/craves/adminexplorer/ExplorerEngine.java','src/test/java/in/craves/adminexplorer/ExplorerQueryTest.java','src/test/java/in/craves/adminexplorer/ExplorerPostgresTest.java']:
+for relative in ['src/main/java/in/craves/adminexplorer/ExplorerQuery.java','src/main/java/in/craves/adminexplorer/ExplorerRateLimiter.java','src/test/java/in/craves/adminexplorer/ExplorerRateLimiterPostgresTest.java','src/main/java/in/craves/adminexplorer/ExplorerEngine.java','src/test/java/in/craves/adminexplorer/ExplorerQueryTest.java','src/test/java/in/craves/adminexplorer/ExplorerPostgresTest.java']:
     copies=[(root/f'services/{s}-service'/relative).read_bytes() for s in services]
     assert copies[0]==copies[1]==copies[2], f'Shared implementation drift: {relative}'
     print(relative, hashlib.sha256(copies[0]).hexdigest())

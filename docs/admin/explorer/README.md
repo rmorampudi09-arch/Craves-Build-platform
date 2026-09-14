@@ -200,3 +200,48 @@ financial revenue recognition, KYC policy, cancellation eligibility or commissio
 changes. The user's referenced HLD002 v2.0 / FUNC001 sections are still required
 before changing those policies. See the handover's phased backlog rather than
 presenting unsupported buttons as working controls.
+
+
+## Explicit production admin promotion
+
+`azure-pipelines-admin-dashboard.yml` defaults `deployProduction=false`.
+Automatic main runs and PR runs validate code only. A production image/deployment
+requires a manual main-branch run with `deployProduction=true` and a full
+`expectedReleaseSha` equal to both the checked-out commit and
+`Build.SourceVersion`. The existing `craves-admin-prodlow` environment approval
+remains required. The image carries the reviewed source OCI label, which is checked after pulling
+the published immutable digest. The deployment consumes that digest, not its tag.
+
+Deploy the reviewed Auth, User/Chef and Order dependencies before the admin app.
+For this release, supply their existing `imageTag` parameter with that same full
+source SHA. Record the build runs, source commits, registry digests and actual
+ready revisions; a tag is not independent proof of a build's provenance. Preserve
+immutable release tags and pin the actual dependency runtime image references to
+those recorded digests before admin promotion. Mutable backend runtime tags are
+rejected because a moved registry tag does not prove which image is running.
+
+After environment approval and before any admin image update, the read-only
+`verify-runtime-readiness.sh` discovers existing app and APIM origins and checks:
+ready single-revision dependencies; one replica; activated Explorer flags; each
+actual digest-pinned runtime image against its reviewed-SHA tag; complete API,
+ancestor/descendant operation and product policy inventories; structurally exact
+reviewed APIM operation authentication/body limits/rate limits/backend rewrites;
+no inherited credential, body, cache or routing transformations; no-store; and
+anonymous denial. Unresolved policy fragments and partial paginated inventories
+are rejected until separately inspected. Backend replica counts are read directly. Existing APIM custom proxy domains are accepted when
+validating the admin API origin. Missing or conflicting source/configuration/
+routing evidence fails before updating admin. A secret-referenced admin API
+origin requires separate resolved-origin verification; this script never reads
+or replaces its secret. Admin update changes only the digest-pinned image and reasserts the existing
+one-replica bounds. Before/after hashes verify managed identity, secret references
+and all unrelated configuration. Post-deploy checks require Single revision mode,
+one actual replica and all traffic on the new ready revision. Firebase, API,
+payment, document, identity and secret configuration are preserved.
+
+These checks are deployment prerequisites. They do not prove authenticated
+Explorer success or wrong-role/owner denial, and an anonymous 401 is not described
+as authenticated acceptance. Record those owner-session checks securely with the
+exact backend release and complete migration/index evidence before approving the
+admin environment. Do not extract owner cookies or put access tokens into CI.
+The command-fixture tests exercise these inventory guards without Azure calls;
+actual runtime acceptance still belongs to the approved release.

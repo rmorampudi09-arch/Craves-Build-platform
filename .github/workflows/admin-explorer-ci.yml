@@ -11,6 +11,7 @@ on:
       - infra/apim/admin-explorer/**
       - scripts/apim/configure-admin-explorer-apim.sh
       - .github/workflows/admin-explorer-ci.yml
+      - azure-pipelines-admin-dashboard.yml
   push:
     branches: [main]
     paths:
@@ -22,6 +23,7 @@ on:
       - infra/apim/admin-explorer/**
       - scripts/apim/configure-admin-explorer-apim.sh
       - .github/workflows/admin-explorer-ci.yml
+      - azure-pipelines-admin-dashboard.yml
 permissions:
   contents: read
 concurrency:
@@ -148,3 +150,5 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - run: python3 scripts/admin-explorer/verify-source.py
       - run: bash -n scripts/apim/configure-admin-explorer-apim.sh
+      - run: bash -n scripts/admin-explorer/verify-runtime-readiness.sh
+      - run: python3 scripts/admin-explorer/test-runtime-readiness.py

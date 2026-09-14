@@ -7,8 +7,8 @@ import {
   BarChart3, Users, PackageSearch, ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
   LayoutDashboard, LogOut, Menu, ReceiptText, Search, SearchCheck, ShieldCheck, Truck, X
 } from "lucide-react";
-import type { AdminIdentity } from "@/lib/admin-contract";
-import { observeAdminSession, logoutAdminSession, type SessionState } from "@/lib/admin-renewal";
+import { observeAdminSession, logoutAdminSession } from "@/lib/admin-renewal";
+import { createAdminAuthorization, INITIAL_ADMIN_AUTHORIZATION } from "@/lib/admin-authorization";
 import { loadAdminIdentity } from "@/lib/admin-session";
 import { ADMIN_MODULES, matchesAdminRoute, searchAdminModules } from "@/lib/admin-navigation";
 import { AdminModuleLink } from "@/components/admin-module-link";
@@ -45,40 +45,26 @@ function Brand() {
 
 export function AdminWorkspace({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [identity, setIdentity] = useState<AdminIdentity | null>(null);
-  const [message, setMessage] = useState("Verifying administrator access…");
-  const [sessionState, setSessionState] = useState<SessionState>("checking");
+  const [{ identity, message, sessionState }, setAuthorization] = useState(INITIAL_ADMIN_AUTHORIZATION);
   const [query, setQuery] = useState("");
   const [signingOut, setSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const [logoutStarted, setLogoutStarted] = useState(false);
+  const [logoutConfirmed, setLogoutConfirmed] = useState(false);
+  const logoutInFlight = useRef(false);
   const menu = useRef<HTMLDialogElement>(null);
   const commands = useRef<HTMLDialogElement>(null);
   const commandInput = useRef<HTMLInputElement>(null);
   const allowInteraction = sessionState === "ready" && identity !== null && message === "";
 
   useEffect(() => {
-    let active = true;
-    let authorizationGeneration = 0;
-    const stop = observeAdminSession(state => {
-      const generation = ++authorizationGeneration;
-      setSessionState(state);
-      menu.current?.close(); commands.current?.close();
-      if (state === "ended") { setIdentity(null); setMessage("Your administrator session has ended. Please sign in again."); }
-      if (state === "reconnecting") setMessage("Reconnecting securely. Your open workspace is kept in this tab.");
-      if (state === "ready") {
-        setMessage("Verifying administrator access…");
-        void loadAdminIdentity()
-          .then(admin => { if (active && generation === authorizationGeneration) { setIdentity(admin); setMessage(""); } })
-          .catch(error => {
-            if (active && generation === authorizationGeneration) {
-              // Never retain an earlier authorization after a failed re-check.
-              setIdentity(null);
-              setMessage(error instanceof Error ? error.message : "Administrator access is unavailable.");
-            }
-          });
-      }
+    const authorization = createAdminAuthorization({
+      loadIdentity: loadAdminIdentity,
+      publish: setAuthorization,
+      closeDialogs: () => { menu.current?.close(); commands.current?.close(); },
     });
-    return () => { active = false; stop(); };
+    const stop = observeAdminSession(state => { void authorization.accept(state); });
+    return () => { authorization.dispose(); stop(); };
   }, []);
 
   useEffect(() => {
@@ -94,17 +80,31 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
   }, [allowInteraction]);
 
   async function signOut() {
-    if (signingOut) return;
+    if (logoutInFlight.current) return;
+    logoutInFlight.current = true;
+    setLogoutStarted(true);
     setSigningOut(true);
     setLogoutError("");
-    try { await logoutAdminSession(); }
-    catch { setLogoutError("Sign out did not complete. Please try again."); }
-    finally { setSigningOut(false); }
+    try { await logoutAdminSession(); setLogoutConfirmed(true); }
+    catch { setLogoutError("Sign out has not been confirmed. This workspace is locked. Retry sign out to finish securely."); }
+    finally { logoutInFlight.current = false; setSigningOut(false); }
   }
+
+  // Keep the retry reachable after local authorization is cleared, including Academy.
+  if (logoutStarted) return <main className="cr-admin cr-session-screen">
+    <section className="cr-session-card"><CravesLogo size="lg" priority/><p className="cr-eyebrow">Craves administration</p>
+      <h1>{logoutConfirmed ? "Signed out" : signingOut ? "Signing out securely" : "Finish signing out"}</h1>
+      <p className="cr-muted" role={logoutError ? "alert" : "status"}>{logoutError || (logoutConfirmed ? "Your Craves session has been signed out." : "This workspace is locked while Craves confirms sign out.")}</p>
+      <div className="cr-actions">{logoutConfirmed
+        ? <Link className="cr-button cr-primary" href={`/sign-in?returnTo=${encodeURIComponent(pathname)}`}>Administrator sign in</Link>
+        : <button type="button" className="cr-button cr-primary" onClick={() => void signOut()} disabled={signingOut}>{signingOut ? "Signing out…" : "Retry sign out"}</button>}
+      </div>
+    </section>
+  </main>;
 
   // Academy keeps its purpose-built, already Craves-branded learning workspace.
   if (pathname === "/admin/academy" || pathname.startsWith("/admin/academy/")) {
-    return <AcademyWorkspace identity={identity} message={message} sessionState={sessionState}>{children}</AcademyWorkspace>;
+    return <AcademyWorkspace identity={identity} message={message} sessionState={sessionState} onSignOut={() => { void signOut(); }}>{children}</AcademyWorkspace>;
   }
 
   const current = ADMIN_MODULES.find(module => matchesAdminRoute(pathname, module.href));

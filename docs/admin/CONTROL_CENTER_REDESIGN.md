@@ -5,14 +5,17 @@
 Prepared on 14 September 2026 from verified main
 `f0ba9d64ad8ad98ce3a4da2dfac5cc9bcf953d49`.
 
-This is a presentation/navigation release for `apps/customer-web-next`, including
-its dedicated admin build. It is not a backend-feature or production-activation
-release. Do not overlay this work onto an older ZIP snapshot or replace newer main
-changes. Review the exact PR diff and release SHA before building.
+This guide describes the original presentation/navigation shell and its session
+safety follow-up. PR342 subsequently added the analytics/explorer module at
+`6fc36ab8302366087b6248e5780e4896821b80dd`. That increment includes Auth, User/Chef
+and Order APIs and audit migrations. Follow [the explorer release guide](explorer/README.md)
+for the expanded review, index, route and deployment requirements. The earlier
+frontend-only release description does not authorize or certify those dependencies.
 
-No Java services, migrations, provider settings, credentials, commercial rules,
-role grants, session-duration policy, Azure resources or replica counts change.
-The existing one-replica production constraint remains a release requirement.
+The session follow-up was reconciled on that exact newer head and preserves its
+analytics navigation and explorer code. Do not overlay an older ZIP or replace
+newer main changes. Review the final integrated SHA before building. Preserve
+existing resources, credentials, financial policy and the one-replica maximum.
 
 ## Visual system
 
@@ -37,10 +40,11 @@ purpose-built learning workspace.
 
 ## Implemented navigation and data coverage
 
-The module registry has 13 destinations: Overview, Global search, All modules,
+The original shell has 13 destinations: Overview, Global search, All modules,
 Orders & investigations, Delivery Intelligence, Chef applications, Account security,
 Finance control center, Subscription plans, Subscriptions, Subscription capacity,
-Notification recovery and Craves Academy.
+Notification recovery and Craves Academy. The explorer increment adds Marketplace
+analytics plus Users, Chefs and Orders explorers, bringing the registry to 17.
 
 The header offers keyboard-accessible module search (Ctrl/Cmd+K), a notification
 recovery shortcut, current-workspace context and a native mobile navigation dialog.
@@ -92,10 +96,28 @@ grant roles. Public and chef sign-in retain their existing presentation.
 The workspace preserves the existing admin-session observer, renewal and logout.
 An unsuccessful identity re-check clears the prior identity; the operational
 workspace is hidden during re-verification/reconnection. Native dialogs close
-before re-checks. Existing forms remain mounted while reconnecting when identity
+when access becomes uncertain. Routine successful session checks continue to
+revalidate identity without closing dialogs, hiding healthy work or moving focus.
+Existing forms remain mounted while reconnecting when identity
 is retained, to avoid discarding work. No sensitive data is stored in localStorage.
 
+Administrator sign-out immediately locks local operational access. It is confirmed
+only after the same-origin logout route returns a successful `signedOut: true`
+receipt. Network failures, non-success statuses and invalid receipts show a locked
+retry screen, including when sign-out starts from Academy. No operational mutation
+is replayed after sign-out. The shared server logout route owns actual token
+revocation and cookie handling; these client checks do not substitute for its
+release acceptance.
+
 ## Validation evidence and required release gates
+
+The session safety follow-up adds ten authorization lifecycle cases and
+seven logout confirmation/concurrency cases. Local lint and full TypeScript checks
+passed on the reconciled analytics head; the complete web test command passed
+85 Vitest and 293 Node tests, with no
+failures or skips. These use disposable in-memory responses, not live sessions.
+Browser, authenticated runtime and deployment gates below still apply to the final
+integrated release, including the independently owned shared logout server changes.
 
 Completed locally on the prepared source:
 
@@ -105,8 +127,8 @@ Completed locally on the prepared source:
 - TypeScript transpilation syntax check: all nine TS/TSX files, zero diagnostics.
 - Brand text-pair contrast calculations (not a full accessibility certification).
 
-Not completed by those checks: full repository lint/typecheck/tests/Next.js build,
-authenticated end-to-end testing, production rendering or deployment.
+The original shell-only checks above do not certify the later analytics increment
+or authenticated end-to-end testing, production rendering or deployment.
 The existing `.github/workflows/admin-dashboard-ci.yml` performs lint, typecheck,
 tests and production build on PRs. Require all applicable checks on the exact
 reviewed head; do not relabel pending/failed checks as passed.
@@ -123,4 +145,6 @@ Merge only after normal review. Use the current verified admin-web release pipel
 with an exact reviewed source SHA, preserve its deployment configuration and one
 replica, and run authenticated acceptance on the admin domain. Do not deploy all
 backend services for this change. Preserve the previous admin image/digest for
-rollback. A merged PR or green source build alone is not production acceptance.
+rollback. The explorer increment separately needs the three reviewed backend
+dependencies described in its release guide; this is not a blanket fleet release.
+A merged PR or green source build alone is not production acceptance.

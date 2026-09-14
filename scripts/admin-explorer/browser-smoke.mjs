@@ -7,7 +7,7 @@ const {chromium}=require('playwright');
 const output='explorer-browser-evidence';await mkdir(output,{recursive:true});
 const browser=await chromium.launch({headless:true});
 const context=await browser.newContext({viewport:{width:1440,height:1100},reducedMotion:'reduce'});
-const page=await context.newPage();const errors=[],queries=[];let deny=false;
+const page=await context.newPage();const errors=[],queries=[];let deny=false,logoutAttempts=0;
 page.on('pageerror',e=>errors.push(e.message));
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const records=Array.from({length:65},(_,i)=>({n:i+1,id:uuid(i+1),day:i<30?'2026-09-10':'2026-09-11'}));
@@ -27,6 +27,7 @@ await page.route('**/*',async route=>{
  if(url.origin!=='http://127.0.0.1:3100')return route.abort();
  const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
  if(url.pathname==='/api/auth/admin-session'){const now=Date.now();return json({timing:{serverTime:now,accessExpiresAt:now+900000,sessionExpiresAt:now+28800000}});}
+ if(url.pathname==='/api/auth/logout'){logoutAttempts++;return json(logoutAttempts===1?{signedOut:false,code:'LOGOUT_UNCONFIRMED'}:{signedOut:true},logoutAttempts===1?503:200);}
  if(url.pathname==='/api/admin/me')return json({displayName:'Fixture administrator',email:'fixture@example.test',status:'ACTIVE',adminEnabled:true});
  if(url.pathname.startsWith('/api/admin/explorer/')){
   const dataset=url.pathname.split('/').pop();const q=route.request().postDataJSON();queries.push({dataset,...q});
@@ -36,6 +37,12 @@ await page.route('**/*',async route=>{
  if(url.pathname.startsWith('/api/'))return json({code:'FIXTURE_ENDPOINT_NOT_CONFIGURED'},503);
  return route.continue();
 });
+async function healthyRecheckPreservesDialog(){
+ const checked=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/admin/me');
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await (await checked).finished();
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ assert.equal(await page.getByRole('dialog').count(),1,'A healthy focus/session check must preserve the open dialog');
+}
 async function ribbon(){await page.evaluate(()=>{let b=document.getElementById('fixture-ribbon');if(!b){b=document.createElement('div');b.id='fixture-ribbon';b.textContent='LOCAL BROWSER TEST • SYNTHETIC DATA • NOT PRODUCTION';b.style.cssText='position:fixed;bottom:8px;right:8px;z-index:9999;background:#111;color:white;padding:7px 12px;border-radius:5px;font:10px sans-serif;pointer-events:none';document.body.appendChild(b);}});}
 try{
  await page.goto('http://127.0.0.1:3100/admin/analytics');
@@ -57,6 +64,7 @@ try{
  await page.getByRole('button',{name:'Previous',exact:true}).click();await page.getByText('Page 1',{exact:true}).waitFor();
  await page.getByRole('button',{name:/View details for/}).first().click();await page.getByRole('dialog').waitFor();
  assert.ok(await page.getByRole('link',{name:/Open audited identity lookup/}).count());
+ await healthyRecheckPreservesDialog();
  await ribbon();await page.screenshot({path:`${output}/02-users-detail-desktop.png`,fullPage:false});
  await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0);
  await page.getByRole('button',{name:'Reset all filters',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.ex-metrics-row strong')?.textContent==='65');
@@ -79,11 +87,17 @@ try{
  await page.evaluate(()=>window.scrollTo(0,0));await ribbon();await page.screenshot({path:`${output}/03-orders-desktop.png`,fullPage:true});
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await ribbon();await page.screenshot({path:`${output}/04-orders-mobile.png`,fullPage:true});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Page must not overflow horizontally');
- await page.getByRole('button',{name:'Open navigation',exact:true}).click();await page.getByRole('dialog',{name:'Admin navigation'}).waitFor();await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Open navigation',exact:true}).click();await page.getByRole('dialog',{name:'Admin navigation'}).waitFor();await healthyRecheckPreservesDialog();await page.keyboard.press('Escape');
  for(const width of [320,768,1024]){await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`Horizontal overflow at ${width}`);}
  await page.setViewportSize({width:1440,height:1100});
  deny=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByRole('alert').filter({hasText:'Platform or audit'}).waitFor();assert.equal(await page.locator('.ex-table tbody tr').count(),0);
+ // Failed logout remains locked and retryable; a signedOut receipt is required.
+ await page.getByRole('button',{name:'Sign out',exact:true}).click();
+ await page.getByRole('heading',{name:'Finish signing out',exact:true}).waitFor();
+ assert.equal(await page.getByRole('table').count(),0);
+ await page.getByRole('button',{name:'Retry sign out',exact:true}).click();
+ await page.getByRole('heading',{name:'Signed out',exact:true}).waitFor();assert.equal(logoutAttempts,2);
  assert.deepEqual(errors,[]);
- await writeFile(`${output}/result.json`,JSON.stringify({passed:true,scope:'Synthetic BFF fixtures only; no production authentication or service calls',assertions:['graph-to-status filter','trend-bar-to-date filter','purpose preserved','complete-list pagination','record drawer and Escape','aggregate export','empty search','chef and order endpoint binding','320/390/768/1024/1440 width checks','mobile navigation','permission denial clears records'],requests:queries.length,pageErrors:errors},null,2));
+ await writeFile(`${output}/result.json`,JSON.stringify({passed:true,scope:'Synthetic BFF fixtures only; no production authentication or service calls',assertions:['graph-to-status filter','trend-bar-to-date filter','purpose preserved','complete-list pagination','record drawer and Escape','healthy session checks preserve record/navigation dialogs','failed logout locks and retries until confirmed','aggregate export','empty search','chef and order endpoint binding','320/390/768/1024/1440 width checks','mobile navigation','permission denial clears records'],requests:queries.length,pageErrors:errors},null,2));
 }catch(error){await page.screenshot({path:`${output}/failure.png`,fullPage:true}).catch(()=>{});await writeFile(`${output}/failure.json`,JSON.stringify({message:String(error),pageErrors:errors,queries},null,2));throw error;}
 finally{await context.close();await browser.close();}

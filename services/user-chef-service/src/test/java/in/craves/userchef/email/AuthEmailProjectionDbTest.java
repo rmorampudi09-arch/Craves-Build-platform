@@ -53,14 +53,16 @@ class AuthEmailProjectionDbTest {
         flyway(null).validate();assertEquals(0,flyway(null).migrate().migrationsExecuted);
         resetPublicExplorerFixture(jdbc);
         jdbc.execute("DROP SCHEMA email_userchef_test CASCADE");jdbc.execute("CREATE SCHEMA email_userchef_test");assertEquals(10,flyway("10").migrate().migrationsExecuted);
-        UUID id=UUID.randomUUID();insertProfile(id,"legacy-unverified@example.test");assertEquals(2,flyway(null).migrate().migrationsExecuted);flyway(null).validate();
+        UUID id=UUID.randomUUID();insertProfile(id,"legacy-unverified@example.test");assertEquals(3,flyway(null).migrate().migrationsExecuted);flyway(null).validate();
         assertEquals(0,flyway(null).migrate().migrationsExecuted);assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM auth_email_projection",Integer.class));
         assertEquals("legacy-unverified@example.test",profiles.getProfile(user(id)).email());
-        assertEquals(12,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        assertEquals(13,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_audit')::text",String.class));
+        assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_admission')::text",String.class));
     }
     private static void resetPublicExplorerFixture(JdbcTemplate database) {
         // V11 deliberately uses public. Drop only its fixture objects, preserving public PostGIS under the strict disposable DB guard.
+        database.execute("DROP TABLE IF EXISTS public.admin_explorer_admission CASCADE");
         database.execute("DROP TABLE IF EXISTS public.admin_explorer_audit CASCADE");
         database.execute("DROP FUNCTION IF EXISTS public.reject_admin_explorer_audit_mutation()");
     }

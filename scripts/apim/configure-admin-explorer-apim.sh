@@ -13,6 +13,8 @@ fail(){ echo "ERROR: $*" >&2; exit 1; }
 for tool in az jq curl python3; do command -v "$tool" >/dev/null || fail "$tool is required"; done
 [[ "$(git -C "$ROOT" rev-parse HEAD)" == "${EXPECTED_RELEASE_SHA:-}" ]] || fail 'EXPECTED_RELEASE_SHA must equal the reviewed checkout commit'
 [[ -z "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]] || fail 'Tracked release files are dirty'
+APIM_SKU=$(az apim show -g "$RG" --name "$APIM" --query sku.name -o tsv --only-show-errors)
+[[ -n "$APIM_SKU" ]] || fail 'APIM tier could not be verified; no routes were modified'
 SUB=$(az account show --query id -o tsv)
 [[ "$SUB" =~ ^[a-fA-F0-9-]{36}$ ]] || fail 'Azure subscription unavailable'
 BASE="https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.ApiManagement/service/$APIM"

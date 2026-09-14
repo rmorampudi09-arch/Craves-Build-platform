@@ -149,12 +149,32 @@ BFF fixtures; they are not authenticated production smoke tests.
 
 ## Release and manual actions
 
+**Consumption-compatible admission:** each owning backend now admits at most 20
+Explorer reads per rolling 60 seconds, shared across administrators and entry points
+for that dataset. Together the three services admit at most 60 reads per minute.
+A dataset previously allowed 60 requests per source IP; its new budget is deliberately
+stricter. A dedicated PostgreSQL counter uses database time and a nonblocking
+transaction-scoped advisory lock. Its short admission transaction commits before the
+report; failed reports still consume budget. Counter failures fail closed. Exhaustion
+or admission contention returns 429 with a bounded `Retry-After` through the BFF.
+The separate append-only access audit is unchanged. No IP, identity, purpose, contacts
+or tokens are stored in the counter. Expired counter entries are pruned on admission.
+
+This replaces the unsupported APIM `rate-limit-by-key` element. Keep the reviewed
+Bearer guard, 8 KB body limit, routing and no-store policies. Ordinary APIM `rate-limit`
+requires a subscription key and is not a substitute for these subscription-free
+routes. No tier, secret, database connection or Azure resource change is needed.
+Verify additive admission migrations **Auth V9.1, User/Chef V11.1 and Order V26.1**, as well
+as the existing audit migrations V9/V11/V26 and their guards, before activation.
+See [keyed throttling](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-by-key-policy)
+and [subscription throttling](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-policy).
+
 1. Refresh main/feature head, pending PRs and Flyway versions. Review the exact diff.
    Require all applicable checks on one exact reviewed release SHA.
 2. Use the existing `Craves-Dev-Service-Connection`. Deploy only the reviewed Auth,
    User/Chef and Order builds with the flag still false. Do not run a broad service
    rollout for this module. Preserve existing configuration and one-replica limits.
-3. Verify each new audit migration in its owning DB. Review DDL privileges and audit
+3. Verify each audit and admission migration in its owning DB. Review DDL privileges and audit
    retention requirements. Do not renumber already applied migrations.
 4. A database operator runs `scripts/admin-explorer/auth-indexes.sql` and
    `business-indexes.sql` against the verified matching DBs with psql
@@ -187,8 +207,10 @@ data, undo paid history, alter providers or delete a shared APIM API blindly.
 
 Each service permits two simultaneous explorer reads, uses five-second SQL statement
 limits and an eight-second transaction timeout, and does not auto-poll lists. The BFF
-has a ten-second upstream limit. The APIM plan allows 60 requests/minute per observed
-source IP; shared BFF egress may share this limit. Re-tune only after measurement.
+has a ten-second upstream limit. Durable backend admission permits 20 reads per
+rolling minute per dataset across all callers, with a two-second admission transaction
+limit, one-second admission SQL limit and nonblocking budget lock. Re-tune only after
+measurement.
 Exact all-time counts and contains-search can still scan many rows. Keyset pagination
 avoids deep OFFSET, but does not eliminate count/search cost. This is NOT a million-
 concurrent-user load certification. Large deployments need measured query plans and
@@ -225,7 +247,8 @@ After environment approval and before any admin image update, the read-only
 ready single-revision dependencies; one replica; activated Explorer flags; each
 actual digest-pinned runtime image against its reviewed-SHA tag; complete API,
 ancestor/descendant operation and product policy inventories; structurally exact
-reviewed APIM operation authentication/body limits/rate limits/backend rewrites;
+reviewed APIM operation authentication/body limits/backend rewrites and source-linked
+durable backend admission;
 no inherited credential, body, cache or routing transformations; no-store; and
 anonymous denial. Unresolved policy fragments and partial paginated inventories
 are rejected until separately inspected. Backend replica counts are read directly. Existing APIM custom proxy domains are accepted when
@@ -245,3 +268,16 @@ exact backend release and complete migration/index evidence before approving the
 admin environment. Do not extract owner cookies or put access tokens into CI.
 The command-fixture tests exercise these inventory guards without Azure calls;
 actual runtime acceptance still belongs to the approved release.
+
+## Independently reviewed backend maintenance source
+
+The admin production run remains a manual exact-SHA release from main, with its
+existing environment approval. `backend-release.json` fixes the three backend images
+to the independently tested maintenance candidate from PR #350. The runtime gate
+requires that immutable commit in the admin release ancestry, identical Explorer
+implementation/migrations in both sources, and no unrelated backend delta from the
+recorded deployed baseline. No runtime SHA override is accepted. Registry digest
+checks use this verified backend SHA; admin image provenance still uses the exact
+main SHA. This keeps the pending email-verification and cart changes out of these
+three backend deployments. V9.1/V11.1/V26.1 leave later migration numbers available.
+Require successful exact-head CI on both #350 and #349 before production promotion.

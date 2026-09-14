@@ -19,10 +19,12 @@ public class ExplorerEngine {
     static final String SOURCE = ExplorerDomain.SOURCE;
     private static final String AUDIT = ExplorerDomain.AUDIT;
     private final JdbcTemplate jdbc;
+    private final ExplorerRateLimiter limiter;
     private final TransactionTemplate transaction;
     private final Semaphore slots = new Semaphore(2);
     public ExplorerEngine(DataSource source) {
         jdbc = new JdbcTemplate(source);
+        limiter = new ExplorerRateLimiter(source);
         transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
         transaction.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
         transaction.setTimeout(8);
@@ -38,7 +40,7 @@ public class ExplorerEngine {
 
     public Result read(UUID actor, ExplorerQuery q) {
         if (!slots.tryAcquire()) throw new Busy();
-        try { return Objects.requireNonNull(transaction.execute(tx -> execute(actor, q))); }
+        try { limiter.admit(); return Objects.requireNonNull(transaction.execute(tx -> execute(actor, q))); }
         finally { slots.release(); }
     }
     private Result execute(UUID actor, ExplorerQuery q) {

@@ -55,6 +55,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -64,7 +65,7 @@ jobs:
         run: python3 scripts/admin-explorer/verify-source.py
       - name: Real PostgreSQL query, paging, audit and authorization tests
         working-directory: services/${{ matrix.service }}-service
-        run: mvn -B -ntp -Dtest='ExplorerQueryTest,ExplorerPostgresTest,AdminExplorerControllerTest' test
+        run: mvn -B -ntp -Dtest='ExplorerQueryTest,ExplorerPostgresTest,ExplorerRateLimiterPostgresTest,AdminExplorerControllerTest' test
       - name: Require database tests without skips
         env:
           SERVICE: ${{ matrix.service }}
@@ -76,6 +77,11 @@ jobs:
           assert int(r.attrib['tests']) >= 9, r.attrib
           assert all(int(r.attrib.get(k,'0')) == 0 for k in ('failures','errors','skipped')), r.attrib
           print('PostgreSQL fixture suite passed without skips:',r.attrib['tests'])
+          p=p.with_name('TEST-in.craves.adminexplorer.ExplorerRateLimiterPostgresTest.xml')
+          r=ET.parse(p).getroot()
+          assert int(r.attrib['tests']) >= 8, r.attrib
+          assert all(int(r.attrib.get(k,'0')) == 0 for k in ('failures','errors','skipped')), r.attrib
+          print('Durable admission suite passed without skips:',r.attrib['tests'])
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -94,6 +100,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -148,7 +155,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
       - run: python3 scripts/admin-explorer/verify-source.py
+      - run: python3 scripts/admin-explorer/verify-backend-release.py
+      - run: python3 scripts/admin-explorer/test-backend-release.py
       - run: bash -n scripts/apim/configure-admin-explorer-apim.sh
       - run: bash -n scripts/admin-explorer/verify-runtime-readiness.sh
       - run: python3 scripts/admin-explorer/test-runtime-readiness.py

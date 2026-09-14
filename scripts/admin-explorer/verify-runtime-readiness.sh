@@ -11,7 +11,10 @@ APIM="${APIM:-apim-craves-prodlow-l3ing6}"
 fail(){ echo "ERROR: $* Existing admin image preserved." >&2; exit 1; }
 [[ "${EXPECTED_RELEASE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'Exact reviewed source SHA is required.'
 [[ "$(git -C "$ROOT" rev-parse HEAD)" == "$EXPECTED_RELEASE_SHA" ]] || fail 'Readiness checkout differs from reviewed source.'
+BACKEND_RELEASE_SHA=$(python3 "$ROOT/scripts/admin-explorer/verify-backend-release.py") || fail 'Backend release provenance or explorer parity failed.'
 for tool in az jq curl python3; do command -v "$tool" >/dev/null || fail "$tool is required."; done
+APIM_SKU=$(az apim show -g "$RG" --name "$APIM" --query sku.name -o tsv --only-show-errors)
+[[ -n "$APIM_SKU" ]] || fail 'APIM tier could not be verified.'
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 SUB=$(az account show --query id -o tsv)
@@ -88,7 +91,7 @@ for i in 0 1 2; do
   reference="${image#"$LOGIN/"}"; repository="${reference%%[@:]*}"
   [[ "$repository" =~ ^[a-z0-9._/-]+$ ]] || fail "$app repository reference is invalid."
   current=$(az acr repository show --name "$ACR" --image "$reference" --query digest -o tsv)
-  reviewed=$(az acr repository show --name "$ACR" --image "$repository:$EXPECTED_RELEASE_SHA" --query digest -o tsv)
+  reviewed=$(az acr repository show --name "$ACR" --image "$repository:$BACKEND_RELEASE_SHA" --query digest -o tsv)
   [[ "$current" =~ ^sha256:[0-9a-f]{64}$ && "$current" == "${image##*@}" && "$current" == "$reviewed" ]] || fail "$app image differs from its reviewed-release SHA tag."
   curl --fail --silent --show-error --max-time 20 "https://$fqdn/actuator/health" >/dev/null
   op="post-explorer-$domain-query"
@@ -99,6 +102,6 @@ for i in 0 1 2; do
   status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' -X POST "$GATEWAY/api/v1/admin/explorer/$domain/query" -H 'Content-Type: application/json' --data '{"mode":"summary"}')
   [[ "$status" == 401 ]] || fail "$domain anonymous route is not denied."
   revision=$(jq -r '.properties.latestReadyRevisionName' "$TMP/app.json")
-  echo "READY: $domain revision=$revision runningDigest=$current release=$EXPECTED_RELEASE_SHA"
+  echo "READY: $domain revision=$revision runningDigest=$current backendRelease=$BACKEND_RELEASE_SHA adminRelease=$EXPECTED_RELEASE_SHA"
 done
 echo 'PASS: deployed source-linked dependencies, active flags, routes and anonymous denial verified. Authenticated success/role-denial acceptance is separate required release evidence.'

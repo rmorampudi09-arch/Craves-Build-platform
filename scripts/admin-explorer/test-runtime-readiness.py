@@ -12,13 +12,13 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SHA = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
 AZ = r'''#!/usr/bin/env python3
 import json, os, sys, pathlib
-a=sys.argv[1:]; case=os.environ['READINESS_CASE']; sha=os.environ['EXPECTED_RELEASE_SHA']; digest='sha256:'+'a'*64
+a=sys.argv[1:]; case=os.environ['READINESS_CASE']; sha=os.environ['EXPECTED_RELEASE_SHA']; digest='sha256:'+'a'*64; backend_sha=os.environ['BACKEND_FIXTURE_SHA']
 assert not any(x in a for x in ['update','create','put','delete','patch','login']), 'A readiness check attempted a mutation'
 def emit(value): print(json.dumps(value) if isinstance(value,(dict,list)) else value)
 if a[:2]==['account','show']: emit('00000000-0000-0000-0000-000000000001')
 elif a[:2]==['acr','show']: emit('fixture.azurecr.io')
 elif a[:3]==['acr','repository','show']:
- image=a[a.index('--image')+1]; emit('sha256:'+'b'*64 if case=='digest' and image.endswith(':'+sha) else digest)
+ image=a[a.index('--image')+1]; emit('sha256:'+'b'*64 if case=='digest' and image.endswith(':'+backend_sha) else digest)
 elif a[:3]==['apim','api','list']:
  result=[{'path':'api/v1/admin/explorer','name':'craves-admin-explorer-v1'}]* (2 if case=='duplicate-api' else 1)
  result.append({'path':'api/v1','name':'legacy'})
@@ -27,7 +27,9 @@ elif a[:3]==['apim','api','list']:
 elif a[:4]==['apim','api','operation','list']:
  if a[a.index('--api-id')+1]=='legacy':emit([{'method':'POST','urlTemplate':'/*' if case=='ancestor-wildcard' else '/admin/explorer/users/query' if case=='ancestor-exact' else '/auth/sign-in'}])
  else:emit([{'method':'POST','urlTemplate':'/'+d+'/query'} for d in ['users','chefs','orders']]+([{'method':'POST','urlTemplate':'/*'}] if case=='wildcard' else []))
-elif a[:2]==['apim','show']: emit({'gatewayUrl':'https://fixture.azure-api.net','hostnameConfigurations':[{'type':'Proxy','hostName':'api.example.test'}]})
+elif a[:2]==['apim','show']:
+ sku='Consumption' if case=='consumption' else '' if case=='missing-sku' else 'Developer'
+ emit(sku if '--query' in a and a[a.index('--query')+1]=='sku.name' else {'sku':{'name':sku},'gatewayUrl':'https://fixture.azure-api.net','hostnameConfigurations':[{'type':'Proxy','hostName':'api.example.test'}]})
 elif a[:3]==['containerapp','replica','list']:emit([{}])
 elif a[:2]==['containerapp','show']:
  name=a[a.index('-n')+1]; admin='admin-web' in name
@@ -59,7 +61,7 @@ else: print('{}')
 '''
 
 class ReadinessTest(unittest.TestCase):
-    def run_case(self, case, sha=SHA):
+    def run_case(self, case, sha=SHA, configure=False):
         with tempfile.TemporaryDirectory(prefix='craves-readiness-fixture-') as folder:
             path = pathlib.Path(folder)
             for name, content in [('az', AZ), ('curl', CURL)]:
@@ -67,9 +69,28 @@ class ReadinessTest(unittest.TestCase):
                 file.write_text(content)
                 file.chmod(0o700)
             env = os.environ.copy()
+            env['BACKEND_FIXTURE_SHA']=json.loads((ROOT/'docs/admin/explorer/backend-release.json').read_text())['source']
             env.update(PATH=str(path)+os.pathsep+env['PATH'], EXPECTED_RELEASE_SHA=sha, READINESS_CASE=case, READINESS_POLICY=str(ROOT/'infra/apim/admin-explorer/authenticated-policy.xml'))
-            return subprocess.run(['bash', str(ROOT/'scripts/admin-explorer/verify-runtime-readiness.sh')],
+            if configure:
+                # The gateway fixture represents an already-reviewed clean checkout.
+                git = path/'git'
+                git.write_text('#!/usr/bin/env python3\nimport os,sys\na=sys.argv[1:]\nif a[:1]==["-C"]:a=a[2:]\nif a==["rev-parse","HEAD"]:print(os.environ["EXPECTED_RELEASE_SHA"])\nelif a!=["status","--porcelain","--untracked-files=no"]:raise AssertionError(a)\n')
+                git.chmod(0o700)
+                env['CONFIRM_APIM_WRITE']='true'
+            script='scripts/apim/configure-admin-explorer-apim.sh' if configure else 'scripts/admin-explorer/verify-runtime-readiness.sh'
+            return subprocess.run(['bash', str(ROOT/script)],
                                   cwd=ROOT, env=env, capture_output=True, text=True, timeout=30)
+
+    def test_consumption_tier_passes_with_source_linked_backend_admission(self):
+        result=self.run_case('consumption')
+        self.assertEqual(0,result.returncode,result.stderr)
+
+    def test_unverified_gateway_tier_fails_closed(self):
+        for configure in [False, True]:
+            with self.subTest(configure=configure):
+                result=self.run_case('missing-sku',configure=configure)
+                self.assertNotEqual(0,result.returncode)
+                self.assertIn('tier could not be verified',result.stderr)
 
     def test_complete_source_linked_custom_domain_inventory_passes(self):
         result = self.run_case('ready')

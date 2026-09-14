@@ -3,6 +3,7 @@ package in.craves.auth.admin.explorer;
 import in.craves.auth.security.CurrentUser;
 import in.craves.adminexplorer.ExplorerQuery;
 import in.craves.adminexplorer.ExplorerEngine;
+import in.craves.adminexplorer.ExplorerRateLimiter;
 import org.springframework.context.annotation.Import;
 import java.time.Instant;
 import java.util.UUID;
@@ -35,6 +36,10 @@ public class AdminExplorerController {
         try {
             ExplorerEngine.Result response=engine.read(actor.identityId(), query);
             return ResponseEntity.ok().headers(headers()).header("X-Correlation-ID",response.correlationId().toString()).body(response);
+        } catch (ExplorerRateLimiter.Limited e) {
+            UUID id=UUID.randomUUID();
+            return ResponseEntity.status(429).headers(headers()).header("Retry-After",Integer.toString(e.retryAfter())).header("X-Correlation-ID",id.toString())
+                .body(new Error("EXPLORER_RATE_LIMITED","Reporting capacity is limited to 20 reads per minute for this dataset. Please retry shortly",id));
         } catch (ExplorerEngine.Busy e) { return error(429,"EXPLORER_BUSY","Two reports are already running. Please retry shortly"); }
         catch (RuntimeException e) {
             UUID id=UUID.randomUUID();

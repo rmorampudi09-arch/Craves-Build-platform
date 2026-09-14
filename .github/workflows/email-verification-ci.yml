@@ -1,0 +1,86 @@
+name: Email verification security CI
+on:
+  pull_request:
+    paths:
+      - 'services/auth-service/**'
+      - 'services/user-chef-service/**'
+      - 'services/notification-service/**'
+      - 'apps/customer-web-next/**'
+      - 'docs/auth/**'
+      - 'scripts/email/**'
+      - '.github/workflows/email-verification-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: email-verification-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth-service, user-chef-service, notification-service]
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: craves_email_test
+          POSTGRES_USER: email_ci
+          POSTGRES_PASSWORD: disposable-email-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U email_ci -d craves_email_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      EMAIL_TEST_DB_URL: jdbc:postgresql://localhost:5432/craves_email_test
+      EMAIL_TEST_DB_USER: email_ci
+      EMAIL_TEST_DB_PASSWORD: disposable-email-ci-only
+      EMAIL_TEST_DISPOSABLE: 'true'
+      CRAVES_EMAIL_VERIFICATION_ENABLED: 'false'
+      CRAVES_EMAIL_VERIFICATION_TRANSPORT_ENABLED: 'false'
+      CRAVES_EMAIL_PROJECTION_WORKER_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/${{ matrix.service }}/pom.xml
+      - name: Unit, disposable PostgreSQL migration, concurrency and existing regression tests
+        run: mvn -B -ntp -f services/${{ matrix.service }}/pom.xml verify
+      - name: Require all email suites with no failures or skips
+        run: python3 scripts/email/require-email-test-evidence.py '${{ matrix.service }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: email-${{ matrix.service }}-${{ github.sha }}
+          path: |
+            services/${{ matrix.service }}/target/surefire-reports
+            email-test-summary-${{ matrix.service }}.json
+          retention-days: 14
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/customer-web-next
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

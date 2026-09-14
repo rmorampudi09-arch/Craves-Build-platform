@@ -14,7 +14,7 @@ Production foundation for Craves transactional notifications.
 - `IN_APP`: persisted and marked `SENT`
 - `EMAIL`, `SMS`, `PUSH`: persisted as `PENDING` until provider adapters are enabled
 
-OTP is not handled here. Phone OTP remains with Firebase Authentication and the Craves Auth Service.
+Phone OTP remains with Firebase Authentication and the Craves Auth Service. Auth-owned email verification uses a separate signed, bounded ACS transport; see [email verification](modules/email-verification/README.md). The normal notification queue never stores an email verification code.
 
 ## Database
 

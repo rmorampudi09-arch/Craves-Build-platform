@@ -192,7 +192,9 @@ public class AuthService {
             identity.getId(),
             identity.getEmail(),
             identity.isEmailVerified(),
-            identity.getStatus()
+            identity.getStatus(),
+            identity.getEmailRevision(),
+            identity.getEmailVerifiedAt()
         );
     }
 
@@ -201,6 +203,9 @@ public class AuthService {
         AuthIdentity identity = identityRepository.findById(identityId)
             .orElseThrow(() -> AuthException.badRequest("IDENTITY_NOT_FOUND", "Identity was not found"));
         assertActive(identity);
+        if (!identity.isEmailVerified() || !StringUtils.hasText(identity.getEmail())) {
+            throw AuthException.conflict("EMAIL_VERIFICATION_REQUIRED", "Verify your email before completing chef onboarding");
+        }
         ensureRole(identity.getId(), ROLE_CHEF);
         List<String> roles = identityRoleRepository.findRoleCodesByIdentityId(identity.getId());
         saveAudit(identity.getId(), "CHEF_ROLE_GRANTED", "Chef role granted from application " + sourceApplicationId, null, null);
@@ -223,8 +228,8 @@ public class AuthService {
 
         identity.setFirebaseUid(firebaseUid);
         identity.setPhoneNumber(phoneNumber);
-        identity.setEmail(emptyToNull(decodedToken.getEmail()));
-        identity.setEmailVerified(decodedToken.isEmailVerified());
+        // Phone authentication never changes the Auth-owned verified email or pending replacement.
+        // Email is enrolled exclusively through the authenticated email challenge lifecycle.
         identity.setDisplayName(truncate(emptyToNull(decodedToken.getName()), 160));
         if (!StringUtils.hasText(identity.getStatus())) {
             identity.setStatus(STATUS_ACTIVE);

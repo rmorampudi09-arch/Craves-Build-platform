@@ -71,7 +71,10 @@ try{
  // All-time chef and order lists are separate bound endpoints, with no auto mutation.
  for(const dataset of ['chefs','orders']){
   await page.getByRole('navigation',{name:'Record type'}).getByRole('link',{name:new RegExp(dataset,'i')}).click();
-  await page.getByRole('table').waitFor();assert.ok(queries.some(q=>q.dataset===dataset&&q.mode==='records'));
+  await page.waitForURL(`**/admin/explorer/${dataset}`);
+  await page.getByRole('heading',{name:`${dataset[0].toUpperCase()+dataset.slice(1)} explorer`,exact:true}).waitFor();
+  await page.locator('.ex-table tbody tr').filter({hasText:`Test ${dataset}`}).first().waitFor();
+  assert.ok(queries.some(q=>q.dataset===dataset&&q.mode==='records'));
  }
  await page.evaluate(()=>window.scrollTo(0,0));await ribbon();await page.screenshot({path:`${output}/03-orders-desktop.png`,fullPage:true});
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await ribbon();await page.screenshot({path:`${output}/04-orders-mobile.png`,fullPage:true});

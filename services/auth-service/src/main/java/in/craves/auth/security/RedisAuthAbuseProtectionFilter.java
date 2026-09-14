@@ -20,8 +20,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
 public class RedisAuthAbuseProtectionFilter extends OncePerRequestFilter {
-    private static final String EXCHANGE_PATH = "/api/v1/auth/firebase/exchange";
-    private static final String REFRESH_PATH = "/api/v1/auth/refresh";
     private static final DefaultRedisScript<Long> INCREMENT_WITH_EXPIRY = new DefaultRedisScript<>(
         "local value = redis.call('INCR', KEYS[1]); " +
             "if value == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]); end; " +
@@ -44,10 +42,11 @@ public class RedisAuthAbuseProtectionFilter extends OncePerRequestFilter {
         @Value("${CRAVES_AUTH_RATE_LIMIT_REFRESH_LIMIT:0}") int refreshLimit,
         @Value("${CRAVES_AUTH_RATE_LIMIT_WINDOW_SECONDS:60}") int windowSeconds,
         @Value("${CRAVES_AUTH_RATE_LIMIT_TRUST_FORWARDED_FOR:false}") boolean trustForwardedFor,
-        @Value("${CRAVES_AUTH_RATE_LIMIT_KEY_PREFIX:craves:auth:rate}") String keyPrefix
+        @Value("${CRAVES_AUTH_RATE_LIMIT_KEY_PREFIX:craves:auth:rate}") String keyPrefix,
+        @Value("${CRAVES_AUTH_RATE_LIMIT_MODE:redis}") String mode
     ) {
         this.redisTemplate = redisTemplate;
-        this.enabled = enabled;
+        this.enabled = enabled && "redis".equals(mode);
         this.exchangeLimit = exchangeLimit;
         this.refreshLimit = refreshLimit;
         this.windowSeconds = windowSeconds;
@@ -75,11 +74,7 @@ public class RedisAuthAbuseProtectionFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        if (!enabled || !"POST".equalsIgnoreCase(request.getMethod())) {
-            return true;
-        }
-        String uri = request.getRequestURI();
-        return !EXCHANGE_PATH.equals(uri) && !REFRESH_PATH.equals(uri);
+        return !enabled || AuthProtectedOperation.operation(request) == null;
     }
 
     @Override
@@ -88,7 +83,7 @@ public class RedisAuthAbuseProtectionFilter extends OncePerRequestFilter {
         HttpServletResponse response,
         FilterChain filterChain
     ) throws ServletException, IOException {
-        String operation = EXCHANGE_PATH.equals(request.getRequestURI()) ? "exchange" : "refresh";
+        String operation = AuthProtectedOperation.operation(request);
         int limit = "exchange".equals(operation) ? exchangeLimit : refreshLimit;
         String key = keyPrefix + ":" + operation + ":" + sha256(clientIp(request));
         Long count;

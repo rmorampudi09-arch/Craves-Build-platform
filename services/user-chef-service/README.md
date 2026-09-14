@@ -222,4 +222,4 @@ Delivery radius, delivery charges, commissions, pricing, and compliance rules re
 
 ## Verified account email
 
-Auth remains the email verification authority. See [email verification](modules/email-verification/README.md) for V11 projection, canonical profile writes and mandatory verification at chef submission and approval.
+Auth remains the email verification authority. See [email verification](modules/email-verification/README.md) for V12 projection, canonical profile writes and mandatory verification at chef submission and approval.

@@ -67,7 +67,7 @@ Private operations `/internal/v1/auth-email/verification` and `/internal/v1/auth
 
 ## Migrations and deployment
 
-Auth V10 adds canonical email revision/timestamp, pending challenges, audit and projection outbox. User/Chef V12 adds projection and receipt history. Notification V7 adds verification transport receipts. The combined release preserves the newer analytics Auth V9/User/Chef V11 migrations. Runtime preflight observed Auth V8/User/Chef V10; migration tests cover that actual baseline and the final combined release. They are additive: never change an applied migration or repair Flyway to hide a mismatch.
+Auth V10 adds canonical email revision/timestamp, pending challenges, audit and projection outbox. User/Chef V12 adds projection and receipt history. Notification V7 adds verification transport receipts. The combined release preserves the newer analytics Auth V9/User/Chef V11 migrations. Auth V11 separately adds the reviewed PostgreSQL request limiter; see [Auth request protection](AUTH_RATE_LIMITS.md). Runtime preflight observed Auth V8/User/Chef V10; migration tests cover that actual baseline and the final combined release. They are additive: never change an applied migration or repair Flyway to hide a mismatch.
 
 Deploy the exact reviewed release through existing targeted Auth, User/Chef, Notification and customer-web pipelines using `Craves-Dev-Service-Connection`. Preserve one replica, previous healthy revisions, Firebase configuration and existing payment/document settings. Root release evidence records actual deployment order, SHA, image digest, traffic, migrations and activation timestamps. New code existing in this document is not proof of deployment.
 

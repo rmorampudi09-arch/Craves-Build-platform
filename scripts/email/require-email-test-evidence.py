@@ -10,7 +10,10 @@ import xml.etree.ElementTree as ET
 
 REQUIRED = {
     'auth-service': {'EmailVerificationCryptoTest': 5, 'EmailVerificationControllerTest': 4,
-        'EmailCanonicalPreservationTest': 2, 'SignedEmailTransportTest': 4, 'EmailVerificationPersistenceTest': 16},
+        'EmailCanonicalPreservationTest': 2, 'SignedEmailTransportTest': 4, 'EmailVerificationPersistenceTest': 16,
+        'PostgresAuthRateLimiterDbTest': 12, 'PostgresAuthAbuseProtectionFilterTest': 19,
+        'AuthRequestReadConfigurationTest': 3, 'AuthRequestReadTomcatTest': 2,
+        'AuthProtectedOperationTest': 6, 'AuthProtectedOperationTomcatTest': 2, 'RedisAuthAbuseProtectionFilterTest': 4},
     'user-chef-service': {'AuthEmailProjectionSecurityTest': 6, 'AuthEmailProjectionDbTest': 10,
         'AuthCanonicalEmailTest': 3, 'AuthEmailHttpTest': 3},
     'notification-service': {'VerificationEmailSecurityTest': 10, 'VerificationEmailTemplateTest': 5,

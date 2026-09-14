@@ -38,6 +38,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      CRAVES_DISPOSABLE_TEST_DATABASE: "true"
       LEDGER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/chef_ledger_test
       LEDGER_TEST_DB_USER: ledger_ci
       LEDGER_TEST_DB_PASSWORD: ledger_ci_local_only
@@ -80,7 +81,8 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, pathlib, xml.etree.ElementTree as E
-          required={'FinancialPostingDatabaseTest':9,'ChefSettlementHistoryDatabaseTest':7,
+          required={'ManualChefSettlementDatabaseTest':29,'ManualSettlementMigrationDatabaseTest':2,
+                    'ManualSettlementSecurityTest':7,'BankOnboardingDatabaseTest':19,'FinancialPostingDatabaseTest':9,'ChefSettlementHistoryDatabaseTest':7,
                     'FinancialFullMigrationDatabaseTest':2,'FinancialPostingPrivilegesDatabaseTest':3,
                     'LedgerMoneyAndPolicyTest':19,'ChefFeePreviewServiceTest':4,
                     'ChefFinancialConflictAdviceTest':3,'FinanceCalculationsTest':19,

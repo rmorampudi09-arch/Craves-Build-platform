@@ -7,7 +7,7 @@ export const metadata = {title: "Chef balance and withdrawals | Craves", robots:
 export default function ChefFinancePage() {
   return <main className="mx-auto min-h-screen max-w-7xl px-4 py-6">
     <ChefPageHeader eyebrow="Chef finance" title="Balance and withdrawal requests"
-      description="Manage your provider-validated bank account, verified available earnings and transfer status. Historical earnings are not silently imported as new withdrawable funds." />
+      description="View earned balances, manual Craves payment requests and statements. Historical earnings retain their original accounting." />
     <div className="mt-6 space-y-6"><ChefAccessBoundary><ChefBankOnboardingPanel /><ChefWithdrawalPanel /><ChefLedgerStatementPanel /></ChefAccessBoundary></div>
   </main>;
 }

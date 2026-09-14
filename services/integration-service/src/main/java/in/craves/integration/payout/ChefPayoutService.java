@@ -44,7 +44,6 @@ public class ChefPayoutService {
     public void recordDeliveredPayable(UUID chef,UUID order,UUID journal,Instant deliveredAt,FinancePolicy frozenPolicy) {
         lockChef(chef);
         if(!frozenPolicy.ledgerEnabled() || deliveredAt==null) throw conflict("Verified enabled financial snapshot is required");
-        // PostgreSQL timestamps preserve microseconds, not Java nanoseconds. Normalize before both writing and comparing.
         deliveredAt=deliveredAt.truncatedTo(ChronoUnit.MICROS);
         var source=jdbc.query("SELECT coalesce(sum(l.credit_amount-l.debit_amount),0) FROM payment_schema.ledger_transaction t JOIN payment_schema.ledger_line l ON l.transaction_id=t.id WHERE t.id=? AND t.chef_order_id=? AND t.event_type='CHEF_ORDER_EARNING' AND l.account_code='CHEF_PAYABLE' AND l.chef_identity_id=? GROUP BY t.id",
             (rs,n)->rs.getBigDecimal(1),journal,order,chef);
@@ -64,7 +63,7 @@ public class ChefPayoutService {
         BigDecimal available=sumAvailable(id,now,false);BigDecimal total=jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM payment_schema.finance_payable WHERE chef_identity_id=?",BigDecimal.class,id);
         BigDecimal allocated=jdbc.queryForObject("SELECT coalesce(sum(p.amount),0) FROM payment_schema.finance_payable p JOIN payment_schema.finance_payout_allocation a ON a.payable_id=p.id WHERE p.chef_identity_id=? AND a.active",BigDecimal.class,id);
         return new Balance(LedgerMoney.text(held?BigDecimal.ZERO:available),LedgerMoney.text(total.subtract(paidTotal(id))),LedgerMoney.text(allocated),held,used,
-            date.plusDays(1).atStartOfDay(FinancePolicy.ZONE).toInstant().toString(),listForChef(id),policies.current().settings().manualWithdrawalsEnabled() && provider.ready());
+            date.plusDays(1).atStartOfDay(FinancePolicy.ZONE).toInstant().toString(),listForChef(id),!held && policies.current().settings().manualWithdrawalsEnabled() && provider.ready());
     }
     private BigDecimal paidTotal(UUID chef) {return jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? AND settlement_journal_id IS NOT NULL AND reversal_journal_id IS NULL",BigDecimal.class,chef);}
     private List<Payout> listForChef(UUID chef) {return jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? ORDER BY created_at DESC,id DESC LIMIT 100",this::map,chef);}
@@ -86,7 +85,7 @@ public class ChefPayoutService {
     }
     public List<UUID> dueChefs() {
         if(!policies.current().settings().automaticPayoutsEnabled() || !provider.ready()) return List.of();
-        return jdbc.query("SELECT DISTINCT p.chef_identity_id FROM payment_schema.finance_payable p JOIN payment_schema.finance_chef_payout_control c ON c.chef_identity_id=p.chef_identity_id WHERE p.automatic_due_at<=now() AND NOT c.on_hold AND c.beneficiary_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_payout_allocation a WHERE a.payable_id=p.id AND a.active) ORDER BY p.chef_identity_id LIMIT 25",(rs,n)->rs.getObject(1,UUID.class));
+        return jdbc.query("SELECT DISTINCT p.chef_identity_id FROM payment_schema.finance_payable p JOIN payment_schema.finance_chef_payout_control c ON c.chef_identity_id=p.chef_identity_id WHERE p.automatic_due_at<=now() AND NOT c.on_hold AND c.beneficiary_id IS NOT NULL AND payment_schema.finance_bank_ready(c.chef_identity_id,c.beneficiary_id) AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_payout_allocation a WHERE a.payable_id=p.id AND a.active) ORDER BY p.chef_identity_id LIMIT 25",(rs,n)->rs.getObject(1,UUID.class));
     }
     @Transactional
     public void reserveAutomatic(UUID chef) {
@@ -94,7 +93,7 @@ public class ChefPayoutService {
         if(sumAvailable(chef,Instant.now(),true).signum()>0) reserve(chef,UUID.randomUUID(),"AUTOMATIC",null,Instant.now(),policy.revision());
     }
     private Payout reserve(UUID chef,UUID key,String mode,BigDecimal expected,Instant now,long revision) {
-        var control=jdbc.query("SELECT beneficiary_id,on_hold FROM payment_schema.finance_chef_payout_control WHERE chef_identity_id=? FOR UPDATE",(rs,n)->new Object[]{rs.getObject(1,UUID.class),rs.getBoolean(2)},chef);
+        var control=jdbc.query("SELECT beneficiary_id,on_hold OR NOT payment_schema.finance_bank_ready(chef_identity_id,beneficiary_id) FROM payment_schema.finance_chef_payout_control WHERE chef_identity_id=? FOR UPDATE",(rs,n)->new Object[]{rs.getObject(1,UUID.class),rs.getBoolean(2)},chef);
         if(control.isEmpty() || control.getFirst()[0]==null || Boolean.TRUE.equals(control.getFirst()[1])) throw conflict("Verified beneficiary required; chef balance is held");
         String time="AUTOMATIC".equals(mode)?"automatic_due_at":"manual_available_at";
         var payables=jdbc.query("SELECT p.id,p.amount FROM payment_schema.finance_payable p WHERE chef_identity_id=? AND "+time+"<=? AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_payout_allocation a WHERE a.payable_id=p.id AND a.active) ORDER BY p.id FOR UPDATE",
@@ -106,12 +105,15 @@ public class ChefPayoutService {
         for(var item:payables) jdbc.update("INSERT INTO payment_schema.finance_payout_allocation(instruction_id,payable_id) VALUES (?,?)",id,item.id());
         audit(id,chef,"RESERVED",mode,"policy-revision/"+revision);return get(id);
     }
+    /** Compatibility for pre-automation beneficiaries only, not an override for bank validation. */
     @Transactional
     public void bindVerifiedBeneficiary(CravesPrincipal actor,UUID chef,Binding request) {
         FinancePolicyService.operator(actor);FinancePolicyService.reason(request.reason());String evidence=FinancePolicyService.reason(request.bankOwnershipEvidence());
         if(evidence.length()>240 || request.fundAccountId()==null || !request.fundAccountId().matches("fa_[A-Za-z0-9]+") || request.contactId()==null || !request.contactId().matches("cont_[A-Za-z0-9]+")) throw new IllegalArgumentException("Valid beneficiary identifiers and evidence are required");
-        // The controller performs provider reads before entering this local transaction.
-        lockChef(chef);UUID id=UUID.randomUUID();
+        lockChef(chef);
+        if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.finance_bank_head WHERE chef_identity_id=?)",Boolean.class,chef)))
+            throw conflict("This chef uses automatic bank validation; manual beneficiary replacement is not permitted");
+        UUID id=UUID.randomUUID();
         jdbc.update("INSERT INTO payment_schema.finance_beneficiary_version(id,chef_identity_id,fund_account_id,contact_id,verification_reference,verified_by) VALUES (?,?,?,?,?,?)",id,chef,request.fundAccountId(),request.contactId(),evidence,actor.identityId());
         jdbc.update("INSERT INTO payment_schema.finance_chef_payout_control(chef_identity_id,beneficiary_id,on_hold,hold_reason) VALUES (?,?,true,'New beneficiary: review and release hold') ON CONFLICT(chef_identity_id) DO UPDATE SET beneficiary_id=EXCLUDED.beneficiary_id,on_hold=true,hold_reason=EXCLUDED.hold_reason,updated_at=now()",chef,id);
         audit(null,chef,"BENEFICIARY_VERSION_BOUND",actor.identityId().toString(),evidence);
@@ -125,7 +127,7 @@ public class ChefPayoutService {
     @Transactional
     public Work claim() {
         if(!provider.ready()) return null;var policy=policies.current().settings();
-        var rows=jdbc.query("SELECT i.id FROM payment_schema.finance_payout_instruction i JOIN payment_schema.finance_chef_payout_control c ON c.chef_identity_id=i.chef_identity_id WHERE ((i.status='RESERVED' AND NOT c.on_hold AND ((i.mode='MANUAL' AND ?) OR (i.mode='AUTOMATIC' AND ?))) OR (i.provider_id IS NOT NULL AND i.status IN ('PROCESSING','UNKNOWN','SUBMITTING'))) AND i.next_attempt_at<=now() AND (i.lease_until IS NULL OR i.lease_until<now()) ORDER BY i.next_attempt_at,i.id LIMIT 1 FOR UPDATE OF i SKIP LOCKED",
+        var rows=jdbc.query("SELECT i.id FROM payment_schema.finance_payout_instruction i JOIN payment_schema.finance_chef_payout_control c ON c.chef_identity_id=i.chef_identity_id WHERE ((i.status='RESERVED' AND NOT c.on_hold AND payment_schema.finance_bank_ready(c.chef_identity_id,i.beneficiary_id) AND ((i.mode='MANUAL' AND ?) OR (i.mode='AUTOMATIC' AND ?))) OR (i.provider_id IS NOT NULL AND i.status IN ('PROCESSING','UNKNOWN','SUBMITTING'))) AND i.next_attempt_at<=now() AND (i.lease_until IS NULL OR i.lease_until<now()) ORDER BY i.next_attempt_at,i.id LIMIT 1 FOR UPDATE OF i SKIP LOCKED",
             (rs,n)->rs.getObject(1,UUID.class),policy.manualWithdrawalsEnabled(),policy.automaticPayoutsEnabled());
         if(rows.isEmpty()) return null;UUID id=rows.getFirst(),lease=UUID.randomUUID();
         jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status=CASE WHEN status='RESERVED' THEN 'SUBMITTING' ELSE status END,lease_id=?,lease_until=now()+interval '60 seconds',attempts=attempts+1,updated_at=now() WHERE id=?",lease,id);
@@ -146,8 +148,7 @@ public class ChefPayoutService {
             var posted=ledger.post(new LedgerJournal.Entry("chef-payout/"+work.id()+"/confirmed",work.id(),"razorpayx","CHEF_PAYOUT_CONFIRMED",null,null,"INR",Instant.now(),"razorpayx/"+receipt.payoutId(),null,"SERVICE","chef-payout-worker",lines));
             if(posted.outcome()==LedgerJournal.Outcome.CONFLICT) {
                 jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status='REVIEW_REQUIRED',last_error='PAYOUT_POSTING_CONFLICT',lease_id=NULL,lease_until=NULL,updated_at=now() WHERE id=?",work.id());
-                jdbc.update("UPDATE payment_schema.finance_chef_payout_control SET on_hold=true,hold_reason='Payout posting conflict',updated_at=now() WHERE chef_identity_id=?",work.chef());
-                return; // Commit the conflict evidence without clearing or reissuing the reserved funds.
+                jdbc.update("UPDATE payment_schema.finance_chef_payout_control SET on_hold=true,hold_reason='Payout posting conflict',updated_at=now() WHERE chef_identity_id=?",work.chef());return;
             }
             journal=posted.transactionId();
         }
@@ -162,14 +163,13 @@ public class ChefPayoutService {
     @Transactional
     public void uncertain(Work work) {
         jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status=CASE WHEN provider_id IS NULL THEN 'REVIEW_REQUIRED' ELSE 'UNKNOWN' END,last_error='PROVIDER_OUTCOME_UNCONFIRMED',lease_id=NULL,lease_until=NULL,next_attempt_at=now()+interval '120 seconds',updated_at=now() WHERE id=? AND lease_id=?",work.id(),work.leaseId());
-        // Signed webhook recovery can attach the original provider ID. Never issue a fresh transfer for an unknown result.
     }
     @Transactional
     public void recoverStaleSubmissions() {
         jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status='REVIEW_REQUIRED',last_error='CRASH_DURING_SUBMISSION',lease_id=NULL,lease_until=NULL,updated_at=now() WHERE status='SUBMITTING' AND provider_id IS NULL AND lease_until<now()");
     }
     private BigDecimal sumAvailable(UUID chef,Instant now,boolean automatic) {return jdbc.queryForObject("SELECT coalesce(sum(p.amount),0) FROM payment_schema.finance_payable p WHERE p.chef_identity_id=? AND "+(automatic?"automatic_due_at":"manual_available_at")+"<=? AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_payout_allocation a WHERE a.payable_id=p.id AND a.active)",BigDecimal.class,chef,Timestamp.from(now));}
-    private boolean isHeld(UUID chef) {return jdbc.query("SELECT on_hold FROM payment_schema.finance_chef_payout_control WHERE chef_identity_id=?",(rs,n)->rs.getBoolean(1),chef).stream().findFirst().orElse(true);}
+    private boolean isHeld(UUID chef) {return jdbc.query("SELECT on_hold OR NOT payment_schema.finance_bank_ready(chef_identity_id,beneficiary_id) FROM payment_schema.finance_chef_payout_control WHERE chef_identity_id=?",(rs,n)->rs.getBoolean(1),chef).stream().findFirst().orElse(true);}
     private boolean usedDay(UUID chef,LocalDate day) {return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.finance_manual_withdrawal_day WHERE chef_identity_id=? AND business_date=?)",Boolean.class,chef,java.sql.Date.valueOf(day)));}
     private void lockChef(UUID chef) {jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",rs->{return null;},"chef-payout/"+chef);}
     private Payout get(UUID id) {return jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction WHERE id=?",this::map,id).getFirst();}

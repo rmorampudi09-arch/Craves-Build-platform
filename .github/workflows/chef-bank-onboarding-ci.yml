@@ -28,7 +28,7 @@ jobs:
           POSTGRES_PASSWORD: ledger_ci_local_only
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U ledger_ci -d chef_ledger_test'
+          --health-cmd pg_isready
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       LEDGER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/chef_ledger_test

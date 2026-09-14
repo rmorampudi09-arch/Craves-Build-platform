@@ -50,7 +50,6 @@ public class BankOnboardingService {
     public Status submit(CravesPrincipal actor, Submission request) {
         requireIdentity(actor);
         if(!cipher.ready()) throw unavailable("Secure bank storage is not configured");
-        // Authoritative identity lookup is outside the local money/reservation transaction.
         var identity=applicants.fetch(actor.identityId());
         var details=BankOnboardingModels.details(request,identity);
         return tx.execute(s->save(actor.identityId(),request,details));
@@ -71,8 +70,9 @@ public class BankOnboardingService {
         UUID current=heads.isEmpty()?null:heads.getFirst();
         if(!Objects.equals(current,request.expectedCurrentId())) throw conflict("Bank profile changed; refresh before editing");
         if(current!=null) {
-            String old=jdbc.queryForObject("SELECT encrypted_details FROM payment_schema.finance_bank_request WHERE id=?",String.class,current);
-            if(cipher.same(details,cipher.decrypt(current,chef,old))) {
+            var previous=jdbc.queryForMap("SELECT encrypted_details,state FROM payment_schema.finance_bank_request WHERE id=?",current);
+            boolean mayResubmit=Set.of("VALIDATION_FAILED","NAME_MISMATCH","APPLICANT_ACTION_REQUIRED").contains(previous.get("state").toString());
+            if(!mayResubmit && cipher.same(details,cipher.decrypt(current,chef,previous.get("encrypted_details").toString()))) {
                 receive(chef,request,current);return get(current);
             }
         }
@@ -87,7 +87,6 @@ public class BankOnboardingService {
                 details.accountNumber().substring(details.accountNumber().length()-4),details.ifsc(),CONSENT_VERSION);
         if(current!=null) jdbc.update("UPDATE payment_schema.finance_bank_request SET state='SUPERSEDED',lease_id=NULL,lease_until=NULL,updated_at=now() WHERE id=?",current);
         jdbc.update("INSERT INTO payment_schema.finance_bank_head(chef_identity_id,request_id) VALUES (?,?) ON CONFLICT(chef_identity_id) DO UPDATE SET request_id=EXCLUDED.request_id",chef,id);
-        // A new chef has no operational hold. The independent bank-ready guard blocks payouts until validation.
         jdbc.update("INSERT INTO payment_schema.finance_chef_payout_control(chef_identity_id,on_hold,hold_reason) VALUES (?,false,NULL) ON CONFLICT DO NOTHING",chef);
         receive(chef,request,id);audit(id,chef,"ENROLLMENT_QUEUED","CHEF");return get(id);
     }
@@ -121,30 +120,30 @@ public class BankOnboardingService {
             return null;
         });return controls(actor);
     }
-    /** One bounded unit of work. Provider calls never run inside a DB transaction. */
+    /** One bounded unit of work. All network calls are outside local database transactions. */
     public boolean processOne() {
         if(!provider.ready() || !cipher.ready()) return false;
-        Work work=tx.execute(s->claim());
-        if(work==null) return false;
+        Work work=tx.execute(s->claim());if(work==null) return false;
         try {
             Details d=cipher.decrypt(work.id(),work.chefId(),work.encryptedDetails());
             Identity identity=applicants.fetch(work.chefId());
             if(!Set.of("PENDING","APPROVED").contains(identity.status())
                     || !d.applicationId().equals(identity.applicationId())
                     || !normalizeName(d.name()).equals(normalizeName(identity.name()))
-                    || !d.email().equals(identity.email())
+                    || !d.email().equals(identity.email()) || identity.phone()==null
                     || !d.phone().equals(identity.phone().replaceFirst("^\\+91",""))) {
                 tx.execute(s->{invalidApplicant(work);return null;});return true;
             }
             Result result;
             if(work.validationId()!=null) result=provider.fetch(work.id(),d,work.validationId());
-            else if("QUEUED".equals(work.state())) result=provider.create(work.id(),d);
-            else result=provider.find(work.id(),d,work.createdAt());
+            else if("QUEUED".equals(work.state())) {
+                // Journal intent only immediately before the chargeable POST. A failed identity read is safely retryable.
+                if(!Boolean.TRUE.equals(tx.execute(s->beginSubmission(work)))) return true;
+                result=provider.create(work.id(),d);
+            } else result=provider.find(work.id(),d,work.createdAt());
             if(result==null) {tx.execute(s->{uncertain(work);return null;});return true;}
             tx.execute(s->{apply(work,result,identity.approved());return null;});
-        } catch(RuntimeException error) {
-            tx.execute(s->{uncertain(work);return null;});
-        }
+        } catch(RuntimeException error) {tx.execute(s->{uncertain(work);return null;});}
         return true;
     }
     private Work claim() {
@@ -154,9 +153,17 @@ public class BankOnboardingService {
         var rows=jdbc.queryForList("SELECT r.* FROM payment_schema.finance_bank_request r JOIN payment_schema.finance_bank_head h ON h.request_id=r.id WHERE r.state IN ('QUEUED','VALIDATING','UNKNOWN','WAITING_APPROVAL','VERIFIED') AND r.next_attempt_at<=now() AND (r.lease_until IS NULL OR r.lease_until<now()) ORDER BY r.next_attempt_at,r.id LIMIT 1 FOR UPDATE OF r SKIP LOCKED");
         if(rows.isEmpty()) return null;
         var row=rows.getFirst();UUID id=(UUID)row.get("id"),lease=UUID.randomUUID();String old=row.get("state").toString();
-        jdbc.update("UPDATE payment_schema.finance_bank_request SET state=CASE WHEN state='QUEUED' THEN 'SUBMITTING' ELSE state END,lease_id=?,lease_until=now()+interval '300 seconds',attempts=attempts+1,updated_at=now() WHERE id=?",lease,id);
+        jdbc.update("UPDATE payment_schema.finance_bank_request SET lease_id=?,lease_until=now()+interval '300 seconds',attempts=attempts+1,updated_at=now() WHERE id=?",lease,id);
         return new Work(id,(UUID)row.get("chef_identity_id"),lease,old,(String)row.get("validation_id"),
                 row.get("encrypted_details").toString(),((Timestamp)row.get("created_at")).toInstant());
+    }
+    private boolean beginSubmission(Work work) {
+        var row=ownedWork(work);if(row==null || !"QUEUED".equals(row.get("state"))) return false;
+        if(!Boolean.TRUE.equals(jdbc.queryForObject("SELECT validation_enabled FROM payment_schema.finance_bank_automation_control WHERE singleton=true FOR SHARE",Boolean.class))) {
+            jdbc.update("UPDATE payment_schema.finance_bank_request SET lease_id=NULL,lease_until=NULL WHERE id=?",work.id());return false;
+        }
+        jdbc.update("UPDATE payment_schema.finance_bank_request SET state='SUBMITTING',updated_at=now() WHERE id=?",work.id());
+        return true;
     }
     private Map<String,Object> ownedWork(Work work) {
         lockChef(work.chefId());
@@ -180,7 +187,7 @@ public class BankOnboardingService {
         jdbc.update("UPDATE payment_schema.finance_bank_request SET state=?,validation_id=?,fund_account_id=?,contact_id=?,beneficiary_id=?,bank_validated=?,application_approved=?,verified_at=CASE WHEN ? THEN now() ELSE verified_at END,lease_id=NULL,lease_until=NULL,last_error=NULL,next_attempt_at=now()+(? * interval '1 second'),updated_at=now() WHERE id=?",
                 state,result.validationId(),result.fundAccountId(),result.contactId(),beneficiary,valid,approved,valid && approved,delay,work.id());
         if(valid && approved) {
-            // Release only the legacy system's initial missing-beneficiary hold, never an admin/refund/source hold.
+            // Only the initial system-generated missing-beneficiary hold can be cleared. Financial holds remain intact.
             jdbc.update("UPDATE payment_schema.finance_chef_payout_control SET on_hold=CASE WHEN beneficiary_id IS NULL AND hold_reason='Beneficiary verification required' THEN false ELSE on_hold END,hold_reason=CASE WHEN beneficiary_id IS NULL AND hold_reason='Beneficiary verification required' THEN NULL ELSE hold_reason END,beneficiary_id=?,updated_at=now() WHERE chef_identity_id=?",beneficiary,work.chefId());
         }
         audit(work.id(),work.chefId(),state,"RAZORPAY_VALIDATION");
@@ -189,7 +196,6 @@ public class BankOnboardingService {
         var row=ownedWork(work);if(row==null)return;
         int attempts=((Number)row.get("attempts")).intValue();
         int delay=Math.min(3600,30*(1<<Math.min(6,attempts)))+ThreadLocalRandom.current().nextInt(30);
-        // Keep a verified bank's prior evidence only until the DB freshness deadline. Unknown create never retries POST.
         jdbc.update("UPDATE payment_schema.finance_bank_request SET state=CASE WHEN state='SUBMITTING' THEN 'UNKNOWN' ELSE state END,lease_id=NULL,lease_until=NULL,last_error='PROVIDER_OR_SOURCE_UNCONFIRMED',next_attempt_at=now()+(? * interval '1 second'),updated_at=now() WHERE id=?",delay,work.id());
         audit(work.id(),work.chefId(),"RECONCILIATION_SCHEDULED","SERVICE");
     }
@@ -200,18 +206,20 @@ public class BankOnboardingService {
     }
     private Status get(UUID id) {return jdbc.query("SELECT * FROM payment_schema.finance_bank_request WHERE id=?",this::mapStatus,id).getFirst();}
     private Status mapStatus(ResultSet rs,int n)throws SQLException {
-        String state=rs.getString("state");
+        String state=rs.getString("state");Timestamp verified=rs.getTimestamp("verified_at");
+        boolean stale="VERIFIED".equals(state) && (verified==null || !verified.toInstant().isAfter(Instant.now().minusSeconds(86400)));
         String message=switch(state) {
-            case "VERIFIED" -> "Razorpay bank validation passed. No manual bank approval is required; other payout controls still apply.";
+            case "VERIFIED" -> stale?"Bank status recheck is pending. New payouts are paused until automatic verification is refreshed."
+                :"Razorpay bank validation passed. No manual bank approval is required; other payout controls still apply.";
             case "WAITING_APPROVAL" -> "Bank validated by Razorpay. Chef application approval is still pending; this is not a bank review.";
             case "VALIDATION_FAILED" -> "Razorpay could not validate this bank account. Correct your bank details.";
-            case "NAME_MISMATCH" -> "The name returned by the bank does not match your saved chef applicant name. Correct your own account or application details.";
+            case "NAME_MISMATCH" -> "The bank-returned name does not match your saved chef applicant name. Correct your own account or application details.";
             case "UNKNOWN" -> "Razorpay response is unconfirmed. Automatic reconciliation is running; no duplicate validation request is sent.";
             case "APPLICANT_ACTION_REQUIRED" -> "Your saved chef identity or application status changed. Update and resubmit your bank enrollment.";
             case "SUPERSEDED" -> "This is an older bank enrollment and cannot receive new payouts.";
             default -> "Bank details saved securely. Automatic Razorpay validation is pending.";
         };
-        return new Status(rs.getObject("id",UUID.class),state,rs.getString("last_four"),rs.getString("ifsc"),
+        return new Status(rs.getObject("id",UUID.class),stale?"VALIDATING":state,rs.getString("last_four"),rs.getString("ifsc"),
                 rs.getBoolean("bank_validated"),rs.getBoolean("application_approved"),true,message,
                 rs.getTimestamp("updated_at").toInstant());
     }

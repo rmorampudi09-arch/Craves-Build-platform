@@ -12,19 +12,23 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 public class WebSecurityConfiguration {
     @Bean
-    public SecurityFilterChain integrationSecurityFilterChain(HttpSecurity http,CravesJwtAuthenticationFilter jwtFilter) throws Exception {
+    public SecurityFilterChain integrationSecurityFilterChain(
+        HttpSecurity http,
+        CravesJwtAuthenticationFilter jwtFilter
+    ) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/admin/operations/delivery-intelligence/**").hasAnyRole(
-                    "ADMIN","PLATFORM_ADMIN","SUPPORT_ADMIN","PAYMENTS_ADMIN","OPERATIONS_ADMIN","AUDIT_ADMIN")
+                    "ADMIN", "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
+                )
                 .requestMatchers("/api/v1/admin/**").hasAnyRole(
-                    "PLATFORM_ADMIN","SUPPORT_ADMIN","PAYMENTS_ADMIN","OPERATIONS_ADMIN","AUDIT_ADMIN")
-                // Applicants may enroll before CHEF is granted. The service independently reads their saved application.
-                .requestMatchers("/api/v1/chef-onboarding/bank").authenticated()
+                    "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
+                )
                 .requestMatchers("/api/v1/chef/**").hasRole("CHEF")
-                .anyRequest().permitAll())
-            .addFilterBefore(jwtFilter,UsernamePasswordAuthenticationFilter.class);
+                .anyRequest().permitAll()
+            )
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

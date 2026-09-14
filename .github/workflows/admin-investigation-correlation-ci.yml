@@ -40,6 +40,10 @@ jobs:
           fetch-depth: 0
 
       - name: Verify narrow source scope
+        # This guard describes the original investigation-only publication.
+        # Broader reviewed PRs still run every regression and policy boundary
+        # below; unrelated application changes are reviewed by their own gates.
+        if: github.head_ref == 'fix/admin-investigation-canonical-correlation-20260908' || github.ref_name == 'fix/admin-investigation-canonical-correlation-20260908'
         shell: bash
         run: |
           set -euo pipefail
@@ -52,6 +56,13 @@ jobs:
             printf '%s\n' "$unexpected" >&2
             exit 1
           fi
+
+      - name: Validate reviewed regression source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check refs/remotes/origin/main...HEAD
+          git rev-parse HEAD
 
       - name: Setup Node 24
         uses: actions/setup-node@v4

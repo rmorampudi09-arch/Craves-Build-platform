@@ -1,3 +1,5 @@
+import { boundedFetch } from "@/lib/bounded-fetch";
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -70,7 +72,7 @@ async function forward(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const upstream = await fetch(`${apiBaseUrl()}/chef/application`, {
+    const upstream = await boundedFetch(`${apiBaseUrl()}/chef/application`, {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -80,7 +82,7 @@ async function forward(
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
       signal: controller.signal,
-    });
+    }, 40_000);
     if (!upstream.ok) {
       const failure = upstreamFailure(
         upstream.status,
@@ -125,6 +127,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request))
     return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const input = parseChefApplicationInput(

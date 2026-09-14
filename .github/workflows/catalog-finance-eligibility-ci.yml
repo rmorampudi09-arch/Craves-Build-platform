@@ -1,0 +1,84 @@
+name: Catalog finance selling eligibility
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/catalog-service/**'
+      - 'services/integration-service/**'
+      - '.github/workflows/catalog-finance-eligibility-ci.yml'
+      - 'docs/finance/CATALOG_SELLING_ELIGIBILITY.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-finance-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: catalog_finance_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable-catalog-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d catalog_finance_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      CRAVES_CATALOG_DISPOSABLE_DATABASE: 'true'
+      CATALOG_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/catalog_finance_test
+      CATALOG_TEST_DB_PASSWORD: disposable-catalog-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Check identical signed wire protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          diff <(tail -n +2 services/catalog-service/src/main/java/in/craves/catalog/finance/CatalogEligibilityProtocol.java) \
+               <(tail -n +2 services/integration-service/src/main/java/in/craves/integration/finance/catalog/CatalogEligibilityProtocol.java)
+      - name: Catalog full suite and disposable PostGIS acceptance
+        run: mvn -B -ntp -f services/catalog-service/pom.xml clean verify
+      - name: Integration eligibility and full migration replay acceptance
+        run: >-
+          mvn -B -ntp -f services/integration-service/pom.xml clean test
+          -Dtest=ChefTaxProfileBatchTest,CatalogEligibilityServiceTest,CatalogEligibilityControllerTest,CatalogEligibilityDatabaseTest
+      - name: Require every acceptance suite with zero skipped cases
+        shell: python
+        run: |
+          import pathlib, xml.etree.ElementTree as ET
+          required = {
+            'CatalogSellingDatabaseTest': 3,
+            'CatalogSellingGateTest': 2,
+            'CatalogFinanceEligibilityTest': 5,
+            'NearbyFinanceCacheTest': 1,
+            'InternalCatalogAccessTest': 1,
+            'ChefTaxProfileBatchTest': 3,
+            'CatalogEligibilityServiceTest': 4,
+            'CatalogEligibilityControllerTest': 3,
+            'CatalogEligibilityDatabaseTest': 1,
+          }
+          seen = set()
+          for path in pathlib.Path('services').glob('*/target/surefire-reports/TEST-*.xml'):
+            suite = ET.parse(path).getroot()
+            name = suite.attrib['name'].rsplit('.', 1)[-1]
+            if name in required:
+              assert int(suite.attrib['tests']) >= required[name], (name, 'missing cases')
+              assert all(int(suite.attrib.get(k, 0)) == 0 for k in ['failures', 'errors', 'skipped']), (name, 'not green')
+              seen.add(name)
+          assert seen == set(required), ('missing suites', set(required) - seen)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: catalog-finance-test-reports
+          path: |
+            services/catalog-service/target/surefire-reports/
+            services/integration-service/target/surefire-reports/

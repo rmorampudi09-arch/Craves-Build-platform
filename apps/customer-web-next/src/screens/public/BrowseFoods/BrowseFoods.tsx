@@ -166,6 +166,8 @@ function BrowseFoodsPage() {
   const [discoveryState, setDiscoveryState] = useState<DiscoveryState>("loading");
   const [catalogMessage, setCatalogMessage] = useState("Detecting your current delivery location…");
   const [radiusLabel, setRadiusLabel] = useState<string | null>(null);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
 
   const refreshDiscovery = useCallback(async (activeAddress: CravesAddress | null) => {
     setSelectedKitchen(null);
@@ -342,8 +344,11 @@ function BrowseFoodsPage() {
   }, [category, searchTerm, dishes]);
 
   const handleLogout = async () => {
-    await clearSession();
-    router.push("/");
+    if (logoutBusy) return;
+    setLogoutBusy(true); setLogoutError("");
+    try { await clearSession(); router.push("/"); }
+    catch { setLogoutError("Sign-out could not be confirmed. You are still signed in. Please try again."); }
+    finally { setLogoutBusy(false); }
   };
 
   const locationLabel = address
@@ -377,6 +382,9 @@ function BrowseFoodsPage() {
         onSearchTermChange={setSearchTerm}
       />
       <main>
+        {logoutError && <div role="alert" className="mx-auto max-w-6xl px-4 py-3 text-sm text-red-800">
+          {logoutError} <button type="button" disabled={logoutBusy} onClick={() => void handleLogout()} className="font-semibold underline">Retry sign out</button>
+        </div>}
         <WelcomeBanner
           firstName={user.firstName || user.username.split(" ")[0] || "there"}
           dishCount={visibleDishCount}

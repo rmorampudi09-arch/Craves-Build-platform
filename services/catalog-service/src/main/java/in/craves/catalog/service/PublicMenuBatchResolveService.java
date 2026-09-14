@@ -1,5 +1,7 @@
 package in.craves.catalog.service;
 
+import in.craves.catalog.finance.CatalogFinanceEligibility;
+
 import in.craves.catalog.exception.ApiException;
 import in.craves.catalog.web.PublicCatalogBatchDtos.ResolveMenuItemsRequest;
 import in.craves.catalog.web.PublicCatalogBatchDtos.ResolvedMenuItemResponse;
@@ -13,10 +15,12 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class PublicMenuBatchResolveService {
+    private final CatalogFinanceEligibility financeEligibility;
     private final NamedParameterJdbcTemplate jdbc;
 
-    public PublicMenuBatchResolveService(NamedParameterJdbcTemplate jdbc) {
+    public PublicMenuBatchResolveService(NamedParameterJdbcTemplate jdbc, CatalogFinanceEligibility financeEligibility) {
         this.jdbc = jdbc;
+        this.financeEligibility = financeEligibility;
     }
 
     public List<ResolvedMenuItemResponse> resolve(ResolveMenuItemsRequest request) {
@@ -31,6 +35,7 @@ public class PublicMenuBatchResolveService {
             throw ApiException.badRequest("MENU_ITEM_ID_REQUIRED", "Menu item ids cannot contain null values");
         }
 
+        var eligible = financeEligibility.current();
         return jdbc.query(
             """
                 SELECT mi.id, mi.kitchen_id, mi.item_name, mi.price, mi.currency,
@@ -41,9 +46,10 @@ public class PublicMenuBatchResolveService {
                    AND mi.status = 'ACTIVE'
                    AND mi.is_available = true
                    AND kp.status = 'ACTIVE'
+                   AND kp.identity_id = ANY(CAST(:financeChefIds AS uuid[]))
                  ORDER BY mi.id
                 """,
-            new MapSqlParameterSource("ids", ids),
+            new MapSqlParameterSource("ids", ids).addValue("financeChefIds", eligible.sqlArray()),
             (rs, rowNum) -> new ResolvedMenuItemResponse(
                 rs.getObject("id", UUID.class),
                 rs.getObject("kitchen_id", UUID.class),

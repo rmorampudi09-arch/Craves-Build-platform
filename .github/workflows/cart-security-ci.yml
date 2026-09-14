@@ -1,0 +1,64 @@
+name: Cart Security CI
+on:
+  pull_request:
+    paths:
+      - 'services/order-service/**'
+      - '.github/workflows/cart-security-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cart-security-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  cart-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chef_ledger_test
+          POSTGRES_USER: ledger_ci
+          POSTGRES_PASSWORD: ledger_ci_local_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
+      LEDGER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/chef_ledger_test
+      LEDGER_TEST_DB_USER: ledger_ci
+      LEDGER_TEST_DB_PASSWORD: ledger_ci_local_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/order-service/pom.xml
+      - name: Real PostgreSQL cart concurrency and authorization
+        run: mvn --batch-mode --no-transfer-progress -f services/order-service/pom.xml -Dtest=CartLimitsTest,CartConcurrencyDatabaseTest test
+      - name: Require every cart test without skips
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as E
+          for name, minimum in {'CartLimitsTest':2, 'CartConcurrencyDatabaseTest':6}.items():
+              files=list(Path('services/order-service/target/surefire-reports').glob('TEST-*.'+name+'.xml'))
+              assert len(files)==1, 'Missing required suite: '+name
+              result=E.parse(files[0]).getroot()
+              assert int(result.attrib['tests'])>=minimum, name
+              assert all(int(result.attrib.get(k,'0'))==0 for k in ['failures','errors','skipped']), name
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cart-security-evidence-${{ github.sha }}
+          path: services/order-service/target/surefire-reports
+          retention-days: 14

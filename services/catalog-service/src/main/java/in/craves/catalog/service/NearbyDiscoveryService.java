@@ -1,5 +1,7 @@
 package in.craves.catalog.service;
 
+import in.craves.catalog.finance.CatalogFinanceEligibility;
+
 import in.craves.catalog.config.CatalogDiscoveryProperties;
 import in.craves.catalog.exception.ApiException;
 import in.craves.catalog.service.DiscoveryCriteria.KitchenSort;
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class NearbyDiscoveryService {
+    private final CatalogFinanceEligibility financeEligibility;
     private static final BigDecimal MIN_LATITUDE = new BigDecimal("-90");
     private static final BigDecimal MAX_LATITUDE = new BigDecimal("90");
     private static final BigDecimal MIN_LONGITUDE = new BigDecimal("-180");
@@ -57,17 +60,20 @@ public class NearbyDiscoveryService {
     @Autowired
     public NearbyDiscoveryService(
         JdbcTemplate jdbcTemplate,
-        CatalogDiscoveryProperties discoveryProperties
+        CatalogDiscoveryProperties discoveryProperties,
+        CatalogFinanceEligibility financeEligibility
     ) {
-        this(new NamedParameterJdbcTemplate(jdbcTemplate), discoveryProperties);
+        this(new NamedParameterJdbcTemplate(jdbcTemplate), discoveryProperties, financeEligibility);
     }
 
     NearbyDiscoveryService(
         NamedParameterJdbcTemplate jdbcTemplate,
-        CatalogDiscoveryProperties discoveryProperties
+        CatalogDiscoveryProperties discoveryProperties,
+        CatalogFinanceEligibility financeEligibility
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.discoveryProperties = discoveryProperties;
+        this.financeEligibility = financeEligibility;
     }
 
     public NearbyKitchenDiscoveryResponse discoverKitchens(
@@ -97,6 +103,14 @@ public class NearbyDiscoveryService {
         int page,
         int size
     ) {
+        validateInputs(latitude, longitude, radiusMeters, criteria, page, size);
+        return discoverKitchens(latitude, longitude, radiusMeters, criteria, sort, page, size, financeEligibility.current());
+    }
+
+    public NearbyKitchenDiscoveryResponse discoverKitchens(
+        BigDecimal latitude, BigDecimal longitude, int radiusMeters, DiscoveryCriteria criteria,
+        KitchenSort sort, int page, int size, CatalogFinanceEligibility.Snapshot eligibility
+    ) {
         validateQuery(latitude, longitude, radiusMeters, page, size);
         ValidatedCriteria validatedCriteria = validateCriteria(criteria);
         KitchenSort effectiveSort = sort == null ? KitchenSort.DISTANCE_ASC : sort;
@@ -108,6 +122,7 @@ public class NearbyDiscoveryService {
             page,
             size
         );
+        parameters.addValue("financeChefIds", eligibility.sqlArray());
         long totalElements = countNearbyKitchens(validatedCriteria, parameters);
         List<NearbyKitchenSummaryResponse> kitchens = totalElements == 0
             ? List.of()
@@ -148,6 +163,14 @@ public class NearbyDiscoveryService {
         int page,
         int size
     ) {
+        validateInputs(latitude, longitude, radiusMeters, criteria, page, size);
+        return discoverMenuItems(latitude, longitude, radiusMeters, criteria, sort, page, size, financeEligibility.current());
+    }
+
+    public NearbyMenuItemDiscoveryResponse discoverMenuItems(
+        BigDecimal latitude, BigDecimal longitude, int radiusMeters, DiscoveryCriteria criteria,
+        MenuItemSort sort, int page, int size, CatalogFinanceEligibility.Snapshot eligibility
+    ) {
         validateQuery(latitude, longitude, radiusMeters, page, size);
         ValidatedCriteria validatedCriteria = validateCriteria(criteria);
         MenuItemSort effectiveSort = sort == null ? MenuItemSort.DISTANCE_ASC : sort;
@@ -159,6 +182,7 @@ public class NearbyDiscoveryService {
             page,
             size
         );
+        parameters.addValue("financeChefIds", eligibility.sqlArray());
         long totalElements = countNearbyMenuItems(validatedCriteria, parameters);
         List<NearbyMenuItemSummaryResponse> menuItems = totalElements == 0
             ? List.of()
@@ -266,6 +290,7 @@ public class NearbyDiscoveryService {
             FROM catalog_schema.kitchen_profile kp
             CROSS JOIN request_location rl
             WHERE kp.status = 'ACTIVE'
+              AND kp.identity_id = ANY(CAST(:financeChefIds AS uuid[]))
               AND kp.location IS NOT NULL
               AND public.ST_DWithin(kp.location, rl.location, :radiusMeters)
               AND EXISTS (
@@ -316,6 +341,7 @@ public class NearbyDiscoveryService {
             JOIN catalog_schema.kitchen_profile kp ON kp.id = mi.kitchen_id
             CROSS JOIN request_location rl
             WHERE kp.status = 'ACTIVE'
+              AND kp.identity_id = ANY(CAST(:financeChefIds AS uuid[]))
               AND kp.location IS NOT NULL
               AND
             """);
@@ -485,6 +511,11 @@ public class NearbyDiscoveryService {
             supplied.maxPreparationTimeMinutes(),
             supplied.spiceLevel()
         );
+    }
+
+    public void validateInputs(BigDecimal latitude, BigDecimal longitude, int radiusMeters, DiscoveryCriteria criteria, int page, int size) {
+        validateQuery(latitude, longitude, radiusMeters, page, size);
+        validateCriteria(criteria);
     }
 
     private void validateQuery(

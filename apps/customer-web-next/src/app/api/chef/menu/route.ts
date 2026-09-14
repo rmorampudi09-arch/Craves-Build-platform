@@ -1,3 +1,5 @@
+import { boundedFetch } from "@/lib/bounded-fetch";
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefMenuItem, parseChefMenuItemInput, parseChefMenuItems } from "@/lib/chef-menu-contract";
@@ -10,7 +12,7 @@ async function requestUpstream(request: NextRequest, method: "GET" | "POST", bod
   if (!token) return NextResponse.json({ code: "AUTHENTICATION_REQUIRED" }, { status: 401 });
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
-    const upstream = await fetch(`${apiBaseUrl()}/kitchens/me/menu-items`, { method, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: controller.signal });
+    const upstream = await boundedFetch(`${apiBaseUrl()}/kitchens/me/menu-items`, { method, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: controller.signal }, 40_000);
     if (!upstream.ok) { const response = NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : "MENU_REQUEST_FAILED" }, { status: upstream.status }); if (upstream.status === 401) response.cookies.delete("craves_access_token"); return response; }
     const raw = await upstream.json().catch(() => null);
     const parsed = method === "GET" ? parseChefMenuItems(raw) : parseChefMenuItem(raw);
@@ -21,4 +23,8 @@ async function requestUpstream(request: NextRequest, method: "GET" | "POST", bod
 }
 
 export async function GET(request: NextRequest) { return requestUpstream(request, "GET"); }
-export async function POST(request: NextRequest) { if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 }); const input = parseChefMenuItemInput(await request.json().catch(() => null)); if (!input) return NextResponse.json({ code: "INVALID_MENU_ITEM" }, { status: 400 }); return requestUpstream(request, "POST", input); }
+export async function POST(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+ if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 }); const input = parseChefMenuItemInput(await request.json().catch(() => null)); if (!input) return NextResponse.json({ code: "INVALID_MENU_ITEM" }, { status: 400 }); return requestUpstream(request, "POST", input); }

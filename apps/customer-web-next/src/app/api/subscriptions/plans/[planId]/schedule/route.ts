@@ -1,3 +1,4 @@
+import { boundedFetch } from "@/lib/bounded-fetch";
 import { NextResponse } from "next/server";
 import { parsePublicSubscriptionSchedule } from "@/lib/subscription-schedule-contract";
 import { apiBaseUrl, isUuid } from "@/lib/server-api";
@@ -18,9 +19,9 @@ export async function GET(_request: Request, context: { params: Promise<{ planId
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
-    const upstream = await fetch(`${apiBaseUrl()}/subscriptions/plans/${planId}/schedule`, {
+    const upstream = await boundedFetch(`${apiBaseUrl()}/subscriptions/plans/${planId}/schedule`, {
       headers: { Accept: "application/json" }, cache: "no-store", signal: controller.signal,
-    });
+    }, 40_000);
     if (!upstream.ok) return NextResponse.json({ code: "SUBSCRIPTION_SCHEDULE_UNAVAILABLE" }, { status: upstream.status });
     const schedule = parsePublicSubscriptionSchedule(await upstream.json().catch(() => null));
     if (!schedule) return NextResponse.json({ code: "INVALID_SUBSCRIPTION_SCHEDULE_RESPONSE" }, { status: 502 });
@@ -29,9 +30,9 @@ export async function GET(_request: Request, context: { params: Promise<{ planId
     const names = new Map<string, string>();
     await Promise.all(uniqueMenuIds.map(async menuItemId => {
       try {
-        const response = await fetch(`${apiBaseUrl()}/catalog/menu-items/${menuItemId}`, {
+        const response = await boundedFetch(`${apiBaseUrl()}/catalog/menu-items/${menuItemId}`, {
           headers: { Accept: "application/json" }, cache: "no-store", signal: controller.signal,
-        });
+        }, 40_000);
         if (!response.ok) return;
         const name = parseMenuItemName(await response.json().catch(() => null), menuItemId);
         if (name) names.set(menuItemId, name);

@@ -1,49 +1,33 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { isSameOrigin } from "@/lib/request-security";
 import { reverseGeocodeWithAzureMaps } from "@/lib/server/azure-maps";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 30;
-const rateBuckets = new Map<string, { startedAt: number; count: number }>();
+const MAX_IN_FLIGHT = 4;
+// No trusted proxy attestation exists here. Client-supplied headers never create budgets.
+// At most 30 timestamps are retained, independent of request/header cardinality.
+const admittedAt: number[] = [];
+let inFlight = 0;
 
-function clientKey(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || request.headers.get("x-azure-clientip")?.trim() || "unknown";
-}
-
-function allowRequest(key: string): boolean {
+function admissionRetryAfter(): number | null {
   const now = Date.now();
-  const current = rateBuckets.get(key);
-  if (!current || now - current.startedAt >= RATE_LIMIT_WINDOW_MS) {
-    rateBuckets.set(key, { startedAt: now, count: 1 });
-  } else if (current.count >= RATE_LIMIT_REQUESTS) {
-    return false;
-  } else {
-    current.count += 1;
+  while (admittedAt.length > 0 && now - admittedAt[0] >= RATE_LIMIT_WINDOW_MS) {
+    admittedAt.shift();
   }
-
-  if (rateBuckets.size > 5_000) {
-    for (const [candidate, bucket] of rateBuckets) {
-      if (now - bucket.startedAt >= RATE_LIMIT_WINDOW_MS) rateBuckets.delete(candidate);
-    }
+  if (admittedAt.length >= RATE_LIMIT_REQUESTS) {
+    return Math.max(1, Math.ceil((admittedAt[0] + RATE_LIMIT_WINDOW_MS - now) / 1_000));
   }
-  return true;
+  if (inFlight >= MAX_IN_FLIGHT) return 1;
+  admittedAt.push(now);
+  inFlight += 1;
+  return null;
 }
 
 export async function POST(request: NextRequest) {
-  if (!isSameOrigin(request)) {
-    return NextResponse.json(
-      { error: "ORIGIN_REJECTED", message: "Reverse geocoding is only available from Craves." },
-      { status: 403 },
-    );
-  }
-
-  if (!allowRequest(clientKey(request))) {
-    return NextResponse.json(
-      { error: "LOCATION_RATE_LIMITED", message: "Too many location lookups. Please try again shortly." },
-      { status: 429, headers: { "Retry-After": "60" } },
-    );
-  }
+  const bounded = await boundBffRequest(request, { maxBytes: 1_024, timeoutMs: 2_000 });
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
 
   const body = (await request.json().catch(() => null)) as {
     latitude?: unknown;
@@ -66,6 +50,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const retryAfter = admissionRetryAfter();
+  if (retryAfter !== null) {
+    return NextResponse.json(
+      { error: "LOCATION_RATE_LIMITED", message: "Too many location lookups. Please try again shortly." },
+      { status: 429, headers: { "Retry-After": String(retryAfter), "Cache-Control": "no-store, private" } },
+    );
+  }
+
   try {
     const address = await reverseGeocodeWithAzureMaps(latitude, longitude);
     return NextResponse.json(address, {
@@ -74,14 +66,15 @@ export async function POST(request: NextRequest) {
         "X-Content-Type-Options": "nosniff",
       },
     });
-  } catch (error) {
-    console.error("Azure Maps reverse geocoding failed", error);
+  } catch {
     return NextResponse.json(
       {
         error: "REVERSE_GEOCODING_UNAVAILABLE",
         message: "Craves could not identify this address right now. Please try again.",
       },
-      { status: 503 },
+      { status: 503, headers: { "Cache-Control": "no-store, private" } },
     );
+  } finally {
+    inFlight -= 1;
   }
 }

@@ -173,3 +173,26 @@ One replica remains the approved operating constraint. No million-user load cert
 Remaining gates until actually observed: authorized Auth pipeline execution, digest/revision and unchanged-settings evidence, authenticated routed v3 content and assessment acceptance. Historical records remain in `docs/runbooks/2026-09-12-academy-admin-production-acceptance.md` and `docs/runbooks/2026-09-13-admin-portal-repair.md`; retain their dates and limitations.
 
 Maintain one service curriculum at a time. Recheck claims against source and tests, pin a new immutable teaching revision when needed and version changed assessments deliberately. Run source/size/prerequisite/regression gates. Automatic course regeneration, private video production and peer-review certification systems are not implemented by this release.
+
+
+## Academy regression inside a broader reviewed release
+
+The original `feat/craves-academy-20260913` publication branch still runs the
+unchanged `release-guard.py source` restriction against its fixed Academy-only
+Auth baseline. The guard script, runtime image checks and replica protections
+remain unchanged.
+
+A broader release that intentionally changes Auth for reviewed analytics or email
+features cannot be certified as an Academy-only publication. For these pull
+requests, `craves-academy-ci.yml` runs the same curriculum provenance checks,
+projection validation, guard unit tests, real disposable PostgreSQL Academy
+persistence tests and web regression. It requires both Academy suites with zero
+skipped cases and checks out the exact PR head. Only the historical publication
+scope check is branch-specific; no regression test is omitted.
+
+The resulting `release-scope.json` explicitly says
+`academyOnlyPublicationApproved=false` and labels the artifact as Academy
+regression within a broader release. It is not approval to deploy Auth, bypass
+runtime guards or use the Academy-only pipeline for unrelated changes. The full
+release review must cover all Auth code, migration dependencies, secure runtime
+configuration, normal merge/environment approvals and the exact running SHA.

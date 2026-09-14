@@ -115,7 +115,7 @@ test("logout while renewal is pending cannot restore ready state", async () => {
   let called!: () => void; const started = new Promise<void>(resolve => { called = resolve; });
   const states: SessionState[] = [];
   const client = createAdminRenewal({ now: () => 1000, lock: work => work(), notify: state => states.push(state), fetcher: async input => {
-    if (String(input).endsWith("logout")) return Response.json({});
+    if (String(input).endsWith("logout")) return Response.json({ signedOut: true });
     called(); await waiting;
     return Response.json({ timing: { accessExpiresAt: 100_000, sessionExpiresAt: 28_800_000 } });
   } });
@@ -139,4 +139,53 @@ test("client clock skew and clock jumps cannot independently expire a server-val
   await client.ensure();
   assert.ok(!states.includes("ended"));
   assert.equal(states.at(-1), "ready");
+});
+
+for (const failure of ["503", "403", "invalid receipt", "malformed JSON", "network", "timeout"]) {
+  test(`unconfirmed logout (${failure}) locks operations and remains explicitly retryable`, async () => {
+    const states: SessionState[] = [];
+    let fail = true;
+    let logoutRequests = 0;
+    let operationRequests = 0;
+    let clears = 0;
+    const client = createAdminRenewal({ now: () => 1000, lock: work => work(), notify: state => states.push(state),
+      receipt: { get: () => null, set: () => undefined, clear: () => { clears++; } },
+      fetcher: async input => {
+        if (!String(input).endsWith("logout")) { operationRequests++; return Response.json({}); }
+        logoutRequests++;
+        if (fail) {
+          if (failure === "network") throw new TypeError("offline");
+          if (failure === "timeout") throw new DOMException("timeout", "TimeoutError");
+          if (failure === "malformed JSON") return new Response("not JSON");
+          if (failure === "invalid receipt") return Response.json({ signedOut: false });
+          return Response.json({ signedOut: false, code: "LOGOUT_UNCONFIRMED" }, { status: Number(failure) });
+        }
+        return Response.json({ signedOut: true });
+      },
+    });
+    await assert.rejects(client.logout());
+    assert.equal(states.at(-1), "ended");
+    assert.equal((await client.request("/api/admin/test", { method: "POST" })).status, 401);
+    assert.equal(operationRequests, 0);
+    assert.equal(clears, 0);
+    fail = false;
+    await client.logout();
+    assert.equal(logoutRequests, 2);
+    assert.equal(clears, 1);
+    await assert.rejects(client.ensure(), /sign-in/);
+  });
+}
+
+test("concurrent sign-out requests share one server request and confirm its receipt", async () => {
+  let release!: () => void;
+  const waiting = new Promise<void>(resolve => { release = resolve; });
+  let requests = 0;
+  const client = createAdminRenewal({ now: () => 1000, lock: work => work(), notify: () => undefined,
+    fetcher: async () => { requests++; await waiting; return Response.json({ signedOut: true }); },
+  });
+  const first = client.logout();
+  const second = client.logout();
+  release();
+  await Promise.all([first, second]);
+  assert.equal(requests, 1);
 });

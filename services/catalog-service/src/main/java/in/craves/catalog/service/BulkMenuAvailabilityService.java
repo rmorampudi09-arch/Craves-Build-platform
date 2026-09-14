@@ -1,6 +1,7 @@
 package in.craves.catalog.service;
 
 import in.craves.catalog.exception.ApiException;
+import in.craves.catalog.finance.CatalogFinanceEligibility;
 import in.craves.catalog.security.CravesPrincipal;
 import in.craves.catalog.web.BulkMenuAvailabilityDtos.AvailabilityChange;
 import in.craves.catalog.web.BulkMenuAvailabilityDtos.AvailabilityResult;
@@ -22,8 +23,10 @@ import org.springframework.util.StringUtils;
 @Service
 public class BulkMenuAvailabilityService {
     private final NamedParameterJdbcTemplate jdbc;
+    private final CatalogFinanceEligibility financeEligibility;
 
-    public BulkMenuAvailabilityService(NamedParameterJdbcTemplate jdbc) {
+    public BulkMenuAvailabilityService(NamedParameterJdbcTemplate jdbc, CatalogFinanceEligibility financeEligibility) {
+        this.financeEligibility = financeEligibility;
         this.jdbc = jdbc;
     }
 
@@ -47,6 +50,7 @@ public class BulkMenuAvailabilityService {
             }
         }
 
+        if (request.changes().stream().anyMatch(AvailabilityChange::available)) financeEligibility.requireChef(principal.identityId());
         UUID kitchenId = requireKitchenId(principal.identityId());
         MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("kitchenId", kitchenId)

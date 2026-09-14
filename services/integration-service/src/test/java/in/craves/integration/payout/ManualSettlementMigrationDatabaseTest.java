@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
@@ -34,7 +35,16 @@ class ManualSettlementMigrationDatabaseTest {
         Flyway.configure().dataSource(ds).defaultSchema("payment_schema").schemas("payment_schema").locations("classpath:db/migration").target("133").load().migrate();
         ledger=new LedgerPostingService(jdbc,json,true);
     }
-    void upgrade(){Flyway.configure().dataSource(ds).defaultSchema("payment_schema").schemas("payment_schema").locations("classpath:db/migration").load().migrate();}
+    void upgrade() {
+        Flyway flyway=Flyway.configure().dataSource(ds).defaultSchema("payment_schema").schemas("payment_schema").locations("classpath:db/migration").load();
+        assertEquals("133",flyway.info().current().getVersion().getVersion());
+        assertEquals(List.of("134","136"),Arrays.stream(flyway.info().pending()).map(m->m.getVersion().getVersion()).toList(),
+                "The combined release must test every exact source migration; this checkout has no V135");
+        assertEquals(2,flyway.migrate().migrationsExecuted);
+        assertEquals("136",flyway.info().current().getVersion().getVersion());
+        flyway.validate();
+        assertEquals(0,flyway.migrate().migrationsExecuted,"Validated release migrations must be safe to replay");
+    }
     @Test void existingPaidRazorpayInstructionAndJournalsSurviveUnchanged()throws Exception {
         UUID chef=UUID.randomUUID(),beneficiary=UUID.randomUUID(),instruction=UUID.randomUUID(),order=UUID.randomUUID(),payable=UUID.randomUUID();
         Instant delivered=Instant.now().minusSeconds(180000);BigDecimal amount=new BigDecimal("100.00");

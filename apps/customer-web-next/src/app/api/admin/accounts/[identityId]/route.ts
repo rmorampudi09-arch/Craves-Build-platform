@@ -1,3 +1,4 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import {
   parseAdminAccountAction,
@@ -51,6 +52,10 @@ export async function GET(request: NextRequest, context: Context) {
 }
 
 export async function POST(request: NextRequest, context: Context) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return failure(403, "CROSS_ORIGIN_REQUEST_REJECTED");
   const id = await identityId(context);
   const input = parseAdminAccountAction(await request.json().catch(() => null));

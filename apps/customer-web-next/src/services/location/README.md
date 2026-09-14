@@ -64,9 +64,16 @@ Reverse geocoding can only fill what the map provider can resolve. When Azure Ma
 - reverse geocoding is server-side only;
 - the browser never receives an Azure Maps key;
 - the public BFF route accepts same-origin POST requests only;
-- the BFF applies a 30-requests-per-minute per-client process-level safety limit before calling the metered provider;
+- the BFF validates JSON of at most 1 KiB within two seconds and finite, in-range numeric coordinates before consuming provider admission;
+- the BFF admits at most 30 lookups in a rolling 60-second window, shared by all anonymous and signed-in callers in one process, with at most four provider lookups in flight;
+- forwarded IP headers do not identify callers or create extra budgets; the guard retains at most 30 timestamps and returns HTTP 429 with `Retry-After` when full;
+- failed provider calls release the in-flight slot but still count against the lookup budget;
+- managed-identity and Maps responses have whole-body deadlines of five and seven seconds, response limits of 32 KiB and 256 KiB respectively, and redirects are rejected;
+- errors return a generic response without logging raw provider exceptions, tokens, coordinates, or response bodies;
 - precise coordinates remain internal to Craves requests used for PostGIS discovery and delivery;
 - provider responses are normalized before they reach UI code;
 - the Azure Maps account itself uses Entra/RBAC with local/shared-key authentication disabled.
 
-The in-process rate guard is a cost-abuse safety layer, not a replacement for Azure Front Door/WAF traffic policy. Production monitoring should alert on unusual reverse-geocoding volume and 429/5xx rates.
+These are engineering limits for the existing single-replica deployment, not a huge-load or availability guarantee. Admission is per Node.js process and resets on process restart; more processes or replicas would each have their own budget. Anonymous use remains supported, so one caller can consume the shared budget. Production monitoring should alert on reverse-geocoding volume and 429/5xx rates; higher capacity requires reviewed traffic controls and metered-usage bounds.
+
+Kitchen discovery requires explicit decimal latitude and longitude, including legitimate zero values. Missing, blank, duplicate, unknown, non-finite, or out-of-range query values are rejected before Catalog is called. The query is limited to 256 characters, coordinates to 32 characters, radius to 1–100,000 metres, page to 0–1,000, and page size to 1–50. Omitted radius/page/size keep the existing defaults of 5,000/0/20. These request bounds limit input and pagination work; they do not establish measured service capacity.

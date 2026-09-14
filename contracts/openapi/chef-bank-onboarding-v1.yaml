@@ -1,0 +1,134 @@
+openapi: 3.0.3
+info:
+  title: Craves Automatic Chef Bank Onboarding
+  version: 1.0.0
+  description: >-
+    Consent-bound encrypted bank enrollment and automatic Razorpay validation.
+    No human bank approval endpoint exists. Chef application approval and financial
+    holds are independent. Registration alone is not payout authorization.
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/chef-onboarding/bank:
+    get:
+      operationId: getMyBankEnrollment
+      description: Authenticated applicant reads only their masked current enrollment. No bank number or provider identity is returned.
+      responses:
+        '200':
+          description: No-store masked enrollment, including NOT_SUBMITTED.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatus' }
+        '401': { description: Authentication required. }
+    post:
+      operationId: enrollMyBankAccount
+      description: >-
+        Creates an immutable bank-detail version or returns the original request receipt.
+        Maximum request body 8192 bytes. Uses server-side chef identity and applicant details.
+        Does not call Razorpay synchronously or transfer funds.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BankSubmission' }
+      responses:
+        '200':
+          description: Stored or replayed request; not a claim of completed bank validation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankStatus' }
+        '400': { description: Invalid input, consent, name or saved applicant eligibility. }
+        '401': { description: Authentication required. }
+        '409': { description: Stale bank version, changed idempotency content or unresolved payout. }
+        '413': { description: Body exceeds the allowed size. }
+        '429': { description: Rolling 24-hour new bank-version limit exceeded. }
+        '503': { description: Secure storage, identity source or enrollment service unavailable. }
+  /api/v1/admin/finance/bank-onboarding:
+    get:
+      operationId: getBankAutomationControls
+      description: Finance or audit role. Latest 100 masked enrollment outcomes; readiness is not merchant certification.
+      responses:
+        '200':
+          description: Configuration and masked current states.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankControls' }
+        '403': { description: Finance read role required. }
+    post:
+      operationId: configureBankAutomation
+      description: PLATFORM_ADMIN or PAYMENTS_ADMIN; exact configuration revision and reason required. Does not approve a bank account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedRevision, submissionsEnabled, validationEnabled, maximumRequestsPerDay, reason]
+              properties:
+                expectedRevision: { type: integer, format: int64, minimum: 0 }
+                submissionsEnabled: { type: boolean }
+                validationEnabled: { type: boolean }
+                maximumRequestsPerDay: { type: integer, minimum: 1, maximum: 10 }
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '200':
+          description: Updated audited controls.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankControls' }
+        '400': { description: Invalid control values or missing reason. }
+        '403': { description: Finance operator role required. }
+        '409': { description: Stale revision or missing runtime/provider prerequisites. }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    BankSubmission:
+      type: object
+      additionalProperties: false
+      required: [requestKey, accountHolderName, accountNumber, accountNumberConfirmation, ifsc, consent, consentVersion]
+      properties:
+        requestKey: { type: string, format: uuid }
+        expectedCurrentId: { type: string, format: uuid, nullable: true }
+        accountHolderName: { type: string, minLength: 2, maxLength: 120, description: Must match the authoritative saved applicant. }
+        accountNumber: { type: string, pattern: '^[0-9]{6,24}$', writeOnly: true }
+        accountNumberConfirmation: { type: string, pattern: '^[0-9]{6,24}$', writeOnly: true }
+        ifsc: { type: string, pattern: '^[A-Z]{4}0[A-Z0-9]{6}$' }
+        consent: { type: boolean, enum: [true] }
+        consentVersion: { type: string, enum: [craves-bank-validation-20260914-v1] }
+    BankStatus:
+      type: object
+      required: [id, state, lastFour, ifsc, bankValidated, applicationApproved, automaticActivation, message, updatedAt]
+      properties:
+        id: { type: string, format: uuid, nullable: true }
+        state:
+          type: string
+          enum: [NOT_SUBMITTED, QUEUED, SUBMITTING, VALIDATING, UNKNOWN, WAITING_APPROVAL, VERIFIED, VALIDATION_FAILED, NAME_MISMATCH, APPLICANT_ACTION_REQUIRED, SUPERSEDED]
+        lastFour: { type: string, pattern: '^[0-9]{4}$', nullable: true }
+        ifsc: { type: string, nullable: true }
+        bankValidated: { type: boolean }
+        applicationApproved: { type: boolean }
+        automaticActivation: { type: boolean, enum: [true] }
+        message: { type: string, maxLength: 1000 }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    BankControls:
+      type: object
+      required: [revision, submissionsEnabled, validationEnabled, maximumRequestsPerDay, encryptionReady, providerReady, workerDeployed, recent]
+      properties:
+        revision: { type: integer, format: int64, minimum: 0 }
+        submissionsEnabled: { type: boolean }
+        validationEnabled: { type: boolean }
+        maximumRequestsPerDay: { type: integer, minimum: 1, maximum: 10 }
+        encryptionReady: { type: boolean }
+        providerReady: { type: boolean }
+        workerDeployed: { type: boolean }
+        recent:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            required: [chefId, bank]
+            properties:
+              chefId: { type: string, format: uuid }
+              bank: { $ref: '#/components/schemas/BankStatus' }

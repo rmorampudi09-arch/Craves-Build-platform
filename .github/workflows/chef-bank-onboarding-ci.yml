@@ -1,0 +1,89 @@
+name: Chef Bank Onboarding CI
+on:
+  push:
+    branches: [feat/chef-ledger-controls-20260913]
+  pull_request:
+    paths:
+      - 'services/integration-service/**'
+      - 'services/user-chef-service/**'
+      - 'apps/customer-web-next/**'
+      - 'scripts/finance/**'
+      - 'docs/finance/**'
+      - 'contracts/openapi/chef-bank-onboarding-v1.yaml'
+      - 'azure-pipelines-chef-bank-configuration.yml'
+      - '.github/workflows/chef-bank-onboarding-ci.yml'
+permissions:
+  contents: read
+concurrency:
+  group: chef-bank-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  bank:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chef_ledger_test
+          POSTGRES_USER: ledger_ci
+          POSTGRES_PASSWORD: ledger_ci_local_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      LEDGER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/chef_ledger_test
+      LEDGER_TEST_DB_USER: ledger_ci
+      LEDGER_TEST_DB_PASSWORD: ledger_ci_local_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Exact source evidence
+        run: git archive --format=zip --output=bank-onboarding-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bank-source-${{ github.sha }}
+          path: bank-onboarding-source.zip
+          retention-days: 7
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            services/integration-service/pom.xml
+            services/user-chef-service/pom.xml
+      - name: Configuration guards without Azure writes or provider calls
+        run: |
+          set -euo pipefail
+          mkdir -p bank-evidence
+          python3 -m unittest discover -s scripts/finance -p 'test_configure_bank_*.py' -v 2>&1 | tee bank-evidence/configuration-tests.txt
+      - name: Integration bank state, encryption, provider contract and regression tests
+        run: mvn -B -ntp -f services/integration-service/pom.xml verify
+      - name: User Chef identity signature and regression tests
+        run: mvn -B -ntp -f services/user-chef-service/pom.xml verify
+      - name: Require every bank test suite without skips
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as E
+          required={'BankOnboardingDatabaseTest':16,'BankAutomationSafetyDatabaseTest':9,
+                    'BankDataCipherTest':6,'RazorpayBankValidationClientTest':14,
+                    'BankOnboardingSecurityTest':5,'BankIdentitySignatureTest':5}
+          for name,minimum in required.items():
+              files=list(pathlib.Path('services').glob('*/target/surefire-reports/TEST-*.'+name+'.xml'))
+              assert len(files)==1, name
+              r=E.parse(files[0]).getroot()
+              assert int(r.attrib['tests'])>=minimum, name
+              assert all(int(r.attrib.get(k,'0'))==0 for k in ('skipped','failures','errors')),name
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bank-tests-${{ github.sha }}
+          path: |
+            services/integration-service/target/surefire-reports
+            services/user-chef-service/target/surefire-reports
+            bank-evidence
+          retention-days: 14

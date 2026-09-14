@@ -27,7 +27,7 @@ export function AccountCard({
   const name = `${firstName ?? ""} ${lastName ?? ""}`.trim();
   const displayName = name || "Complete your Craves profile";
   const phone = profile?.registeredPhoneNumber || user.phoneNumber;
-  const email = profile?.email ?? user.email;
+  const email = user.email;
 
   return (
     <section
@@ -62,11 +62,12 @@ export function AccountCard({
               <p className="mt-2 flex items-center gap-2 truncate text-sm text-muted-foreground">
                 <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span className="truncate">{email}</span>
+                <span className="shrink-0 text-xs font-semibold">{user.emailVerified ? "Verified" : "Not verified"}</span>
               </p>
             )}
             {!profile && (
               <p className="mt-3 max-w-md text-sm leading-6 text-contrast-red">
-                Add your first name, last name and optional email so checkout and
+                Add your first name and last name so checkout and
                 support use the correct details.
               </p>
             )}

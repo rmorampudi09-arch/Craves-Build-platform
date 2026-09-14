@@ -13,7 +13,7 @@ export const bankStatusSchema = z.object({
   id: z.string().uuid().nullable(),
   state: z.enum(["NOT_SUBMITTED", "QUEUED", "SUBMITTING", "VALIDATING", "UNKNOWN", "WAITING_APPROVAL", "VERIFIED", "VALIDATION_FAILED", "NAME_MISMATCH", "APPLICANT_ACTION_REQUIRED", "SUPERSEDED"]),
   lastFour: z.string().regex(/^[0-9]{4}$/).nullable(), ifsc: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/).nullable(),
-  bankValidated: z.boolean(), applicationApproved: z.boolean(), automaticActivation: z.literal(true),
+  bankValidated: z.boolean(), applicationApproved: z.boolean(), automaticActivation: z.boolean(),
   message: z.string().max(1000), updatedAt: z.string().datetime().nullable(),
 });
 export type BankStatus = z.infer<typeof bankStatusSchema>;

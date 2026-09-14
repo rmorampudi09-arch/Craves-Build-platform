@@ -1,5 +1,7 @@
 # Automatic chef bank onboarding
 
+> Current owner-requested launch mode: [Manual Craves settlement](MANUAL_CRAVES_SETTLEMENT.md). Finance earning/ledger readiness is separate from RazorpayX and Fund Account Validation. The automatic bank form remains unavailable unless all effective bank gates are ready; manual settlement never asserts automatic bank verification. Historical instructions below describe the separately gated provider mode.
+
 Release guide, 14 September 2026, Asia/Kolkata. Repository `rmorampudi09-arch/Craves-Build-platform`, branch `feat/chef-ledger-controls-20260913`, draft PR **340**. Bank work starts from `bee739db325f89910656c2da4943b0a5708fd861`; final exact-head evidence is recorded in the PR and delivery bundle.
 
 ## Decision and scope

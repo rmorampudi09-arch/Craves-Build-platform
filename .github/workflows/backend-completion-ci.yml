@@ -9,6 +9,7 @@ on:
       - 'config/production/azure-resource-inventory.json'
       - 'scripts/release/**'
       - 'azure-pipelines-*-service.yml'
+      - 'azure-pipelines-razorpay-customer-web.yml'
       - 'azure-pipelines-backend-completion.yml'
       - '.github/workflows/backend-completion-ci.yml'
   workflow_dispatch:

@@ -23,12 +23,17 @@ public class FinancePolicyService {
     public record Draft(UUID id,String contentHash,FinancePolicy settings) {}
     public record ActivateRequest(long expectedRevision,String expectedHash,String reason) {}
     private final JdbcTemplate jdbc;private final ObjectMapper json;
-    private final boolean financialSourceReady;private final boolean postingEnabled;private final boolean payoutReady;
+    private final boolean financialSourceReady;private final boolean postingEnabled;private final boolean payoutReady;private final boolean manualReady;
+    public FinancePolicyService(JdbcTemplate jdbc,ObjectMapper json,boolean sourceReady,boolean postingEnabled,boolean payoutReady) {
+        this(jdbc,json,sourceReady,postingEnabled,payoutReady,false);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
     public FinancePolicyService(JdbcTemplate jdbc,ObjectMapper json,
         @Value("${craves.finance.authoritative-source-ready:false}") boolean sourceReady,
         @Value("${craves.ledger.posting-enabled:false}") boolean postingEnabled,
-        @Value("${craves.razorpayx.production-approved:false}") boolean payoutReady) {
-        this.jdbc=jdbc;this.json=json;this.financialSourceReady=sourceReady;this.postingEnabled=postingEnabled;this.payoutReady=payoutReady;
+        @Value("${craves.razorpayx.production-approved:false}") boolean payoutReady,
+        @Value("${CRAVES_MANUAL_SETTLEMENT_ENABLED:false}") boolean manualReady) {
+        this.jdbc=jdbc;this.json=json;this.financialSourceReady=sourceReady;this.postingEnabled=postingEnabled;this.payoutReady=payoutReady;this.manualReady=manualReady;
     }
     public View view(CravesPrincipal actor) {reader(actor);return current();}
     public View current() {
@@ -41,7 +46,8 @@ public class FinancePolicyService {
         if(!postingEnabled) result.add("JOURNAL_POSTING_DISABLED");
         if(policy.taxApprovalReference()==null || policy.chefFeeTaxTreatment()==FinancePolicy.FeeTaxTreatment.UNCONFIRMED)
             result.add("COMMISSION_GST_TREATMENT_AND_TAX_CLASSIFICATION_UNCONFIRMED");
-        if(!payoutReady) result.add("RAZORPAYX_ACCOUNT_PAYOUT_PERMISSION_NOT_CERTIFIED");
+        if(policy.automaticPayoutsEnabled() && !payoutReady) result.add("RAZORPAYX_ACCOUNT_PAYOUT_PERMISSION_NOT_CERTIFIED");
+        if(policy.manualWithdrawalsEnabled() && !payoutReady && !manualReady) result.add("MANUAL_SETTLEMENT_RUNTIME_NOT_CERTIFIED");
         return List.copyOf(result);
     }
     private View view(long revision,UUID id,FinancePolicy settings) {
@@ -66,7 +72,8 @@ public class FinancePolicyService {
         if(!candidate.contentHash().equals(request.expectedHash())) throw conflict("Reviewed policy hash differs");
         var policy=candidate.settings();
         if(policy.ledgerEnabled() && (!financialSourceReady || !postingEnabled)) throw conflict("Authoritative earning source and journal release gates are not certified");
-        if((policy.manualWithdrawalsEnabled() || policy.automaticPayoutsEnabled()) && !payoutReady) throw conflict("RazorpayX payout account activation has not been certified");
+        if(policy.automaticPayoutsEnabled() && !payoutReady) throw conflict("RazorpayX automatic payout activation has not been certified");
+        if(policy.manualWithdrawalsEnabled() && !payoutReady && !manualReady) throw conflict("Manual settlement runtime has not been certified");
         var previous=current().settings();
         if(previous.ledgerEnabled() && !previous.ledgerStartDate().equals(policy.ledgerStartDate())) throw conflict("An activated ledger start date cannot be moved through a policy edit");
         jdbc.update("UPDATE payment_schema.finance_policy_head SET policy_id=?,revision=revision+1,updated_at=now() WHERE singleton=true",id);

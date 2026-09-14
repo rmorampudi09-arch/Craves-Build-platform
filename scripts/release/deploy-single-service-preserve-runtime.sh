@@ -15,6 +15,9 @@ READY_ATTEMPTS=${READY_ATTEMPTS:-60}
 READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-5}
 STATUS_READ_FAILURE_LIMIT=${STATUS_READ_FAILURE_LIMIT:-4}
 DEPLOY_PREFLIGHT_ONLY=${DEPLOY_PREFLIGHT_ONLY:-false}
+# Opt in only from reviewed release pipelines; legacy callers and read-only
+# Academy baseline preflights retain their existing contract.
+REQUIRE_REVIEWED_DIGEST=${REQUIRE_REVIEWED_DIGEST:-false}
 
 fail() {
   echo "ERROR: $*" >&2
@@ -27,6 +30,13 @@ command -v sha256sum >/dev/null 2>&1 || fail 'sha256sum is required.'
 command -v curl >/dev/null 2>&1 || fail 'curl is required.'
 [[ "$DEPLOY_PREFLIGHT_ONLY" == true || "$DEPLOY_PREFLIGHT_ONLY" == false ]] \
   || fail 'DEPLOY_PREFLIGHT_ONLY must be true or false.'
+[[ "$REQUIRE_REVIEWED_DIGEST" == true || "$REQUIRE_REVIEWED_DIGEST" == false ]] \
+  || fail 'REQUIRE_REVIEWED_DIGEST must be true or false.'
+if [[ "$REQUIRE_REVIEWED_DIGEST" == true && "$DEPLOY_PREFLIGHT_ONLY" == false ]]; then
+  RELEASE_HELPERS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  bash "$RELEASE_HELPERS/verify-reviewed-service-source.sh"
+  bash "$RELEASE_HELPERS/verify-reviewed-service-image.sh" "$TARGET_IMAGE"
+fi
 
 runtime_template_hash() {
   local revision=$1

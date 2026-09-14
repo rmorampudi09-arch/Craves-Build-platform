@@ -22,6 +22,8 @@ public class SecurityConfig {
                 .requestMatchers("/internal/v1/customer-addresses/**").permitAll()
                 // This exact read-only operation verifies a separate short-lived HMAC in its controller.
                 .requestMatchers("/internal/v1/chef-bank/identity").permitAll()
+                // Dedicated Auth email HMAC; never published through a public API product.
+                .requestMatchers("/internal/v1/auth-email/projection").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class);

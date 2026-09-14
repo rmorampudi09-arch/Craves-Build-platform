@@ -16,7 +16,7 @@ class DocumentMigrationDbTest {
         var jdbc=new JdbcTemplate(data);
         jdbc.execute("DROP SCHEMA IF EXISTS notification_schema CASCADE");
         var flyway=Flyway.configure().dataSource(data).schemas("notification_schema").locations("classpath:db/migration").load();
-        assertEquals(6,flyway.migrate().migrationsExecuted);
+        assertEquals(7,flyway.migrate().migrationsExecuted);
         flyway.validate();
         assertEquals(0,flyway.migrate().migrationsExecuted);
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('notification_schema.pdf_document')::text",String.class));

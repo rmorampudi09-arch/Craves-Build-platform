@@ -1,0 +1,88 @@
+# Existing-resource configuration only. No image deployment, provider call, public
+# route publication, new resource, role assignment or scaling is performed.
+trigger: none
+pr: none
+lockBehavior: sequential
+parameters:
+  - name: applyConfiguration
+    type: boolean
+    default: false
+  - name: phase
+    type: string
+    default: provision
+    values: [provision, email-processing, email-capability, finance-processing, order-checkout]
+  - name: expectedReleaseSha
+    type: string
+    default: ''
+  - name: reviewedPlanRunId
+    type: string
+    default: ''
+  - name: preflightEvidenceSecureFile
+    type: string
+    default: ''
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+pool:
+  vmImage: ubuntu-latest
+steps:
+  - checkout: self
+    persistCredentials: false
+  - script: |
+      set -euo pipefail
+      python3 -m unittest discover -s scripts/launch -p 'test_*.py' -v
+      python3 -m unittest discover -s scripts/finance -p 'test_configure_bank_*.py' -v
+    displayName: Verify configuration guards without cloud or provider calls
+  - ${{ if ne(parameters.preflightEvidenceSecureFile, '') }}:
+    - task: DownloadSecureFile@1
+      name: preflightEvidence
+      inputs:
+        secureFile: ${{ parameters.preflightEvidenceSecureFile }}
+      displayName: Read approved redacted runtime and migration evidence
+  - ${{ if eq(parameters.applyConfiguration, true) }}:
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        buildType: specific
+        project: $(System.TeamProject)
+        definition: $(System.DefinitionId)
+        buildVersionToDownload: specific
+        pipelineId: ${{ parameters.reviewedPlanRunId }}
+        artifactName: public-launch-configuration
+        targetPath: $(Pipeline.Workspace)/reviewed-public-launch-plan
+      displayName: Read the immutable plan from the reviewed plan-only run
+  - task: AzureCLI@2
+    displayName: Plan or apply this one reviewed configuration phase
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        mkdir -p "$(Build.ArtifactStagingDirectory)/public-launch"
+        args=(--phase "$CONFIGURATION_PHASE" --expected-release-sha "$EXPECTED_RELEASE_SHA"
+              --output "$(Build.ArtifactStagingDirectory)/public-launch/public-launch-plan.json")
+        if [[ "$HAS_PREFLIGHT_EVIDENCE" == "true" ]]; then
+          args+=(--evidence "$PREFLIGHT_EVIDENCE_PATH")
+        fi
+        if [[ "${APPLY_CONFIGURATION,,}" == "true" ]]; then
+          [[ "$REVIEWED_PLAN_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'A specific reviewed plan-only run is required.' >&2; exit 1; }
+          args+=(--apply --approved-plan "$(Pipeline.Workspace)/reviewed-public-launch-plan/public-launch-plan.json")
+        fi
+        python3 scripts/launch/configure_public_launch.py "${args[@]}"
+    env:
+      APPLY_CONFIGURATION: ${{ parameters.applyConfiguration }}
+      CONFIGURATION_PHASE: ${{ parameters.phase }}
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REVIEWED_PLAN_RUN_ID: ${{ parameters.reviewedPlanRunId }}
+      ${{ if ne(parameters.preflightEvidenceSecureFile, '') }}:
+        HAS_PREFLIGHT_EVIDENCE: 'true'
+        PREFLIGHT_EVIDENCE_PATH: $(preflightEvidence.secureFilePath)
+      ${{ else }}:
+        HAS_PREFLIGHT_EVIDENCE: 'false'
+        PREFLIGHT_EVIDENCE_PATH: ''
+  - task: PublishPipelineArtifact@1
+    condition: succeededOrFailed()
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)/public-launch
+      artifact: public-launch-configuration
+    displayName: Retain redacted plans and per-app readbacks, including partial progress

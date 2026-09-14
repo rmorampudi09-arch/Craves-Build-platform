@@ -25,9 +25,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ChefPayoutService {
-    public record Payout(UUID id,String amount,String mode,String status,String providerStatus,String transferReference,Instant createdAt) {}
+    public record Payout(UUID id,String amount,String mode,String status,String providerStatus,String transferReference,Instant createdAt,String payoutChannel) {}
     public record Balance(String available,String outstanding,String reservedOrPaid,boolean onHold,
-        boolean manualRequestUsedToday,String nextManualRequestAt,List<Payout> recentPayouts,boolean executionEnabled) {}
+        boolean manualRequestUsedToday,String nextManualRequestAt,List<Payout> recentPayouts,boolean executionEnabled,String payoutMode) {}
     public record Withdrawal(UUID requestKey,String expectedAvailableAmount) {}
     public record Binding(String fundAccountId,String contactId,String bankOwnershipEvidence,String reason) {}
     public record Hold(boolean onHold,String reason) {}
@@ -36,8 +36,13 @@ public class ChefPayoutService {
     }
     private final JdbcTemplate jdbc;private final ObjectMapper json;private final FinancePolicyService policies;
     private final LedgerPostingService ledger;private final RazorpayXPayoutClient provider;
+    private final ManualChefSettlementService manual;
     public ChefPayoutService(JdbcTemplate jdbc,ObjectMapper json,FinancePolicyService policies,LedgerPostingService ledger,RazorpayXPayoutClient provider) {
-        this.jdbc=jdbc;this.json=json;this.policies=policies;this.ledger=ledger;this.provider=provider;
+        this(jdbc,json,policies,ledger,provider,null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public ChefPayoutService(JdbcTemplate jdbc,ObjectMapper json,FinancePolicyService policies,LedgerPostingService ledger,RazorpayXPayoutClient provider,ManualChefSettlementService manual) {
+        this.jdbc=jdbc;this.json=json;this.policies=policies;this.ledger=ledger;this.provider=provider;this.manual=manual;
     }
     /** Internal finalizer hook only. Never expose this as an admin-entered amount endpoint. */
     @Transactional
@@ -50,7 +55,7 @@ public class ChefPayoutService {
         if(source.size()!=1 || source.getFirst().signum()<=0) throw conflict("Verified earning journal does not establish this chef payable");
         if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.chef_earning_entry WHERE order_id=? AND status IN ('SETTLEMENT_PENDING','SETTLED','REVERSED'))",Boolean.class,order)))
             throw conflict("Legacy settlement or reversal already owns this order");
-        jdbc.update("INSERT INTO payment_schema.finance_chef_payout_control(chef_identity_id,hold_reason) VALUES (?,'Beneficiary verification required') ON CONFLICT DO NOTHING",chef);
+        jdbc.update("INSERT INTO payment_schema.finance_chef_payout_control(chef_identity_id,hold_reason,hold_kind) VALUES (?,'Beneficiary verification required','BANK_REQUIREMENT') ON CONFLICT DO NOTHING",chef);
         jdbc.update("INSERT INTO payment_schema.finance_payable(id,chef_identity_id,chef_order_id,journal_id,amount,delivered_at,automatic_due_at,manual_available_at,policy_snapshot) VALUES (?,?,?,?,?,?,?,?,CAST(? AS jsonb)) ON CONFLICT(chef_order_id) DO NOTHING",
             UUID.randomUUID(),chef,order,journal,source.getFirst(),Timestamp.from(deliveredAt),Timestamp.from(frozenPolicy.automaticDueAt(deliveredAt)),Timestamp.from(frozenPolicy.manualAvailableAt(deliveredAt)),encode(frozenPolicy));
         var existing=jdbc.queryForMap("SELECT chef_identity_id,journal_id,delivered_at,policy_snapshot::text AS policy FROM payment_schema.finance_payable WHERE chef_order_id=?",order);
@@ -59,18 +64,21 @@ public class ChefPayoutService {
     }
     public Balance balance(CravesPrincipal actor) {
         chef(actor);UUID id=actor.identityId();Instant now=Instant.now();LocalDate date=now.atZone(FinancePolicy.ZONE).toLocalDate();
-        boolean held=isHeld(id),used=usedDay(id,date);
+        boolean manualMode=manual!=null && manual.configured();
+        boolean held=manualMode?manual.held(id):isHeld(id),used=usedDay(id,date);
         BigDecimal available=sumAvailable(id,now,false);BigDecimal total=jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM payment_schema.finance_payable WHERE chef_identity_id=?",BigDecimal.class,id);
         BigDecimal allocated=jdbc.queryForObject("SELECT coalesce(sum(p.amount),0) FROM payment_schema.finance_payable p JOIN payment_schema.finance_payout_allocation a ON a.payable_id=p.id WHERE p.chef_identity_id=? AND a.active",BigDecimal.class,id);
         return new Balance(LedgerMoney.text(held?BigDecimal.ZERO:available),LedgerMoney.text(total.subtract(paidTotal(id))),LedgerMoney.text(allocated),held,used,
-            date.plusDays(1).atStartOfDay(FinancePolicy.ZONE).toInstant().toString(),listForChef(id),!held && policies.current().settings().manualWithdrawalsEnabled() && provider.ready());
+            date.plusDays(1).atStartOfDay(FinancePolicy.ZONE).toInstant().toString(),listForChef(id),!held && (manualMode?manual.enabled():policies.current().settings().manualWithdrawalsEnabled() && provider.ready()),manualMode?"CRAVES_MANUAL":"RAZORPAYX");
     }
     private BigDecimal paidTotal(UUID chef) {return jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? AND settlement_journal_id IS NOT NULL AND reversal_journal_id IS NULL",BigDecimal.class,chef);}
     private List<Payout> listForChef(UUID chef) {return jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? ORDER BY created_at DESC,id DESC LIMIT 100",this::map,chef);}
     public List<Payout> listAdmin(CravesPrincipal actor) {FinancePolicyService.reader(actor);return jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction ORDER BY created_at DESC,id DESC LIMIT 100",this::map);}
     @Transactional
     public Payout withdraw(CravesPrincipal actor,Withdrawal request) {
-        chef(actor);if(request==null || request.requestKey()==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A stable request UUID is required");
+        chef(actor);
+        if(manual!=null && manual.configured()) {var reserved=manual.reserveChef(actor,request);return get(reserved.id());}
+        if(request==null || request.requestKey()==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A stable request UUID is required");
         BigDecimal expected=LedgerMoney.parse(request.expectedAvailableAmount());lockChef(actor.identityId());
         var replay=jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? AND request_key=?",this::map,actor.identityId(),request.requestKey());
         if(!replay.isEmpty()) {
@@ -121,13 +129,13 @@ public class ChefPayoutService {
     @Transactional
     public void hold(CravesPrincipal actor,UUID chef,Hold request) {
         FinancePolicyService.operator(actor);String reason=FinancePolicyService.reason(request.reason());lockChef(chef);
-        if(jdbc.update("UPDATE payment_schema.finance_chef_payout_control SET on_hold=?,hold_reason=?,updated_at=now() WHERE chef_identity_id=?",request.onHold(),reason,chef)!=1) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Chef payout settings not found");
+        if(jdbc.update("UPDATE payment_schema.finance_chef_payout_control SET on_hold=?,hold_reason=?,hold_kind='OPERATIONAL',updated_at=now() WHERE chef_identity_id=?",request.onHold(),reason,chef)!=1) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Chef payout settings not found");
         audit(null,chef,request.onHold()?"HOLD":"RELEASE_HOLD",actor.identityId().toString(),reason);
     }
     @Transactional
     public Work claim() {
         if(!provider.ready()) return null;var policy=policies.current().settings();
-        var rows=jdbc.query("SELECT i.id FROM payment_schema.finance_payout_instruction i JOIN payment_schema.finance_chef_payout_control c ON c.chef_identity_id=i.chef_identity_id WHERE ((i.status='RESERVED' AND NOT c.on_hold AND payment_schema.finance_bank_ready(c.chef_identity_id,i.beneficiary_id) AND ((i.mode='MANUAL' AND ?) OR (i.mode='AUTOMATIC' AND ?))) OR (i.provider_id IS NOT NULL AND i.status IN ('PROCESSING','UNKNOWN','SUBMITTING'))) AND i.next_attempt_at<=now() AND (i.lease_until IS NULL OR i.lease_until<now()) ORDER BY i.next_attempt_at,i.id LIMIT 1 FOR UPDATE OF i SKIP LOCKED",
+        var rows=jdbc.query("SELECT i.id FROM payment_schema.finance_payout_instruction i JOIN payment_schema.finance_chef_payout_control c ON c.chef_identity_id=i.chef_identity_id WHERE i.payout_channel='RAZORPAYX' AND ((i.status='RESERVED' AND NOT c.on_hold AND payment_schema.finance_bank_ready(c.chef_identity_id,i.beneficiary_id) AND ((i.mode='MANUAL' AND ?) OR (i.mode='AUTOMATIC' AND ?))) OR (i.provider_id IS NOT NULL AND i.status IN ('PROCESSING','UNKNOWN','SUBMITTING'))) AND i.next_attempt_at<=now() AND (i.lease_until IS NULL OR i.lease_until<now()) ORDER BY i.next_attempt_at,i.id LIMIT 1 FOR UPDATE OF i SKIP LOCKED",
             (rs,n)->rs.getObject(1,UUID.class),policy.manualWithdrawalsEnabled(),policy.automaticPayoutsEnabled());
         if(rows.isEmpty()) return null;UUID id=rows.getFirst(),lease=UUID.randomUUID();
         jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status=CASE WHEN status='RESERVED' THEN 'SUBMITTING' ELSE status END,lease_id=?,lease_until=now()+interval '60 seconds',attempts=attempts+1,updated_at=now() WHERE id=?",lease,id);
@@ -138,6 +146,7 @@ public class ChefPayoutService {
     public void recordOutcome(Work work,RazorpayXPayoutClient.Receipt receipt) {
         lockChef(work.chef());var state=jdbc.queryForMap("SELECT * FROM payment_schema.finance_payout_instruction WHERE id=? FOR UPDATE",work.id());
         if(!work.leaseId().equals(state.get("lease_id"))) return;
+        if(!"RAZORPAYX".equals(state.get("payout_channel"))) throw conflict("Manual Craves settlement cannot accept provider outcomes");
         String previous=state.get("status").toString();if(Set.of("PAID","FAILED","REVERSED","REVIEW_REQUIRED").contains(previous)) return;
         String target=switch(receipt.status()) {case "processed"->"PAID";case "failed","cancelled","rejected"->"FAILED";case "reversed"->"REVERSED";default->"PROCESSING";};
         UUID journal=null;
@@ -166,14 +175,14 @@ public class ChefPayoutService {
     }
     @Transactional
     public void recoverStaleSubmissions() {
-        jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status='REVIEW_REQUIRED',last_error='CRASH_DURING_SUBMISSION',lease_id=NULL,lease_until=NULL,updated_at=now() WHERE status='SUBMITTING' AND provider_id IS NULL AND lease_until<now()");
+        jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status='REVIEW_REQUIRED',last_error='CRASH_DURING_SUBMISSION',lease_id=NULL,lease_until=NULL,updated_at=now() WHERE payout_channel='RAZORPAYX' AND status='SUBMITTING' AND provider_id IS NULL AND lease_until<now()");
     }
     private BigDecimal sumAvailable(UUID chef,Instant now,boolean automatic) {return jdbc.queryForObject("SELECT coalesce(sum(p.amount),0) FROM payment_schema.finance_payable p WHERE p.chef_identity_id=? AND "+(automatic?"automatic_due_at":"manual_available_at")+"<=? AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_payout_allocation a WHERE a.payable_id=p.id AND a.active)",BigDecimal.class,chef,Timestamp.from(now));}
     private boolean isHeld(UUID chef) {return jdbc.query("SELECT on_hold OR NOT payment_schema.finance_bank_ready(chef_identity_id,beneficiary_id) FROM payment_schema.finance_chef_payout_control WHERE chef_identity_id=?",(rs,n)->rs.getBoolean(1),chef).stream().findFirst().orElse(true);}
     private boolean usedDay(UUID chef,LocalDate day) {return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.finance_manual_withdrawal_day WHERE chef_identity_id=? AND business_date=?)",Boolean.class,chef,java.sql.Date.valueOf(day)));}
     private void lockChef(UUID chef) {jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",rs->{return null;},"chef-payout/"+chef);}
     private Payout get(UUID id) {return jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction WHERE id=?",this::map,id).getFirst();}
-    private Payout map(ResultSet rs,int n)throws SQLException {return new Payout(rs.getObject("id",UUID.class),LedgerMoney.text(rs.getBigDecimal("amount")),rs.getString("mode"),rs.getString("status"),rs.getString("provider_status"),rs.getString("transfer_reference"),rs.getTimestamp("created_at").toInstant());}
+    private Payout map(ResultSet rs,int n)throws SQLException {return new Payout(rs.getObject("id",UUID.class),LedgerMoney.text(rs.getBigDecimal("amount")),rs.getString("mode"),rs.getString("status"),rs.getString("provider_status"),rs.getString("transfer_reference"),rs.getTimestamp("created_at").toInstant(),rs.getString("payout_channel"));}
     private void audit(UUID payout,UUID chef,String action,String actor,String evidence) {jdbc.update("INSERT INTO payment_schema.finance_payout_audit(id,instruction_id,chef_identity_id,action,actor,evidence_reference) VALUES (?,?,?,?,?,?)",UUID.randomUUID(),payout,chef,action,actor,evidence);}
     private static void chef(CravesPrincipal actor) {if(actor==null || actor.identityId()==null || !actor.hasRole("CHEF"))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Chef role is required");}
     private String encode(Object value){try{return json.writeValueAsString(value);}catch(Exception e){throw new IllegalArgumentException("Invalid snapshot",e);}}

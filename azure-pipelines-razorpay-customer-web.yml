@@ -4,14 +4,18 @@ pr: none
 parameters:
   - name: targetEnvironment
     type: string
-    default: sandbox
+    default: production
     values: [sandbox, production]
   - name: confirmReplaceCurrentCustomerWeb
     type: boolean
     default: false
   - name: imageTag
     type: string
-    default: $(Build.BuildId)
+    default: $(Build.SourceVersion)
+
+  - name: expectedReleaseSha
+    type: string
+    default: NOT_SELECTED
 
 variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
@@ -27,6 +31,15 @@ pool:
 steps:
   - checkout: self
     clean: true
+  - bash: |
+      set -euo pipefail
+      [[ "$TARGET_ENVIRONMENT" == production ]] || { echo 'This existing production web target requires production payment mode.' >&2; exit 2; }
+      bash scripts/release/verify-reviewed-service-source.sh
+    displayName: Verify production target and exact reviewed source
+    env:
+      TARGET_ENVIRONMENT: ${{ parameters.targetEnvironment }}
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.imageTag }}
   - task: NodeTool@0
     inputs:
       versionSpec: 24.x
@@ -70,6 +83,9 @@ steps:
   - task: AzureCLI@2
     displayName: Build, deploy and verify Razorpay customer web
     env:
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.imageTag }}
+      TARGET_ENVIRONMENT: ${{ parameters.targetEnvironment }}
       NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: $(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: $(NEXT_PUBLIC_FIREBASE_PROJECT_ID)
@@ -83,9 +99,28 @@ steps:
       inlineScript: |
         set -euo pipefail
         set +x
-        previous=$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].image' -o tsv)
+        [[ "$TARGET_ENVIRONMENT" == production ]] || { echo 'Production payment mode is required.' >&2; exit 2; }
+        bash scripts/release/verify-reviewed-service-source.sh
+        umask 077
+        runtime_dir=$(mktemp -d)
+        trap 'rm -rf "$runtime_dir"' EXIT
+        read_runtime() {
+          az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' -o json > "$runtime_dir/app.json" || return 1
+          az containerapp revision list -g '$(resourceGroup)' -n '$(containerApp)' -o json > "$runtime_dir/revisions.json" || return 1
+          revision=$(jq -r '.properties.latestReadyRevisionName // empty' "$runtime_dir/app.json")
+          [[ -n "$revision" ]] || return 1
+          az containerapp replica list -g '$(resourceGroup)' -n '$(containerApp)' --revision "$revision" -o json > "$runtime_dir/replicas.json" || return 1
+        }
+        verify_runtime() {
+          python3 scripts/release/verify-customer-web-runtime.py "$1" \
+            --app "$runtime_dir/app.json" --revisions "$runtime_dir/revisions.json" \
+            --replicas "$runtime_dir/replicas.json" --baseline "$runtime_dir/baseline.json" "${@:2}"
+        }
+        read_runtime
+        verify_runtime capture
+        previous=$(jq -r '.image' "$runtime_dir/baseline.json")
         login=$(az acr show -g '$(resourceGroup)' -n '$(acrName)' --query loginServer -o tsv)
-        image="$login/$(imageRepository):${{ parameters.imageTag }}"
+        image="$login/$(imageRepository):$REQUESTED_IMAGE_TAG"
         az acr login -n '$(acrName)'
         docker build \
           --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="$NEXT_PUBLIC_FIREBASE_API_KEY" \
@@ -96,17 +131,28 @@ steps:
           --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
           --build-arg NEXT_PUBLIC_RAZORPAY_MODE='${{ parameters.targetEnvironment }}' \
           --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false \
-          --label org.opencontainers.image.revision='$(Build.SourceVersion)' \
+          --label "org.opencontainers.image.revision=$EXPECTED_RELEASE_SHA" \
           -t "$image" '$(appPath)'
+        local_image_id=$(docker image inspect "$image" --format '{{.Id}}')
         docker push "$image"
-        az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' --image "$image" \
-          --set-env-vars NEXT_PUBLIC_RAZORPAY_MODE='${{ parameters.targetEnvironment }}' >/dev/null
+        image=$(bash scripts/release/resolve-reviewed-service-image.sh '$(acrName)' '$(imageRepository)' "$local_image_id")
+        bash scripts/release/verify-reviewed-service-source.sh
+        bash scripts/release/verify-reviewed-service-image.sh "$image"
+        read_runtime
+        verify_runtime guard
+        az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' --image "$image" >/dev/null
         fqdn=$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.configuration.ingress.fqdn -o tsv)
         for _ in $(seq 1 30); do
+          if ! read_runtime || ! verify_runtime verify --expected-image "$image"; then
+            sleep 10
+            continue
+          fi
           readiness=$(curl -fsS --max-time 20 "https://${fqdn}/api/readiness/razorpay" 2>/dev/null || true)
           [[ "$(jq -r '.razorpayMode // empty' <<<"$readiness")" == '${{ parameters.targetEnvironment }}' ]] && exit 0
           sleep 10
         done
-        echo 'Razorpay customer web verification failed; restoring previous image.' >&2
+        echo 'Razorpay customer web verification failed; checking safe image-only recovery.' >&2
+        az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' -o json > "$runtime_dir/app.json"
+        verify_runtime rollback-allowed --expected-image "$image"
         az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' --image "$previous" >/dev/null
         exit 2

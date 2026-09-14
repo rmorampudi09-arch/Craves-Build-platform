@@ -33,6 +33,12 @@ elif a[:2]==['apim','show']:
 elif a[:3]==['containerapp','replica','list']:emit([{}])
 elif a[:2]==['containerapp','show']:
  name=a[a.index('-n')+1]; admin='admin-web' in name
+ if not admin:
+  assert '--query' in a, 'Backend inventory must use a projection'
+  projection=a[a.index('--query')+1]
+  assert 'secrets' not in projection and 'identity' not in projection, 'Unneeded backend credentials/configuration requested'
+  if 'containers' in projection:
+   assert 'env[?name==`"CRAVES_ADMIN_EXPLORER_ENABLED"`]' in projection, 'Unrelated backend environment values requested'
  settings=[{'name':'CRAVES_ADMIN_PORTAL','value':'true'},{'name':'CRAVES_API_BASE_URL','value':'https://api.example.test/api/v1'}] if admin else [{'name':'CRAVES_ADMIN_EXPLORER_ENABLED','value':'false' if case=='disabled' else 'true'}]
  emit({'properties':{'latestRevisionName':'ready','latestReadyRevisionName':'ready','runningStatus':'Running','configuration':{'activeRevisionsMode':'Multiple' if case=='admin-mode' and admin else 'Single','ingress':{'fqdn':name+'.fixture.azurecontainerapps.io'}},'template':{'scale':{'minReplicas':1,'maxReplicas':2 if case=='replicas' else 1},'containers':[{'image':'fixture.azurecr.io/craves/'+name+(':'+sha if case=='mutable-backend' and not admin else '@'+digest),'env':settings}]}}})
 elif a[:1]==['rest']:

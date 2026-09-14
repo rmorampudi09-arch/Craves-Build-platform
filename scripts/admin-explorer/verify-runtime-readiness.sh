@@ -75,7 +75,9 @@ apps=(ca-craves-auth-service-prodlow ca-craves-user-chef-service-prod ca-craves-
 domains=(users chefs orders)
 for i in 0 1 2; do
   app="${apps[$i]}"; domain="${domains[$i]}"
-  az containerapp show -g "$RG" -n "$app" -o json >"$TMP/app.json"
+  # Backend inventory needs only health, image, replica limits and the Explorer flag.
+  # Do not persist unrelated environment values (for example telemetry credentials).
+  az containerapp show -g "$RG" -n "$app" --query '{properties:{latestRevisionName:properties.latestRevisionName,latestReadyRevisionName:properties.latestReadyRevisionName,runningStatus:properties.runningStatus,configuration:{activeRevisionsMode:properties.configuration.activeRevisionsMode,ingress:{fqdn:properties.configuration.ingress.fqdn}},template:{scale:properties.template.scale,containers:properties.template.containers[].{image:image,env:env[?name==`"CRAVES_ADMIN_EXPLORER_ENABLED"`].{name:name,value:value}}}}}' -o json >"$TMP/app.json"
   jq -e '.properties.latestRevisionName == .properties.latestReadyRevisionName
     and .properties.latestRevisionName != null and .properties.runningStatus == "Running"
     and .properties.configuration.activeRevisionsMode == "Single"

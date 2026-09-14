@@ -1,0 +1,154 @@
+name: Admin Analytics Explorer CI
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - apps/customer-web-next/**
+      - services/auth-service/**
+      - services/user-chef-service/**
+      - services/order-service/**
+      - scripts/admin-explorer/**
+      - infra/apim/admin-explorer/**
+      - scripts/apim/configure-admin-explorer-apim.sh
+      - .github/workflows/admin-explorer-ci.yml
+      - azure-pipelines-admin-dashboard.yml
+  push:
+    branches: [main]
+    paths:
+      - apps/customer-web-next/**
+      - services/auth-service/**
+      - services/user-chef-service/**
+      - services/order-service/**
+      - scripts/admin-explorer/**
+      - infra/apim/admin-explorer/**
+      - scripts/apim/configure-admin-explorer-apim.sh
+      - .github/workflows/admin-explorer-ci.yml
+      - azure-pipelines-admin-dashboard.yml
+permissions:
+  contents: read
+concurrency:
+  group: admin-explorer-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  postgres:
+    name: Explorer PostgreSQL — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth, user-chef, order]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: craves_explorer_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d craves_explorer_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      EXPLORER_TEST_DB_URL: jdbc:postgresql://127.0.0.1:5432/craves_explorer_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Shared-source parity and route binding
+        run: python3 scripts/admin-explorer/verify-source.py
+      - name: Real PostgreSQL query, paging, audit and authorization tests
+        working-directory: services/${{ matrix.service }}-service
+        run: mvn -B -ntp -Dtest='ExplorerQueryTest,ExplorerPostgresTest,AdminExplorerControllerTest' test
+      - name: Require database tests without skips
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, xml.etree.ElementTree as ET
+          p=pathlib.Path('services')/(os.environ['SERVICE']+'-service')/'target/surefire-reports/TEST-in.craves.adminexplorer.ExplorerPostgresTest.xml'
+          r=ET.parse(p).getroot()
+          assert int(r.attrib['tests']) >= 9, r.attrib
+          assert all(int(r.attrib.get(k,'0')) == 0 for k in ('failures','errors','skipped')), r.attrib
+          print('PostgreSQL fixture suite passed without skips:',r.attrib['tests'])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: explorer-postgres-${{ matrix.service }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: services/${{ matrix.service }}-service/target/surefire-reports/
+          retention-days: 14
+  web:
+    name: Explorer web and browser acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CRAVES_API_BASE_URL: https://example.invalid/api/v1
+      CRAVES_ADMIN_PORTAL: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - name: Full Next.js checks
+        working-directory: apps/customer-web-next
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+      - name: Install isolated browser test runner
+        run: |
+          mkdir -p "$RUNNER_TEMP/craves-browser"
+          npm install --prefix "$RUNNER_TEMP/craves-browser" --no-audit --no-fund --ignore-scripts playwright@1.55.0
+          "$RUNNER_TEMP/craves-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Start local-only web app
+        working-directory: apps/customer-web-next
+        run: |
+          PORT=3100 HOSTNAME=127.0.0.1 npm run start > /tmp/craves-explorer-web.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3100/sign-in >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/craves-explorer-web.log
+          exit 1
+      - name: Graph drill-through, rows, keyboard and responsive fixtures
+        env:
+          PLAYWRIGHT_MODULE_ROOT: ${{ runner.temp }}/craves-browser/package.json
+        run: node scripts/admin-explorer/browser-smoke.mjs
+      - name: Exact tested source
+        if: always()
+        run: |
+          git rev-parse HEAD > explorer-tested-sha.txt
+          git archive --format=zip --output=explorer-tested-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: explorer-web-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            explorer-tested-sha.txt
+            explorer-tested-source.zip
+            explorer-browser-evidence/
+            /tmp/craves-explorer-web.log
+          retention-days: 14
+  contracts:
+    name: Explorer release contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - run: python3 scripts/admin-explorer/verify-source.py
+      - run: bash -n scripts/apim/configure-admin-explorer-apim.sh
+      - run: bash -n scripts/admin-explorer/verify-runtime-readiness.sh
+      - run: python3 scripts/admin-explorer/test-runtime-readiness.py

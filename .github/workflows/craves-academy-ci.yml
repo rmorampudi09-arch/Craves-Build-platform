@@ -44,21 +44,54 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Curriculum provenance, projection and release-scope gates
+      - name: Curriculum provenance, projection and guard regression
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/academy-delivery"
           python3 scripts/academy/verify-curriculum.py --git --output "$RUNNER_TEMP/academy-delivery/curriculum-public.json" | tee "$RUNNER_TEMP/academy-delivery/verification.json"
           python3 scripts/academy/test-release-guard.py
-          python3 scripts/academy/release-guard.py source | tee "$RUNNER_TEMP/academy-delivery/release-scope.json"
           git rev-parse HEAD > "$RUNNER_TEMP/academy-delivery/source-sha.txt"
+      - name: Enforce historical Academy-only publication scope
+        if: github.head_ref == 'feat/craves-academy-20260913' || github.ref == 'refs/heads/feat/craves-academy-20260913'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/academy/release-guard.py source | tee "$RUNNER_TEMP/academy-delivery/release-scope.json"
+      - name: Label broader release evidence as Academy regression only
+        if: github.head_ref != 'feat/craves-academy-20260913' && github.ref != 'refs/heads/feat/craves-academy-20260913'
+        shell: python
+        run: |
+          import json, os, pathlib, subprocess
+          evidence = {
+            'sourceSha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+            'scope': 'academy-regression-within-broader-release',
+            'academyOnlyPublicationApproved': False,
+            'requiredReview': 'Full release review of all Auth changes and migrations; normal merge and environment approvals',
+          }
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'academy-delivery' / 'release-scope.json'
+          path.write_text(json.dumps(evidence, indent=2) + '\n')
       - run: mvn -B -f services/auth-service/pom.xml -Dtest=AcademyCoreTest,AcademyPersistenceTest test
+      - name: Require Academy core and real database suites without skipped cases
+        shell: python
+        run: |
+          import pathlib, xml.etree.ElementTree as ET
+          required = {'AcademyCoreTest', 'AcademyPersistenceTest'}
+          seen = set()
+          for path in pathlib.Path('services/auth-service/target/surefire-reports').glob('TEST-*.xml'):
+            suite = ET.parse(path).getroot()
+            name = suite.attrib['name'].rsplit('.', 1)[-1]
+            if name in required:
+              assert int(suite.attrib['tests']) > 0, (name, 'empty suite')
+              assert all(int(suite.attrib.get(k, 0)) == 0 for k in ['failures', 'errors', 'skipped']), (name, 'not green')
+              seen.add(name)
+          assert seen == required, ('missing Academy suites', required - seen)
       - name: Package the complete tracked Academy module and its existing release helper
         shell: bash
         run: |
@@ -94,6 +127,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '24'

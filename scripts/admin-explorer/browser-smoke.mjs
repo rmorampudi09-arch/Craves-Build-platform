@@ -43,7 +43,11 @@ try{
  await page.getByPlaceholder(/For example: Review onboarding/).fill('Review synthetic onboarding and order activity');
  await ribbon();await page.screenshot({path:`${output}/01-analytics-desktop.png`,fullPage:true});
  // A real graph button navigates to a filtered list and retains the in-memory read purpose.
- await page.getByRole('button',{name:/Active: 32/}).click();
+ const segment=page.getByRole('button',{name:/Active: 32/});
+ await segment.evaluate(el=>el.scrollIntoView({block:'center'}));
+ // A doughnut segment's bounding-box center may be in the empty hole. Hit its painted mid-arc.
+ const hit=await segment.evaluate(el=>{const svg=el.ownerSVGElement;const b=svg.getBoundingClientRect();const angle=(32/65)*Math.PI-Math.PI/2;return {x:b.x+(110+75*Math.cos(angle))*b.width/220,y:b.y+(110+75*Math.sin(angle))*b.height/220};});
+ await page.mouse.click(hit.x,hit.y);
  await page.getByRole('heading',{name:'Users explorer',exact:true}).waitFor();
  await page.getByRole('table').waitFor();assert.equal(await page.getByLabel('Current status',{exact:true}).inputValue(),'ACTIVE');
  assert.ok(queries.some(q=>q.dataset==='users'&&q.mode==='records'&&q.status==='ACTIVE'));
@@ -55,6 +59,12 @@ try{
  assert.ok(await page.getByRole('link',{name:/Open audited identity lookup/}).count());
  await ribbon();await page.screenshot({path:`${output}/02-users-detail-desktop.png`,fullPage:false});
  await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0);
+ await page.getByRole('button',{name:'Reset all filters',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.ex-metrics-row strong')?.textContent==='65');
+ // Creation bars apply their exact date window to the real list route.
+ await page.getByRole('button',{name:'2026-09-10 to 2026-09-10: 30 records. Open this period.',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.ex-metrics-row strong')?.textContent==='30');
+ assert.equal(await page.getByLabel('Created from',{exact:true}).inputValue(),'2026-09-10');
+ assert.ok(queries.some(q=>q.dataset==='users'&&q.fromDate==='2026-09-10'&&q.toDate==='2026-09-10'&&q.mode==='records'));
  await page.getByRole('button',{name:'Reset all filters',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.ex-metrics-row strong')?.textContent==='65');
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Export aggregates',exact:true}).click();await (await download).saveAs(`${output}/aggregate-fixture.csv`);
  await page.getByLabel('Search all matching records',{exact:true}).fill('not-a-real-fixture');await page.getByRole('button',{name:'Apply & show records',exact:true}).click();await page.getByText('No matching records on this page',{exact:true}).waitFor();
@@ -71,6 +81,6 @@ try{
  await page.setViewportSize({width:1440,height:1100});
  deny=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByRole('alert').filter({hasText:'Platform or audit'}).waitFor();assert.equal(await page.locator('.ex-table tbody tr').count(),0);
  assert.deepEqual(errors,[]);
- await writeFile(`${output}/result.json`,JSON.stringify({passed:true,scope:'Synthetic BFF fixtures only; no production authentication or service calls',assertions:['graph-to-status filter','purpose preserved','complete-list pagination','record drawer and Escape','aggregate export','empty search','chef and order endpoint binding','320/390/768/1024/1440 width checks','mobile navigation','permission denial clears records'],requests:queries.length,pageErrors:errors},null,2));
+ await writeFile(`${output}/result.json`,JSON.stringify({passed:true,scope:'Synthetic BFF fixtures only; no production authentication or service calls',assertions:['graph-to-status filter','trend-bar-to-date filter','purpose preserved','complete-list pagination','record drawer and Escape','aggregate export','empty search','chef and order endpoint binding','320/390/768/1024/1440 width checks','mobile navigation','permission denial clears records'],requests:queries.length,pageErrors:errors},null,2));
 }catch(error){await page.screenshot({path:`${output}/failure.png`,fullPage:true}).catch(()=>{});await writeFile(`${output}/failure.json`,JSON.stringify({message:String(error),pageErrors:errors,queries},null,2));throw error;}
 finally{await context.close();await browser.close();}

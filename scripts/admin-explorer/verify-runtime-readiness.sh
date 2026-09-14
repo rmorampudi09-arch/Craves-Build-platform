@@ -31,7 +31,7 @@ python3 "$ROOT/scripts/admin-explorer/verify-runtime-policy.py" inherited "$TMP/
 optional_policy(){
   if az rest --method get --url "$1" --query properties.value -o tsv >"$2" 2>"$TMP/policy-error"; then
     python3 "$ROOT/scripts/admin-explorer/verify-runtime-policy.py" inherited "$2"
-  elif python3 -c 'import pathlib,re,sys; sys.exit(0 if re.search(r"\(ResourceNotFound\)|Code: ResourceNotFound",pathlib.Path(sys.argv[1]).read_text()) else 1)' "$TMP/policy-error"; then
+  elif python3 -c 'import pathlib,re,sys; sys.exit(0 if re.search(r"\(ResourceNotFound\)|Code: ResourceNotFound|\"code\"\s*:\s*\"ResourceNotFound\"",pathlib.Path(sys.argv[1]).read_text()) else 1)' "$TMP/policy-error"; then
     : # An absent scoped policy inherits its already checked parent.
   else fail 'Inherited policy inventory is incomplete.'; fi
 }

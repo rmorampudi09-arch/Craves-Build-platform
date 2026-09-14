@@ -35,17 +35,20 @@ public class ChefApplicationService {
     private final BlobDocumentStorageService storageService;
     private final AuthInternalClient authInternalClient;
     private final NotificationInternalClient notificationInternalClient;
+    private final in.craves.userchef.email.AuthEmailProjectionService emailProjection;
 
     public ChefApplicationService(
         JdbcTemplate jdbcTemplate,
         BlobDocumentStorageService storageService,
         AuthInternalClient authInternalClient,
-        NotificationInternalClient notificationInternalClient
+        NotificationInternalClient notificationInternalClient,
+        in.craves.userchef.email.AuthEmailProjectionService emailProjection
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.storageService = storageService;
         this.authInternalClient = authInternalClient;
         this.notificationInternalClient = notificationInternalClient;
+        this.emailProjection = emailProjection;
     }
 
     public ChefApplicationResponse getMyApplication(CurrentUser user) {
@@ -58,6 +61,8 @@ public class ChefApplicationService {
 
     @Transactional
     public ChefApplicationResponse submitApplication(CurrentUser user, ChefApplicationRequest request) {
+        emailProjection.lockIdentity(user.identityId());
+        String canonicalEmail = authInternalClient.requireVerifiedEmail(user.identityId(), request.email());
         List<String> statuses = jdbcTemplate.query(
             "SELECT status FROM chef_application WHERE identity_id = ?",
             (rs, rowNum) -> rs.getString("status"),
@@ -71,7 +76,7 @@ public class ChefApplicationService {
             jdbcTemplate.update(
                 "INSERT INTO chef_application (id, identity_id, phone_number, email, first_name, last_name, address_line1, address_line2, landmark, city, state, postal_code, latitude, longitude, status, submitted_at, created_at, updated_at) " +
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', now(), now(), now())",
-                UUID.randomUUID(), user.identityId(), user.phoneNumber(), request.email(), request.firstName(),
+                UUID.randomUUID(), user.identityId(), user.phoneNumber(), canonicalEmail, request.firstName(),
                 request.lastName(), request.addressLine1(), blankToNull(request.addressLine2()),
                 blankToNull(request.landmark()), request.city(), request.state(), blankToNull(request.postalCode()),
                 request.latitude(), request.longitude()
@@ -79,7 +84,7 @@ public class ChefApplicationService {
         } else {
             jdbcTemplate.update(
                 "UPDATE chef_application SET phone_number = ?, email = ?, first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, landmark = ?, city = ?, state = ?, postal_code = ?, latitude = ?, longitude = ?, status = 'PENDING', rejection_reason = NULL, reviewed_at = NULL, reviewed_by_identity_id = NULL, submitted_at = now(), updated_at = now() WHERE identity_id = ?",
-                user.phoneNumber(), request.email(), request.firstName(), request.lastName(), request.addressLine1(),
+                user.phoneNumber(), canonicalEmail, request.firstName(), request.lastName(), request.addressLine1(),
                 blankToNull(request.addressLine2()), blankToNull(request.landmark()), request.city(), request.state(),
                 blankToNull(request.postalCode()), request.latitude(), request.longitude(), user.identityId()
             );
@@ -165,6 +170,13 @@ public class ChefApplicationService {
         if (application.status() != ChefApplicationStatus.PENDING) {
             throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be approved");
         }
+        emailProjection.lockIdentity(application.identityId());
+        // Re-read after the projection lock: an email replacement may have synchronized while review was opened.
+        application = getApplicationForAdmin(admin, applicationId);
+        if (application.status() != ChefApplicationStatus.PENDING) {
+            throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be approved");
+        }
+        authInternalClient.requireVerifiedEmail(application.identityId(), application.email());
         requireCompleteApplicationDocuments(applicationId);
         updateDecision(applicationId, admin.identityId(), "APPROVED", null);
         authInternalClient.grantChefRole(application.identityId(), applicationId);

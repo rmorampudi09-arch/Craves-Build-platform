@@ -28,7 +28,7 @@ public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
         throws ServletException, IOException {
-        if (request.getRequestURI().startsWith("/api/v1/auth/")) {
+        if (request.getRequestURI().startsWith("/api/v1/auth/") || request.getRequestURI().startsWith("/internal/v1/identities/")) {
             response.setHeader("Cache-Control", "private, no-store");
             response.setHeader("Vary", "Authorization");
         }

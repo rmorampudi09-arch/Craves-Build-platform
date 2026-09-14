@@ -29,9 +29,12 @@ public class CustomerProfileService {
     private static final BigDecimal MAX_LONGITUDE = new BigDecimal("180");
 
     private final JdbcTemplate jdbcTemplate;
+    private final AuthInternalClient auth;
+    private final in.craves.userchef.email.AuthEmailProjectionService emailProjection;
 
-    public CustomerProfileService(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    public CustomerProfileService(JdbcTemplate jdbcTemplate, AuthInternalClient auth,
+        in.craves.userchef.email.AuthEmailProjectionService emailProjection) {
+        this.jdbcTemplate = jdbcTemplate; this.auth = auth; this.emailProjection = emailProjection;
     }
 
     public CustomerProfileResponse getProfile(CurrentUser user) {
@@ -48,6 +51,10 @@ public class CustomerProfileService {
 
     @Transactional
     public CustomerProfileResponse upsertProfile(CurrentUser user, CustomerProfileRequest request) {
+        emailProjection.lockIdentity(user.identityId());
+        String canonicalEmail = StringUtils.hasText(request.email()) ? auth.requireVerifiedEmail(user.identityId(), request.email()) : null;
+        String projectedEmail = emailProjection.projectedEmail(user.identityId());
+        if (canonicalEmail == null) canonicalEmail = projectedEmail;
         List<UUID> existing = jdbcTemplate.query(
             "SELECT id FROM customer_profile WHERE identity_id = ?",
             (rs, rowNum) -> rs.getObject("id", UUID.class),
@@ -64,16 +71,16 @@ public class CustomerProfileService {
                 user.phoneNumber(),
                 request.firstName(),
                 request.lastName(),
-                blankToNull(request.email())
+                canonicalEmail
             );
         } else {
             jdbcTemplate.update(
-                "UPDATE customer_profile SET registered_phone_number = ?, first_name = ?, last_name = ?, email = ?, updated_at = now() " +
+                "UPDATE customer_profile SET registered_phone_number = ?, first_name = ?, last_name = ?, email = COALESCE(?, email), updated_at = now() " +
                     "WHERE identity_id = ?",
                 user.phoneNumber(),
                 request.firstName(),
                 request.lastName(),
-                blankToNull(request.email()),
+                canonicalEmail,
                 user.identityId()
             );
         }

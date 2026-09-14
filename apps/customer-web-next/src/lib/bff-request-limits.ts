@@ -41,9 +41,13 @@ export async function boundBffRequest(request: NextRequest, options: { maxBytes?
     const headers = new Headers(request.headers);
     headers.delete("transfer-encoding");
     headers.set("content-length", String(bytes.byteLength));
-    return new NextRequest(request, {
+    // Server adapters can supply a Request from a different runtime constructor.
+    // Passing that object to NextRequest can drop its method and default to GET.
+    return new NextRequest(request.url, {
+      method: request.method,
       headers,
       body: bytes.buffer as ArrayBuffer,
+      signal: request.signal,
     });
   } catch (error) {
     if (error instanceof DocumentTransportError) {

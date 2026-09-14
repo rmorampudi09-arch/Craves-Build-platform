@@ -49,7 +49,7 @@ public class BankOnboardingService {
     }
     public Status submit(CravesPrincipal actor, Submission request) {
         requireIdentity(actor);
-        if(!available()) throw unavailable("Bank enrollment is not currently available. Eligible payouts are processed manually by Craves.");
+        if(!available()) throw unavailable("Bank enrollment is not currently available. Check your finance balance for eligible payout options.");
         var identity=applicants.fetch(actor.identityId());
         var details=BankOnboardingModels.details(request,identity);
         return availability(tx.execute(s->save(actor.identityId(),request,details)));
@@ -211,7 +211,7 @@ public class BankOnboardingService {
     private Status availability(Status status) {
         boolean ready=available();
         return new Status(status.id(),status.state(),status.lastFour(),status.ifsc(),status.bankValidated(),status.applicationApproved(),ready,
-            ready?status.message():"Eligible payouts are currently processed manually by Craves. Automatic bank enrollment is unavailable.",status.updatedAt());
+            ready?status.message():"Automatic bank enrollment is currently unavailable. Check your finance balance for eligible payout options.",status.updatedAt());
     }
     private Status get(UUID id) {return jdbc.query("SELECT * FROM payment_schema.finance_bank_request WHERE id=?",this::mapStatus,id).getFirst();}
     private Status mapStatus(ResultSet rs,int n)throws SQLException {

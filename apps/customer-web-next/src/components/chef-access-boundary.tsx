@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import {
+  captureSessionContext,
+  getSession,
+  isSessionContextCurrent,
+  isSessionReady,
   loadSession,
+  subscribeSession,
   synchronizeSessionRoles,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
@@ -11,40 +16,62 @@ import {
 type AccessState = "synchronizing" | "ready" | "sign-in" | "not-approved";
 
 function hasChefRole(user: CravesUser | null): boolean {
-  return Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF"));
+  return Boolean(user?.status === "ACTIVE" && user.roles.some((role) => role.toUpperCase() === "CHEF"));
 }
 
+function accessScope(): string {
+  const context = captureSessionContext();
+  return JSON.stringify([context.generation, context.identityId, hasChefRole(getSession()), isSessionReady()]);
+}
+const serverScope = () => "server";
+
 export function ChefAccessBoundary({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AccessState>("synchronizing");
+  const scope = useSyncExternalStore(subscribeSession, accessScope, serverScope);
+  const [access, setAccess] = useState<{ scope: string; state: AccessState }>({ scope: "server", state: "synchronizing" });
 
   useEffect(() => {
     let active = true;
     void (async () => {
+      const initial = captureSessionContext();
       const current = await loadSession();
       if (!active) return;
+      // Initial /me may establish an owner. An existing owner's logout or
+      // replacement invalidates all work started under that session generation.
+      if (initial.identityId !== null && !isSessionContextCurrent(initial)) return;
       if (!current) {
-        setState("sign-in");
+        setAccess({ scope: accessScope(), state: "sign-in" });
+        return;
+      }
+      if (getSession()?.id !== current.id) return;
+      if (!isSessionReady()) {
+        setAccess({ scope: accessScope(), state: "sign-in" });
         return;
       }
       if (!hasChefRole(current)) {
-        setState("not-approved");
+        setAccess({ scope: accessScope(), state: "not-approved" });
         return;
       }
 
       // Auth /me reads the current database roles. Rotate the HTTP-only token
       // before calling Catalog or Order so its signed JWT carries CHEF too.
+      const established = captureSessionContext();
       const synchronized = await synchronizeSessionRoles();
-      if (!active) return;
-      setState(hasChefRole(synchronized) ? "ready" : "sign-in");
+      if (!active || !isSessionContextCurrent(established) || getSession()?.id !== current.id) return;
+      setAccess({ scope: accessScope(), state: isSessionReady() && synchronized?.id === current.id && hasChefRole(synchronized) ? "ready" : "sign-in" });
     })().catch(() => {
-      if (active) setState("sign-in");
+      if (active) setAccess({ scope, state: "sign-in" });
     });
     return () => {
       active = false;
     };
-  }, []);
+  }, [scope]);
 
-  if (state === "ready") return children;
+  const state = access.scope === scope ? access.state : "synchronizing";
+  if (state === "ready" && isSessionReady() && hasChefRole(getSession())) {
+    // Reset private forms and request receipts on owner/session changes, while
+    // preserving local work during healthy same-owner email/profile updates.
+    return <Fragment key={scope}>{children}</Fragment>;
+  }
 
   return (
     <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950">

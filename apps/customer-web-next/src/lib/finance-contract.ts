@@ -20,12 +20,13 @@ export type FinanceView = z.infer<typeof financeViewSchema>;
 export const draftSchema = z.object({id: z.string().uuid(), contentHash: z.string().regex(/^[0-9a-f]{64}$/), settings: financeSettingsSchema});
 export const payoutSchema = z.object({
   id: z.string().uuid(), amount: moneySchema, mode: z.enum(["MANUAL", "AUTOMATIC"]),
-  status: z.enum(["RESERVED", "SUBMITTING", "PROCESSING", "UNKNOWN", "PAID", "FAILED", "REVERSED", "REVIEW_REQUIRED"]),
+  status: z.enum(["RESERVED", "SUBMITTING", "PROCESSING", "UNKNOWN", "PAID", "FAILED", "REVERSED", "REVIEW_REQUIRED", "CANCELLED"]),
+  payoutChannel: z.enum(["RAZORPAYX", "CRAVES_MANUAL"]).default("RAZORPAYX"),
   providerStatus: z.string().nullable(), transferReference: z.string().nullable(), createdAt: z.string().datetime(),
 });
 export const chefBalanceSchema = z.object({
   available: moneySchema, outstanding: moneySchema, reservedOrPaid: moneySchema, onHold: z.boolean(),
-  manualRequestUsedToday: z.boolean(), nextManualRequestAt: z.string().datetime(), recentPayouts: z.array(payoutSchema), executionEnabled: z.boolean(),
+  manualRequestUsedToday: z.boolean(), nextManualRequestAt: z.string().datetime(), recentPayouts: z.array(payoutSchema), executionEnabled: z.boolean(), payoutMode: z.enum(["RAZORPAYX", "CRAVES_MANUAL"]).default("RAZORPAYX"),
 });
 export type ChefBalance = z.infer<typeof chefBalanceSchema>;
 export const subscriptionPreviewSchema = z.object({total: moneySchema, simulation: z.literal(true), notice: z.string(),

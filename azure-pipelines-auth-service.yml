@@ -15,15 +15,15 @@ parameters:
     type: string
     default: ca-craves-auth-service-prodlow
   - name: imageTag
-    displayName: Immutable image tag (Academy mode uses the exact source SHA)
+    displayName: Image tag (must equal the full reviewed source SHA)
     type: string
-    default: $(Build.BuildId)
+    default: $(Build.SourceVersion)
   - name: academyPublication
     displayName: Guarded Academy-only curriculum publication
     type: boolean
     default: false
   - name: expectedReleaseSha
-    displayName: Exact reviewed commit for Academy publication
+    displayName: Exact reviewed commit for this release
     type: string
     default: NOT_SELECTED
   - name: academyBaselineSourceSha
@@ -65,6 +65,12 @@ steps:
         TARGET_ACR: ${{ parameters.acrName }}
         TARGET_APP: ${{ parameters.containerAppName }}
 
+  - bash: bash scripts/release/verify-reviewed-service-source.sh
+    displayName: Verify exact reviewed checkout and image tag
+    env:
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.imageTag }}
+
   - task: JavaToolInstaller@0
     displayName: Use Java 21
     inputs:
@@ -104,18 +110,24 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        set +x
+        bash scripts/release/verify-reviewed-service-source.sh
         ACR='${{ parameters.acrName }}'
-        TAG='${{ parameters.imageTag }}'
+        TAG="$REQUESTED_IMAGE_TAG"
         IMAGE_REPOSITORY='$(imageRepository)'
-        if [[ "$ACADEMY_PUBLICATION" == True || "$ACADEMY_PUBLICATION" == true ]]; then TAG='$(Build.SourceVersion)'; fi
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
         [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG"
         az acr login --name "$ACR" --only-show-errors
-        docker build --pull -t "$IMAGE" "$(modulePath)"
+        docker build --pull --label "org.opencontainers.image.revision=$EXPECTED_RELEASE_SHA" -t "$IMAGE" "$(modulePath)"
+        LOCAL_IMAGE_ID=$(docker image inspect "$IMAGE" --format '{{.Id}}')
         docker push "$IMAGE"
-        echo "Image pushed: $IMAGE"
+        PINNED_IMAGE=$(bash scripts/release/resolve-reviewed-service-image.sh "$ACR" "$(imageRepository)" "$LOCAL_IMAGE_ID")
+        echo "##vso[task.setvariable variable=REVIEWED_SERVICE_IMAGE;isReadOnly=true]$PINNED_IMAGE"
+        echo "Reviewed image pushed: $PINNED_IMAGE source=$EXPECTED_RELEASE_SHA"
     env:
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.imageTag }}
       ACADEMY_PUBLICATION: ${{ parameters.academyPublication }}
 
   - task: AzureCLI@2
@@ -126,19 +138,12 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        bash scripts/release/verify-reviewed-service-source.sh
         set +x
         RG='${{ parameters.resourceGroupName }}'
-        ACR='${{ parameters.acrName }}'
         APP='${{ parameters.containerAppName }}'
-        TAG='${{ parameters.imageTag }}'
-        if [[ "$ACADEMY_PUBLICATION" == True || "$ACADEMY_PUBLICATION" == true ]]; then TAG='$(Build.SourceVersion)'; fi
-        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
-        [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
-        IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
+        IMAGE="$REVIEWED_SERVICE_IMAGE"
         if [[ "$ACADEMY_PUBLICATION" == True || "$ACADEMY_PUBLICATION" == true ]]; then
-          DIGEST=$(az acr repository show --name "$ACR" --image "$(imageRepository):$TAG" --query digest -o tsv --only-show-errors)
-          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'ERROR: Missing immutable image digest.' >&2; exit 1; }
-          IMAGE="$ACR_LOGIN_SERVER/$(imageRepository)@$DIGEST"
           # Recheck the baseline immediately before the image mutation.
           python3 scripts/academy/release-guard.py preflight --baseline "$ACADEMY_BASELINE_SOURCE" --evidence "$(Build.ArtifactStagingDirectory)/academy-release"
         fi
@@ -150,6 +155,10 @@ steps:
             --baseline "$ACADEMY_BASELINE_SOURCE" --evidence "$(Build.ArtifactStagingDirectory)/academy-release"
         fi
     env:
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.imageTag }}
+      REVIEWED_SERVICE_IMAGE: $(REVIEWED_SERVICE_IMAGE)
+      REQUIRE_REVIEWED_DIGEST: 'true'
       ACADEMY_PUBLICATION: ${{ parameters.academyPublication }}
       ACADEMY_BASELINE_SOURCE: ${{ parameters.academyBaselineSourceSha }}
       ACADEMY_EXPECTED_SOURCE: ${{ parameters.expectedReleaseSha }}

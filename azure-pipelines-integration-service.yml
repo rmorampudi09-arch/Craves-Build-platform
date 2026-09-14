@@ -16,7 +16,12 @@ parameters:
     default: ca-craves-integration-service-pr
   - name: imageTag
     type: string
-    default: $(Build.BuildId)
+    default: $(Build.SourceVersion)
+
+  - name: expectedReleaseSha
+    displayName: Exact reviewed commit for this release
+    type: string
+    default: NOT_SELECTED
 
 variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
@@ -35,6 +40,12 @@ steps:
       echo "Source commit: $(Build.SourceVersion)"
       echo "Source branch: $(Build.SourceBranch)"
     displayName: Show immutable build identity
+
+  - bash: bash scripts/release/verify-reviewed-service-source.sh
+    displayName: Verify exact reviewed checkout and image tag
+    env:
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.imageTag }}
 
   - task: JavaToolInstaller@0
     displayName: Use Java 21
@@ -62,15 +73,23 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        set +x
+        bash scripts/release/verify-reviewed-service-source.sh
         ACR='${{ parameters.acrName }}'
-        TAG='${{ parameters.imageTag }}'
+        TAG="$REQUESTED_IMAGE_TAG"
         ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
         [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
         IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
         az acr login --name "$ACR" --only-show-errors
-        docker build --pull -t "$IMAGE" "$(modulePath)"
+        docker build --pull --label "org.opencontainers.image.revision=$EXPECTED_RELEASE_SHA" -t "$IMAGE" "$(modulePath)"
+        LOCAL_IMAGE_ID=$(docker image inspect "$IMAGE" --format '{{.Id}}')
         docker push "$IMAGE"
-        echo "Image pushed: $IMAGE"
+        PINNED_IMAGE=$(bash scripts/release/resolve-reviewed-service-image.sh "$ACR" "$(imageRepository)" "$LOCAL_IMAGE_ID")
+        echo "##vso[task.setvariable variable=REVIEWED_SERVICE_IMAGE;isReadOnly=true]$PINNED_IMAGE"
+        echo "Reviewed image pushed: $PINNED_IMAGE source=$EXPECTED_RELEASE_SHA"
+    env:
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.imageTag }}
 
   - task: AzureCLI@2
     displayName: Deploy Integration image without changing runtime configuration
@@ -80,17 +99,14 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        bash scripts/release/verify-reviewed-service-source.sh
         VERIFY_FEEDBACK='${{ parameters.verifyDeliveryFeedback }}'
         if [[ "${VERIFY_FEEDBACK,,}" == true ]]; then
           python3 scripts/release/verify-delivery-feedback-production.py --phase preflight
         fi
         RG='${{ parameters.resourceGroupName }}'
-        ACR='${{ parameters.acrName }}'
         APP='${{ parameters.containerAppName }}'
-        TAG='${{ parameters.imageTag }}'
-        ACR_LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv --only-show-errors)
-        [[ -n "$ACR_LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
-        IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$TAG"
+        IMAGE="$REVIEWED_SERVICE_IMAGE"
 
         # Craves prod-low has documented healthy Container App revisions taking
         # more than ten minutes to converge. Preserve fail-fast terminal-state
@@ -103,6 +119,11 @@ steps:
           "$APP" \
           "$IMAGE" \
           integration
+    env:
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.imageTag }}
+      REVIEWED_SERVICE_IMAGE: $(REVIEWED_SERVICE_IMAGE)
+      REQUIRE_REVIEWED_DIGEST: 'true'
 
   - ${{ if eq(parameters.verifyDeliveryFeedback, true) }}:
     - task: AzureCLI@2

@@ -219,3 +219,7 @@ Order Service
 ```
 
 Delivery radius, delivery charges, commissions, pricing, and compliance rules remain outside this module until Product defines them.
+
+## Verified account email
+
+Auth remains the email verification authority. See [email verification](modules/email-verification/README.md) for V12 projection, canonical profile writes and mandatory verification at chef submission and approval.

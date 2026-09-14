@@ -6,6 +6,8 @@ public record InternalIdentityEmailResponse(
     UUID identityId,
     String email,
     boolean emailVerified,
-    String status
+    String status,
+    long emailRevision,
+    java.time.Instant verifiedAt
 ) {
 }

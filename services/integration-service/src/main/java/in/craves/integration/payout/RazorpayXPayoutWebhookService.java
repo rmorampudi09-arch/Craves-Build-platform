@@ -35,7 +35,7 @@ public class RazorpayXPayoutWebhookService {
             String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(body));
             var prior=jdbc.query("SELECT payload_hash FROM payment_schema.finance_payout_webhook_inbox WHERE event_id=?",(rs,n)->rs.getString(1),eventId);
             if(!prior.isEmpty()) {if(!prior.getFirst().equals(hash)) throw error(HttpStatus.CONFLICT,"Provider event content changed");return "REPLAY";}
-            var rows=jdbc.queryForList("SELECT i.*,b.fund_account_id FROM payment_schema.finance_payout_instruction i JOIN payment_schema.finance_beneficiary_version b ON b.id=i.beneficiary_id WHERE i.id=? FOR UPDATE OF i",instruction);
+            var rows=jdbc.queryForList("SELECT i.*,b.fund_account_id FROM payment_schema.finance_payout_instruction i JOIN payment_schema.finance_beneficiary_version b ON b.id=i.beneficiary_id WHERE i.payout_channel='RAZORPAYX' AND i.id=? FOR UPDATE OF i",instruction);
             if(rows.isEmpty()) return "IGNORED_UNRELATED_PAYOUT";
             var current=rows.getFirst();UUID chef=(UUID)current.get("chef_identity_id");
             var context=new RazorpayXPayoutClient.Instruction(instruction,current.get("fund_account_id").toString(),current.get("amount").toString(),(String)current.get("provider_id"));

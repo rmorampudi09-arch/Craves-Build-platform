@@ -192,5 +192,7 @@ fi
 
 python3 "$ROOT/scripts/release/tests/test-backend-preflight.py"
 python3 "$ROOT/scripts/release/tests/test-backend-image-reuse.py"
+python3 "$ROOT/scripts/release/tests/test-reviewed-service-image.py"
+python3 "$ROOT/scripts/release/tests/test-customer-web-runtime.py"
 
 echo 'SUCCESS: backend completion pack, diagnostics, and runtime-preserving deployment contracts passed.'

@@ -103,7 +103,7 @@ public class FinancePayoutReconciliationService {
         return new Result(id,"REVERSED",receipt.status(),"Linked reversal restored the chef liability. Original settlement is retained; chef remains on hold");
     }
     private Map<String,Object> load(UUID id,boolean lock) {
-        var rows=jdbc.queryForList("SELECT i.*,b.fund_account_id FROM payment_schema.finance_payout_instruction i JOIN payment_schema.finance_beneficiary_version b ON b.id=i.beneficiary_id WHERE i.id=?"+(lock?" FOR UPDATE OF i":""),id);
+        var rows=jdbc.queryForList("SELECT i.*,b.fund_account_id FROM payment_schema.finance_payout_instruction i JOIN payment_schema.finance_beneficiary_version b ON b.id=i.beneficiary_id WHERE i.payout_channel='RAZORPAYX' AND i.id=?"+(lock?" FOR UPDATE OF i":""),id);
         if(rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Payout instruction not found");
         return rows.getFirst();
     }

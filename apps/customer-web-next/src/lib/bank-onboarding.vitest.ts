@@ -26,6 +26,10 @@ describe("automatic bank onboarding contracts", () => {
     const parsed = bankStatusSchema.parse({...status,accountNumber:payload.accountNumber,encryptedDetails:"private",contactId:"cont_private"});
     expect(JSON.stringify(parsed)).not.toContain(payload.accountNumber);expect(JSON.stringify(parsed)).not.toContain("private");
   });
+  it("represents unavailable automation without claiming validation", () => {
+    const parsed = bankStatusSchema.parse({...status, state:"NOT_SUBMITTED", automaticActivation:false, bankValidated:false});
+    expect(parsed.automaticActivation).toBe(false); expect(parsed.bankValidated).toBe(false);
+  });
   it("refuses unknown ready statuses", () => {expect(bankStatusSchema.safeParse({...status,state:"SUCCESS"}).success).toBe(false);});
   it("blocks cross-origin submission before forwarding bank details", async () => {
     expect((await bankOnboardingProxy(request(payload,"https://attacker.invalid"),"chef")).status).toBe(403);expect(upstream).not.toHaveBeenCalled();

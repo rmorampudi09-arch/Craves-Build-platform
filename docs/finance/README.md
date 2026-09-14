@@ -1,5 +1,7 @@
 # Craves finance — connected order source and chef tax treatment
 
+> Current owner-requested launch mode: [Manual Craves settlement](MANUAL_CRAVES_SETTLEMENT.md). Finance earning/ledger readiness is separate from RazorpayX and Fund Account Validation. The automatic bank form remains unavailable unless all effective bank gates are ready; manual settlement never asserts automatic bank verification. Historical instructions below describe the separately gated provider mode.
+
 Updated **14 September 2026**, Asia/Kolkata. Repository `rmorampudi09-arch/Craves-Build-platform`, feature branch `feat/chef-ledger-controls-20260913`, PR **340**. Main baseline for this release is `1715746c6d2f3e38c59eef9a8bfe41bdd82529ea`; always refresh it before merging. Exact final-head build evidence is recorded in the PR and release bundle.
 
 This guide supersedes the earlier statement that the normal order source is unimplemented. `CHEF_LEDGER_IMPLEMENTATION.md` is historical foundation documentation, not current completion status.

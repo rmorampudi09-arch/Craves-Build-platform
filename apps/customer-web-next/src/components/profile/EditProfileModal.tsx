@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
 import {
   parseCustomerProfile,
   type CustomerProfile,
 } from "@/lib/profile-contract";
-import { setSessionProfile } from "@/services/auth/cravesAuth";
+import { captureSessionContext, isSessionContextCurrent, setSessionProfile } from "@/services/auth/cravesAuth";
+import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
 
 interface EditProfileModalProps {
   open: boolean;
@@ -14,8 +15,6 @@ interface EditProfileModalProps {
   onClose: () => void;
   onSaved: (profile: CustomerProfile) => void;
 }
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function EditProfileModal({
   open,
@@ -26,15 +25,16 @@ export function EditProfileModal({
   const fieldPrefix = useId();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const saveGeneration = useRef(0);
+  useEffect(() => { saveGeneration.current += 1; setBusy(false); }, [open]);
+  useEffect(() => () => { saveGeneration.current += 1; }, []);
 
   useEffect(() => {
     if (!open) return;
     setFirstName(profile?.firstName ?? "");
     setLastName(profile?.lastName ?? "");
-    setEmail(profile?.email ?? "");
     setError("");
   }, [open, profile]);
 
@@ -52,7 +52,6 @@ export function EditProfileModal({
   async function save() {
     const cleanFirstName = firstName.trim();
     const cleanLastName = lastName.trim();
-    const cleanEmail = email.trim();
 
     if (cleanFirstName.length < 2) {
       setError("Enter your first name using at least two characters.");
@@ -62,13 +61,12 @@ export function EditProfileModal({
       setError("Enter your last name.");
       return;
     }
-    if (cleanEmail && !EMAIL_PATTERN.test(cleanEmail)) {
-      setError("Enter a valid email address or leave it blank.");
-      return;
-    }
 
     setBusy(true);
     setError("");
+    const context = captureSessionContext();
+    const attempt = ++saveGeneration.current;
+    const current = () => attempt === saveGeneration.current && isSessionContextCurrent(context);
     try {
       const response = await fetch("/api/customer/profile", {
         method: "PUT",
@@ -77,10 +75,10 @@ export function EditProfileModal({
         body: JSON.stringify({
           firstName: cleanFirstName,
           lastName: cleanLastName,
-          email: cleanEmail || null,
         }),
       });
       const raw = await response.json().catch(() => null);
+      if (!current()) return;
       if (!response.ok) {
         const message =
           raw &&
@@ -94,17 +92,18 @@ export function EditProfileModal({
       const savedProfile = parseCustomerProfile(raw);
       if (!savedProfile)
         throw new Error("Craves returned an invalid profile response.");
-      setSessionProfile(savedProfile);
+      setSessionProfile(savedProfile, context);
       onSaved(savedProfile);
       onClose();
     } catch (caught) {
+      if (!current()) return;
       setError(
         caught instanceof Error
           ? caught.message
           : "Profile could not be saved.",
       );
     } finally {
-      setBusy(false);
+      if (current()) setBusy(false);
     }
   }
 
@@ -118,7 +117,7 @@ export function EditProfileModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${fieldPrefix}-title`}
-        className="w-full max-w-lg rounded-t-2xl border border-border bg-white p-6 shadow-[var(--shadow-pop)] md:rounded-2xl"
+        className="max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-white p-6 shadow-[var(--shadow-pop)] md:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
@@ -180,28 +179,12 @@ export function EditProfileModal({
           </label>
         </div>
 
-        <label
-          htmlFor={`${fieldPrefix}-email`}
-          className="mt-4 block text-sm font-semibold text-ink"
-        >
-          Email <span className="font-normal text-muted-foreground">(optional)</span>
-          <input
-            id={`${fieldPrefix}-email`}
-            type="email"
-            value={email}
-            maxLength={320}
-            autoComplete="email"
-            placeholder="you@example.com"
-            onChange={(event) => setEmail(event.target.value)}
-            className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-grey-400 focus:border-primary"
-            disabled={busy}
-          />
-        </label>
+        <div className="mt-4"><EmailVerificationPanel /></div>
 
         {profile && (
           <p className="mt-4 rounded-lg bg-secondary p-3 text-sm text-muted-foreground">
-            Verified phone: {profile.registeredPhoneNumber}. Phone changes require
-            a new Firebase verification flow.
+            Verified phone: {profile.registeredPhoneNumber}. Verify the new number
+            to change your phone.
           </p>
         )}
 

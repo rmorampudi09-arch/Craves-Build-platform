@@ -31,12 +31,14 @@ PURPOSE = "craves-bank-auto-v1"
 class GuardError(RuntimeError):
     pass
 
-def az(*args: str):
+def az(*args: str, output: str = "json"):
     """Capture stdout/stderr; raw Azure output can include unrelated runtime secrets."""
-    result = subprocess.run(["az", *args, "--only-show-errors", "-o", "json"],
+    result = subprocess.run(["az", *args, "--only-show-errors", "-o", output],
                             capture_output=True, text=True, timeout=1800, check=False)
     if result.returncode:
         raise GuardError("Azure command failed: " + " ".join(args[:2]) + "; inspect restricted Azure diagnostics")
+    if output == "none":
+        return None
     try:
         return json.loads(result.stdout) if result.stdout.strip() else None
     except ValueError as exc:
@@ -122,6 +124,14 @@ def check_env(app: dict, wanted: dict[str, str]) -> None:
     for key, value in wanted.items():
         previous = environment(app).get(key)
         expected = {"name": key, "secretRef": value.removeprefix("secretref:")} if value.startswith("secretref:") else {"name": key, "value": value}
+        if previous is not None:
+            previous = dict(previous)
+            # Azure returns an unused empty/null value beside a secret reference.
+            # Ignore it only when the nonempty reference already matches exactly.
+            if expected.get("secretRef") and previous.get("secretRef") == expected["secretRef"] and previous.get("value") in (None, ""):
+                previous.pop("value", None)
+            elif "value" in expected and previous.get("secretRef") is None:
+                previous.pop("secretRef", None)
         if previous is not None and previous != expected:
             raise GuardError("Existing setting differs for " + key + "; refusing a secret rotation or runtime override")
 

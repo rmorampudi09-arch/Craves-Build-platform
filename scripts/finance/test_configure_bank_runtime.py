@@ -18,6 +18,24 @@ def app():
              "template": {"scale": {"minReplicas": 1, "maxReplicas": 1}, "containers": [{"name": "app", "image": "unchanged:image", "resources": {"cpu": 0.5, "memory": "1Gi"}, "env": [{"name": "EXISTING_SECRET", "secretRef": "existing"}]}]}}}
 
 class RuntimeGuardTest(unittest.TestCase):
+    def test_azure_json_reads_keep_strict_parsing(self):
+        result = release.subprocess.CompletedProcess([], 0, '{"value": []}', "")
+        with patch.object(release.subprocess, "run", return_value=result) as command:
+            self.assertEqual({"value": []}, release.az("rest", "--method", "get"))
+            self.assertEqual(["-o", "json"], command.call_args.args[0][-2:])
+        result.stdout = "<policies />"
+        with patch.object(release.subprocess, "run", return_value=result), self.assertRaises(release.GuardError):
+            release.az("rest", "--method", "get")
+    def test_azure_write_output_none_does_not_parse_policy_xml(self):
+        result = release.subprocess.CompletedProcess([], 0, "<policies />", "")
+        with patch.object(release.subprocess, "run", return_value=result) as command:
+            self.assertIsNone(release.az("rest", "--method", "put", output="none"))
+            self.assertEqual(["-o", "none"], command.call_args.args[0][-2:])
+        result.returncode = 1
+        result.stderr = "restricted diagnostic"
+        with patch.object(release.subprocess, "run", return_value=result), self.assertRaises(release.GuardError) as failure:
+            release.az("rest", "--method", "put", output="none")
+        self.assertNotIn("restricted diagnostic", str(failure.exception))
     def test_origin_is_read_from_actual_resource(self):
         self.assertEqual("https://test.internal.example.azurecontainerapps.io", release.origin(app()))
     def test_origin_rejects_untrusted_urls(self):
@@ -33,6 +51,66 @@ class RuntimeGuardTest(unittest.TestCase):
     def test_conflicting_environment_cannot_be_overwritten(self):
         with self.assertRaises(release.GuardError): release.check_env(app(), {"EXISTING_SECRET": "secretref:different"})
         release.check_env(app(), {"EXISTING_SECRET": "secretref:existing", "NEW": "safe"})
+    def test_existing_secret_reference_accepts_azure_empty_and_null_literal_value(self):
+        for unused_value in ("", None):
+            with self.subTest(unused_value=unused_value):
+                value = app()
+                value["properties"]["template"]["containers"][0]["env"][0]["value"] = unused_value
+                release.check_env(value, {"EXISTING_SECRET": "secretref:existing"})
+    def test_existing_literal_accepts_azure_null_secret_reference(self):
+        value = app()
+        value["properties"]["template"]["containers"][0]["env"].append(
+            {"name": "ENABLED", "value": "true", "secretRef": None})
+        release.check_env(value, {"ENABLED": "true"})
+    def test_unused_optional_fields_do_not_hide_conflicting_bindings(self):
+        cases = [
+            ({"name": "SETTING", "secretRef": "different", "value": None}, "secretref:existing"),
+            ({"name": "SETTING", "secretRef": "existing", "value": "inline-secret"}, "secretref:existing"),
+            ({"name": "SETTING", "secretRef": "different", "value": ""}, "secretref:existing"),
+            ({"name": "SETTING", "secretRef": "", "value": ""}, "secretref:existing"),
+            ({"name": "SETTING", "value": ""}, "secretref:existing"),
+            ({"name": "SETTING", "secretRef": "unexpected", "value": "true"}, "true"),
+            ({"name": "SETTING", "secretRef": None, "value": "false"}, "true"),
+            ({"name": "SETTING", "secretRef": None, "value": None}, "true"),
+            ({"name": "SETTING", "secretRef": "existing", "value": None, "unexpected": None}, "secretref:existing"),
+        ]
+        for entry, wanted in cases:
+            with self.subTest(entry=entry):
+                value = app()
+                value["properties"]["template"]["containers"][0]["env"].append(entry)
+                with self.assertRaises(release.GuardError): release.check_env(value, {"SETTING": wanted})
+    def test_apply_is_read_only_with_observed_azure_empty_secret_values(self):
+        apps = {role: app() for role in release.APPS}
+        wanted = release.desired(apps)
+        refs = {local: "https://craveskv.vault.azure.net/secrets/" + remote + "/version"
+                for local, remote in release.SECRET_NAMES.items()}
+        for role, value in apps.items():
+            for key, setting in wanted[role].items():
+                # Observed on all three deployed apps: exact secretRef plus value="".
+                entry = {"name": key, "value": "", "secretRef": setting.removeprefix("secretref:")} if setting.startswith("secretref:") else {"name": key, "value": setting}
+                value["properties"]["template"]["containers"][0]["env"].append(entry)
+            used = {setting.removeprefix("secretref:") for setting in wanted[role].values() if setting.startswith("secretref:")}
+            value["properties"]["configuration"]["secrets"].extend(
+                {"name": local, "keyVaultUrl": refs[local], "identity": "system"} for local in sorted(used))
+        calls = []
+        def fake(*args):
+            calls.append(args)
+            if args[:2] == ("account", "show"): return {"id": "test-subscription"}
+            if args[:2] == ("containerapp", "show"):
+                name = args[args.index("-n") + 1]
+                role = next(role for role, app_name in release.APPS.items() if app_name == name)
+                return copy.deepcopy(apps[role])
+            if args[:2] == ("keyvault", "show"): return "test-vault-id"
+            if args[:3] == ("keyvault", "secret", "list"): return [{"id": ref} for ref in refs.values()]
+            if args[:3] == ("keyvault", "secret", "show"):
+                name = args[args.index("--name") + 1]
+                local = next(local for local, remote in release.SECRET_NAMES.items() if remote == name)
+                return {"id": refs[local], "enabled": True, "tags": {"craves-purpose": release.PURPOSE}}
+            raise AssertionError("An already configured runtime must not cause a cloud write")
+        with tempfile.TemporaryDirectory() as folder, patch.object(release.subprocess, "check_output", return_value="a" * 40 + "\n"), \
+             patch.object(release, "az", side_effect=fake):
+            self.assertEqual(0, release.main(["--apply", "--expected-source-sha", "a" * 40, "--output", str(Path(folder) / "plan.json")]))
+        self.assertTrue(all("set" not in args and "update" not in args for args in calls))
     def test_unrelated_image_scale_and_env_changes_are_detected(self):
         original = app(); baseline = release.stable(original, {"NEW"}, {"new"})
         for component in ("image", "scale", "env"):

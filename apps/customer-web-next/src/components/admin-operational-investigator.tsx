@@ -32,9 +32,9 @@ function statusMessage(responseStatus: number, code: string | null): string {
   return "The investigation service is temporarily unavailable.";
 }
 
-export function AdminOperationalInvestigator() {
+export function AdminOperationalInvestigator({ initialReference = "" }: { initialReference?: string } = {}) {
   const [resource, setResource] = useState<AdminInvestigationResource>("order");
-  const [resourceId, setResourceId] = useState("");
+  const [resourceId, setResourceId] = useState(initialReference);
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<AdminInvestigationResult | null>(null);
   const [message, setMessage] = useState("Choose a resource and enter its exact UUID.");

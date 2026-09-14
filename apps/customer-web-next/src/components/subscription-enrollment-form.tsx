@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { CustomerAddress } from "@/lib/address-contract";
 import {
   parseCustomerSubscription,
@@ -15,6 +16,7 @@ function newIdempotencyKey(): string {
 }
 
 export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
+  const router = useRouter();
   const [plan, setPlan] = useState<PublicSubscriptionPlan | null>(null);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [addressId, setAddressId] = useState("");
@@ -90,7 +92,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
       }
       const subscription = parseCustomerSubscription(body);
       if (!subscription) throw new Error("Craves returned an invalid subscription response.");
-      window.location.assign(`/subscriptions/${encodeURIComponent(subscription.id)}/payment`);
+      router.push(`/subscriptions/${encodeURIComponent(subscription.id)}/payment`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Subscription could not be created.");
       setBusy(false);

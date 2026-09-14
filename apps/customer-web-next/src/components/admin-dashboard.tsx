@@ -1,90 +1,134 @@
 "use client";
 
-import { adminFetch } from "@/lib/admin-renewal";
-
-import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import {
-  ArrowRight, BellRing, CheckCircle2, ChefHat, Clock3, PackageCheck, RefreshCw,
-  RotateCcw, Search, SearchCheck, ShieldCheck, Truck
-} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, CheckCircle2, Clock3, Copy, Download, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { adminFetch } from "@/lib/admin-renewal";
 import { parseAdminDashboardSummary, type AdminDashboardSummary } from "@/lib/admin-dashboard-contract";
+import { adminMetricCsv, formatAdminTimestamp, readableAdminStatus } from "@/lib/admin-navigation";
+import { AdminModuleDirectory } from "@/components/admin-module-directory";
 
-const Visuals = dynamic(() => import("@/components/admin-dashboard-visuals").then(module => module.AdminDashboardVisuals), {
-  ssr: false,
-  loading: () => <div className="h-[390px] animate-pulse rounded-[28px] bg-white" />
-});
-
-const statusLabel = (status: string) => status.toLowerCase().replaceAll("_", " ").replace(/^./, value => value.toUpperCase());
+type SummaryMetrics = AdminDashboardSummary["metrics"];
+const metricCards: ReadonlyArray<{ key: keyof SummaryMetrics; label: string; note: string; tone?: string }> = [
+  { key: "ordersCreated24h", label: "Orders created", note: "Last 24 hours" },
+  { key: "chefAcceptancePending", label: "Awaiting chef", note: "Current queue", tone: "warning" },
+  { key: "preparing", label: "Preparing", note: "Current orders" },
+  { key: "readyForPickup", label: "Ready for pickup", note: "Current orders", tone: "info" },
+  { key: "outForDelivery", label: "Out for delivery", note: "Current orders", tone: "info" },
+  { key: "delivered24h", label: "Delivered", note: "Updated in last 24 hours", tone: "success" },
+  { key: "refundPending", label: "Refund pending", note: "Current queue", tone: "warning" },
+  { key: "refundFailed", label: "Refund failed", note: "Needs investigation", tone: "danger" }
+];
 
 export function AdminDashboard() {
   const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
-  const [message, setMessage] = useState("Loading live operational data…");
-  const [refreshing, setRefreshing] = useState(false);
+  const [message, setMessage] = useState("");
+  const [refreshing, setRefreshing] = useState(true);
+  const [filter, setFilter] = useState("");
+  const [status, setStatus] = useState("all");
+  const [sort, setSort] = useState<"updated" | "status">("updated");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const [feedback, setFeedback] = useState("");
+  const generation = useRef(0);
+  const request = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    const current = ++generation.current;
     setRefreshing(true);
+    setMessage("");
     try {
-      const response = await adminFetch("/api/admin/dashboard/summary", { cache: "no-store" });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(response.status === 403 ? "Administrator access is required." : "Live dashboard data is temporarily unavailable.");
-      const parsed = parseAdminDashboardSummary(body);
-      if (!parsed) throw new Error("The dashboard received an invalid backend response.");
-      setSummary(parsed);
-      setMessage("");
+      const response = await adminFetch("/api/admin/dashboard/summary", { cache: "no-store", signal: controller.signal });
+      if (current !== generation.current) return;
+      if (response.status === 401 || response.status === 403) {
+        setSummary(null);
+        throw new Error("Administrator access must be verified. Sign in again or retry your connection.");
+      }
+      if (!response.ok) throw new Error("The operational summary is temporarily unavailable. Other modules may still be accessible below.");
+      const parsed = parseAdminDashboardSummary(await response.json().catch(() => null));
+      if (!parsed) throw new Error("The summary response could not be verified. No replacement values have been invented.");
+      if (current === generation.current) { setSummary(parsed); setMessage(""); }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Live dashboard data is unavailable.");
+      if (current === generation.current && !controller.signal.aborted) setMessage(error instanceof Error ? error.message : "Unable to load the operational summary.");
     } finally {
-      setRefreshing(false);
+      if (current === generation.current) setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    return () => { generation.current += 1; request.current?.abort(); };
+  }, [load]);
 
-  if (!summary) return <section className="rounded-[28px] border border-[#ebe5ef] bg-white p-8 shadow-sm"><div className="h-2 w-24 rounded bg-[#f6b545]" /><h1 className="mt-6 text-3xl font-black">Operations control center</h1><p className="mt-3 text-[#766981]" role="status">{message}</p><button onClick={() => void load()} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#6930ca] px-4 py-3 text-sm font-black text-white"><RefreshCw size={17} />Try again</button></section>;
+  async function copyReference(reference: string) {
+    try { await navigator.clipboard.writeText(reference); setFeedback("Order reference copied."); }
+    catch { setFeedback("Clipboard access is unavailable. Select and copy the full reference in the row details."); }
+  }
 
-  const metrics = summary.metrics;
-  const cards = [
-    { label: "Orders created", value: metrics.ordersCreated24h, note: "Last 24 hours", icon: PackageCheck, tone: "bg-[#efe8ff] text-[#6930ca]" },
-    { label: "Awaiting chef", value: metrics.chefAcceptancePending, note: "Current queue", icon: Clock3, tone: "bg-[#fff3d8] text-[#a86400]" },
-    { label: "Preparing", value: metrics.preparing, note: "Current orders", icon: ChefHat, tone: "bg-[#ffe9e2] text-[#bd4b2d]" },
-    { label: "Out for delivery", value: metrics.outForDelivery, note: "Current orders", icon: Truck, tone: "bg-[#e5f5ff] text-[#126a9a]" },
-    { label: "Delivered", value: metrics.delivered24h, note: "Updated in 24 hours", icon: CheckCircle2, tone: "bg-[#e5f7ec] text-[#24784b]" },
-    { label: "Refund attention", value: metrics.refundPending + metrics.refundFailed, note: `${metrics.refundFailed} failed`, icon: RotateCcw, tone: "bg-[#ffe7ea] text-[#a72c3c]" }
-  ];
+  function exportMetrics() {
+    if (!summary) return;
+    try {
+      const url = URL.createObjectURL(new Blob([adminMetricCsv(summary.metrics, summary.generatedAt)], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `craves-admin-metrics-${new Date(summary.generatedAt).toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setFeedback("Aggregate metrics exported. No customer or chef identifiers were included.");
+    } catch { setFeedback("Export could not be prepared. Please refresh the summary and try again."); }
+  }
 
-  const workbench = [
-    { label: "Find customer or chef", note: "Mobile, email, UUID or exact name", href: "/admin/search", icon: Search, accent: "bg-[#6930ca] text-white" },
-    { label: "Investigate order / payment", note: "Read-only evidence with audit reason", href: "/admin/operations", icon: SearchCheck, accent: "bg-[#0b1426] text-white" },
-    { label: "Review chef applications", note: "Review onboarding evidence and recorded decisions", href: "/admin/chef-reviews", icon: ChefHat, accent: "bg-[#f6b545] text-[#0b1426]" },
-    { label: "Recover notifications", note: "Inspect failed delivery and recovery controls", href: "/admin/notifications", icon: BellRing, accent: "bg-[#fff8ec] text-[#6930ca]" },
-    { label: "Secure an account", note: "Controlled admin security actions", href: "/admin/accounts", icon: ShieldCheck, accent: "bg-[#e9f8ef] text-[#26724a]" }
-  ];
+  const filtered = (summary?.recentExceptions ?? []).filter(item => {
+    const needle = filter.trim().toLowerCase();
+    return (status === "all" || item.status === status) && `${item.orderId} ${item.kitchenName ?? ""}`.toLowerCase().includes(needle);
+  }).sort((a, b) => sort === "status" ? a.status.localeCompare(b.status) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt) : Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const rows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const maxTrend = Math.max(1, ...(summary?.orderTrend.map(point => point.count) ?? []));
+  const maxStatus = Math.max(1, ...(summary?.statusCounts.map(item => item.count) ?? []));
 
-  return <div className="space-y-7">
-    <section className="overflow-hidden rounded-[32px] bg-[#0b1426] px-6 py-8 text-white shadow-[0_28px_75px_-42px_rgba(11,20,38,0.85)] sm:px-9">
-      <div className="flex flex-col justify-between gap-7 xl:flex-row xl:items-end"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#f6b545]">Operations control center</p><h1 className="mt-3 max-w-4xl text-3xl font-black sm:text-4xl">Find the case. Understand the timeline. Take the right action.</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">Start with a customer, chef or operational reference and move across the live modules without losing context. The overview below uses only currently exposed backend metrics.</p></div><div className="flex flex-wrap gap-3"><Link href="/admin/search" className="inline-flex items-center gap-2 rounded-xl bg-[#f6b545] px-4 py-3 text-sm font-black text-[#0b1426]"><Search size={17}/>Global search</Link><button onClick={() => void load()} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-sm font-black ring-1 ring-white/15 transition hover:bg-white/15 disabled:opacity-60"><RefreshCw size={17} className={refreshing ? "animate-spin" : ""}/>Refresh</button></div></div>
+  return <div className="cr-dashboard">
+    <section className="cr-welcome">
+      <div><p className="cr-eyebrow">The Craves control center</p><h1>A clear view.<br className="cr-mobile-break"/> The right next action.</h1><p>Keep every meal moving. Find a case, understand what happened, and open the right controlled workflow.</p></div>
+      <div className="cr-actions"><Link href="/admin/search" className="cr-button cr-primary"><Search size={17} aria-hidden="true"/>Global search</Link><button className="cr-button" type="button" onClick={() => void load()} disabled={refreshing}><RefreshCw size={17} aria-hidden="true" className={refreshing ? "cr-spin" : ""}/>{refreshing ? "Refreshing…" : "Refresh snapshot"}</button></div>
     </section>
 
-    {message && <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-900" role="status">{message} Showing the last successfully loaded snapshot.</div>}
+    <div className="cr-snapshot-line"><span className="cr-badge" data-tone={message ? "warning" : undefined}><Clock3 size={14} aria-hidden="true"/>{summary ? `Snapshot: ${formatAdminTimestamp(summary.generatedAt)}` : refreshing ? "Loading operational summary" : "Summary unavailable"}</span><span>Snapshot data · Refresh on demand</span></div>
+    {message && <div className="cr-alert" role="alert"><strong>{message}</strong>{summary && <p>Showing the last successfully loaded snapshot above, not a live refresh.</p>}</div>}
 
-    <section><div className="mb-4 flex items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-[#8b7b97]">Live workload</p><h2 className="mt-1 text-xl font-black">What needs attention now</h2></div><p className="hidden text-xs text-[#8a7c95] sm:block">Snapshot {new Date(summary.generatedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-      {cards.map(card => { const Icon = card.icon; return <article key={card.label} className="rounded-[24px] border border-[#ebe5ef] bg-white p-5 shadow-[0_16px_45px_-38px_rgba(58,38,73,0.55)]"><div className={`grid h-11 w-11 place-items-center rounded-2xl ${card.tone}`}><Icon size={21}/></div><p className="mt-5 text-3xl font-black tabular-nums">{card.value.toLocaleString("en-IN")}</p><p className="mt-1 text-sm font-black">{card.label}</p><p className="mt-1 text-xs text-[#897b94]">{card.note}</p></article>; })}
-    </div></section>
+    {!summary && <section className="cr-panel cr-empty" aria-busy={refreshing}><h2>{refreshing ? "Loading your operational overview" : "The overview could not be loaded"}</h2><p>{refreshing ? "Retrieving the existing backend summary. No sample numbers are shown." : "Use Refresh snapshot to retry. Your module directory remains available below."}</p>{refreshing && <div className="cr-skeleton" aria-hidden="true"/>}</section>}
 
-    <section className="rounded-[28px] border border-[#e7dfec] bg-[#fff8ec] p-5 sm:p-6"><div className="mb-4"><p className="text-xs font-black uppercase tracking-[0.16em] text-[#9a7444]">Operator workbench</p><h2 className="mt-1 text-xl font-black">Common admin journeys in one click</h2></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">{workbench.map(item => { const Icon=item.icon; return <Link key={item.label} href={item.href} className="group rounded-[22px] border border-black/5 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-lg"><div className={`grid h-10 w-10 place-items-center rounded-xl ${item.accent}`}><Icon size={18}/></div><p className="mt-4 text-sm font-black">{item.label}</p><p className="mt-1 min-h-8 text-xs leading-4 text-[#817487]">{item.note}</p><div className="mt-3 flex items-center gap-1 text-xs font-black text-[#6930ca]">Open<ArrowRight size={13} className="transition group-hover:translate-x-1"/></div></Link>; })}</div></section>
+    {summary && <>
+      <section aria-labelledby="cr-workload-title"><div className="cr-section-heading"><div><p className="cr-eyebrow">Operational workload</p><h2 id="cr-workload-title">What needs your attention</h2></div><button type="button" onClick={exportMetrics} className="cr-button"><Download size={16} aria-hidden="true"/>Export metrics</button></div>
+        <div className="cr-metric-grid">{metricCards.map(card => <article className="cr-metric" key={card.key} data-tone={card.tone}><span className="cr-metric-label">{card.label}</span><strong>{summary.metrics[card.key].toLocaleString("en-IN")}</strong><span className="cr-muted">{card.note}</span></article>)}</div>
+      </section>
 
-    <Visuals summary={summary}/>
+      <section className="cr-panel" aria-labelledby="cr-attention-title">
+        <div className="cr-section-heading"><div><p className="cr-eyebrow">Recent exceptions</p><h2 id="cr-attention-title">Review. Investigate. Resolve.</h2><p className="cr-muted">This is the recent-exception summary, not the complete order history. Open investigations for the full case.</p></div><Link href="/admin/operations" className="cr-button">Open investigations<ArrowRight size={16} aria-hidden="true"/></Link></div>
+        <div className="cr-filter-row"><label className="cr-search-field"><Search size={16} aria-hidden="true"/><span className="cr-sr-only">Filter recent exceptions by order reference or kitchen</span><input type="search" placeholder="Filter this snapshot by order or kitchen…" maxLength={160} value={filter} onChange={event => { setFilter(event.target.value); setPage(1); }}/></label>
+          <label className="cr-select-label">Status<select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}><option value="all">All statuses</option>{[...new Set(summary.recentExceptions.map(item => item.status))].map(value => <option value={value} key={value}>{readableAdminStatus(value)}</option>)}</select></label>
+          <label className="cr-select-label">Sort<select value={sort} onChange={event => { setSort(event.target.value === "status" ? "status" : "updated"); setPage(1); }}><option value="updated">Newest first</option><option value="status">Status</option></select></label>
+          <button className="cr-button" onClick={() => { setFilter(""); setStatus("all"); setSort("updated"); setPage(1); }}>Reset filters</button>
+        </div>
+        {rows.length === 0 ? <div className="cr-empty"><CheckCircle2 size={26} aria-hidden="true"/><strong>{summary.recentExceptions.length === 0 ? "No recent exceptions in this snapshot" : "No exceptions match these filters"}</strong><p>{summary.recentExceptions.length === 0 ? "This does not certify that every service is healthy." : "Clear the filters to see the returned snapshot."}</p></div> : <div className="cr-table-scroll" role="region" aria-label="Recent exception records" tabIndex={0}><table className="cr-table"><caption className="cr-sr-only">Recent exceptions from {formatAdminTimestamp(summary.generatedAt)}</caption><thead><tr><th scope="col">Order reference</th><th scope="col">Kitchen</th><th scope="col">Status</th><th scope="col">Last updated · IST</th><th scope="col">Details</th></tr></thead><tbody>{rows.map(item => <tr key={item.orderId}><td><code>{item.orderId.slice(0, 8).toUpperCase()}</code></td><td>{item.kitchenName || "Kitchen name unavailable"}</td><td><span className="cr-status" data-tone={item.status === "REFUND_FAILED" ? "danger" : "warning"}>{readableAdminStatus(item.status)}</span></td><td>{formatAdminTimestamp(item.updatedAt)}</td><td><details className="cr-record-details"><summary>View reference</summary><div><code>{item.orderId}</code><button type="button" className="cr-button" onClick={() => void copyReference(item.orderId)}><Copy size={14} aria-hidden="true"/>Copy reference</button><p className="cr-footnote">Paste this into Orders & investigations. The existing audit-reason requirement still applies.</p></div></details></td></tr>)}</tbody></table></div>}
+        <div className="cr-pagination"><span>{filtered.length} matching / {summary.recentExceptions.length} returned records</span><label className="cr-select-label">Rows<select value={pageSize} onChange={event => { setPageSize(event.target.value === "10" ? 10 : 5); setPage(1); }}><option value="5">5</option><option value="10">10</option></select></label><button className="cr-button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Previous</button><span aria-live="polite">Page {currentPage} of {pageCount}</span><button className="cr-button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)}>Next</button></div>
+      </section>
 
-    <section className="grid gap-5 lg:grid-cols-[1fr_1.35fr]">
-      <article className="rounded-[28px] border border-[#ebe5ef] bg-white p-6 sm:p-7"><p className="text-xs font-black uppercase tracking-[0.16em] text-[#8b7b97]">Current flow</p><h2 className="mt-2 text-xl font-black">Operational stage counts</h2><div className="mt-6 space-y-3">{summary.statusCounts.map(item => <div key={item.status} className="flex items-center justify-between rounded-2xl bg-[#f8f6fa] px-4 py-3"><span className="text-sm font-bold text-[#62566d]">{statusLabel(item.status)}</span><strong className="rounded-lg bg-white px-3 py-1 text-sm tabular-nums shadow-sm">{item.count.toLocaleString("en-IN")}</strong></div>)}</div></article>
-      <article className="rounded-[28px] bg-[#0b1426] p-6 text-white sm:p-7"><p className="text-xs font-black uppercase tracking-[0.16em] text-[#f6b545]">Admin operating principle</p><h2 className="mt-2 text-xl font-black">Fast to navigate, hard to misuse.</h2><div className="mt-5 grid gap-3 sm:grid-cols-2">{[
-        ["People lookup", "Search returns minimal masked matches before opening a full audited case."],
-        ["Operational evidence", "Order, payment, refund and delivery lookups remain read-only and reason-gated."],
-        ["Mutating actions", "Approval, account and recovery actions stay inside their owning backend service."],
-        ["Commercial rules", "Pricing, commission, refund eligibility and compliance policy are not invented by the dashboard."]
-      ].map(([title, note]) => <div key={title} className="rounded-2xl bg-white/6 p-4 ring-1 ring-white/10"><p className="text-sm font-black">{title}</p><p className="mt-1 text-xs leading-5 text-slate-300">{note}</p></div>)}</div></article>
-    </section>
+      <div className="cr-chart-grid">
+        <section className="cr-panel" aria-labelledby="cr-trend-title"><p className="cr-eyebrow">Reported period</p><h2 id="cr-trend-title">Order volume</h2><p className="cr-muted">All date buckets returned by the backend.</p>
+          {summary.orderTrend.length === 0 ? <p className="cr-empty">No trend records were returned.</p> : <><div className="cr-chart-scroll"><div className="cr-bar-chart" style={{ minWidth: `${Math.max(280, summary.orderTrend.length * 38)}px` }} aria-hidden="true">{summary.orderTrend.map(point => <div className="cr-bar-column" key={point.date} title={`${point.date}: ${point.count} orders`}><strong>{point.count.toLocaleString("en-IN")}</strong><div className="cr-bar-track"><span style={{ height: `${100 * point.count / maxTrend}%` }}/></div><small>{point.date.slice(5)}</small></div>)}</div></div><details className="cr-chart-data"><summary>View exact chart data</summary><table className="cr-table"><caption className="cr-sr-only">Order volume by backend date bucket</caption><thead><tr><th scope="col">Date</th><th scope="col">Orders</th></tr></thead><tbody>{summary.orderTrend.map(point => <tr key={point.date}><td>{point.date}</td><td>{point.count.toLocaleString("en-IN")}</td></tr>)}</tbody></table></details></>}
+        </section>
+        <section className="cr-panel" aria-labelledby="cr-flow-title"><p className="cr-eyebrow">Current flow</p><h2 id="cr-flow-title">Operational stages</h2><p className="cr-muted">Backend-reported counts by current status.</p><div className="cr-stage-list">{summary.statusCounts.map(item => <div key={item.status}><div><span>{readableAdminStatus(item.status)}</span><strong>{item.count.toLocaleString("en-IN")}</strong></div><div className="cr-stage-track" aria-hidden="true"><span style={{ width: `${100 * item.count / maxStatus}%` }}/></div></div>)}</div>{summary.statusCounts.length === 0 && <p className="cr-empty">No stage records were returned.</p>}</section>
+      </div>
+    </>}
+    <p className="cr-feedback" role="status" aria-live="polite">{feedback}</p>
+    <AdminModuleDirectory compact/>
+    <section className="cr-safety-note"><ShieldCheck size={24} aria-hidden="true"/><div><strong>Easy to operate. Controlled where it matters.</strong><p>Search is audited. Sensitive actions stay in their owning modules. Pricing, payout, account and recovery rules are not bypassed by this dashboard.</p></div></section>
   </div>;
 }

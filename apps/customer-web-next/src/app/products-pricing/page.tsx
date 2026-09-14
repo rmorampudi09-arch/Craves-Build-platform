@@ -139,7 +139,7 @@ export default async function ProductsPricingPage() {
             <div className="rounded-3xl border border-[#F62E18]/20 bg-[#FFF5F3] p-6">
               <h2 className="font-display text-2xl font-bold">Live pricing is temporarily unavailable.</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-black/65">
-                Craves does not publish invented or placeholder prices. Production payment activation is blocked until at least one real, active INR-priced dish is available through the public catalog.
+                Please try again shortly, or explore the marketplace for dishes available near you. You can review the full order total before payment.
               </p>
             </div>
           )}
@@ -148,7 +148,7 @@ export default async function ProductsPricingPage() {
         <div className="mt-10 rounded-3xl bg-[#111111] p-7 text-white">
           <h2 className="font-display text-2xl font-bold">How the final price is confirmed</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70">
-            Browse the live marketplace, add available dishes to your cart, and review checkout before paying. Craves creates the Razorpay payment order from the server-side checkout total; the customer client cannot choose a different payable amount.
+            Browse the marketplace, add available dishes to your cart, and review the complete order total before paying securely with Razorpay.
           </p>
         </div>
       </section>

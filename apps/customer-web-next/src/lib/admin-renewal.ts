@@ -15,6 +15,7 @@ export function createAdminRenewal(deps: Dependencies) {
   let generation = 0;
   let attempt: string | null = null;
   let retryAt = 0;
+  let logoutInflight: Promise<void> | null = null;
   const send = (url: string, init: RequestInit = {}) => deps.fetcher(url, {
     ...init, cache: "no-store", credentials: "same-origin", signal: init.signal ?? AbortSignal.timeout(12_000),
   });
@@ -92,9 +93,18 @@ export function createAdminRenewal(deps: Dependencies) {
     return result;
   };
 
-  const logout = async () => {
+  const logout = (): Promise<void> => {
+    if (logoutInflight) return logoutInflight;
     end();
-    return deps.lock(async () => send("/api/auth/logout", { method: "POST" }));
+    logoutInflight = deps.lock(async () => {
+      const response = await send("/api/auth/logout", { method: "POST" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || body?.signedOut !== true) {
+        throw new RenewalError(response.ok ? 503 : response.status, "Sign out has not been confirmed. Please retry.");
+      }
+      deps.receipt?.clear();
+    }).finally(() => { logoutInflight = null; });
+    return logoutInflight;
   };
   return { ensure, request, logout, end };
 }

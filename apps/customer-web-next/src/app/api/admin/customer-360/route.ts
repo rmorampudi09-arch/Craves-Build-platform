@@ -1,3 +1,4 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import {
   parseCustomerOrderPage,
@@ -117,6 +118,10 @@ async function fetchResource(request: NextRequest, resource: Resource, identityI
 }
 
 export async function POST(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return NextResponse.json({ code: "CROSS_ORIGIN_REQUEST_REJECTED" }, { status: 403 });
   const input = await request.json().catch(() => null) as Input | null;
   if (!input) return NextResponse.json({ code: "INVALID_CUSTOMER_360_REQUEST" }, { status: 400 });

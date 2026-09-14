@@ -7,6 +7,8 @@ import in.craves.integration.ledger.LedgerMoney;
 import in.craves.integration.security.CravesPrincipal;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -33,6 +35,8 @@ public class ChefTaxProfileService {
         }
     }
     public record Version(UUID id,UUID chefIdentityId,Profile profile,String registrationReview,String foodGstDeduction,String gstTcsDeduction) {}
+    public record ResolvedBatch(boolean complete,List<Version> versions) {}
+    private record StoredVersion(UUID chef,UUID id,String payload) {}
     private final JdbcTemplate jdbc;private final ObjectMapper json;
     public ChefTaxProfileService(JdbcTemplate jdbc,ObjectMapper json){this.jdbc=jdbc;this.json=json;}
     @Transactional
@@ -46,8 +50,32 @@ public class ChefTaxProfileService {
     }
     public Version read(CravesPrincipal actor,UUID chef){FinancePolicyService.reader(actor);return load(chef);}
     public Version resolved(UUID chef) {
-        Version version=load(chef);
-        if(!yearOf(LocalDate.now(FinancePolicy.ZONE)).equals(version.profile().financialYear()))throw new ResponseStatusException(HttpStatus.CONFLICT,"A current-financial-year tax and withholding review is required");
+        return requireCurrentYear(load(chef),LocalDate.now(FinancePolicy.ZONE));
+    }
+    /** One bounded joined query; uses exactly the same decoding, review and year rules as a quote. */
+    @Transactional(readOnly=true)
+    public ResolvedBatch resolvedBatch(int maximumHeads) {
+        if(maximumHeads<1 || maximumHeads>1000)throw new IllegalArgumentException("Tax profile batch limit is out of range");
+        LocalDate today=LocalDate.now(FinancePolicy.ZONE);
+        List<StoredVersion> rows=jdbc.query(
+            "SELECT h.chef_identity_id,v.id,v.payload::text FROM payment_schema.finance_chef_tax_head h " +
+                "LEFT JOIN payment_schema.finance_chef_tax_version v ON v.id=h.version_id " +
+                "ORDER BY h.chef_identity_id LIMIT ?",
+            (rs,n)->new StoredVersion(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getString(3)),maximumHeads+1);
+        if(rows.size()>maximumHeads)return new ResolvedBatch(false,List.of());
+        List<Version> current=new ArrayList<>(rows.size());
+        for(StoredVersion row:rows) {
+            if(row.id()==null || row.payload()==null)throw new IllegalStateException("Stored tax profile reference is invalid");
+            Version version=view(row.id(),row.chef(),decode(row.payload()));
+            try {current.add(requireCurrentYear(version,today));}
+            catch(ResponseStatusException staleYear) {
+                if(staleYear.getStatusCode().value()!=409)throw staleYear;
+            }
+        }
+        return new ResolvedBatch(true,List.copyOf(current));
+    }
+    private Version requireCurrentYear(Version version,LocalDate today) {
+        if(!yearOf(today).equals(version.profile().financialYear()))throw new ResponseStatusException(HttpStatus.CONFLICT,"A current-financial-year tax and withholding review is required");
         return version;
     }
     private Version load(UUID chef) {

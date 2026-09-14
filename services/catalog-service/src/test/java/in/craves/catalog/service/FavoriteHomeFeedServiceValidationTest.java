@@ -21,7 +21,7 @@ class FavoriteHomeFeedServiceValidationTest {
     @BeforeEach
     void setUp() {
         jdbc = mock(NamedParameterJdbcTemplate.class);
-        service = new FavoriteHomeFeedService(jdbc);
+        service = new FavoriteHomeFeedService(jdbc, org.mockito.Mockito.mock(in.craves.catalog.finance.CatalogFinanceEligibility.class));
     }
 
     @Test

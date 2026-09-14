@@ -22,7 +22,7 @@ class NearbyDiscoveryServiceCriteriaValidationTest {
         CatalogDiscoveryProperties properties = new CatalogDiscoveryProperties();
         properties.setMaxQueryRadiusMeters(50_000);
         properties.setMaxPageSize(100);
-        service = new NearbyDiscoveryService(new JdbcTemplate(), properties);
+        service = new NearbyDiscoveryService(new JdbcTemplate(), properties, org.mockito.Mockito.mock(in.craves.catalog.finance.CatalogFinanceEligibility.class));
     }
 
     @Test
@@ -31,6 +31,7 @@ class NearbyDiscoveryServiceCriteriaValidationTest {
             CatalogDiscoveryProperties properties = new CatalogDiscoveryProperties();
             context.registerBean(JdbcTemplate.class, () -> org.mockito.Mockito.mock(JdbcTemplate.class));
             context.registerBean(CatalogDiscoveryProperties.class, () -> properties);
+            context.registerBean(in.craves.catalog.finance.CatalogFinanceEligibility.class, () -> org.mockito.Mockito.mock(in.craves.catalog.finance.CatalogFinanceEligibility.class));
             context.register(NearbyDiscoveryService.class);
             context.refresh();
 

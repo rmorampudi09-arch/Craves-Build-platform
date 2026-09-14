@@ -78,8 +78,8 @@ const searchable = [
   [UserRound,"Customer mobile","Exact registered mobile"], [ChefHat,"Chef mobile","Exact application mobile"], [UsersRound,"Email / name","Exact email or exact name"], [ShieldCheck,"Customer / chef UUID","Identity or profile/application ID"]
 ] as const;
 
-export function AdminGlobalSearch() {
-  const [query,setQuery]=useState(""); const [reason,setReason]=useState(""); const [result,setResult]=useState<AdminDirectorySearchResponse|null>(null); const [openCase,setOpenCase]=useState<OpenCase>(null); const [busy,setBusy]=useState(false); const [message,setMessage]=useState("");
+export function AdminGlobalSearch({ initialReference = "" }: { initialReference?: string } = {}) {
+  const [query,setQuery]=useState(initialReference); const [reason,setReason]=useState(""); const [result,setResult]=useState<AdminDirectorySearchResponse|null>(null); const [openCase,setOpenCase]=useState<OpenCase>(null); const [busy,setBusy]=useState(false); const [message,setMessage]=useState("");
   const canSearch=useMemo(()=>query.trim().length>=2&&reason.trim().length>=10&&!busy,[query,reason,busy]);
 
   async function call(payload: Record<string,string>) {

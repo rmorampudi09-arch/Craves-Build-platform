@@ -1,5 +1,7 @@
 package in.craves.catalog.service;
 
+import in.craves.catalog.finance.CatalogFinanceEligibility;
+
 import in.craves.catalog.exception.ApiException;
 import in.craves.catalog.web.FavoriteHomeFeedDtos.FavoriteCookingState;
 import in.craves.catalog.web.FavoriteHomeFeedDtos.FavoriteHomeCard;
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class FavoriteHomeFeedService {
+    private final CatalogFinanceEligibility financeEligibility;
     static final int MAX_RELATIONSHIPS_PER_REQUEST = 100;
     static final int MAX_PREVIEW_ITEMS_PER_KITCHEN = 3;
     static final int LOOKAHEAD_DAYS = 7;
@@ -35,8 +38,9 @@ public class FavoriteHomeFeedService {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    public FavoriteHomeFeedService(NamedParameterJdbcTemplate jdbc) {
+    public FavoriteHomeFeedService(NamedParameterJdbcTemplate jdbc, CatalogFinanceEligibility financeEligibility) {
         this.jdbc = jdbc;
+        this.financeEligibility = financeEligibility;
     }
 
     public ResolveFavoriteHomeResponse resolve(ResolveFavoriteHomeRequest request) {
@@ -55,7 +59,8 @@ public class FavoriteHomeFeedService {
             }
         }
 
-        List<KitchenRow> kitchens = loadKitchens(chefIds, kitchenIds);
+        var eligible = financeEligibility.current();
+        List<KitchenRow> kitchens = loadKitchens(chefIds, kitchenIds, eligible);
         Map<UUID, KitchenRow> byKitchenId = new HashMap<>();
         Map<UUID, KitchenRow> byChefIdentityId = new HashMap<>();
         for (KitchenRow kitchen : kitchens) {
@@ -127,10 +132,10 @@ public class FavoriteHomeFeedService {
         return unique;
     }
 
-    private List<KitchenRow> loadKitchens(Set<UUID> chefIds, Set<UUID> kitchenIds) {
+    private List<KitchenRow> loadKitchens(Set<UUID> chefIds, Set<UUID> kitchenIds, CatalogFinanceEligibility.Snapshot eligible) {
         List<String> predicates = new ArrayList<>();
         MapSqlParameterSource parameters = new MapSqlParameterSource()
-            .addValue("defaultTimezone", DEFAULT_TIMEZONE);
+            .addValue("defaultTimezone", DEFAULT_TIMEZONE).addValue("financeChefIds", eligible.sqlArray());
         if (!chefIds.isEmpty()) {
             predicates.add("kp.identity_id IN (:chefIds)");
             parameters.addValue("chefIds", chefIds);
@@ -153,7 +158,7 @@ public class FavoriteHomeFeedService {
                    ksc.paused_until
               FROM catalog_schema.kitchen_profile kp
               LEFT JOIN catalog_schema.kitchen_schedule_config ksc ON ksc.kitchen_id = kp.id
-             WHERE %s
+             WHERE (%s) AND kp.identity_id = ANY(CAST(:financeChefIds AS uuid[]))
             """.formatted(String.join(" OR ", predicates));
         return jdbc.query(sql, parameters, (rs, rowNum) -> new KitchenRow(
             rs.getObject("id", UUID.class),

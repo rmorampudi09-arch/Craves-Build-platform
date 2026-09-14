@@ -1,5 +1,7 @@
 package in.craves.catalog.service;
 
+import in.craves.catalog.finance.CatalogFinanceEligibility;
+
 import in.craves.catalog.exception.ApiException;
 import in.craves.catalog.web.SavedMenuItemDtos.ResolveSavedMenuItemsRequest;
 import in.craves.catalog.web.SavedMenuItemDtos.ResolveSavedMenuItemsResponse;
@@ -28,14 +30,16 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class SavedMenuItemReadService {
+    private final CatalogFinanceEligibility financeEligibility;
     static final int MAX_BATCH_SIZE = 100;
     static final int LOOKAHEAD_DAYS = 7;
     static final String DEFAULT_TIMEZONE = "Asia/Kolkata";
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    public SavedMenuItemReadService(NamedParameterJdbcTemplate jdbc) {
+    public SavedMenuItemReadService(NamedParameterJdbcTemplate jdbc, CatalogFinanceEligibility financeEligibility) {
         this.jdbc = jdbc;
+        this.financeEligibility = financeEligibility;
     }
 
     public ResolveSavedMenuItemsResponse resolve(ResolveSavedMenuItemsRequest request) {
@@ -44,7 +48,8 @@ public class SavedMenuItemReadService {
 
     ResolveSavedMenuItemsResponse resolveAt(ResolveSavedMenuItemsRequest request, Instant evaluatedAt) {
         List<UUID> requestedIds = validateAndNormalize(request);
-        Map<UUID, ItemRow> itemsById = loadItems(requestedIds);
+        var eligible = financeEligibility.current();
+        Map<UUID, ItemRow> itemsById = loadItems(requestedIds, eligible);
         Set<UUID> kitchenIds = new LinkedHashSet<>();
         itemsById.values().stream()
             .map(ItemRow::kitchenId)
@@ -84,7 +89,7 @@ public class SavedMenuItemReadService {
         return List.copyOf(unique);
     }
 
-    private Map<UUID, ItemRow> loadItems(List<UUID> menuItemIds) {
+    private Map<UUID, ItemRow> loadItems(List<UUID> menuItemIds, CatalogFinanceEligibility.Snapshot eligible) {
         String sql = """
             SELECT mi.id,
                    mi.kitchen_id,
@@ -116,11 +121,11 @@ public class SavedMenuItemReadService {
               FROM catalog_schema.menu_item mi
               LEFT JOIN catalog_schema.kitchen_profile kp ON kp.id = mi.kitchen_id
               LEFT JOIN catalog_schema.kitchen_schedule_config ksc ON ksc.kitchen_id = kp.id
-             WHERE mi.id IN (:ids)
+             WHERE mi.id IN (:ids) AND kp.identity_id = ANY(CAST(:financeChefIds AS uuid[]))
             """;
 
         MapSqlParameterSource parameters = new MapSqlParameterSource()
-            .addValue("ids", menuItemIds)
+            .addValue("ids", menuItemIds).addValue("financeChefIds", eligible.sqlArray())
             .addValue("defaultTimezone", DEFAULT_TIMEZONE);
         Map<UUID, ItemRow> rows = new LinkedHashMap<>();
         jdbc.query(sql, parameters, rs -> {

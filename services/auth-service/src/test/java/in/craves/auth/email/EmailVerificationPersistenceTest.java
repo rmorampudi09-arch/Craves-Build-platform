@@ -22,12 +22,14 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /** Real PostgreSQL transactions/concurrency; never accepts any production/tunnel configuration. */
 @EnabledIfEnvironmentVariable(named="EMAIL_TEST_DB_URL", matches=".+")
+@ResourceLock("disposable-email-auth-migration-schemas")
 class EmailVerificationPersistenceTest {
     static JdbcTemplate jdbc;
     static DataSourceTransactionManager transactions;
@@ -48,6 +50,9 @@ class EmailVerificationPersistenceTest {
             uri.getQuery()!=null || uri.getUserInfo()!=null || uri.getFragment()!=null)
             throw new IllegalStateException("Only the explicitly disposable CI PostgreSQL service is allowed");
         var admin=new DriverManagerDataSource(url,System.getenv("EMAIL_TEST_DB_USER"),System.getenv("EMAIL_TEST_DB_PASSWORD"));
+        // V7 owns a hardcoded schema outside Flyway's configured default. Reset it only after the disposable DB guard.
+        new JdbcTemplate(admin).execute("DROP SCHEMA IF EXISTS academy_schema CASCADE");
+        resetPublicExplorerFixture(new JdbcTemplate(admin));
         new JdbcTemplate(admin).execute("DROP SCHEMA IF EXISTS email_auth_test CASCADE");
         new JdbcTemplate(admin).execute("CREATE SCHEMA email_auth_test");
         var source=new DriverManagerDataSource(url+"?currentSchema=email_auth_test",System.getenv("EMAIL_TEST_DB_USER"),System.getenv("EMAIL_TEST_DB_PASSWORD"));
@@ -218,12 +223,22 @@ class EmailVerificationPersistenceTest {
         assertEquals(address(),transport.projected.get(owner.identityId()));
     }
     @Test void cleanMigrationAndReplayingHaveNoSideEffects() {
+        // This second fresh migration also executes V7; another default schema does not isolate academy_schema.
+        jdbc.execute("DROP SCHEMA IF EXISTS academy_schema CASCADE");
+        resetPublicExplorerFixture(jdbc);
         jdbc.execute("DROP SCHEMA IF EXISTS email_auth_clean_test CASCADE");
         var source=jdbc.getDataSource();
         Flyway clean=Flyway.configure().dataSource(source).schemas("email_auth_clean_test").defaultSchema("email_auth_clean_test").load();
         assertEquals(11,clean.migrate().migrationsExecuted);
         assertEquals(0,clean.migrate().migrationsExecuted);clean.validate();
         assertEquals(11,jdbc.queryForObject("SELECT count(*) FROM email_auth_clean_test.flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        assertNotNull(jdbc.queryForObject("SELECT to_regclass('academy_schema.learner')::text",String.class));
+        assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_audit')::text",String.class));
+    }
+    private static void resetPublicExplorerFixture(JdbcTemplate database) {
+        // V9 deliberately uses public, outside the test's default schema. The caller has passed the strict disposable DB guard.
+        database.execute("DROP TABLE IF EXISTS public.admin_explorer_audit CASCADE");
+        database.execute("DROP FUNCTION IF EXISTS public.reject_admin_explorer_audit_mutation()");
     }
     static class CaptureTransport implements EmailVerificationTransport {
         final ConcurrentHashMap<UUID,String> codes=new ConcurrentHashMap<>();

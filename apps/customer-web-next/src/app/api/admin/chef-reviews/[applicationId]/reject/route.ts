@@ -1,9 +1,14 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseAdminChefApplication, parseAdminDecision } from "@/lib/admin-chef-review-contract";
 import { isSameOrigin } from "@/lib/request-security";
 import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ applicationId: string }> }) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const { applicationId } = await context.params;
   if (!isUuid(applicationId)) return NextResponse.json({ code: "INVALID_APPLICATION_ID" }, { status: 400 });

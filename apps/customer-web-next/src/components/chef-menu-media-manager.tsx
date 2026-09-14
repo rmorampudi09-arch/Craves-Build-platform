@@ -42,7 +42,7 @@ export function ChefMenuMediaManager() {
     try {
       const data = new FormData(); data.set("file", image); data.set("primary", String(primary));
       const response = await fetch(`/api/chef/menu/${selected.id}/images`, { method: "POST", body: data });
-      if (!response.ok) throw new Error("Image upload failed. Use JPG, PNG or WebP under 10 MB.");
+      if (!response.ok) throw new Error("Image upload failed. Use JPG, PNG or WebP up to 8 MiB.");
       setImage(null); await load(); setMessage("Menu image uploaded by Catalog Service.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Image upload failed."); }
     finally { setBusy(false); }

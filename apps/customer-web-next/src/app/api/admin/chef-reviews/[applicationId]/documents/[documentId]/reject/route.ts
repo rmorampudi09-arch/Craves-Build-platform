@@ -1,3 +1,4 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseAdminChefDocument } from "@/lib/admin-chef-document-contract";
 import { isSameOrigin } from "@/lib/request-security";
@@ -13,6 +14,10 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ applicationId: string; documentId: string }> },
 ) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const { applicationId, documentId } = await context.params;
   if (!isUuid(applicationId) || !isUuid(documentId)) {

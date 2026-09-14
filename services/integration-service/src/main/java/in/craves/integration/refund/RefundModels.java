@@ -53,8 +53,26 @@ public final class RefundModels {
         String provider,
         String providerOrderId,
         String providerPaymentId,
-        String providerRefundId
+        String providerRefundId,
+        String workKind,
+        String priorStatus,
+        String dispatchProtocol,
+        String dispatchRequestBody,
+        String dispatchRequestSha256,
+        int reconciliationAttemptCount,
+        int consecutiveReconciliationFailures,
+        String priorErrorSha256
     ) {
+        public RefundWorkItem(UUID refundId, UUID paymentOrderId, UUID checkoutId, UUID chefSubOrderId,
+            UUID customerIdentityId, UUID requestEventId, String cashfreeOrderId, String refundReference,
+            UUID idempotencyKey, BigDecimal amount, String currency, String reason, String status,
+            String providerStatus, String cfRefundId, int attemptCount, UUID lockToken, String provider,
+            String providerOrderId, String providerPaymentId, String providerRefundId) {
+            this(refundId,paymentOrderId,checkoutId,chefSubOrderId,customerIdentityId,requestEventId,
+                cashfreeOrderId,refundReference,idempotencyKey,amount,currency,reason,status,providerStatus,
+                cfRefundId,attemptCount,lockToken,provider,providerOrderId,providerPaymentId,providerRefundId,
+                "UNCLASSIFIED",status,null,null,null,0,0,null);
+        }
         public RefundWorkItem(
             UUID refundId, UUID paymentOrderId, UUID checkoutId, UUID chefSubOrderId,
             UUID customerIdentityId, UUID requestEventId, String cashfreeOrderId,

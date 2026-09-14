@@ -38,6 +38,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
       LEDGER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/chef_ledger_test
       LEDGER_TEST_DB_USER: ledger_ci
       LEDGER_TEST_DB_PASSWORD: ledger_ci_local_only
@@ -87,7 +88,8 @@ jobs:
                     'FinancePolicyDatabaseTest':5,'ChefPayoutDatabaseTest':14,'RazorpayXPayoutClientTest':11,
                     'ChefPayoutWebhookDatabaseTest':8,'FinanceArithmeticPropertyTest':2,'FinanceRecoveryDatabaseTest':10,
                     'OrderFinancialFinalizationDatabaseTest':18,'FinancialSourceSignatureTest':3,
-                    'FinancialCheckoutDatabaseTest':7,'FinancialSourceCompletionDatabaseTest':8}
+                    'FinancialCheckoutDatabaseTest':7,'FinancialSourceCompletionDatabaseTest':8,
+                    'CartLimitsTest':2,'CartConcurrencyDatabaseTest':6}
           roots=[pathlib.Path('services/'+s+'/target/surefire-reports') for s in ['integration-service','order-service']]
           for name, minimum in required.items():
               files=[p for root in roots for p in root.glob('TEST-*.'+name+'.xml')]

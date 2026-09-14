@@ -18,7 +18,7 @@ class NearbyDiscoveryServiceValidationTest {
         CatalogDiscoveryProperties properties = new CatalogDiscoveryProperties();
         properties.setMaxQueryRadiusMeters(50_000);
         properties.setMaxPageSize(100);
-        service = new NearbyDiscoveryService(new JdbcTemplate(), properties);
+        service = new NearbyDiscoveryService(new JdbcTemplate(), properties, org.mockito.Mockito.mock(in.craves.catalog.finance.CatalogFinanceEligibility.class));
     }
 
     @Test

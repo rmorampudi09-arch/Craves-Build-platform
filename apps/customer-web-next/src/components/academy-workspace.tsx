@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { ArrowLeft, BookOpen, GraduationCap, LayoutDashboard, LockKeyhole, Menu, Search, ShieldCheck, Truck, X } from "lucide-react";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import type { AdminIdentity } from "@/lib/admin-contract";
-import { logoutAdminSession, type SessionState } from "@/lib/admin-renewal";
+import type { SessionState } from "@/lib/admin-renewal";
 import { AcademySkeleton } from "@/app/admin/academy/academy-ui";
 import "@/app/admin/academy/academy.css";
 
 /** Scoped to Academy: other administrative workspaces retain their existing theme. */
-export function AcademyWorkspace({ identity, message, children, sessionState }: { identity: AdminIdentity | null; message: string; children: ReactNode; sessionState: SessionState }) {
+export function AcademyWorkspace({ identity, message, children, sessionState, onSignOut }: { identity: AdminIdentity | null; message: string; children: ReactNode; sessionState: SessionState; onSignOut: () => void }) {
   const drawer = useRef<HTMLDialogElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const close = () => { drawer.current?.close(); menuButton.current?.focus(); };
+  const allowInteraction = identity !== null && sessionState === "ready" && message === "";
+  useEffect(() => { if (!allowInteraction) drawer.current?.close(); }, [allowInteraction]);
   const nav = <>
     <div className="ca-shell-brand"><CravesLogo size="md" priority /><div><strong>CRAVES</strong><span>INTERNAL ACADEMY</span></div></div>
     <nav className="ca-shell-nav" aria-label="Craves workspaces">
@@ -39,11 +41,11 @@ export function AcademyWorkspace({ identity, message, children, sessionState }: 
         <button ref={menuButton} className="ca-shell-menu ca-secondary" aria-label="Open navigation" onClick={() => drawer.current?.showModal()}><Menu size={20} /></button>
         <div className="ca-shell-page"><h1>Craves Academy</h1><p>Your product knowledge, connected.</p></div>
         <div className="ca-shell-private"><LockKeyhole size={14} /><span>Private workspace</span></div>
-        {identity && <button type="button" className="ca-secondary" onClick={() => { void logoutAdminSession(); }}>Sign out</button>}
+        {identity && <button type="button" className="ca-secondary" onClick={onSignOut}>Sign out</button>}
         <div className="ca-shell-account"><span className="ca-shell-avatar"><ShieldCheck size={18} /></span><div><strong>{identity?.displayName || "Administrator"}</strong><small>{identity ? "Role verified" : "Checking access"}</small></div></div>
       </header>
       <main id="ca-main" className="ca-shell-content" tabIndex={-1}>
-        {identity ? <><div hidden={sessionState !== "ready"}>{children}</div>{sessionState !== "ready" && <section className="ca-error-state"><div><h2>Reconnecting securely</h2><p role="status">Your answers are kept in this tab. We’ll continue when your session is verified.</p></div></section>}</> : verifying ? <AcademySkeleton /> : <section className="ca-error-state"><span className="ca-state-icon"><LockKeyhole size={32} /></span><div><span className="ca-kicker">ADMINISTRATOR ACCESS</span><h2>Continue securely to Academy</h2><p role="alert">{message || "Sign in with an authorized Craves administrator account."}</p><Link className="ca-primary" href="/sign-in?returnTo=%2Fadmin%2Facademy">Administrator sign in</Link></div></section>}
+        {identity ? <><div hidden={!allowInteraction}>{children}</div>{!allowInteraction && <section className="ca-error-state"><div><h2>Reconnecting securely</h2><p role="status">Your answers are kept in this tab. We’ll continue when your session is verified.</p></div></section>}</> : verifying ? <AcademySkeleton /> : <section className="ca-error-state"><span className="ca-state-icon"><LockKeyhole size={32} /></span><div><span className="ca-kicker">ADMINISTRATOR ACCESS</span><h2>Continue securely to Academy</h2><p role="alert">{message || "Sign in with an authorized Craves administrator account."}</p><Link className="ca-primary" href="/sign-in?returnTo=%2Fadmin%2Facademy">Administrator sign in</Link></div></section>}
       </main>
     </div>
   </div>;

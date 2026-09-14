@@ -21,7 +21,7 @@ class SavedMenuItemReadServiceValidationTest {
     @BeforeEach
     void setUp() {
         jdbc = mock(NamedParameterJdbcTemplate.class);
-        service = new SavedMenuItemReadService(jdbc);
+        service = new SavedMenuItemReadService(jdbc, org.mockito.Mockito.mock(in.craves.catalog.finance.CatalogFinanceEligibility.class));
     }
 
     @Test

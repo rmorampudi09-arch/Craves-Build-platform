@@ -1,5 +1,7 @@
 package in.craves.catalog.service;
 
+import in.craves.catalog.finance.CatalogFinanceEligibility;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.catalog.exception.ApiException;
@@ -31,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class KitchenScheduleService {
+    private final CatalogFinanceEligibility financeEligibility;
     private static final String HYDERABAD_TIMEZONE = "Asia/Kolkata";
     private static final int MAX_WEEKLY_WINDOWS = 56;
     private static final int MAX_WINDOWS_PER_OVERRIDE = 8;
@@ -39,9 +42,10 @@ public class KitchenScheduleService {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
-    public KitchenScheduleService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    public KitchenScheduleService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper, CatalogFinanceEligibility financeEligibility) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.financeEligibility = financeEligibility;
     }
 
     public KitchenScheduleResponse getMySchedule(CravesPrincipal principal) {
@@ -57,6 +61,7 @@ public class KitchenScheduleService {
     ) {
         UUID kitchenId = requireChefKitchen(principal);
         validateScheduleRequest(request);
+        if (Boolean.TRUE.equals(request.acceptingOrders())) financeEligibility.requireChef(principal.identityId());
         ensureConfig(kitchenId);
         KitchenScheduleResponse oldState = readSchedule(kitchenId);
 
@@ -173,7 +178,8 @@ public class KitchenScheduleService {
             throw ApiException.badRequest("KITCHEN_ID_REQUIRED", "kitchenId is required");
         }
         Instant effectiveAt = evaluatedAt == null ? Instant.now() : evaluatedAt;
-        KitchenState kitchen = requireKitchen(kitchenId);
+        var eligible = financeEligibility.current();
+        KitchenState kitchen = requireKitchen(kitchenId, eligible);
         ScheduleConfig config = readConfigOrDefault(kitchenId);
         ZoneId zoneId = safeZone(config.timezoneId());
         ZonedDateTime local = effectiveAt.atZone(zoneId);
@@ -328,11 +334,11 @@ public class KitchenScheduleService {
         return ids.getFirst();
     }
 
-    private KitchenState requireKitchen(UUID kitchenId) {
+    private KitchenState requireKitchen(UUID kitchenId, CatalogFinanceEligibility.Snapshot eligible) {
         List<KitchenState> rows = jdbcTemplate.query(
-            "SELECT status FROM catalog_schema.kitchen_profile WHERE id = ?",
+            "SELECT status FROM catalog_schema.kitchen_profile WHERE id = ? AND identity_id = ANY(CAST(? AS uuid[]))",
             (rs, rowNum) -> new KitchenState("ACTIVE".equalsIgnoreCase(rs.getString("status"))),
-            kitchenId
+            kitchenId, eligible.sqlArray()
         );
         if (rows.isEmpty()) {
             throw ApiException.notFound("KITCHEN_NOT_FOUND", "Kitchen was not found");

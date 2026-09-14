@@ -27,6 +27,6 @@ public class InternalCatalogController {
         @PathVariable UUID kitchenId
     ) {
         authorizer.requireAuthorized(internalKey);
-        return catalogService.getPublicKitchen(kitchenId);
+        return catalogService.getInternalKitchen(kitchenId);
     }
 }

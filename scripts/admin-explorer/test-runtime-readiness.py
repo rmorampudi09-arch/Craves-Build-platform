@@ -57,6 +57,9 @@ elif a[:1]==['rest']:
    if case=='marker-only':policy='<policies><!-- CRAVES_ADMIN_EXPLORER_V1 Authorization --><inbound><set-status code="401"/></inbound></policies>'
    emit(policy)
  elif '/policies/' in url:
+  if case in ['missing-api-policy','policy-forbidden','policy-timeout'] and '/apis/' in url:
+   errors={'missing-api-policy':'ERROR: Not Found({"error":{"code":"ResourceNotFound","message":"PoliciesConfiguration not found.","details":null}})', 'policy-forbidden':'ERROR: Forbidden({"error":{"code":"AuthorizationFailed","message":"Denied"}})', 'policy-timeout':'ERROR: GatewayTimeout'}
+   print(errors[case],file=sys.stderr);sys.exit(1)
   if case=='fragment':emit('<policies><inbound><include-fragment fragment-id="unchecked"/></inbound></policies>')
   else:emit('<policies><inbound><set-header name="Authorization"><value>replacement</value></set-header></inbound></policies>' if case=='product-auth' and '/products/' in url else '<policies><inbound><base/></inbound></policies>')
  else: emit({'properties':{'path':'api/v1/admin/explorer','subscriptionRequired':False}})
@@ -104,6 +107,15 @@ class ReadinessTest(unittest.TestCase):
         result = self.run_case('ready')
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn('Authenticated success/role-denial acceptance is separate', result.stdout)
+
+    def test_explicit_missing_scoped_policy_inherits_verified_parent(self):
+        result=self.run_case('missing-api-policy')
+        self.assertEqual(0,result.returncode,result.stderr)
+        for case in ['policy-forbidden','policy-timeout']:
+            with self.subTest(case=case):
+                result=self.run_case(case)
+                self.assertNotEqual(0,result.returncode)
+                self.assertIn('Inherited policy inventory is incomplete',result.stderr)
 
     def test_disabled_backend_cannot_open_admin(self):
         self.assertNotEqual(0, self.run_case('disabled').returncode)

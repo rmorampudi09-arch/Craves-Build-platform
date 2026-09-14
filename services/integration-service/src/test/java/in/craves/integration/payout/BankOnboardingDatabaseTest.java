@@ -138,4 +138,20 @@ class BankOnboardingDatabaseTest {
         submit();banks.configure(f.admin,new BankOnboardingService.ControlChange(1,true,false,3,"Pause automatic validation"));
         assertFalse(banks.processOne());verify(provider,never()).create(any(),any());assertEquals("QUEUED",banks.status(f.chef).state());
     }
+    @Test void unavailableProviderIsShownAsUnavailableWithoutAcceptingBankDetails() {
+        when(provider.ready()).thenReturn(false);assertFalse(banks.status(f.chef).automaticActivation());
+        assertEquals("NOT_SUBMITTED",banks.status(f.chef).state());assertThrows(RuntimeException.class,this::submit);
+        assertEquals(0,f.count("finance_bank_request"));verifyNoInteractions(identities);verify(provider,never()).create(any(),any());
+    }
+    @Test void pausedValidationDisablesNewEnrollmentAndRetainsHistoricalStatus() {
+        var original=verified();banks.configure(f.admin,new BankOnboardingService.ControlChange(1,true,false,3,"TEST pause"));
+        var status=banks.status(f.chef);assertFalse(status.automaticActivation());assertTrue(status.bankValidated());assertEquals(original.id(),status.id());
+        assertThrows(RuntimeException.class,()->banks.submit(f.chef,request(UUID.randomUUID(),original.id(),"001234567899")));
+        assertEquals(1,f.count("finance_bank_request"));
+    }
+    @Test void missingWorkerDisablesSubmissionEvenWhenProviderConfigured() {
+        var stopped=new BankOnboardingService(f.jdbc,cipher,identities,provider,new DataSourceTransactionManager(f.jdbc.getDataSource()),false);
+        assertFalse(stopped.status(f.chef).automaticActivation());assertThrows(RuntimeException.class,()->stopped.submit(f.chef,request(UUID.randomUUID(),null,"001234567890")));
+        assertEquals(0,f.count("finance_bank_request"));verifyNoInteractions(identities);
+    }
 }

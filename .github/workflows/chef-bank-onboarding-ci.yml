@@ -33,6 +33,7 @@ jobs:
           --health-cmd pg_isready
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
+      CRAVES_DISPOSABLE_TEST_DATABASE: "true"
       LEDGER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/chef_ledger_test
       LEDGER_TEST_DB_USER: ledger_ci
       LEDGER_TEST_DB_PASSWORD: ledger_ci_local_only
@@ -68,7 +69,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import pathlib, xml.etree.ElementTree as E
-          required={'BankOnboardingDatabaseTest':16,'BankAutomationSafetyDatabaseTest':9,
+          required={'BankOnboardingDatabaseTest':19,'BankAutomationSafetyDatabaseTest':9,
                     'BankDataCipherTest':6,'RazorpayBankValidationClientTest':14,
                     'BankOnboardingSecurityTest':5,'BankIdentitySignatureTest':5}
           for name,minimum in required.items():

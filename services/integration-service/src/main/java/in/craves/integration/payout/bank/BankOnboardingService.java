@@ -44,15 +44,15 @@ public class BankOnboardingService {
         requireIdentity(actor);
         var rows=jdbc.query("SELECT r.* FROM payment_schema.finance_bank_head h JOIN payment_schema.finance_bank_request r ON r.id=h.request_id WHERE h.chef_identity_id=?",
                 this::mapStatus,actor.identityId());
-        return rows.isEmpty()?new Status(null,"NOT_SUBMITTED",null,null,false,false,true,
-                "Add your bank details once. Razorpay performs bank validation automatically.",null):rows.getFirst();
+        return availability(rows.isEmpty()?new Status(null,"NOT_SUBMITTED",null,null,false,false,true,
+                "Add your bank details once. Razorpay performs bank validation automatically.",null):rows.getFirst());
     }
     public Status submit(CravesPrincipal actor, Submission request) {
         requireIdentity(actor);
-        if(!cipher.ready()) throw unavailable("Secure bank storage is not configured");
+        if(!available()) throw unavailable("Bank enrollment is not currently available. Check your finance balance for eligible payout options.");
         var identity=applicants.fetch(actor.identityId());
         var details=BankOnboardingModels.details(request,identity);
-        return tx.execute(s->save(actor.identityId(),request,details));
+        return availability(tx.execute(s->save(actor.identityId(),request,details)));
     }
     private Status save(UUID chef,Submission request,Details details) {
         lockChef(chef);
@@ -65,7 +65,7 @@ public class BankOnboardingService {
             return get(id);
         }
         var controls=jdbc.queryForMap("SELECT * FROM payment_schema.finance_bank_automation_control WHERE singleton=true FOR SHARE");
-        if(!Boolean.TRUE.equals(controls.get("submissions_enabled"))) throw unavailable("Bank enrollment is not enabled");
+        if(!Boolean.TRUE.equals(controls.get("submissions_enabled")) || !Boolean.TRUE.equals(controls.get("validation_enabled")) || !provider.ready() || !workerDeployed) throw unavailable("Bank enrollment is not enabled");
         var heads=jdbc.query("SELECT request_id FROM payment_schema.finance_bank_head WHERE chef_identity_id=? FOR UPDATE",(rs,n)->rs.getObject(1,UUID.class),chef);
         UUID current=heads.isEmpty()?null:heads.getFirst();
         if(!Objects.equals(current,request.expectedCurrentId())) throw conflict("Bank profile changed; refresh before editing");
@@ -97,7 +97,7 @@ public class BankOnboardingService {
         FinancePolicyService.reader(actor);
         var c=jdbc.queryForMap("SELECT * FROM payment_schema.finance_bank_automation_control WHERE singleton=true");
         var rows=jdbc.query("SELECT r.* FROM payment_schema.finance_bank_head h JOIN payment_schema.finance_bank_request r ON r.id=h.request_id ORDER BY r.updated_at DESC,r.id DESC LIMIT 100",
-                (rs,n)->new AdminRow(rs.getObject("chef_identity_id",UUID.class),mapStatus(rs,n)));
+                (rs,n)->new AdminRow(rs.getObject("chef_identity_id",UUID.class),availability(mapStatus(rs,n))));
         return new Controls(((Number)c.get("revision")).longValue(),(boolean)c.get("submissions_enabled"),
                 (boolean)c.get("validation_enabled"),((Number)c.get("maximum_requests_per_day")).intValue(),
                 cipher.ready(),provider.ready(),workerDeployed,rows);
@@ -204,6 +204,15 @@ public class BankOnboardingService {
         jdbc.update("UPDATE payment_schema.finance_bank_request SET state='APPLICANT_ACTION_REQUIRED',application_approved=false,lease_id=NULL,lease_until=NULL,last_error='APPLICANT_IDENTITY_CHANGED_OR_INELIGIBLE',updated_at=now() WHERE id=?",work.id());
         audit(work.id(),work.chefId(),"APPLICANT_ACTION_REQUIRED","SERVICE");
     }
+    private boolean available() {
+        if(!cipher.ready() || !provider.ready() || !workerDeployed)return false;
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT submissions_enabled AND validation_enabled FROM payment_schema.finance_bank_automation_control WHERE singleton=true",Boolean.class));
+    }
+    private Status availability(Status status) {
+        boolean ready=available();
+        return new Status(status.id(),status.state(),status.lastFour(),status.ifsc(),status.bankValidated(),status.applicationApproved(),ready,
+            ready?status.message():"Automatic bank enrollment is currently unavailable. Check your finance balance for eligible payout options.",status.updatedAt());
+    }
     private Status get(UUID id) {return jdbc.query("SELECT * FROM payment_schema.finance_bank_request WHERE id=?",this::mapStatus,id).getFirst();}
     private Status mapStatus(ResultSet rs,int n)throws SQLException {
         String state=rs.getString("state");Timestamp verified=rs.getTimestamp("verified_at");
@@ -219,7 +228,7 @@ public class BankOnboardingService {
             case "SUPERSEDED" -> "This is an older bank enrollment and cannot receive new payouts.";
             default -> "Bank details saved securely. Automatic Razorpay validation is pending.";
         };
-        return new Status(rs.getObject("id",UUID.class),stale?"VALIDATING":state,rs.getString("last_four"),rs.getString("ifsc"),
+        return new Status(rs.getObject("id",UUID.class),stale && available()?"VALIDATING":state,rs.getString("last_four"),rs.getString("ifsc"),
                 rs.getBoolean("bank_validated"),rs.getBoolean("application_approved"),true,message,
                 rs.getTimestamp("updated_at").toInstant());
     }

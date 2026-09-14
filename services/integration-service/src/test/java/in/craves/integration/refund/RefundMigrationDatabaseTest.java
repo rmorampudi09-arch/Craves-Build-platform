@@ -18,7 +18,7 @@ class RefundMigrationDatabaseTest {
         var jdbc=new JdbcTemplate(ds);assertEquals("craves_refund_test",jdbc.queryForObject("SELECT current_database()",String.class));
         jdbc.execute("DROP SCHEMA IF EXISTS payment_schema CASCADE");jdbc.execute("DROP SCHEMA IF EXISTS delivery_schema CASCADE");
         Flyway.configure().dataSource(ds).defaultSchema("payment_schema").schemas("payment_schema")
-            .locations("classpath:db/migration").target("135").load().migrate();
+            .locations("classpath:db/migration").target("133").load().migrate();
         UUID id=UUID.randomUUID(),event=UUID.randomUUID();
         jdbc.update("INSERT INTO payment_schema.refund(id,refund_ref,amount,currency,status,attempt_count,last_error,provider) VALUES (?, ?, 12.34,'INR','DEAD_LETTER',8,'Historical unknown HTTP 400','RAZORPAY')",id,"CRV"+id.toString().replace("-",""));
         String oldKey="REFUND_STATUS_CHANGED:"+id+":REFUND_FAILED:FAILED";
@@ -30,7 +30,12 @@ class RefundMigrationDatabaseTest {
         var before=jdbc.queryForMap("SELECT status,attempt_count,last_error,provider_payload,created_at,updated_at FROM payment_schema.refund WHERE id=?",id);
         var beforeEvent=jdbc.queryForMap("SELECT * FROM payment_schema.refund_status_outbox WHERE id=?",event);
         var latest=Flyway.configure().dataSource(ds).defaultSchema("payment_schema").schemas("payment_schema").locations("classpath:db/migration").load();
-        assertEquals(1,latest.migrate().migrationsExecuted);latest.validate();assertEquals(0,latest.migrate().migrationsExecuted);
+        assertEquals("133",latest.info().current().getVersion().getVersion());
+        var pending=java.util.Arrays.stream(latest.info().pending()).map(m->m.getVersion().getVersion()).toList();
+        // V134 is the separately reviewed manual channel; V135 has never existed.
+        // Both the isolated refund branch and the combined release start from real production V133.
+        assertTrue(pending.equals(java.util.List.of("136")) || pending.equals(java.util.List.of("134","136")),pending.toString());
+        assertEquals(pending.size(),latest.migrate().migrationsExecuted);latest.validate();assertEquals(0,latest.migrate().migrationsExecuted);
         assertEquals(before,jdbc.queryForMap("SELECT status,attempt_count,last_error,provider_payload,created_at,updated_at FROM payment_schema.refund WHERE id=?",id));
         assertEquals(beforeEvent,jdbc.queryForMap("SELECT * FROM payment_schema.refund_status_outbox WHERE id=?",event));
         assertNull(jdbc.queryForObject("SELECT dispatch_protocol FROM payment_schema.refund WHERE id=?",String.class,id));

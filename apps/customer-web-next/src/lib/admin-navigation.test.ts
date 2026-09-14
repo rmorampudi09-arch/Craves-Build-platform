@@ -3,7 +3,7 @@ import test from "node:test";
 import { ADMIN_MODULES, adminMetricCsv, formatAdminTimestamp, isAdminDestination, matchesAdminRoute, searchAdminModules } from "./admin-navigation.ts";
 
 test("every workspace has a unique stable destination", () => {
-  assert.equal(ADMIN_MODULES.length, 13);
+  assert.equal(ADMIN_MODULES.length, 17);
   assert.equal(new Set(ADMIN_MODULES.map(module => module.id)).size, ADMIN_MODULES.length);
   assert.equal(new Set(ADMIN_MODULES.map(module => module.href)).size, ADMIN_MODULES.length);
   for (const id of ["chefs", "accounts", "finance", "plans", "subscriptions", "capacity", "notifications", "academy", "delivery", "operations", "search"]) assert.ok(ADMIN_MODULES.find(module => module.id === id));

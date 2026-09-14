@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
-  ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
+  BarChart3, Users, PackageSearch, ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
   LayoutDashboard, LogOut, Menu, ReceiptText, Search, SearchCheck, ShieldCheck, Truck, X
 } from "lucide-react";
 import type { AdminIdentity } from "@/lib/admin-contract";
@@ -18,6 +18,7 @@ import { AcademyWorkspace } from "@/components/academy-workspace";
 import "@/styles/admin-control.css";
 
 const icons = {
+  analytics: BarChart3, users: Users, "chef-explorer": ChefHat, "order-explorer": PackageSearch,
   overview: LayoutDashboard, search: Search, modules: Menu, operations: SearchCheck,
   delivery: Truck, chefs: ChefHat, accounts: ShieldCheck, finance: ReceiptText,
   plans: ReceiptText, subscriptions: ClipboardList, capacity: Gauge,

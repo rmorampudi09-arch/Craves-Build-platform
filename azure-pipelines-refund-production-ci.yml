@@ -4,31 +4,54 @@ pr: none
 pool:
   vmImage: ubuntu-latest
 
-steps:
-  - checkout: self
-    clean: true
-    persistCredentials: false
+resources:
+  containers:
+    - container: refundPostgres
+      image: postgres:16
+      ports: ['5432:5432']
+      env:
+        POSTGRES_DB: craves_refund_test
+        POSTGRES_USER: refund_ci
+        POSTGRES_PASSWORD: refund_ci_disposable_only
+      options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
 
-  - task: JavaToolInstaller@0
-    displayName: Use Java 21
-    inputs:
-      versionSpec: '21'
-      jdkArchitectureOption: x64
-      jdkSourceOption: PreInstalled
-
-  - bash: |
-      set -euo pipefail
-      cd services/integration-service
-      mvn -B -ntp -DskipTests=false verify
-    displayName: Verify refund production readiness
-
-  - bash: |
-      set -euo pipefail
-      file=services/integration-service/src/main/resources/application.yml
-      grep -Fq 'provider-execution-enabled: ${CRAVES_REFUND_PROVIDER_EXECUTION_ENABLED:false}' "$file"
-      grep -Fq 'reconciliation-enabled: ${CRAVES_REFUND_RECONCILIATION_ENABLED:false}' "$file"
-      grep -Fq 'production-provider-execution-approved: ${CRAVES_REFUND_PRODUCTION_PROVIDER_EXECUTION_APPROVED:false}' "$file"
-      grep -Fq 'production-reconciliation-approved: ${CRAVES_REFUND_PRODUCTION_RECONCILIATION_APPROVED:false}' "$file"
-      grep -Fq 'CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED:false' \
-        services/integration-service/src/main/java/in/craves/integration/config/PaymentProviderProperties.java
-    displayName: Verify financial switches default false
+jobs:
+  - job: refund_safety
+    timeoutInMinutes: 25
+    services:
+      postgres: refundPostgres
+    steps:
+      - checkout: self
+        clean: true
+        persistCredentials: false
+      - task: JavaToolInstaller@0
+        inputs:
+          versionSpec: '21'
+          jdkArchitectureOption: x64
+          jdkSourceOption: PreInstalled
+        displayName: Use Java 21
+      - bash: |
+          set -euo pipefail
+          mvn -B -ntp -f services/integration-service/pom.xml \
+            -Dtest=RazorpayRefundClientTest,RefundExecutionWorkerTest,RefundProductionReadinessServiceTest,RefundProductionApprovalDefaultsTest,RefundDispatchDatabaseTest,RefundMigrationDatabaseTest,RefundRequestServiceTest,RefundStatusEventFactoryTest,RefundEventValidatorTest,RefundWorkflowPropertiesTest \
+            clean verify
+          python3 scripts/refund/verify-refund-safety-evidence.py
+          python3 -m unittest discover -s scripts/refund -p 'test_*.py' -v
+        env:
+          REFUND_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/craves_refund_test
+          REFUND_TEST_DB_USER: refund_ci
+          REFUND_TEST_DB_PASSWORD: refund_ci_disposable_only
+          CRAVES_REFUND_DISPOSABLE_DATABASE: 'true'
+        displayName: Require refund protocol and disposable database acceptance
+      - task: PublishTestResults@2
+        condition: always()
+        inputs:
+          testResultsFormat: JUnit
+          testResultsFiles: services/integration-service/target/surefire-reports/TEST-*.xml
+          failTaskOnFailedTests: true
+          failTaskOnMissingResultsFile: true
+      - task: PublishPipelineArtifact@1
+        condition: always()
+        inputs:
+          targetPath: services/integration-service/target/surefire-reports
+          artifact: refund-safety-test-evidence

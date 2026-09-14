@@ -26,7 +26,7 @@ API="$BASE/apis/craves-admin-explorer-v1"
 VERSION=2022-08-01
 az rest --method get --url "$API?api-version=$VERSION" -o json >"$TMP/api.json"
 jq -e '.properties.path == "api/v1/admin/explorer" and .properties.subscriptionRequired == false' "$TMP/api.json" >/dev/null || fail 'Explorer API ownership or subscription settings differ.'
-az rest --method get --url "$BASE/policies/policy?api-version=$VERSION" --query properties.value -o tsv >"$TMP/global.xml"
+az rest --method get --url "$BASE/policies/policy?api-version=$VERSION&format=rawxml" --query properties.value -o tsv >"$TMP/global.xml"
 python3 "$ROOT/scripts/admin-explorer/verify-runtime-policy.py" inherited "$TMP/global.xml"
 optional_policy(){
   if az rest --method get --url "$1" --query properties.value -o tsv >"$2" 2>"$TMP/policy-error"; then
@@ -35,12 +35,12 @@ optional_policy(){
     : # An absent scoped policy inherits its already checked parent.
   else fail 'Inherited policy inventory is incomplete.'; fi
 }
-optional_policy "$API/policies/policy?api-version=$VERSION" "$TMP/api-policy.xml"
+optional_policy "$API/policies/policy?api-version=$VERSION&format=rawxml" "$TMP/api-policy.xml"
 az rest --method get --url "$API/products?api-version=$VERSION" -o json >"$TMP/products.json"
 jq -e '(.value | type) == "array" and (.nextLink == null or .nextLink == "")' "$TMP/products.json" >/dev/null || fail 'Product policy inventory is incomplete.'
 while IFS= read -r product; do
   [[ "$product" =~ ^[A-Za-z0-9._-]+$ ]] || fail 'Unexpected API product identity.'
-  optional_policy "$BASE/products/$product/policies/policy?api-version=$VERSION" "$TMP/product-policy.xml"
+  optional_policy "$BASE/products/$product/policies/policy?api-version=$VERSION&format=rawxml" "$TMP/product-policy.xml"
 done < <(jq -r '.value[]?.name' "$TMP/products.json")
 az apim api list -g "$RG" --service-name "$APIM" -o json >"$TMP/apis.json"
 python3 "$ROOT/scripts/admin-explorer/verify-route-ownership.py" inventory "$TMP/apis.json" >"$TMP/ancestors"
@@ -99,7 +99,7 @@ for i in 0 1 2; do
   op="post-explorer-$domain-query"
   az rest --method get --url "$API/operations/$op?api-version=$VERSION" -o json >"$TMP/operation.json"
   jq -e --arg path "/$domain/query" '.properties.method == "POST" and .properties.urlTemplate == $path' "$TMP/operation.json" >/dev/null || fail "$domain operation does not match the implemented route."
-  az rest --method get --url "$API/operations/$op/policies/policy?api-version=$VERSION" --query properties.value -o tsv >"$TMP/operation.xml"
+  az rest --method get --url "$API/operations/$op/policies/policy?api-version=$VERSION&format=rawxml" --query properties.value -o tsv >"$TMP/operation.xml"
   python3 "$ROOT/scripts/admin-explorer/verify-runtime-policy.py" operation "$TMP/operation.xml" "$ROOT/infra/apim/admin-explorer/authenticated-policy.xml" "https://$fqdn/api/v1/admin/explorer"
   status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' -X POST "$GATEWAY/api/v1/admin/explorer/$domain/query" -H 'Content-Type: application/json' --data '{"mode":"summary"}')
   [[ "$status" == 401 ]] || fail "$domain anonymous route is not denied."

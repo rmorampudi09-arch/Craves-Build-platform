@@ -44,6 +44,8 @@ elif a[:2]==['containerapp','show']:
 elif a[:1]==['rest']:
  assert a[a.index('--method')+1]=='get'
  url=a[a.index('--url')+1]
+ if '/policies/policy?' in url:
+  assert '&format=rawxml' in url, 'Policy readback must request raw XML to preserve reviewed C# expressions'
  if '/products?' in url:emit({'value':[{'name':'fixture-product'}],**({'nextLink':'https://not-followed.invalid'} if case=='pagination' else {})})
  elif '/operations/' in url:
   domain=next(d for d in ['users','chefs','orders'] if '-'+d+'-query' in url)

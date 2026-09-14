@@ -1,4 +1,5 @@
 import "server-only";
+import { boundedFetch } from "@/lib/bounded-fetch";
 
 import {
   parseReverseGeocodedAddress,
@@ -49,11 +50,10 @@ async function managedIdentityToken(): Promise<string> {
   url.searchParams.set("resource", AZURE_MAPS_RESOURCE);
   url.searchParams.set("api-version", "2019-08-01");
 
-  const response = await fetch(url, {
+  const response = await boundedFetch(url.toString(), {
     cache: "no-store",
     headers: { "X-IDENTITY-HEADER": identityHeader },
-    signal: AbortSignal.timeout(5_000),
-  });
+  }, 5_000, 32 * 1_024);
   if (!response.ok) {
     throw new Error(`Managed identity token request failed with HTTP ${response.status}`);
   }
@@ -88,7 +88,7 @@ export async function reverseGeocodeWithAzureMaps(
   url.searchParams.set("coordinates", `${longitude},${latitude}`);
   url.searchParams.set("view", "IN");
 
-  const response = await fetch(url, {
+  const response = await boundedFetch(url.toString(), {
     cache: "no-store",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -96,8 +96,7 @@ export async function reverseGeocodeWithAzureMaps(
       "Accept-Language": "en-IN",
       Accept: "application/geo+json, application/json",
     },
-    signal: AbortSignal.timeout(7_000),
-  });
+  }, 7_000, 256 * 1_024);
 
   if (!response.ok) {
     throw new Error(`Azure Maps reverse geocoding failed with HTTP ${response.status}`);

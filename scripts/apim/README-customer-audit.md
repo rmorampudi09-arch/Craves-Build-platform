@@ -6,7 +6,7 @@ Scope: existing customer review/support GET contracts and the public, bounded Sa
 
 - `../../azure-pipelines-customer-audit-status.yml`: read-only image, health and route inventory.
 - `customer-audit-read-routes.py`: complete preflight before any write; image pins, healthy service check, exact public path ownership, protected backend reads, inherited policy checks, idempotent route ownership, authenticated/no-store policies and readback.
-- `test_customer_audit_read_routes.py`: six deterministic safety tests.
+- `test_customer_audit_read_routes.py`: nine deterministic safety tests, including UTF-8 BOM responses, explicit JSON media negotiation and failed-write propagation.
 - `../../azure-pipelines-customer-audit-read-routes.yml`: tests, plan, explicit apply and anonymous-denial/empty-batch validation. Uses existing `Craves-Dev-Service-Connection`.
 - Existing `configure-favorites-p1b-catalog-apim.sh` and `../../infra/apim/favorites-p1b/catalog-saved-resolver-policy.xml` are reused unchanged.
 
@@ -30,4 +30,6 @@ Retest using the owner's normal signed-in app: My Reviews, an already-owned orde
 Deployment is additive. New IDs: `get-own-order-review`, `get-own-reviews`, `get-review-tags`, `get-own-support-cases`, `get-own-support-case`; new API IDs only if absent are `craves-customer-reviews-v1` and `craves-customer-support-v1`. Preserve other API operations and inherited policies. If rollback is needed, review the exact operations and disable only these newly introduced reads through the existing release process; do not delete an API containing unrelated operations. No automatic delete/rollback is performed. Saved resolver has its existing separately guarded rollback script.
 
 Partial failure is not success: inspect pipeline steps and read back the gateway before continuing. Record applied operations and the final run URL in the mobile audit ledger. Current mobile/Catalog changes, email rollout, signed-in device acceptance and production release holds remain separate pending work.
+
+Run39040 stopped after the first operation/policy PUT because Azure returned a BOM-prefixed policy response. The operation was not blindly rolled back: its anonymous denial was independently verified. The correction requests the JSON envelope for reads, tolerates a leading UTF-8 BOM and suppresses write response parsing; explicit GET readbacks remain mandatory. See [Microsoft's policy media types](https://learn.microsoft.com/en-us/rest/api/apimanagement/api-policy/get?view=rest-apimanagement-2024-05-01). No authentication checks were relaxed to address this deployment-script failure.
 

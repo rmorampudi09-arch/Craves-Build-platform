@@ -60,7 +60,7 @@ steps:
         patterns = {
             'datasource_health_failure': r'DataSource health check failed',
             'redis_health_failure': r'Redis health check failed',
-            'redis_loopback_connection_failure': r'(?i)(localhost|127\\.0\\.0\\.1)[^\\n]{0,120}:6379',
+            'redis_loopback_connection_failure': r'(?i)(localhost|127[.]0[.]0[.]1).{0,120}:6379',
             'redis_auth_failure': r'(?i)(WRONGPASS|NOAUTH Authentication required)',
             'redis_connection_refused': r'(?i)connection refused',
             'redis_command_timeout': r'RedisCommandTimeoutException',

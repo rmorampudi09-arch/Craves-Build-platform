@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Heart,
@@ -19,10 +18,9 @@ import type { Dish } from "@/services/api/dishes";
 
 interface DishImageHeaderProps {
   dish: Dish;
-  onBack: () => void;
 }
 
-export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
+export function DishImageHeader({ dish }: DishImageHeaderProps) {
   const [favorite, setFavorite] = useState(() =>
     getCustomerFavoriteIds().has(dish.id),
   );
@@ -133,16 +131,7 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
             }
           />
 
-          <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3.5 sm:p-4 md:justify-end">
-            <button
-              type="button"
-              onClick={onBack}
-              className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white/95 !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] !backdrop-blur-md hover:!text-[#F62E18] md:!hidden"
-              aria-label="Back to discovery"
-            >
-              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-            </button>
-
+          <div className="absolute inset-x-0 top-0 flex items-center justify-end p-3.5 sm:p-4">
             <div className="flex items-center gap-2">
               <button
                 type="button"

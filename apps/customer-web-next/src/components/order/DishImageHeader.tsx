@@ -201,7 +201,7 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
               key={`${image}-${index}`}
               type="button"
               onClick={() => setActiveIndex(index)}
-              className={`!h-[4rem] !w-[5.15rem] shrink-0 overflow-hidden rounded-xl !border !bg-[#F1F3F5] !p-0 transition sm:!h-[4.4rem] sm:!w-[5.8rem] ${
+              className={`relative !h-[4rem] !w-[5.15rem] shrink-0 overflow-hidden rounded-xl !border !bg-[#F1F3F5] !p-0 transition sm:!h-[4.4rem] sm:!w-[5.8rem] ${
                 index === safeIndex
                   ? "!border-[#F62E18] !shadow-[0_0_0_2px_rgba(246,46,24,0.12)]"
                   : "!border-[#E5E7EB] hover:!border-[#F62E18]/45"
@@ -209,11 +209,16 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
               aria-label={`Show photo ${index + 1} of ${images.length}`}
               aria-pressed={index === safeIndex}
             >
-              <img
+              <ProgressiveImage
                 src={image}
                 alt=""
+                width={232}
+                height={176}
+                loading="lazy"
+                fetchPriority="low"
                 className="h-full w-full object-cover"
                 aria-hidden="true"
+                fallbackLabel="Photo unavailable"
               />
             </button>
           ))}

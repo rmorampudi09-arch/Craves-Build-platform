@@ -46,17 +46,24 @@ jobs:
         run: python3 scripts/referrals/verify-additive.py
       - name: Compile and verify against disposable PostgreSQL
         run: mvn -B -ntp -f services/referral-service/pom.xml verify
-      - name: Require executed non-skipped database tests
+      - name: Require actual database tests, SBOM and migration launcher
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import json, zipfile
           import xml.etree.ElementTree as E
-          reports = list(Path('services/referral-service/target/failsafe-reports').glob('TEST-*.xml'))
+          target = Path('services/referral-service/target')
+          reports = list((target/'failsafe-reports').glob('TEST-*.xml'))
           assert reports, 'Missing PostgreSQL integration-test results'
           suites = [E.parse(p).getroot() for p in reports]
-          assert sum(int(s.attrib['tests']) for s in suites) >= 3
+          assert sum(int(s.attrib['tests']) for s in suites) >= 19
           assert all(int(s.attrib.get(k, '0')) == 0 for s in suites for k in ['failures', 'errors', 'skipped'])
           print('Executed PostgreSQL integration cases:', sum(int(s.attrib['tests']) for s in suites))
+          bom = json.loads((target/'bom.json').read_text())
+          assert bom.get('bomFormat') == 'CycloneDX' and bom.get('components'), 'Missing usable SBOM'
+          with zipfile.ZipFile(target/'referral-service-0.1.0-SNAPSHOT.jar') as archive:
+              assert 'org/springframework/boot/loader/launch/PropertiesLauncher.class' in archive.namelist()
+          print('SBOM components:', len(bom['components']))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -119,15 +126,46 @@ jobs:
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
       - run: npm ci
-      - name: Typecheck the isolated native feature against existing dependencies
+      - name: Typecheck isolated native feature against existing dependencies
         run: npx tsc --project ../../scripts/referrals/mobile-tsconfig.json --noEmit
       - name: Native referral contract tests
         run: npm test -- --runInBand --runTestsByPath src/features/referralsV2/model.test.ts --json --outputFile=../../referral-mobile-results.json
       - name: Existing cross-feature regression tests
         run: npm run test:integration
+      - name: Record native dependency findings without changing the lockfile
+        if: always()
+        run: npm audit --json > ../../referral-mobile-audit.json || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: chef-referral-v2-mobile-evidence-${{ github.event.pull_request.head.sha || github.sha }}
-          path: referral-mobile-results.json
+          path: |
+            referral-mobile-results.json
+            referral-mobile-audit.json
+          retention-days: 14
+  release-kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify additive boundary and read-only deployment-plan tests
+        run: |
+          python3 scripts/referrals/verify-additive.py
+          python3 -m unittest discover -s scripts/referrals -p 'test_release_plan.py' -v
+      - name: Compile dormant Bicep template without logging in or deploying
+        run: az bicep build --file services/referral-service/deploy/main.bicep --outfile /tmp/referral-compiled.json
+      - name: Package only additions for offline review
+        run: |
+          git diff --name-only -z --diff-filter=A 870f5293884888aa28f0c069b91a86d06492c9a2...HEAD | tar --null -T - -czf referral-additions.tar.gz
+          git rev-parse HEAD > referral-source-head.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chef-referral-v2-release-kit-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/referral-compiled.json
+            referral-additions.tar.gz
+            referral-source-head.txt
           retention-days: 14

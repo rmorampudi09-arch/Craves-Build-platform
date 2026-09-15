@@ -28,19 +28,23 @@ GROUPS = [
 ]
 
 
-def az(*args):
+def az(*args, expect_json=True):
     # Capture CLI output so error bodies/configuration cannot enter pipeline logs.
-    result = subprocess.run(["az", *args, "-o", "json"], capture_output=True, text=True)
+    result = subprocess.run(["az", *args, "-o", "json" if expect_json else "none"], capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError("Azure operation failed: " + " ".join(args[:3]))
-    return json.loads(result.stdout) if result.stdout.strip() else None
+    if not expect_json:
+        return None  # Writes are verified separately with explicit GET readback.
+    output = result.stdout.lstrip("\ufeff").strip()
+    return json.loads(output) if output else None
 
 
 def rest(method, url, body=None):
-    args = ["rest", "--method", method, "--url", url]
+    # APIM policy endpoints also offer raw XML; explicitly request their JSON envelope.
+    args = ["rest", "--method", method, "--url", url, "--headers", "Accept=application/json"]
     if body is not None:
         args += ["--body", json.dumps(body)]
-    return az(*args)
+    return az(*args, expect_json=method.lower() == "get")
 
 
 def status(url):

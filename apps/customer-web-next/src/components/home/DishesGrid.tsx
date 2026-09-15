@@ -389,7 +389,7 @@ export function DishesGrid({
             <DishCard
               key={dish.id}
               dish={dish}
-              priorityImage={index < 4}
+              priorityImage={index < 2}
             />
           ))}
         </div>

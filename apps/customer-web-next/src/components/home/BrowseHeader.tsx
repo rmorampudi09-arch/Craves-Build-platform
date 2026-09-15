@@ -45,7 +45,7 @@ export function BrowseHeader({
   return (
     <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
       <div className="mx-auto max-w-[88rem] px-4 md:px-7 lg:px-10">
-        <div className="flex min-h-[4.8rem] items-center gap-3 py-2.5 lg:gap-6">
+        <div className="flex min-h-[4.4rem] items-center gap-3 py-2 lg:gap-6 lg:py-2.5">
           <Link
             to="/home"
             className="flex shrink-0 items-center gap-2 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
@@ -60,7 +60,7 @@ export function BrowseHeader({
           <button
             type="button"
             onClick={openLocation}
-            className="hidden min-h-11 min-w-0 max-w-[16rem] items-center gap-2.5 rounded-full bg-[#F1F3F5] px-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(26,26,26,0.08)] md:flex"
+            className="hidden min-h-11 min-w-0 max-w-[16rem] items-center gap-2.5 rounded-full bg-[#F1F3F5] px-3.5 text-left transition-shadow duration-200 hover:shadow-[0_8px_20px_rgba(26,26,26,0.08)] md:flex"
             aria-label={`Default delivery address: ${locationLabel}. Manage address`}
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
@@ -72,7 +72,7 @@ export function BrowseHeader({
             </span>
           </button>
 
-          <label className="ml-auto hidden min-h-14 min-w-0 flex-1 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-all duration-200 ease-out hover:scale-[1.02] hover:ring-2 hover:ring-[#F62E18]/40 hover:shadow-[0_10px_30px_rgba(246,46,24,0.16)] focus-within:scale-[1.02] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_12px_34px_rgba(246,46,24,0.18)] motion-reduce:transform-none lg:flex lg:max-w-[36rem]">
+          <label className="ml-auto hidden min-h-14 min-w-0 flex-1 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-[box-shadow,ring-color] duration-200 ease-out hover:ring-2 hover:ring-[#F62E18]/40 hover:shadow-[0_10px_30px_rgba(246,46,24,0.16)] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_12px_34px_rgba(246,46,24,0.18)] motion-reduce:transform-none lg:flex lg:max-w-[36rem]">
             <FaSearch className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
@@ -91,7 +91,7 @@ export function BrowseHeader({
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
             <Link
               to="/profile"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)]"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-shadow duration-200 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)]"
               aria-label="Open profile"
             >
               <FaUser className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
@@ -99,7 +99,7 @@ export function BrowseHeader({
             <button
               type="button"
               onClick={onOpenCart}
-              className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)]"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-shadow duration-200 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)]"
               aria-label={`Open cart${cartCount ? ` with ${cartCount} items` : ""}`}
             >
               <CravesCartIcon className="h-[1.18rem] w-[1.18rem]" />
@@ -112,7 +112,7 @@ export function BrowseHeader({
             <button
               type="button"
               onClick={onLogout}
-              className="hidden h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)] xl:flex"
+              className="hidden h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-shadow duration-200 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)] xl:flex"
               aria-label="Sign out"
             >
               <FaSignOutAlt className="h-[1.05rem] w-[1.05rem]" strokeWidth={2.2} aria-hidden="true" />
@@ -120,8 +120,8 @@ export function BrowseHeader({
           </div>
         </div>
 
-        <div className="grid gap-2.5 pb-2.5 lg:hidden">
-          <label className="flex min-h-14 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-all duration-200 ease-out hover:scale-[1.01] hover:ring-2 hover:ring-[#F62E18]/40 hover:shadow-[0_8px_24px_rgba(246,46,24,0.15)] focus-within:scale-[1.01] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_10px_28px_rgba(246,46,24,0.17)] motion-reduce:transform-none">
+        <div className="grid gap-2 pb-2 lg:hidden">
+          <label className="flex min-h-12 items-center gap-3 rounded-[1.2rem] bg-[#F1F3F5] px-4 transition-shadow duration-200 ease-out hover:ring-2 hover:ring-[#F62E18]/40 hover:shadow-[0_8px_24px_rgba(246,46,24,0.15)] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_10px_28px_rgba(246,46,24,0.17)] motion-reduce:transform-none">
             <FaSearch className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
@@ -138,7 +138,7 @@ export function BrowseHeader({
           </label>
         </div>
 
-        <div className="flex min-w-0 items-center justify-between gap-3 pb-2.5">
+        <div className="flex min-w-0 items-center justify-between gap-3 pb-2 md:hidden">
           <button
             type="button"
             onClick={openLocation}

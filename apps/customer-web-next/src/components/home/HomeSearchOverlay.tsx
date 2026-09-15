@@ -147,7 +147,7 @@ export function HomeSearchOverlay({
               <span className="text-xs font-bold text-[#6B6B6B]">{dishResults.length} shown</span>
             </div>
             <div className="divide-y divide-[#E5E7EB] border-y border-[#E5E7EB]">
-              {dishResults.map((dish) => (
+              {dishResults.map((dish, index) => (
                 <Link
                   key={dish.id}
                   to="/dish/$id"
@@ -160,8 +160,8 @@ export function HomeSearchOverlay({
                       alt=""
                       width={192}
                       height={160}
-                      loading="lazy"
-                      fetchPriority="low"
+                      loading={index < 3 ? "eager" : "lazy"}
+                      fetchPriority={index === 0 ? "high" : "auto"}
                       fallbackLabel="Dish photo unavailable"
                       className="h-full w-full object-cover"
                     />

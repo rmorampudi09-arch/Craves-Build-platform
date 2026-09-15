@@ -27,12 +27,20 @@ public class OutboxService {
                 Map<String,Object> row=existing.getFirst();
                 require(row.get("operation_type").equals("outbox.claim") && hash.equals(row.get("payload_hash")),409,"CLAIM_ID_CONFLICT");
                 JsonNode result=Json.parse(row.get("result").toString());
-                if(!settings.withdrawalsEnabled()) for(JsonNode item:result.get("items"))
-                    require(!item.get("eventType").asText().equals("referral.payout.requested"),503,"CASHOUT_DISABLED");
+                for(JsonNode item:result.get("items")) {
+                    if(!settings.withdrawalsEnabled())
+                        require(!item.get("eventType").asText().equals("referral.payout.requested"),503,"CASHOUT_DISABLED");
+                    Map<String,Object> live=db.one("SELECT status,lease_id,lease_until FROM referral_schema.outbox WHERE id=? FOR SHARE",UUID.fromString(item.get("id").asText()));
+                    // A cached claim is not a perpetual permission to execute its events.
+                    require(live.get("status").equals("LEASED")
+                        && UUID.fromString(item.get("leaseId").asText()).equals(uuid(live,"lease_id"))
+                        && instant(live,"lease_until")!=null && instant(live,"lease_until").isAfter(clock.instant()),
+                        409,"OUTBOX_CLAIM_NO_LONGER_VALID");
+                }
                 return result;
             }
-            db.update("UPDATE referral_schema.outbox SET status='DEAD' WHERE status='LEASED' AND lease_until<? AND attempts>=12",time(clock.instant()));
-            List<Map<String,Object>> rows=db.rows("SELECT * FROM referral_schema.outbox WHERE (status='PENDING' OR (status='LEASED' AND lease_until<?)) AND attempts<12 AND (event_type<>'referral.payout.requested' OR ?) ORDER BY created_at,id LIMIT ? FOR UPDATE SKIP LOCKED",
+            db.update("UPDATE referral_schema.outbox SET status='DEAD' WHERE status='LEASED' AND lease_until<=? AND attempts>=12",time(clock.instant()));
+            List<Map<String,Object>> rows=db.rows("SELECT * FROM referral_schema.outbox WHERE (status='PENDING' OR (status='LEASED' AND lease_until<=?)) AND attempts<12 AND (event_type<>'referral.payout.requested' OR ?) ORDER BY created_at,id LIMIT ? FOR UPDATE SKIP LOCKED",
                 time(clock.instant()),settings.withdrawalsEnabled(),limit);
             List<Map<String,Object>> items=new ArrayList<>();
             for(Map<String,Object> row:rows) {

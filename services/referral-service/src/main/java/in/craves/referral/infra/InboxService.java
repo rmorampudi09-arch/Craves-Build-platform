@@ -30,8 +30,8 @@ public class InboxService {
         require(!occurred.isAfter(clock.instant().plusSeconds(60)),422,"FUTURE_SOURCE_EVENT");
         SourceEventRouter.validate(source,type,aggregate,envelope.get("payload"));
         return db.tx(() -> {
-            db.update("INSERT INTO referral_schema.inbox(source,event_id,aggregate_id,event_type,payload_hash,payload) VALUES (?,?,?,?,?,?::jsonb) ON CONFLICT(source,event_id) DO NOTHING",
-                source,id,aggregate,type,hash,Json.write(envelope));
+            db.update("INSERT INTO referral_schema.inbox(source,event_id,aggregate_id,event_type,payload_hash,payload,next_attempt_at,received_at) VALUES (?,?,?,?,?,?::jsonb,?,?) ON CONFLICT(source,event_id) DO NOTHING",
+                source,id,aggregate,type,hash,Json.write(envelope),time(clock.instant()),time(clock.instant()));
             Map<String,Object> row=db.one("SELECT payload_hash,status FROM referral_schema.inbox WHERE source=? AND event_id=?",source,id);
             require(hash.equals(row.get("payload_hash")),409,"SOURCE_EVENT_ID_CONFLICT");
             return Map.of("eventId",id.toString(),"status",row.get("status"),"accepted",true);

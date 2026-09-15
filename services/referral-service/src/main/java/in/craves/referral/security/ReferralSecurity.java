@@ -31,7 +31,8 @@ public class ReferralSecurity {
         errors(http); return http.build();
     }
     @Bean @Order(2) SecurityFilterChain external(HttpSecurity http,ReferralSettings settings,JwtDecoder decoder,StringRedisTemplate redis,
-            @Value("${CRAVES_REFERRALS_PUBLIC_ACCESS_ENABLED:false}") boolean publicAccessEnabled) throws Exception {
+            @Value("${CRAVES_REFERRALS_PUBLIC_ACCESS_ENABLED:false}") boolean publicAccessEnabled,
+            @Value("${CRAVES_REFERRALS_REVOCATION_ABSENCE_CONTRACT_CONFIRMED:false}") boolean absenceContractConfirmed) throws Exception {
         http.csrf(csrf->csrf.disable()).sessionManagement(session->session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .requestCache(cache->cache.disable()).cors(cors->cors.disable())
             .authorizeHttpRequests(auth->auth
@@ -46,7 +47,7 @@ public class ReferralSecurity {
                     .map(role->(GrantedAuthority)new SimpleGrantedAuthority("ROLE_"+role)).toList();
                 return new JwtAuthenticationToken(token,authorities,token.getSubject());
             })).authenticationEntryPoint((req,res,ex)->SourceAuthenticationFilter.error(res,401,"AUTHENTICATION_REQUIRED")))
-            .addFilterAfter(new ReferralRevocationFilter(settings,redis,publicAccessEnabled),BearerTokenAuthenticationFilter.class);
+            .addFilterAfter(new ReferralRevocationFilter(settings,redis,publicAccessEnabled,absenceContractConfirmed),BearerTokenAuthenticationFilter.class);
         errors(http); return http.build();
     }
     private static void errors(HttpSecurity http) throws Exception {

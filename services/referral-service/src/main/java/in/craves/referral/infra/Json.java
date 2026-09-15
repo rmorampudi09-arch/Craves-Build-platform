@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -19,7 +20,7 @@ import java.util.UUID;
 
 public final class Json {
     public static final ObjectMapper MAPPER=new ObjectMapper(JsonFactory.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-        .streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(32).maxStringLength(131072).maxNumberLength(30).build()).build()).findAndRegisterModules();
+        .streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(32).maxStringLength(131072).maxNumberLength(30).build()).build()).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).findAndRegisterModules();
     private Json() { }
     public static JsonNode parse(String value) {
         try { JsonNode result=MAPPER.readTree(value); if(result==null) throw new IllegalArgumentException(); return result; }

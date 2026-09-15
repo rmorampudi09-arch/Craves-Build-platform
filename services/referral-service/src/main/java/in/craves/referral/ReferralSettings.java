@@ -2,6 +2,8 @@ package in.craves.referral;
 
 import java.net.URI;
 import java.util.Base64;
+import java.security.MessageDigest;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "referral")
@@ -36,6 +38,21 @@ public record ReferralSettings(boolean enabled, boolean workersEnabled, boolean 
         try {
             byte[] key = Base64.getDecoder().decode(configured == null ? "" : configured);
             if (key.length < 32) throw new IllegalArgumentException();
+            for(String other:List.of("auth","order","finance")) {
+                if(other.equals(source)) continue;
+                String[] candidates=switch(other) {
+                    case "auth" -> new String[]{authKey,previousAuthKey};
+                    case "order" -> new String[]{orderKey,previousOrderKey};
+                    default -> new String[]{financeKey,previousFinanceKey};
+                };
+                for(String candidate:candidates) {
+                    if(candidate==null || candidate.isBlank()) continue;
+                    byte[] decoded;
+                    try { decoded=Base64.getDecoder().decode(candidate); }
+                    catch(IllegalArgumentException ex) { continue; }
+                    if(MessageDigest.isEqual(key,decoded)) throw new ReferralProblem(503,"SOURCE_KEY_ISOLATION_REQUIRED");
+                }
+            }
             return key;
         } catch (IllegalArgumentException ex) { throw new ReferralProblem(401, "INVALID_SOURCE_SIGNATURE"); }
     }

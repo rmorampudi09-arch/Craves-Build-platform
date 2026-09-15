@@ -39,7 +39,10 @@ public final class ReferralJwtDecoder {
     }
     private static OAuth2TokenValidatorResult validate(Jwt jwt,ReferralSettings settings,Clock clock) {
         try {
-            UUID.fromString(jwt.getSubject());
+            String subject=jwt.getSubject();
+            if(subject==null || !subject.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"))
+                throw new IllegalArgumentException();
+            UUID.fromString(subject);
             Object version=jwt.getClaims().get("token_version"), roles=jwt.getClaims().get("roles");
             boolean integral=version instanceof Long || version instanceof Integer;
             if(jwt.getExpiresAt()==null || jwt.getIssuedAt()==null || jwt.getIssuedAt().isAfter(clock.instant().plusSeconds(30))

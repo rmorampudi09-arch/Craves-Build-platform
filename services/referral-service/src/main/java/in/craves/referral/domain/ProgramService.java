@@ -73,6 +73,10 @@ public class ProgramService {
 
     /** Invoked only for a signed Auth-service registration event, never from a user's bearer token. */
     public void register(JsonNode body) {
+        // Keep direct adapter callers atomic too; REQUIRED propagation joins an inbox transaction.
+        db.tx(() -> { registerLocked(body); return null; });
+    }
+    private void registerLocked(JsonNode body) {
         Json.fields(body,"userId","registeredAt","parentCode","fingerprintConsent","contactHash","deviceHash","paymentHash","termsVersion");
         UUID user=Json.uuid(body,"userId"); Instant registered=Json.instant(body,"registeredAt");
         require(!registered.isAfter(clock.instant().plusSeconds(60)),422,"FUTURE_REGISTRATION");
@@ -81,6 +85,15 @@ public class ProgramService {
         require(device==null || consent,422,"FINGERPRINT_CONSENT_REQUIRED");
         String parentCode=Json.optionalText(body,"parentCode",16); String terms=Json.text(body,"termsVersion",100);
         String fingerprint=Json.hash(body);
+        // Two different registration event IDs may name the same account or identity signals.
+        // Deterministic locks make duplicate detection see the preceding committed signup.
+        db.jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"referral-member:"+user);
+        List<String> signalLocks=new ArrayList<>();
+        signalLocks.add("referral-contact:"+contact);
+        if(device!=null) signalLocks.add("referral-device:"+device);
+        if(payment!=null) signalLocks.add("referral-payment:"+payment);
+        signalLocks.stream().distinct().sorted().forEach(key->
+            db.jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,key));
         List<Map<String,Object>> existing=db.rows("SELECT registration_hash FROM referral_schema.member WHERE user_id=?",user);
         if(!existing.isEmpty()) { require(existing.getFirst().get("registration_hash").equals(fingerprint),409,"ATTRIBUTION_ALREADY_LOCKED"); return; }
         UUID parent=null; List<UUID> path=new ArrayList<>();
@@ -95,8 +108,12 @@ public class ProgramService {
             require(!path.contains(user) && path.size()<10000,422,"INVALID_REFERRAL_PATH");
         }
         path.add(user); String pathValue="{"+String.join(",",path.stream().map(UUID::toString).toList())+"}";
-        db.update("INSERT INTO referral_schema.member(user_id,code,parent_id,path,registered_at,contact_hash,device_hash,payment_hash,fingerprint_consent,terms_version,registration_hash) VALUES (?,?,?,?::uuid[],?,?,?,?,?,?,?)",
-            user,ReferralCodes.generate(),parent,pathValue,time(registered),contact,device,payment,consent,terms,fingerprint);
+        int inserted=0;
+        for(int attempt=0;attempt<4 && inserted==0;attempt++) {
+            inserted=db.update("INSERT INTO referral_schema.member(user_id,code,parent_id,path,registered_at,contact_hash,device_hash,payment_hash,fingerprint_consent,terms_version,registration_hash) VALUES (?,?,?,?::uuid[],?,?,?,?,?,?,?) ON CONFLICT(code) DO NOTHING",
+                user,ReferralCodes.generate(),parent,pathValue,time(registered),contact,device,payment,consent,terms,fingerprint);
+        }
+        require(inserted==1,503,"REFERRAL_CODE_ALLOCATION_RETRY");
         db.update("INSERT INTO referral_schema.wallet(user_id) VALUES (?)",user);
         if(db.count("SELECT count(*) FROM referral_schema.member WHERE user_id<>? AND (contact_hash=? OR (?::text IS NOT NULL AND payment_hash=?) OR (?::text IS NOT NULL AND device_hash=?))",user,contact,payment,payment,device,device)>0)
             fraud(user,"identity:"+user,"DUPLICATE_IDENTITY_SIGNAL","auth-registration");

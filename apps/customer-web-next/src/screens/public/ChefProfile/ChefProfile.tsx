@@ -200,7 +200,7 @@ function ChefProfilePage() {
               <button
                 type="button"
                 onClick={() => setPhotoNotice((visible) => !visible)}
-                className="!mt-5 !inline-flex !min-h-11 !items-center !gap-2 !rounded-full !border !border-[#E5E7EB] !bg-white !px-4 !text-sm !font-black !text-[#1A1A1A] !shadow-[0_5px_14px_rgba(26,26,26,0.05)] transition hover:!-translate-y-0.5 hover:!border-[#F62E18]/35 hover:!text-[#F62E18]"
+                className="!mt-5 !inline-flex !min-h-11 !items-center !gap-2 !rounded-full !border !border-[#E5E7EB] !bg-white !px-4 !text-sm !font-black !text-[#1A1A1A] !shadow-[0_5px_14px_rgba(26,26,26,0.05)] transition-[border-color,color,box-shadow] hover:!border-[#F62E18]/35 hover:!text-[#F62E18]"
                 aria-expanded={photoNotice}
               >
                 <Images className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />

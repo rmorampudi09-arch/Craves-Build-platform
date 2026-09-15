@@ -35,6 +35,7 @@ steps:
             if result.returncode:
                 raise SystemExit('Read-only configuration check failed for ' + app)
             props = json.loads(result.stdout)['properties']
+            print('RUNTIME_RECEIPT ' + json.dumps({'service':app,'latestRevision':props['latestRevisionName'],'readyRevision':props['latestReadyRevisionName'],'image':props['template']['containers'][0]['image'],'revisionMode':props['configuration'].get('activeRevisionsMode'),'traffic':props['configuration'].get('ingress',{}).get('traffic',[])}))
             secrets = {item['name'] for item in props.get('configuration',{}).get('secrets',[])}
             env = {item['name']:item for item in props['template']['containers'][0].get('env',[])}
             print('SERVICE ' + app)

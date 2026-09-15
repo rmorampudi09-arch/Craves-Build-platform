@@ -35,9 +35,12 @@ class HealthRepairTests(unittest.TestCase):
             repair.validate(app([{'name':repair.SETTING,'value':'true'}]))
 
     def test_external_configuration_requires_review(self):
+        repair.validate(app([{'name':'SPRING_PROFILES_ACTIVE','value':'prod'}]))
         for key in ('SPRING_APPLICATION_JSON','SPRING_CONFIG_IMPORT','SPRING_PROFILES_ACTIVE'):
             with self.assertRaises(repair.runtime.guard.GuardError):
                 repair.validate(app([{'name':key,'value':'configured'}]))
+        with self.assertRaises(repair.runtime.guard.GuardError):
+            repair.validate(app([{'name':'SPRING_PROFILES_INCLUDE','value':'other'}]))
 
     def test_unknown_image_is_rejected(self):
         candidate = app()

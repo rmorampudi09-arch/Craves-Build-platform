@@ -111,10 +111,24 @@ assert all(x['changeType'] in ['NoChange','Ignore'] or (x['changeType']=='Create
 assert {a['name']:runtime_hash(a) for a in az('containerapp','list','-g',RG)}==baseline_hash,'Existing deployment changed during provisioning; recheck before proceeding'
 result=az('deployment','group','create','-g',RG,'-n','referral-backend-'+os.environ['BUILD_BUILDID'],'--template-file','services/referral-service/deploy/main.bicep','--parameters','@'+str(EVIDENCE/'deployment-parameters.json'))
 app=az('containerapp','show','-g',RG,'-n',APP)
+revision=app['properties']['latestRevisionName']
+# ARM provisioning success alone can precede a failed Java startup. Require
+# sustained probe health before recording a successful runtime deployment.
+deadline=time.monotonic()+300; healthy_observations=0
+while time.monotonic()<deadline:
+    current=az('containerapp','revision','show','-g',RG,'-n',APP,'--revision',revision)['properties']
+    if current.get('healthState')=='Healthy' and current.get('runningState') in ('Running','RunningAtMaxScale'):
+        healthy_observations+=1
+        if healthy_observations>=3: break
+    else: healthy_observations=0
+    time.sleep(10)
+else: raise RuntimeError('Private referral revision failed sustained runtime health checks')
+app=az('containerapp','show','-g',RG,'-n',APP)
+assert app['properties']['latestReadyRevisionName']==revision
 assert app['properties']['template']['containers'][0]['image']==image
 assert not app['properties']['configuration']['ingress']['external']
 flags={e['name']:e.get('value') for e in app['properties']['template']['containers'][0]['env'] if e['name'].startswith('CRAVES_REFERRALS_') and e['name'].endswith('_ENABLED')}
 assert len(flags)==7 and set(flags.values())=={'false'}
 after={a['name']:runtime_hash(a) for a in az('containerapp','list','-g',RG) if a['name']!=APP};assert after==baseline_hash
-(EVIDENCE/'result.json').write_text(json.dumps({'app':APP,'source':SOURCE,'image':image,'privateOrigin':'https://'+app['properties']['configuration']['ingress']['fqdn'],'revision':app['properties'].get('latestReadyRevisionName'),'state':app['properties']['provisioningState'],'flags':flags,'existingAppsUnchanged':True,'migrations':9,'runtimeRole':RUNTIME},indent=2))
+(EVIDENCE/'result.json').write_text(json.dumps({'app':APP,'source':SOURCE,'image':image,'privateOrigin':'https://'+app['properties']['configuration']['ingress']['fqdn'],'revision':revision,'state':app['properties']['provisioningState'],'healthy':True,'flags':flags,'existingAppsUnchanged':True,'migrations':9,'runtimeRole':RUNTIME},indent=2))
 print('Private referral backend deployed; programme flags remain disabled',flush=True)

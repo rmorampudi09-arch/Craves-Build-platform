@@ -122,6 +122,15 @@ var dormantEnvironment = [
     value: jwtAudience
   }
   {
+    name: 'MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE'
+    value: authVerificationMode == 'REDIS' ? 'readinessState,db,redis' : 'readinessState,db'
+  }
+]
+
+// AUTH_HTTP never uses Redis. Do not bind an empty host: Spring still creates
+// its lazy Redis template, and validates host syntax before serving requests.
+var redisEnvironment = authVerificationMode == 'REDIS' ? [
+  {
     name: 'SPRING_DATA_REDIS_HOST'
     value: redisHost
   }
@@ -137,11 +146,7 @@ var dormantEnvironment = [
     name: 'SPRING_DATA_REDIS_SSL_ENABLED'
     value: 'true'
   }
-  {
-    name: 'MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE'
-    value: authVerificationMode == 'REDIS' ? 'readinessState,db,redis' : 'readinessState,db'
-  }
-]
+] : []
 
 resource referral 'Microsoft.App/containerApps@2025-01-01' = {
   name: appName
@@ -185,7 +190,7 @@ resource referral 'Microsoft.App/containerApps@2025-01-01' = {
         {
           name: 'referral-service'
           image: image
-          env: concat(secureEnvironment, dormantEnvironment)
+          env: concat(secureEnvironment, dormantEnvironment, redisEnvironment)
           resources: {
             cpu: 1
             memory: '2Gi'

@@ -6,6 +6,7 @@ import {
   PackageCheck,
   UtensilsCrossed,
 } from "lucide-react";
+import { hasHomeReturnState } from "@/lib/home-return-state";
 import {
   getChef,
   getDishesByChef,
@@ -111,6 +112,15 @@ function ChefProfilePage() {
   }, [id, navigate]);
 
   const handleBack = () => {
+    if (
+      typeof window !== "undefined" &&
+      hasHomeReturnState() &&
+      window.history.length > 1
+    ) {
+      window.history.back();
+      return;
+    }
+
     navigate({ to: "/home" });
   };
 

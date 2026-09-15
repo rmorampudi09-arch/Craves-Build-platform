@@ -108,11 +108,11 @@ export function KitchensGrid({ kitchens, searchTerm, state, message, onSelectKit
             return (
               <article
                 key={kitchen.id}
-                className="group relative overflow-hidden rounded-[1.85rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[#F62E18]/50 hover:shadow-[0_16px_36px_rgba(26,26,26,0.09)]"
+                className="group relative overflow-hidden rounded-[1.85rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow] duration-200 hover:border-[#F62E18]/50 hover:shadow-[0_16px_36px_rgba(26,26,26,0.09)]"
               >
                 <span className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full border-[18px] border-[#F1F3F5]" aria-hidden="true" />
                 <div className="relative flex items-start gap-4">
-                  <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition duration-300 group-hover:scale-105">
+                  <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
                     <ChefHat className="h-8 w-8" strokeWidth={2} aria-hidden="true" />
                   </span>
                   <div className="min-w-0 flex-1 pt-0.5">
@@ -134,7 +134,7 @@ export function KitchensGrid({ kitchens, searchTerm, state, message, onSelectKit
                     <UtensilsCrossed className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
                     {kitchen.activeMenuItemCount} active {kitchen.activeMenuItemCount === 1 ? "dish" : "dishes"}
                   </span>
-                  <button type="button" onClick={() => onSelectKitchen(kitchen)} className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-[#F62E18] px-4 text-xs font-black text-white transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02]">
+                  <button type="button" onClick={() => onSelectKitchen(kitchen)} className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-[#F62E18] px-4 text-xs font-black text-white transition-[box-shadow,background-color] duration-200 hover:shadow-[0_7px_18px_rgba(246,46,24,0.2)]">
                     Open <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 </div>

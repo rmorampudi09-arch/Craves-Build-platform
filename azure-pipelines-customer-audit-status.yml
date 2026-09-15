@@ -1,0 +1,41 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 1
+
+  - task: AzureCLI@2
+    displayName: Read customer service versions and gateway routes (no writes)
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        RG=rg-craves-prodlow-centralindia
+        APIM=apim-craves-prodlow-l3ing6
+        for app in ca-craves-auth-service-prodlow ca-craves-order-service-prodlow ca-craves-user-chef-service-prod ca-craves-catalog-service-prodlo ca-craves-notification-service-p; do
+          app_json="$(az containerapp show -g "$RG" -n "$app" -o json)"
+          jq '{name, state:.properties.runningStatus, latest:.properties.latestRevisionName, ready:.properties.latestReadyRevisionName, fqdn:.properties.configuration.ingress.fqdn, images:[.properties.template.containers[].image]}' <<<"$app_json"
+          fqdn="$(jq -r '.properties.configuration.ingress.fqdn' <<<"$app_json")"
+          code="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' "https://$fqdn/actuator/health")"
+          echo "Health $app HTTP $code"
+        done
+        apis="$(az apim api list -g "$RG" --service-name "$APIM" -o json)"
+        jq '[.[] | select(.path | test("^api/v1/(auth|orders|reviews|support|discovery|customer)(/|$)")) | {name,path,serviceUrl,subscriptionRequired}]' <<<"$apis"
+        while IFS= read -r api; do
+          echo "Operations for $api"
+          az apim api operation list -g "$RG" --service-name "$APIM" --api-id "$api" --query '[].{id:name,method:method,path:urlTemplate}' -o json
+        done < <(jq -r '.[] | select(.path | test("^api/v1/(auth|orders|reviews|support|discovery|customer)(/|$)")) | .name' <<<"$apis")
+        for path in api/v1/reviews/mine api/v1/support/cases api/v1/auth/email-verification api/v1/orders/00000000-0000-4000-8000-000000000000/review api/v1/orders/00000000-0000-4000-8000-000000000000/delivery-status; do
+          code="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' "https://api.craves.in/$path")"
+          echo "Unauthenticated GET /$path HTTP $code"
+        done
+        echo 'Read-only diagnostic complete. No secret values, customer records or database contents were read; no cloud or application writes were made.'
+

@@ -1,12 +1,10 @@
 "use client";
 
+import Image, { type ImageProps } from "next/image";
 import { ImageOff } from "lucide-react";
-import { useEffect, useState, type ImgHTMLAttributes } from "react";
+import { useEffect, useState } from "react";
 
-type ProgressiveImageProps = Omit<
-  ImgHTMLAttributes<HTMLImageElement>,
-  "onLoad" | "onError"
-> & {
+type ProgressiveImageProps = Omit<ImageProps, "onLoad" | "onError"> & {
   fallbackLabel?: string;
 };
 
@@ -48,7 +46,7 @@ export function ProgressiveImage({
         </span>
       ) : null}
 
-      <img
+      <Image
         {...imageProps}
         src={src}
         alt={alt}

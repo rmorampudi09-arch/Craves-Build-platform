@@ -25,8 +25,8 @@ export const overviewSchema = z.object({
   asOf: instantSchema, currency: z.literal("INR"), pendingPaise: nonnegativePaiseSchema,
   availablePaise: paiseSchema, reservedPaise: nonnegativePaiseSchema, balanceUpdatedAt: instantSchema,
   onReviewHold: z.boolean(), spendingEnabled: z.boolean(), code: codeValueSchema,
-  levels: z.array(z.object({ level: z.number().int().min(1).max(3), netEarnedPaise: paiseSchema })).length(3),
-  downline: z.array(z.object({ level: z.number().int().min(1).max(3), members: countSchema })).max(3),
+  levels: z.array(z.object({ level: z.number().int().min(1).max(3), netEarnedPaise: paiseSchema })).length(3).refine(items => new Set(items.map(item => item.level)).size === 3),
+  downline: z.array(z.object({ level: z.number().int().min(1).max(3), members: countSchema })).max(3).refine(items => new Set(items.map(item => item.level)).size === items.length),
   cashout: z.object({ enabled: z.boolean(), eligible: z.boolean(), reason: z.string().max(100), minimumPaise: nonnegativePaiseSchema }),
   policy: policySchema.nullable()
 });
@@ -34,7 +34,7 @@ export const rewardSchema = z.object({
   id: uuidSchema, track: z.enum(["UPLINE", "CUSTOMER"]), level: z.number().int().min(0).max(3),
   amountPaise: nonnegativePaiseSchema, reversedPaise: nonnegativePaiseSchema, netPaise: paiseSchema,
   status: z.enum(["PENDING", "CREDITED", "REVERSED", "CANCELLED"]), createdAt: instantSchema, holdUntil: instantSchema
-});
+}).refine(value => BigInt(value.amountPaise) - BigInt(value.reversedPaise) === BigInt(value.netPaise) && BigInt(value.reversedPaise) <= BigInt(value.amountPaise), "Reward reconciliation mismatch");
 export const cashoutSchema = z.object({
   id: uuidSchema, amountPaise: nonnegativePaiseSchema,
   status: z.enum(["RESERVED", "APPROVED", "SUBMITTED", "UNKNOWN", "PAID", "RELEASED"]), requestedAt: instantSchema
@@ -56,9 +56,7 @@ export const policyPageSchema = z.object({
     state: z.enum(["DRAFT", "SCHEDULED", "ACTIVE", "RETIRED"])
   })).max(50), activeRevision: countSchema, latestRevision: countSchema, latestActivatedRevision: countSchema
 });
-export const queuePageSchema = z.object({
-  items: z.array(z.record(z.string(), z.unknown())).max(100), nextCursor: z.string().max(512).nullable()
-});
+export const queuePageSchema = z.object({ items: z.array(z.record(z.string(), z.unknown())).max(100), nextCursor: z.string().max(512).nullable() });
 export const inboxPageSchema = z.object({ items: z.array(z.record(z.string(), z.unknown())).max(100), nextId: uuidSchema.nullable() });
 export const policyDraftSchema = z.object({
   expectedLatestRevision: countSchema, l1Bps: z.number().int().min(0).max(400), l2Bps: z.number().int().min(0).max(400), l3Bps: z.number().int().min(0).max(400),
@@ -66,7 +64,6 @@ export const policyDraftSchema = z.object({
   minimumPaise: nonnegativePaiseSchema, customerBonusPaise: nonnegativePaiseSchema, inviteeDiscountPaise: nonnegativePaiseSchema,
   approvals: approvalsSchema
 }).refine(value => value.l1Bps + value.l2Bps + value.l3Bps <= value.capBps, "The three rates must not exceed the cap");
-
 export type ReferralOverview = z.infer<typeof overviewSchema>;
 export type RewardPage = z.infer<typeof rewardPageSchema>;
 export type CashoutPage = z.infer<typeof cashoutPageSchema>;
@@ -74,7 +71,6 @@ export type AdminOverview = z.infer<typeof adminOverviewSchema>;
 export type PolicyPage = z.infer<typeof policyPageSchema>;
 export type PolicyDraft = z.infer<typeof policyDraftSchema>;
 export type QueuePage = z.infer<typeof queuePageSchema>;
-
 export function formatPaise(value: string): string {
   paiseSchema.parse(value);
   const signed = BigInt(value), negative = signed < BigInt(0), n = negative ? -signed : signed;
@@ -92,6 +88,6 @@ export function formatReferralTime(value: string): string {
 export function safeReferralLink(value: string, expectedOrigin: string, code: string): string {
   codeSchema.parse(code);
   const url = new URL(value), origin = new URL(expectedOrigin);
-  if (url.origin !== origin.origin || url.protocol !== "https:" || url.username || url.password || url.hash || url.searchParams.get("ref") !== code) throw new Error("Referral link could not be verified.");
+  if (url.origin !== origin.origin || url.protocol !== "https:" || url.username || url.password || url.hash || url.search || url.pathname !== `/r/${code}`) throw new Error("Referral link could not be verified.");
   return url.href;
 }

@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import {
+  FaArrowLeft,
   FaMapMarkerAlt,
   FaSearch,
   FaSignOutAlt,
@@ -24,6 +25,8 @@ interface BrowseHeaderProps {
   onSearchTermChange: (value: string) => void;
   onSearchFocus: () => void;
   returnPath?: string;
+  onBack?: () => void;
+  backLabel?: string;
 }
 
 export function BrowseHeader({
@@ -36,6 +39,8 @@ export function BrowseHeader({
   onSearchTermChange,
   onSearchFocus,
   returnPath = "/home",
+  onBack,
+  backLabel = "Back to home",
 }: BrowseHeaderProps) {
   const openLocation = () => {
     rememberReturnRoute("/addresses", toCustomerReturnRoute(returnPath));
@@ -45,7 +50,20 @@ export function BrowseHeader({
   return (
     <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
       <div className="mx-auto max-w-[88rem] px-4 md:px-7 lg:px-10">
-        <div className="flex min-h-[4.4rem] items-center gap-3 py-2 lg:gap-6 lg:py-2.5">
+        <div className="flex min-h-[4.4rem] items-center gap-2.5 py-2 sm:gap-3 lg:gap-5 lg:py-2.5">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F1F3F5] px-3 text-xs font-black text-[#1A1A1A] transition-colors hover:bg-white hover:text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:px-3.5"
+              aria-label={backLabel}
+              title={backLabel}
+            >
+              <FaArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="hidden xl:inline">Home</span>
+            </button>
+          ) : null}
+
           <Link
             to="/home"
             className="flex shrink-0 items-center gap-2 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"

@@ -14,7 +14,7 @@ ROOT = Path('services/referral-service')
 TARGET = ROOT / 'target'
 counts = {}
 suite_counts = {}
-for folder, minimum in [('surefire-reports', 18), ('failsafe-reports', 35)]:
+for folder, minimum in [('surefire-reports', 18), ('failsafe-reports', 39)]:
     reports = sorted((TARGET / folder).glob('TEST-*.xml'))
     assert reports, f'Missing test evidence: {folder}'
     suites = [ET.parse(path).getroot() for path in reports]
@@ -49,7 +49,7 @@ with zipfile.ZipFile(jar_path) as archive:
     assert 'Main-Class: org.springframework.boot.loader.launch.JarLauncher' in manifest
     assert 'Start-Class: in.craves.referral.ReferralApplication' in manifest
     migrations = sorted((ROOT / 'src/main/resources/db/referral_migration').glob('*.sql'))
-    assert len(migrations) >= 7
+    assert len(migrations) == 8
     for migration in migrations:
         assert archive.read('BOOT-INF/classes/db/referral_migration/' + migration.name) == migration.read_bytes()
     assert archive.read(sbom_entry) == bom_bytes, 'Packaged SBOM differs from verified inventory'

@@ -10,4 +10,5 @@ cd "$(dirname "$0")/../.."
 for service in referral-service auth-service order-service integration-service; do
   mvn -B -ntp -f "services/$service/pom.xml" verify
 done
+python3 scripts/referrals/verify-build.py
 python3 scripts/referrals/require-backend-evidence.py

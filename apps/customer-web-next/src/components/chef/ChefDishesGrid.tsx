@@ -36,7 +36,7 @@ export function ChefDishesGrid({ chefName, dishes }: ChefDishesGridProps) {
           <DishCard
             key={dish.id}
             dish={dish}
-            priorityImage={index < 3}
+            priorityImage={index < 2}
           />
         ))}
       </div>

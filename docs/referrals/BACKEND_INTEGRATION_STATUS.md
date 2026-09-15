@@ -24,6 +24,8 @@ Set `CRAVES_REFERRALS_AUTH_VERIFICATION_MODE=AUTH_HTTP` and `CRAVES_REFERRALS_AU
 
 The deployment template supports this mode without Redis credentials; set `MANAGEMENT_HEALTH_REDIS_ENABLED=false` and readiness to `readinessState,db`. Request-level Auth verification remains mandatory even when the readiness probe is green. The prior `REDIS` mode remains available only with its validated publisher/TTL/absence contract. This change does not enable or modify the existing login revocation publisher.
 
+Administrative routes use Craves' issued roles: `PLATFORM_ADMIN` and `PAYMENTS_ADMIN` may write; `AUDIT_ADMIN` may read only. Generic `ADMIN`, support and customer roles grant no administrative access. Administrative routes require `AUTH_HTTP`, so Auth verifies the existing bounded administrator session as well as current account/role state. Redis projection alone cannot authorize administrator sessions.
+
 ## Checkout API
 
 The existing `POST /api/v1/checkout` accepts an optional field:

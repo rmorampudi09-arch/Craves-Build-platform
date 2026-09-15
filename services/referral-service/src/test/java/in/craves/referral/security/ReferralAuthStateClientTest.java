@@ -25,7 +25,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 class ReferralAuthStateClientTest {
     String origin="https://auth.example.test"; UUID id=UUID.randomUUID();
-    Jwt jwt=Jwt.withTokenValue("TEST_ONLY_BEARER").header("alg","RS256").subject(id.toString()).claim("token_version",2L).claim("roles",List.of("ADMIN","CUSTOMER")).build();
+    Jwt jwt=Jwt.withTokenValue("TEST_ONLY_BEARER").header("alg","RS256").subject(id.toString()).claim("token_version",2L).claim("roles",List.of("PLATFORM_ADMIN","CUSTOMER")).build();
     RestClient.Builder builder=RestClient.builder();
     MockRestServiceServer server=MockRestServiceServer.bindTo(builder).build();
     ReferralAuthStateClient client=new ReferralAuthStateClient(origin,builder);
@@ -35,17 +35,23 @@ class ReferralAuthStateClientTest {
     @Test void verifiesOriginalBearerAndReturnsCurrentRoles(){responds(body());assertEquals(Set.of("ROLE_CUSTOMER"),client.verify(jwt));server.verify();}
     @Test void noPositiveCacheAndRevocationTakesEffectOnNextRequest(){responds(body());server.expect(anything()).andRespond(withStatus(HttpStatus.UNAUTHORIZED));client.verify(jwt);var ex=assertThrows(ReferralProblem.class,()->client.verify(jwt));assertEquals(401,ex.status());server.verify();}
     @Test void outagesAndRedirectsFailClosed(){for(HttpStatus status:List.of(HttpStatus.SERVICE_UNAVAILABLE,HttpStatus.FOUND,HttpStatus.NOT_FOUND)){server.reset();server.expect(anything()).andRespond(withStatus(status));assertEquals(503,assertThrows(ReferralProblem.class,()->client.verify(jwt)).status());}}
-    @Test void wrongSubjectVersionStatusAndRoleCannotAuthorize(){for(String invalid:List.of(body().replace(id.toString(),UUID.randomUUID().toString()),body().replace(":2",":1"),body().replace("ACTIVE","SUSPENDED"),body().replace("CUSTOMER","PLATFORM_ADMIN"),"null","{}")){server.reset();responds(invalid);assertEquals(503,assertThrows(ReferralProblem.class,()->client.verify(jwt)).status());}}
+    @Test void wrongSubjectVersionStatusAndRoleCannotAuthorize(){for(String invalid:List.of(body().replace(id.toString(),UUID.randomUUID().toString()),body().replace(":2",":1"),body().replace("ACTIVE","SUSPENDED"),body().replace("CUSTOMER","SUPPORT_ADMIN"),"null","{}")){server.reset();responds(invalid);assertEquals(503,assertThrows(ReferralProblem.class,()->client.verify(jwt)).status());}}
     @Test void oversizedAndMalformedBodiesAreRejected(){responds(" ".repeat(16385));assertThrows(ReferralProblem.class,()->client.verify(jwt));server.reset();responds("not json");assertThrows(ReferralProblem.class,()->client.verify(jwt));}
     @Test void networkFailureDoesNotAuthorize(){server.expect(anything()).andRespond(withException(new IOException("TEST outage")));assertEquals(503,assertThrows(ReferralProblem.class,()->client.verify(jwt)).status());}
     @Test void configuredOriginMustBeHttpsWithoutRedirectablePathOrCredentials(){for(String url:List.of("http://auth.test","https://user:password@auth.test","https://auth.test/api","https://auth.test?x=1","https://auth.test#fragment"))assertThrows(IllegalArgumentException.class,()->new ReferralAuthStateClient(url,builder));}
     @Test void filterDropsRemovedAdminAuthorityBeforeAuthorizationWithoutRedis()throws Exception{
         responds(body());var settings=mock(ReferralSettings.class);var redis=mock(org.springframework.data.redis.core.StringRedisTemplate.class);
         var filter=new ReferralRevocationFilter(settings,redis,true,false,client);
-        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt,List.of(new SimpleGrantedAuthority("ROLE_ADMIN"),new SimpleGrantedAuthority("ROLE_CUSTOMER"))));
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt,List.of(new SimpleGrantedAuthority("ROLE_PLATFORM_ADMIN"),new SimpleGrantedAuthority("ROLE_CUSTOMER"))));
         var request=new MockHttpServletRequest("GET","/api/v1/referrals/admin/policy");
         filter.doFilter(request,new MockHttpServletResponse(),(req,res)->assertEquals(List.of("ROLE_CUSTOMER"),SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().map(a->a.getAuthority()).toList()));
         verifyNoInteractions(redis);server.verify();
+    }
+    @Test void redisAloneCannotAuthorizeAnAdministratorSession()throws Exception{
+        var redis=mock(org.springframework.data.redis.core.StringRedisTemplate.class);
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt,List.of(new SimpleGrantedAuthority("ROLE_PLATFORM_ADMIN"))));var response=new MockHttpServletResponse();
+        new ReferralRevocationFilter(mock(ReferralSettings.class),redis,true,true).doFilter(new MockHttpServletRequest("GET","/api/v1/referrals/admin/overview"),response,(req,res)->fail("Unverified admin session reached handler"));
+        assertEquals(503,response.getStatus());verifyNoInteractions(redis);
     }
     @Test void failureStopsFilterChainAndDoesNotFallBackToRedis()throws Exception{
         server.expect(anything()).andRespond(withStatus(HttpStatus.UNAUTHORIZED));var redis=mock(org.springframework.data.redis.core.StringRedisTemplate.class);

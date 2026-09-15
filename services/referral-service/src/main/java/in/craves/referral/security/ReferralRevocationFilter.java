@@ -47,6 +47,7 @@ public final class ReferralRevocationFilter extends OncePerRequestFilter {
                 chain.doFilter(request,response);
                 return;
             }
+            require(!request.getRequestURI().startsWith("/api/v1/referrals/admin/"),503,"AUTH_SESSION_VERIFICATION_REQUIRED");
             UUID id=UUID.fromString(jwt.getSubject());
             String projection;
             try { projection=redis.opsForValue().get("craves:auth:revocation:"+id); }

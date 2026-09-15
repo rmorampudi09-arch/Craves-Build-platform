@@ -23,6 +23,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 public class ReferralSecurity {
+    @Bean @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="CRAVES_REFERRALS_AUTH_VERIFICATION_MODE",havingValue="AUTH_HTTP")
+    ReferralAuthStateClient referralAuthStateClient(@Value("${CRAVES_REFERRALS_AUTH_BASE_URL:}") String baseUrl) { return new ReferralAuthStateClient(baseUrl); }
     @Bean JwtDecoder referralDecoder(ReferralSettings settings,Clock clock) { return ReferralJwtDecoder.create(settings,clock); }
     @Bean @Order(1) SecurityFilterChain internal(HttpSecurity http,ReferralSettings settings,Clock clock) throws Exception {
         http.securityMatcher("/internal/**").csrf(csrf->csrf.disable()).sessionManagement(session->session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -34,20 +36,21 @@ public class ReferralSecurity {
             @Value("${CRAVES_REFERRALS_PUBLIC_ACCESS_ENABLED:false}") boolean publicAccessEnabled,
             @Value("${CRAVES_REFERRALS_REVOCATION_ABSENCE_CONTRACT_CONFIRMED:false}") boolean absenceContractConfirmed,
             @Value("${CRAVES_REFERRALS_AUTH_VERIFICATION_MODE:REDIS}") String verificationMode,
-            @Value("${CRAVES_REFERRALS_AUTH_BASE_URL:}") String authBaseUrl) throws Exception {
+            org.springframework.beans.factory.ObjectProvider<ReferralAuthStateClient> authClients) throws Exception {
         if(!List.of("REDIS","AUTH_HTTP").contains(verificationMode))throw new IllegalArgumentException("Unknown Auth verification mode");
-        ReferralAuthStateClient authState="AUTH_HTTP".equals(verificationMode)?new ReferralAuthStateClient(authBaseUrl):null;
+        ReferralAuthStateClient authState="AUTH_HTTP".equals(verificationMode)?authClients.getObject():null;
         http.csrf(csrf->csrf.disable()).sessionManagement(session->session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .requestCache(cache->cache.disable()).cors(cors->cors.disable())
             .authorizeHttpRequests(auth->auth
                 .requestMatchers("/actuator/health","/actuator/health/liveness","/actuator/health/readiness").permitAll()
-                .requestMatchers("/api/v1/referrals/admin/**").hasRole("ADMIN")
+                .requestMatchers(org.springframework.http.HttpMethod.GET,"/api/v1/referrals/admin/**").hasAnyRole("PLATFORM_ADMIN","PAYMENTS_ADMIN","AUDIT_ADMIN")
+                .requestMatchers("/api/v1/referrals/admin/**").hasAnyRole("PLATFORM_ADMIN","PAYMENTS_ADMIN")
                 .requestMatchers("/api/v1/referrals/me","/api/v1/referrals/me/**").authenticated()
                 .anyRequest().denyAll())
             .oauth2ResourceServer(oauth->oauth.jwt(jwt->jwt.decoder(decoder).jwtAuthenticationConverter(token->{
                 List<String> roles=token.getClaimAsStringList("roles");
                 Collection<GrantedAuthority> authorities=roles.stream().map(role->role.toUpperCase(Locale.ROOT))
-                    .filter(role->List.of("ADMIN","CHEF","CUSTOMER").contains(role)).distinct()
+                    .filter(role->List.of("PLATFORM_ADMIN","PAYMENTS_ADMIN","AUDIT_ADMIN","CHEF","CUSTOMER").contains(role)).distinct()
                     .map(role->(GrantedAuthority)new SimpleGrantedAuthority("ROLE_"+role)).toList();
                 return new JwtAuthenticationToken(token,authorities,token.getSubject());
             })).authenticationEntryPoint((req,res,ex)->SourceAuthenticationFilter.error(res,401,"AUTHENTICATION_REQUIRED")))

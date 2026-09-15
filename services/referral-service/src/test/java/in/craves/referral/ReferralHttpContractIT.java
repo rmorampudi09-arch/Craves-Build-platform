@@ -43,12 +43,13 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /** Actual loopback HTTP server + RSA/HMAC filters + disposable PostgreSQL.
- * Redis is an explicit mock dependency; no current Craves owner or provider is called. */
+ * Auth account/session verification is an explicit mock; no deployed owner or provider is called. */
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT,properties={
     "referral.enabled=true","referral.workers-enabled=true","referral.awards-enabled=true",
     "referral.settlement-enabled=true","referral.withdrawals-enabled=true","referral.spending-enabled=true",
     "referral.cashout-minimum-paise=1000","referral.annual-kyc-threshold-paise=10000000",
     "referral.lifetime-review-paise=100000000","referral.worker-delay-ms=86400000",
+    "CRAVES_REFERRALS_AUTH_VERIFICATION_MODE=AUTH_HTTP","CRAVES_REFERRALS_AUTH_BASE_URL=https://auth.example.test",
     "CRAVES_REFERRALS_PUBLIC_ACCESS_ENABLED=true","CRAVES_REFERRALS_REVOCATION_ABSENCE_CONTRACT_CONFIRMED=false"})
 @Import(ReferralHttpContractIT.TimeConfig.class)
 @DirtiesContext(classMode=DirtiesContext.ClassMode.AFTER_CLASS)
@@ -73,10 +74,12 @@ class ReferralHttpContractIT {
     @Autowired SettlementService settlement;
     @Autowired ReferralSettings settings;
     @MockitoBean StringRedisTemplate redis;
+    @MockitoBean in.craves.referral.security.ReferralAuthStateClient authState;
     ReferralTestRig r;
     ValueOperations<String,String> values;
     @BeforeEach @SuppressWarnings("unchecked") void setup() {
         r=new ReferralTestRig();TIME.set(r.clock.instant());
+        when(authState.verify(any())).thenAnswer(call->((org.springframework.security.oauth2.jwt.Jwt)call.getArgument(0)).getClaimAsStringList("roles").stream().map(role->"ROLE_"+role).collect(java.util.stream.Collectors.toSet()));
         values=mock(ValueOperations.class);when(redis.opsForValue()).thenReturn(values);when(values.get(anyString())).thenReturn("ACTIVE|1");
     }
     String token(UUID user,String role) throws Exception {
@@ -153,14 +156,20 @@ class ReferralHttpContractIT {
         var member=r.member(null);String memberToken=token(member.id(),"CUSTOMER");
         assertEquals(401,get("/api/v1/referrals/me",null).statusCode());assertEquals(401,get("/api/v1/referrals/me","not-a-jwt").statusCode());
         assertEquals(403,get("/api/v1/referrals/admin/overview",memberToken).statusCode());
-        assertEquals(200,get("/api/v1/referrals/admin/overview",token(r.approver,"ADMIN")).statusCode());
-        when(values.get(anyString())).thenReturn("SUSPENDED|1");assertEquals(401,get("/api/v1/referrals/me",memberToken).statusCode());
-        when(values.get(anyString())).thenReturn("ACTIVE|2");assertEquals(401,get("/api/v1/referrals/me",memberToken).statusCode());
-        when(values.get(anyString())).thenReturn("bad");assertEquals(503,get("/api/v1/referrals/me",memberToken).statusCode());
-        when(values.get(anyString())).thenReturn(null);var absent=get("/api/v1/referrals/me",memberToken);assertEquals(503,absent.statusCode());
-        assertTrue(absent.body().contains("REVOCATION_ABSENCE_CONTRACT_UNCONFIRMED"));
-        when(values.get(anyString())).thenThrow(new IllegalStateException("TEST_ONLY_REDIS_OUTAGE"));
-        var unavailable=get("/api/v1/referrals/me",memberToken);assertEquals(503,unavailable.statusCode());assertFalse(unavailable.body().contains("TEST_ONLY_REDIS_OUTAGE"));
+        assertEquals(200,get("/api/v1/referrals/admin/overview",token(r.approver,"PLATFORM_ADMIN")).statusCode());
+        assertEquals(200,get("/api/v1/referrals/admin/overview",token(r.approver,"PAYMENTS_ADMIN")).statusCode());
+        assertEquals(200,get("/api/v1/referrals/admin/overview",token(r.approver,"AUDIT_ADMIN")).statusCode());
+        assertEquals(403,post("/api/v1/referrals/admin/policies",token(r.approver,"AUDIT_ADMIN"),r.json(Map.of())).statusCode());
+        assertEquals(403,get("/api/v1/referrals/admin/overview",token(r.approver,"ADMIN")).statusCode());
+        assertEquals(403,get("/api/v1/referrals/admin/overview",token(r.approver,"SUPPORT_ADMIN")).statusCode());
+        doReturn(java.util.Set.of("ROLE_CUSTOMER")).when(authState).verify(any());
+        assertEquals(403,get("/api/v1/referrals/admin/overview",token(r.approver,"PLATFORM_ADMIN")).statusCode());
+        doThrow(new ReferralProblem(401,"ACCESS_TOKEN_REVOKED")).when(authState).verify(any());
+        assertEquals(401,get("/api/v1/referrals/me",memberToken).statusCode());
+        assertEquals(401,get("/api/v1/referrals/admin/overview",token(r.approver,"PLATFORM_ADMIN")).statusCode());
+        doThrow(new ReferralProblem(503,"AUTH_VERIFICATION_UNAVAILABLE")).when(authState).verify(any());
+        var unavailable=get("/api/v1/referrals/me",memberToken);assertEquals(503,unavailable.statusCode());
+        verify(values,never()).get(anyString());
         assertEquals(200,get("/actuator/health/liveness",null).statusCode());
     }
     @Test void signedHttpRejectsTamperWrongSourceDuplicateKeysAndTrailingDocuments() throws Exception {
@@ -209,7 +218,7 @@ class ReferralHttpContractIT {
             "admin-overview","/admin/overview","policies","/admin/policies");
         for(var entry:paths.entrySet()) {
             boolean admin=entry.getValue().startsWith("/admin/");
-            var response=get("/api/v1/referrals"+entry.getValue(),token(admin?r.approver:owner.id(),admin?"ADMIN":"CUSTOMER"));
+            var response=get("/api/v1/referrals"+entry.getValue(),token(admin?r.approver:owner.id(),admin?"PLATFORM_ADMIN":"CUSTOMER"));
             assertEquals(200,response.statusCode(),response.body());
             assertTrue(response.headers().firstValue("Content-Type").orElse("").startsWith("application/json"));
             Json.parse(response.body());

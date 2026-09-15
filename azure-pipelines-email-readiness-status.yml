@@ -2,19 +2,30 @@
 # existing audit pipeline without changing that pipeline's default branch.
 trigger: none
 pr: none
+parameters:
+  - name: action
+    displayName: Device acceptance action
+    type: string
+    default: inspect
+    values:
+      - inspect
+      - release-cart
 pool:
   vmImage: ubuntu-latest
 steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
-  - task: AzureCLI@2
-    displayName: Read cart dependencies and live revision, without secrets or writes
-    inputs:
-      azureSubscription: Craves-Dev-Service-Connection
-      scriptType: bash
-      scriptLocation: inlineScript
-      inlineScript: |
-        set -euo pipefail
-        set +x
-        python3 scripts/release/device-cart-readiness.py
+  - ${{ if eq(parameters.action, 'inspect') }}:
+      - task: AzureCLI@2
+        displayName: Read cart dependencies and live revision, without secrets or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/device-cart-readiness.py
+  - ${{ if eq(parameters.action, 'release-cart') }}:
+      - template: pipelines/device-cart-release-steps.yml

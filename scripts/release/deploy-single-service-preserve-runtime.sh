@@ -370,6 +370,13 @@ PREVIOUS_IMAGE=$(az containerapp revision show \
 
 [[ -n "$PREVIOUS_IMAGE" ]] || fail 'Previous ready revision image was not resolved. No deployment was attempted.'
 
+# Optional exact-image gate for isolated repairs; never overwrite another release.
+if [[ -n "${EXPECTED_PREVIOUS_IMAGE:-}" ]]; then
+  [[ "$PREVIOUS_IMAGE" == "$EXPECTED_PREVIOUS_IMAGE" ]] || fail 'Previous image changed; review the concurrent release before deploying.'
+  [[ "$(jq -r '.properties.latestRevisionName' <<<"$BEFORE")" == "$PREVIOUS_REVISION" ]] || fail 'Another rollout is in progress.'
+  [[ "$(jq -r '.properties.template.containers[0].image' <<<"$BEFORE")" == "$EXPECTED_PREVIOUS_IMAGE" ]] || fail 'Desired image already changed.'
+fi
+
 SECRET_META_BEFORE=$(secret_metadata_json)
 verify_active_secret_refs_are_key_vault_backed "$BEFORE" "$SECRET_META_BEFORE"
 

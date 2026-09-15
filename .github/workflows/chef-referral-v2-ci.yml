@@ -68,6 +68,8 @@ jobs:
           bom = json.loads(bom_bytes)
           assert bom.get('bomFormat') == 'CycloneDX' and bom.get('components'), 'Missing usable SBOM'
           jar_path = target/'referral-service-0.1.0-SNAPSHOT.jar'
+          # Boot's Packager preserves META-INF/sbom at the archive root.
+          sbom_entry = 'META-INF/sbom/application.cdx.json'
           with zipfile.ZipFile(jar_path) as archive:
               names = set(archive.namelist())
               assert 'BOOT-INF/classes/in/craves/referral/ReferralApplication.class' in names
@@ -79,10 +81,11 @@ jobs:
               assert 'Start-Class: in.craves.referral.ReferralApplication' in manifest
               for migration in Path('services/referral-service/src/main/resources/db/referral_migration').glob('*.sql'):
                   assert archive.read('BOOT-INF/classes/db/referral_migration/' + migration.name) == migration.read_bytes()
-              assert archive.read('BOOT-INF/classes/META-INF/sbom/application.cdx.json') == bom_bytes, 'Packaged SBOM differs from verified inventory'
+              assert archive.read(sbom_entry) == bom_bytes, 'Packaged SBOM differs from verified inventory'
 
           receipt = {'workflowRunId': os.environ['GITHUB_RUN_ID'], 'tests': counts,
                      'sbomComponents': len(bom['components']), 'sbomPackaged': True,
+                     'sbomArchiveEntry': sbom_entry,
                      'jarSha256': hashlib.sha256(jar_path.read_bytes()).hexdigest(),
                      'sbomSha256': hashlib.sha256(bom_bytes).hexdigest()}
           (target/'artifact-verification.json').write_text(json.dumps(receipt, indent=2) + '\n')

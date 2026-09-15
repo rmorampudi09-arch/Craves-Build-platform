@@ -58,13 +58,13 @@ CycloneDX runs in `prepare-package`, before the JAR is created. The dependency i
 services/referral-service/target/classes/META-INF/sbom/application.cdx.json
 ```
 
-The executable JAR contains that same inventory at:
+Spring Boot preserves this META-INF entry at the executable JAR's top level, rather than relocating it under BOOT-INF/classes. The archive entry is:
 
 ```text
-BOOT-INF/classes/META-INF/sbom/application.cdx.json
+META-INF/sbom/application.cdx.json
 ```
 
-CI checks those bytes are identical and records JAR/SBOM SHA-256 values in `target/artifact-verification.json`. The previous CI failure looked for `target/bom.json`, which was not the generated Spring Boot inventory path. Do not create an empty placeholder inventory or skip the gate. The inventory identifies dependencies; it is not a vulnerability-clearance report.
+CI checks those bytes are identical and records the archive entry plus JAR/SBOM SHA-256 values in `target/artifact-verification.json`. The previous CI failure looked for `target/bom.json`, which was not the generated Spring Boot inventory path. Do not create an empty placeholder inventory or skip the gate. The inventory identifies dependencies; it is not a vulnerability-clearance report.
 
 ## Runtime environment — no secret values in chat or Git
 

@@ -9,6 +9,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 
+import { ProgressiveImage } from "@/components/media/ProgressiveImage";
 import type { NearbyKitchen } from "@/lib/discovery-contract";
 import type { Dish } from "@/services/api/dishes";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
@@ -153,8 +154,17 @@ export function HomeSearchOverlay({
                   params={{ id: dish.id }}
                   className="group flex items-center gap-4 py-4 focus-visible:outline-none"
                 >
-                  <div className="h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-[#F1F3F5]">
-                    <img src={dish.img} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.025]" />
+                  <div className="relative h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-[#F1F3F5]">
+                    <ProgressiveImage
+                      src={dish.img}
+                      alt=""
+                      width={192}
+                      height={160}
+                      loading="lazy"
+                      fetchPriority="low"
+                      fallbackLabel="Dish photo unavailable"
+                      className="h-full w-full object-cover"
+                    />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-base font-black text-[#1A1A1A] group-hover:text-[#F62E18]">{dish.name}</p>

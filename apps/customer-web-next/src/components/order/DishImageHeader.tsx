@@ -6,6 +6,7 @@ import {
   ImageOff,
   Share2,
 } from "lucide-react";
+import { ProgressiveImage } from "@/components/media/ProgressiveImage";
 import {
   customerFavoritesLoaded,
   getCustomerFavoriteIds,
@@ -120,16 +121,7 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
     <section aria-label={`${dish.name} photos`}>
       <div className="relative overflow-hidden rounded-[1.65rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-[0_14px_36px_rgba(26,26,26,0.08)] md:rounded-[2rem]">
         <div className="relative aspect-[4/3] md:aspect-[16/10]">
-          <img
-            src={activeImage}
-            alt={dish.imageIsPlaceholder ? "" : `${dish.name} photo ${safeIndex + 1}`}
-            aria-hidden={dish.imageIsPlaceholder || undefined}
-            className={
-              dish.imageIsPlaceholder
-                ? "h-full w-full object-contain p-16 opacity-80 sm:p-20"
-                : "h-full w-full object-cover object-center"
-            }
-          />
+          <ProgressiveImage\n            key={activeImage}\n            src={activeImage}\n            alt={dish.imageIsPlaceholder ? "" : `${dish.name} photo ${safeIndex + 1}`}\n            aria-hidden={dish.imageIsPlaceholder || undefined}\n            width={1280}\n            height={960}\n            loading="eager"\n            fetchPriority="high"\n            fallbackLabel="Dish photo unavailable"\n            className={\n              dish.imageIsPlaceholder\n                ? "h-full w-full object-contain p-16 opacity-80 sm:p-20"\n                : "h-full w-full object-cover object-center"\n            }\n          />
 
           <div className="absolute inset-x-0 top-0 flex items-center justify-end p-3.5 sm:p-4">
             <div className="flex items-center gap-2">

@@ -84,7 +84,7 @@ function SelectionCircle({ selected }: { selected: boolean }) {
       } flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2`}
       aria-hidden="true"
     >
-      {selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#F62E18]" /> : null}
+      {selected ? <span className={`${styles.filterSelectionDot} h-2.5 w-2.5 rounded-full bg-[#F62E18]`} /> : null}
     </span>
   );
 }
@@ -125,7 +125,7 @@ export function DishesGrid({
   const scrollToDishes = () => {
     const heading = document.getElementById("available-dishes-heading");
     heading?.closest("section")?.scrollIntoView({
-      behavior: "smooth",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
       block: "start",
     });
   };
@@ -155,7 +155,7 @@ export function DishesGrid({
 
   return (
     <section
-      className={`${styles.fadeUp} ${styles.delayTwo} mx-auto max-w-[88rem] scroll-mt-40 px-4 pb-10 pt-12 md:px-7 lg:px-10 lg:pt-16`}
+      className="mx-auto max-w-[88rem] scroll-mt-32 px-4 pb-10 pt-11 md:px-7 lg:px-10 lg:pt-14"
       aria-labelledby="available-dishes-heading"
     >
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -210,7 +210,7 @@ export function DishesGrid({
               <Popover.Content
                 sideOffset={10}
                 align="start"
-                className="z-[80] w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[1.55rem] border border-[#F1F3F5] bg-white shadow-[0_24px_60px_rgba(26,26,26,0.16)] outline-none"
+                className={`${styles.filterPopover} z-[80] w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[1.55rem] border border-[#F1F3F5] bg-white shadow-[0_24px_60px_rgba(26,26,26,0.16)] outline-none`}
                 aria-label="Dish filter options"
               >
                 <div className="px-5 pb-4 pt-5">
@@ -306,7 +306,7 @@ export function DishesGrid({
           <p className="sr-only" role="status">
             Loading nearby dishes
           </p>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className={styles.dishGrid}>
             {Array.from({ length: 8 }, (_, index) => (
               <DishSkeleton key={index} />
             ))}
@@ -384,7 +384,7 @@ export function DishesGrid({
       ) : null}
 
       {state === "ready" && dishes.length > 0 ? (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className={styles.dishGrid}>
           {dishes.map((dish) => (
             <DishCard key={dish.id} dish={dish} />
           ))}

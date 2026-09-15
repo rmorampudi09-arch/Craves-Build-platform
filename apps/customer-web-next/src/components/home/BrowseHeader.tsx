@@ -55,7 +55,7 @@ export function BrowseHeader({
             <button
               type="button"
               onClick={onBack}
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F1F3F5] px-3 text-xs font-black text-[#1A1A1A] transition-colors hover:bg-white hover:text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:px-3.5"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] p-0 text-[#1A1A1A] transition-[background-color,color,box-shadow] hover:bg-white hover:text-[#F62E18] hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
               aria-label={backLabel}
               title={backLabel}
             >

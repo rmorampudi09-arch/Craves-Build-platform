@@ -61,10 +61,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: chef-referral-v2-backend-evidence-${{ github.sha }}
+          name: chef-referral-v2-backend-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             services/referral-service/target/surefire-reports/
             services/referral-service/target/failsafe-reports/
+            services/referral-service/target/bom.json
+            services/referral-service/target/bom.xml
           retention-days: 14
   web:
     runs-on: ubuntu-latest
@@ -82,19 +84,50 @@ jobs:
           cache: npm
           cache-dependency-path: apps/customer-web-next/package-lock.json
       - run: npm ci
-      - name: Lint existing app plus additive components
-        run: npm run lint
-      - name: Typecheck without editing the app configuration
-        run: npm run typecheck
-      - name: Referral contracts, first touch, BFF and rendering tests
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Referral contracts, attribution, BFF, recovery and rendering tests
         run: npx vitest run --config ../../scripts/referrals/web-vitest.config.mts --reporter=default --reporter=junit --outputFile.junit=../../referral-web-results.xml
       - name: Existing application regression tests
         run: npm test
       - name: Production web compilation (no deployment)
         run: npm run build
+      - name: Record inherited dependency findings without editing the lockfile
+        if: always()
+        run: npm audit --json > ../../referral-web-audit.json || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: chef-referral-v2-web-evidence-${{ github.sha }}
-          path: referral-web-results.xml
+          name: chef-referral-v2-web-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            referral-web-results.xml
+            referral-web-audit.json
+          retention-days: 14
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+      - name: Typecheck the isolated native feature against existing dependencies
+        run: npx tsc --project ../../scripts/referrals/mobile-tsconfig.json --noEmit
+      - name: Native referral contract tests
+        run: npm test -- --runInBand --runTestsByPath src/features/referralsV2/model.test.ts --json --outputFile=../../referral-mobile-results.json
+      - name: Existing cross-feature regression tests
+        run: npm run test:integration
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chef-referral-v2-mobile-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: referral-mobile-results.json
           retention-days: 14

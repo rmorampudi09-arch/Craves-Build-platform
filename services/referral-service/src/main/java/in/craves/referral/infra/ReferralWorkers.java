@@ -6,9 +6,9 @@ import in.craves.referral.domain.AwardService;
 import in.craves.referral.domain.PayoutBatchPlanner;
 import in.craves.referral.domain.SettlementService;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +26,6 @@ public class ReferralWorkers {
     private final PayoutBatchPlanner payouts;
     private final ReferralSettings settings;
     private final Clock clock;
-    private final AtomicLong sweepHour=new AtomicLong(-1);
     public ReferralWorkers(Store db,InboxService inbox,AwardService awards,SettlementService settlement,PayoutBatchPlanner payouts,ReferralSettings settings,Clock clock) {
         this.db=db; this.inbox=inbox; this.awards=awards; this.settlement=settlement; this.payouts=payouts; this.settings=settings; this.clock=clock;
     }
@@ -42,12 +41,11 @@ public class ReferralWorkers {
                     attempt("CUSTOMER",uuid(row,"id"),awards::awardCustomer,900);
             }
             if(settings.settlementEnabled()) {
-                long hour=clock.instant().getEpochSecond()/3600;
-                if(sweepHour.get()!=hour) {
-                    db.update("INSERT INTO referral_schema.worker_schedule(kind,aggregate_id,next_at) SELECT 'CREDIT',r.id,? FROM referral_schema.reward r WHERE r.status='PENDING' AND r.hold_until<=? AND NOT EXISTS(SELECT 1 FROM referral_schema.worker_schedule w WHERE w.kind='CREDIT' AND w.aggregate_id=r.id) ORDER BY r.hold_until,r.id LIMIT 1000 ON CONFLICT DO NOTHING",time(clock.instant()),time(clock.instant()));
-                    sweepHour.set(hour);
-                }
-                // Follow-up to the hourly sweep runs frequently so a fresh Finance reply does not age out for an hour.
+                // The eligibility cutoff advances hourly, but bounded pages drain throughout
+                // that hour. Do not strand everything beyond the first 1,000 due rewards.
+                Instant hourlyCutoff=Instant.ofEpochSecond(Math.floorDiv(clock.instant().getEpochSecond(),3600)*3600);
+                db.update("INSERT INTO referral_schema.worker_schedule(kind,aggregate_id,next_at) SELECT 'CREDIT',r.id,? FROM referral_schema.reward r WHERE r.status='PENDING' AND r.hold_until<=? AND NOT EXISTS(SELECT 1 FROM referral_schema.worker_schedule w WHERE w.kind='CREDIT' AND w.aggregate_id=r.id) ORDER BY r.hold_until,r.id LIMIT 1000 ON CONFLICT DO NOTHING",time(clock.instant()),time(hourlyCutoff));
+                // Fresh finance replies are reconsidered within a minute, not a full hour later.
                 for(Map<String,Object> row:db.rows("SELECT r.id FROM referral_schema.reward r JOIN referral_schema.worker_schedule w ON w.kind='CREDIT' AND w.aggregate_id=r.id WHERE r.status='PENDING' AND r.hold_until<=? AND w.next_at<=? ORDER BY w.next_at,r.id LIMIT 100",time(clock.instant()),time(clock.instant())))
                     attempt("CREDIT",uuid(row,"id"),settlement::settle,60);
             }

@@ -1,6 +1,7 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { MapPin, Minus, Plus } from "lucide-react";
+import { hasHomeReturnState } from "@/lib/home-return-state";
 import { loadSession } from "@/services/auth/cravesAuth";
 import {
   getDish,
@@ -119,6 +120,15 @@ function DishDetailPage() {
   }, []);
 
   const handleBack = () => {
+    if (
+      typeof window !== "undefined" &&
+      hasHomeReturnState() &&
+      window.history.length > 1
+    ) {
+      window.history.back();
+      return;
+    }
+
     navigate({ to: "/home" });
   };
 

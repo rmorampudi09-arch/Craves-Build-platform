@@ -36,7 +36,7 @@
   transform: translateZ(0);
   backface-visibility: hidden;
   image-rendering: auto;
-  object-position: 68% 28%;
+  object-position: 72% 42%;
 }
 
 .searchInput,
@@ -287,13 +287,19 @@
 
 @media (min-width: 640px) {
   .heroArtwork {
-    object-position: 63% 24%;
+    object-position: 66% 32%;
   }
 }
 
 @media (min-width: 1024px) {
   .heroArtwork {
-    object-position: 61% 22%;
+    object-position: 62% 26%;
+  }
+}
+
+@media (min-width: 1440px) {
+  .heroArtwork {
+    object-position: 60% 24%;
   }
 }
 
@@ -343,16 +349,78 @@
   min-height: clamp(25rem, 64svh, 34rem);
 }
 
+.heroShade {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.99) 0%,
+    rgba(255, 255, 255, 0.97) 48%,
+    rgba(255, 255, 255, 0.78) 70%,
+    rgba(255, 255, 255, 0.3) 100%
+  );
+}
+
+.heroBottomFade {
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.72),
+    rgba(255, 255, 255, 0)
+  );
+}
+
+.heroTitle {
+  text-wrap: balance;
+}
+
 .dishGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.25rem;
 }
 
 .kitchenGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .dishGrid,
+  .kitchenGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .heroShade {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.99) 0%,
+      rgba(255, 255, 255, 0.94) 34%,
+      rgba(255, 255, 255, 0.55) 58%,
+      rgba(255, 255, 255, 0.08) 80%
+    );
+  }
+}
+
+@media (min-width: 1024px) {
+  .dishGrid,
+  .kitchenGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .heroShade {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.99) 0%,
+      rgba(255, 255, 255, 0.92) 29%,
+      rgba(255, 255, 255, 0.4) 50%,
+      rgba(255, 255, 255, 0) 72%
+    );
+  }
+}
+
+@media (min-width: 1280px) {
+  .dishGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .filterPopover[data-state="open"] {
@@ -389,14 +457,21 @@
 @media (max-width: 639px) {
   .heroShell,
   .heroContent {
-    min-height: clamp(24rem, 58svh, 29rem);
+    min-height: clamp(23rem, 58svh, 28rem);
   }
 }
 
 @media (max-height: 700px) and (min-width: 768px) {
   .heroShell,
   .heroContent {
-    min-height: 25rem;
+    min-height: 24rem;
+  }
+}
+
+@media (max-height: 600px) and (min-width: 768px) {
+  .heroShell,
+  .heroContent {
+    min-height: 21.5rem;
   }
 }
 

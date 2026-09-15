@@ -63,7 +63,16 @@ public class ReferralCheckoutBenefits {
         var result=parse(r.get("result").toString());var body=json.createObjectNode().put("checkoutId",checkout.toString()).put("buyerUserId",r.get("buyer_id").toString()).put("walletPaise",result.path("walletPaise").asText()).put("discountPaise",result.path("discountPaise").asText()).put("evidenceRef","finance-cancellation/"+checkout).put("checkoutCancellationConfirmed",true);
         db.update("UPDATE order_schema.referral_checkout_benefit SET state='RELEASING',finish_envelope=?::jsonb,attempts=0,next_attempt_at=now() WHERE checkout_id=?",envelope(checkout,"release",body).toString(),checkout);return false;
     }));}
-    @Scheduled(fixedDelayString="${CRAVES_REFERRAL_CHECKOUT_POLL_MS:1000}") public void tick(){for(int i=0;i<20;i++)if(!runOne())return;}
+    public void retry(CravesPrincipal actor,UUID checkout,String reason,String evidence){
+        if(actor==null || !actor.hasAnyRole("PLATFORM_ADMIN","PAYMENTS_ADMIN"))throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        if(reason==null || reason.isBlank() || reason.length()>1000 || evidence==null || !evidence.matches("[A-Za-z0-9][A-Za-z0-9._:/-]{5,179}"))throw bad("Reviewed recovery reason and evidence required");
+        tx.executeWithoutResult(s->{var row=db.queryForMap("SELECT * FROM order_schema.referral_checkout_benefit WHERE checkout_id=? FOR UPDATE",checkout);if(!"REVIEW".equals(row.get("state")))throw conflict("Only blocked work can be retried");
+            String stage=row.get("finish_envelope")==null?"RESERVING":parse(row.get("finish_envelope").toString()).path("operationType").asText().equals("checkout.release")?"RELEASING":"CONSUMING";
+            db.update("INSERT INTO order_schema.referral_benefit_recovery_audit(id,checkout_id,actor_id,reason,evidence_ref,prior_attempts,target_state) VALUES (?,?,?,?,?,?,?)",UUID.randomUUID(),checkout,actor.identityId(),reason,evidence,row.get("attempts"),stage);
+            db.update("UPDATE order_schema.referral_checkout_benefit SET state=?,attempts=0,next_attempt_at=now(),lease_id=NULL,lease_until=NULL,last_code=NULL WHERE checkout_id=?",stage,checkout);
+        });
+    }
+    @Scheduled(scheduler="referralTaskScheduler",fixedDelayString="${CRAVES_REFERRAL_CHECKOUT_POLL_MS:1000}") public void tick(){for(int i=0;i<20;i++)if(!runOne())return;}
     public boolean runOne(){Work w=claim();if(w==null)return false;try{
         var response=client.send(ReferralSourceClient.Endpoint.OPERATIONS,w.envelope().getBytes(StandardCharsets.UTF_8));
         if(response.status()!=200)throw new IllegalStateException("REFERRAL_OPERATION_NOT_CONFIRMED");

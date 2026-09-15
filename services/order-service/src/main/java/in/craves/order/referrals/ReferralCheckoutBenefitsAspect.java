@@ -13,8 +13,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** Optional request is rejected when its runtime is absent; it can never silently charge the full amount. */
 @Aspect @Component @Order(Ordered.HIGHEST_PRECEDENCE+35)
 public class ReferralCheckoutBenefitsAspect {
-    private final ObjectProvider<ReferralCheckoutBenefits> services;private final TransactionTemplate tx;
-    public ReferralCheckoutBenefitsAspect(ObjectProvider<ReferralCheckoutBenefits> services,PlatformTransactionManager manager){this.services=services;this.tx=new TransactionTemplate(manager);}
+    private final org.springframework.jdbc.core.JdbcTemplate db;private final ObjectProvider<ReferralCheckoutBenefits> services;private final TransactionTemplate tx;
+    public ReferralCheckoutBenefitsAspect(ObjectProvider<ReferralCheckoutBenefits> services,PlatformTransactionManager manager,org.springframework.jdbc.core.JdbcTemplate db){this.db=db;this.services=services;this.tx=new TransactionTemplate(manager);}
     @Around("execution(* in.craves.order.service.OrderService.checkout(..))")
     public Object checkout(ProceedingJoinPoint call) throws Throwable {
         var request=(CheckoutRequest)call.getArgs()[1];if(request==null || request.referralBenefits()==null || request.referralBenefits().isNull())return call.proceed();
@@ -24,11 +24,13 @@ public class ReferralCheckoutBenefitsAspect {
     @Around("execution(* in.craves.order.service.OrderService.getCheckout(..))")
     public Object read(ProceedingJoinPoint call) throws Throwable {
         var result=(CheckoutResponse)call.proceed();var service=services.getIfAvailable();
-        return service!=null && !"NONE".equals(service.read(result.id()).path("state").asText())?result.withReferralBenefits():result;
+        return Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM order_schema.referral_checkout_benefit WHERE checkout_id=?)",Boolean.class,result.id()))?result.withReferralBenefits():result;
     }
     @Around("execution(* in.craves.order.service.PaymentCallbackService.markCheckoutPaid(..))")
     public Object paid(ProceedingJoinPoint call) throws Throwable {
-        var service=services.getIfAvailable();if(service!=null && !service.requestConsumption((UUID)call.getArgs()[0]))throw ReferralCheckoutBenefits.conflict("Referral funding confirmation is pending");
+        var service=services.getIfAvailable();
+        if(service==null && Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM order_schema.referral_checkout_benefit WHERE checkout_id=?)",Boolean.class,(UUID)call.getArgs()[0])))throw ReferralCheckoutBenefits.conflict("Referral funding runtime must be restored before fulfilment");
+        if(service!=null && !service.requestConsumption((UUID)call.getArgs()[0]))throw ReferralCheckoutBenefits.conflict("Referral funding confirmation is pending");
         return call.proceed();
     }
 }

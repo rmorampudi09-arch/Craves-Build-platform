@@ -22,4 +22,12 @@ public class ReferralTransportConfiguration {
         return new ReferralSourceClient(URI.create(origin),"finance","current",Base64.getDecoder().decode(key),Clock.systemUTC());
     }
     @Bean ReferralOutboxWorker referralOutboxWorker(ReferralOutbox outbox,ReferralSourceClient client,ObjectMapper json){return new ReferralOutboxWorker(outbox,client,json);}
+    @Bean(name="referralTaskScheduler")
+    org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler referralTaskScheduler(){
+        var scheduler=new org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(4);scheduler.setThreadNamePrefix("referral-worker-");
+        scheduler.setWaitForTasksToCompleteOnShutdown(false);scheduler.setAwaitTerminationSeconds(20);
+        scheduler.setRemoveOnCancelPolicy(true);return scheduler;
+    }
+
 }

@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 public final class ReferralOutboxWorker {
     private final ReferralOutbox outbox;private final ReferralSourceClient client;private final ObjectMapper json;
     public ReferralOutboxWorker(ReferralOutbox outbox,ReferralSourceClient client,ObjectMapper json){this.outbox=outbox;this.client=client;this.json=json;}
-    @Scheduled(fixedDelayString="${CRAVES_REFERRAL_SOURCE_POLL_MS:5000}")
+    @Scheduled(scheduler="referralTaskScheduler",fixedDelayString="${CRAVES_REFERRAL_SOURCE_POLL_MS:5000}")
     public void drain(){
         for(int n=0;n<10;n++){
             var work=outbox.claim();if(work==null)return;

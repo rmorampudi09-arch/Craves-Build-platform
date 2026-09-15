@@ -19,7 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ReferralFinanceObservation {
     private final JdbcTemplate db;private final ObjectMapper json;private final ReferralOutbox outbox;private final TransactionTemplate tx;
     public ReferralFinanceObservation(JdbcTemplate db,ObjectMapper json,ReferralOutbox outbox,PlatformTransactionManager manager){this.db=db;this.json=json;this.outbox=outbox;this.tx=new TransactionTemplate(manager);}
-    @Scheduled(fixedDelayString="${CRAVES_REFERRAL_FINANCE_OBSERVATION_POLL_MS:5000}")
+    @Scheduled(scheduler="referralTaskScheduler",fixedDelayString="${CRAVES_REFERRAL_FINANCE_OBSERVATION_POLL_MS:5000}")
     public void refresh(){for(int n=0;n<20;n++)if(!observeOne())return;}
     public boolean observeOne(){return Boolean.TRUE.equals(tx.execute(s->{
         var rows=db.queryForList("SELECT * FROM payment_schema.referral_finance_binding WHERE next_observation_at<=now() ORDER BY next_observation_at,chef_order_id LIMIT 1 FOR UPDATE SKIP LOCKED");

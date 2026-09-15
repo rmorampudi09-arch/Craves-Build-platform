@@ -84,7 +84,7 @@ public class ReferralCheckoutFundingService {
         db.update("UPDATE payment_schema.referral_checkout_funding SET create_state='NO_GATEWAY' WHERE checkout_id=? AND create_state='READY'",checkout);
         return new CreatePaymentOrderResponse(payment,checkout,ref,"REFERRAL_WALLET",null,null,null,null,BigDecimal.ZERO.setScale(2),"INR",PaymentOrderStatus.PAYMENT_PENDING,Instant.now());
     }
-    @Scheduled(fixedDelayString="${CRAVES_REFERRAL_FUNDING_POLL_MS:1000}") public void tick(){for(int i=0;i<20;i++){try{if(!runOne())return;}catch(RuntimeException e){return;}}}
+    @Scheduled(scheduler="referralTaskScheduler",fixedDelayString="${CRAVES_REFERRAL_FUNDING_POLL_MS:1000}") public void tick(){for(int i=0;i<20;i++){try{if(!runOne())return;}catch(RuntimeException e){return;}}}
     public boolean runOne(){Work w=claim();if(w==null)return false;try{
         var reply=internal.post().uri("/payments/checkout/{id}/referral-paid",w.checkout()).header("X-Craves-Internal-Secret",internalKey).retrieve().body(JsonNode.class);
         if(reply==null || !"CONSUMED".equals(reply.path("state").asText()) || !w.hash().equals(FinancialJson.hash(reply.path("funding"),json)))throw conflict("Core funding is not confirmed");
@@ -128,7 +128,7 @@ public class ReferralCheckoutFundingService {
             db.update("INSERT INTO payment_schema.referral_checkout_cancellation(checkout_id,actor_id) VALUES (?,?) ON CONFLICT DO NOTHING",checkout,actor.identityId());
         });return Map.of("status","CANCELLATION_RECORDED");
     }
-    @Scheduled(fixedDelayString="${CRAVES_REFERRAL_CANCELLATION_POLL_MS:1000}")
+    @Scheduled(scheduler="referralTaskScheduler",fixedDelayString="${CRAVES_REFERRAL_CANCELLATION_POLL_MS:1000}")
     public void cancelTick(){try{cancelOne();}catch(RuntimeException e){/* Original cancellation stays recorded. */}}
     public boolean cancelOne(){
         var rows=newTx.execute(s->{var due=db.queryForList("SELECT c.checkout_id,f.funding_hash FROM payment_schema.referral_checkout_cancellation c JOIN payment_schema.referral_checkout_funding f ON f.checkout_id=c.checkout_id WHERE c.completed_at IS NULL AND c.attempts<40 AND c.next_attempt_at<=now() ORDER BY c.next_attempt_at,c.checkout_id LIMIT 1 FOR UPDATE OF c SKIP LOCKED");

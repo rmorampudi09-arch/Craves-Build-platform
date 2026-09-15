@@ -1,70 +1,111 @@
-# Backend integration status and release contract
+# Referral backend integration status
 
-## Acceptance status
+Backend continuation of PR #358. Frontend implementation remains deferred. This document describes implemented behavior, not evidence of a production launch. The user's engineering authorization includes the integration and verification work; outstanding business evidence is actual configuration data, not an additional permission request.
 
-NOT COMPLETE / NOT DEPLOYED. This is a concrete backend integration candidate, not production acceptance. No frontend was implemented. Exact CI results belong to the tested commit, not to the original uploaded archive or an older green build.
+## Implemented owner boundaries
 
-## What is implemented
+| Owner | Behavior | Failure boundary |
+|---|---|---|
+| Auth | New-account enrollment, immutable parent attribution, current terms, keyed contact evidence, transactional registration/status outbox | Existing logins never re-parent an account; no reward on signup |
+| Order | Original financial snapshots, enrolled-participant lookup, durable binding, delivery and food-refund evidence, first qualifying checkout | Existing tax, gross totals, chef payable and cart rollback remain authoritative |
+| Order checkout | Optional `referralBenefits` in the existing checkout request; durable atomic reservation, consumption, pre-payment cancellation and reviewed retry | A missing/disabled benefit runtime rejects opted-in payment or fulfilment; it cannot silently collect the gross amount |
+| Integration payments | Frozen gross/wallet/discount/gateway funding, deterministic child allocations, durable provider creation receipt, recovery of the original provider order | Unknown creation cannot automatically issue another Razorpay order |
+| Integration refunds | Gateway portion uses the existing hardened provider refund worker; wallet and discount funding restore cumulatively through the referral engine | Gross customer success is deferred until every tender is restored; no discount is paid out as customer cash |
+| Finance | Balanced referral journal projection, gross funding capture, original earning snapshots, observed refund/capture/commission evidence | Chef payable is not a referral funding source |
+| Finance reviews | Immutable recipient/bank-ownership/KYC/tax and marketing-funding evidence drafts; a different operator approves the exact content hash | No self-declared customer KYC or placeholder business approval is generated |
+| Finance payouts | Persisted original attempt/destination/net/withholding, RazorpayX execution, verified receipt, unknown-result reconciliation and audited retry | No new transfer identity after an uncertain submission; unknown funds remain reserved |
+| Operations | Independent referral schedulers; database leases, bounded retries, immutable recovery audit, operator queue counts and original-work replay APIs | Existing non-referral scheduled jobs retain their default scheduler |
 
-| Owner | Implemented connection | Execution boundary |
-| --- | --- | --- |
-| Auth | Optional explicit referral terms consent on new Firebase identity creation; original registration timestamp; verified signed first-touch token; contact HMAC; immutable local enrollment and same-transaction source outbox | `CRAVES_REFERRAL_SOURCE_ENABLED=false` by default; no existing user automatically enrolled |
-| Auth | Authenticated root enrollment for an existing active account with current token version and explicit terms consent | Existing users cannot choose or change a parent |
-| Auth | Enrolled account active/status changes write monotonic source events in the original database transaction | Publishers can stop while durable source history continues |
-| Order | Existing financial checkout transaction is wrapped by a referral binding aspect; private lookup checks enrolled participants and policy; original snapshots and amounts are retained | Requires existing `CRAVES_FINANCE_SOURCE_ENABLED=true`; absent in inspected runtime |
-| Order | Bound delivery and full-refund events; source-history first qualifying checkout check across all buyer orders; replay-safe source keys | Partial or unsupported refunds create a source exception and are not assigned invented food amounts |
-| Finance | Takes durable ownership of referral outbox events before ACK, then separately retries application by original event ID | A receipt means durable handling, not payout or reward completion |
-| Finance | Matches bound orders to immutable issued financial snapshots; reads verified capture, delivery earning and refund records; publishes fresh finance evidence | Unknown/partial refund allocation fails referral finance eligibility; it does not rewrite an existing refund |
-| Finance | Every referral economic journal entry is mirrored once into balanced Finance accounts | Selling-chef payable lines are not used to fund referral rewards |
-| Finance | Stores original payout instructions in `AWAITING_PROVIDER_REVIEW` | No provider execution is implemented or represented as paid |
-| Referral engine | New private readiness lookup; exact transaction journal/binding events | Original ledger, attribution, settlement, cashout and spending state-machine protections remain |
+## Checkout API
 
-## Changes to existing source
+The existing `POST /api/v1/checkout` accepts an optional field:
 
-Only two existing production Java files change: Auth's exchange request DTO gains an optional `referral` JSON field and AuthService invokes enrollment inside new-identity creation. The two-argument request constructor remains. Order and Finance integrations are new conditional components. Existing owner schemas receive new migration files; historical migration files are not edited.
+```json
+{
+  "deliveryAddressId": "<existing customer address UUID>",
+  "note": "",
+  "referralBenefits": {
+    "walletPaise": "30000",
+    "inviteeDiscount": true
+  }
+}
+```
 
-Existing test changes update explicit expected migration inventories and add one checkout fixture hook. Those inventory assertions are increased to account for the new migrations; historical identity, refund, cart, tax and payable assertions remain. No existing CI workflow, service configuration, frontend, dependency manifest or provider client is edited. The dedicated scope gate enumerates allowed existing-file edits and additive paths.
+Money in the referral contract is an exact paise string. The amount is a customer preference; Order verifies the checkout and the engine independently enforces eligibility, wallet availability, active policy and discount funding. A failed combined reservation rolls back both legs. The response retains the original `grandTotal`, tax and per-chef totals and includes `referralBenefitsRequested=true`.
 
-## Source durability and recovery
+`GET /api/v1/checkout/{id}/referral-benefits` requires the checkout owner. State is `RESERVING`, `RESERVED`, `CONSUMING`, `CONSUMED`, `RELEASING`, `RELEASED` or `REVIEW`; a checkout without benefits returns `NONE`. Once reserved, `funding` contains gross, wallet, discount and gateway paise, reservation IDs and policy context.
 
-Each owner persists the event UUID, business key, original serialized envelope and content hash in the originating transaction. Duplicate keys with different content fail. Updates/deletes/truncates cannot rewrite source identity or payload. Workers claim with PostgreSQL SKIP LOCKED, use bounded requests and response bodies, and fence receipts by a still-valid lease. Timeouts replay the original ID/body. Bounded retries eventually become DEAD, which is an operational incident, never an instruction to generate a replacement economic event.
+The existing payment creation endpoint reads that owner response server-side. It never accepts a browser-supplied net total. Finance checks the immutable quote and issued child snapshots and freezes the tender plan before contacting the payment provider. Each child receives an exact deterministic allocation bounded by its original price. The allocation survives every retry and is reused for refunds.
 
-The engine similarly leases Finance outbox events. Finance stores their immutable type and payload before ACK. Its application transaction posts the journal/projection together. A failed application rolls back money and retains retryable source evidence. Capture/refund/earning changes wake only explicitly bound referral observations.
+A zero-gateway checkout uses explicit `REFERRAL_WALLET` tender with amount zero and null provider payment/order identities. It initially remains pending. Finance confirms consumption with Order, which requires the engine's durable receipt, before recording funded payment. No fabricated Razorpay payment is created.
 
-Before activation, configure owner outbox and consumer DEAD-count, oldest-unreceived-age, stale-evidence and wallet/Finance-journal drift alerts. Validate replay procedures and alert delivery against the deployed restricted role. These operational integrations are pending; table durability alone is not an alerting system.
+Customer cancellation uses `POST /api/v1/payments/referral-checkouts/{id}/cancel`. It is permitted only before provider creation starts and before any payment row exists. Finance first persists a cancellation interlock, then Order releases the original reservations and records checkout/child cancellation history. If provider creation has started or is uncertain, cancellation cannot release those reservations.
 
-## Configuration
+## Refund behavior
 
-All three owners use `CRAVES_REFERRAL_SOURCE_ENABLED` (default false), `CRAVES_REFERRAL_SERVICE_ORIGIN` (explicit private HTTPS origin), and `CRAVES_REFERRAL_SOURCE_HMAC_BASE64` (different source secret per owner). Auth additionally requires current `CRAVES_REFERRAL_TERMS_VERSION`, distinct contact and attribution HMAC keys, and an approved retention decision before accepting first-touch tokens. Never put these secrets into frontend code, source control, command logs, reports or PR descriptions.
+The existing authoritative refund-request contract supports full child refunds for chef decline and acceptance timeout. Referral integration requires the exact frozen child gross; an unallocated partial amount is rejected for review. This is the existing source contract's limit, not evidence that arbitrary partial or post-delivery refunds are implemented.
 
-The standalone engine has separate ENABLED, PUBLIC_ACCESS, WORKERS, AWARDS, SETTLEMENT, WITHDRAWALS and SPENDING switches, all default false. Runtime has no automatic Flyway DDL; its migration entry point uses separate credentials and requires verified PostgreSQL TLS remotely. Its cashout minimum, annual KYC threshold and lifetime review threshold default to zero and deliberately block eligibility until actual reviewed positive values are configured.
+The source inbox retains its original payload and tracing IDs. The existing provider refund row contains only that child's gateway allocation. Zero-gateway portions enter `BENEFITS_PENDING` and cannot dispatch a provider refund. Recognized internal tender is excluded from the legacy gateway-unknown exposure check only when its original funding and allocation match.
 
-## Bash verification
+After gateway success, the referral refund worker sends one durable cumulative operation per checkout version. Wallet credit returns to the buyer's wallet; discount funding returns to the marketing budget, without re-enabling the customer's one-use discount. If the response is lost, the original operation ID/body is replayed. The customer receives the original gross refund status only after both restorations succeed and Finance posts a balanced journal. An unresolved child cannot cause another checkout's refund queue to stall.
 
-The dedicated workflow provisions disposable PostgreSQL and named `referral_test`, `referral_owner_test`, `chef_ledger_test`, and `craves_email_test` databases. It runs Maven verify for the four affected services, checks the actual executable referral jar/SBOM/migration resources, and rejects absent, failed or skipped required suites.
+## Finance review APIs
 
-Required tests cover the original referral engine, signed HTTP boundaries, private lookup, same-transaction economic outbox, Auth consent and status rollback, owner duplicate/conflict and concurrent lease fencing, original checkout totals/cart rollback with the new aspect, Finance journal balancing/deduplication and invalid source retries, full owner migration chains, existing finance settlement, and email/rate-limit persistence.
+All endpoints below require `PAYMENTS_ADMIN` or `PLATFORM_ADMIN`; read endpoints also allow `AUDIT_ADMIN`.
 
-Local Bash tests compile and execute unit/regression suites with an explicit JVM test agent. Local database suites are intentionally skipped without disposable fixture variables; their local result is not sufficient evidence. In CI, the required database suites must execute. HTTP tests use mocked Redis and source checkout tests use a mocked private HTTPS client; live private DNS/TLS, Redis revocation projection and the full multi-service transport still need staging acceptance. No real customer/provider transaction is used as a test fixture.
+- `POST /api/v1/admin/finance/referrals/reviews`: immutable draft with `kind`, `payload`, `fundAccountId`, `contactId`, `evidenceRef` and `reason`.
+- `GET /api/v1/admin/finance/referrals/reviews?limit=50`: bounded review inventory.
+- `POST /api/v1/admin/finance/referrals/reviews/{id}/approve`: `expectedHash` and `reason`; the approving operator must differ from the draft author.
+- `GET /api/v1/admin/finance/referrals/payouts?limit=50`: instructions and execution state.
 
-## Observed Azure baseline
+`RECIPIENT` payload is the existing `recipient.assessed` contract: assessment/user IDs, Indian financial year, verified KYC and expiry, opaque destination reference, tax-assessment reference/handling, cashout permission, annual limit, assessment time and optional annual-threshold review reference. Bank ownership/KYC/tax evidence must be actual reviewed records. RazorpayX fund-account/contact identity is independently fetched before draft and approval. Draft and approval reasons and reviewed hashes are audited.
 
-Subscription: Craves-Dev (`4f897b61-9b52-44b4-8cf1-bdac281cc1aa`). Resource group: `rg-craves-prodlow-centralindia`.
+`FUNDING` payload is the existing `budget.funded` contract: funding UUID, `CUSTOMER` or `DISCOUNT` track, exact positive amount and actual funding evidence reference. Approval publishes a source-owned durable event; it does not invent a bank transfer or authorize unreviewed budget.
 
-Azure Portal and DevOps project `Craves` were accessed through the signed-in cloud browser. Bash observations showed all 11 existing applications Succeeded / Running at the same ready revision as the initial read. Auth revision `0000041`, Order `0000088`, and Integration `0000156` also reported Healthy / Provisioned / RunningAtMaxScale. These are Azure platform observations, not a synthetic purchase or payout test.
+## Payout execution and recovery
 
-Auth and Order production pipelines use `release/admin-explorer-consumption-v1`; Integration uses main-based commit `cc39599908bc0dd213270d8863b6c6fae436184d`. The current main branch contains additional Auth/Order changes absent from that release. Do not replace those service images with an arbitrary current-main build: first reconcile the actual deployed source and preserve unrelated service behavior.
+Execution requires `CRAVES_REFERRAL_PAYOUT_EXECUTION_ENABLED=true`, the existing separate RazorpayX payout credentials and `craves.razorpayx.production-approved=true`. Customer collection credentials are not reused.
 
-There is no referral Container App. No resource, secret, role, migration, scaling setting, production flag, payment or deployment was changed in this session. No live enrollment or reward was created.
+Before network submission, Finance freezes the core's original attempt ID, approved assessment/destination and exact net/withholding. The provider idempotency key and reference use that attempt ID. The referral narration is separate; the existing chef payout method retains its original narration and behavior.
 
-## Work still required before completion
+A processed result requires a transfer reference. Finance posts net clearing and sends original-amount payout evidence to the engine, which releases reserved liability and records any withholding. A timeout or response mismatch becomes `UNKNOWN`; it cannot create another transfer. If no provider ID was obtained, an operator identifies the original payout and supplies it to:
 
-1. Finish Order wallet reserve/consume/release/refund and invitee-discount application against authoritative payment amounts, including mixed-chef allocation and uncertain payment recovery. The engine's operation API is implemented; the existing checkout/payment owner integration is not.
-2. Implement Finance recipient/funding approval sources and original-attempt provider execution/reconciliation. Stored instructions are not transfers. Unknown outcomes must remain reserved. Provider, bank ownership, KYC and tax evidence must be real.
-3. Supply reviewed terms, retention policy, legal/tax/privacy/funding/mixed-chef/payout references, actual cashout/annual-KYC/lifetime thresholds, pilot cohort and budget. The supplied archive contains placeholders/test fixtures, which cannot become production approval evidence.
-4. Reconcile each owner's deployed source baseline; review and test the combined financial-source enablement before changing Order pricing behavior.
-5. Provision the isolated service with separate migration/runtime roles, private ingress and DNS/TLS, distinct versioned Key Vault source keys, existing verified JWT/revocation semantics, backups, restore rehearsal and load/alert acceptance.
-6. Run staging end-to-end signup → immutable ancestry → actual checkout → delivery → captured Finance evidence → hold → settled journal → refund, followed by wallet, discount and payout recovery paths. Use deterministic provider sandboxes; do not shorten the production hold as proof.
-7. Build/scan/pin exact images; validate migration what-if and rollback; deploy only the reviewed candidate; compare all existing applications against the frozen baseline and execute authenticated smoke checks. Leave public launch/cashout disabled until its gates pass.
+`POST /api/v1/admin/finance/referrals/payouts/{attemptId}/reconcile`
 
-The user has already authorized engineering work. The remaining programme evidence must be supplied as actual business data, and the remaining code/runtime gates must be implemented and verified; they are not an extra permission request or a claim that sign-in alone finishes the integration.
+The request includes `providerId`, `evidenceRef` and `reason`. A read-only provider lookup verifies original reference, beneficiary, amount and currency before reconciliation resumes. Known IDs are fetched; they are never POSTed again. A failed submission response requires a subsequent verified GET before funds are released as proven failed. Reversed or ambiguous results remain unresolved. Every operator retry records the previous attempt count and original identity.
+
+Unknown customer payment creation has a corresponding read-only recovery endpoint:
+
+`POST /api/v1/admin/finance/referrals/checkouts/{id}/recover-provider-order`
+
+It accepts `providerOrderId`, `evidenceRef` and `reason` and verifies the original receipt, amount and currency. It does not create a replacement order.
+
+## Operational replay and isolation
+
+`GET /api/v1/admin/finance/referrals/operations` reports bounded status counts for source outbox, consumer inbox, checkout funding, split refunds and payouts.
+
+`POST /api/v1/admin/finance/referrals/operations/{kind}/{id}/retry` requeues blocked `checkouts`, `refunds`, `cancellations`, `inbox` or `outbox` using a repair reason and evidence reference. Economic IDs, bodies, allocations and provider identities remain immutable. It cannot submit a payout.
+
+Order's counterpart is `POST /api/v1/checkout/referral-operations/{id}/retry`, restricted to Finance administrators. Its audit is append-only and its retry resumes the original reserve/consume/release operation.
+
+Referral work has named schedulers separate from existing jobs: two threads in Auth and Order, four in Integration. Database claims use leases and `SKIP LOCKED`. Expired workers cannot acknowledge another worker's lease. Unknown external payment/payout creation is handled more conservatively than retryable internal operations.
+
+Production alert delivery, observed throughput, capacity limits, backup restore and full network acceptance remain deployment gates. Queue durability and a count endpoint are not substitutes for those checks.
+
+## Release flags and migrations
+
+Owners retain `CRAVES_REFERRAL_SOURCE_ENABLED=false` by default. Order and Integration add `CRAVES_REFERRAL_CHECKOUT_BENEFITS_ENABLED=false`. Integration adds `CRAVES_REFERRAL_PAYOUT_EXECUTION_ENABLED=false`. Enable the owner/source dependencies together only on the tested release. Preserve recovery workers until outstanding financial work is drained; disabling new benefit selection must not erase outstanding reservations.
+
+The engine's seven public/execution switches remain false by default. Its cashout minimum, annual KYC threshold and lifetime-review threshold remain zero until actual reviewed positive values are supplied. The engine's policy still requires actual legal, terms, tax, privacy, funding, multi-chef and payout references and two different approving administrators. This implementation does not supply or fabricate those facts.
+
+Additive continuation migrations are Order V31/V32, Integration V140–V143 and isolated Referral V8. Prior integration migrations remain required. Historical migration contents are unchanged. Owner migrations run under their existing schema ownership; the referral engine has its separate migrator/history and restricted runtime role.
+
+## Verification and production status
+
+Run `bash scripts/referrals/test-backend.sh` with the explicitly disposable PostgreSQL environment documented by `.github/workflows/referral-backend-ci.yml`. The script runs all four affected services, preserves a failing exit status, validates the executable referral JAR/SBOM and all nine packaged migration resources, and rejects absent/failed/skipped required suites.
+
+Tests cover atomic combined benefits, earned wallet fixtures, cross-source authorization, exact paise allocation, multi-chef cumulative refunds, no-provider wallet payment/refund, original provider identity on retry, lost outer commits, immutable evidence, worker leases, distinct review actors, zero-tender legacy exposure, pre-payment cancellation, runtime-disable protection and existing service regressions. Provider results and customer/finance evidence in these tests are explicitly synthetic.
+
+The source PR remains separate from production. Azure observations before this continuation showed 11 existing apps Succeeded/Running and no referral app. Auth/Order deploy from `release/admin-explorer-consumption-v1`; Integration deploys a main-based release. Current main contains unrelated Auth/Order changes, so a deployment must use a reconciled, tested owner baseline rather than replacing their images with arbitrary main builds.
+
+Do not label this production-complete from the presence of code or a green build. Archive the exact final source SHA and CI evidence, verify restricted-role and live private-network behavior, deploy the bounded candidate, check all existing service revisions/health, and complete authenticated end-to-end acceptance. Programme activation additionally requires the actual business evidence and thresholds described above.

@@ -22,4 +22,16 @@ public class ReferralTransportConfiguration {
         return new ReferralSourceClient(URI.create(origin),"auth","current",Base64.getDecoder().decode(key),Clock.systemUTC());
     }
     @Bean ReferralOutboxWorker referralOutboxWorker(ReferralOutbox outbox,ReferralSourceClient client,ObjectMapper json){return new ReferralOutboxWorker(outbox,client,json);}
+    @Bean(name="referralTaskScheduler")
+    org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler referralTaskScheduler(){
+        var scheduler=new org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(2);scheduler.setThreadNamePrefix("referral-worker-");
+        scheduler.setWaitForTasksToCompleteOnShutdown(false);scheduler.setAwaitTerminationSeconds(20);
+        scheduler.setRemoveOnCancelPolicy(true);return scheduler;
+    }
+    // Keep Spring's original scheduler available for every existing non-referral job.
+    @Bean(name="taskScheduler")
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name="taskScheduler")
+    org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler taskScheduler(org.springframework.boot.task.TaskSchedulerBuilder builder){return builder.build();}
+
 }

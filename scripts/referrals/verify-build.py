@@ -49,7 +49,8 @@ with zipfile.ZipFile(jar_path) as archive:
     assert 'Main-Class: org.springframework.boot.loader.launch.JarLauncher' in manifest
     assert 'Start-Class: in.craves.referral.ReferralApplication' in manifest
     migrations = sorted((ROOT / 'src/main/resources/db/referral_migration').glob('*.sql'))
-    assert len(migrations) == 8
+    assert len(migrations) == 9
+    assert any(p.name == 'V8__discount_refund_evidence.sql' for p in migrations)
     for migration in migrations:
         assert archive.read('BOOT-INF/classes/db/referral_migration/' + migration.name) == migration.read_bytes()
     assert archive.read(sbom_entry) == bom_bytes, 'Packaged SBOM differs from verified inventory'

@@ -1,6 +1,6 @@
 # Manual integration and release runbook
 
-**Current state: branch implementation only; no merge or deployment authorised by this handover.** Follow-up changes to current owners require a separately reviewed integration PR. Never mark a gate complete merely because feature CI is green.
+**Historical preintegration guide.** The user subsequently authorized backend integration and verification. Current implementation and API behavior are documented in [BACKEND_INTEGRATION_STATUS.md](BACKEND_INTEGRATION_STATUS.md). The historical insertion-point list below is retained as the original checklist; it is not the current completion state. Business evidence and production acceptance must still be real.
 
 ## A. Existing insertion points — what is NOT wired yet
 

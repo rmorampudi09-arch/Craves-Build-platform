@@ -22,7 +22,7 @@ public class ReferralFinanceConsumer {
     private final JdbcTemplate db;private final ObjectMapper json;private final ReferralSourceClient client;
     private final TransactionTemplate tx;private final ReferralJournalMirror mirror;
     public ReferralFinanceConsumer(JdbcTemplate db,ObjectMapper json,ReferralSourceClient client,PlatformTransactionManager manager,ReferralJournalMirror mirror){this.db=db;this.json=json;this.client=client;this.tx=new TransactionTemplate(manager);this.mirror=mirror;}
-    @Scheduled(fixedDelayString="${CRAVES_REFERRAL_FINANCE_CONSUMER_POLL_MS:5000}")
+    @Scheduled(scheduler="referralTaskScheduler",fixedDelayString="${CRAVES_REFERRAL_FINANCE_CONSUMER_POLL_MS:5000}")
     public void receive(){
         try{
             var request=json.createObjectNode().put("claimId",UUID.randomUUID().toString()).put("limit",20);
@@ -50,7 +50,7 @@ public class ReferralFinanceConsumer {
             if(!hash.equals(prior))throw new IllegalStateException("REFERRAL_CONSUMER_EVENT_CONFLICT");
         });
     }
-    @Scheduled(fixedDelayString="${CRAVES_REFERRAL_FINANCE_APPLY_POLL_MS:1000}")
+    @Scheduled(scheduler="referralTaskScheduler",fixedDelayString="${CRAVES_REFERRAL_FINANCE_APPLY_POLL_MS:1000}")
     public void process(){for(int n=0;n<20;n++)if(!applyOne())return;}
     public boolean applyOne(){
         UUID[] event={null};int[] attempts={0};

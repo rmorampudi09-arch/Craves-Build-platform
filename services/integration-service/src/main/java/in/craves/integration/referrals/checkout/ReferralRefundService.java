@@ -51,7 +51,7 @@ public class ReferralRefundService {
         data.put("refundAmount",BigDecimal.valueOf(((Number)rows.getFirst().get("gross_paise")).longValue(),2));
         return new SerializedRefundStatusEvent(event.eventId(),event.eventType(),event.eventVersion(),event.occurredAt(),event.correlationId(),event.causationId(),event.subject(),p.toString(),event.eventKey());
     }
-    @Scheduled(fixedDelayString="${CRAVES_REFERRAL_REFUND_POLL_MS:1000}")public void tick(){for(int i=0;i<20;i++){try{if(!runOne())return;}catch(RuntimeException e){return;}}}
+    @Scheduled(scheduler="referralTaskScheduler",fixedDelayString="${CRAVES_REFERRAL_REFUND_POLL_MS:1000}")public void tick(){for(int i=0;i<20;i++){try{if(!runOne())return;}catch(RuntimeException e){return;}}}
     public boolean runOne(){Work w=claim();if(w==null)return false;try{
         var p=parse(w.envelope()).path("payload");var response=client.send(ReferralSourceClient.Endpoint.OPERATIONS,w.envelope().getBytes(StandardCharsets.UTF_8));
         if(response.status()!=200)throw new IllegalStateException("REFERRAL_REFUND_UNCONFIRMED");var result=json.readTree(response.body());

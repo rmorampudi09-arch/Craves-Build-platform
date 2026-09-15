@@ -35,7 +35,7 @@ public class ReferralPayoutWorker {
         @Value("${CRAVES_REFERRAL_PAYOUT_EXECUTION_ENABLED:false}") boolean enabled) {
         this.db=db;this.json=json;this.provider=provider;this.outbox=outbox;this.ledger=ledger;this.tx=new TransactionTemplate(manager);this.enabled=enabled;
     }
-    @Scheduled(fixedDelayString="${CRAVES_REFERRAL_PAYOUT_POLL_MS:5000}")
+    @Scheduled(scheduler="referralTaskScheduler",fixedDelayString="${CRAVES_REFERRAL_PAYOUT_POLL_MS:5000}")
     public void tick(){if(!enabled || !provider.ready())return;for(int i=0;i<10;i++){try{if(!runOne())return;}catch(RuntimeException e){return;}}}
     public boolean runOne() {
         if(!enabled || !provider.ready())return false;

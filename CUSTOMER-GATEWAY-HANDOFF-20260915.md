@@ -1,6 +1,14 @@
-# Craves customer gateway repair: verified partial live release
+# Craves customer gateway and secure runtime: verified partial live release
 
-This package contains complete scoped gateway source, tests, existing reusable policies/scripts, and the customer-audit progress report. It is not an APK, full backend replacement, database migration release, or full-platform production certification.
+## Current checkpoint — 16 September 2026
+
+Independent read-only run39053 succeeded at `a82175ef9a4834a05610e2062d3b68620bde90e8`: https://dev.azure.com/ravitejamorampudi7777/Craves/_build/results?buildId=39053. Auth latest=ready0000043, UserChef0000049 and Notification0000043; all Single mode with100% latest traffic and unchanged images. Allfive intended key-consumer references are present. Verification, projection worker, transport and local-HTTP flags remain FALSE. Existing Notification general email remains TRUE, ACS reference present and sender configured. Final independent root probes report UP for allthree. No functional email/inbox acceptance is implied. Pipeline122 is left on read-only readiness YAML.
+
+DevOps run39050 succeeded at `6c623022bce24c15259ffb71c3aa3791295732c3` after all40 Linux guard tests passed. It corrected only Notification's unused Redis health indicator and created the approved three dedicated email keys in the existing vault. The log recorded zero compatible keys before creation, followed by verified healthy bindings for Notification, UserChef and Auth. Their existing images and unrelated settings were preserved. All dedicated email verification/transport/projection gates remain FALSE. No secret values were displayed, no roles/resources created, and no emails, migrations or payment/order transactions were run. The independent post-release receipt is recorded above.
+
+This supersedes the historical no-key-created readiness snapshot below. The package now also includes complete email configuration/guard scripts and their generic helper/test dependency. These scripts do not install or activate email verification. Coordinated compatible service code, migration and inbox acceptance remain pending.
+
+This package contains complete scoped gateway and email-runtime source, tests, reusable policies/scripts, and the customer-audit progress report. It is not an APK, full backend replacement, database migration release, or full-platform production certification.
 
 ## Built and deployed
 
@@ -30,7 +38,7 @@ The full source-level mobile regression separately passed256 suites/2647 tests, 
 ## Manual steps still required
 
 - Use the existing signed-in app to open My Reviews, an already-owned order review, Support history, Saved dishes and delivery tracking. Verify appropriate real-data or empty states; do not create test records on production.
-- Email verification requires a separate compatible Auth/UserChef/Notification/customer-web release and secure key bindings. Do not enable a partially configured feature. Never share secrets or verification codes in chat.
+- Secure key bindings are now verified. Email verification still requires a separate compatible Auth/UserChef/Notification/customer-web release, migration evidence and inbox acceptance. Do not enable a partially configured feature. Never share secrets or verification codes in chat.
 - Catalog optional ingredients/allergens still require live migration-version inspection, disposable database rehearsal and a compatible service rollout.
 - Current mobile changes, including close-spelling search, still require a newly built artifact and real-device acceptance. No new APK is in this package.
 - Real order/payment, Chef operations and upload acceptance remain deferred as requested. Production release, iOS certification and full-scale readiness are not complete.

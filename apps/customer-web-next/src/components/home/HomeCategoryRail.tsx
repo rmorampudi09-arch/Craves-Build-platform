@@ -133,13 +133,13 @@ export function HomeCategoryRail({
     if (!scroller) return;
     scroller.scrollBy({
       left: direction * Math.max(260, scroller.clientWidth * 0.68),
-      behavior: "smooth",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
     });
   };
 
   return (
     <section
-      className={`${styles.fadeUp} ${styles.delayOne} mx-auto max-w-[88rem] bg-white px-4 pt-11 md:px-7 lg:px-10 lg:pt-14`}
+      className="mx-auto max-w-[88rem] bg-white px-4 pt-10 md:px-7 lg:px-10 lg:pt-14"
       aria-labelledby="craving-categories-heading"
     >
       <div className="flex items-end justify-between gap-4 bg-white">

@@ -20,8 +20,12 @@ def validate(app):
     runtime.require(env.get('CRAVES_TOKEN_REVOCATION_ENABLED', {}).get('value') == 'false', 'Revocation must already be explicitly disabled; this script never disables it')
     for key in env:
         runtime.require(not key.startswith(('SPRING_DATA_REDIS_', 'SPRING_REDIS_')), 'Redis is configured; do not hide a real dependency failure')
-    for key in ('SPRING_APPLICATION_JSON', 'SPRING_CONFIG_IMPORT', 'SPRING_CONFIG_LOCATION', 'SPRING_PROFILES_ACTIVE'):
+    for key in ('SPRING_APPLICATION_JSON', 'SPRING_CONFIG_IMPORT', 'SPRING_CONFIG_LOCATION'):
         runtime.require(key not in env, 'Additional configuration sources require review')
+    # Source6691aa2 has only application.yml and no @Profile beans; live metadata
+    # confirms exactly prod. Do not permit arbitrary profiles or external imports.
+    runtime.guard.check_env(app, {'SPRING_PROFILES_ACTIVE': 'prod'})
+    runtime.require(not any(key.startswith('SPRING_PROFILES_') and key != 'SPRING_PROFILES_ACTIVE' for key in env), 'Additional profile configuration requires review')
     for key in ('JAVA_TOOL_OPTIONS', 'JAVA_OPTS', 'JDK_JAVA_OPTIONS'):
         value = env.get(key, {}).get('value', '')
         runtime.require('redis' not in value.lower() and 'revocation' not in value.lower() and not env.get(key, {}).get('secretRef'), 'Java property overrides require review')

@@ -158,8 +158,8 @@ export function HomeSearchOverlay({
                     <ProgressiveImage
                       src={dish.img}
                       alt=""
-                      width={192}
-                      height={160}
+                      width={96}
+                      height={80}
                       loading={index < 3 ? "eager" : "lazy"}
                       fetchPriority={index === 0 ? "high" : "auto"}
                       fallbackLabel="Dish photo unavailable"

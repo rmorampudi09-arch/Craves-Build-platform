@@ -74,6 +74,9 @@ steps:
             'sql_exception': r'PSQLException',
         }
         print('NOTIFICATION_LOG_CLASSIFICATIONS ' + json.dumps({key:len(re.findall(pattern,text)) for key,pattern in patterns.items()}))
+        image = app['properties']['template']['containers'][0]['image'].split('/',1)[1]
+        result = subprocess.run(['az','acr','manifest','show-metadata','-r','cravesprodlowacr82121','-n',image,'--query','{digest:digest,tags:tags,lastUpdateTime:lastUpdateTime}','-o','json'],capture_output=True,text=True,timeout=90)
+        print('NOTIFICATION_IMAGE_METADATA ' + (result.stdout.strip() if result.returncode == 0 else 'UNAVAILABLE'))
         print('READ ONLY: no raw logs, secret values or customer records displayed; no resource or settings changes')
         PY
 

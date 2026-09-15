@@ -10,6 +10,7 @@ parameters:
     values:
       - inspect
       - release-cart
+      - inspect-cart-policy
 pool:
   vmImage: ubuntu-latest
 steps:
@@ -29,3 +30,14 @@ steps:
             python3 scripts/release/device-cart-readiness.py
   - ${{ if eq(parameters.action, 'release-cart') }}:
       - template: pipelines/device-cart-release-steps.yml
+  - ${{ if eq(parameters.action, 'inspect-cart-policy') }}:
+      - task: AzureCLI@2
+        displayName: Inspect owned cart policy structure without values or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/apim/inspect-device-cart-policy.py

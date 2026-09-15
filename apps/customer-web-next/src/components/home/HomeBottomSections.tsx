@@ -1,7 +1,5 @@
 import { FaApple } from "react-icons/fa";
 
-import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
-
 function GooglePlayMark() {
   return (
     <svg

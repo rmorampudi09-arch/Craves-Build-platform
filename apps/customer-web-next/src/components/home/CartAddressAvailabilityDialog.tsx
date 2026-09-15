@@ -1,6 +1,7 @@
 import { AlertTriangle, MapPin, ShoppingBag, X } from "lucide-react";
 
 import type { CartItem } from "@/services/api/cravesCart";
+import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 interface CartAddressAvailabilityDialogProps {
   open: boolean;
@@ -35,7 +36,7 @@ export function CartAddressAvailabilityDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-end justify-center bg-black/30 p-3 backdrop-blur-[2px] sm:items-center sm:p-6"
+      className={`${styles.modalBackdrop} fixed inset-0 z-[70] flex items-end justify-center bg-black/30 p-3 backdrop-blur-[2px] sm:items-center sm:p-6`}
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !busy) onClose();
@@ -46,7 +47,7 @@ export function CartAddressAvailabilityDialog({
         aria-modal="true"
         aria-labelledby="cart-address-title"
         aria-describedby="cart-address-description"
-        className="w-full max-w-[31rem] overflow-hidden rounded-[1.9rem] border border-white/80 bg-white shadow-[0_28px_90px_rgba(26,26,26,0.24)]"
+        className={`${styles.modalPanel} w-full max-w-[31rem] overflow-hidden rounded-[1.6rem] border border-white/80 bg-white shadow-[0_28px_90px_rgba(26,26,26,0.24)] sm:rounded-[1.9rem]`}
       >
         <div className="relative px-5 pb-5 pt-6 sm:px-7 sm:pb-6 sm:pt-7">
           <button

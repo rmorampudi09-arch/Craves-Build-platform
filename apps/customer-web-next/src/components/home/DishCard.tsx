@@ -208,12 +208,12 @@ export function DishCard({
           <ProgressiveImage
             src={dish.img}
             alt={dish.name}
-            width={1024}
-            height={768}
+            fill
+            sizes="(min-width: 1280px) 22vw, (min-width: 1024px) 30vw, (min-width: 640px) 48vw, calc(100vw - 32px)"
             loading={priorityImage ? "eager" : "lazy"}
             fetchPriority={priorityImage ? "high" : "auto"}
             fallbackLabel="Dish photo unavailable"
-            className="h-full w-full object-cover"
+            className="object-cover"
           />
         </Link>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#1A1A1A]/60 via-[#1A1A1A]/15 to-transparent" />

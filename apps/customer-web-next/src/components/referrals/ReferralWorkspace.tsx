@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { createReferralClient, ReferralApiError, type ReferralTransport } from "@/lib/referrals/client";
 import { safeReferralLink, rupeesToPaise, type CashoutPage, type ReferralOverview, type RewardPage } from "@/lib/referrals/contracts";
 import { withdrawalAttempts, type WithdrawalAttempt } from "@/lib/referrals/attempt-store";
+import { createOperationGate, mayDiscardRejectedAttempt } from "@/lib/referrals/operation-safety";
 import { ReferralMemberView } from "./ReferralMemberView";
 
 export type ReferralWorkspaceProps = { accountId: string; transport?: ReferralTransport; publicOrigin?: string; brand?: ReactNode };
@@ -11,6 +12,7 @@ function message(error: unknown) { return error instanceof Error ? error.message
 // A verified account change destroys the entire old account's view and pending request state.
 export function ReferralWorkspace(props: ReferralWorkspaceProps) { return <ReferralWorkspaceContent key={props.accountId} {...props} />; }
 function ReferralWorkspaceContent({ accountId, transport, publicOrigin = "https://craves.in", brand }: ReferralWorkspaceProps) {
+  const [operations] = useState(createOperationGate);
   const api = useMemo(() => createReferralClient(transport), [transport]);
   const [summary, setSummary] = useState<ReferralOverview | null>(null);
   const [rewards, setRewards] = useState<RewardPage>({ items: [], nextCursor: null });
@@ -58,6 +60,8 @@ function ReferralWorkspaceContent({ accountId, transport, publicOrigin = "https:
   }
   async function requestWithdrawal(event: FormEvent) {
     event.preventDefault(); if (!summary || busy || !recoveryReady || (!attempt && (!active || !summary.cashout.eligible || !confirmed))) return;
+    if (!operations.enter()) return;
+    const recovering = Boolean(attempt);
     setBusy(true); setNotice("");
     try {
       const operation = attempt ?? { id: crypto.randomUUID(), amountPaise: rupeesToPaise(amount) };
@@ -69,17 +73,17 @@ function ReferralWorkspaceContent({ accountId, transport, publicOrigin = "https:
       setNotice(`Withdrawal ${result.status.toLowerCase()}. A reservation is not a completed bank payment.`); await load();
     } catch (error) {
       if (owner.current !== accountId) return;
-      if (error instanceof ReferralApiError && !error.uncertain) {
+      if (error instanceof ReferralApiError && mayDiscardRejectedAttempt(recovering, error.status, error.uncertain)) {
         try { withdrawalAttempts(window.sessionStorage, accountId).clear(); setAttempt(null); } catch { setRecoveryReady(false); }
       }
       setNotice(message(error));
-    } finally { if (owner.current === accountId) setBusy(false); }
+    } finally { operations.leave(); if (owner.current === accountId) setBusy(false); }
   }
   async function cancel(id: string) {
-    if (!active) return; setBusy(true);
+    if (!active || !operations.enter()) return; setBusy(true);
     try { await api.cancelCashout(id); if (owner.current !== accountId) return; setNotice("The reservation was released before submission."); await load(); }
     catch (error) { if (owner.current === accountId) setNotice(message(error)); }
-    finally { if (owner.current === accountId) setBusy(false); }
+    finally { operations.leave(); if (owner.current === accountId) setBusy(false); }
   }
   async function more(kind: "rewards" | "cashouts") {
     if (busy) return; const current = generation.current; setBusy(true);

@@ -6,6 +6,7 @@ import { Download, RefreshCw, ShieldCheck } from "lucide-react";
 import { adminFetch } from "@/lib/admin-renewal";
 import { createReferralClient, ReferralApiError, type ReferralTransport } from "@/lib/referrals/client";
 import { approvalKeys, formatPaise, formatReferralTime, nonnegativePaiseSchema, policyDraftSchema, rupeesToPaise, uuidSchema, type AdminOverview, type PolicyPage, type QueuePage } from "@/lib/referrals/contracts";
+import { createOperationGate, mayDiscardRejectedAttempt } from "@/lib/referrals/operation-safety";
 import styles from "./referrals.module.css";
 
 type Props = { accountId: string; transport?: ReferralTransport; brand?: ReactNode };
@@ -19,6 +20,7 @@ const text = (error: unknown) => error instanceof Error ? error.message : "The o
 const field = (data: FormData, name: string) => String(data.get(name) ?? "").trim();
 export function ReferralAdminWorkspace(props: Props) { return <ReferralAdminContent key={props.accountId} {...props} />; }
 function ReferralAdminContent({ accountId, transport = adminFetch, brand }: Props) {
+  const [operations] = useState(createOperationGate);
   const api = useMemo(() => createReferralClient(transport), [transport]);
   const [overview, setOverview] = useState<AdminOverview | null>(null), [policies, setPolicies] = useState<PolicyPage | null>(null);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [problem, setProblem] = useState(""), [notice, setNotice] = useState("");
@@ -71,14 +73,15 @@ function ReferralAdminContent({ accountId, transport = adminFetch, brand }: Prop
     finally { if (mounted.current) setBusy(false); }
   }
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!policies || disabled) return;
-    const data = new FormData(event.currentTarget); setBusy(true); setNotice("");
+    event.preventDefault(); if (!policies || disabled || !operations.enter()) return;
+    setBusy(true); setNotice("");
     try {
+      const data = new FormData(event.currentTarget);
       const draft = policyDraftSchema.parse({ expectedLatestRevision: policies.latestRevision, l1Bps: Number(field(data, "l1")), l2Bps: Number(field(data, "l2")), l3Bps: Number(field(data, "l3")), capBps: 400, holdDays: Number(field(data, "hold")), minimumPaise: rupeesToPaise(field(data, "minimum")), customerBonusPaise: rupeesToPaise(field(data, "bonus")), inviteeDiscountPaise: rupeesToPaise(field(data, "discount")), approvals: Object.fromEntries(approvalKeys.map(key => [key, field(data, key)])) });
       const result = await api.createPolicy(draft); if (!mounted.current) return;
       setNotice(`Draft revision ${result.revision} saved. A different administrator must approve it. Existing orders keep their original policy.`); await load();
     } catch (error) { if (mounted.current) { setNotice(`${text(error)} Refresh the revision list before another draft submission.`); await load(); } }
-    finally { if (mounted.current) setBusy(false); }
+    finally { operations.leave(); if (mounted.current) setBusy(false); }
   }
   async function execute(intent: Intent) {
     switch (intent.action) {
@@ -92,9 +95,11 @@ function ReferralAdminContent({ accountId, transport = adminFetch, brand }: Prop
     }
   }
   async function review(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy || !policies || !recoveryReady) return;
-    const data = new FormData(event.currentTarget); setBusy(true); setNotice("");
+    event.preventDefault(); if (busy || !policies || !recoveryReady || !operations.enter()) return;
+    const recovering = Boolean(pending);
+    setBusy(true); setNotice("");
     try {
+      const data = new FormData(event.currentTarget);
       if (!pending && (field(data, "confirm") !== target || disabled)) throw new Error("Refresh the current state and type the exact target reference to confirm.");
       const intent = pending ?? intentSchema.parse({ action, target, evidence: field(data, "evidence"), source, amountPaise: ["cashout-approve", "reward-reverse"].includes(action) ? rupeesToPaise(field(data, "amount")) : "0", withholdingPaise: action === "cashout-approve" ? rupeesToPaise(field(data, "withholding")) : "0", effectiveAt: action === "policy-approve" ? new Date(field(data, "effective")).toISOString() : "", expected: policies.latestActivatedRevision, operationId: crypto.randomUUID() });
       const encoded = JSON.stringify(intent); window.sessionStorage.setItem(storageKey, encoded);
@@ -104,11 +109,11 @@ function ReferralAdminContent({ accountId, transport = adminFetch, brand }: Prop
       setNotice("The server accepted this action. Approval or replay does not prove a bank payment completed."); await load();
     } catch (error) {
       if (!mounted.current) return;
-      if (error instanceof ReferralApiError && !error.uncertain) {
+      if (error instanceof ReferralApiError && mayDiscardRejectedAttempt(recovering, error.status, error.uncertain)) {
         try { window.sessionStorage.removeItem(storageKey); setPending(null); } catch { setRecoveryReady(false); }
       }
       setNotice(text(error));
-    } finally { if (mounted.current) setBusy(false); }
+    } finally { operations.leave(); if (mounted.current) setBusy(false); }
   }
   async function exportAudit() {
     if (disabled) return; setBusy(true);

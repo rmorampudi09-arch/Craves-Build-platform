@@ -196,4 +196,26 @@ class ReferralHttpContractIT {
         assertEquals(422,get("/api/v1/referrals/me/rewards?limit=101",token(first.id(),"CUSTOMER")).statusCode());
         assertEquals(422,get("/api/v1/referrals/me/rewards?cursor=not-a-cursor",token(first.id(),"CUSTOMER")).statusCode());
     }
+    @Test void exportsActualHttpResponsesForClientContractVerification() throws Exception {
+        var owner=r.member(null);var seller=r.member(owner);var buyer=r.member(null);
+        var order=r.order(seller,buyer,100000);r.deliver(order);r.finance(order,1,0,7000);
+        r.awards.award(order.id());r.mature(order,0);r.assess(owner);TIME.set(r.clock.instant());
+        var reserve=post("/api/v1/referrals/me/cashouts",token(owner.id(),"CUSTOMER"),
+            r.json(Map.of("requestId",UUID.randomUUID().toString(),"amountPaise","1500")));
+        assertEquals(200,reserve.statusCode(),reserve.body());
+        var directory=java.nio.file.Path.of(System.getProperty("basedir",System.getProperty("user.dir")),"target","contract-fixtures");
+        java.nio.file.Files.createDirectories(directory);
+        Map<String,String> paths=Map.of("overview","/me","rewards","/me/rewards","cashouts","/me/cashouts",
+            "admin-overview","/admin/overview","policies","/admin/policies");
+        for(var entry:paths.entrySet()) {
+            boolean admin=entry.getValue().startsWith("/admin/");
+            var response=get("/api/v1/referrals"+entry.getValue(),token(admin?r.approver:owner.id(),admin?"ADMIN":"CUSTOMER"));
+            assertEquals(200,response.statusCode(),response.body());
+            assertTrue(response.headers().firstValue("Content-Type").orElse("").startsWith("application/json"));
+            Json.parse(response.body());
+            java.nio.file.Files.writeString(directory.resolve(entry.getKey()+".json"),response.body(),StandardCharsets.UTF_8);
+        }
+        // Only synthetic API response bodies are exported; no token, HMAC or private key.
+    }
+
 }

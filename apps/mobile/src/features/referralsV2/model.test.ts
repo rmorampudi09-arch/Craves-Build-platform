@@ -1,4 +1,5 @@
 import {money, toPaise, qrPath, referralOverview, invitation} from './model';
+import {createOperationGate, mayDiscardRejectedAttempt} from './operation-safety';
 
 describe('referral native contract', () => {
   test('formats exact paise without floating point or a BigInt Intl dependency', () => {
@@ -18,5 +19,19 @@ describe('referral native contract', () => {
     const value = {code: {code: '23456789ABCDEFGH', link: 'https://craves.in/r/23456789ABCDEFGH'}} as Parameters<typeof invitation>[0];
     expect(invitation(value)).toBe(value.code.link);
     expect(() => invitation({...value, code: {...value.code, link: 'https://evil.example/r/23456789ABCDEFGH'}})).toThrow();
+  });
+});
+describe('native financial retry identity', () => {
+  test('blocks two synchronous submissions and releases only after completion', () => {
+    const gate = createOperationGate();
+    expect(gate.enter()).toBe(true); expect(gate.enter()).toBe(false);
+    gate.leave(); expect(gate.enter()).toBe(true); gate.leave();
+  });
+  test('keeps an earlier uncertain request after sign-in expiry or retry denial', () => {
+    for (const status of [0, 401, 403, 409, 422, 429, 503]) {
+      expect(mayDiscardRejectedAttempt(true, status, false)).toBe(false);
+      expect(mayDiscardRejectedAttempt(false, status, true)).toBe(false);
+    }
+    expect(mayDiscardRejectedAttempt(false, 422, false)).toBe(true);
   });
 });

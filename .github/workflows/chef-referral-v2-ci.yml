@@ -14,7 +14,7 @@ concurrency:
 jobs:
   referral:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -46,52 +46,9 @@ jobs:
         run: python3 scripts/referrals/verify-additive.py
       - name: Compile and verify against disposable PostgreSQL
         run: mvn -B -ntp -f services/referral-service/pom.xml clean verify
-      - name: Require actual database tests, SBOM and packaged migration entry point
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib, json, os, zipfile
-          import xml.etree.ElementTree as E
-
-          target = Path('services/referral-service/target')
-          counts = {}
-          for folder, minimum in [('surefire-reports', 12), ('failsafe-reports', 19)]:
-              reports = sorted((target/folder).glob('TEST-*.xml'))
-              assert reports, f'Missing test evidence: {folder}'
-              suites = [E.parse(p).getroot() for p in reports]
-              counts[folder] = sum(int(s.attrib['tests']) for s in suites)
-              assert counts[folder] >= minimum, f'Too few executed tests: {folder}'
-              assert all(int(s.attrib.get(k, '0')) == 0 for s in suites for k in ['failures', 'errors', 'skipped'])
-
-          bom_path = target/'classes/META-INF/sbom/application.cdx.json'
-          bom_bytes = bom_path.read_bytes()
-          bom = json.loads(bom_bytes)
-          assert bom.get('bomFormat') == 'CycloneDX' and bom.get('components'), 'Missing usable SBOM'
-          jar_path = target/'referral-service-0.1.0-SNAPSHOT.jar'
-          # Boot's Packager preserves META-INF/sbom at the archive root.
-          sbom_entry = 'META-INF/sbom/application.cdx.json'
-          with zipfile.ZipFile(jar_path) as archive:
-              names = set(archive.namelist())
-              assert 'BOOT-INF/classes/in/craves/referral/ReferralApplication.class' in names
-              assert 'BOOT-INF/classes/in/craves/referral/infra/ReferralMigrate.class' in names
-              assert 'org/springframework/boot/loader/launch/JarLauncher.class' in names
-              assert any(n.startswith('BOOT-INF/lib/') and n.endswith('.jar') for n in names)
-              manifest = archive.read('META-INF/MANIFEST.MF').decode('utf-8').replace('\r\n ', '').replace('\r\n', '\n')
-              assert 'Main-Class: org.springframework.boot.loader.launch.JarLauncher' in manifest
-              assert 'Start-Class: in.craves.referral.ReferralApplication' in manifest
-              for migration in Path('services/referral-service/src/main/resources/db/referral_migration').glob('*.sql'):
-                  assert archive.read('BOOT-INF/classes/db/referral_migration/' + migration.name) == migration.read_bytes()
-              assert archive.read(sbom_entry) == bom_bytes, 'Packaged SBOM differs from verified inventory'
-
-          receipt = {'workflowRunId': os.environ['GITHUB_RUN_ID'], 'tests': counts,
-                     'sbomComponents': len(bom['components']), 'sbomPackaged': True,
-                     'sbomArchiveEntry': sbom_entry,
-                     'jarSha256': hashlib.sha256(jar_path.read_bytes()).hexdigest(),
-                     'sbomSha256': hashlib.sha256(bom_bytes).hexdigest()}
-          (target/'artifact-verification.json').write_text(json.dumps(receipt, indent=2) + '\n')
-          print(json.dumps(receipt, indent=2))
-          PY
-      - name: Verify documented standalone migrator twice against CI disposable database only
+      - name: Require executed hardening suites, HTTP fixtures, executable JAR and SBOM
+        run: python3 scripts/referrals/verify-build.py
+      - name: Verify standalone migrator twice against CI disposable database only
         env:
           REFERRAL_MIGRATION_CONFIRM: CREATE_REFERRAL_SCHEMA_ONLY
           REFERRAL_MIGRATION_DB_URL: jdbc:postgresql://localhost:5432/referral_test
@@ -113,6 +70,8 @@ jobs:
             java -cp "services/referral-service/target/classes:$(cat "$CP_FILE")" \
               in.craves.referral.infra.ReferralMigrate
           done
+      - name: Build and smoke-test the dormant non-root container locally only
+        run: python3 scripts/referrals/smoke-container.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -122,17 +81,38 @@ jobs:
             services/referral-service/target/failsafe-reports/
             services/referral-service/target/classes/META-INF/sbom/application.cdx.json
             services/referral-service/target/artifact-verification.json
+            services/referral-service/target/container-verification.json
+            services/referral-service/target/contract-fixtures/
           retention-days: 14
   web:
+    needs: referral
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
       run:
         working-directory: apps/customer-web-next
+    env:
+      REFERRAL_WIRE_FIXTURE_DIR: ${{ github.workspace }}/referral-backend-evidence/contract-fixtures
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: chef-referral-v2-backend-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: referral-backend-evidence
+      - name: Bind contract fixtures to this exact tested source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, subprocess
+          root = Path('../../referral-backend-evidence')
+          receipt = json.loads((root/'artifact-verification.json').read_text())
+          assert receipt['sourceSha'] == subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          for name, expected in receipt['contractFixtureSha256'].items():
+              assert hashlib.sha256((root/'contract-fixtures'/(name+'.json')).read_bytes()).hexdigest() == expected
+          print('Same-SHA HTTP contract fixtures verified')
+          PY
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -141,7 +121,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - name: Referral contracts, attribution, BFF, recovery and rendering tests
+      - name: Referral contracts, capture, BFF, recovery, rendering and real API fixtures
         run: npx vitest run --config ../../scripts/referrals/web-vitest.config.mts --reporter=default --reporter=junit --outputFile.junit=../../referral-web-results.xml
       - name: Existing application regression tests
         run: npm test
@@ -176,7 +156,7 @@ jobs:
       - run: npm ci
       - name: Typecheck isolated native feature against existing dependencies
         run: npx tsc --project ../../scripts/referrals/mobile-tsconfig.json --noEmit
-      - name: Native referral contract tests
+      - name: Native referral contract and retry-identity tests
         run: npm test -- --runInBand --runTestsByPath src/features/referralsV2/model.test.ts --json --outputFile=../../referral-mobile-results.json
       - name: Existing cross-feature regression tests
         run: npm run test:integration

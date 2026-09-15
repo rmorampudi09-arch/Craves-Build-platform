@@ -3,6 +3,7 @@ import {ActivityIndicator, Pressable, RefreshControl, ScrollView, Share, StyleSh
 import Svg, {Path, Rect} from 'react-native-svg';
 import {ReferralMobileError, type ReferralNativeApi} from './api';
 import {invitation, money, toPaise, uuid, type CashoutsPage, type ReferralOverview, type RewardsPage, type WithdrawalAttempt} from './model';
+import {createOperationGate, mayDiscardRejectedAttempt} from './operation-safety';
 import {secureReferralRecovery, type ReferralRecovery} from './recovery';
 
 type Props = {accountId: string; api: ReferralNativeApi; newRequestId: () => string; recovery?: ReferralRecovery; brand?: ReactNode; onBack?: () => void};
@@ -10,6 +11,7 @@ const message = (error: unknown) => error instanceof Error ? error.message : 'Th
 const time = (value: string) => new Intl.DateTimeFormat('en-IN', {timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short'}).format(new Date(value)) + ' IST';
 export function ReferralRewardsScreen(props: Props) { return <ReferralRewardsContent key={props.accountId} {...props} />; }
 function ReferralRewardsContent({accountId, api, newRequestId, recovery = secureReferralRecovery, brand, onBack}: Props) {
+  const [operations] = useState(createOperationGate);
   const [summary, setSummary] = useState<ReferralOverview | null>(null), [rewards, setRewards] = useState<RewardsPage>({items: [], nextCursor: null});
   const [cashouts, setCashouts] = useState<CashoutsPage>({items: [], nextCursor: null}), [qr, setQr] = useState('');
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
@@ -44,6 +46,8 @@ function ReferralRewardsContent({accountId, api, newRequestId, recovery = secure
   }
   async function withdraw() {
     if (busy || !ready || !summary || (!pending && (!fresh || !confirmed || !summary.cashout.eligible))) { return; }
+    if (!operations.enter()) { return; }
+    const recovering = Boolean(pending);
     setBusy(true); setNotice('');
     try {
       const operation = pending ?? {id: uuid.parse(newRequestId()), amountPaise: toPaise(amount)};
@@ -54,15 +58,15 @@ function ReferralRewardsContent({accountId, api, newRequestId, recovery = secure
       setPending(null); setAmount(''); setConfirmed(false); setNotice(`Withdrawal ${result.status.toLowerCase()}. This is not proof of a completed bank payment.`); await load();
     } catch (failure) {
       if (!mounted.current) { return; }
-      if (failure instanceof ReferralMobileError && !failure.uncertain) {try {await recovery.clear(accountId); if (mounted.current) {setPending(null);}} catch {if (mounted.current) {setReady(false);}}}
+      if (failure instanceof ReferralMobileError && mayDiscardRejectedAttempt(recovering, failure.status, failure.uncertain)) {try {await recovery.clear(accountId); if (mounted.current) {setPending(null);}} catch {if (mounted.current) {setReady(false);}}}
       if (mounted.current) {setNotice(message(failure));}
-    } finally {if (mounted.current) {setBusy(false);}}
+    } finally {operations.leave(); if (mounted.current) {setBusy(false);}}
   }
   async function cancel(id: string) {
-    if (busy || !fresh) { return; } setBusy(true);
+    if (busy || !fresh || !operations.enter()) { return; } setBusy(true);
     try {await api.cancel(id); if (mounted.current) {setNotice('Reservation cancelled before submission.'); await load();}}
     catch (failure) {if (mounted.current) {setNotice(message(failure));}}
-    finally {if (mounted.current) {setBusy(false);}}
+    finally {operations.leave(); if (mounted.current) {setBusy(false);}}
   }
   async function older(kind: 'rewards' | 'cashouts') {
     if (busy) { return; } setBusy(true); const current = epoch.current;

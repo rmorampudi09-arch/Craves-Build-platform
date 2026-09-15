@@ -77,11 +77,12 @@ with tempfile.TemporaryDirectory() as temp:
     subprocess.run(['java','-cp',temp+'/unpacked/BOOT-INF/classes:'+temp+'/unpacked/BOOT-INF/lib/*','in.craves.referral.infra.ReferralMigrate'],env=env,check=True)
 sql(f'GRANT USAGE ON SCHEMA referral_schema TO {RUNTIME}; GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA referral_schema TO {RUNTIME}; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA referral_schema TO {RUNTIME}; REVOKE ALL ON referral_schema.referral_flyway_history FROM {RUNTIME};',DATABASE,OWNER,owner_secret['value'])
 # No runtime DELETE, DDL, trigger-bypass, migration-history or other-owner-table permissions.
-assert sql("SELECT count(*) FROM referral_schema.referral_flyway_history WHERE success",DATABASE,OWNER,owner_secret['value'])=='9'
+assert sql("SELECT string_agg(version,',' ORDER BY installed_rank) FROM referral_schema.referral_flyway_history WHERE type='SQL' AND success",DATABASE,OWNER,owner_secret['value'])=='1,1.1,2,3,4,5,6,7,8'
+assert sql("SELECT count(*) FROM referral_schema.referral_flyway_history WHERE NOT success",DATABASE,OWNER,owner_secret['value'])=='0'
 assert sql("SELECT count(*) FROM referral_schema.wallet",DATABASE,RUNTIME,runtime_secret['value'])=='0'
 assert sql("SELECT has_schema_privilege(current_user,'referral_schema','CREATE')",DATABASE,RUNTIME,runtime_secret['value'])=='f'
 assert sql("SELECT has_table_privilege(current_user,'referral_schema.referral_flyway_history','UPDATE')",DATABASE,RUNTIME,runtime_secret['value'])=='f'
-assert sql("SELECT has_table_privilege(current_user,'public.auth_identity','SELECT')",'craves_auth_db',RUNTIME,runtime_secret['value'])=='f'
+assert sql(f"SELECT has_table_privilege('{RUNTIME}','public.auth_identity','SELECT')",'craves_auth_db')=='f'
 print('All nine migrations and restricted runtime checks passed',flush=True)
 refs={}
 for key,name,value in [('dbUrl','craves-referral-db-url',f'jdbc:postgresql://{SERVER}:5432/{DATABASE}?sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt'),('dbUser','craves-referral-db-user',RUNTIME)]:refs[key]=secret(name,value)['id']

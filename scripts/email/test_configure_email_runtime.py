@@ -1,5 +1,7 @@
 import copy
+from contextlib import redirect_stdout
 import importlib.util
+import io
 import os
 from pathlib import Path
 import stat
@@ -93,7 +95,7 @@ class EmailRuntimeTests(unittest.TestCase):
         self.assertFalse(files[0].exists())
 
     def test_plan_default_never_applies(self):
-        with patch.object(runtime, 'preflight', return_value='plan'), patch.object(runtime, 'configure') as configure:
+        with patch.object(runtime, 'preflight', return_value='plan'), patch.object(runtime, 'configure') as configure, redirect_stdout(io.StringIO()):
             runtime.main([])
             configure.assert_not_called()
 
@@ -114,6 +116,53 @@ class EmailRuntimeTests(unittest.TestCase):
         value['properties']['template']['containers'][0]['env'].append({'name': 'CRAVES_EMAIL_VERIFICATION_ENABLED', 'value': 'true'})
         with self.assertRaises(runtime.guard.GuardError):
             runtime.guard.check_env(value, {'CRAVES_EMAIL_VERIFICATION_ENABLED': 'false'})
+
+    def test_configure_reuses_keys_and_only_adds_scoped_closed_settings(self):
+        initial = {role: app(role) for role in runtime.APPS}
+        initial['notification']['properties']['template']['containers'][0]['env'].append({'name': 'CRAVES_NOTIFICATION_EMAIL_ENABLED', 'value': 'true'})
+        state = copy.deepcopy(initial)
+        names = {name: role for role, name in runtime.APPS.items()}
+        metadata = {local: {'id': 'https://existing.vault.azure.net/secrets/' + remote + '/version', 'enabled': True, 'expires': None, 'tags': {'craves-purpose': runtime.PURPOSE}} for local, remote in runtime.KEYS.items()}
+        mutations = []
+        def azure(*args, **kwargs):
+            role = names[args[args.index('-n') + 1]]
+            if args[:2] == ('containerapp', 'show'):
+                return copy.deepcopy(state[role])
+            mutations.append(args)
+            if args[:3] == ('containerapp', 'secret', 'set'):
+                for addition in args[args.index('--secrets') + 1:]:
+                    name, rest = addition.split('=keyvaultref:', 1)
+                    url, identity = rest.split(',identityref:', 1)
+                    state[role]['properties']['configuration']['secrets'].append({'name': name, 'keyVaultUrl': url, 'identity': identity})
+            elif args[:2] == ('containerapp', 'update'):
+                self.assertNotIn('--image', args)
+                for addition in args[args.index('--set-env-vars') + 1:]:
+                    name, value = addition.split('=', 1)
+                    field = {'secretRef': value.removeprefix('secretref:')} if value.startswith('secretref:') else {'value': value}
+                    state[role]['properties']['template']['containers'][0]['env'].append({'name': name, **field})
+            else:
+                raise AssertionError('Unexpected write')
+        wanted = runtime.desired(initial)
+        plan = (initial, 'existing', {role: 'system' for role in initial}, metadata, wanted)
+        with patch.object(runtime, 'az', side_effect=azure), patch.object(runtime, 'healthy'), patch.object(runtime, 'create_missing_key') as create, redirect_stdout(io.StringIO()):
+            runtime.configure(plan)
+            create.assert_not_called()
+        self.assertEqual(len(mutations), 6)
+        self.assertEqual(runtime.guard.environment(state['notification'])['CRAVES_NOTIFICATION_EMAIL_ENABLED']['value'], 'true')
+        for role in state:
+            self.assertEqual(state[role]['properties']['template']['containers'][0]['image'], runtime.IMAGES[role])
+            runtime.guard.check_env(state[role], wanted[role])
+
+    def test_configure_stops_before_any_key_creation_on_live_drift(self):
+        initial = {role: app(role) for role in runtime.APPS}
+        changed = copy.deepcopy(initial['auth'])
+        changed['properties']['template']['containers'][0]['image'] = 'concurrent-release'
+        plan = (initial, 'existing', {role: 'system' for role in initial}, {}, runtime.desired(initial))
+        with patch.object(runtime, 'az', return_value=changed) as azure, patch.object(runtime, 'create_missing_key') as create:
+            with self.assertRaises(runtime.guard.GuardError):
+                runtime.configure(plan)
+            self.assertEqual(azure.call_count, 1)
+            create.assert_not_called()
 
 
 if __name__ == '__main__':

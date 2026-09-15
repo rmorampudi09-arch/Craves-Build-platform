@@ -24,6 +24,16 @@ def example():
 class ReleasePlanTest(unittest.TestCase):
     def test_accepts_only_static_dormant_new_name_plan(self):
         module.validate(example(), [], SUB, RG)
+    def test_azure_resource_id_case_does_not_weaken_subscription_or_type_checks(self):
+        plan=example()
+        for key in ['managedEnvironmentId','userAssignedIdentityId']:
+            plan['parameters'][key]['value']=plan['parameters'][key]['value'].lower()
+        module.validate(plan, [], SUB, RG)
+        for key in ['managedEnvironmentId','userAssignedIdentityId']:
+            for invalid in [plan['parameters'][key]['value'].replace(SUB,'22222222-2222-4222-8222-222222222222'),
+                            plan['parameters'][key]['value'].replace('/providers/','/providers/unapproved/')]:
+                bad=copy.deepcopy(plan); bad['parameters'][key]['value']=invalid
+                with self.assertRaises(ValueError): module.validate(bad, [], SUB, RG)
     def test_auth_http_requires_trusted_origin_and_no_redis_secret(self):
         plan=example(); p=plan['parameters']; p['authVerificationMode']={'value':'AUTH_HTTP'}; p['authBaseUrl']={'value':'https://auth.example.test'}
         del p['redisHost']; del p['redisPort']; del p['secretReferences']['value']['redisPassword']

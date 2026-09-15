@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 EXPECTED = {"appName", "location", "managedEnvironmentId", "userAssignedIdentityId", "registryServer", "image", "redisHost", "redisPort", "redisUsername", "jwtIssuer", "jwtAudience", "secretReferences", "authVerificationMode", "authBaseUrl"}
 REQUIRED = EXPECTED - {"redisHost", "redisPort", "redisUsername", "jwtIssuer", "jwtAudience", "authVerificationMode", "authBaseUrl"}
 SECRETS = {"dbUrl", "dbUser", "dbPassword", "jwtVerificationPem", "redisPassword", "authHmac", "orderHmac", "financeHmac"}
-RESOURCE = re.compile(r"^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/([^/]+)/([^/]+)/[^/]+$")
+RESOURCE = re.compile(r"^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/([^/]+)/([^/]+)/[^/]+$", re.IGNORECASE)
 
 def validate(document: dict, inventory: list, subscription: str, resource_group: str) -> None:
     if not isinstance(document, dict) or set(document) - {"$schema", "contentVersion", "parameters"}:

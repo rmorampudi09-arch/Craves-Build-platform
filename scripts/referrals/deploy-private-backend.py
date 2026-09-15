@@ -42,6 +42,8 @@ baseline_hash={a['name']:runtime_hash(a) for a in baseline}
 (EVIDENCE/'existing-app-baseline.json').write_text(json.dumps(baseline_hash,indent=2))
 auth=next(a for a in baseline if a['name']=='ca-craves-auth-service-prodlow')
 environment=az('containerapp','env','show','-g',RG,'-n','cae-craves-prodlow-l3ing6')
+location=environment['location'].replace(' ','').lower()
+assert location=='centralindia','Unexpected existing environment region'
 vault=az('keyvault','show','-g',RG,'-n',VAULT);assert vault['properties'].get('enableRbacAuthorization') is True,'Per-secret RBAC required'
 registry=az('acr','show','-n',ACR)
 manifest=az('acr','repository','show','--name',ACR,'--image','craves/referral-service:'+SOURCE)
@@ -96,7 +98,7 @@ for scope,role in [(registry['id'],'AcrPull')]+[(vault['id']+'/secrets/'+urllib.
     assignments=az('role','assignment','list','--scope',scope)
     if not any(a.get('principalId')==identity['principalId'] and a.get('roleDefinitionName')==role and a.get('scope','').lower()==scope.lower() for a in assignments):
         az('role','assignment','create','--assignee-object-id',identity['principalId'],'--assignee-principal-type','ServicePrincipal','--role',role,'--scope',scope)
-values={'appName':APP,'location':environment['location'],'managedEnvironmentId':environment['id'],'userAssignedIdentityId':identity['id'],'registryServer':registry['loginServer'],'image':image,'authVerificationMode':'AUTH_HTTP','authBaseUrl':'https://'+auth['properties']['configuration']['ingress']['fqdn'],'secretReferences':refs}
+values={'appName':APP,'location':location,'managedEnvironmentId':environment['id'],'userAssignedIdentityId':identity['id'],'registryServer':registry['loginServer'],'image':image,'authVerificationMode':'AUTH_HTTP','authBaseUrl':'https://'+auth['properties']['configuration']['ingress']['fqdn'],'secretReferences':refs}
 parameters={'$schema':'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#','contentVersion':'1.0.0.0','parameters':{k:{'value':v} for k,v in values.items()}}
 (EVIDENCE/'deployment-parameters.json').write_text(json.dumps(parameters,indent=2));(EVIDENCE/'inventory.json').write_text(json.dumps([{'id':a['id'],'name':a['name']} for a in baseline]))
 subprocess.run(['python3','scripts/referrals/verify-release-plan.py',str(EVIDENCE/'deployment-parameters.json'),str(EVIDENCE/'inventory.json'),'--subscription',SUB,'--resource-group',RG],check=True)

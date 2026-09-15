@@ -32,7 +32,11 @@ public class ReferralSecurity {
     }
     @Bean @Order(2) SecurityFilterChain external(HttpSecurity http,ReferralSettings settings,JwtDecoder decoder,StringRedisTemplate redis,
             @Value("${CRAVES_REFERRALS_PUBLIC_ACCESS_ENABLED:false}") boolean publicAccessEnabled,
-            @Value("${CRAVES_REFERRALS_REVOCATION_ABSENCE_CONTRACT_CONFIRMED:false}") boolean absenceContractConfirmed) throws Exception {
+            @Value("${CRAVES_REFERRALS_REVOCATION_ABSENCE_CONTRACT_CONFIRMED:false}") boolean absenceContractConfirmed,
+            @Value("${CRAVES_REFERRALS_AUTH_VERIFICATION_MODE:REDIS}") String verificationMode,
+            @Value("${CRAVES_REFERRALS_AUTH_BASE_URL:}") String authBaseUrl) throws Exception {
+        if(!List.of("REDIS","AUTH_HTTP").contains(verificationMode))throw new IllegalArgumentException("Unknown Auth verification mode");
+        ReferralAuthStateClient authState="AUTH_HTTP".equals(verificationMode)?new ReferralAuthStateClient(authBaseUrl):null;
         http.csrf(csrf->csrf.disable()).sessionManagement(session->session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .requestCache(cache->cache.disable()).cors(cors->cors.disable())
             .authorizeHttpRequests(auth->auth
@@ -47,7 +51,7 @@ public class ReferralSecurity {
                     .map(role->(GrantedAuthority)new SimpleGrantedAuthority("ROLE_"+role)).toList();
                 return new JwtAuthenticationToken(token,authorities,token.getSubject());
             })).authenticationEntryPoint((req,res,ex)->SourceAuthenticationFilter.error(res,401,"AUTHENTICATION_REQUIRED")))
-            .addFilterAfter(new ReferralRevocationFilter(settings,redis,publicAccessEnabled,absenceContractConfirmed),BearerTokenAuthenticationFilter.class);
+            .addFilterAfter(new ReferralRevocationFilter(settings,redis,publicAccessEnabled,absenceContractConfirmed,authState),BearerTokenAuthenticationFilter.class);
         errors(http); return http.build();
     }
     private static void errors(HttpSecurity http) throws Exception {

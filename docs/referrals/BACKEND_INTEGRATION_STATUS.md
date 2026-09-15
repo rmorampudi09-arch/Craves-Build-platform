@@ -16,6 +16,14 @@ Backend continuation of PR #358. Frontend implementation remains deferred. This 
 | Finance payouts | Persisted original attempt/destination/net/withholding, RazorpayX execution, verified receipt, unknown-result reconciliation and audited retry | No new transfer identity after an uncertain submission; unknown funds remain reserved |
 | Operations | Independent referral schedulers; database leases, bounded retries, immutable recovery audit, operator queue counts and original-work replay APIs | Existing non-referral scheduled jobs retain their default scheduler |
 
+## Authoritative Auth verification
+
+Azure's observed Auth revision has its Redis revocation publisher disabled. The additive `GET /api/v1/auth/referrals/access` endpoint therefore supports direct, uncached verification by the referral engine. Auth's existing JWT and admin-session filters still run. The endpoint checks the current identity row, requires ACTIVE status and an exact token-version match, and returns only the intersection of current and token roles. It exposes no contact or bank information and makes no account writes.
+
+Set `CRAVES_REFERRALS_AUTH_VERIFICATION_MODE=AUTH_HTTP` and `CRAVES_REFERRALS_AUTH_BASE_URL` to the actual trusted Auth HTTPS origin after deploying the endpoint with its source flag. The client forwards the original verified bearer token only to that fixed origin, disables redirects, bounds response size and concurrent calls, and uses two-second connection/read timeouts. Removed roles are stripped before referral authorization. Missing accounts, stale tokens, transport failures and malformed responses fail closed; there is no fallback to an empty Redis projection or cached positive result.
+
+The deployment template supports this mode without Redis credentials; set `MANAGEMENT_HEALTH_REDIS_ENABLED=false` and readiness to `readinessState,db`. Request-level Auth verification remains mandatory even when the readiness probe is green. The prior `REDIS` mode remains available only with its validated publisher/TTL/absence contract. This change does not enable or modify the existing login revocation publisher.
+
 ## Checkout API
 
 The existing `POST /api/v1/checkout` accepts an optional field:

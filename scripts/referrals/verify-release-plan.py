@@ -12,8 +12,8 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-EXPECTED = {"appName", "location", "managedEnvironmentId", "userAssignedIdentityId", "registryServer", "image", "redisHost", "redisPort", "redisUsername", "jwtIssuer", "jwtAudience", "secretReferences"}
-REQUIRED = EXPECTED - {"redisUsername", "jwtIssuer", "jwtAudience"}
+EXPECTED = {"appName", "location", "managedEnvironmentId", "userAssignedIdentityId", "registryServer", "image", "redisHost", "redisPort", "redisUsername", "jwtIssuer", "jwtAudience", "secretReferences", "authVerificationMode", "authBaseUrl"}
+REQUIRED = EXPECTED - {"redisHost", "redisPort", "redisUsername", "jwtIssuer", "jwtAudience", "authVerificationMode", "authBaseUrl"}
 SECRETS = {"dbUrl", "dbUser", "dbPassword", "jwtVerificationPem", "redisPassword", "authHmac", "orderHmac", "financeHmac"}
 RESOURCE = re.compile(r"^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[^/]+/providers/([^/]+)/([^/]+)/[^/]+$")
 
@@ -49,10 +49,17 @@ def validate(document: dict, inventory: list, subscription: str, resource_group:
         raise ValueError("Pin the scanned image to an immutable SHA-256 digest from the approved registry")
     if not isinstance(p["location"], str) or not re.fullmatch(r"[a-z0-9]+", p["location"]):
         raise ValueError("An explicit approved Azure region is required")
-    if not isinstance(p["redisHost"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]+", p["redisHost"]) or not isinstance(p["redisPort"], int) or isinstance(p["redisPort"], bool) or not 1 <= p["redisPort"] <= 65535:
+    mode=p.get("authVerificationMode", "REDIS")
+    if mode not in {"REDIS", "AUTH_HTTP"}:
+        raise ValueError("Unknown Auth verification mode")
+    if mode == "AUTH_HTTP":
+        url=urlparse(p.get("authBaseUrl", ""))
+        if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment or url.path not in {"", "/"}:
+            raise ValueError("Auth verification requires an HTTPS origin")
+    if mode == "REDIS" and (not isinstance(p.get("redisHost"), str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]+", p["redisHost"]) or not isinstance(p.get("redisPort"), int) or isinstance(p["redisPort"], bool) or not 1 <= p["redisPort"] <= 65535):
         raise ValueError("Invalid TLS Redis host/port; network reachability still needs verification")
     refs = p["secretReferences"]
-    if not isinstance(refs, dict) or set(refs) != SECRETS:
+    if not isinstance(refs, dict) or set(refs) != (SECRETS if mode == "REDIS" else SECRETS - {"redisPassword"}):
         raise ValueError("Provide exactly the required Key Vault secret reference map, never secret values")
     for value in refs.values():
         if not isinstance(value, str):

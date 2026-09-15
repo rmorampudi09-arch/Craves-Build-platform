@@ -11,14 +11,17 @@ param userAssignedIdentityId string
 param registryServer string
 @description('Pin the scanned image to registry/repository@sha256:<64 lowercase hex>.')
 param image string
-param redisHost string
-param redisPort int
+@allowed(['REDIS', 'AUTH_HTTP'])
+param authVerificationMode string = 'REDIS'
+param authBaseUrl string = ''
+param redisHost string = ''
+param redisPort int = 6380
 param redisUsername string = 'default'
 param jwtIssuer string = 'https://api.craves.in/auth'
 param jwtAudience string = 'craves-api'
 param secretReferences object
 
-var bindings = [
+var bindings = concat([
   {
     name: 'referral-db-url'
     env: 'REFERRAL_DB_URL'
@@ -40,11 +43,6 @@ var bindings = [
     url: secretReferences.jwtVerificationPem
   }
   {
-    name: 'referral-redis-password'
-    env: 'SPRING_DATA_REDIS_PASSWORD'
-    url: secretReferences.redisPassword
-  }
-  {
     name: 'referral-auth-hmac'
     env: 'CRAVES_REFERRALS_AUTH_HMAC_BASE64'
     url: secretReferences.authHmac
@@ -59,12 +57,30 @@ var bindings = [
     env: 'CRAVES_REFERRALS_FINANCE_HMAC_BASE64'
     url: secretReferences.financeHmac
   }
-]
+], authVerificationMode == 'REDIS' ? [
+  {
+    name: 'referral-redis-password'
+    env: 'SPRING_DATA_REDIS_PASSWORD'
+    url: secretReferences.redisPassword
+  }
+] : [])
 var secureEnvironment = [for binding in bindings: {
   name: binding.env
   secretRef: binding.name
 }]
 var dormantEnvironment = [
+  {
+    name: 'CRAVES_REFERRALS_AUTH_VERIFICATION_MODE'
+    value: authVerificationMode
+  }
+  {
+    name: 'CRAVES_REFERRALS_AUTH_BASE_URL'
+    value: authBaseUrl
+  }
+  {
+    name: 'MANAGEMENT_HEALTH_REDIS_ENABLED'
+    value: authVerificationMode == 'REDIS' ? 'true' : 'false'
+  }
   {
     name: 'CRAVES_REFERRALS_ENABLED'
     value: 'false'
@@ -123,7 +139,7 @@ var dormantEnvironment = [
   }
   {
     name: 'MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE'
-    value: 'readinessState,db,redis'
+    value: authVerificationMode == 'REDIS' ? 'readinessState,db,redis' : 'readinessState,db'
   }
 ]
 

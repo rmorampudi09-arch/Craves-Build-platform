@@ -24,6 +24,18 @@ def example():
 class ReleasePlanTest(unittest.TestCase):
     def test_accepts_only_static_dormant_new_name_plan(self):
         module.validate(example(), [], SUB, RG)
+    def test_auth_http_requires_trusted_origin_and_no_redis_secret(self):
+        plan=example(); p=plan['parameters']; p['authVerificationMode']={'value':'AUTH_HTTP'}; p['authBaseUrl']={'value':'https://auth.example.test'}
+        del p['redisHost']; del p['redisPort']; del p['secretReferences']['value']['redisPassword']
+        module.validate(plan, [], SUB, RG)
+        for origin in ['http://auth.test','https://user@auth.test','https://auth.test/path','https://auth.test?query=1']:
+            p['authBaseUrl']['value']=origin
+            with self.assertRaises(ValueError): module.validate(plan, [], SUB, RG)
+    def test_rejects_missing_redis_dependency_and_unknown_mode(self):
+        plan=example(); del plan['parameters']['redisHost']
+        with self.assertRaises(ValueError): module.validate(plan, [], SUB, RG)
+        plan=example(); plan['parameters']['authVerificationMode']={'value':'BYPASS'}
+        with self.assertRaises(ValueError): module.validate(plan, [], SUB, RG)
     def test_rejects_existing_app(self):
         inventory = [{"name": "ca-craves-referral-test", "id": f"/subscriptions/{SUB}/resourceGroups/{RG}/providers/Microsoft.App/containerApps/ca-craves-referral-test"}]
         with self.assertRaises(ValueError): module.validate(example(), inventory, SUB, RG)

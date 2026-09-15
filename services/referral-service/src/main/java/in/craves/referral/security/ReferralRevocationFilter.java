@@ -14,18 +14,23 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.filter.OncePerRequestFilter;
 import static in.craves.referral.ReferralProblem.require;
 
-/** Uses the existing Craves Auth revocation projection. Redis errors fail closed; no new Auth writes. */
+/** Uses one explicitly selected Auth verification contract; neither mode falls back on failure. */
 public final class ReferralRevocationFilter extends OncePerRequestFilter {
     private final ReferralSettings settings;
     private final StringRedisTemplate redis;
     private final boolean publicAccessEnabled;
     private final boolean absenceContractConfirmed;
+    private final ReferralAuthStateClient authState;
     public ReferralRevocationFilter(ReferralSettings settings,StringRedisTemplate redis,boolean publicAccessEnabled) {
         this(settings,redis,publicAccessEnabled,false);
     }
     public ReferralRevocationFilter(ReferralSettings settings,StringRedisTemplate redis,boolean publicAccessEnabled,boolean absenceContractConfirmed) {
+        this(settings,redis,publicAccessEnabled,absenceContractConfirmed,null);
+    }
+    public ReferralRevocationFilter(ReferralSettings settings,StringRedisTemplate redis,boolean publicAccessEnabled,boolean absenceContractConfirmed,ReferralAuthStateClient authState) {
         this.settings=settings; this.redis=redis; this.publicAccessEnabled=publicAccessEnabled;
         this.absenceContractConfirmed=absenceContractConfirmed;
+        this.authState=authState;
     }
     @Override protected boolean shouldNotFilter(HttpServletRequest request) { return !request.getRequestURI().startsWith("/api/v1/referrals/"); }
     @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain) throws IOException,ServletException {
@@ -35,6 +40,13 @@ public final class ReferralRevocationFilter extends OncePerRequestFilter {
             var authentication=SecurityContextHolder.getContext().getAuthentication();
             require(authentication!=null && authentication.getPrincipal() instanceof Jwt,401,"AUTHENTICATION_REQUIRED");
             Jwt jwt=(Jwt)authentication.getPrincipal();
+            if(authState!=null) {
+                var verified=authState.verify(jwt);
+                var retained=authentication.getAuthorities().stream().filter(a->verified.contains(a.getAuthority())).toList();
+                SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt,retained,jwt.getSubject()));
+                chain.doFilter(request,response);
+                return;
+            }
             UUID id=UUID.fromString(jwt.getSubject());
             String projection;
             try { projection=redis.opsForValue().get("craves:auth:revocation:"+id); }

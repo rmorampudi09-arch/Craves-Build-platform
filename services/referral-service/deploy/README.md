@@ -1,8 +1,10 @@
 # Dormant isolated deployment kit — NOT EXECUTED
 
-This template adds only one new referral Container App. It does not provision or update an environment, registry, identity, vault, Redis instance, database server, gateway, existing Craves app or payment provider. These dependencies and their permissions must be explicitly approved and already exist. No deployment is triggered by this repository addition.
+This template adds only one new referral Container App. It does not provision or update an environment, registry, identity, vault, Redis instance, database server, gateway, existing Craves app or payment provider. Dependencies and scoped permissions must already exist; the user has authorized the engineering work. Actual business evidence remains required for programme activation. No deployment is triggered by this repository addition.
 
-`main.bicep` uses the documented Microsoft.App/containerApps 2025-01-01 schema. Private HTTPS ingress, a non-root image definition, Key Vault references, an existing user-assigned identity and all seven referral flags OFF are the intended starting state. Replica bounds are one; CPU is 1 and memory 2 GiB. These are a proposed starting allocation requiring cost/capacity approval, not a measured production capacity promise or high-availability setup. Rolling revisions may transiently overlap.
+`main.bicep` uses the documented Microsoft.App/containerApps 2025-01-01 schema. Private HTTPS ingress, a non-root image definition, Key Vault references, an existing user-assigned identity and all seven referral flags OFF are the intended starting state. Replica bounds are one; CPU is 1 and memory 2 GiB. These are a proposed starting allocation requiring capacity verification, not a measured production capacity promise or high-availability setup. Rolling revisions may transiently overlap.
+
+For the observed Azure Auth deployment, select `authVerificationMode=AUTH_HTTP` and set `authBaseUrl` to the deployed Auth HTTPS origin. Deploy the additive Auth verification endpoint first. Omit `redisPassword` from `secretReferences`; Redis host/port are not required in this mode. The template disables Redis health and requires database readiness. Auth is verified on every authenticated referral request with no positive cache or fallback. Default `REDIS` mode still requires a working, validated Auth revocation projection.
 
 ## Files
 
@@ -30,13 +32,13 @@ az bicep build --file services/referral-service/deploy/main.bicep \
 ```
 
 5. Run the normal Azure deployment **what-if** against only this new app using reviewed parameters. It must show no current Craves app changes and no dependency replacement. An empty/stale supplied inventory is not evidence that a name is unused; verify with a direct `az containerapp show` lookup as well. A 403/network error is not a confirmed absence.
-6. Follow the isolated database migration runbook, restricted-runtime-role validation and backup/restore rehearsal. The standalone migrator uses `REFERRAL_MIGRATION_DB_URL`, `REFERRAL_MIGRATION_DB_USER`, `REFERRAL_MIGRATION_DB_PASSWORD` and `REFERRAL_MIGRATION_CONFIRM=CREATE_REFERRAL_SCHEMA_ONLY`, not the runtime datasource secret names. Its history is `referral_schema.referral_flyway_history`. Apply the template only after a separate release approval. No actual `deployment create` command is included here to imply authorisation or execution.
+6. Follow the isolated database migration runbook, restricted-runtime-role validation and backup/restore rehearsal. The standalone migrator uses `REFERRAL_MIGRATION_DB_URL`, `REFERRAL_MIGRATION_DB_USER`, `REFERRAL_MIGRATION_DB_PASSWORD` and `REFERRAL_MIGRATION_CONFIRM=CREATE_REFERRAL_SCHEMA_ONLY`, not the runtime datasource secret names. Its history is `referral_schema.referral_flyway_history`. Apply the template only after the exact candidate passes its release gates. This document does not claim deployment execution.
 7. Verify all flags OFF from the new revision, private ingress, exact image digest, min/max replicas, probes and database/Redis readiness. Check no existing Craves application image/configuration changed. Do not run the current multi-service deployment pipeline.
 8. Complete the owner-side signup/order/Finance/checkout/gateway integration in a separate review before activation. The template's readiness probe includes database and Redis connectivity, but readiness does not prove policy, financial correctness, revocation mapping or legal approval.
 
 ## Approvals and rotation
 
-Template parameters intentionally cannot enable rewards, public access, withdrawals or spending. Activation must be a separate reviewed configuration change after integration and acceptance. Current/previous source keys are supported; add previous-version secret bindings through the approved rotation change rather than sharing one key among producers. Secret values must never be printed or committed.
+Template parameters intentionally cannot enable rewards, public access, withdrawals or spending. Activation must be a configuration change after integration and acceptance. Current/previous source keys are supported; add previous-version secret bindings through the approved rotation change rather than sharing one key among producers. Secret values must never be printed or committed.
 
 ## Primary references
 

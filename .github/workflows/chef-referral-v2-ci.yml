@@ -46,7 +46,7 @@ jobs:
         run: python3 scripts/referrals/verify-additive.py
       - name: Compile and verify against disposable PostgreSQL
         run: mvn -B -ntp -f services/referral-service/pom.xml verify
-      - name: Require actual database tests, SBOM and migration launcher
+      - name: Require actual database tests, SBOM and packaged migration entry point
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -62,9 +62,32 @@ jobs:
           bom = json.loads((target/'bom.json').read_text())
           assert bom.get('bomFormat') == 'CycloneDX' and bom.get('components'), 'Missing usable SBOM'
           with zipfile.ZipFile(target/'referral-service-0.1.0-SNAPSHOT.jar') as archive:
-              assert 'org/springframework/boot/loader/launch/PropertiesLauncher.class' in archive.namelist()
+              assert 'BOOT-INF/classes/in/craves/referral/infra/ReferralMigrate.class' in archive.namelist()
+              assert 'BOOT-INF/classes/db/referral_migration/V6__deferred_reward_reconciliation.sql' in archive.namelist()
           print('SBOM components:', len(bom['components']))
           PY
+      - name: Verify documented standalone migrator twice against CI disposable database only
+        env:
+          REFERRAL_MIGRATION_CONFIRM: CREATE_REFERRAL_SCHEMA_ONLY
+          REFERRAL_MIGRATION_DB_URL: jdbc:postgresql://localhost:5432/referral_test
+          REFERRAL_MIGRATION_DB_USER: referral_test
+          REFERRAL_MIGRATION_DB_PASSWORD: disposable_referral_test_only
+        run: |
+          set +x
+          set -Eeuo pipefail
+          umask 077
+          test "$REFERRAL_TEST_CONFIRM" = YES_DISPOSABLE_REFERRAL_TEST_ONLY
+          test "$REFERRAL_MIGRATION_DB_URL" = jdbc:postgresql://localhost:5432/referral_test
+          CP_FILE="$(mktemp)"
+          trap 'rm -f "$CP_FILE"' EXIT
+          mvn -B -ntp -f services/referral-service/pom.xml \
+            org.apache.maven.plugins:maven-dependency-plugin:3.8.1:build-classpath \
+            -DincludeScope=runtime "-Dmdep.outputFile=$CP_FILE"
+          test -s "$CP_FILE"
+          for attempt in 1 2; do
+            java -cp "services/referral-service/target/classes:$(cat "$CP_FILE")" \
+              in.craves.referral.infra.ReferralMigrate
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:

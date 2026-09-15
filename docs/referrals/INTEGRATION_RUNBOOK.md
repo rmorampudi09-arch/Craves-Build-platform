@@ -39,34 +39,43 @@ Save a new evidence-backed policy draft with Administrator A. Administrator B mu
 2. Verify registry image digest, target subscription/resource group/environment, regional networking and capacity. Obtain cost approval for the new workload. Template launch configuration is one active-revision replica; that is **not high availability**. Do not silently increase replicas or deploy the seven-service backend pipeline.
 3. Create or approve a restricted database/schema allocation and separate migration/runtime roles. Confirm backups/PITR and perform a restore rehearsal. The runtime role must not be superuser, schema owner or have CREATE/ALTER/DROP/TRIGGER-bypass rights or access to existing chef/order/auth tables. Preserve the append-only triggers and grants. Test permitted application operations with the real restricted role, not just a test superuser.
 4. Build the standalone service, archive tests and SBOM, scan the application/image and pin the released image digest. Resolve inherited dependency findings in a separate authorised change. Do not run `npm audit fix --force` against protected baseline lockfiles.
-5. Run the isolated migrator once using migration-only credentials and the exact approval phrase below. Automatic Spring Flyway startup is disabled. Check `referral_schema.flyway_schema_history_referral`, migration checksums and isolated object/grant inventory. Do not apply these migrations to a host service's Flyway history or renumber live host migrations.
+5. Run the isolated migrator with migration-only credentials and the exact confirmation below. Automatic Spring Flyway startup is disabled. Check `referral_schema.referral_flyway_history`, migration checksums and isolated object/grant inventory. Do not use a host service's Flyway history or renumber live host migrations.
 6. Provision source-specific current/previous HMAC secret references, approved JWT verification PEM, issuer/audience, Redis TLS connection and database credentials in Key Vault. Do not paste values into GitHub, evidence PDFs, issue comments or shell tracing. Auth/Order/Finance keys must be distinct and at least 32 decoded bytes. Validate rotation with overlapping current/previous keys and confirm time synchronisation.
 7. Deploy only the referral image with **all seven public/execution flags false**. Check liveness, database/revocation connectivity and no side effects. Public/member routes remain disabled. Keep the original web/Auth/Order/Integration revisions untouched in this step.
 8. After separate owner integration review, test private event transport and Finance outbox handling in staging. Validate source JWT token-version/revocation semantics using the current Auth owner. Apply gateway controls and observability. Archive exact SHA, image digest, migration state, runtime settings, role grants, test results and rollback revision.
 
 ### Build and isolated migration commands
 
-Execute from a reviewed checkout; do not paste database secrets into command arguments. These are manual instructions, not a deployment executed by the assistant.
+Run from the reviewed repository root in Bash/Linux with Java 21 and Maven. Do not paste database secrets into command arguments. The migration environment uses **different variable names and credentials from the runtime datasource**. CI exercises the standalone command only against its disposable `referral_test` database; no production migration has been performed.
 
 ```bash
 # Read-only scope assertion against the protected baseline:
 python3 scripts/referrals/verify-additive.py
 
-# CI supplies a disposable PostgreSQL test database and explicit test confirmation.
+# Requires the documented disposable PostgreSQL test fixture, never a production tunnel.
 mvn -B -ntp -f services/referral-service/pom.xml verify
 
-# Build only this service; the Docker build skips tests, so require verified CI first.
+# Package only this service after verified tests; no registry push or deploy here.
 docker build -t "$APPROVED_REFERRAL_IMAGE" services/referral-service
 
-# Run outside the application, with migration-only credentials injected securely.
-# All required values must target the approved isolated database/schema.
-export REFERRAL_MIGRATE_CONFIRM=APPLY_ISOLATED_REFERRAL_SCHEMA
-java -Dloader.main=in.craves.referral.infra.ReferralMigrate \
-  -cp services/referral-service/target/referral-service-0.1.0-SNAPSHOT.jar \
-  org.springframework.boot.loader.launch.PropertiesLauncher
+# Securely inject REFERRAL_MIGRATION_DB_URL, REFERRAL_MIGRATION_DB_USER,
+# and REFERRAL_MIGRATION_DB_PASSWORD from the approved migration-only secret set.
+# The URL must use sslmode=verify-full for any remote PostgreSQL host.
+set +x
+set -Eeuo pipefail
+umask 077
+export REFERRAL_MIGRATION_CONFIRM=CREATE_REFERRAL_SCHEMA_ONLY
+CP_FILE="$(mktemp)"
+trap 'rm -f "$CP_FILE"' EXIT
+mvn -B -ntp -f services/referral-service/pom.xml \
+  org.apache.maven.plugins:maven-dependency-plugin:3.8.1:build-classpath \
+  -DincludeScope=runtime "-Dmdep.outputFile=$CP_FILE"
+test -s "$CP_FILE"
+java -cp "services/referral-service/target/classes:$(cat "$CP_FILE")" \
+  in.craves.referral.infra.ReferralMigrate
 ```
 
-Required migrator environment: `REFERRAL_DB_URL`, `REFERRAL_DB_USER`, `REFERRAL_DB_PASSWORD`, and the approval phrase. Verify the PropertiesLauncher class exists in the exact built archive before running this command. Migration credentials must not be the normal application credentials. Never use Flyway clean, drop the schema, delete journal history or restore a backup over newer real financial events as an ordinary rollback.
+The standalone migrator loads the verified checkout's compiled classes/resources and Maven runtime dependencies; it does not assume that Spring Boot's optional PropertiesLauncher is included in a standard executable JAR. Run the reviewed build first and never reuse a classpath or compiled directory from another SHA. Successful reruns validate the existing migration history without activating rewards. Never use Flyway clean, drop the schema, delete journal history or restore a backup over newer financial events as an ordinary rollback.
 
 ## D. Staged activation — only after evidence passes
 
@@ -74,16 +83,16 @@ Required migrator environment: `REFERRAL_DB_URL`, `REFERRAL_DB_USER`, `REFERRAL_
 | --- | --- | --- |
 | Dormant deployment | New service/image, schema and private connectivity validation. | All programme execution/public flags off; no real payouts. |
 | Staging contract acceptance | Synthetic accounts/orders; authoritative source publishers and Finance consumer; duplicate/refund/unknown-outcome and permissions tests. | Production sources/payouts remain disconnected. |
-| Production private observation | After approvals, explicit `ENABLED` and `WORKERS_ENABLED` only; source completeness and reconciliation observed without awarding. | `AWARDS`, `SETTLEMENT`, `WITHDRAWALS`, `SPENDING`, `PUBLIC_ACCESS` off. Pause on missing binding/funding or unresolved incompatible source contract. |
+| Production private observation | After approvals, explicit `ENABLED` and `WORKERS_ENABLED` only; source completeness and reconciliation observed without awarding. | `AWARDS`, `SETTLEMENT`, `WITHDRAWALS`, `SPENDING`, `PUBLIC_ACCESS` off. Pause on missing binding/funding or incompatible source contracts. |
 | Approved small pilot | Activate reviewed policy and future-order award creation for an explicit allowlisted cohort enforced by owner/gateway rollout, then settlement only after fresh finance evidence and holds. | No automatic public rollout; cashout off. Cohort filtering is an integration responsibility, not an implemented runtime allowlist. |
 | Wallet pilot | Enable spending only after checkout reserve/capture/refund integration and reconciliation are accepted. | Withdrawals off. Wallet-first does not mean checkout is already wired. |
 | Cashout beta | Positive assessed limits, destination/KYC/tax review, independent approval and Finance provider reconciliation accepted. | Unknown outcomes never trigger replacement payments. |
 | Public availability | Explicit decision after completed technical/compliance/economic gates; public flag, web/native navigation and programme communication enabled together. | No inferred approval from an elapsed pilot duration or passing CI. |
 
-The source recommends a 20–50 chef, one-city pilot (4–6 weeks), then beta. These are planning suggestions, not a scheduled rollout or results achieved. Owner/gateway cohort selection is still to be implemented; do not turn on awards globally and call that a limited pilot.
+The source recommends a 20–50 chef, one-city pilot (4–6 weeks), then beta. These are planning suggestions, not a scheduled rollout or results achieved. Owner/gateway cohort selection remains to be implemented; do not enable awards globally and call that a limited pilot.
 
 ## E. Required repository work before merge
 
-Resolve the existing mobile-only consolidation scope gate through a maintainer-approved, separate workflow-scope correction or a pure-mobile split. Do not disable that check, alter branch protection or claim the cross-stack PR has all checks green. Re-run the full required checks against the final integration SHA and current main. Review older referral/loyalty branches and current runtime ownership; names alone do not prove they are deployed.
+Resolve the existing mobile-only consolidation scope gate through a maintainer-approved, separate workflow-scope correction or a pure-mobile split. Do not disable that check, alter branch protection or claim this cross-stack PR has all checks green. Re-run required checks against the final integration SHA and current main. Review older referral/loyalty branches and current runtime ownership; names alone do not prove deployment.
 
 Only after all approvals should a human remove draft status, merge the reviewed additions and execute the isolated release. This delivery deliberately does none of those actions.

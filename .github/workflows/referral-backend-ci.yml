@@ -1,7 +1,5 @@
 name: Referral backend integration CI
 on:
-  push:
-    branches: [feat/referral-backend-integration-20260915]
   pull_request:
     paths: ['services/referral-service/**', 'services/auth-service/**', 'services/order-service/**', 'services/integration-service/**', 'scripts/referrals/**', '.github/workflows/referral-backend-ci.yml']
   workflow_dispatch:
@@ -23,7 +21,7 @@ jobs:
           POSTGRES_PASSWORD: disposable-referral-ci-only
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U referral_ci -d referral_test'
+          --health-cmd "pg_isready -U referral_ci -d referral_test"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       PGHOST: localhost

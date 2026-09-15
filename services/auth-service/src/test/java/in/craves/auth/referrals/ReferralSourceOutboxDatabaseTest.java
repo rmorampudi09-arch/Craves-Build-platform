@@ -21,7 +21,7 @@ class ReferralSourceOutboxDatabaseTest {
   String url=System.getenv("REFERRAL_OWNER_TEST_JDBC_URL");
   assertEquals("YES_DISPOSABLE_REFERRAL_TEST_ONLY",System.getenv("REFERRAL_TEST_CONFIRM"));
   assertTrue(url.matches("jdbc:postgresql://(localhost|127[.]0[.]0[.]1):[0-9]+/referral_owner_test"));
-  var ds=new DriverManagerDataSource(url,System.getenv("REFERRAL_TEST_DB_USER"),System.getenv("REFERRAL_TEST_DB_PASSWORD"));
+  var ds=new DriverManagerDataSource(url+"?currentSchema=auth_schema",System.getenv("REFERRAL_TEST_DB_USER"),System.getenv("REFERRAL_TEST_DB_PASSWORD"));
   db=new JdbcTemplate(ds);assertEquals("referral_owner_test",db.queryForObject("SELECT current_database()",String.class));
   db.execute("DROP SCHEMA IF EXISTS auth_schema CASCADE");db.execute("CREATE SCHEMA auth_schema");
   try(var in=getClass().getResourceAsStream("/db/migration/V12__referral_source_outbox.sql")){assertNotNull(in);db.execute(new String(in.readAllBytes(),StandardCharsets.UTF_8));}

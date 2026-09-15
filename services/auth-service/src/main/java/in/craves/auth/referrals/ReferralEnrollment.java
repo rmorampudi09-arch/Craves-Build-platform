@@ -39,7 +39,7 @@ public class ReferralEnrollment {
         var payload=json.createObjectNode().put("userId",identity.getId().toString()).put("registeredAt",identity.getCreatedAt().toString())
             .put("parentCode",parent).put("contactHash",contact).putNull("deviceHash").putNull("paymentHash").put("fingerprintConsent",false).put("termsVersion",terms);
         var event=outbox.enqueue("account/"+identity.getId()+"/registered","account.registered",identity.getId(),identity.getCreatedAt(),payload);
-        db.update("INSERT INTO auth_schema.referral_enrollment(identity_id,event_id,parent_code,terms_version,contact_hash,registered_at) VALUES (?,?,?,?,?,?) ON CONFLICT(identity_id) DO NOTHING",identity.getId(),event,parent,terms,contact,java.sql.Timestamp.from(identity.getCreatedAt()));
+        db.update("INSERT INTO referral_enrollment(identity_id,event_id,parent_code,terms_version,contact_hash,registered_at) VALUES (?,?,?,?,?,?) ON CONFLICT(identity_id) DO NOTHING",identity.getId(),event,parent,terms,contact,java.sql.Timestamp.from(identity.getCreatedAt()));
     }
     public void validate(ReferralSignup consent){
         if(consent==null || !Boolean.TRUE.equals(consent.termsAccepted()) || !terms.equals(consent.termsVersion()))throw in.craves.auth.exception.AuthException.conflict("CURRENT_REFERRAL_TERMS_ACCEPTANCE_REQUIRED","Accept the current referral terms");

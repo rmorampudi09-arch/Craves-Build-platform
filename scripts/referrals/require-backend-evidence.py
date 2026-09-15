@@ -5,9 +5,9 @@ from pathlib import Path
 import xml.etree.ElementTree as E
 required = {
  'referral-service': {'ReferralLedgerIT':1,'ReferralResilienceIT':1,'ReferralHttpContractIT':1,'ReferralFinanceTransportIT':3},
- 'auth-service': {'ReferralAttributionTest':5,'ReferralSourceOutboxDatabaseTest':7,'EmailVerificationPersistenceTest':1,'PostgresAuthRateLimiterDbTest':1},
- 'order-service': {'ReferralSourceOutboxDatabaseTest':7,'FinancialCheckoutDatabaseTest':7,'CartConcurrencyDatabaseTest':6},
- 'integration-service': {'ReferralSourceOutboxDatabaseTest':7,'ReferralJournalMirrorTest':4,'FinancialFullMigrationDatabaseTest':2,'OrderFinancialFinalizationDatabaseTest':18,'ManualChefSettlementDatabaseTest':29},
+ 'auth-service': {'ReferralAttributionTest':5,'ReferralEnrollmentDatabaseTest':5,'ReferralSourceOutboxDatabaseTest':7,'EmailVerificationPersistenceTest':1,'PostgresAuthRateLimiterDbTest':1},
+ 'order-service': {'ReferralSourceOutboxDatabaseTest':7,'FinancialCheckoutDatabaseTest':7,'ReferralCheckoutIntegrationDatabaseTest':12,'CartConcurrencyDatabaseTest':6},
+ 'integration-service': {'ReferralSourceOutboxDatabaseTest':7,'ReferralJournalMirrorTest':4,'ReferralFinanceConsumerDatabaseTest':5,'FinancialFullMigrationDatabaseTest':2,'OrderFinancialFinalizationDatabaseTest':18,'ManualChefSettlementDatabaseTest':29},
 }
 summary={'status':'PASS','scope':'Backend source and disposable PostgreSQL; no Azure deployment or provider payment', 'services':{}}
 for service,names in required.items():

@@ -23,7 +23,7 @@ public class ReferralEnrollmentController {
         if(consent.attributionToken()!=null)throw AuthException.conflict("EXISTING_ACCOUNT_PARENT_LOCKED","Existing accounts can join only without a new parent");
         var identity=identities.findById(actor.identityId()).orElseThrow(()->AuthException.unauthorized("IDENTITY_NOT_FOUND","Identity not found"));
         if(!"ACTIVE".equals(identity.getStatus()) || actor.tokenVersion()<identity.getTokenVersion())throw AuthException.unauthorized("ACCOUNT_INACTIVE","Current active account required");
-        if(Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM auth_schema.referral_enrollment WHERE identity_id=?)",Boolean.class,identity.getId())))return Map.of("accepted",true,"status","ALREADY_ENROLLED","userId",identity.getId().toString());
+        if(Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM referral_enrollment WHERE identity_id=?)",Boolean.class,identity.getId())))return Map.of("accepted",true,"status","ALREADY_ENROLLED","userId",identity.getId().toString());
         enrollment.signup(identity,consent);
         return Map.of("accepted",true,"status","QUEUED","userId",identity.getId().toString());
     }

@@ -385,12 +385,8 @@ export function DishesGrid({
 
       {state === "ready" && dishes.length > 0 ? (
         <div className={styles.dishGrid}>
-          {dishes.map((dish, index) => (
-            <DishCard
-              key={dish.id}
-              dish={dish}
-              priorityImage={index < 2}
-            />
+          {dishes.map((dish) => (
+            <DishCard key={dish.id} dish={dish} />
           ))}
         </div>
       ) : null}

@@ -187,7 +187,7 @@ export function DishCard({
 
   return (
     <article
-      className={`group flex h-full flex-col overflow-hidden border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-all duration-300 hover:-translate-y-1.5 hover:border-[#F62E18]/45 hover:shadow-[0_18px_42px_rgba(26,26,26,0.11)] ${
+      className={`${message && state === "idle" ? styles.dishCardAdded : ""} group flex h-full flex-col overflow-hidden border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[#F62E18]/35 hover:shadow-[0_16px_36px_rgba(26,26,26,0.09)] ${
         featured ? "rounded-[2rem]" : "rounded-[1.65rem]"
       }`}
     >
@@ -208,7 +208,7 @@ export function DishCard({
             width={1024}
             height={768}
             loading="lazy"
-            className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-[1.065]"
+            className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-[1.035]"
           />
         </Link>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#1A1A1A]/60 via-[#1A1A1A]/15 to-transparent" />
@@ -224,7 +224,7 @@ export function DishCard({
           aria-pressed={favorite}
           aria-label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
           title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
-          className="absolute right-3.5 top-3.5 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/90 text-[#1A1A1A] shadow-[0_8px_22px_rgba(26,26,26,0.12)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-1 hover:scale-[1.06] hover:border-[#F62E18]/30 hover:bg-white hover:text-[#F62E18] hover:shadow-[0_10px_26px_rgba(246,46,24,0.16)] disabled:cursor-wait disabled:opacity-60"
+          className="absolute right-3.5 top-3.5 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/90 text-[#1A1A1A] shadow-[0_8px_22px_rgba(26,26,26,0.12)] backdrop-blur-xl transition-all duration-200 hover:scale-[1.035] hover:border-[#F62E18]/30 hover:bg-white hover:text-[#F62E18] hover:shadow-[0_10px_26px_rgba(246,46,24,0.16)] disabled:cursor-wait disabled:opacity-60"
         >
           <Heart
             className={`h-[1.05rem] w-[1.05rem] transition-colors ${

@@ -1,0 +1,36 @@
+trigger: none
+pr: none
+pool:
+  vmImage: ubuntu-latest
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+steps:
+  - checkout: self
+    fetchDepth: 0
+    persistCredentials: false
+  - task: JavaToolInstaller@0
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+  - bash: |
+      set -euo pipefail
+      python3 -m py_compile scripts/referrals/deploy-private-backend.py
+      python3 -m unittest discover -s scripts/referrals -p test_release_plan.py
+    displayName: Verify isolated deployment plan
+  - task: AzureCLI@2
+    displayName: Provision and deploy private referral backend
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        umask 077
+        python3 scripts/referrals/deploy-private-backend.py
+  - task: PublishPipelineArtifact@1
+    condition: always()
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)/referral-deployment
+      artifact: referral-private-deployment

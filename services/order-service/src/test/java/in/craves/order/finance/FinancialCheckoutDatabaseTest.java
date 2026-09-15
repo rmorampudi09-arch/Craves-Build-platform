@@ -67,9 +67,10 @@ class FinancialCheckoutDatabaseTest {
         context.registerBean(DataSourceTransactionManager.class,()->manager);context.registerBean(CatalogClient.class,()->catalog);context.registerBean(CustomerAddressClient.class,()->addresses);
         context.registerBean(FinanceSourceClient.class,()->finance);context.registerBean(CheckoutSnapshotFactory.class,CheckoutSnapshotFactory::new);
         context.registerBean(NotificationInternalClient.class,()->new NotificationInternalClient(new NotificationClientProperties(),RestClient.builder(),notifications));
-        context.registerBean(OrderService.class);context.registerBean(OrderFinancialBindingService.class);context.registerBean(FinancialCheckoutTransactionAspect.class);context.refresh();
+        context.registerBean(OrderService.class);context.registerBean(OrderFinancialBindingService.class);context.registerBean(FinancialCheckoutTransactionAspect.class);registerAdditionalOwners();context.refresh();
         orders=context.getBean(OrderService.class);orders.addCartItem(actor,new AddCartItemRequest(menu,1));
     }
+    void registerAdditionalOwners() {}
     @AfterEach void close(){if(context!=null)context.close();}
     CheckoutResponse checkout(){return orders.checkout(actor,new CheckoutRequest(address,"Finance integration test"));}
     ObjectNode quote(JsonNode request){

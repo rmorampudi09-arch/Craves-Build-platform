@@ -16,6 +16,9 @@ import org.springframework.util.StringUtils;
 public class RefundRequestService {
     private final JdbcTemplate jdbcTemplate;
     private final RefundEventValidator validator;
+    private in.craves.integration.referrals.checkout.ReferralRefundService referralRefunds;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void setReferralRefunds(in.craves.integration.referrals.checkout.ReferralRefundService service){this.referralRefunds=service;}
 
     public RefundRequestService(JdbcTemplate jdbcTemplate, RefundEventValidator validator) {
         this.jdbcTemplate = jdbcTemplate;
@@ -25,6 +28,7 @@ public class RefundRequestService {
     @Transactional
     public boolean accept(EventEnvelope<RefundRequestedData> event, String rawPayload) {
         validator.validate(event);
+        if(referralRefunds!=null)referralRefunds.verifyReplay(event);
 
         int inboxInserted = jdbcTemplate.update(
             """
@@ -55,6 +59,7 @@ public class RefundRequestService {
         }
 
         BigDecimal requestedAmount = data.refundAmount().setScale(2, RoundingMode.HALF_UP);
+        if(referralRefunds!=null)requestedAmount=referralRefunds.allocate(event,rawPayload,requestedAmount);
         validateFinancialBounds(paymentOrder, data, requestedAmount);
 
         String refundReference = refundReference(data.chefSubOrderId());
@@ -102,6 +107,7 @@ public class RefundRequestService {
             return false;
         }
 
+        if(referralRefunds!=null)referralRefunds.inserted(refundId,data.chefSubOrderId());
         jdbcTemplate.update(
             "UPDATE payment_schema.refund_request_inbox SET processing_status = 'PROCESSED', processed_at = now() WHERE event_id = ?",
             event.eventId()
@@ -158,7 +164,7 @@ public class RefundRequestService {
         if (!"PAID".equals(paymentOrder.status())) {
             throw new RefundNonRetryableException("Only a paid checkout can be refunded");
         }
-        if (!StringUtils.hasText(paymentOrder.providerOrderId())) {
+        if (!"REFERRAL_WALLET".equals(paymentOrder.provider()) && !StringUtils.hasText(paymentOrder.providerOrderId())) {
             throw new RefundRetryableException("Payment provider order identifier is not available");
         }
         if ("RAZORPAY".equals(paymentOrder.provider()) && !StringUtils.hasText(paymentOrder.providerPaymentId())) {

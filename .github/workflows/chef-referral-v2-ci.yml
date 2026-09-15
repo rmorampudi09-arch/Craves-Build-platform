@@ -45,26 +45,48 @@ jobs:
       - name: Enforce add-only scope
         run: python3 scripts/referrals/verify-additive.py
       - name: Compile and verify against disposable PostgreSQL
-        run: mvn -B -ntp -f services/referral-service/pom.xml verify
+        run: mvn -B -ntp -f services/referral-service/pom.xml clean verify
       - name: Require actual database tests, SBOM and packaged migration entry point
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import json, zipfile
+          import hashlib, json, os, zipfile
           import xml.etree.ElementTree as E
+
           target = Path('services/referral-service/target')
-          reports = list((target/'failsafe-reports').glob('TEST-*.xml'))
-          assert reports, 'Missing PostgreSQL integration-test results'
-          suites = [E.parse(p).getroot() for p in reports]
-          assert sum(int(s.attrib['tests']) for s in suites) >= 19
-          assert all(int(s.attrib.get(k, '0')) == 0 for s in suites for k in ['failures', 'errors', 'skipped'])
-          print('Executed PostgreSQL integration cases:', sum(int(s.attrib['tests']) for s in suites))
-          bom = json.loads((target/'bom.json').read_text())
+          counts = {}
+          for folder, minimum in [('surefire-reports', 12), ('failsafe-reports', 19)]:
+              reports = sorted((target/folder).glob('TEST-*.xml'))
+              assert reports, f'Missing test evidence: {folder}'
+              suites = [E.parse(p).getroot() for p in reports]
+              counts[folder] = sum(int(s.attrib['tests']) for s in suites)
+              assert counts[folder] >= minimum, f'Too few executed tests: {folder}'
+              assert all(int(s.attrib.get(k, '0')) == 0 for s in suites for k in ['failures', 'errors', 'skipped'])
+
+          bom_path = target/'classes/META-INF/sbom/application.cdx.json'
+          bom_bytes = bom_path.read_bytes()
+          bom = json.loads(bom_bytes)
           assert bom.get('bomFormat') == 'CycloneDX' and bom.get('components'), 'Missing usable SBOM'
-          with zipfile.ZipFile(target/'referral-service-0.1.0-SNAPSHOT.jar') as archive:
-              assert 'BOOT-INF/classes/in/craves/referral/infra/ReferralMigrate.class' in archive.namelist()
-              assert 'BOOT-INF/classes/db/referral_migration/V6__deferred_reward_reconciliation.sql' in archive.namelist()
-          print('SBOM components:', len(bom['components']))
+          jar_path = target/'referral-service-0.1.0-SNAPSHOT.jar'
+          with zipfile.ZipFile(jar_path) as archive:
+              names = set(archive.namelist())
+              assert 'BOOT-INF/classes/in/craves/referral/ReferralApplication.class' in names
+              assert 'BOOT-INF/classes/in/craves/referral/infra/ReferralMigrate.class' in names
+              assert 'org/springframework/boot/loader/launch/JarLauncher.class' in names
+              assert any(n.startswith('BOOT-INF/lib/') and n.endswith('.jar') for n in names)
+              manifest = archive.read('META-INF/MANIFEST.MF').decode('utf-8').replace('\r\n ', '').replace('\r\n', '\n')
+              assert 'Main-Class: org.springframework.boot.loader.launch.JarLauncher' in manifest
+              assert 'Start-Class: in.craves.referral.ReferralApplication' in manifest
+              for migration in Path('services/referral-service/src/main/resources/db/referral_migration').glob('*.sql'):
+                  assert archive.read('BOOT-INF/classes/db/referral_migration/' + migration.name) == migration.read_bytes()
+              assert archive.read('BOOT-INF/classes/META-INF/sbom/application.cdx.json') == bom_bytes, 'Packaged SBOM differs from verified inventory'
+
+          receipt = {'workflowRunId': os.environ['GITHUB_RUN_ID'], 'tests': counts,
+                     'sbomComponents': len(bom['components']), 'sbomPackaged': True,
+                     'jarSha256': hashlib.sha256(jar_path.read_bytes()).hexdigest(),
+                     'sbomSha256': hashlib.sha256(bom_bytes).hexdigest()}
+          (target/'artifact-verification.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt, indent=2))
           PY
       - name: Verify documented standalone migrator twice against CI disposable database only
         env:
@@ -95,8 +117,8 @@ jobs:
           path: |
             services/referral-service/target/surefire-reports/
             services/referral-service/target/failsafe-reports/
-            services/referral-service/target/bom.json
-            services/referral-service/target/bom.xml
+            services/referral-service/target/classes/META-INF/sbom/application.cdx.json
+            services/referral-service/target/artifact-verification.json
           retention-days: 14
   web:
     runs-on: ubuntu-latest

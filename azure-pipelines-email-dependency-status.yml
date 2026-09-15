@@ -39,6 +39,12 @@ steps:
                 else: state = 'SECRET_REFERENCE' if item.get('secretRef') else 'CONFIGURED' if item.get('value') else 'EMPTY'
                 states[key] = state
             print('REDIS_SETTINGS ' + name + ' ' + json.dumps(states))
+            overrides = {}
+            for key in ['SPRING_APPLICATION_JSON','SPRING_CONFIG_IMPORT','SPRING_CONFIG_LOCATION','SPRING_PROFILES_ACTIVE']:
+                if key in env:
+                    value = env[key].get('value','')
+                    overrides[key] = value if key == 'SPRING_PROFILES_ACTIVE' and isinstance(value,str) and re.fullmatch(r'[A-Za-z0-9_, -]{1,120}',value) else 'PRESENT_VALUE_NOT_DISPLAYED'
+            print('CONFIGURATION_OVERRIDE_METADATA ' + name + ' ' + json.dumps(overrides))
             refs = []
             for item in app['properties']['configuration'].get('secrets',[]):
                 host = urlparse(item.get('keyVaultUrl','')).hostname

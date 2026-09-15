@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 
 spec = importlib.util.spec_from_file_location("routes", Path(__file__).with_name("customer-audit-read-routes.py"))
@@ -9,6 +11,22 @@ spec.loader.exec_module(routes)
 
 
 class RouteSafetyTests(unittest.TestCase):
+    def test_json_reads_accept_utf8_bom(self):
+        with patch.object(routes.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout='\ufeff{"value": []}')):
+            self.assertEqual(routes.az("account", "show"), {"value": []})
+
+    def test_policy_put_does_not_parse_response_and_requests_json(self):
+        with patch.object(routes.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout='\ufeff<policies />')) as run:
+            self.assertIsNone(routes.rest("put", "https://management.azure.com/example", {"properties": {}}))
+            arguments = run.call_args.args[0]
+            self.assertIn("Accept=application/json", arguments)
+            self.assertEqual(arguments[-2:], ["-o", "none"])
+
+    def test_write_error_is_not_swallowed_or_logged_with_private_body(self):
+        with patch.object(routes.subprocess, "run", return_value=SimpleNamespace(returncode=1, stdout="", stderr="private")):
+            with self.assertRaisesRegex(RuntimeError, "^Azure operation failed: rest --method put$"):
+                routes.rest("put", "https://management.azure.com/example", {})
+
     def test_all_published_operations_are_reads(self):
         for _, prefix, _, operations in routes.GROUPS:
             self.assertTrue(prefix.startswith("api/v1/"))

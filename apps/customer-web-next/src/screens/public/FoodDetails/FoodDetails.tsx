@@ -135,7 +135,7 @@ function DishDetailPage() {
     return (
       <main className="min-h-screen bg-white px-4 py-12">
         <div className="mx-auto max-w-6xl animate-pulse" aria-hidden="true">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,39rem)_23.5rem] lg:justify-center">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.9fr)] lg:justify-center xl:grid-cols-[minmax(0,42rem)_24rem]">
             <div className="aspect-[4/3] rounded-[2rem] bg-[#F1F3F5] md:aspect-[16/10]" />
             <div className="h-[28rem] rounded-[2rem] bg-[#F1F3F5]" />
           </div>
@@ -218,7 +218,7 @@ function DishDetailPage() {
       <DetailBrowseHeader returnPath={`/dish/${id}`} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
-        <div className="grid gap-7 lg:grid-cols-[minmax(0,39rem)_23.5rem] lg:items-start lg:justify-center xl:grid-cols-[minmax(0,42rem)_24rem] xl:gap-9">
+        <div className="grid gap-7 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.9fr)] lg:items-start lg:justify-center xl:grid-cols-[minmax(0,42rem)_24rem] xl:gap-9">
           <div className="min-w-0">
             <DishImageHeader dish={dish} onBack={handleBack} />
 

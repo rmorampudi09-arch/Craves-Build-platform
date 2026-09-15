@@ -1,0 +1,63 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 1
+  - task: AzureCLI@2
+    displayName: Read Notification health causes and existing vault metadata only
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        python3 - <<'PY'
+        import collections, json, re, subprocess
+        from urllib.parse import urlparse
+        rg = 'rg-craves-prodlow-centralindia'
+        names = ['ca-craves-auth-service-prodlow','ca-craves-user-chef-service-prod','ca-craves-notification-service-p']
+        vaults = set()
+        for name in names:
+            result = subprocess.run(['az','containerapp','show','-g',rg,'-n',name,'-o','json'],capture_output=True,text=True)
+            if result.returncode: raise SystemExit('App metadata read failed')
+            app = json.loads(result.stdout)
+            refs = []
+            for item in app['properties']['configuration'].get('secrets',[]):
+                host = urlparse(item.get('keyVaultUrl','')).hostname
+                if host:
+                    vaults.add(host.split('.')[0])
+                    refs.append({'vaultHost':host,'identityKind':'system' if item.get('identity') == 'system' else 'user-assigned' if item.get('identity') else 'missing'})
+            print(json.dumps({'app':name,'identityType':(app.get('identity') or {}).get('type'),'existingVaultBindings':refs,'revision':app['properties']['latestRevisionName'],'ready':app['properties']['latestReadyRevisionName'],'image':app['properties']['template']['containers'][0]['image']}))
+        if not vaults:
+            result = subprocess.run(['az','keyvault','list','-g',rg,'--query','[].name','-o','json'],capture_output=True,text=True)
+            if result.returncode: raise SystemExit('Existing vault inventory failed')
+            vaults = set(json.loads(result.stdout))
+        for vault in sorted(vaults):
+            result = subprocess.run(['az','keyvault','show','-n',vault,'--query','{name:name,rbac:properties.enableRbacAuthorization}','-o','json'],capture_output=True,text=True)
+            print('VAULT_METADATA ' + (result.stdout.strip() if result.returncode == 0 else 'UNAVAILABLE'))
+        result = subprocess.run(['az','containerapp','logs','show','-g',rg,'-n',names[-1],'--type','console','--tail','300','--format','json'],capture_output=True,text=True,timeout=90)
+        if result.returncode: raise SystemExit('Restricted Notification log read failed; no log contents displayed')
+        text = result.stdout
+        # Only fixed labels/counts leave this process, never raw logs or identifiers.
+        patterns = {
+            'datasource_health_failure': r'DataSource health check failed',
+            'redis_health_failure': r'Redis health check failed',
+            'disk_space_low': r'Free disk space below threshold',
+            'database_pool_timeout': r'Connection is not available, request timed out',
+            'database_connection_failure': r'(?i)(connection to .* refused|connection attempt failed|could not obtain connection)',
+            'database_authentication_failure': r'(?i)password authentication failed',
+            'too_many_database_connections': r'(?i)(too many clients|remaining connection slots)',
+            'unknown_host': r'UnknownHostException',
+            'socket_timeout': r'SocketTimeoutException',
+            'sql_exception': r'PSQLException',
+        }
+        print('NOTIFICATION_LOG_CLASSIFICATIONS ' + json.dumps({key:len(re.findall(pattern,text)) for key,pattern in patterns.items()}))
+        print('READ ONLY: no raw logs, secret values or customer records displayed; no resource or settings changes')
+        PY
+

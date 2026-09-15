@@ -1,0 +1,55 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 1
+  - task: AzureCLI@2
+    displayName: Read email capability gates and binding presence only
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        python3 - <<'PY'
+        import json, subprocess
+        targets = {
+          'ca-craves-auth-service-prodlow': [
+            'CRAVES_EMAIL_VERIFICATION_ENABLED', 'CRAVES_EMAIL_VERIFICATION_HMAC_KEY',
+            'CRAVES_EMAIL_VERIFICATION_INTERNAL_KEY', 'CRAVES_EMAIL_NOTIFICATION_BASE_URL',
+            'CRAVES_EMAIL_PROJECTION_WORKER_ENABLED', 'CRAVES_EMAIL_PROJECTION_INTERNAL_KEY',
+            'CRAVES_EMAIL_USER_CHEF_BASE_URL', 'CRAVES_EMAIL_VERIFICATION_ALLOW_LOCAL_HTTP'],
+          'ca-craves-user-chef-service-prod': ['CRAVES_EMAIL_PROJECTION_INTERNAL_KEY'],
+          'ca-craves-notification-service-p': [
+            'CRAVES_EMAIL_VERIFICATION_TRANSPORT_ENABLED', 'CRAVES_EMAIL_VERIFICATION_INTERNAL_KEY',
+            'CRAVES_NOTIFICATION_EMAIL_ENABLED', 'ACS_EMAIL_CONNECTION_STRING', 'ACS_EMAIL_SENDER_ADDRESS']
+        }
+        for app, names in targets.items():
+            result = subprocess.run(['az','containerapp','show','-g','rg-craves-prodlow-centralindia','-n',app,'-o','json'],capture_output=True,text=True)
+            if result.returncode:
+                raise SystemExit('Read-only configuration check failed for ' + app)
+            props = json.loads(result.stdout)['properties']
+            secrets = {item['name'] for item in props.get('configuration',{}).get('secrets',[])}
+            env = {item['name']:item for item in props['template']['containers'][0].get('env',[])}
+            print('SERVICE ' + app)
+            for name in names:
+                setting = env.get(name)
+                if setting is None:
+                    state = 'UNSET'
+                elif name.endswith('_KEY') or name == 'ACS_EMAIL_CONNECTION_STRING':
+                    ref = setting.get('secretRef')
+                    state = 'SECRET_REFERENCE_PRESENT' if ref and ref in secrets else 'REFERENCE_MISSING_OR_NON_SECRET_BINDING'
+                elif name.endswith('_ENABLED') or name.endswith('_ALLOW_LOCAL_HTTP'):
+                    state = {'true':'TRUE','false':'FALSE'}.get(str(setting.get('value','')).lower(),'NON_LITERAL_OR_UNRECOGNIZED')
+                else:
+                    state = 'CONFIGURED' if setting.get('value') or setting.get('secretRef') else 'EMPTY'
+                print(name + ': ' + state)
+        print('READ ONLY: no secret values displayed, no settings or data changed.')
+        PY
+

@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminSubscriptionRuntimeManager } from "@/components/admin-subscription-runtime-manager";
 import type { AdminSubscriptionPlan, ApprovedChefReference } from "@/lib/admin-subscription-plan-contract";
@@ -26,8 +28,8 @@ export function AdminSubscriptionPlanManager() {
 
   const load = useCallback(async () => {
     const [plansResponse, chefsResponse] = await Promise.all([
-      fetch("/api/admin/subscription-plans", { cache: "no-store" }),
-      fetch("/api/admin/subscription-plans/chefs", { cache: "no-store" }),
+      adminFetch("/api/admin/subscription-plans", { cache: "no-store" }),
+      adminFetch("/api/admin/subscription-plans/chefs", { cache: "no-store" }),
     ]);
 
     if (plansResponse.status === 401) throw new Error("Administrator session expired.");
@@ -62,7 +64,7 @@ export function AdminSubscriptionPlanManager() {
     if (reason.length < 3) { setMessage("Enter a short review reason before approving or rejecting the plan."); return; }
     setBusyPlanId(plan.id); setMessage("");
     try {
-      const response = await fetch(`/api/admin/subscription-plans/${plan.id}/review`, {
+      const response = await adminFetch(`/api/admin/subscription-plans/${plan.id}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision, reason }),
@@ -87,7 +89,7 @@ export function AdminSubscriptionPlanManager() {
   async function deactivate(plan: AdminSubscriptionPlan) {
     setBusyPlanId(plan.id); setMessage("");
     try {
-      const response = await fetch(`/api/admin/subscription-plans/${plan.id}/status`, {
+      const response = await adminFetch(`/api/admin/subscription-plans/${plan.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "INACTIVE" }),

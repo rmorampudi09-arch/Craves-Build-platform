@@ -1,3 +1,4 @@
+import { boundedFetch } from "@/lib/bounded-fetch";
 import { NextResponse } from "next/server";
 import { parseSubscriptionPlanPolicy } from "@/lib/subscription-lifecycle-contract";
 import { apiBaseUrl, isUuid } from "@/lib/server-api";
@@ -10,9 +11,9 @@ export async function GET(_request: Request, context: { params: Promise<{ planId
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
-    const upstream = await fetch(`${apiBaseUrl()}/subscriptions/plans/${planId}/policy`, {
+    const upstream = await boundedFetch(`${apiBaseUrl()}/subscriptions/plans/${planId}/policy`, {
       headers: { Accept: "application/json" }, cache: "no-store", signal: controller.signal,
-    });
+    }, 40_000);
     if (!upstream.ok) return NextResponse.json({ code: "SUBSCRIPTION_POLICY_UNAVAILABLE" }, { status: upstream.status });
     const policy = parseSubscriptionPlanPolicy(await upstream.json().catch(() => null));
     return policy ? NextResponse.json(policy, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ code: "INVALID_SUBSCRIPTION_POLICY_RESPONSE" }, { status: 502 });

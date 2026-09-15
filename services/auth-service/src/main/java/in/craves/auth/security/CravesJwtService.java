@@ -23,17 +23,22 @@ public class CravesJwtService {
     private final JwtProperties jwtProperties;
     private final RsaKeyProvider keyProvider;
     private final ObjectMapper objectMapper;
+    private final java.time.Clock clock;
 
-    public CravesJwtService(JwtProperties jwtProperties, RsaKeyProvider keyProvider, ObjectMapper objectMapper) {
+    public CravesJwtService(JwtProperties jwtProperties, RsaKeyProvider keyProvider, ObjectMapper objectMapper, java.time.Clock clock) {
         this.jwtProperties = jwtProperties;
         this.keyProvider = keyProvider;
         this.objectMapper = objectMapper;
+        this.clock = clock;
     }
 
     public String issueAccessToken(AuthIdentity identity, List<String> roles) {
+        return issueAccessToken(identity, roles, clock.instant().plus(jwtProperties.getAccessTokenTtl()), null, null);
+    }
+
+    public String issueAccessToken(AuthIdentity identity, List<String> roles, Instant expiresAt, UUID adminSessionId, Instant authenticatedAt) {
         try {
-            Instant now = Instant.now();
-            Instant expiresAt = now.plus(jwtProperties.getAccessTokenTtl());
+            Instant now = clock.instant();
 
             Map<String, Object> header = new LinkedHashMap<>();
             header.put("alg", "RS256");
@@ -50,6 +55,11 @@ public class CravesJwtService {
             claims.put("phone_number", identity.getPhoneNumber());
             claims.put("roles", roles);
             claims.put("token_version", identity.getTokenVersion());
+            if (adminSessionId != null) {
+                claims.put("admin_sid", adminSessionId.toString());
+                claims.put("auth_time", authenticatedAt.getEpochSecond());
+                claims.put("admin_session_exp", authenticatedAt.plusSeconds(28800).getEpochSecond());
+            }
 
             String headerPart = encodeJson(header);
             String claimPart = encodeJson(claims);
@@ -91,7 +101,7 @@ public class CravesJwtService {
                 throw AuthException.unauthorized("INVALID_ACCESS_TOKEN", "Invalid access token audience");
             }
             Instant expiresAt = Instant.ofEpochSecond(expiresAtEpoch);
-            if (!expiresAt.isAfter(Instant.now())) {
+            if (!expiresAt.isAfter(clock.instant())) {
                 throw AuthException.unauthorized("ACCESS_TOKEN_EXPIRED", "Access token has expired");
             }
 
@@ -109,7 +119,8 @@ public class CravesJwtService {
                 roles,
                 tokenVersion,
                 Instant.ofEpochSecond(issuedAtEpoch),
-                expiresAt
+                expiresAt,
+                claims.get("admin_sid") == null ? null : UUID.fromString(stringClaim(claims, "admin_sid"))
             );
         } catch (AuthException ex) {
             throw ex;

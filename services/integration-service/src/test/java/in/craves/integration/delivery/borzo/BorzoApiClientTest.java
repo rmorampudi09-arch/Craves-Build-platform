@@ -124,6 +124,48 @@ class BorzoApiClientTest {
     }
 
     @Test
+    void compactsUuidClientReferenceToBorzoMaximumLength() {
+        String uuidReference = "397aeab4-4df3-489d-881a-796c68cfba3c";
+
+        server.expect(requestTo(BASE_URL + "/create-order"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(content().json("""
+                {
+                  "points": [
+                    {},
+                    {"client_order_id": "397aeab44df3489d881a796c68cfba3c"}
+                  ]
+                }
+                """, false))
+            .andRespond(withSuccess("""
+                {
+                  "is_successful": true,
+                  "order": {
+                    "order_id": 1250033,
+                    "order_name": "50033",
+                    "status": "available",
+                    "payment_amount": "125.50",
+                    "delivery_fee_amount": "125.50",
+                    "points": [
+                      {"delivery": null},
+                      {
+                        "tracking_url": "https://example.test/track/2",
+                        "delivery": {"status": "planned"}
+                      }
+                    ]
+                  }
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        var delivery = client.create(
+            new CreateDeliveryRequest(uuidReference, quoteRequest())
+        );
+
+        assertThat(delivery.providerDeliveryId()).isEqualTo("1250033");
+        server.verify();
+    }
+
+    @Test
     void marksCreateOutcomeUncertainWhenTheProviderResponseIsNotReceived() {
         server.expect(requestTo(BASE_URL + "/create-order"))
             .andExpect(method(HttpMethod.POST))

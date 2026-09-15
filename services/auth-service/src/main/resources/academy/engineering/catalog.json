@@ -1,0 +1,69 @@
+{
+  "courseId": "catalog",
+  "minutesAdded": 82,
+  "addSources": [
+    "services/catalog-service/src/main/java/in/craves/catalog/service/CatalogService.java",
+    "services/catalog-service/src/main/java/in/craves/catalog/web/PublicCatalogController.java"
+  ],
+  "lessons": [
+    {
+      "id": "catalog-engineering-map",
+      "title": "Map catalog writes, public reads and spatial discovery",
+      "overview": "Catalog has different trust boundaries for chef-owned writes, public discovery and internal service reads. Start at the relevant controller, follow CatalogService and its persistence queries, then identify discovery caching or PostGIS behavior. Nearby discovery is a database query bounded by validated coordinates, radius and pagination; it is not a delivery promise. Engineering changes must preserve that distinction and invalidate or refresh derived views when source catalog data changes.",
+      "steps": [
+        {"label": "Classify the route", "detail": "Identify whether the change belongs to kitchen/chef management, public catalog discovery or an internal service contract."},
+        {"label": "Follow CatalogService", "detail": "Trace validation, ownership and persistence in CatalogService rather than duplicating rules in controllers."},
+        {"label": "Inspect spatial behavior", "detail": "For nearby discovery, identify coordinate validation, PostGIS distance filtering, ordering and page bounds."},
+        {"label": "Inspect derived data", "detail": "Find cache or batch-resolution behavior that may become stale after a write."},
+        {"label": "Identify consumers", "detail": "Check what Order or web clients expect before changing a response field or its meaning."}
+      ],
+      "example": "Changing a meal’s packaged weight is a catalog write, but Order may snapshot that value during checkout. Existing orders should not be retroactively recomputed from the edited catalog row.",
+      "lab": "Trace one PublicCatalogController request and one chef-owned catalog mutation through controller → service → persistence/cache. Record which downstream contract could be affected.",
+      "pitfall": "Do not turn a discovery radius into an undocumented delivery-radius or pricing rule.",
+      "questions": [
+        {"id": "catalog-engineering-map-q1", "prompt": "What should nearby discovery radius represent?", "options": ["A spatial search boundary", "A permanent delivery fee", "A chef payout percentage", "A payment signature"], "answer": 0, "explanation": "The reviewed catalog contract uses the radius for spatial discovery."},
+        {"id": "catalog-engineering-map-q2", "prompt": "Why inspect Order before changing package metadata?", "options": ["Order can snapshot catalog facts at checkout", "Order owns Firebase tokens", "Order builds CSS", "Order creates admin roles"], "answer": 0, "explanation": "A catalog field can become historical order data at checkout."}
+      ]
+    },
+    {
+      "id": "catalog-build-feature",
+      "title": "Add an approved catalog field from database to UI",
+      "overview": "Treat a new catalog field as an end-to-end contract change. Confirm its approved meaning and unit, add the schema migration when persistence is required, map it through service queries and DTOs, expose it only on the correct public/chef/internal routes, update downstream snapshots when the field must travel with an order, and finally render it in the web/mobile client. Avoid overloading an existing field with a second business meaning.",
+      "steps": [
+        {"label": "Define semantics", "detail": "Write the approved field name, data type, unit, nullability and ownership before changing schema."},
+        {"label": "Persist", "detail": "Add a forward migration and update the service query/mapping without destructive default assumptions."},
+        {"label": "Expose deliberately", "detail": "Update only the DTOs/routes that require the field; public responses should not inherit internal data automatically."},
+        {"label": "Propagate if historical", "detail": "If checkout must preserve the value, update the Order contract and snapshot explicitly."},
+        {"label": "Invalidate derived views", "detail": "Update cache invalidation or batch reads so old values are not served after mutation."},
+        {"label": "Render last", "detail": "Update Next.js or mobile types/components only after the backend contract is validated."}
+      ],
+      "example": "For an approved package attribute, document its unit, persist it, include it in the appropriate Catalog DTO, and add Order snapshot handling only if fulfilment requires historical preservation.",
+      "lab": "Design a generic approved catalog-field change. Produce the exact sequence: migration → service mapping → controller DTO → consumer contract → tests → UI. Leave pricing, delivery policy and compliance decisions explicitly out of scope.",
+      "pitfall": "A field label such as radius, weight or fee must not be reused with a new meaning just because its data type is convenient.",
+      "questions": [
+        {"id": "catalog-build-feature-q1", "prompt": "What should be fixed before choosing a database type for a new catalog field?", "options": ["Its approved semantics and unit", "Its button color", "A random provider response", "The current Academy XP"], "answer": 0, "explanation": "Data modelling starts with a precise domain meaning."},
+        {"id": "catalog-build-feature-q2", "prompt": "When should Order be changed for a new catalog field?", "options": ["Always", "Only when checkout/fulfilment must preserve or consume that field", "Never", "Only when the UI is blue"], "answer": 1, "explanation": "Cross-service propagation must follow an actual contract need."}
+      ]
+    },
+    {
+      "id": "catalog-test-release-recover",
+      "title": "Protect discovery performance and contract compatibility",
+      "overview": "Catalog changes can fail functionally or operationally. Test ownership and validation for writes, public privacy for reads, spatial edge cases, page limits, cache invalidation and backward compatibility for existing consumers. Query plans and indexes matter because an unbounded nearby query can become a production load problem. Release evidence should include representative discovery checks and rollback should avoid deleting newly written catalog data.",
+      "steps": [
+        {"label": "Test route security", "detail": "Verify chef/customer/internal boundaries and rejected mutations."},
+        {"label": "Test spatial edges", "detail": "Cover invalid coordinates, small/large permitted radii, empty results and page boundaries."},
+        {"label": "Test stale data", "detail": "Mutate a synthetic item and confirm public/batch reads no longer return an unintended cached old value."},
+        {"label": "Check query safety", "detail": "Review index/query behavior for the changed discovery path before high traffic."},
+        {"label": "Smoke consumers", "detail": "Validate Catalog plus at least the affected Order/web contract when response shapes change."},
+        {"label": "Rollback compatibly", "detail": "Prefer code rollback or feature disablement while retaining data written by the new version when schema is backward compatible."}
+      ],
+      "example": "If a new response field breaks an older web parser, restore a compatible response or roll back the consumer/provider pair; do not drop the production column and lose captured data as the first recovery action.",
+      "lab": "Create a release matrix for a synthetic catalog change: chef write, public read, nearby query, cache refresh, affected Order contract and previous-client compatibility.",
+      "pitfall": "Passing unit tests does not prove a spatial query is safe at production data volume.",
+      "questions": [
+        {"id": "catalog-test-release-recover-q1", "prompt": "Which test detects stale derived catalog data?", "options": ["Mutate then re-read through the cached/public path", "Only compile Java", "Only open the admin menu", "Repeat a payment webhook"], "answer": 0, "explanation": "A mutation followed by the derived read validates invalidation behavior."},
+        {"id": "catalog-test-release-recover-q2", "prompt": "What should be considered for high-volume nearby discovery?", "options": ["Query bounds and spatial index behavior", "Only logo size", "Admin XP", "Email subject length"], "answer": 0, "explanation": "Spatial query design is a production scalability concern."}
+      ]
+    }
+  ]
+}

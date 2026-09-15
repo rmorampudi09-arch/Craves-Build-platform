@@ -1,3 +1,5 @@
+import { boundedFetch } from "@/lib/bounded-fetch";
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -28,7 +30,7 @@ async function call(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
-    const upstream = await fetch(`${apiBaseUrl()}/kitchens/me`, {
+    const upstream = await boundedFetch(`${apiBaseUrl()}/kitchens/me`, {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -38,7 +40,7 @@ async function call(
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
       signal: controller.signal,
-    });
+    }, 40_000);
     if (method === "GET" && upstream.status === 404)
       return NextResponse.json(null, {
         status: 200,
@@ -92,6 +94,10 @@ export async function GET(request: NextRequest) {
   return call(request, "GET");
 }
 export async function PUT(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request))
     return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const input = parseChefKitchenInput(await request.json().catch(() => null));

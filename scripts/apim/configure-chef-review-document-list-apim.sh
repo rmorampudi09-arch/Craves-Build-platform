@@ -69,18 +69,32 @@ SUB_REQUIRED=$(az apim api show -g "$RG" --service-name "$APIM" --api-id "$API_I
 [[ "${SUB_REQUIRED,,}" == "false" ]] || fail "Existing API ${API_ID} unexpectedly requires a subscription key"
 
 MGMT="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}/apis/${API_ID}"
-OP_ID="list-chef-review-documents"
-PARAMS='[{"name":"applicationId","type":"string","required":true}]'
-BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
-trap 'rm -f "$BODY" "$RENDERED" "$POLICY_BODY"' EXIT
 
-jq -n --argjson params "$PARAMS" '{properties:{displayName:"List Chef review documents",method:"GET",urlTemplate:"/{applicationId}/documents",templateParameters:$params,responses:[{statusCode:200,description:"Document metadata"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"Access denied"},{statusCode:404,description:"Not found"}]}}' >"$BODY"
-az rest --method put --url "${MGMT}/operations/${OP_ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
-sed "s|__BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
-jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
-az rest --method put --url "${MGMT}/operations/${OP_ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none
-POLICY=$(az rest --method get --url "${MGMT}/operations/${OP_ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
-[[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Bearer"* && "$POLICY" == *"no-store"* ]] || fail "Admin Chef document-list policy verification failed"
-az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$OP_ID" -o none --only-show-errors
+put_operation() {
+  local OP_ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" PARAMS="$5"
+  local BODY RENDERED POLICY_BODY POLICY
+  BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
+  jq -n \
+    --arg display "$DISPLAY" \
+    --arg method "$METHOD" \
+    --arg template "$TEMPLATE" \
+    --argjson params "$PARAMS" \
+    '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:$params,responses:[{statusCode:200,description:"Chef document review result"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"Access denied"},{statusCode:404,description:"Not found"},{statusCode:409,description:"Document is not awaiting review"}]}}' >"$BODY"
+  az rest --method put --url "${MGMT}/operations/${OP_ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
+  sed "s|__BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
+  jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
+  az rest --method put --url "${MGMT}/operations/${OP_ID}/policies/policy?api-version=${API_VERSION}" --body @"$POLICY_BODY" -o none
+  POLICY=$(az rest --method get --url "${MGMT}/operations/${OP_ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
+  [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Bearer"* && "$POLICY" == *"no-store"* ]] || fail "${OP_ID} policy verification failed"
+  az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$OP_ID" -o none --only-show-errors
+  rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
+}
 
-echo "SUCCESS: Admin Chef review document-list operation configured on existing APIM API ${API_ID}."
+APPLICATION_PARAMS='[{"name":"applicationId","type":"string","required":true}]'
+DOCUMENT_PARAMS='[{"name":"applicationId","type":"string","required":true},{"name":"documentId","type":"string","required":true}]'
+
+put_operation "list-chef-review-documents" "GET" "/{applicationId}/documents" "List Chef review documents" "$APPLICATION_PARAMS"
+put_operation "approve-chef-review-document" "POST" "/{applicationId}/documents/{documentId}/approve" "Approve one Chef review document" "$DOCUMENT_PARAMS"
+put_operation "reject-chef-review-document" "POST" "/{applicationId}/documents/{documentId}/reject" "Reject one Chef review document" "$DOCUMENT_PARAMS"
+
+echo "SUCCESS: Admin Chef review document list and granular decision operations configured on existing APIM API ${API_ID}."

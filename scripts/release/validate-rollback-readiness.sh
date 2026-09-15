@@ -2,8 +2,13 @@
 set -euo pipefail
 
 ROOT="${1:-.}"
+shift || true
 cd "$ROOT"
-mapfile -t PIPELINES < <(find . -maxdepth 1 -type f -name 'azure-pipelines*.yml' -print | sort)
+if (($# > 0)); then
+  PIPELINES=("$@")
+else
+  mapfile -t PIPELINES < <(find . -maxdepth 1 -type f -name 'azure-pipelines*.yml' -print | sort)
+fi
 ((${#PIPELINES[@]} > 0)) || { echo 'ERROR: no Azure pipeline YAML files found.' >&2; exit 1; }
 
 MUTABLE_LATEST_PATTERN=$(cat <<'REGEX'
@@ -14,6 +19,7 @@ REGEX
 failures=0
 checked=0
 for file in "${PIPELINES[@]}"; do
+  [[ -f "$file" ]] || { echo "ERROR: pipeline file not found: $file" >&2; failures=$((failures+1)); continue; }
   name=$(basename "$file")
   case "$name" in
     *-ci.yml|*-status.yml|*-rollback.yml|azure-pipelines-release-*) continue ;;
@@ -29,8 +35,13 @@ for file in "${PIPELINES[@]}"; do
     failures=$((failures+1))
   fi
 
+  guarded_helper=false
+  if grep -Eq 'scripts/release/(deploy-single-service-preserve-runtime|deploy-containerapp-safe)\.sh' "$file"; then
+    guarded_helper=true
+  fi
+
   if grep -Eq 'az[[:space:]]+containerapp[[:space:]]+update' "$file"; then
-    if ! grep -Eq 'az[[:space:]]+containerapp[[:space:]]+show.*image|CURRENT_IMAGE|PREVIOUS_IMAGE|ROLLBACK_IMAGE' "$file"; then
+    if [[ "$guarded_helper" != true ]] && ! grep -Eq 'az[[:space:]]+containerapp[[:space:]]+show.*image|CURRENT_IMAGE|PREVIOUS_IMAGE|ROLLBACK_IMAGE' "$file"; then
       echo "ERROR: $name deploys a Container App without visibly recording the previous image." >&2
       failures=$((failures+1))
     fi
@@ -38,7 +49,8 @@ for file in "${PIPELINES[@]}"; do
 
   stem=${name#azure-pipelines-}
   stem=${stem%.yml}
-  if ! find . -maxdepth 1 -type f -name "azure-pipelines-*${stem}*rollback*.yml" -print -quit | grep -q . \
+  if [[ "$guarded_helper" != true ]] \
+     && ! find . -maxdepth 1 -type f -name "azure-pipelines-*${stem}*rollback*.yml" -print -quit | grep -q . \
      && ! grep -Eqi 'rollback' "$file"; then
     echo "ERROR: $name has no matching rollback pipeline or rollback stage." >&2
     failures=$((failures+1))

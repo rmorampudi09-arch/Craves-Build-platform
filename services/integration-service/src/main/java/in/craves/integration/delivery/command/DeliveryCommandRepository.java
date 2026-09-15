@@ -79,6 +79,31 @@ public class DeliveryCommandRepository {
             """, sequenceNumber, serviceBusMessageId, commandId) == 1;
     }
 
+    public boolean accelerateScheduled(UUID commandId,
+                                       DeliveryCommandMessage message,
+                                       String serviceBusMessageId) {
+        return jdbc.update("""
+            UPDATE delivery_schema.delivery_command
+            SET ready_at = ?,
+                dispatch_at = ?,
+                payload = ?::jsonb,
+                source_event_id = ?,
+                scheduled_sequence_number = NULL,
+                service_bus_message_id = ?,
+                updated_at = now()
+            WHERE id = ?
+              AND status = 'SCHEDULED'
+              AND attempt_count = 0
+            """,
+            toDatabaseTimestamp(message.readyAt()),
+            toDatabaseTimestamp(message.dispatchAt()),
+            writeJson(message),
+            message.sourceEventId(),
+            serviceBusMessageId,
+            commandId
+        ) == 1;
+    }
+
     @Transactional
     public Optional<CommandRecord> claim(UUID commandId, int maximumAttempts) {
         List<CommandRecord> rows = jdbc.query("""

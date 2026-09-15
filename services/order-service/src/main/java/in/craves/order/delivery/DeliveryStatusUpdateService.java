@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,6 +23,11 @@ public class DeliveryStatusUpdateService {
         "REFUND_PENDING",
         "REFUNDED",
         "REFUND_FAILED"
+    );
+    private static final Set<String> OUT_FOR_DELIVERY_STATUSES = Set.of(
+        "PICKED_UP",
+        "IN_TRANSIT",
+        "AT_DROPOFF"
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -146,6 +152,8 @@ public class DeliveryStatusUpdateService {
             event.source()
         );
 
+        synchronizeCommercialOrderStatus(order, data);
+
         boolean statusChanged = !data.status().equals(order.deliveryStatus());
         if (statusChanged) {
             notificationService.record(
@@ -212,6 +220,59 @@ public class DeliveryStatusUpdateService {
                 "Provider delivery identifier changed for the chef sub-order"
             );
         }
+    }
+
+    private void synchronizeCommercialOrderStatus(
+        LockedOrder order,
+        DeliveryStatusChangedData data
+    ) {
+        String nextStatus = commercialStatusForDelivery(order.orderStatus(), data.status());
+        if (Objects.equals(order.orderStatus(), nextStatus)) {
+            return;
+        }
+
+        int updated = jdbcTemplate.update(
+            """
+                UPDATE order_schema.customer_order
+                SET status = ?, updated_at = now()
+                WHERE id = ? AND status = ?
+                """,
+            nextStatus,
+            order.id(),
+            order.orderStatus()
+        );
+        if (updated != 1) {
+            throw new DeliveryStatusRetryableException(
+                "Commercial order status could not be synchronized with delivery status"
+            );
+        }
+
+        jdbcTemplate.update(
+            """
+                INSERT INTO order_schema.order_status_history (
+                    id, order_id, old_status, new_status,
+                    actor_identity_id, reason, created_at
+                ) VALUES (?, ?, ?, ?, NULL, ?, now())
+                """,
+            UUID.randomUUID(),
+            order.id(),
+            order.orderStatus(),
+            nextStatus,
+            "Delivery lifecycle synchronized from " + data.status()
+        );
+    }
+
+    static String commercialStatusForDelivery(String currentOrderStatus, String deliveryStatus) {
+        if ("DELIVERED".equals(deliveryStatus)
+            && ("READY_FOR_PICKUP".equals(currentOrderStatus)
+                || "OUT_FOR_DELIVERY".equals(currentOrderStatus))) {
+            return "DELIVERED";
+        }
+        if ("READY_FOR_PICKUP".equals(currentOrderStatus)
+            && OUT_FOR_DELIVERY_STATUSES.contains(deliveryStatus)) {
+            return "OUT_FOR_DELIVERY";
+        }
+        return currentOrderStatus;
     }
 
     private void markInbox(UUID eventId, String status) {

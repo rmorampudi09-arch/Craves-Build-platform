@@ -15,6 +15,11 @@ steps:
       jdkSourceOption: PreInstalled
 
   - script: |
+      set -euo pipefail
+      bash scripts/release/verify-integration-flyway-history.sh
+    displayName: Verify immutable Integration Flyway history
+
+  - script: |
       cd services/integration-service
       mvn -B clean verify
     displayName: Compile and run Integration Service tests

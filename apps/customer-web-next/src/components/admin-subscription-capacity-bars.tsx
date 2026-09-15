@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CircleAlert, RefreshCw } from "lucide-react";
 import type { AdminSubscriptionPlan } from "@/lib/admin-subscription-plan-contract";
@@ -48,14 +50,14 @@ export function AdminSubscriptionCapacityBars({plan}:{plan:AdminSubscriptionPlan
 
   const load=useCallback(async()=>{
     if(!plan.chefIdentityId){setMessage("Chef identity is missing from this plan.");return;}
-    const scheduleResponse=await fetch(`/api/admin/subscription-plans/${plan.id}/schedule`,{cache:"no-store"});
+    const scheduleResponse=await adminFetch(`/api/admin/subscription-plans/${plan.id}/schedule`,{cache:"no-store"});
     const scheduleRaw=await scheduleResponse.json().catch(()=>null);
     if(!scheduleResponse.ok){setSchedule(null);setMessage("Chef meal schedule could not be retrieved.");return;}
     const parsedSchedule=parseAdminSchedule(scheduleRaw);
     if(!parsedSchedule){setSchedule(null);setMessage("Chef meal schedule response is invalid.");return;}
     setSchedule(parsedSchedule);
 
-    const capacityResponse=await fetch(`/api/admin/subscription-capacity/chefs/${plan.chefIdentityId}`,{cache:"no-store"});
+    const capacityResponse=await adminFetch(`/api/admin/subscription-capacity/chefs/${plan.chefIdentityId}`,{cache:"no-store"});
     const capacityRaw=await capacityResponse.json().catch(()=>null);
     if(!capacityResponse.ok){setCapacity(null);setMessage("Chef capacity could not be retrieved. The APIM read route must be deployed.");return;}
     const parsedCapacity=parseChefCapacitySummary(capacityRaw);

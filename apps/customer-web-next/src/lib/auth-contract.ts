@@ -55,7 +55,7 @@ export function parseSessionExchange(value: unknown): CravesSessionExchange | nu
     ? Math.floor(body.expiresIn)
     : 0;
   const identity = parseIdentity(body.identity);
-  if (!accessToken || !refreshToken || !refreshTokenExpiresAt || Number.isNaN(Date.parse(refreshTokenExpiresAt)) || expiresIn < 60 || !identity) return null;
+  if (!accessToken || !refreshToken || !refreshTokenExpiresAt || Number.isNaN(Date.parse(refreshTokenExpiresAt)) || expiresIn < 1 || !identity) return null;
   return {
     accessToken,
     expiresIn: Math.min(expiresIn, 60 * 60),
@@ -67,8 +67,12 @@ export function parseSessionExchange(value: unknown): CravesSessionExchange | nu
 
 export function safeReturnPath(value: unknown): string {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return "/";
-  if (value.length > 500 || /[\r\n]/.test(value)) return "/";
-  return value;
+  if (value.length > 500 || /[\u0000-\u0020\u007f\\]/.test(value)) return "/";
+  try {
+    const base = "https://craves.invalid";
+    const target = new URL(value, base);
+    return target.origin === base ? `${target.pathname}${target.search}${target.hash}` : "/";
+  } catch { return "/"; }
 }
 
 export function publicAuthError(status: number): string {

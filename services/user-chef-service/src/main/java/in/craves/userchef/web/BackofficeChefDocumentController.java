@@ -14,6 +14,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -51,4 +53,25 @@ public class BackofficeChefDocumentController {
             .contentLength(document.bytes().length)
             .body(document.bytes());
     }
+
+    @PostMapping("/{applicationId}/documents/{documentId}/approve")
+    public DocumentMetadata approve(
+        @AuthenticationPrincipal CurrentUser admin,
+        @PathVariable UUID applicationId,
+        @PathVariable UUID documentId
+    ) {
+        return service.approve(admin, applicationId, documentId);
+    }
+
+    @PostMapping("/{applicationId}/documents/{documentId}/reject")
+    public DocumentMetadata reject(
+        @AuthenticationPrincipal CurrentUser admin,
+        @PathVariable UUID applicationId,
+        @PathVariable UUID documentId,
+        @RequestBody DocumentRejectRequest request
+    ) {
+        return service.reject(admin, applicationId, documentId, request == null ? null : request.reason());
+    }
+
+    public record DocumentRejectRequest(String reason) {}
 }

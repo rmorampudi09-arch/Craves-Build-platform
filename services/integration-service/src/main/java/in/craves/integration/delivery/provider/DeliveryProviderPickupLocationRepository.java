@@ -35,6 +35,42 @@ public class DeliveryProviderPickupLocationRepository {
         return findVerifiedExternalLocation(providerId, pickupLocationReference).isPresent();
     }
 
+    public void upsertVerified(
+        String providerId,
+        UUID pickupLocationReference,
+        String externalLocationCode,
+        String metadataJson
+    ) {
+        if (providerId == null || providerId.isBlank()) {
+            throw new IllegalArgumentException("providerId is required");
+        }
+        if (pickupLocationReference == null) {
+            throw new IllegalArgumentException("pickupLocationReference is required");
+        }
+        if (externalLocationCode == null || externalLocationCode.isBlank()) {
+            throw new IllegalArgumentException("externalLocationCode is required");
+        }
+        String metadata = metadataJson == null || metadataJson.isBlank() ? "{}" : metadataJson;
+        jdbc.update(
+            """
+                INSERT INTO delivery_schema.delivery_provider_pickup_location (
+                    provider_id, pickup_location_reference, external_location_code,
+                    is_verified, verified_at, metadata, created_at, updated_at
+                ) VALUES (?, ?, ?, TRUE, now(), CAST(? AS jsonb), now(), now())
+                ON CONFLICT (provider_id, pickup_location_reference) DO UPDATE SET
+                    external_location_code = EXCLUDED.external_location_code,
+                    is_verified = TRUE,
+                    verified_at = now(),
+                    metadata = EXCLUDED.metadata,
+                    updated_at = now()
+                """,
+            normalize(providerId),
+            pickupLocationReference,
+            externalLocationCode.trim(),
+            metadata
+        );
+    }
+
     public int countVerified(String providerId) {
         if (providerId == null || providerId.isBlank()) {
             return 0;

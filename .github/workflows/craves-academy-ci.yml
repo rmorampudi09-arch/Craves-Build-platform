@@ -1,0 +1,148 @@
+name: Craves Academy CI
+on:
+  push:
+    branches: [feat/craves-academy-20260913]
+  pull_request:
+    paths:
+      - 'services/auth-service/**'
+      - 'apps/customer-web-next/src/**/academy/**'
+      - 'apps/customer-web-next/src/lib/academy-*'
+      - 'apps/customer-web-next/src/components/admin-workspace.tsx'
+      - 'apps/customer-web-next/src/components/academy-workspace.tsx'
+      - 'scripts/academy/**'
+      - 'docs/academy/**'
+      - 'azure-pipelines-auth-service.yml'
+      - '.github/workflows/craves-academy-ci.yml'
+permissions:
+  contents: read
+concurrency:
+  group: academy-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: craves_academy_ci
+          POSTGRES_USER: academy_ci
+          POSTGRES_PASSWORD: academy_disposable_ci_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U academy_ci -d craves_academy_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ACADEMY_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/craves_academy_ci
+      ACADEMY_TEST_DB_USER: academy_ci
+      ACADEMY_TEST_DB_PASSWORD: academy_disposable_ci_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Curriculum provenance, projection and guard regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/academy-delivery"
+          python3 scripts/academy/verify-curriculum.py --git --output "$RUNNER_TEMP/academy-delivery/curriculum-public.json" | tee "$RUNNER_TEMP/academy-delivery/verification.json"
+          python3 scripts/academy/test-release-guard.py
+          git rev-parse HEAD > "$RUNNER_TEMP/academy-delivery/source-sha.txt"
+      - name: Enforce historical Academy-only publication scope
+        if: github.head_ref == 'feat/craves-academy-20260913' || github.ref == 'refs/heads/feat/craves-academy-20260913'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/academy/release-guard.py source | tee "$RUNNER_TEMP/academy-delivery/release-scope.json"
+      - name: Label broader release evidence as Academy regression only
+        if: github.head_ref != 'feat/craves-academy-20260913' && github.ref != 'refs/heads/feat/craves-academy-20260913'
+        shell: python
+        run: |
+          import json, os, pathlib, subprocess
+          evidence = {
+            'sourceSha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+            'scope': 'academy-regression-within-broader-release',
+            'academyOnlyPublicationApproved': False,
+            'requiredReview': 'Full release review of all Auth changes and migrations; normal merge and environment approvals',
+          }
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'academy-delivery' / 'release-scope.json'
+          path.write_text(json.dumps(evidence, indent=2) + '\n')
+      - run: mvn -B -f services/auth-service/pom.xml -Dtest=AcademyCoreTest,AcademyPersistenceTest test
+      - name: Require Academy core and real database suites without skipped cases
+        shell: python
+        run: |
+          import pathlib, xml.etree.ElementTree as ET
+          required = {'AcademyCoreTest', 'AcademyPersistenceTest'}
+          seen = set()
+          for path in pathlib.Path('services/auth-service/target/surefire-reports').glob('TEST-*.xml'):
+            suite = ET.parse(path).getroot()
+            name = suite.attrib['name'].rsplit('.', 1)[-1]
+            if name in required:
+              assert int(suite.attrib['tests']) > 0, (name, 'empty suite')
+              assert all(int(suite.attrib.get(k, 0)) == 0 for k in ['failures', 'errors', 'skipped']), (name, 'not green')
+              seen.add(name)
+          assert seen == required, ('missing Academy suites', required - seen)
+      - name: Package the complete tracked Academy module and its existing release helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output="$RUNNER_TEMP/academy-delivery/academy-source.zip" HEAD \
+            services/auth-service/src/main/resources/academy \
+            services/auth-service/src/main/java/in/craves/auth/academy \
+            services/auth-service/src/test/java/in/craves/auth/academy \
+            scripts/academy docs/academy azure-pipelines-auth-service.yml \
+            .github/workflows/craves-academy-ci.yml \
+            scripts/release/deploy-single-service-preserve-runtime.sh
+          cp -R services/auth-service/target/surefire-reports "$RUNNER_TEMP/academy-delivery/test-reports"
+          cd "$RUNNER_TEMP/academy-delivery"
+          sha256sum academy-source.zip > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academy-curriculum-delivery
+          path: ${{ runner.temp }}/academy-delivery/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: academy-backend-test-reports
+          path: services/auth-service/target/surefire-reports
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/customer-web-next
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - run: npm ci
+      - run: node --test --experimental-strip-types src/lib/academy-*.test.ts
+      - run: npx eslint src/app/admin/academy src/app/api/admin/academy src/lib/academy-route-policy.ts src/lib/academy-ux-state.ts src/components/academy-workspace.tsx --max-warnings=0
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - uses: actions/upload-artifact@v4
+        with:
+          name: academy-canonical-brand-logo
+          path: apps/customer-web-next/public/brand/craves-logo-20260805.png
+          if-no-files-found: error
+# No Azure deployment, source-writing job, payments or external provider calls.

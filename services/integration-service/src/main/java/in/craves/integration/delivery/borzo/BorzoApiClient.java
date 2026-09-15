@@ -108,7 +108,7 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
     public ProviderDelivery create(CreateDeliveryRequest request) {
         requireApiReady();
         Objects.requireNonNull(request, "request is required");
-        validateClientReference(request.clientReference());
+        String clientReference = toBorzoClientReference(request.clientReference());
         validateQuoteRequest(request.quoteRequest());
 
         Instant attemptedAt = Instant.now();
@@ -116,13 +116,13 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         try {
             response = post(
                 "/create-order",
-                buildOrderRequest(request.quoteRequest(), request.clientReference())
+                buildOrderRequest(request.quoteRequest(), clientReference)
             );
         } catch (BorzoApiException ex) {
             if (ex.getCause() instanceof ResourceAccessException) {
                 throw new ProviderCreateUncertainException(
                     PROVIDER_ID,
-                    request.clientReference(),
+                    clientReference,
                     attemptedAt,
                     ex
                 );
@@ -400,6 +400,26 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
             && stop.requiredFinish().isBefore(stop.requiredStart())) {
             throw new IllegalArgumentException(name + " requiredFinish cannot be before requiredStart");
         }
+    }
+
+    private static String toBorzoClientReference(String clientReference) {
+        if (!StringUtils.hasText(clientReference)) {
+            throw new IllegalArgumentException("clientReference is required");
+        }
+
+        if (clientReference.length() <= 32) {
+            return clientReference;
+        }
+
+        String compactUuid = clientReference.replace("-", "");
+        if (compactUuid.length() == 32
+            && compactUuid.matches("[0-9a-fA-F]{32}")) {
+            return compactUuid;
+        }
+
+        throw new IllegalArgumentException(
+            "Borzo clientReference cannot exceed 32 characters"
+        );
     }
 
     private static void validateClientReference(String clientReference) {

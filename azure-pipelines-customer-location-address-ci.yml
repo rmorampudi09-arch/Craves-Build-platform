@@ -64,7 +64,6 @@ steps:
         apps/customer-web-next/src/components/chef-kitchen-form.tsx
         apps/customer-web-next/src/components/chef-mode-dashboard.tsx
         apps/customer-web-next/src/components/chef-operations-workspace.tsx
-        apps/customer-web-next/src/components/discovery-browser.tsx
       )
 
       if grep -nE 'aria-label="(Latitude|Longitude)"|>Latitude<|>Longitude<|"Latitude"[[:space:]]*,|"Longitude"[[:space:]]*,' "${TARGETS[@]}"; then

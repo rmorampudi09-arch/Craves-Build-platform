@@ -36,18 +36,19 @@ public class DeliveryServiceBusPublisher {
     public ScheduledMessage schedule(DeliveryCommandMessage command) {
         ServiceBusSenderClient sender = requireCommandSender();
         String messageId = "delivery-command:" + command.chefSubOrderId();
-        ServiceBusMessage message = new ServiceBusMessage(writeJson(command))
-            .setMessageId(messageId)
-            .setCorrelationId(command.correlationId().toString())
-            .setSubject(DeliveryCommandModels.DELIVERY_COMMAND)
-            .setContentType("application/json");
-        message.getApplicationProperties().put("event_type", DeliveryCommandModels.DELIVERY_COMMAND);
-        message.getApplicationProperties().put("chef_sub_order_id", command.chefSubOrderId().toString());
+        ServiceBusMessage message = commandMessage(command, messageId);
         Long sequenceNumber = sender.scheduleMessage(
             message,
             command.dispatchAt().atOffset(ZoneOffset.UTC)
         );
         return new ScheduledMessage(sequenceNumber, messageId);
+    }
+
+    public void publishNow(DeliveryCommandMessage command, String messageId) {
+        if (messageId == null || messageId.isBlank()) {
+            throw new IllegalArgumentException("Immediate delivery messageId is required");
+        }
+        requireCommandSender().sendMessage(commandMessage(command, messageId));
     }
 
     public void cancelScheduled(long sequenceNumber) {
@@ -68,6 +69,17 @@ public class DeliveryServiceBusPublisher {
         message.getApplicationProperties().put("event_type", eventType);
         message.getApplicationProperties().put("eventType", eventType);
         requireDomainEventSender().sendMessage(message);
+    }
+
+    private ServiceBusMessage commandMessage(DeliveryCommandMessage command, String messageId) {
+        ServiceBusMessage message = new ServiceBusMessage(writeJson(command))
+            .setMessageId(messageId)
+            .setCorrelationId(command.correlationId().toString())
+            .setSubject(DeliveryCommandModels.DELIVERY_COMMAND)
+            .setContentType("application/json");
+        message.getApplicationProperties().put("event_type", DeliveryCommandModels.DELIVERY_COMMAND);
+        message.getApplicationProperties().put("chef_sub_order_id", command.chefSubOrderId().toString());
+        return message;
     }
 
     private ServiceBusSenderClient requireCommandSender() {

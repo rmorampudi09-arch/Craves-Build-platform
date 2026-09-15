@@ -21,9 +21,13 @@ variables:
   customerApexHostname: craves.in
   customerWwwHostname: www.craves.in
   customerDomainVerificationId: 8CBF8092F604318F13145F6181237B80D12FD1336F3F37C199AA8D7099FF5DF1
+  frontDoorProfileName: afd-craves-prodlow
+  frontDoorEndpointHostname: craves-prodlow-4f897b61-d4e6bvhscdbzbgbv.z01.azurefd.net
   apimHostname: api.craves.in
+  apimExpectedCname: apim-craves-prodlow-l3ing6.azure-api.net
   rollbackWwwHostname: lemon-bay-06f924610.7.azurestaticapps.net
   certMinRemainingDays: 30
+  integrationAppName: ca-craves-integration-service-pr
 
 pool:
   vmImage: ubuntu-latest
@@ -37,6 +41,7 @@ steps:
       set -euo pipefail
       packages=()
       command -v dig >/dev/null 2>&1 || packages+=(dnsutils)
+      command -v jq >/dev/null 2>&1 || packages+=(jq)
       command -v shellcheck >/dev/null 2>&1 || packages+=(shellcheck)
       if [[ ${#packages[@]} -gt 0 ]]; then
         sudo apt-get update -qq
@@ -69,8 +74,43 @@ steps:
         export CUSTOMER_APEX_HOSTNAME='$(customerApexHostname)'
         export CUSTOMER_WWW_HOSTNAME='$(customerWwwHostname)'
         export CUSTOMER_DOMAIN_VERIFICATION_ID='$(customerDomainVerificationId)'
+        export FRONT_DOOR_PROFILE_NAME='$(frontDoorProfileName)'
+        export FRONT_DOOR_ENDPOINT_HOSTNAME='$(frontDoorEndpointHostname)'
         export APIM_HOSTNAME='$(apimHostname)'
+        export APIM_EXPECTED_CNAME='$(apimExpectedCname)'
         export ROLLBACK_WWW_HOSTNAME='$(rollbackWwwHostname)'
         export CERT_MIN_REMAINING_DAYS='$(certMinRemainingDays)'
 
         bash infra/operations/production-stabilization/check-production.sh
+
+  - task: AzureCLI@2
+    displayName: Verify Integration JWT runtime alignment
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      addSpnToEnvironment: false
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+
+        JSON="$(az containerapp show -g '$(resourceGroup)' -n '$(integrationAppName)' -o json --only-show-errors)"
+        ISSUER="$(jq -r '[.properties.template.containers[0].env[]? | select(.name=="CRAVES_JWT_ISSUER")][0].value // ""' <<<"$JSON")"
+        AUDIENCE="$(jq -r '[.properties.template.containers[0].env[]? | select(.name=="CRAVES_JWT_AUDIENCE")][0].value // ""' <<<"$JSON")"
+        LATEST="$(jq -r '.properties.latestRevisionName // ""' <<<"$JSON")"
+        READY="$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$JSON")"
+
+        [[ "$LATEST" == "$READY" && -n "$READY" ]] || {
+          echo "ERROR: Integration latest revision is not the ready revision (latest=$LATEST ready=$READY)." >&2
+          exit 1
+        }
+        [[ "$ISSUER" == 'https://api.craves.in/auth' ]] || {
+          echo 'ERROR: Integration CRAVES_JWT_ISSUER drift detected.' >&2
+          exit 1
+        }
+        [[ "$AUDIENCE" == 'craves-api' ]] || {
+          echo 'ERROR: Integration CRAVES_JWT_AUDIENCE drift detected.' >&2
+          exit 1
+        }
+
+        echo "PASS: Integration JWT runtime alignment is healthy on revision $READY."

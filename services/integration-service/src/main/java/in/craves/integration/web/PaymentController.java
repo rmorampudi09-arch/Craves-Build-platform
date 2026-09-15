@@ -2,6 +2,7 @@ package in.craves.integration.web;
 
 import in.craves.integration.config.PaymentApiProperties;
 import in.craves.integration.payment.CashfreeWebhookInboxService;
+import in.craves.integration.payment.ScheduledPaymentEligibilityGuard;
 import in.craves.integration.service.PaymentService;
 import in.craves.integration.web.PaymentDtos.CreatePaymentOrderRequest;
 import in.craves.integration.web.PaymentDtos.CreatePaymentOrderResponse;
@@ -26,15 +27,18 @@ public class PaymentController {
     private final PaymentService paymentService;
     private final CashfreeWebhookInboxService cashfreeWebhookInboxService;
     private final PaymentApiProperties apiProperties;
+    private final ScheduledPaymentEligibilityGuard scheduledPaymentGuard;
 
     public PaymentController(
         PaymentService paymentService,
         CashfreeWebhookInboxService cashfreeWebhookInboxService,
-        PaymentApiProperties apiProperties
+        PaymentApiProperties apiProperties,
+        ScheduledPaymentEligibilityGuard scheduledPaymentGuard
     ) {
         this.paymentService = paymentService;
         this.cashfreeWebhookInboxService = cashfreeWebhookInboxService;
         this.apiProperties = apiProperties;
+        this.scheduledPaymentGuard = scheduledPaymentGuard;
     }
 
     @PostMapping("/orders")
@@ -43,6 +47,7 @@ public class PaymentController {
         @Valid @RequestBody CreatePaymentOrderRequest request
     ) {
         apiProperties.requireOrderExecutionEnabled();
+        scheduledPaymentGuard.requireEligibleForNewPayment(authorization, request.checkoutId());
         return paymentService.createPaymentOrder(authorization, request);
     }
 

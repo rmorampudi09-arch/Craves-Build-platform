@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.ChefAcceptedOrderData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelope;
+import in.craves.integration.delivery.command.DeliveryCommandModels.OrderReadyForPickupData;
 import in.craves.integration.delivery.command.DeliveryCommandScheduler.DeliveryMessageValidationException;
 import in.craves.integration.delivery.command.DeliveryCommandWorker.DeliveryCommandNonRetryableException;
 import in.craves.integration.delivery.command.DeliveryCommandWorker.DeliveryCommandTransientException;
@@ -60,9 +61,9 @@ public class DeliveryServiceBusProcessors {
             .maxConcurrentCalls(properties.getMaxConcurrentMessages())
             .prefetchCount(properties.getPrefetchCount())
             .maxAutoLockRenewDuration(properties.maxAutoLockRenewDuration())
-            .processMessage(this::processChefAccepted)
+            .processMessage(this::processDeliveryDomainEvent)
             .processError(context -> log.error(
-                "Service Bus chef-accepted processor error from {} / {}",
+                "Service Bus delivery-domain processor error from {} / {}",
                 context.getFullyQualifiedNamespace(), context.getEntityPath(), context.getException()
             ))
             .buildProcessorClient();
@@ -95,19 +96,32 @@ public class DeliveryServiceBusProcessors {
         );
     }
 
-    private void processChefAccepted(ServiceBusReceivedMessageContext context) {
+    private void processDeliveryDomainEvent(ServiceBusReceivedMessageContext context) {
         try {
             String rawBody = context.getMessage().getBody().toString();
-            JavaType eventType = objectMapper.getTypeFactory().constructParametricType(
+            Object property = context.getMessage().getApplicationProperties().get("event_type");
+            String eventType = property == null ? context.getMessage().getSubject() : property.toString();
+
+            if (DeliveryCommandModels.ORDER_READY_FOR_PICKUP.equals(eventType)) {
+                JavaType readyType = objectMapper.getTypeFactory().constructParametricType(
+                    EventEnvelope.class, OrderReadyForPickupData.class
+                );
+                EventEnvelope<OrderReadyForPickupData> event = objectMapper.readValue(rawBody, readyType);
+                scheduler.accelerateReadyForPickup(event);
+                context.complete();
+                return;
+            }
+
+            JavaType acceptedType = objectMapper.getTypeFactory().constructParametricType(
                 EventEnvelope.class, ChefAcceptedOrderData.class
             );
-            EventEnvelope<ChefAcceptedOrderData> event = objectMapper.readValue(rawBody, eventType);
+            EventEnvelope<ChefAcceptedOrderData> event = objectMapper.readValue(rawBody, acceptedType);
             scheduler.schedule(event);
             context.complete();
         } catch (DeliveryMessageValidationException | IllegalArgumentException ex) {
-            deadLetter(context, "INVALID_CHEF_ACCEPTED_EVENT", ex);
+            deadLetter(context, "INVALID_DELIVERY_DOMAIN_EVENT", ex);
         } catch (Exception ex) {
-            retryOrDeadLetter(context, "CHEF_ACCEPTED_SCHEDULING_FAILED", ex);
+            retryOrDeadLetter(context, "DELIVERY_DOMAIN_EVENT_PROCESSING_FAILED", ex);
         }
     }
 

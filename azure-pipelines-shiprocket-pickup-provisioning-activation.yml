@@ -1,0 +1,205 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: action
+    displayName: Pickup provisioning action
+    type: string
+    default: DISABLE
+    values:
+      - DISABLE
+      - ENABLE
+  - name: confirmation
+    displayName: Exact typed confirmation for the selected action
+    type: string
+    default: ''
+  - name: resourceGroupName
+    type: string
+    default: rg-craves-prodlow-centralindia
+  - name: catalogContainerAppName
+    type: string
+    default: ca-craves-catalog-service-prodlo
+  - name: integrationContainerAppName
+    type: string
+    default: ca-craves-integration-service-pr
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    persistCredentials: false
+
+  - task: AzureCLI@2
+    displayName: Apply guarded Shiprocket pickup provisioning switch
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+
+        ACTION='${{ parameters.action }}'
+        CONFIRMATION='${{ parameters.confirmation }}'
+        RG='${{ parameters.resourceGroupName }}'
+        CATALOG_APP='${{ parameters.catalogContainerAppName }}'
+        INTEGRATION_APP='${{ parameters.integrationContainerAppName }}'
+
+        fail() { echo "ERROR: $*" >&2; exit 2; }
+
+        wait_ready() {
+          local app="$1"
+          local latest ready
+          latest="$(az containerapp show -g "$RG" -n "$app" --query properties.latestRevisionName -o tsv --only-show-errors)"
+          [[ -n "$latest" ]] || fail "Could not resolve latest revision for $app."
+          for _ in $(seq 1 60); do
+            ready="$(az containerapp show -g "$RG" -n "$app" --query properties.latestReadyRevisionName -o tsv --only-show-errors 2>/dev/null || true)"
+            [[ "$ready" == "$latest" ]] && return 0
+            sleep 10
+          done
+          fail "$app revision $latest did not become ready."
+        }
+
+        env_json() {
+          az containerapp show -g "$RG" -n "$1" \
+            --query 'properties.template.containers[0].env' -o json --only-show-errors
+        }
+
+        env_value() {
+          local json="$1" name="$2"
+          jq -r --arg name "$name" '.[] | select(.name == $name) | (.value // "")' <<<"$json" | tail -1
+        }
+
+        env_secret_ref() {
+          local json="$1" name="$2"
+          jq -r --arg name "$name" '.[] | select(.name == $name) | (.secretRef // "")' <<<"$json" | tail -1
+        }
+
+        rollback_enable_failure() {
+          local code=$?
+          trap - ERR
+          if [[ "$ACTION" == 'ENABLE' ]]; then
+            echo 'WARN: Activation failed. Disabling pickup workers/gates in safe reverse order.' >&2
+            az containerapp update -g "$RG" -n "$CATALOG_APP" \
+              --set-env-vars CRAVES_PICKUP_PROVISIONING_ENABLED=false >/dev/null 2>&1 || true
+            wait_ready "$CATALOG_APP" >/dev/null 2>&1 || true
+            az containerapp update -g "$RG" -n "$INTEGRATION_APP" \
+              --set-env-vars CRAVES_PROVIDERS_SHIPROCKET_PICKUP_PROVISIONING_ENABLED=false >/dev/null 2>&1 || true
+            wait_ready "$INTEGRATION_APP" >/dev/null 2>&1 || true
+          fi
+          exit "$code"
+        }
+        trap rollback_enable_failure ERR
+
+        [[ "$ACTION" == 'ENABLE' || "$ACTION" == 'DISABLE' ]] || fail 'action must be ENABLE or DISABLE.'
+        if [[ "$ACTION" == 'ENABLE' ]]; then
+          [[ "$CONFIRMATION" == 'ENABLE_SHIPROCKET_PICKUP_PROVISIONING' ]] || \
+            fail 'Type ENABLE_SHIPROCKET_PICKUP_PROVISIONING to enable.'
+        else
+          [[ "$CONFIRMATION" == 'DISABLE_SHIPROCKET_PICKUP_PROVISIONING' ]] || \
+            fail 'Type DISABLE_SHIPROCKET_PICKUP_PROVISIONING to disable.'
+        fi
+
+        test -f services/catalog-service/src/main/resources/db/migration/V4__versioned_delivery_pickup_locations.sql || \
+          fail 'Catalog pickup lifecycle migration V4 is missing.'
+        test -f services/catalog-service/src/main/resources/db/migration/V5__harden_pickup_location_lifecycle.sql || \
+          fail 'Catalog pickup lifecycle hardening migration V5 is missing.'
+        test -f services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket/ShiprocketPickupProvisioningService.java || \
+          fail 'Shiprocket pickup provisioning service is missing.'
+        grep -Fq 'enabled: ${CRAVES_PICKUP_PROVISIONING_ENABLED:false}' services/catalog-service/src/main/resources/application.yml || \
+          fail 'Catalog pickup worker must default disabled.'
+
+        az containerapp show -g "$RG" -n "$CATALOG_APP" --only-show-errors >/dev/null || fail "Catalog Container App $CATALOG_APP not found."
+        az containerapp show -g "$RG" -n "$INTEGRATION_APP" --only-show-errors >/dev/null || fail "Integration Container App $INTEGRATION_APP not found."
+        wait_ready "$CATALOG_APP"
+        wait_ready "$INTEGRATION_APP"
+
+        if [[ "$ACTION" == 'DISABLE' ]]; then
+          # Stop the upstream worker before closing the downstream mutation endpoint.
+          az containerapp update -g "$RG" -n "$CATALOG_APP" \
+            --set-env-vars CRAVES_PICKUP_PROVISIONING_ENABLED=false >/dev/null
+          wait_ready "$CATALOG_APP"
+          az containerapp update -g "$RG" -n "$INTEGRATION_APP" \
+            --set-env-vars CRAVES_PROVIDERS_SHIPROCKET_PICKUP_PROVISIONING_ENABLED=false >/dev/null
+          wait_ready "$INTEGRATION_APP"
+
+          catalog_after="$(env_json "$CATALOG_APP")"
+          integration_after="$(env_json "$INTEGRATION_APP")"
+          [[ "$(env_value "$catalog_after" CRAVES_PICKUP_PROVISIONING_ENABLED)" == 'false' ]] || fail 'Catalog worker disable verification failed.'
+          [[ "$(env_value "$integration_after" CRAVES_PROVIDERS_SHIPROCKET_PICKUP_PROVISIONING_ENABLED)" == 'false' ]] || fail 'Integration pickup gate disable verification failed.'
+
+          trap - ERR
+          echo 'SHIPROCKET PICKUP PROVISIONING: DISABLED'
+          exit 0
+        fi
+
+        # Pickup onboarding mutates the Shiprocket account. It requires authenticated PRODUCTION
+        # access and explicit production approval, but it deliberately does NOT require or enable
+        # SHIPROCKET_CREATE_ENABLED. Delivery creation remains controlled by the existing production
+        # activation pipeline after verified mappings exist.
+        integration_before="$(env_json "$INTEGRATION_APP")"
+        [[ "$(env_value "$integration_before" SHIPROCKET_API_ENABLED)" == 'true' ]] || \
+          fail 'SHIPROCKET_API_ENABLED must already be true.'
+        [[ "$(env_value "$integration_before" SHIPROCKET_API_ENVIRONMENT)" == 'PRODUCTION' ]] || \
+          fail 'SHIPROCKET_API_ENVIRONMENT must already be PRODUCTION.'
+        [[ "$(env_value "$integration_before" SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED)" == 'true' ]] || \
+          fail 'SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED must already be true.'
+
+        integration_internal_ref="$(env_secret_ref "$integration_before" CRAVES_INTERNAL_SERVICE_KEY)"
+        [[ -n "$integration_internal_ref" ]] || \
+          fail 'Integration CRAVES_INTERNAL_SERVICE_KEY must use a Container App secret reference.'
+        integration_internal_kv="$(az containerapp secret list -g "$RG" -n "$INTEGRATION_APP" \
+          --query "[?name=='$integration_internal_ref']|[0].keyVaultUrl" -o tsv --only-show-errors)"
+        [[ "$integration_internal_kv" == https://*.vault.azure.net/secrets/* ]] || \
+          fail 'Integration internal-service secret is not Key Vault backed.'
+
+        # Find an existing Catalog secret that references the exact same Key Vault secret. We never
+        # read or copy the secret value in this pipeline.
+        catalog_secrets_json="$(az containerapp secret list -g "$RG" -n "$CATALOG_APP" -o json --only-show-errors)"
+        catalog_internal_ref="$(jq -r --arg url "$integration_internal_kv" \
+          '[.[] | select(.keyVaultUrl == $url) | .name][0] // ""' <<<"$catalog_secrets_json")"
+        [[ -n "$catalog_internal_ref" ]] || \
+          fail 'Catalog has no Key Vault-backed secret reference matching Integration CRAVES_INTERNAL_SERVICE_KEY. Bind the same Key Vault secret to Catalog first.'
+
+        integration_fqdn="$(az containerapp show -g "$RG" -n "$INTEGRATION_APP" \
+          --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)"
+        [[ -n "$integration_fqdn" ]] || fail 'Integration ingress FQDN could not be resolved.'
+        integration_base_url="https://$integration_fqdn"
+
+        # Downstream endpoint first; upstream producer second.
+        az containerapp update -g "$RG" -n "$INTEGRATION_APP" \
+          --set-env-vars CRAVES_PROVIDERS_SHIPROCKET_PICKUP_PROVISIONING_ENABLED=true >/dev/null
+        wait_ready "$INTEGRATION_APP"
+
+        az containerapp update -g "$RG" -n "$CATALOG_APP" \
+          --set-env-vars \
+            CRAVES_INTEGRATION_SERVICE_BASE_URL="$integration_base_url" \
+            CRAVES_INTERNAL_SERVICE_KEY="secretref:${catalog_internal_ref}" \
+            CRAVES_PICKUP_PROVISIONING_ENABLED=true >/dev/null
+        wait_ready "$CATALOG_APP"
+
+        integration_after="$(env_json "$INTEGRATION_APP")"
+        catalog_after="$(env_json "$CATALOG_APP")"
+        [[ "$(env_value "$integration_after" CRAVES_PROVIDERS_SHIPROCKET_PICKUP_PROVISIONING_ENABLED)" == 'true' ]] || \
+          fail 'Integration pickup provisioning gate verification failed.'
+        [[ "$(env_value "$catalog_after" CRAVES_PICKUP_PROVISIONING_ENABLED)" == 'true' ]] || \
+          fail 'Catalog pickup provisioning worker verification failed.'
+        [[ "$(env_value "$catalog_after" CRAVES_INTEGRATION_SERVICE_BASE_URL)" == "$integration_base_url" ]] || \
+          fail 'Catalog Integration base URL verification failed.'
+        [[ "$(env_secret_ref "$catalog_after" CRAVES_INTERNAL_SERVICE_KEY)" == "$catalog_internal_ref" ]] || \
+          fail 'Catalog internal-service secret binding verification failed.'
+
+        trap - ERR
+        echo '============================================================'
+        echo 'SHIPROCKET PICKUP PROVISIONING: ENABLED'
+        echo "Catalog app: $CATALOG_APP"
+        echo "Integration app: $INTEGRATION_APP"
+        echo 'Secret handling: Key Vault references only; no secret value was read.'
+        echo 'Shipment creation state: unchanged.'
+        echo 'Existing ACTIVE kitchens will be processed asynchronously by the Catalog outbox worker.'
+        echo '============================================================'

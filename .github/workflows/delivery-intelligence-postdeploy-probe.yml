@@ -1,0 +1,29 @@
+name: Delivery Intelligence Postdeploy Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/delivery-intelligence-postdeploy-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify live Integration boundary
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          FAKE='eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDAiLCJpc3MiOiJjcmF2ZXMtdGVzdCIsImF1ZCI6ImNyYXZlcyIsImV4cCI6NDEwMjQ0NDgwMH0.invalid'
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          unsigned="$(curl -sS --max-time 30 -o "$body" -w '%{http_code}' 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=0&limit=25&sort=desc&offset=0&attentionOffset=0' || true)"
+          echo "unsigned=${unsigned} body=$(head -c 500 "$body")"
+          fake="$(curl -sS --max-time 30 -o "$body" -w '%{http_code}' -H "Authorization: Bearer ${FAKE}" 'https://api.craves.in/api/v1/admin/operations/delivery-intelligence/overview?hours=0&limit=25&sort=desc&offset=0&attentionOffset=0' || true)"
+          echo "fakeBearer=${fake} body=$(head -c 500 "$body")"
+          [[ "$unsigned" == '401' ]] || { echo "Expected unsigned APIM boundary 401, got $unsigned" >&2; exit 1; }
+          [[ "$fake" == '401' ]] || { echo "Expected new Integration JWT filter to return 401, got $fake" >&2; exit 1; }

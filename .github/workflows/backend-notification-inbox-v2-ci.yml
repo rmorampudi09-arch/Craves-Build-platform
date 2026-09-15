@@ -1,0 +1,60 @@
+name: CRAVES Backend Notification Inbox v2 CI
+
+on:
+  push:
+    branches:
+      - feature/backend-notification-inbox-v2-20260911
+    paths:
+      - 'services/notification-service/**'
+      - '.github/workflows/backend-notification-inbox-v2-ci.yml'
+      - 'docs/handover/2026-09-11-backend-notification-inbox-v2.md'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'services/notification-service/**'
+      - '.github/workflows/backend-notification-inbox-v2-ci.yml'
+      - 'docs/handover/2026-09-11-backend-notification-inbox-v2.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-notification-inbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Ownership, pagination and privacy guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          repository='services/notification-service/src/main/java/in/craves/notification/repository/NotificationRepository.java'
+          service='services/notification-service/src/main/java/in/craves/notification/service/NotificationService.java'
+          controller='services/notification-service/src/main/java/in/craves/notification/api/AppNotificationController.java'
+          migration='services/notification-service/src/main/resources/db/migration/V5__in_app_notification_inbox_indexes.sql'
+          test -s "$repository"
+          test -s "$service"
+          test -s "$controller"
+          test -s "$migration"
+          grep -q 'recipient_identity_id = :userId' "$repository"
+          grep -q 'created_at DESC, id DESC' "$repository"
+          grep -q 'read_at IS NULL' "$repository"
+          grep -q 'appNoticePage' "$service"
+          grep -q 'markAllRead' "$controller"
+          grep -q 'unread-count' "$controller"
+          grep -q 'idx_in_app_notification_recipient_cursor' "$migration"
+          grep -q 'idx_in_app_notification_recipient_unread_cursor' "$migration"
+          ! grep -R --line-number -E 'raw.*payload|provider.*payload|retry_count|dead.?letter|delivery_address' \
+              services/notification-service/src/main/java/in/craves/notification/api/{AppNoticePageResponse,AppNoticeResponse,UnreadCountResponse,AppNotificationController}.java
+          ! grep -R --line-number -E 'System\.out|printStackTrace|Authorization: Bearer|client[_-]?secret|password\s*=' \
+              services/notification-service/src/main/java/in/craves/notification/{api,domain,repository,service}
+      - name: Maven clean verify — Notification Service
+        working-directory: services/notification-service
+        run: mvn -B -ntp clean verify

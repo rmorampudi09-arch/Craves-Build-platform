@@ -1,4 +1,5 @@
 import { apiBaseUrl } from "./server-api";
+import { boundedFetch } from "./bounded-fetch";
 
 export async function publicApiFetch(
   path: string,
@@ -11,12 +12,12 @@ export async function publicApiFetch(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(`${apiBaseUrl()}${path}`, {
+    return await boundedFetch(`${apiBaseUrl()}${path}`, {
       ...init,
       headers: { Accept: "application/json", ...init.headers },
       cache: "no-store",
       signal: controller.signal,
-    });
+    }, timeoutMs);
   } finally {
     clearTimeout(timeout);
   }

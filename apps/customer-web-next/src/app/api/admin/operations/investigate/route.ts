@@ -1,3 +1,5 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
   parseAdminInvestigationRequest,
@@ -24,6 +26,10 @@ function errorCode(status: number): string {
 }
 
 export async function POST(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) {
     return NextResponse.json({ code: "CROSS_ORIGIN_REQUEST_REJECTED" }, { status: 403 });
   }
@@ -34,26 +40,52 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const correlationId = randomUUID();
     const upstream = await authenticatedApiFetch(
       request,
       `${PATHS[input.resource]}/${input.resourceId}`,
-      { headers: { "X-Admin-Reason": input.reason } },
+      {
+        headers: {
+          "X-Admin-Reason": input.reason,
+          "X-Correlation-ID": correlationId,
+          "X-Craves-Correlation-ID": correlationId
+        }
+      },
       15_000
     );
     const body = await upstream.json().catch(() => null);
     if (!upstream.ok) {
       return NextResponse.json({ code: errorCode(upstream.status) }, {
         status: upstream.status,
-        headers: { "Cache-Control": "no-store" }
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Correlation-ID": correlationId
+        }
       });
     }
 
-    const correlationId = upstream.headers.get("X-Correlation-ID")?.trim() ?? "";
+    const echoedCorrelationId = (
+      upstream.headers.get("X-Craves-Correlation-ID")
+      ?? upstream.headers.get("X-Correlation-ID")
+    )?.trim();
+    if (echoedCorrelationId && echoedCorrelationId !== correlationId) {
+      return NextResponse.json({ code: "INVESTIGATION_CORRELATION_MISMATCH" }, {
+        status: 502,
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Correlation-ID": correlationId
+        }
+      });
+    }
+
     const result = parseAdminInvestigationResult(input.resource, body, correlationId);
     if (!result) {
       return NextResponse.json({ code: "INVALID_INVESTIGATION_RESPONSE" }, {
         status: 502,
-        headers: { "Cache-Control": "no-store" }
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Correlation-ID": correlationId
+        }
       });
     }
 

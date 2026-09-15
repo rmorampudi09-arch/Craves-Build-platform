@@ -136,6 +136,8 @@ public final class ApiDtos {
         String contentType,
         long fileSizeBytes,
         String status,
+        String reviewReason,
+        Instant reviewedAt,
         Instant createdAt,
         Instant updatedAt
     ) {

@@ -36,14 +36,7 @@ common_pipeline_required = (
     "AZURE_SERVICE_CONNECTION",
 )
 
-shared_helper_services = {
-    "auth",
-    "user-chef",
-    "order",
-    "subscription",
-    "integration",
-    "notification",
-}
+shared_helper_services = set(pipelines)
 
 forbidden_pipeline_patterns = (
     r"--set-env-vars\b",
@@ -83,19 +76,6 @@ for service, path in pipelines.items():
             raise SystemExit(
                 f"ERROR: {path.name} must use the shared runtime-preserving deployment helper"
             )
-    else:
-        catalog_required = (
-            "Runtime environment preserved: YES",
-            "secret_metadata_hash",
-            "environment_hash",
-            "--image",
-            "/actuator/health/readiness",
-        )
-        for token in catalog_required:
-            if token not in text:
-                raise SystemExit(
-                    f"ERROR: {path.name} lacks Catalog runtime-preservation token: {token}"
-                )
 
     for pattern in forbidden_pipeline_patterns:
         if re.search(pattern, text):
@@ -123,11 +103,13 @@ helper_required = (
     "verify_active_secret_refs_are_key_vault_backed",
     "az containerapp update",
     "--image",
-    "rollback()",
+    "Attempting guarded rollback",
+    "Previous image was restored as ready revision",
     "/actuator/health/liveness",
     "/actuator/health/readiness",
-    "Credential values read:     NO",
-    "Credential values changed:  NO",
+    "Container App configuration drift detected after image deployment.",
+    "Managed identity drift detected after image deployment.",
+    "Container App secret metadata drift detected after image deployment.",
 )
 for token in helper_required:
     if token not in helper_text:

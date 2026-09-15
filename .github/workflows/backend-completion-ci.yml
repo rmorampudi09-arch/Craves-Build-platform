@@ -8,6 +8,7 @@ on:
       - 'config/production/backend-completion-pack.json'
       - 'config/production/azure-resource-inventory.json'
       - 'scripts/release/**'
+      - 'azure-pipelines-*-service.yml'
       - 'azure-pipelines-backend-completion.yml'
       - '.github/workflows/backend-completion-ci.yml'
   workflow_dispatch:

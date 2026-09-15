@@ -385,12 +385,18 @@ public class DeliveryProviderRouter {
 
         List<RankedQuoteOutcome> result = new ArrayList<>();
         for (CandidateScore candidate : assignment.rankedCandidates()) {
+            if (candidate.status() != in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus.SELECTED
+                && candidate.status() != in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus.RANKED
+                && candidate.status() != in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus.ACCEPTED)
+                continue;
             QuoteOutcome outcome = byProvider.get(normalize(candidate.providerId()));
             if (outcome != null) {
                 result.add(new RankedQuoteOutcome(candidate, outcome));
             }
         }
-        result.sort(Comparator.comparingInt(ranked -> ranked.candidate().candidateRank()));
+        result.sort(Comparator.<RankedQuoteOutcome>comparingInt(ranked ->
+            Objects.equals(ranked.candidate().candidateId(), assignment.selectedCandidateId()) ? 0 : 1)
+            .thenComparingInt(ranked -> ranked.candidate().candidateRank()));
         return List.copyOf(result);
     }
 

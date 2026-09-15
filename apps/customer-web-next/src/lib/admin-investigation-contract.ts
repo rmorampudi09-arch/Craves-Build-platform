@@ -161,11 +161,13 @@ export function parsePaymentInvestigation(value: unknown, correlationId: string)
   for (const attemptValue of array(root.attempts)) {
     const attempt = record(attemptValue);
     if (!attempt) continue;
+    const provider = nullableText(attempt.provider, 30);
+    const providerPaymentId = nullableText(attempt.providerPaymentId, 160) ?? nullableText(attempt.cashfreePaymentId, 160);
     timeline.push({
-      label: "Payment attempt",
+      label: provider ? `${provider} payment attempt` : "Payment attempt",
       status: nullableText(attempt.paymentStatus, 80),
       occurredAt: dateTime(attempt.createdAt),
-      detail: currency(attempt.amount, attempt.currency)
+      detail: [providerPaymentId, currency(attempt.amount, attempt.currency)].filter(Boolean).join(" · ")
     });
   }
   for (const eventValue of array(root.events)) {
@@ -175,22 +177,27 @@ export function parsePaymentInvestigation(value: unknown, correlationId: string)
       label: nullableText(event.eventType, 120) ?? "Payment event",
       status: nullableText(event.paymentStatus, 80),
       occurredAt: dateTime(event.createdAt),
-      detail: null
+      detail: nullableText(event.providerEventId, 160)
     });
   }
   timeline.sort((a, b) => (a.occurredAt ?? "").localeCompare(b.occurredAt ?? ""));
 
+  const provider = nullableText(payment.provider, 30) ?? "Legacy provider";
+  const providerOrderId = nullableText(payment.providerOrderId, 160) ?? nullableText(payment.cashfreeOrderId, 160);
+  const providerPaymentId = nullableText(payment.providerPaymentId, 160) ?? nullableText(payment.cashfreeCfOrderId, 160);
   return {
     resource: "payment",
     resourceId: paymentOrderId,
     correlationId,
-    title: "Payment investigation",
+    title: `${provider} payment investigation`,
     status,
     summary: [
       { label: "Amount", value: currency(payment.amount, payment.currency) },
+      { label: "Provider", value: provider },
       { label: "Provider status", value: valueOrDash(nullableText(payment.providerStatus, 80)) },
       { label: "Craves reference", value: valueOrDash(nullableText(payment.cravesReference, 150)) },
-      { label: "Cashfree order", value: valueOrDash(nullableText(payment.cashfreeOrderId, 150)) },
+      { label: "Provider order", value: valueOrDash(providerOrderId) },
+      { label: "Provider payment", value: valueOrDash(providerPaymentId) },
       { label: "Attempts", value: String(array(root.attempts).length) },
       { label: "Events", value: String(array(root.events).length) },
       { label: "Created", value: valueOrDash(dateTime(payment.createdAt)) },
@@ -218,15 +225,22 @@ export function parseRefundInvestigation(value: unknown, correlationId: string):
     }];
   });
 
+  const provider = nullableText(refund.provider, 30) ?? "Legacy provider";
+  const providerOrderId = nullableText(refund.providerOrderId, 160) ?? nullableText(refund.cashfreeOrderId, 160);
+  const providerRefundId = nullableText(refund.providerRefundId, 160) ?? nullableText(refund.cashfreeRefundId, 160);
   return {
     resource: "refund",
     resourceId: refundId,
     correlationId,
-    title: "Refund investigation",
+    title: `${provider} refund investigation`,
     status,
     summary: [
       { label: "Amount", value: currency(refund.amount, refund.currency) },
+      { label: "Provider", value: provider },
       { label: "Provider status", value: valueOrDash(nullableText(refund.providerStatus, 80)) },
+      { label: "Provider order", value: valueOrDash(providerOrderId) },
+      { label: "Provider payment", value: valueOrDash(nullableText(refund.providerPaymentId, 160)) },
+      { label: "Provider refund", value: valueOrDash(providerRefundId) },
       { label: "Refund reference", value: valueOrDash(nullableText(refund.refundReference, 150)) },
       { label: "Attempts", value: valueOrDash(numberText(refund.attemptCount)) },
       { label: "Next attempt", value: valueOrDash(dateTime(refund.nextAttemptAt)) },

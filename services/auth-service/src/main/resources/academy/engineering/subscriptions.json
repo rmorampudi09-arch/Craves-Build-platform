@@ -1,0 +1,66 @@
+{
+  "courseId": "subscriptions",
+  "minutesAdded": 82,
+  "addSources": [],
+  "lessons": [
+    {
+      "id": "subscriptions-engineering-map",
+      "title": "Trace plan, customer subscription and schedule state",
+      "overview": "Subscription engineering starts by keeping three concepts separate: the plan definition, the individual customer's subscription lifecycle, and generated or scheduled work. The service owns these records and their validated transitions. An administrator changing a plan is not the same operation as changing an existing customer's state, and a schedule calculation is not permission to invent pricing, rollover, pause, cancellation or payout rules.",
+      "steps": [
+        {"label": "Identify the object", "detail": "Determine whether the requirement changes a plan, a customer subscription or schedule/execution state."},
+        {"label": "Trace the caller", "detail": "Follow customer versus administrator routes and the Craves JWT/role or ownership check."},
+        {"label": "Trace lifecycle rules", "detail": "Locate service validation for current state, requested transition and relevant schedule constraints."},
+        {"label": "Trace persistence", "detail": "Identify subscription_schema records and which values must remain historical."},
+        {"label": "Trace downstream work", "detail": "Separate persisted lifecycle state from later order/schedule/notification actions and their independent evidence."}
+      ],
+      "example": "An administrator can update an approved plan definition without that operation itself proving every existing subscriber has been migrated to the new terms.",
+      "lab": "Trace one customer subscription operation and one plan/schedule operation from route to service and persistence. Mark every point where an approved commercial policy is required.",
+      "pitfall": "Do not treat a technical schedule field as an implicit answer to an unresolved cancellation, rollover or billing rule.",
+      "questions": [
+        {"id": "subscriptions-engineering-map-q1", "prompt": "What should an engineer identify first in a subscription change?", "options": ["The owning object: plan, customer subscription or schedule", "The logo color", "A delivery rider", "A payment webhook secret"], "answer": 0, "explanation": "Clear aggregate ownership prevents plan and customer-state changes from being conflated."},
+        {"id": "subscriptions-engineering-map-q2", "prompt": "Does schedule code define commercial policy by itself?", "options": ["No; policy requires approved rules", "Yes, always", "Only on weekends", "Only after deployment"], "answer": 0, "explanation": "Implementation follows approved policy; it does not create it."}
+      ]
+    },
+    {
+      "id": "subscriptions-build-feature",
+      "title": "Implement an approved lifecycle or schedule feature",
+      "overview": "Once a subscription rule is approved, convert it into an explicit state and scheduling contract. Define the trigger, allowed source states, resulting state, effective time, idempotency behavior and customer-visible outcome. Implement the rule in the service/schedule layer, persist durable facts, use migrations for schema changes, and keep downstream order or notification creation recoverable. Avoid embedding policy constants in multiple controllers or clients.",
+      "steps": [
+        {"label": "Record the approved rule", "detail": "Reference the authorized business decision and translate it into precise technical inputs and outputs."},
+        {"label": "Define state/time semantics", "detail": "Specify allowed states, effective timestamps, timezone assumptions and retry behavior."},
+        {"label": "Implement centrally", "detail": "Place lifecycle/schedule rules in the owning service instead of duplicating them in web and mobile clients."},
+        {"label": "Persist durable evidence", "detail": "Store the state/time facts needed to explain what happened after configuration or plan data changes."},
+        {"label": "Integrate idempotently", "detail": "Ensure scheduled downstream work cannot create duplicate orders or messages when a job retries."},
+        {"label": "Expose through contracts", "detail": "Update admin/customer DTOs and UI only with approved state and explanatory data."}
+      ],
+      "example": "For an approved pause behavior, the technical design states exactly when pause becomes effective and how repeated requests behave; it does not guess how unused meals or money should be handled.",
+      "lab": "Take a fictional already-approved lifecycle rule and create its state table, effective-time rules, persistence fields, retry key, API changes and tests. Explicitly list commercial questions that would still require Product/Finance input.",
+      "pitfall": "Hard-coding an unapproved commercial assumption makes future correction a customer-impacting migration instead of a policy configuration change.",
+      "questions": [
+        {"id": "subscriptions-build-feature-q1", "prompt": "Where should shared subscription lifecycle logic live?", "options": ["The owning service/schedule layer", "Every client separately", "A CSS module", "A provider webhook"], "answer": 0, "explanation": "Centralized service logic gives all clients one authoritative lifecycle contract."},
+        {"id": "subscriptions-build-feature-q2", "prompt": "What must repeated scheduled execution avoid?", "options": ["Duplicate downstream business effects", "Reading current state", "Using timestamps", "Writing tests"], "answer": 0, "explanation": "Schedulers are routinely retried and therefore require idempotent downstream work."}
+      ]
+    },
+    {
+      "id": "subscriptions-test-release-recover",
+      "title": "Test time, retries and policy-safe rollback",
+      "overview": "Subscription bugs often hide in time boundaries and repeated scheduler runs. Tests should cover lifecycle transition validity, ownership, clock/timezone boundaries, duplicate scheduling, missed/replayed jobs and downstream failures. Release evidence must prove the approved rule is configured as intended. Recovery should restore execution without silently rewriting historical customer state or applying a newly invented financial rule.",
+      "steps": [
+        {"label": "Freeze time in tests", "detail": "Use controlled timestamps to test boundary behavior rather than relying on the machine clock."},
+        {"label": "Test invalid transitions", "detail": "Verify state changes are rejected when the current lifecycle state does not permit them."},
+        {"label": "Replay the scheduler", "detail": "Run the same due work more than once and assert one downstream business effect."},
+        {"label": "Simulate downstream failure", "detail": "Ensure a failed order/notification action can be retried without changing the subscription decision incorrectly."},
+        {"label": "Verify production policy", "detail": "Compare configured behavior with the approved rule before customer-facing activation."},
+        {"label": "Recover historically", "detail": "Preserve audit/lifecycle evidence and use an approved correction path when customer state already changed."}
+      ],
+      "example": "If a scheduler ran twice, recovery should deduplicate the generated work and preserve the single intended lifecycle outcome rather than changing the customer's plan to hide the duplicate.",
+      "lab": "Build a time-based test matrix around a fictional approved renewal/pause boundary using a fixed clock, duplicate scheduler execution and one downstream failure. Do not define real pricing or refunds.",
+      "pitfall": "Changing production subscription state to make a test pass destroys the evidence needed to understand the original failure.",
+      "questions": [
+        {"id": "subscriptions-test-release-recover-q1", "prompt": "Why use a fixed clock in subscription tests?", "options": ["To make time-boundary behavior deterministic", "To bypass authentication", "To calculate delivery distance", "To reveal secrets"], "answer": 0, "explanation": "Deterministic time makes schedule/lifecycle boundary tests reliable."},
+        {"id": "subscriptions-test-release-recover-q2", "prompt": "What should recovery preserve after a lifecycle bug?", "options": ["Historical state/audit evidence", "Only a screenshot", "An invented refund rule", "A browser cache entry"], "answer": 0, "explanation": "Historical evidence is necessary for safe correction and auditability."}
+      ]
+    }
+  ]
+}

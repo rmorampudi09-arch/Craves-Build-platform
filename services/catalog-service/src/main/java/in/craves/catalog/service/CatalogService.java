@@ -1,5 +1,7 @@
 package in.craves.catalog.service;
 
+import in.craves.catalog.finance.CatalogFinanceEligibility;
+
 import in.craves.catalog.config.CatalogDiscoveryProperties;
 import in.craves.catalog.exception.ApiException;
 import in.craves.catalog.security.CravesPrincipal;
@@ -34,6 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class CatalogService {
+    private final CatalogFinanceEligibility financeEligibility;
     private final JdbcTemplate jdbcTemplate;
     private final MediaStorageService mediaStorageService;
     private final CatalogDiscoveryProperties discoveryProperties;
@@ -41,11 +44,13 @@ public class CatalogService {
     public CatalogService(
         JdbcTemplate jdbcTemplate,
         MediaStorageService mediaStorageService,
-        CatalogDiscoveryProperties discoveryProperties
+        CatalogDiscoveryProperties discoveryProperties,
+        CatalogFinanceEligibility financeEligibility
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.mediaStorageService = mediaStorageService;
         this.discoveryProperties = discoveryProperties;
+        this.financeEligibility = financeEligibility;
     }
 
     public KitchenProfileResponse getMyKitchen(CravesPrincipal principal) {
@@ -58,6 +63,7 @@ public class CatalogService {
     public KitchenProfileResponse upsertMyKitchen(CravesPrincipal principal, KitchenProfileRequest request) {
         requireChef(principal);
         KitchenStatus status = request.status() == null ? KitchenStatus.DRAFT : request.status();
+        if (status == KitchenStatus.ACTIVE) financeEligibility.requireChef(principal.identityId());
         Optional<UUID> existingId = findKitchenIdByIdentity(principal.identityId());
         if (existingId.isEmpty()) {
             UUID id = UUID.randomUUID();
@@ -116,6 +122,7 @@ public class CatalogService {
     public MenuItemResponse createMenuItem(CravesPrincipal principal, MenuItemRequest request) {
         requireChef(principal);
         validateDeliveryMetadata(request);
+        if (statusOrDefault(request.status()) == MenuItemStatus.ACTIVE) financeEligibility.requireChef(principal.identityId());
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         UUID menuItemId = UUID.randomUUID();
         jdbcTemplate.update(
@@ -144,6 +151,7 @@ public class CatalogService {
     public MenuItemResponse updateMenuItem(CravesPrincipal principal, UUID menuItemId, MenuItemRequest request) {
         requireChef(principal);
         validateDeliveryMetadata(request);
+        if (statusOrDefault(request.status()) == MenuItemStatus.ACTIVE) financeEligibility.requireChef(principal.identityId());
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         int updated = jdbcTemplate.update(
             "UPDATE catalog_schema.menu_item SET item_name = ?, description = ?, category = ?, food_type = ?, price = ?, currency = ?, serves_count = ?, preparation_time_minutes = ?, spice_level = ?, unit_package_weight_grams = ?, thermobox_required = ?, is_available = ?, status = ?, updated_at = now() WHERE id = ? AND kitchen_id = ?",
@@ -174,6 +182,7 @@ public class CatalogService {
         requireChef(principal);
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         MenuItemResponse existing = getMyMenuItem(principal, menuItemId);
+        if (request.available()) financeEligibility.requireChef(principal.identityId());
         if (request.available() && (existing.unitPackageWeightGrams() == null || existing.thermoboxRequired() == null)) {
             throw ApiException.badRequest(
                 "DELIVERY_METADATA_REQUIRED",
@@ -234,12 +243,13 @@ public class CatalogService {
     }
 
     public PublicKitchenDiscoveryResponse discoverKitchens(BigDecimal latitude, BigDecimal longitude, String city, String areaName, BigDecimal requestedRadiusKm) {
+        var eligibility = financeEligibility.current();
         RadiusPolicy policy = resolveRadius(city, areaName, requestedRadiusKm);
         List<PublicKitchenSummaryResponse> kitchens;
         if (latitude != null && longitude != null) {
-            kitchens = discoverNearby(latitude, longitude, city, policy.radiusKm());
+            kitchens = discoverNearby(latitude, longitude, city, policy.radiusKm(), eligibility);
         } else {
-            kitchens = discoverByCity(city);
+            kitchens = discoverByCity(city, eligibility);
         }
         return new PublicKitchenDiscoveryResponse(
             new DiscoveryRadiusResponse(policy.city(), policy.areaName(), policy.radiusKm(), policy.maxRadiusKm()),
@@ -248,10 +258,19 @@ public class CatalogService {
     }
 
     public KitchenProfileResponse getPublicKitchen(UUID kitchenId) {
+        var eligible = financeEligibility.current();
+        return readKitchen(kitchenId, eligible.sqlArray());
+    }
+
+    /** Existing authenticated order history/ownership reads never depend on new-selling eligibility. */
+    public KitchenProfileResponse getInternalKitchen(UUID kitchenId) { return readKitchen(kitchenId, null); }
+
+    private KitchenProfileResponse readKitchen(UUID kitchenId, String eligibleIds) {
         List<KitchenProfileResponse> rows = jdbcTemplate.query(
-            "SELECT * FROM catalog_schema.kitchen_profile WHERE id = ? AND status = 'ACTIVE'",
+            "SELECT * FROM catalog_schema.kitchen_profile WHERE id = ? AND status = 'ACTIVE'" +
+                (eligibleIds == null ? "" : " AND identity_id = ANY(CAST(? AS uuid[]))"),
             this::mapKitchen,
-            kitchenId
+            eligibleIds == null ? new Object[]{kitchenId} : new Object[]{kitchenId, eligibleIds}
         );
         if (rows.isEmpty()) {
             throw ApiException.notFound("KITCHEN_NOT_FOUND", "Kitchen was not found");
@@ -265,9 +284,10 @@ public class CatalogService {
     }
 
     public MenuItemResponse getPublicMenuItem(UUID menuItemId) {
+        var eligible = financeEligibility.current();
         List<MenuItemResponse> rows = findMenuItems(
-            "WHERE id = ? AND status = 'ACTIVE' AND is_available = true AND kitchen_id IN (SELECT id FROM catalog_schema.kitchen_profile WHERE status = 'ACTIVE')",
-            menuItemId
+            "WHERE id = ? AND status = 'ACTIVE' AND is_available = true AND kitchen_id IN (SELECT id FROM catalog_schema.kitchen_profile WHERE status = 'ACTIVE' AND identity_id = ANY(CAST(? AS uuid[])))",
+            menuItemId, eligible.sqlArray()
         );
         if (rows.isEmpty()) {
             throw ApiException.notFound("MENU_ITEM_NOT_FOUND", "Menu item was not found");
@@ -275,7 +295,7 @@ public class CatalogService {
         return rows.getFirst();
     }
 
-    private List<PublicKitchenSummaryResponse> discoverNearby(BigDecimal latitude, BigDecimal longitude, String city, BigDecimal radiusKm) {
+    private List<PublicKitchenSummaryResponse> discoverNearby(BigDecimal latitude, BigDecimal longitude, String city, BigDecimal radiusKm, CatalogFinanceEligibility.Snapshot eligible) {
         List<Object> args = new ArrayList<>();
         args.add(latitude);
         args.add(longitude);
@@ -285,26 +305,28 @@ public class CatalogService {
             cityClause = " AND lower(city) = lower(?)";
             args.add(city.trim());
         }
+        args.add(eligible.sqlArray());
         args.add(radiusKm);
         String sql = "SELECT k.*, " +
             "(SELECT COUNT(*) FROM catalog_schema.menu_item mi WHERE mi.kitchen_id = k.id AND mi.status = 'ACTIVE' AND mi.is_available = true) AS active_menu_item_count " +
             "FROM (SELECT kp.*, (6371.0 * acos(LEAST(1.0, GREATEST(-1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))))) AS distance_km " +
-            "FROM catalog_schema.kitchen_profile kp WHERE status = 'ACTIVE' AND latitude IS NOT NULL AND longitude IS NOT NULL" + cityClause + ") k " +
+            "FROM catalog_schema.kitchen_profile kp WHERE status = 'ACTIVE' AND latitude IS NOT NULL AND longitude IS NOT NULL" + cityClause + " AND kp.identity_id = ANY(CAST(? AS uuid[]))) k " +
             "WHERE k.distance_km <= ? AND (SELECT COUNT(*) FROM catalog_schema.menu_item mi WHERE mi.kitchen_id = k.id AND mi.status = 'ACTIVE' AND mi.is_available = true) > 0 " +
             "ORDER BY k.distance_km ASC LIMIT 50";
         return jdbcTemplate.query(sql, this::mapPublicKitchen, args.toArray());
     }
 
-    private List<PublicKitchenSummaryResponse> discoverByCity(String city) {
+    private List<PublicKitchenSummaryResponse> discoverByCity(String city, CatalogFinanceEligibility.Snapshot eligible) {
         List<Object> args = new ArrayList<>();
         String cityClause = "";
         if (StringUtils.hasText(city)) {
             cityClause = " AND lower(k.city) = lower(?)";
             args.add(city.trim());
         }
+        args.add(eligible.sqlArray());
         String sql = "SELECT k.*, NULL::numeric AS distance_km, " +
             "(SELECT COUNT(*) FROM catalog_schema.menu_item mi WHERE mi.kitchen_id = k.id AND mi.status = 'ACTIVE' AND mi.is_available = true) AS active_menu_item_count " +
-            "FROM catalog_schema.kitchen_profile k WHERE k.status = 'ACTIVE'" + cityClause + " " +
+            "FROM catalog_schema.kitchen_profile k WHERE k.status = 'ACTIVE'" + cityClause + " AND k.identity_id = ANY(CAST(? AS uuid[])) " +
             "AND (SELECT COUNT(*) FROM catalog_schema.menu_item mi WHERE mi.kitchen_id = k.id AND mi.status = 'ACTIVE' AND mi.is_available = true) > 0 " +
             "ORDER BY k.updated_at DESC LIMIT 50";
         return jdbcTemplate.query(sql, this::mapPublicKitchen, args.toArray());

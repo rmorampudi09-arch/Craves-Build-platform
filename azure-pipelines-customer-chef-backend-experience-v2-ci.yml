@@ -1,0 +1,84 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+steps:
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 1
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - task: NodeTool@0
+    displayName: Use Node.js 24
+    inputs:
+      versionSpec: '24.x'
+
+  - script: |
+      set -euo pipefail
+      sudo apt-get update
+      sudo apt-get install -y --no-install-recommends libxml2-utils
+    displayName: Install XML validation tooling
+
+  - script: |
+      set -euo pipefail
+      chmod +x scripts/release/*.sh
+      scripts/release/verify-seven-service-deployment-contracts.sh
+    displayName: Verify seven-service deployment contracts
+
+  - script: |
+      set -euo pipefail
+      services=(
+        auth-service
+        user-chef-service
+        catalog-service
+        order-service
+        subscription-service
+        integration-service
+        notification-service
+      )
+      for service in "${services[@]}"; do
+        echo "=== Maven verify: ${service} ==="
+        (cd "services/${service}" && mvn -B -ntp clean verify)
+      done
+    displayName: Maven verify seven Java backend services
+
+  - script: |
+      set -euo pipefail
+      scripts/release/scan-secret-material.sh .
+      scripts/release/validate-dockerfiles.sh . \
+        apps/customer-web-next/Dockerfile \
+        services/auth-service/Dockerfile \
+        services/user-chef-service/Dockerfile \
+        services/catalog-service/Dockerfile \
+        services/order-service/Dockerfile \
+        services/subscription-service/Dockerfile \
+        services/integration-service/Dockerfile \
+        services/notification-service/Dockerfile
+      python3 scripts/release/validate-flyway-migrations.py
+      scripts/release/validate-apim-assets.sh .
+      scripts/release/validate-rollback-readiness.sh . \
+        azure-pipelines-auth-service.yml \
+        azure-pipelines-user-chef-service.yml \
+        azure-pipelines-catalog-service.yml \
+        azure-pipelines-order-service.yml \
+        azure-pipelines-subscription-service.yml \
+        azure-pipelines-integration-service.yml \
+        azure-pipelines-notification-service.yml
+    displayName: Validate release source, schemas, APIM and rollback safety
+
+  - script: |
+      set -euo pipefail
+      npm --prefix apps/customer-web-next ci
+      npm --prefix apps/customer-web-next run verify
+    displayName: Validate customer web experience build

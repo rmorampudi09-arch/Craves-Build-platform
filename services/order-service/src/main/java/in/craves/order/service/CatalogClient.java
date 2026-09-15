@@ -2,19 +2,26 @@ package in.craves.order.service;
 
 import in.craves.order.config.CatalogClientProperties;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class CatalogClient {
+    private static final String INTERNAL_HEADER = "X-Craves-Internal-Key";
+
     private final RestClient restClient;
+    private final String internalAccessValue;
 
     public CatalogClient(CatalogClientProperties properties, RestClient.Builder builder) {
         this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
+        this.internalAccessValue = properties.getInternalAccessValue();
     }
 
     public CatalogMenuItem getActiveMenuItem(UUID menuItemId) {
@@ -39,19 +46,59 @@ public class CatalogClient {
         }
     }
 
+    public List<ResolvedCatalogMenuItem> resolveActiveMenuItems(List<UUID> menuItemIds) {
+        if (menuItemIds == null || menuItemIds.isEmpty()) {
+            return List.of();
+        }
+        String internalKey = requireInternalAccess();
+        List<ResolvedCatalogMenuItem> items = restClient.post()
+            .uri("/internal/menu-items/resolve")
+            .header(INTERNAL_HEADER, internalKey)
+            .body(new ResolveMenuItemsRequest(menuItemIds))
+            .retrieve()
+            .body(new ParameterizedTypeReference<List<ResolvedCatalogMenuItem>>() { });
+        return items == null ? List.of() : List.copyOf(items);
+    }
+
     public CatalogKitchen getKitchen(UUID kitchenId) {
+        String internalKey = requireInternalAccess();
         try {
             CatalogKitchen kitchen = restClient.get()
-                .uri("/kitchens/{kitchenId}", kitchenId)
+                .uri("/internal/kitchens/{kitchenId}", kitchenId)
+                .header(INTERNAL_HEADER, internalKey)
                 .retrieve()
                 .body(CatalogKitchen.class);
-            if (kitchen == null || kitchen.id() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Catalog kitchen response is incomplete");
+            if (kitchen == null || kitchen.id() == null || kitchen.identityId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Catalog internal kitchen response is incomplete");
             }
             return kitchen;
         } catch (HttpClientErrorException.NotFound ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kitchen is not active");
         }
+    }
+
+    private String requireInternalAccess() {
+        if (!StringUtils.hasText(internalAccessValue)) {
+            throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Catalog internal access is not configured"
+            );
+        }
+        return internalAccessValue;
+    }
+
+    private record ResolveMenuItemsRequest(List<UUID> menuItemIds) {
+    }
+
+    public record ResolvedCatalogMenuItem(
+        UUID id,
+        UUID kitchenId,
+        String itemName,
+        BigDecimal price,
+        String currency,
+        Integer unitPackageWeightGrams,
+        Boolean thermoboxRequired
+    ) {
     }
 
     public record CatalogMenuItem(

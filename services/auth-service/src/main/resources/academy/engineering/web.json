@@ -1,0 +1,71 @@
+{
+  "courseId": "web",
+  "minutesAdded": 90,
+  "addSources": [
+    "apps/customer-web-next/src/components/academy-workspace.tsx",
+    "apps/customer-web-next/src/lib/academy-route-policy.ts"
+  ],
+  "lessons": [
+    {
+      "id": "web-engineering-map",
+      "title": "Trace a Next.js screen through the BFF to Java",
+      "overview": "Craves web features should be read as a chain: App Router page or component, same-origin Next.js route/BFF when needed, server-api authentication forwarding, the owning Java API, and finally backend persistence or integration. The browser should not become a second business-logic authority. Server-side route handlers constrain allowed upstream paths and carry the existing session; Java remains authoritative for authorization, validation, grading, payments and other domain state.",
+      "steps": [
+        {"label": "Find the page", "detail": "Locate the App Router page and the component that owns user interaction and presentation state."},
+        {"label": "Find the BFF route", "detail": "Trace the same-origin /api route or server action that validates origin/body/action before calling upstream."},
+        {"label": "Follow server-api", "detail": "Identify how the server reads the Craves access-token cookie, forwards Bearer authentication and applies timeout/no-store behavior."},
+        {"label": "Find the Java owner", "detail": "Map the upstream path to the Spring controller/service that owns authorization and durable behavior."},
+        {"label": "Map error states", "detail": "Define how 401, 403, validation, upstream timeout and unavailable states become safe UI messages."},
+        {"label": "Keep client state local", "detail": "Use React state for presentation and pending UI, not as the source of truth for money, identity or durable workflow state."}
+      ],
+      "example": "AcademyWorkspace renders courses and submits learning actions, but the Java Auth service owns answer correctness, XP and persisted progress. Inspecting the browser bundle must not reveal the answer key.",
+      "lab": "Choose one admin screen and trace page/component → Next.js route → server-api → Java controller/service. Record authentication, authorization and error handling at every hop.",
+      "pitfall": "A role-based hidden menu item is UX; it is not a backend authorization boundary.",
+      "questions": [
+        {"id": "web-engineering-map-q1", "prompt": "Where should durable business authorization be enforced?", "options": ["Owning Java backend", "Only in React rendering", "Only in CSS", "Only in localStorage"], "answer": 0, "explanation": "The backend must enforce authorization independently of the UI."},
+        {"id": "web-engineering-map-q2", "prompt": "What is the BFF primarily responsible for?", "options": ["A controlled same-origin boundary and upstream call", "Replacing all domain services", "Storing payment truth in the browser", "Creating production roles client-side"], "answer": 0, "explanation": "The BFF constrains browser-to-backend interaction while domain authority stays in Java."}
+      ]
+    },
+    {
+      "id": "web-build-feature",
+      "title": "Build an admin feature from API contract to polished screen",
+      "overview": "Start a web feature with the backend contract, not with a mock button. Once the owning service exposes an authorized, tested API, add a typed server/BFF function, explicit request/response parsing, a component with loading/empty/error/success states, and navigation only for eligible users. Mutations need origin/CSRF-style protections already used by the BFF, bounded request bodies and clear retry behavior. Accessibility and responsive behavior are part of done, not a later decoration.",
+      "steps": [
+        {"label": "Confirm backend contract", "detail": "Record method, path, request/response fields, auth role and error codes from the owning Java API."},
+        {"label": "Add BFF policy", "detail": "Allow only the required action/path and preserve origin, body-size and session-forwarding protections."},
+        {"label": "Add typed parsing", "detail": "Validate upstream JSON before assuming its shape; fail with an actionable state if the contract is wrong."},
+        {"label": "Build all UI states", "detail": "Implement loading, empty, success, validation, denied and upstream-unavailable states."},
+        {"label": "Protect navigation", "detail": "Hide unavailable actions for UX while relying on backend role checks for actual security."},
+        {"label": "Test responsive/accessibility", "detail": "Verify keyboard operation, labels, focus, mobile layout and long/error content before release."},
+        {"label": "Avoid duplicated rules", "detail": "Do not recalculate protected pricing, role, payment or order-transition truth in TypeScript when Java owns it."}
+      ],
+      "example": "A new admin support panel first gets a reason-audited backend endpoint. The Next.js route forwards the authorized request, and the component renders masked data plus explicit denied/unavailable states.",
+      "lab": "Design a synthetic admin read feature. List backend endpoint, BFF action, TypeScript response parser, component states, role-aware navigation, tests and rollback. Keep all data synthetic.",
+      "pitfall": "Typing an interface in TypeScript does not validate runtime JSON; parse or validate upstream responses before trusting them.",
+      "questions": [
+        {"id": "web-build-feature-q1", "prompt": "What should exist before a production admin mutation button is wired?", "options": ["Authorized backend contract and tests", "Only a Figma screenshot", "A client-side admin flag", "A hard-coded success response"], "answer": 0, "explanation": "The UI should consume an established secure domain contract."},
+        {"id": "web-build-feature-q2", "prompt": "Which UI states are part of feature completeness?", "options": ["Loading, empty, success and error/denied states", "Success only", "Desktop only", "Spinner only"], "answer": 0, "explanation": "Operationally usable interfaces make failure and absence explicit."}
+      ]
+    },
+    {
+      "id": "web-test-release-recover",
+      "title": "Test contracts, build evidence and production rollback",
+      "overview": "Web validation should combine fast unit tests for parsing/policy with typecheck, lint and production build, then authenticated smoke tests against the deployed backend route. A successful Next.js build does not prove APIM/backend routing or feature flags are correct. Release evidence should identify the exact source/image/revision and include both authorized and denied behavior. Rollback should preserve compatibility with any backend/schema changes already deployed.",
+      "steps": [
+        {"label": "Test route policy", "detail": "Cover unknown actions, cross-origin mutations, missing session, oversized/invalid body and upstream failure."},
+        {"label": "Test parsers", "detail": "Feed expected and malformed upstream responses into typed parsing helpers."},
+        {"label": "Run quality gates", "detail": "Require relevant node tests, ESLint, TypeScript typecheck and the production Next.js build."},
+        {"label": "Verify deployment chain", "detail": "Check web image/revision plus backend/APIM route and feature flag instead of stopping at CI."},
+        {"label": "Smoke both roles", "detail": "Use an authorized admin and a denied/non-admin case for the deployed route."},
+        {"label": "Rollback coherently", "detail": "Roll back web and backend in a compatible order when their contracts changed together."}
+      ],
+      "example": "If the web revision is healthy but the BFF gets 404 from upstream, the UI artifact is deployed but the feature is not operational. Fix or roll back routing/backend rather than declaring success from the web health check.",
+      "lab": "Create a release checklist for a synthetic admin feature with commit SHA, web tests/build, backend checks, route/flag verification, authorized smoke, denied smoke and rollback ordering.",
+      "pitfall": "A screenshot of a page is not proof that its protected actions work against the intended production backend.",
+      "questions": [
+        {"id": "web-test-release-recover-q1", "prompt": "Does a successful Next.js build prove an API-backed feature is operational?", "options": ["No; backend/routing/config and smoke evidence are also required", "Yes, always", "Only if the logo loads", "Only on desktop"], "answer": 0, "explanation": "Build evidence and runtime integration evidence are different stages."},
+        {"id": "web-test-release-recover-q2", "prompt": "What should an authenticated production smoke include?", "options": ["Authorized success and denied behavior", "Only page HTML", "A production secret dump", "Only browser localStorage"], "answer": 0, "explanation": "Positive and negative access behavior validates the full protected route."}
+      ]
+    }
+  ]
+}

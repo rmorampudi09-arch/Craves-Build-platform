@@ -23,10 +23,10 @@ public final class ApiDtos {
         REFUND_PENDING, REFUNDED, REFUND_FAILED
     }
 
-    public record AddCartItemRequest(@NotNull UUID menuItemId, @Min(1) int quantity) {
+    public record AddCartItemRequest(@NotNull UUID menuItemId, @Min(1) @jakarta.validation.constraints.Max(100) int quantity) {
     }
 
-    public record UpdateCartItemRequest(@Min(1) int quantity) {
+    public record UpdateCartItemRequest(@Min(1) @jakarta.validation.constraints.Max(100) int quantity) {
     }
 
     public record CartItemResponse(

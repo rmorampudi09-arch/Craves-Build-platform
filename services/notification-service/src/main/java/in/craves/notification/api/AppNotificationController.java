@@ -30,10 +30,36 @@ public class AppNotificationController {
         return notificationService.appNotices(currentIdentity(authentication), limit);
     }
 
+    @GetMapping("/in-app/page")
+    public AppNoticePageResponse page(
+        Authentication authentication,
+        @RequestParam(defaultValue = "50") int limit,
+        @RequestParam(required = false) String cursor,
+        @RequestParam(defaultValue = "false") boolean unreadOnly
+    ) {
+        return notificationService.appNoticePage(
+            currentIdentity(authentication),
+            limit,
+            cursor,
+            unreadOnly
+        );
+    }
+
+    @GetMapping("/in-app/unread-count")
+    public UnreadCountResponse unreadCount(Authentication authentication) {
+        return notificationService.unreadCount(currentIdentity(authentication));
+    }
+
     @PatchMapping("/in-app/{noticeId}/read")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void markRead(Authentication authentication, @PathVariable UUID noticeId) {
         notificationService.markRead(currentIdentity(authentication), noticeId);
+    }
+
+    @PatchMapping("/in-app/read-all")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void markAllRead(Authentication authentication) {
+        notificationService.markAllRead(currentIdentity(authentication));
     }
 
     private static UUID currentIdentity(Authentication authentication) {

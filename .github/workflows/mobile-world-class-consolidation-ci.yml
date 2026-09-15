@@ -1,0 +1,132 @@
+name: CRAVES Mobile World-Class Consolidation CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-world-class-consolidation-ci.yml'
+      - 'docs/handover/2026-09-10-mobile-world-class-consolidation.md'
+  push:
+    branches:
+      - feature/mobile-world-class-consolidation-20260910
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-world-class-consolidation-ci.yml'
+      - 'docs/handover/2026-09-10-mobile-world-class-consolidation.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-world-class-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-mobile-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify mobile-only consolidation scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          changed="$(git diff --name-only refs/remotes/origin/main...HEAD)"
+          printf '%s\n' "$changed"
+          disallowed="$(printf '%s\n' "$changed" | grep -Ev '^(apps/mobile/|\.github/workflows/mobile-world-class-consolidation-ci\.yml$|docs/handover/2026-09-10-mobile-world-class-consolidation\.md$)' || true)"
+          if [[ -n "$disallowed" ]]; then
+            echo 'ERROR: consolidation contains non-mobile runtime changes:' >&2
+            printf '%s\n' "$disallowed" >&2
+            exit 1
+          fi
+
+      - name: Reject committed Firebase and signing material
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden="$(find apps/mobile -type f \( \
+            -name 'google-services.json' -o \
+            -name 'GoogleService-Info.plist' -o \
+            -name '*.keystore' -o \
+            -name '*.jks' -o \
+            -name '*.p12' -o \
+            -name '*.mobileprovision' -o \
+            -name '*.cer' -o \
+            -name '*.key' \
+          \) -print || true)"
+          if [[ -n "$forbidden" ]]; then
+            echo 'ERROR: Firebase native configuration or signing material must be injected securely, not committed:' >&2
+            printf '%s\n' "$forbidden" >&2
+            exit 1
+          fi
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Install locked dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: TypeScript strict check
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+
+      - name: ESLint with zero warnings
+        working-directory: apps/mobile
+        run: npm run lint -- --max-warnings=0
+
+      - name: Full Jest suite
+        working-directory: apps/mobile
+        run: npm test -- --runInBand
+
+      - name: Production Android JavaScript bundle
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          rm -rf build/mobile-world-class-bundle
+          mkdir -p build/mobile-world-class-bundle
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output build/mobile-world-class-bundle/index.android.bundle \
+            --assets-dest build/mobile-world-class-bundle/assets
+          test -s build/mobile-world-class-bundle/index.android.bundle
+
+      - name: Package reviewed mobile source
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_root="$RUNNER_TEMP/Craves_Mobile_World_Class_Source"
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+          cp -R apps/mobile "$package_root/apps-mobile"
+          rm -rf "$package_root/apps-mobile/node_modules" "$package_root/apps-mobile/build"
+          cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
+          Craves React Native mobile consolidation candidate.
+          Includes Favorites 2.0 P1A-P3: offline-safe Saved, enriched current Catalog states,
+          favorite chefs/kitchens, Cooking Today, and safe Your Usual / Order Like Last Time.
+          Firebase native configuration and signing material are deliberately excluded.
+          EOF
+          (cd "$RUNNER_TEMP" && zip -qr Craves_Mobile_World_Class_Source.zip Craves_Mobile_World_Class_Source)
+
+      - name: Upload reviewed source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Craves_Mobile_World_Class_Source
+          path: ${{ runner.temp }}/Craves_Mobile_World_Class_Source.zip
+          if-no-files-found: error
+          retention-days: 30

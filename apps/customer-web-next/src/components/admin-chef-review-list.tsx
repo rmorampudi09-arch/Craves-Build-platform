@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useCallback, useEffect, useState } from "react";
 import type { AdminChefApplication, AdminChefApplicationStatus } from "@/lib/admin-chef-review-contract";
 
@@ -9,7 +11,7 @@ export function AdminChefReviewList() {
   const [message, setMessage] = useState("Loading chef applications…");
 
   const load = useCallback(async () => {
-    const response = await fetch(`/api/admin/chef-reviews?status=${status}`, { cache: "no-store" });
+    const response = await adminFetch(`/api/admin/chef-reviews?status=${status}`, { cache: "no-store" });
     const body = await response.json().catch(() => null);
     if (response.status === 401) throw new Error("Administrator session expired.");
     if (response.status === 403) throw new Error("Administrator access is required.");

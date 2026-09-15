@@ -69,14 +69,15 @@ API_POLICY=$(az rest --method get --url "${API_MGMT}/policies/policy?api-version
 [[ "$API_POLICY" != *'set-backend-service backend-id='* ]] || fail "Inherited API backend-id policy blocks safe operation routing"
 
 put_operation() {
-  local ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" BACKEND="$5"
+  local ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4" BACKEND="$5" PARAM_NAME="${6:-resourceId}"
   local BODY RENDERED POLICY_BODY
   BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
   jq -n \
     --arg display "$DISPLAY" \
     --arg method "$METHOD" \
     --arg template "$TEMPLATE" \
-    '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:[{name:"resourceId",type:"string",required:true}],responses:[{statusCode:200,description:"Audited investigation evidence"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"ADMIN access required"},{statusCode:404,description:"Resource not found"}]}}' >"$BODY"
+    --arg parameter "$PARAM_NAME" \
+    '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:[{name:$parameter,type:"string",required:true}],responses:[{statusCode:200,description:"Audited administrator evidence"},{statusCode:400,description:"Invalid request"},{statusCode:401,description:"Authentication required"},{statusCode:403,description:"ADMIN access required"},{statusCode:404,description:"Resource not found"}]}}' >"$BODY"
   az rest --method put --url "${API_MGMT}/operations/${ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
   sed "s|__BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
   jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
@@ -88,6 +89,9 @@ put_operation "get-admin-order-investigation" "GET" "/orders/{resourceId}" "Inve
 put_operation "get-admin-payment-investigation" "GET" "/payments/{resourceId}" "Investigate payment" "$INTEGRATION_OPERATION_BASE"
 put_operation "get-admin-refund-investigation" "GET" "/refunds/{resourceId}" "Investigate refund" "$INTEGRATION_OPERATION_BASE"
 put_operation "get-admin-delivery-command-investigation" "GET" "/delivery-commands/{resourceId}" "Investigate delivery command" "$INTEGRATION_OPERATION_BASE"
+put_operation "list-admin-customer-orders" "GET" "/customers/{customerId}/orders" "List customer orders" "$ORDER_OPERATION_BASE" "customerId"
+put_operation "list-admin-customer-payments" "GET" "/customers/{customerId}/payments" "List customer payments" "$INTEGRATION_OPERATION_BASE" "customerId"
+put_operation "list-admin-customer-refunds" "GET" "/customers/{customerId}/refunds" "List customer refunds" "$INTEGRATION_OPERATION_BASE" "customerId"
 
 verify_operation() {
   local ID="$1" EXPECTED_BACKEND="$2" POLICY OPERATION
@@ -104,11 +108,16 @@ verify_operation "get-admin-order-investigation" "$ORDER_OPERATION_BASE"
 verify_operation "get-admin-payment-investigation" "$INTEGRATION_OPERATION_BASE"
 verify_operation "get-admin-refund-investigation" "$INTEGRATION_OPERATION_BASE"
 verify_operation "get-admin-delivery-command-investigation" "$INTEGRATION_OPERATION_BASE"
+verify_operation "list-admin-customer-orders" "$ORDER_OPERATION_BASE"
+verify_operation "list-admin-customer-payments" "$INTEGRATION_OPERATION_BASE"
+verify_operation "list-admin-customer-refunds" "$INTEGRATION_OPERATION_BASE"
 
 GATEWAY_URL=$(az apim show -g "$RG" -n "$APIM" --query gatewayUrl -o tsv)
 [[ "$GATEWAY_URL" == https://* ]] || fail "APIM HTTPS gateway URL was not returned"
 SMOKE_ID="00000000-0000-4000-8000-000000000001"
 HTTP_STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 "${GATEWAY_URL%/}/${API_PATH}/orders/${SMOKE_ID}")
 [[ "$HTTP_STATUS" == "401" ]] || fail "Unauthenticated gateway guard returned HTTP $HTTP_STATUS instead of 401"
+CUSTOMER_HTTP_STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 "${GATEWAY_URL%/}/${API_PATH}/customers/${SMOKE_ID}/orders")
+[[ "$CUSTOMER_HTTP_STATUS" == "401" ]] || fail "Unauthenticated Customer 360 gateway guard returned HTTP $CUSTOMER_HTTP_STATUS instead of 401"
 
-echo "SUCCESS: Admin operational investigation APIM operations configured and verified."
+echo "SUCCESS: Admin operational investigation and Customer 360 APIM operations configured and verified."

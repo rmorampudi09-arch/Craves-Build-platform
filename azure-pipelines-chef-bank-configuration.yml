@@ -1,0 +1,67 @@
+# PLAN is read-only. APPLY changes existing Key Vault references / app revisions and
+# optionally publishes two leaf APIs. Normal usage can incur charges, but no new Azure
+# service or scaling is provisioned. Bank provider calls and payouts are not enabled.
+trigger: none
+pr: none
+parameters:
+  - name: applyConfiguration
+    type: boolean
+    default: false
+  - name: publishBankRoutes
+    type: boolean
+    default: false
+  - name: expectedReleaseSha
+    type: string
+    default: ''
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+pool:
+  vmImage: ubuntu-latest
+steps:
+  - checkout: self
+    persistCredentials: false
+  - script: |
+      set -euo pipefail
+      python3 -m unittest discover -s scripts/finance -p 'test_configure_bank_*.py' -v
+    displayName: Verify configuration safety without cloud writes
+  - task: AzureCLI@2
+    displayName: Plan or configure existing bank runtime references
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        args=(--output "$(Build.ArtifactStagingDirectory)/bank-runtime-plan.json")
+        if [[ "${APPLY_CONFIGURATION,,}" == "true" ]]; then
+          args+=(--apply --expected-source-sha "$EXPECTED_RELEASE_SHA")
+        fi
+        python3 scripts/finance/configure_bank_runtime.py "${args[@]}"
+    env:
+      APPLY_CONFIGURATION: ${{ parameters.applyConfiguration }}
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+  - task: AzureCLI@2
+    displayName: Plan or publish exact bank APIs after deployed authentication check
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        args=(--output "$(Build.ArtifactStagingDirectory)/bank-apim-plan.json")
+        if [[ "${PUBLISH_BANK_ROUTES,,}" == "true" ]]; then
+          [[ "${APPLY_CONFIGURATION,,}" == "true" ]] || { echo 'Route publication requires explicit apply configuration.' >&2; exit 1; }
+          args+=(--apply --expected-source-sha "$EXPECTED_RELEASE_SHA")
+        fi
+        python3 scripts/finance/configure_bank_apim.py "${args[@]}"
+    env:
+      APPLY_CONFIGURATION: ${{ parameters.applyConfiguration }}
+      PUBLISH_BANK_ROUTES: ${{ parameters.publishBankRoutes }}
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+  - task: PublishPipelineArtifact@1
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)
+      artifact: chef-bank-configuration-plan
+    displayName: Publish non-secret configuration evidence

@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class DeliveryMetricsRepository {
@@ -86,7 +87,22 @@ public class DeliveryMetricsRepository {
         );
     }
 
+    @Transactional
     public DeliveryScoreResponse insertOutcomeIfAbsent(DeliveryOutcomeRequest request,
+                                                        DeliveryOutcomeScorer.ScoredOutcome score,
+                                                        Instant occurredAt,
+                                                        boolean successful) {
+        return insertOutcomeIfAbsent(new OutcomeContext(request.deliveryId(), request.chefSubOrderId(),
+            request.orderId(), request.providerId(), request.status(), request.distanceKm(), request.area(),
+            request.orderHour(), request.dayOfWeek()), score, occurredAt, successful);
+    }
+
+    public record OutcomeContext(UUID deliveryId, UUID chefSubOrderId, UUID orderId, String providerId,
+        in.craves.integration.delivery.DeliveryIntelligenceModels.OutcomeStatus status,
+        double distanceKm, String area, int orderHour, int dayOfWeek) {}
+
+    @Transactional
+    public DeliveryScoreResponse insertOutcomeIfAbsent(OutcomeContext request,
                                                         DeliveryOutcomeScorer.ScoredOutcome score,
                                                         Instant occurredAt,
                                                         boolean successful) {

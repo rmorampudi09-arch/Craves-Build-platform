@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useCallback, useEffect, useState } from "react";
 import type { AdminSubscriptionPlan } from "@/lib/admin-subscription-plan-contract";
 import type { AdminSubscriptionPolicy } from "@/lib/admin-subscription-runtime-contract";
@@ -20,7 +22,7 @@ export function AdminSubscriptionPolicyManager({ plan, onChanged }: { plan: Admi
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
-    const response = await fetch(`/api/admin/subscription-plans/${plan.id}/policy`, { cache: "no-store" });
+    const response = await adminFetch(`/api/admin/subscription-plans/${plan.id}/policy`, { cache: "no-store" });
     if (response.status === 404) { setPolicy(null); setForm(EMPTY); return; }
     if (response.status === 401) throw new Error("Administrator session expired.");
     if (response.status === 403) throw new Error("Subscription administrator access is required.");
@@ -36,7 +38,7 @@ export function AdminSubscriptionPolicyManager({ plan, onChanged }: { plan: Admi
     if ((form.customerPauseEnabled && pauseCutoffMinutes == null) || (form.customerResumeEnabled && resumeLeadMinutes == null) || (form.customerCancelEnabled && cancelCutoffMinutes == null) || (form.customerSkipEnabled && skipCutoffMinutes == null)) { setMessage("Every enabled customer action requires an explicit admin cutoff/lead time."); return; }
     setBusy(true); setMessage("");
     try {
-      const response = await fetch(`/api/admin/subscription-plans/${plan.id}/policy`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customerPauseEnabled: form.customerPauseEnabled, customerResumeEnabled: form.customerResumeEnabled, customerCancelEnabled: form.customerCancelEnabled, customerSkipEnabled: form.customerSkipEnabled, pauseCutoffMinutes, resumeLeadMinutes, cancelCutoffMinutes, skipCutoffMinutes, holidayPolicyReference: form.holidayPolicyReference.trim() || null, unusedMealPolicyReference: form.unusedMealPolicyReference.trim() || null, refundPolicyReference: form.refundPolicyReference.trim() || null, notes: form.notes.trim() || null }) });
+      const response = await adminFetch(`/api/admin/subscription-plans/${plan.id}/policy`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customerPauseEnabled: form.customerPauseEnabled, customerResumeEnabled: form.customerResumeEnabled, customerCancelEnabled: form.customerCancelEnabled, customerSkipEnabled: form.customerSkipEnabled, pauseCutoffMinutes, resumeLeadMinutes, cancelCutoffMinutes, skipCutoffMinutes, holidayPolicyReference: form.holidayPolicyReference.trim() || null, unusedMealPolicyReference: form.unusedMealPolicyReference.trim() || null, refundPolicyReference: form.refundPolicyReference.trim() || null, notes: form.notes.trim() || null }) });
       if (!response.ok) throw new Error("Lifecycle policy draft could not be saved.");
       await load(); await onChanged(); setMessage("Policy draft saved. No cancellation/refund/unused-meal rule was inferred.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Policy draft could not be saved."); } finally { setBusy(false); }
@@ -46,7 +48,7 @@ export function AdminSubscriptionPolicyManager({ plan, onChanged }: { plan: Admi
     if (!reason.trim()) { setMessage("Enter an activation reason."); return; }
     setBusy(true); setMessage("");
     try {
-      const response = await fetch(`/api/admin/subscription-plans/${plan.id}/policy/activate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reason.trim() }) });
+      const response = await adminFetch(`/api/admin/subscription-plans/${plan.id}/policy/activate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reason.trim() }) });
       if (!response.ok) throw new Error("Lifecycle policy could not be activated.");
       setReason(""); await load(); await onChanged(); setMessage("Lifecycle policy activated.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Policy activation failed."); } finally { setBusy(false); }

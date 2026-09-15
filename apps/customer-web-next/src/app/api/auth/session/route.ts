@@ -1,3 +1,5 @@
+import { boundedFetch } from "@/lib/bounded-fetch";
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseSessionExchange, publicAuthError } from "@/lib/auth-contract";
 import { setSessionCookies } from "@/lib/auth-cookies";
@@ -5,6 +7,10 @@ import { isSameOrigin } from "@/lib/request-security";
 import { apiBaseUrl } from "@/lib/server-api";
 
 export async function POST(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED", message: "Invalid sign-in origin." }, { status: 403 });
   const input = await request.json().catch(() => null) as { firebaseIdToken?: unknown } | null;
   const firebaseIdToken = typeof input?.firebaseIdToken === "string" ? input.firebaseIdToken.trim() : "";
@@ -15,13 +21,13 @@ export async function POST(request: NextRequest) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
-    const upstream = await fetch(`${apiBaseUrl()}/auth/firebase/exchange`, {
+    const upstream = await boundedFetch(`${apiBaseUrl()}/auth/firebase/exchange`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ firebaseIdToken }),
+      body: JSON.stringify({ firebaseIdToken, adminSession: process.env.CRAVES_ADMIN_PORTAL === "true" }),
       cache: "no-store",
       signal: controller.signal,
-    });
+    }, 40_000);
     const raw = await upstream.json().catch(() => null);
     if (!upstream.ok) {
       return NextResponse.json({ code: "SIGN_IN_FAILED", message: publicAuthError(upstream.status) }, { status: upstream.status });

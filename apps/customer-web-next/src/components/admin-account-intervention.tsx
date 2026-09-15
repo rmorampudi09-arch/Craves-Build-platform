@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useState } from "react";
 import type {
   AdminAccountAction,
@@ -34,7 +36,7 @@ export function AdminAccountIntervention() {
   const [busy, setBusy] = useState(false);
 
   async function request(path: string, init?: RequestInit): Promise<AdminAccountInterventionStatus> {
-    const response = await fetch(path, { ...init, cache: "no-store" });
+    const response = await adminFetch(path, { ...init, cache: "no-store" });
     const body = await response.json().catch(() => null) as (AdminAccountInterventionStatus & { code?: string }) | null;
     if (!response.ok || !body || typeof body.identityId !== "string") {
       throw new Error(failureMessage(response.status, body?.code ?? null));

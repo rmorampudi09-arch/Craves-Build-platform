@@ -1,0 +1,85 @@
+name: CRAVES Favorites P2 Catalog CI
+
+on:
+  push:
+    branches:
+      - feature/favorites-clean-p1b-p2-catalog-20260821
+    paths:
+      - 'services/catalog-service/**'
+      - '.github/workflows/favorites-p2-catalog-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'services/catalog-service/**'
+      - '.github/workflows/favorites-p2-catalog-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/catalog-service/pom.xml
+      - name: Maven clean verify
+        working-directory: services/catalog-service
+        run: mvn -B -ntp clean verify
+      - name: P2 privacy and bounded-read guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          service='services/catalog-service/src/main/java/in/craves/catalog/service/FavoriteHomeFeedService.java'
+          test -s "$service"
+          grep -q 'MAX_RELATIONSHIPS_PER_REQUEST = 100' "$service"
+          grep -q 'MAX_PREVIEW_ITEMS_PER_KITCHEN = 3' "$service"
+          grep -q 'COOKING_LATER_TODAY' "$service"
+          ! grep -Eiq 'phone_number|email|address_line1|address_line2|postal_code|latitude|longitude' \
+            services/catalog-service/src/main/java/in/craves/catalog/web/FavoriteHomeFeedDtos.java
+          ! grep -R --line-number -E '(password|secret|token|api[-_]?key)[[:space:]]*=[[:space:]]*[^$<{[:space:]]' \
+            services/catalog-service/modules/favorites-p2-home-feed \
+            services/catalog-service/src/main/java/in/craves/catalog/service/FavoriteHomeFeedService.java
+      - name: Package clean P2 Catalog source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/p2-catalog-base
+          package_root="$RUNNER_TEMP/Craves_Favorites_2_0_P2_Catalog_Clean_Source"
+          rm -rf "$package_root"
+          mkdir -p "$package_root"
+          git diff --name-only origin/p2-catalog-base...HEAD | while IFS= read -r path; do
+            [[ -n "$path" && -f "$path" ]] || continue
+            mkdir -p "$package_root/$(dirname "$path")"
+            cp "$path" "$package_root/$path"
+          done
+          cat > "$package_root/SOURCE_PACKAGE_README.txt" <<'EOF'
+          CRAVES Favorites 2.0 P2 Catalog Home Feed clean integration
+          Base: main
+          Includes required P1B Catalog prerequisite and schedule schema in the clean release diff.
+          Source only. No Azure/APIM/database runtime action is performed by this workflow.
+          EOF
+          (cd "$RUNNER_TEMP" && zip -qr Craves_Favorites_2_0_P2_Catalog_Clean_Source.zip Craves_Favorites_2_0_P2_Catalog_Clean_Source)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Craves_Favorites_2_0_P2_Catalog_Clean_Source
+          path: ${{ runner.temp }}/Craves_Favorites_2_0_P2_Catalog_Clean_Source.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: favorites-p2-catalog-surefire
+          path: services/catalog-service/target/surefire-reports
+          if-no-files-found: ignore
+          retention-days: 14

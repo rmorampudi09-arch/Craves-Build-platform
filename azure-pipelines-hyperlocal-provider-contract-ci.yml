@@ -1,0 +1,106 @@
+trigger: none
+pr: none
+
+variables:
+  JAVA_VERSION: '21'
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    persistCredentials: false
+
+  - task: JavaToolInstaller@0
+    displayName: Use Java 21
+    inputs:
+      versionSpec: '$(JAVA_VERSION)'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - bash: |
+      set -euo pipefail
+      cd services/integration-service
+      mvn -B -ntp clean verify
+    displayName: Maven verify — Integration Service
+
+  - bash: |
+      set -euo pipefail
+
+      PROPS='services/integration-service/src/main/java/in/craves/integration/config/DeliveryProviderContractProperties.java'
+      SERVICE='services/integration-service/src/main/java/in/craves/integration/delivery/production/HyperlocalProviderContractReadinessService.java'
+      CONTROLLER='services/integration-service/src/main/java/in/craves/integration/admin/AdminHyperlocalProviderContractReadinessController.java'
+      TEST='services/integration-service/src/test/java/in/craves/integration/delivery/production/HyperlocalProviderContractReadinessServiceTest.java'
+      MIGRATION='services/integration-service/src/main/resources/db/migration/V111__hyperlocal_provider_contract_profiles.sql'
+
+      for file in "$PROPS" "$SERVICE" "$CONTROLLER" "$TEST" "$MIGRATION"; do
+        test -s "$file" || { echo "ERROR: missing required file $file" >&2; exit 2; }
+      done
+
+      # Contract gates must remain fail-closed by Java default. We intentionally reject any
+      # initializer that turns a verification flag on in source.
+      ! grep -Eq 'private boolean (contractVerified|credentialModelVerified|serviceabilitySchemaVerified|quoteSchemaVerified|createSchemaVerified|cancelSchemaVerified|trackSchemaVerified|webhookSchemaVerified|createReconciliationVerified|hyderabadServiceabilityVerified)[[:space:]]*=[[:space:]]*true' "$PROPS" \
+        || { echo 'ERROR: a partner contract verification flag defaults true.' >&2; exit 2; }
+
+      for blocker in \
+        VENDOR_CONTRACT_NOT_VERIFIED \
+        CONTRACT_VERSION_NOT_RECORDED \
+        CREDENTIAL_MODEL_NOT_VERIFIED \
+        SERVICEABILITY_SCHEMA_NOT_VERIFIED \
+        QUOTE_SCHEMA_NOT_VERIFIED \
+        CREATE_SCHEMA_NOT_VERIFIED \
+        CANCEL_SCHEMA_NOT_VERIFIED \
+        TRACK_SCHEMA_NOT_VERIFIED \
+        WEBHOOK_SCHEMA_NOT_VERIFIED \
+        CREATE_RECONCILIATION_NOT_VERIFIED \
+        HYDERABAD_SERVICEABILITY_NOT_VERIFIED \
+        EXECUTABLE_ADAPTER_NOT_DEPLOYED \
+        PROVIDER_CATALOG_INACTIVE; do
+        grep -Fq "$blocker" "$SERVICE" || {
+          echo "ERROR: readiness blocker $blocker is missing." >&2
+          exit 2
+        }
+      done
+
+      grep -Fq 'routingEligible' "$SERVICE" || {
+        echo 'ERROR: final routing eligibility gate is missing.' >&2
+        exit 2
+      }
+      grep -Fq 'contractReady && adapterRegistered && catalogActive' "$SERVICE" || {
+        echo 'ERROR: routing eligibility no longer requires contract + adapter + catalog.' >&2
+        exit 2
+      }
+
+      grep -Fq 'HYPERLOCAL_MARKETPLACE' "$MIGRATION" || exit 2
+      grep -Fq 'INTRACITY_2W' "$MIGRATION" || exit 2
+      grep -Fq 'DIRECT_INTRACITY' "$MIGRATION" || exit 2
+      grep -Fq 'HYDERABAD_SERVICEABILITY_VERIFICATION_REQUIRED' "$MIGRATION" || exit 2
+      ! grep -Eq "SET[^;]*is_active[[:space:]]*=[[:space:]]*TRUE" "$MIGRATION" || {
+        echo 'ERROR: migration must never activate a provider.' >&2
+        exit 2
+      }
+
+      # Existing standalone provider switches must remain default-disabled and must still check
+      # for provider-specific Java implementation before any enable path is allowed.
+      declare -A PIPELINES=(
+        [shadowfax]='azure-pipelines-shadowfax-environment.yml'
+        [porter]='azure-pipelines-porter-environment.yml'
+        [delhivery]='azure-pipelines-delhivery-environment.yml'
+      )
+      for provider in shadowfax porter delhivery; do
+        file="${PIPELINES[$provider]}"
+        test -s "$file" || { echo "ERROR: missing $file" >&2; exit 2; }
+        grep -A3 -F 'name: enableProvider' "$file" | grep -Fq 'default: false' || {
+          echo "ERROR: $provider enableProvider no longer defaults false." >&2
+          exit 2
+        }
+        grep -Fq 'adapter_present' "$file" || {
+          echo "ERROR: $provider pipeline no longer verifies an adapter." >&2
+          exit 2
+        }
+      done
+
+      echo 'HYPERLOCAL PROVIDER CONTRACT SAFETY: PASS'
+      echo 'No provider was contacted and no Azure runtime state was changed.'
+    displayName: Verify fail-closed hyperlocal provider contract controls

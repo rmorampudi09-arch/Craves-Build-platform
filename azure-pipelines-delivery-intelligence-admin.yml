@@ -1,0 +1,93 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmProductionDeploy
+    type: boolean
+    default: false
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    persistCredentials: false
+  - bash: |
+      set -euo pipefail
+      confirmation='${{ parameters.confirmProductionDeploy }}'
+      [[ "${confirmation,,}" == true ]] || { echo 'Explicit production deployment confirmation required.' >&2; exit 1; }
+      echo "Reviewed source: $(Build.SourceVersion)"
+    displayName: Verify release confirmation
+  - task: NodeTool@0
+    inputs:
+      versionSpec: 24.x
+  - bash: |
+      set -euo pipefail
+      npm ci --ignore-scripts --no-audit --no-fund
+      npm run lint
+      npm run typecheck
+      npm test
+      npm run build
+    workingDirectory: apps/delivery-intelligence-admin
+    displayName: Validate exact Delivery Intelligence source
+  - task: AzureCLI@2
+    displayName: Verify existing resources and live Auth session policy
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        rg=rg-craves-prodlow-centralindia
+        az containerapp show -g "$rg" -n ca-craves-delivery-intel-prodlow --query name -o tsv --only-show-errors
+        origin=$(az containerapp show -g "$rg" -n ca-craves-auth-service-prodlow --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)
+        curl --fail --silent --show-error --max-time 15 "https://${origin}/api/v1/auth/session-policy" |
+          jq -e '.version == "ADMIN_SESSION_V1" and .adminAbsoluteSeconds == 28800 and .accessTokenSeconds > 0 and .accessTokenSeconds <= 900' >/dev/null
+  - task: AzureCLI@2
+    displayName: Build and update the existing admin app with one replica
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+        rg=rg-craves-prodlow-centralindia
+        app=ca-craves-delivery-intel-prodlow
+        registry=cravesprodlowacr82121
+        repository=craves/delivery-intelligence-admin
+        tag='$(Build.SourceVersion)'
+        [[ "$tag" =~ ^[a-f0-9]{40}$ ]]
+        previous=$(az containerapp show -g "$rg" -n "$app" --query properties.template.containers[0].image -o tsv --only-show-errors)
+        previous_revision=$(az containerapp show -g "$rg" -n "$app" --query properties.latestReadyRevisionName -o tsv --only-show-errors)
+        echo "Rollback image: $previous"
+        echo "Rollback revision: $previous_revision"
+        az acr build --registry "$registry" --image "$repository:$tag" --file apps/delivery-intelligence-admin/Dockerfile . --only-show-errors
+        digest=$(az acr repository show --name "$registry" --image "$repository:$tag" --query digest -o tsv --only-show-errors)
+        [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+        image="$registry.azurecr.io/$repository@$digest"
+        rollback() {
+          echo 'Release failed; restoring the previous image with one replica.' >&2
+          az containerapp update -g "$rg" -n "$app" --image "$previous" --min-replicas 1 --max-replicas 1 --only-show-errors -o none
+        }
+        trap rollback ERR
+        az containerapp update -g "$rg" -n "$app" --image "$image" --min-replicas 1 --max-replicas 1 --no-wait --only-show-errors -o none
+        ready=false
+        for attempt in $(seq 1 120); do
+          state=$(az containerapp show -g "$rg" -n "$app" --query '{latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName,image:properties.template.containers[0].image,fqdn:properties.configuration.ingress.fqdn}' -o json --only-show-errors)
+          if jq -e --arg image "$image" '.latest == .ready and .image == $image' <<<"$state" >/dev/null; then
+            origin=$(jq -r '.fqdn' <<<"$state")
+            if curl --fail --silent --show-error --max-time 15 "https://${origin}/delivery-intelligence/api/health" >/dev/null; then ready=true; break; fi
+          fi
+          sleep 10
+        done
+        [[ "$ready" == true ]]
+        status=$(curl --silent --show-error --max-time 15 -o /dev/null -w '%{http_code}' https://admin.craves.in/delivery-intelligence/api/admin/me)
+        [[ "$status" == 401 ]]
+        trap - ERR
+        echo "Ready image: $image"
+        echo "Source: $tag; signed-out API: $status; replicas: 1/1"

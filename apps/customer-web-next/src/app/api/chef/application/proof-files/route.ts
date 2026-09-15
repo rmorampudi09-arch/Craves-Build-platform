@@ -1,3 +1,5 @@
+import { boundedFetch } from "@/lib/bounded-fetch";
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefProofDocument } from "@/lib/chef-application-contract";
@@ -26,6 +28,10 @@ function apiBaseUrl(): string {
 }
 
 export async function POST(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request))
     return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
   const token = request.cookies.get("craves_access_token")?.value;
@@ -50,7 +56,7 @@ export async function POST(request: NextRequest) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
   try {
-    const upstream = await fetch(
+    const upstream = await boundedFetch(
       `${apiBaseUrl()}/chef/application/proof-files?documentType=${encodeURIComponent(documentType)}`,
       {
         method: "POST",
@@ -58,19 +64,27 @@ export async function POST(request: NextRequest) {
         body: upstreamForm,
         cache: "no-store",
         signal: controller.signal,
-      },
+      }, 40_000
     );
     if (!upstream.ok) {
+      const upstreamError = await upstream.json().catch(() => null) as { code?: unknown } | null;
+      const approvedDocument = upstream.status === 409 && upstreamError?.code === "CHEF_DOCUMENT_ALREADY_APPROVED";
       const response = NextResponse.json(
         {
-          code: upstream.status === 401 ? "SESSION_EXPIRED" : "PROOF_FILE_UPLOAD_FAILED",
+          code: upstream.status === 401
+            ? "SESSION_EXPIRED"
+            : approvedDocument
+              ? "CHEF_DOCUMENT_ALREADY_APPROVED"
+              : "PROOF_FILE_UPLOAD_FAILED",
           message: upstream.status === 401
             ? "Your session expired. Sign in again."
             : upstream.status === 400
               ? "The file was rejected. Use the requested JPG, PNG or PDF format under 10 MB."
-              : upstream.status === 409
-                ? "Proof files cannot be changed after chef approval."
-                : "Proof upload is temporarily unavailable.",
+              : approvedDocument
+                ? "This document is already approved and cannot be replaced."
+                : upstream.status === 409
+                  ? "This document cannot be replaced in its current review state."
+                  : "Proof upload is temporarily unavailable.",
         },
         { status: upstream.status },
       );

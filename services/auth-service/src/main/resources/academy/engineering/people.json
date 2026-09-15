@@ -1,0 +1,68 @@
+{
+  "courseId": "people",
+  "minutesAdded": 80,
+  "addSources": [
+    "services/user-chef-service/src/main/java/in/craves/userchef/web/AdminDirectoryController.java"
+  ],
+  "lessons": [
+    {
+      "id": "people-engineering-map",
+      "title": "Trace customer and chef data without losing ownership boundaries",
+      "overview": "The User-Chef service is the owner of customer profile, saved-address and chef-onboarding data. Engineering work must preserve ownership: controllers accept a request, the authenticated principal or internal authorization identifies who may act, services enforce lifecycle rules, persistence records state, and downstream services consume only the contract they need. Administrator directory features additionally require a reason and must avoid exposing more personal data than the support task requires.",
+      "steps": [
+        {"label": "Identify the owner", "detail": "Start in the User-Chef controller and service that owns the profile, address, chef application or directory operation."},
+        {"label": "Classify the caller", "detail": "Determine whether the operation is customer-owned, chef-owned, administrator-only or an internal service call."},
+        {"label": "Trace validation", "detail": "Follow ownership, active-state, reason and lifecycle checks before the write or sensitive read."},
+        {"label": "Trace persistence", "detail": "Identify which record changes and whether deletion is soft, historical or forbidden by existing state."},
+        {"label": "Trace downstream effects", "detail": "Separate the saved state from notification-outbox, catalog or order effects; each has its own evidence."}
+      ],
+      "example": "An admin directory search may return a masked hit and then require an authorized case read. That is safer than returning full customer data in every search result.",
+      "lab": "Trace one saved-address operation and one AdminDirectoryController operation. Record the caller identity source, authorization, service method, persisted state and any downstream event using synthetic identifiers.",
+      "pitfall": "Do not copy current profile data into an old order to reconstruct history; Order owns its checkout snapshots.",
+      "questions": [
+        {"id": "people-engineering-map-q1", "prompt": "Which service owns customer saved-address state?", "options": ["User-Chef Service", "Payment provider", "Delivery adapter", "Academy UI"], "answer": 0, "explanation": "User-Chef is the source of truth for customer profile and saved-address state."},
+        {"id": "people-engineering-map-q2", "prompt": "Why should admin search results be limited before a case is opened?", "options": ["To reduce unnecessary personal-data exposure", "To calculate delivery price", "To bypass audit reasons", "To change order history"], "answer": 0, "explanation": "Administrative tooling should expose only what the support workflow requires."}
+      ]
+    },
+    {
+      "id": "people-build-feature",
+      "title": "Build a profile or onboarding feature vertically",
+      "overview": "A new people-domain feature should be added as a vertical slice: approved requirement, request/response contract, controller, service validation, persistence change when necessary, audit or outbox behavior, tests and client integration. Keep entities internal to the service and shape external responses deliberately. If a feature changes onboarding states or required evidence, treat that as a product/compliance decision and obtain the approved rule instead of inventing it in code.",
+      "steps": [
+        {"label": "Confirm the requirement", "detail": "Separate a technical field or workflow need from product, KYC or compliance policy that needs an authorized decision."},
+        {"label": "Design the API", "detail": "Define DTOs, caller ownership, validation errors and whether the operation is safe to retry."},
+        {"label": "Implement the service", "detail": "Keep lifecycle checks and state transitions in the service layer and use the existing persistence conventions."},
+        {"label": "Add side effects safely", "detail": "Use the existing outbox or integration pattern rather than making a state write depend on an uncontrolled external call."},
+        {"label": "Wire admin or customer UI", "detail": "Expose only the fields and actions authorized for that caller through the existing BFF/API path."},
+        {"label": "Document history", "detail": "State how edits affect future behavior and which historical records intentionally remain unchanged."}
+      ],
+      "example": "For an approved additional profile attribute, add persistence and DTO mapping in User-Chef, validate who may modify it, test it, then expose it in the appropriate UI. Do not silently change chef-approval criteria as part of the same field addition.",
+      "lab": "Design an approved generic profile-field addition. List migration, Java DTO/service/controller changes, ownership tests, UI changes and rollback. Mark any policy question as pending instead of choosing an answer.",
+      "pitfall": "A convenient database column is not permission to create a new KYC, FSSAI or onboarding rule.",
+      "questions": [
+        {"id": "people-build-feature-q1", "prompt": "Where should onboarding state-transition rules live?", "options": ["A React label", "The owning service layer", "A browser URL", "A delivery provider response"], "answer": 1, "explanation": "The service layer owns the lifecycle transition and validation."},
+        {"id": "people-build-feature-q2", "prompt": "What should an engineer do when an onboarding requirement is not approved?", "options": ["Invent a reasonable rule", "Copy another marketplace", "Flag the policy decision and wait for the authorized rule", "Hard-code it in the controller"], "answer": 2, "explanation": "Compliance and product policy must come from the authorized owner."}
+      ]
+    },
+    {
+      "id": "people-test-release-recover",
+      "title": "Test privacy, lifecycle and downstream recovery",
+      "overview": "People-domain tests must prove ownership and privacy, not just successful CRUD. Cover cross-user address access, inactive or deleted records, invalid lifecycle transitions, administrator reason requirements and masked directory results. Release validation should confirm migrations and authorized endpoints before customer traffic. When notifications or downstream synchronization fail, preserve the accepted User-Chef state and recover the side effect through its explicit mechanism instead of re-running the original decision blindly.",
+      "steps": [
+        {"label": "Test ownership", "detail": "Attempt the same resource with the owner and a different synthetic identity; the latter must be denied or hidden as designed."},
+        {"label": "Test lifecycle", "detail": "Cover valid and invalid chef/application transitions plus soft-deleted address behavior."},
+        {"label": "Test privacy", "detail": "Assert directory/search responses are masked and administrator reason controls are enforced."},
+        {"label": "Verify migration", "detail": "Confirm the target schema change is applied before the new code depends on it."},
+        {"label": "Smoke downstream evidence", "detail": "Check outbox/request state separately from channel delivery or catalog visibility."},
+        {"label": "Recover one boundary", "detail": "Retry or repair the failed side effect without repeating an already-completed approval or ownership change."}
+      ],
+      "example": "If chef approval persisted but the email provider was unavailable, recover the notification request. Do not approve the chef a second time merely to cause another email.",
+      "lab": "Write a test matrix for saved-address ownership and chef approval with success, wrong-owner, invalid-state, duplicate-request and downstream-notification-failure cases.",
+      "pitfall": "Never use real addresses, phone numbers or KYC documents in Academy labs or screenshots.",
+      "questions": [
+        {"id": "people-test-release-recover-q1", "prompt": "What should be retried when approval succeeded but notification delivery failed?", "options": ["The approved notification recovery path", "The approval decision itself", "The customer identity creation", "The payment capture"], "answer": 0, "explanation": "State transition and notification delivery are separate boundaries."},
+        {"id": "people-test-release-recover-q2", "prompt": "Which negative test is essential for a saved-address endpoint?", "options": ["Different user attempts access", "Logo renders", "Payment webhook repeats", "Rider quote sorts"], "answer": 0, "explanation": "Ownership isolation is a core requirement of saved-address operations."}
+      ]
+    }
+  ]
+}

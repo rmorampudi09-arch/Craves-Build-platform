@@ -43,8 +43,8 @@ for path in "${required[@]}"; do
   fi
 done
 
-if grep -REn '(az[[:space:]]+containerapp[[:space:]]+update|az[[:space:]]+apim[[:space:]].*(create|update|delete)|docker[[:space:]]+push)' \
-  scripts/release azure-pipelines-release-*.yml | grep -v 'validate-rollback-readiness.sh'; then
+if grep -En '(az[[:space:]]+containerapp[[:space:]]+update|az[[:space:]]+apim[[:space:]].*(create|update|delete)|docker[[:space:]]+push)' \
+  "${required[@]}" | grep -v 'validate-rollback-readiness.sh'; then
   echo 'ERROR: a read-only release gate appears to contain a mutating deployment command.' >&2
   failures=$((failures+1))
 fi

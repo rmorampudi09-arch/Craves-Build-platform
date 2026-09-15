@@ -1,0 +1,116 @@
+name: Chef Ledger CI
+
+on:
+  push:
+    branches: [feat/chef-ledger-controls-20260913]
+  pull_request:
+    paths:
+      - 'services/integration-service/**'
+      - 'services/order-service/**'
+      - 'contracts/**finance**'
+      - 'docs/finance/**'
+      - 'scripts/finance/**'
+      - 'tests/finance/**'
+      - '.github/workflows/chef-ledger-ci.yml'
+      - 'apps/customer-web-next/src/**/finance*'
+      - 'apps/customer-web-next/src/**/finance/**'
+
+permissions:
+  contents: read
+concurrency:
+  group: chef-ledger-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chef_ledger_test
+          POSTGRES_USER: ledger_ci
+          POSTGRES_PASSWORD: ledger_ci_local_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
+      LEDGER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/chef_ledger_test
+      LEDGER_TEST_DB_USER: ledger_ci
+      LEDGER_TEST_DB_PASSWORD: ledger_ci_local_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package exact source evidence
+        run: git archive --format=zip --output=craves-ledger-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chef-ledger-source-${{ github.sha }}
+          path: craves-ledger-source.zip
+          retention-days: 7
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            services/integration-service/pom.xml
+            services/order-service/pom.xml
+      - name: Integration regression and real PostgreSQL finalization tests
+        run: mvn --batch-mode --no-transfer-progress -f services/integration-service/pom.xml verify
+      - name: Actual Order checkout and delivery consumer database tests
+        run: mvn --batch-mode --no-transfer-progress -f services/order-service/pom.xml verify
+      - name: Signed Order-to-Integration-to-payout round trip
+        run: bash scripts/finance/test-source-roundtrip.sh
+      - name: Validate read-only release checks against the disposable round-trip database
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: chef_ledger_test
+          PGUSER: ledger_ci
+          PGPASSWORD: ledger_ci_local_only
+        run: |
+          psql -X --set=ON_ERROR_STOP=1 --file=scripts/finance/verify-integration-source-accounting.sql > target/finance-roundtrip/integration-readonly-check.txt
+          psql -X --set=ON_ERROR_STOP=1 --set=ledger_start_utc='2026-09-13T18:30:00Z' --file=scripts/finance/verify-order-source-accounting.sql > target/finance-roundtrip/order-readonly-check.txt
+      - name: Require every finance suite and connected round trip without skips
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, xml.etree.ElementTree as E
+          required={'ManualChefSettlementDatabaseTest':29,'ManualSettlementMigrationDatabaseTest':2,
+                    'ManualSettlementSecurityTest':7,'BankOnboardingDatabaseTest':19,'FinancialPostingDatabaseTest':9,'ChefSettlementHistoryDatabaseTest':7,
+                    'FinancialFullMigrationDatabaseTest':2,'FinancialPostingPrivilegesDatabaseTest':3,
+                    'LedgerMoneyAndPolicyTest':19,'ChefFeePreviewServiceTest':4,
+                    'ChefFinancialConflictAdviceTest':3,'FinanceCalculationsTest':19,
+                    'FinancePolicyDatabaseTest':5,'ChefPayoutDatabaseTest':14,'RazorpayXPayoutClientTest':11,
+                    'ChefPayoutWebhookDatabaseTest':8,'FinanceArithmeticPropertyTest':2,'FinanceRecoveryDatabaseTest':10,
+                    'OrderFinancialFinalizationDatabaseTest':18,'FinancialSourceSignatureTest':3,
+                    'FinancialCheckoutDatabaseTest':7,'FinancialSourceCompletionDatabaseTest':8,
+                    'CartLimitsTest':2,'CartConcurrencyDatabaseTest':6}
+          roots=[pathlib.Path('services/'+s+'/target/surefire-reports') for s in ['integration-service','order-service']]
+          for name, minimum in required.items():
+              files=[p for root in roots for p in root.glob('TEST-*.'+name+'.xml')]
+              assert len(files)==1, 'Missing finance suite: '+name
+              r=E.parse(files[0]).getroot()
+              assert int(r.attrib['tests'])>=minimum, 'Missing test cases: '+name
+              assert int(r.attrib.get('skipped','0'))==0, 'Skipped required finance tests: '+name
+              assert int(r.attrib.get('failures','0'))==0 and int(r.attrib.get('errors','0'))==0, name
+          report=json.loads(pathlib.Path('target/finance-roundtrip/report.json').read_text())
+          assert report['status']=='PASS' and report['checkCount']>=20
+          assert report['net']=='338.52'
+          json.loads(pathlib.Path('contracts/finance/order-source-v1.schema.json').read_text())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chef-ledger-test-evidence-${{ github.sha }}
+          path: |
+            services/integration-service/target/surefire-reports
+            services/order-service/target/surefire-reports
+            target/finance-roundtrip/report.json
+            target/finance-roundtrip/*-readonly-check.txt
+          retention-days: 14

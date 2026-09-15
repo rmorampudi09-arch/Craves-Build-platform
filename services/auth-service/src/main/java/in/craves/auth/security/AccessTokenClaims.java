@@ -11,6 +11,7 @@ public record AccessTokenClaims(
     List<String> roles,
     long tokenVersion,
     Instant issuedAt,
-    Instant expiresAt
+    Instant expiresAt,
+    UUID adminSessionId
 ) {
 }

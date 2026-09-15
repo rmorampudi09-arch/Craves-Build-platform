@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(name = "auth_identity")
 public class AuthIdentity {
     @Id
@@ -27,6 +28,12 @@ public class AuthIdentity {
 
     @Column(name = "email_verified", nullable = false)
     private boolean emailVerified;
+
+    @Column(name = "email_revision", nullable = false)
+    private long emailRevision;
+
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
 
     @Column(name = "display_name", length = 160)
     private String displayName;
@@ -114,6 +121,9 @@ public class AuthIdentity {
     public void setEmailVerified(boolean emailVerified) {
         this.emailVerified = emailVerified;
     }
+
+    public long getEmailRevision() { return emailRevision; }
+    public Instant getEmailVerifiedAt() { return emailVerifiedAt; }
 
     public String getDisplayName() {
         return displayName;

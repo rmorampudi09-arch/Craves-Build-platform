@@ -6,6 +6,7 @@ import "@syncfusion/ej2-tailwind3-theme/styles/pager/pager.css";
 import "@syncfusion/ej2-tailwind3-theme/styles/popup/popup.css";
 import "@syncfusion/ej2-tailwind3-theme/styles/spinner/spinner.css";
 import "@syncfusion/ej2-tailwind3-theme/styles/tooltip/tooltip.css";
+import { AdminExplorerSession } from "@/components/admin-explorer-session";
 import { AdminWorkspace } from "@/components/admin-workspace";
 
 export const metadata: Metadata = {
@@ -14,5 +15,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <AdminWorkspace>{children}</AdminWorkspace>;
+  return <AdminWorkspace><AdminExplorerSession>{children}</AdminExplorerSession></AdminWorkspace>;
 }

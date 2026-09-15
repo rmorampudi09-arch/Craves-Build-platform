@@ -72,6 +72,49 @@ public class NotificationInternalClient {
         );
     }
 
+    public void chefDocumentRejected(
+        UUID chefIdentityId,
+        UUID applicationId,
+        UUID documentId,
+        String documentType,
+        String reason
+    ) {
+        sendSafely(
+            new CreateNotificationRequest(
+                "chef-document-rejected-" + documentId + "-" + UUID.randomUUID(),
+                "user-chef-service",
+                "CHEF_DOCUMENT_REJECTED",
+                chefIdentityId,
+                "CHEF",
+                "IN_APP",
+                "CHEF_DOCUMENT_REJECTED_IN_APP",
+                null,
+                "One Chef document needs replacement",
+                "Your " + documentLabel(documentType) + " needs to be replaced. Reason: " + reason,
+                "CHEF_DOCUMENT",
+                documentId,
+                Map.of(
+                    "applicationId", applicationId.toString(),
+                    "documentId", documentId.toString(),
+                    "documentType", documentType,
+                    "reason", reason
+                ),
+                3
+            )
+        );
+    }
+
+    private static String documentLabel(String documentType) {
+        if (documentType == null || documentType.isBlank()) return "Chef document";
+        return switch (documentType) {
+            case "APPLICANT_PHOTO" -> "applicant photograph";
+            case "GOVERNMENT_ID_FRONT" -> "government photo ID front";
+            case "GOVERNMENT_ID_BACK" -> "government photo ID back";
+            case "TAX_ID_CARD" -> "PAN / tax ID card";
+            default -> "Chef document";
+        };
+    }
+
     private void sendSafely(CreateNotificationRequest request) {
         if (!properties.isNotificationDirectDispatchEnabled()) {
             log.info("Direct notification dispatch disabled. Outbox will handle requestKey={}", request.requestKey());

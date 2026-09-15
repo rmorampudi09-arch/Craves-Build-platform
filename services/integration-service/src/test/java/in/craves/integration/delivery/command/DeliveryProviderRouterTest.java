@@ -115,6 +115,46 @@ class DeliveryProviderRouterTest {
     }
 
     @Test
+    void honorsStochasticSelectionEvenWhenItIsNotTheHighestRankedProvider() {
+        var catalog=mock(DeliveryProviderCatalogRepository.class);
+        var intelligence=mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("fast","backup"));
+        var fast=new FakeAdapter("fast",5,"110.00",CreateBehavior.SUCCESS);
+        var backup=new FakeAdapter("backup",8,"90.00",CreateBehavior.SUCCESS);
+        var original=assignment(UUID.randomUUID(),UUID.randomUUID());
+        var selected=original.candidates().get(1);
+        when(intelligence.assign(any())).thenReturn(new AssignmentResponse(original.assignmentId(),original.chefSubOrderId(),
+            original.orderId(),AssignmentStrategy.STOCHASTIC,original.status(),original.scoringVersion(),selected.candidateId(),
+            selected.providerId(),null,original.candidates(),original.createdAt()));
+        var router=new DeliveryProviderRouter(List.of(fast,backup),catalog,intelligence,mock(DeliveryAssignmentRepository.class),
+            new DeliveryCommandProperties(),quoteExecutor,clock);
+        assertThat(router.route(command()).providerId()).isEqualTo("backup");
+        assertThat(fast.createCalls()).isZero();
+    }
+
+    @Test
+    void skippedProviderCannotReenterThroughFallback() {
+        var catalog=mock(DeliveryProviderCatalogRepository.class);
+        var intelligence=mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("fast","backup"));
+        var fast=new FakeAdapter("fast",5,"110.00",CreateBehavior.FAIL);
+        var backup=new FakeAdapter("backup",8,"90.00",CreateBehavior.SUCCESS);
+        var original=assignment(UUID.randomUUID(),UUID.randomUUID());
+        var c=original.candidates().get(1);
+        var skipped=new CandidateScore(c.candidateId(),c.rank(),c.providerId(),c.providerQuoteId(),c.agentId(),
+            c.pickupDistanceKm(),c.pickupEtaMinutes(),c.quotedCost(),c.currency(),c.predictedSuccessProbability(),
+            c.combinedScore(),c.liveAverage(),c.storedAverage(),c.momentum(),c.explorationSample(),c.providerQualityScore(),
+            c.proximityScore(),c.finalScore(),CandidateStatus.SKIPPED,c.providerMetadata());
+        when(intelligence.assign(any())).thenReturn(new AssignmentResponse(original.assignmentId(),original.chefSubOrderId(),
+            original.orderId(),original.strategy(),original.status(),original.scoringVersion(),original.selectedCandidateId(),
+            original.selectedProviderId(),null,List.of(original.candidates().getFirst(),skipped),original.createdAt()));
+        var router=new DeliveryProviderRouter(List.of(fast,backup),catalog,intelligence,mock(DeliveryAssignmentRepository.class),
+            new DeliveryCommandProperties(),quoteExecutor,clock);
+        assertThatThrownBy(()->router.route(command())).isInstanceOf(DeliveryProviderRouter.DeliveryRoutingException.class);
+        assertThat(backup.createCalls()).isZero();
+    }
+
+    @Test
     void blocksFallbackWhenSelectedProviderCreateOutcomeIsUncertain() {
         DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
         DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);

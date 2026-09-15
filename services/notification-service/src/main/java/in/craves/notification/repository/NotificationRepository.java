@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.notification.api.AppNoticeResponse;
 import in.craves.notification.api.CreateNotificationRequest;
 import in.craves.notification.api.NotificationRequestResponse;
+import in.craves.notification.domain.AppNoticeCursor;
 import in.craves.notification.domain.NotificationChannel;
 import in.craves.notification.domain.NotificationStatus;
 import java.sql.ResultSet;
@@ -117,9 +118,46 @@ public class NotificationRepository {
             SELECT id, title, body, notification_type, target_type, target_id, read_at, created_at
               FROM notification_schema.in_app_notification
              WHERE recipient_identity_id = :userId
-             ORDER BY created_at DESC
+             ORDER BY created_at DESC, id DESC
              LIMIT :limit
             """, new MapSqlParameterSource().addValue("userId", userId).addValue("limit", Math.min(Math.max(limit, 1), 100)), this::mapNotice);
+    }
+
+    public List<AppNoticeResponse> findAppNoticesPage(
+        UUID userId,
+        int fetchLimit,
+        AppNoticeCursor cursor,
+        boolean unreadOnly
+    ) {
+        StringBuilder sql = new StringBuilder("""
+            SELECT id, title, body, notification_type, target_type, target_id, read_at, created_at
+              FROM notification_schema.in_app_notification
+             WHERE recipient_identity_id = :userId
+            """);
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("userId", userId)
+            .addValue("limit", Math.min(Math.max(fetchLimit, 1), 101));
+
+        if (unreadOnly) {
+            sql.append(" AND read_at IS NULL\n");
+        }
+        if (cursor != null) {
+            sql.append(" AND (created_at < :cursorCreatedAt OR (created_at = :cursorCreatedAt AND id < :cursorId))\n");
+            params.addValue("cursorCreatedAt", cursor.createdAt());
+            params.addValue("cursorId", cursor.id());
+        }
+        sql.append(" ORDER BY created_at DESC, id DESC LIMIT :limit");
+        return jdbc.query(sql.toString(), params, this::mapNotice);
+    }
+
+    public long countUnreadAppNotices(UUID userId) {
+        Long count = jdbc.queryForObject("""
+            SELECT COUNT(*)
+              FROM notification_schema.in_app_notification
+             WHERE recipient_identity_id = :userId
+               AND read_at IS NULL
+            """, Map.of("userId", userId), Long.class);
+        return count == null ? 0L : count;
     }
 
     public void markRead(UUID userId, UUID noticeId) {
@@ -128,6 +166,15 @@ public class NotificationRepository {
                SET read_at = COALESCE(read_at, now())
              WHERE id = :noticeId AND recipient_identity_id = :userId
             """, new MapSqlParameterSource().addValue("noticeId", noticeId).addValue("userId", userId));
+    }
+
+    public int markAllRead(UUID userId) {
+        return jdbc.update("""
+            UPDATE notification_schema.in_app_notification
+               SET read_at = now()
+             WHERE recipient_identity_id = :userId
+               AND read_at IS NULL
+            """, Map.of("userId", userId));
     }
 
     private NotificationRequestResponse mapRequest(ResultSet rs, int rowNum) throws SQLException {

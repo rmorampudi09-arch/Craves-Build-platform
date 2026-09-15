@@ -24,16 +24,22 @@ steps:
   - script: |
       set -euo pipefail
       cd apps/customer-web-next
-      npm install --ignore-scripts
+      npm ci --ignore-scripts --no-audit --no-fund
+      npm run lint
       npm run typecheck
       npm run test
-    displayName: Typecheck and test admin chef review
+    displayName: Lint, typecheck and test admin Chef review
   - script: |
       set -euo pipefail
-      grep -q 'ADMIN_ROLE_REQUIRED' services/user-chef-service/src/main/java/in/craves/userchef/service/ChefDocumentReviewService.java
+      grep -q 'CHEF_DOCUMENT_DECISION_ROLE_REQUIRED' services/user-chef-service/src/main/java/in/craves/userchef/service/ChefDocumentReviewService.java
+      grep -q "status = 'REJECTED'" services/user-chef-service/src/main/java/in/craves/userchef/service/ChefDocumentReviewService.java
+      grep -q 'CHEF_DOCUMENT_ALREADY_APPROVED' services/user-chef-service/src/main/java/in/craves/userchef/service/ChefApplicationService.java
       grep -q 'CacheControl.noStore' services/user-chef-service/src/main/java/in/craves/userchef/web/BackofficeChefDocumentController.java
       grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/admin/chef-reviews/\[applicationId\]/approve/route.ts
       grep -q 'parseAdminDecision' apps/customer-web-next/src/app/api/admin/chef-reviews/\[applicationId\]/reject/route.ts
+      grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/admin/chef-reviews/\[applicationId\]/documents/\[documentId\]/approve/route.ts
+      grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/admin/chef-reviews/\[applicationId\]/documents/\[documentId\]/reject/route.ts
+      bash -n scripts/apim/configure-chef-review-document-list-apim.sh
       if grep -REn '(blobContainer|blobName|identityId|reviewedByIdentityId|localStorage|sessionStorage|console\.(log|debug))' \
         apps/customer-web-next/src/components/admin-chef-review-* \
         apps/customer-web-next/src/app/admin/chef-reviews \
@@ -41,5 +47,5 @@ steps:
         echo 'ERROR: Admin chef review runtime exposes private storage/identity fields or insecure browser behavior.' >&2
         exit 1
       fi
-      echo 'Admin chef review security gates passed.'
+      echo 'Admin chef review granular-decision security gates passed.'
     displayName: Verify KYC review safety gates

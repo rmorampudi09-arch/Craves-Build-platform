@@ -1,30 +1,26 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { clearSessionCookies, setSessionCookies } from "@/lib/auth-cookies";
-import { parseSessionExchange } from "@/lib/auth-contract";
 import { isSameOrigin } from "@/lib/request-security";
 import { apiBaseUrl } from "@/lib/server-api";
+import { renewServerSession } from "@/lib/refresh-server";
+import { sessionTiming } from "@/lib/refresh-policy";
 
+const headers = { "Cache-Control": "no-store, private", Pragma: "no-cache" };
 export async function POST(request: NextRequest) {
-  if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
+  if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403, headers });
   const refreshToken = request.cookies.get("craves_refresh_token")?.value;
-  if (!refreshToken) return NextResponse.json({ code: "REFRESH_REQUIRED" }, { status: 401 });
-  try {
-    const upstream = await fetch(`${apiBaseUrl()}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ refreshToken }),
-      cache: "no-store",
-    });
-    const session = upstream.ok ? parseSessionExchange(await upstream.json().catch(() => null)) : null;
-    if (!session) {
-      const response = NextResponse.json({ code: "SESSION_EXPIRED" }, { status: 401 });
-      clearSessionCookies(response);
-      return response;
-    }
-    const response = NextResponse.json({ identity: session.identity }, { headers: { "Cache-Control": "no-store" } });
-    setSessionCookies(response, session);
+  if (!refreshToken) return NextResponse.json({ code: "REFRESH_REQUIRED" }, { status: 401, headers });
+  const supplied = request.headers.get("x-refresh-request-id");
+  const requestId = supplied && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(supplied) ? supplied : randomUUID();
+  const result = await renewServerSession(apiBaseUrl(), refreshToken, requestId);
+  if ("failure" in result) {
+    const { status, code, terminal, retryAfter } = result.failure;
+    const response = NextResponse.json({ code }, { status, headers: { ...headers, ...(retryAfter ? { "Retry-After": retryAfter } : {}) } });
+    if (terminal) clearSessionCookies(response);
     return response;
-  } catch {
-    return NextResponse.json({ code: "REFRESH_UNAVAILABLE" }, { status: 503 });
   }
+  const response = NextResponse.json({ identity: result.session.identity, timing: sessionTiming(result.session.accessToken) }, { headers });
+  setSessionCookies(response, result.session);
+  return response;
 }

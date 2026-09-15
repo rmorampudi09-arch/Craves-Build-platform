@@ -1,3 +1,4 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import {
   parseNotificationRecoveryRequest,
@@ -26,6 +27,10 @@ function errorCode(status: number): string {
 }
 
 export async function POST(request: NextRequest, context: Context) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) return failure(403, "CROSS_ORIGIN_REQUEST_REJECTED");
   const requestId = (await context.params).requestId.trim().toLowerCase();
   const input = parseNotificationRecoveryRequest(await request.json().catch(() => null));

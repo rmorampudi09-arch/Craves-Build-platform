@@ -1,73 +1,134 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, CheckCircle2, ChefHat, Clock3, PackageCheck, RefreshCw, RotateCcw, Truck } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, CheckCircle2, Clock3, Copy, Download, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { adminFetch } from "@/lib/admin-renewal";
 import { parseAdminDashboardSummary, type AdminDashboardSummary } from "@/lib/admin-dashboard-contract";
+import { adminMetricCsv, formatAdminTimestamp, readableAdminStatus } from "@/lib/admin-navigation";
+import { AdminModuleDirectory } from "@/components/admin-module-directory";
 
-const Visuals = dynamic(() => import("@/components/admin-dashboard-visuals").then(module => module.AdminDashboardVisuals), {
-  ssr: false,
-  loading: () => <div className="h-[390px] animate-pulse rounded-[28px] bg-white" />
-});
-
-const statusLabel = (status: string) => status.toLowerCase().replaceAll("_", " ").replace(/^./, value => value.toUpperCase());
+type SummaryMetrics = AdminDashboardSummary["metrics"];
+const metricCards: ReadonlyArray<{ key: keyof SummaryMetrics; label: string; note: string; tone?: string }> = [
+  { key: "ordersCreated24h", label: "Orders created", note: "Last 24 hours" },
+  { key: "chefAcceptancePending", label: "Awaiting chef", note: "Current queue", tone: "warning" },
+  { key: "preparing", label: "Preparing", note: "Current orders" },
+  { key: "readyForPickup", label: "Ready for pickup", note: "Current orders", tone: "info" },
+  { key: "outForDelivery", label: "Out for delivery", note: "Current orders", tone: "info" },
+  { key: "delivered24h", label: "Delivered", note: "Updated in last 24 hours", tone: "success" },
+  { key: "refundPending", label: "Refund pending", note: "Current queue", tone: "warning" },
+  { key: "refundFailed", label: "Refund failed", note: "Needs investigation", tone: "danger" }
+];
 
 export function AdminDashboard() {
   const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
-  const [message, setMessage] = useState("Loading live operational data…");
-  const [refreshing, setRefreshing] = useState(false);
+  const [message, setMessage] = useState("");
+  const [refreshing, setRefreshing] = useState(true);
+  const [filter, setFilter] = useState("");
+  const [status, setStatus] = useState("all");
+  const [sort, setSort] = useState<"updated" | "status">("updated");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const [feedback, setFeedback] = useState("");
+  const generation = useRef(0);
+  const request = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    const current = ++generation.current;
     setRefreshing(true);
+    setMessage("");
     try {
-      const response = await fetch("/api/admin/dashboard/summary", { cache: "no-store" });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(response.status === 403 ? "Administrator access is required." : "Live dashboard data is temporarily unavailable.");
-      const parsed = parseAdminDashboardSummary(body);
-      if (!parsed) throw new Error("The dashboard received an invalid backend response.");
-      setSummary(parsed);
-      setMessage("");
+      const response = await adminFetch("/api/admin/dashboard/summary", { cache: "no-store", signal: controller.signal });
+      if (current !== generation.current) return;
+      if (response.status === 401 || response.status === 403) {
+        setSummary(null);
+        throw new Error("Administrator access must be verified. Sign in again or retry your connection.");
+      }
+      if (!response.ok) throw new Error("The operational summary is temporarily unavailable. Other modules may still be accessible below.");
+      const parsed = parseAdminDashboardSummary(await response.json().catch(() => null));
+      if (!parsed) throw new Error("The summary response could not be verified. No replacement values have been invented.");
+      if (current === generation.current) { setSummary(parsed); setMessage(""); }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Live dashboard data is unavailable.");
+      if (current === generation.current && !controller.signal.aborted) setMessage(error instanceof Error ? error.message : "Unable to load the operational summary.");
     } finally {
-      setRefreshing(false);
+      if (current === generation.current) setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    return () => { generation.current += 1; request.current?.abort(); };
+  }, [load]);
 
-  if (!summary) return <section className="rounded-[28px] border border-[#ebe5ef] bg-white p-8 shadow-sm"><div className="h-2 w-24 rounded bg-[#f6b545]" /><h1 className="mt-6 text-3xl font-bold">Operations overview</h1><p className="mt-3 text-[#766981]" role="status">{message}</p><button onClick={() => void load()} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#6930ca] px-4 py-3 text-sm font-bold text-white"><RefreshCw size={17} />Try again</button></section>;
+  async function copyReference(reference: string) {
+    try { await navigator.clipboard.writeText(reference); setFeedback("Order reference copied."); }
+    catch { setFeedback("Clipboard access is unavailable. Select and copy the full reference in the row details."); }
+  }
 
-  const metrics = summary.metrics;
-  const cards = [
-    { label: "Orders created", value: metrics.ordersCreated24h, note: "Last 24 hours", icon: PackageCheck, tone: "bg-[#efe8ff] text-[#6930ca]" },
-    { label: "Awaiting chef", value: metrics.chefAcceptancePending, note: "Current queue", icon: Clock3, tone: "bg-[#fff3d8] text-[#a86400]" },
-    { label: "Preparing", value: metrics.preparing, note: "Current orders", icon: ChefHat, tone: "bg-[#ffe9e2] text-[#bd4b2d]" },
-    { label: "Out for delivery", value: metrics.outForDelivery, note: "Current orders", icon: Truck, tone: "bg-[#e5f5ff] text-[#126a9a]" },
-    { label: "Delivered", value: metrics.delivered24h, note: "Updated in 24 hours", icon: CheckCircle2, tone: "bg-[#e5f7ec] text-[#24784b]" },
-    { label: "Refund attention", value: metrics.refundPending + metrics.refundFailed, note: `${metrics.refundFailed} failed`, icon: RotateCcw, tone: "bg-[#ffe7ea] text-[#a72c3c]" }
-  ];
+  function exportMetrics() {
+    if (!summary) return;
+    try {
+      const url = URL.createObjectURL(new Blob([adminMetricCsv(summary.metrics, summary.generatedAt)], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `craves-admin-metrics-${new Date(summary.generatedAt).toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setFeedback("Aggregate metrics exported. No customer or chef identifiers were included.");
+    } catch { setFeedback("Export could not be prepared. Please refresh the summary and try again."); }
+  }
 
-  return <div className="space-y-7">
-    <section className="relative overflow-hidden rounded-[32px] bg-[#321c42] px-6 py-8 text-white shadow-[0_28px_75px_-42px_rgba(38,18,55,0.75)] sm:px-9">
-      <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-[#6930ca]/40 blur-2xl" /><div className="absolute bottom-0 right-32 h-32 w-32 rounded-full bg-[#f6b545]/20 blur-xl" />
-      <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end"><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#f6c868]">Executive operations</p><h1 className="mt-3 text-3xl font-bold sm:text-4xl">Good decisions start with live facts.</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-[#d4c8dc]">Order progress and refund attention are read directly from the owning backend. Commercial values and policy decisions are intentionally excluded.</p></div><button onClick={() => void load()} disabled={refreshing} className="inline-flex w-fit items-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-sm font-bold ring-1 ring-white/15 transition hover:bg-white/15 disabled:opacity-60"><RefreshCw size={17} className={refreshing ? "animate-spin" : ""} />Refresh</button></div>
+  const filtered = (summary?.recentExceptions ?? []).filter(item => {
+    const needle = filter.trim().toLowerCase();
+    return (status === "all" || item.status === status) && `${item.orderId} ${item.kitchenName ?? ""}`.toLowerCase().includes(needle);
+  }).sort((a, b) => sort === "status" ? a.status.localeCompare(b.status) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt) : Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const rows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const maxTrend = Math.max(1, ...(summary?.orderTrend.map(point => point.count) ?? []));
+  const maxStatus = Math.max(1, ...(summary?.statusCounts.map(item => item.count) ?? []));
+
+  return <div className="cr-dashboard">
+    <section className="cr-welcome">
+      <div><p className="cr-eyebrow">The Craves control center</p><h1>A clear view.<br className="cr-mobile-break"/> The right next action.</h1><p>Keep every meal moving. Find a case, understand what happened, and open the right controlled workflow.</p></div>
+      <div className="cr-actions"><Link href="/admin/search" className="cr-button cr-primary"><Search size={17} aria-hidden="true"/>Global search</Link><button className="cr-button" type="button" onClick={() => void load()} disabled={refreshing}><RefreshCw size={17} aria-hidden="true" className={refreshing ? "cr-spin" : ""}/>{refreshing ? "Refreshing…" : "Refresh snapshot"}</button></div>
     </section>
 
-    {message && <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-900" role="status">{message} Showing the last successfully loaded snapshot.</div>}
+    <div className="cr-snapshot-line"><span className="cr-badge" data-tone={message ? "warning" : undefined}><Clock3 size={14} aria-hidden="true"/>{summary ? `Snapshot: ${formatAdminTimestamp(summary.generatedAt)}` : refreshing ? "Loading operational summary" : "Summary unavailable"}</span><span>Snapshot data · Refresh on demand</span></div>
+    {message && <div className="cr-alert" role="alert"><strong>{message}</strong>{summary && <p>Showing the last successfully loaded snapshot above, not a live refresh.</p>}</div>}
 
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-      {cards.map(card => { const Icon = card.icon; return <article key={card.label} className="rounded-[24px] border border-[#ebe5ef] bg-white p-5 shadow-[0_16px_45px_-38px_rgba(58,38,73,0.55)]"><div className={`grid h-11 w-11 place-items-center rounded-2xl ${card.tone}`}><Icon size={21} /></div><p className="mt-5 text-3xl font-bold tabular-nums">{card.value.toLocaleString("en-IN")}</p><p className="mt-1 text-sm font-bold">{card.label}</p><p className="mt-1 text-xs text-[#897b94]">{card.note}</p></article>; })}
-    </section>
+    {!summary && <section className="cr-panel cr-empty" aria-busy={refreshing}><h2>{refreshing ? "Loading your operational overview" : "The overview could not be loaded"}</h2><p>{refreshing ? "Retrieving the existing backend summary. No sample numbers are shown." : "Use Refresh snapshot to retry. Your module directory remains available below."}</p>{refreshing && <div className="cr-skeleton" aria-hidden="true"/>}</section>}
 
-    <Visuals summary={summary} />
+    {summary && <>
+      <section aria-labelledby="cr-workload-title"><div className="cr-section-heading"><div><p className="cr-eyebrow">Operational workload</p><h2 id="cr-workload-title">What needs your attention</h2></div><button type="button" onClick={exportMetrics} className="cr-button"><Download size={16} aria-hidden="true"/>Export metrics</button></div>
+        <div className="cr-metric-grid">{metricCards.map(card => <article className="cr-metric" key={card.key} data-tone={card.tone}><span className="cr-metric-label">{card.label}</span><strong>{summary.metrics[card.key].toLocaleString("en-IN")}</strong><span className="cr-muted">{card.note}</span></article>)}</div>
+      </section>
 
-    <section className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
-      <article className="rounded-[28px] border border-[#ebe5ef] bg-white p-6 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#8b7b97]">Current flow</p><h2 className="mt-2 text-xl font-bold">Operational stage counts</h2><div className="mt-6 space-y-3">{summary.statusCounts.map(item => <div key={item.status} className="flex items-center justify-between rounded-2xl bg-[#f8f6fa] px-4 py-3"><span className="text-sm font-semibold text-[#62566d]">{statusLabel(item.status)}</span><strong className="rounded-lg bg-white px-3 py-1 text-sm tabular-nums shadow-sm">{item.count.toLocaleString("en-IN")}</strong></div>)}</div></article>
-      <article className="rounded-[28px] border border-[#ebe5ef] bg-white p-6 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#8b7b97]">Controlled tools</p><h2 className="mt-2 text-xl font-bold">Continue to an admin module</h2><div className="mt-5 grid gap-3 sm:grid-cols-2">{[
-        ["Investigate an order or refund", "/admin/operations"], ["Review chef applications", "/admin/chef-reviews"], ["Recover notifications", "/admin/notifications"], ["Secure an account", "/admin/accounts"]
-      ].map(([label, href]) => <Link key={href} href={href} className="flex items-center justify-between rounded-2xl border border-[#ede7f1] p-4 text-sm font-bold transition hover:border-[#bca8db] hover:bg-[#faf8fc]"><span>{label}</span><ArrowRight size={17} className="text-[#6930ca]" /></Link>)}</div><p className="mt-5 text-xs leading-5 text-[#8a7c95]">Snapshot generated {new Date(summary.generatedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}.</p></article>
-    </section>
+      <section className="cr-panel" aria-labelledby="cr-attention-title">
+        <div className="cr-section-heading"><div><p className="cr-eyebrow">Recent exceptions</p><h2 id="cr-attention-title">Review. Investigate. Resolve.</h2><p className="cr-muted">This is the recent-exception summary, not the complete order history. Open investigations for the full case.</p></div><Link href="/admin/operations" className="cr-button">Open investigations<ArrowRight size={16} aria-hidden="true"/></Link></div>
+        <div className="cr-filter-row"><label className="cr-search-field"><Search size={16} aria-hidden="true"/><span className="cr-sr-only">Filter recent exceptions by order reference or kitchen</span><input type="search" placeholder="Filter this snapshot by order or kitchen…" maxLength={160} value={filter} onChange={event => { setFilter(event.target.value); setPage(1); }}/></label>
+          <label className="cr-select-label">Status<select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}><option value="all">All statuses</option>{[...new Set(summary.recentExceptions.map(item => item.status))].map(value => <option value={value} key={value}>{readableAdminStatus(value)}</option>)}</select></label>
+          <label className="cr-select-label">Sort<select value={sort} onChange={event => { setSort(event.target.value === "status" ? "status" : "updated"); setPage(1); }}><option value="updated">Newest first</option><option value="status">Status</option></select></label>
+          <button className="cr-button" onClick={() => { setFilter(""); setStatus("all"); setSort("updated"); setPage(1); }}>Reset filters</button>
+        </div>
+        {rows.length === 0 ? <div className="cr-empty"><CheckCircle2 size={26} aria-hidden="true"/><strong>{summary.recentExceptions.length === 0 ? "No recent exceptions in this snapshot" : "No exceptions match these filters"}</strong><p>{summary.recentExceptions.length === 0 ? "This does not certify that every service is healthy." : "Clear the filters to see the returned snapshot."}</p></div> : <div className="cr-table-scroll" role="region" aria-label="Recent exception records" tabIndex={0}><table className="cr-table"><caption className="cr-sr-only">Recent exceptions from {formatAdminTimestamp(summary.generatedAt)}</caption><thead><tr><th scope="col">Order reference</th><th scope="col">Kitchen</th><th scope="col">Status</th><th scope="col">Last updated · IST</th><th scope="col">Details</th></tr></thead><tbody>{rows.map(item => <tr key={item.orderId}><td><code>{item.orderId.slice(0, 8).toUpperCase()}</code></td><td>{item.kitchenName || "Kitchen name unavailable"}</td><td><span className="cr-status" data-tone={item.status === "REFUND_FAILED" ? "danger" : "warning"}>{readableAdminStatus(item.status)}</span></td><td>{formatAdminTimestamp(item.updatedAt)}</td><td><details className="cr-record-details"><summary>View reference</summary><div><code>{item.orderId}</code><button type="button" className="cr-button" onClick={() => void copyReference(item.orderId)}><Copy size={14} aria-hidden="true"/>Copy reference</button><p className="cr-footnote">Paste this into Orders & investigations. The existing audit-reason requirement still applies.</p></div></details></td></tr>)}</tbody></table></div>}
+        <div className="cr-pagination"><span>{filtered.length} matching / {summary.recentExceptions.length} returned records</span><label className="cr-select-label">Rows<select value={pageSize} onChange={event => { setPageSize(event.target.value === "10" ? 10 : 5); setPage(1); }}><option value="5">5</option><option value="10">10</option></select></label><button className="cr-button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Previous</button><span aria-live="polite">Page {currentPage} of {pageCount}</span><button className="cr-button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)}>Next</button></div>
+      </section>
+
+      <div className="cr-chart-grid">
+        <section className="cr-panel" aria-labelledby="cr-trend-title"><p className="cr-eyebrow">Reported period</p><h2 id="cr-trend-title">Order volume</h2><p className="cr-muted">All date buckets returned by the backend.</p>
+          {summary.orderTrend.length === 0 ? <p className="cr-empty">No trend records were returned.</p> : <><div className="cr-chart-scroll"><div className="cr-bar-chart" style={{ minWidth: `${Math.max(280, summary.orderTrend.length * 38)}px` }} aria-hidden="true">{summary.orderTrend.map(point => <div className="cr-bar-column" key={point.date} title={`${point.date}: ${point.count} orders`}><strong>{point.count.toLocaleString("en-IN")}</strong><div className="cr-bar-track"><span style={{ height: `${100 * point.count / maxTrend}%` }}/></div><small>{point.date.slice(5)}</small></div>)}</div></div><details className="cr-chart-data"><summary>View exact chart data</summary><table className="cr-table"><caption className="cr-sr-only">Order volume by backend date bucket</caption><thead><tr><th scope="col">Date</th><th scope="col">Orders</th></tr></thead><tbody>{summary.orderTrend.map(point => <tr key={point.date}><td>{point.date}</td><td>{point.count.toLocaleString("en-IN")}</td></tr>)}</tbody></table></details></>}
+        </section>
+        <section className="cr-panel" aria-labelledby="cr-flow-title"><p className="cr-eyebrow">Current flow</p><h2 id="cr-flow-title">Operational stages</h2><p className="cr-muted">Backend-reported counts by current status.</p><div className="cr-stage-list">{summary.statusCounts.map(item => <div key={item.status}><div><span>{readableAdminStatus(item.status)}</span><strong>{item.count.toLocaleString("en-IN")}</strong></div><div className="cr-stage-track" aria-hidden="true"><span style={{ width: `${100 * item.count / maxStatus}%` }}/></div></div>)}</div>{summary.statusCounts.length === 0 && <p className="cr-empty">No stage records were returned.</p>}</section>
+      </div>
+    </>}
+    <p className="cr-feedback" role="status" aria-live="polite">{feedback}</p>
+    <AdminModuleDirectory compact/>
+    <section className="cr-safety-note"><ShieldCheck size={24} aria-hidden="true"/><div><strong>Easy to operate. Controlled where it matters.</strong><p>Search is audited. Sensitive actions stay in their owning modules. Pricing, payout, account and recovery rules are not bypassed by this dashboard.</p></div></section>
   </div>;
 }

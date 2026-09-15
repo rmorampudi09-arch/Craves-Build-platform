@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Ban, RefreshCw, Search, ShieldCheck, Wrench } from "lucide-react";
 import {
@@ -29,7 +31,7 @@ export function AdminSubscriptionCapacityOperator() {
   const loadIncidents = useCallback(async (filterChefId?: string) => {
     const query = new URLSearchParams({ status: "OPEN", limit: "100" });
     if (filterChefId) query.set("chefIdentityId", filterChefId);
-    const response = await fetch(`/api/admin/subscription-capacity/incidents?${query.toString()}`, { cache: "no-store" });
+    const response = await adminFetch(`/api/admin/subscription-capacity/incidents?${query.toString()}`, { cache: "no-store" });
     const raw = await response.json().catch(() => null);
     if (!response.ok) throw new Error("Capacity incidents are temporarily unavailable.");
     const parsed = parseCapacityIncidentPage(raw);
@@ -44,7 +46,7 @@ export function AdminSubscriptionCapacityOperator() {
     if (!UUID.test(normalized)) { setMessage("Enter a valid chef identity UUID."); return; }
     setBusy(true); setMessage("");
     try {
-      const response = await fetch(`/api/admin/subscription-capacity/chefs/${normalized}`, { cache: "no-store" });
+      const response = await adminFetch(`/api/admin/subscription-capacity/chefs/${normalized}`, { cache: "no-store" });
       const raw = await response.json().catch(() => null);
       if (!response.ok) throw new Error(errorText(raw, "Chef capacity could not be loaded."));
       const parsed = parseChefCapacitySummary(raw);
@@ -59,7 +61,7 @@ export function AdminSubscriptionCapacityOperator() {
     if (!summary || !freezeReason.trim()) { setMessage("Enter a reason before freezing or unfreezing subscription sales."); return; }
     setBusy(true); setMessage("");
     try {
-      const response = await fetch(`/api/admin/subscription-capacity/chefs/${summary.chefIdentityId}/freeze`, {
+      const response = await adminFetch(`/api/admin/subscription-capacity/chefs/${summary.chefIdentityId}/freeze`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ frozen, reason: freezeReason.trim() }),
       });
@@ -78,7 +80,7 @@ export function AdminSubscriptionCapacityOperator() {
     if (!window.confirm("Run audited capacity reconciliation for this subscription? This does not increase the chef's declared capacity.")) return;
     setBusy(true); setMessage("");
     try {
-      const response = await fetch(`/api/admin/subscription-capacity/subscriptions/${subscriptionId.trim()}/reconcile`, {
+      const response = await adminFetch(`/api/admin/subscription-capacity/subscriptions/${subscriptionId.trim()}/reconcile`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reconcileReason.trim() }),
       });
       if (!response.ok) {

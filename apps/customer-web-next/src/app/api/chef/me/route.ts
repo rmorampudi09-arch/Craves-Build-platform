@@ -1,3 +1,4 @@
+import { boundedFetch } from "@/lib/bounded-fetch";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefModeIdentity } from "@/lib/chef-mode-contract";
 
@@ -21,14 +22,14 @@ export async function GET(request: NextRequest) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    const upstream = await fetch(`${apiBaseUrl()}/auth/me`, {
+    const upstream = await boundedFetch(`${apiBaseUrl()}/auth/me`, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
       cache: "no-store",
       signal: controller.signal,
-    });
+    }, 40_000);
     if (!upstream.ok) {
       const response = NextResponse.json(
         {

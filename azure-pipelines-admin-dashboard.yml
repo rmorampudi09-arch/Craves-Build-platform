@@ -16,6 +16,12 @@ pr:
       - services/order-service/**
 
 parameters:
+  - name: deployProduction
+    type: boolean
+    default: false
+  - name: expectedReleaseSha
+    type: string
+    default: ''
   - name: resourceGroupName
     type: string
     default: rg-craves-prodlow-centralindia
@@ -44,6 +50,18 @@ stages:
         steps:
           - checkout: self
             persistCredentials: false
+            fetchDepth: 0
+          - script: |
+              set -euo pipefail
+              if [[ "${DEPLOY_PRODUCTION,,}" == true ]]; then
+                [[ "$BUILD_REASON" == Manual && "$BUILD_SOURCEBRANCH" == refs/heads/main ]] || { echo 'ERROR: Production requires a manual approved release run.' >&2; exit 1; }
+                [[ "$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'ERROR: Exact expectedReleaseSha is required.' >&2; exit 1; }
+                [[ "$(git rev-parse HEAD)" == "$EXPECTED_RELEASE_SHA" && "$BUILD_SOURCEVERSION" == "$EXPECTED_RELEASE_SHA" ]] || { echo 'ERROR: Reviewed source does not match this checkout.' >&2; exit 1; }
+              fi
+            displayName: Bind explicit production request to exact reviewed source
+            env:
+              DEPLOY_PRODUCTION: '${{ parameters.deployProduction }}'
+              EXPECTED_RELEASE_SHA: '${{ parameters.expectedReleaseSha }}'
           - task: NodeTool@0
             displayName: Use Node.js 24
             inputs:
@@ -82,7 +100,7 @@ stages:
   - stage: Image
     displayName: Build dedicated admin image
     dependsOn: Validate
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    condition: and(succeeded(), eq('${{ parameters.deployProduction }}', 'true'), eq(variables['Build.Reason'], 'Manual'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
       - job: BuildAndPush
         pool:
@@ -90,6 +108,7 @@ stages:
         steps:
           - checkout: self
             persistCredentials: false
+            fetchDepth: 0
           - task: AzureCLI@2
             displayName: Build and push immutable admin image
             inputs:
@@ -99,13 +118,14 @@ stages:
               inlineScript: |
                 set -euo pipefail
                 set +x
+                [[ "$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$(git rev-parse HEAD)" == "$EXPECTED_RELEASE_SHA" && "$BUILD_SOURCEVERSION" == "$EXPECTED_RELEASE_SHA" ]] || { echo 'ERROR: Image checkout differs from reviewed source.' >&2; exit 1; }
                 ACR='${{ parameters.acrName }}'
                 TAG='${{ parameters.imageTag }}'
                 LOGIN_SERVER=$(az acr show --name "$ACR" --query loginServer -o tsv)
                 [[ -n "$LOGIN_SERVER" ]] || { echo 'ERROR: ACR login server was not resolved.' >&2; exit 1; }
                 IMAGE="$LOGIN_SERVER/$(imageRepository):$TAG"
                 az acr login --name "$ACR"
-                docker build --pull -f "$(webPath)/Dockerfile.admin" \
+                docker build --pull --label "org.opencontainers.image.revision=$EXPECTED_RELEASE_SHA" -f "$(webPath)/Dockerfile.admin" \
                   --build-arg NEXT_PUBLIC_FIREBASE_API_KEY='$(NEXT_PUBLIC_FIREBASE_API_KEY)' \
                   --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN='$(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)' \
                   --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID='$(NEXT_PUBLIC_FIREBASE_PROJECT_ID)' \
@@ -116,13 +136,21 @@ stages:
                   --build-arg NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY='$(NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY)' \
                   -t "$IMAGE" "$(webPath)"
                 docker push "$IMAGE"
-                echo "##vso[task.setvariable variable=ADMIN_IMAGE;isOutput=true]$IMAGE"
+                DIGEST=$(az acr repository show --name "$ACR" --image "$(imageRepository):$TAG" --query digest -o tsv)
+                [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'ERROR: Published image digest is unavailable.' >&2; exit 1; }
+                PINNED_IMAGE="$LOGIN_SERVER/$(imageRepository)@$DIGEST"
+                docker pull "$PINNED_IMAGE" >/dev/null
+                LABEL=$(docker image inspect "$PINNED_IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')
+                [[ "$LABEL" == "$EXPECTED_RELEASE_SHA" ]] || { echo 'ERROR: Published image source label differs from reviewed source.' >&2; exit 1; }
+                echo "##vso[task.setvariable variable=ADMIN_IMAGE;isOutput=true]$PINNED_IMAGE"
+            env:
+              EXPECTED_RELEASE_SHA: '${{ parameters.expectedReleaseSha }}'
             name: image
 
   - stage: Deploy
     displayName: Deploy admin Container App revision
     dependsOn: Image
-    condition: succeeded()
+    condition: and(succeeded(), eq('${{ parameters.deployProduction }}', 'true'), eq(variables['Build.Reason'], 'Manual'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     variables:
       ADMIN_IMAGE: $[ stageDependencies.Image.BuildAndPush.outputs['image.ADMIN_IMAGE'] ]
     jobs:
@@ -134,7 +162,9 @@ stages:
           runOnce:
             deploy:
               steps:
-                - checkout: none
+                - checkout: self
+                  persistCredentials: false
+                  fetchDepth: 0
                 - task: AzureCLI@2
                   displayName: Update and verify existing admin Container App
                   inputs:
@@ -143,17 +173,36 @@ stages:
                     scriptLocation: inlineScript
                     inlineScript: |
                       set -euo pipefail
+                      set +x
+                      [[ "$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$(git rev-parse HEAD)" == "$EXPECTED_RELEASE_SHA" && "$BUILD_SOURCEVERSION" == "$EXPECTED_RELEASE_SHA" ]] || { echo 'ERROR: Deployment checkout differs from reviewed source.' >&2; exit 1; }
                       RG='${{ parameters.resourceGroupName }}'
                       APP='${{ parameters.containerAppName }}'
                       IMAGE='$(ADMIN_IMAGE)'
-                      [[ "$IMAGE" == */$(imageRepository):* ]] || { echo 'ERROR: Immutable admin image was not resolved.' >&2; exit 1; }
+                      [[ "$IMAGE" == */$(imageRepository)@sha256:* ]] || { echo 'ERROR: Immutable admin image was not resolved.' >&2; exit 1; }
                       az containerapp show -g "$RG" -n "$APP" -o none || {
                         echo 'ERROR: The separately billed admin Container App must be created and approved before deployment.' >&2
                         exit 1
                       }
                       PREVIOUS_IMAGE=$(az containerapp show -g "$RG" -n "$APP" --query 'properties.template.containers[0].image' -o tsv)
-                      az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" \
-                        --set-env-vars CRAVES_API_BASE_URL='$(CRAVES_API_BASE_URL)' CRAVES_ADMIN_PORTAL=true \
+                      # Readiness is checked again after the existing environment approval.
+                      umask 077
+                      ADMIN_RUNTIME_SNAPSHOT_FILE=$(mktemp)
+                      APP_STATE=$(mktemp)
+                      REPLICAS=$(mktemp)
+                      export ADMIN_RUNTIME_SNAPSHOT_FILE
+                      trap 'rm -f "$ADMIN_RUNTIME_SNAPSHOT_FILE" "$APP_STATE" "$REPLICAS" "${HEADERS:-}" "${BODY:-}"' EXIT
+                      bash scripts/admin-explorer/verify-runtime-readiness.sh
+                      # Keep the healthy UI until its required Auth session capability is deployed.
+                      AUTH_FQDN=$(az containerapp show -g "$RG" -n ca-craves-auth-service-prodlow --query 'properties.configuration.ingress.fqdn' -o tsv --only-show-errors)
+                      POLICY=$(curl --fail --silent --show-error --max-time 30 "https://${AUTH_FQDN}/api/v1/auth/session-policy") || {
+                        echo 'ERROR: Deploy the reviewed Auth session release before this admin image. Existing admin image preserved.' >&2
+                        exit 1
+                      }
+                      jq -e '.version == "ADMIN_SESSION_V1" and .adminAbsoluteSeconds == 28800 and .accessTokenSeconds > 0 and .accessTokenSeconds <= 900' <<<"$POLICY" >/dev/null || {
+                        echo 'ERROR: Required short-token/eight-hour Auth policy is not active. Existing admin image preserved.' >&2
+                        exit 1
+                      }
+                      az containerapp update -g "$RG" -n "$APP" --image "$IMAGE" --min-replicas 1 --max-replicas 1 \
                         --no-wait -o none
                       for attempt in $(seq 1 60); do
                         JSON=$(az containerapp show -g "$RG" -n "$APP" -o json)
@@ -162,12 +211,30 @@ stages:
                         RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$JSON")
                         ACTUAL_IMAGE=$(jq -r '.properties.template.containers[0].image // ""' <<<"$JSON")
                         if [[ "$LATEST" == "$READY" && "$RUNNING" == 'Running' && "$ACTUAL_IMAGE" == "$IMAGE" ]]; then
+                          printf '%s' "$JSON" >"$APP_STATE"
+                          az containerapp replica list -g "$RG" -n "$APP" --revision "$READY" -o json >"$REPLICAS"
+                          python3 scripts/admin-explorer/verify-admin-runtime.py verify "$APP_STATE" "$ADMIN_RUNTIME_SNAPSHOT_FILE" "$IMAGE" "$REPLICAS"
                           FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$JSON")
-                          curl --fail --silent --show-error --max-time 30 "https://$FQDN/admin" >/dev/null
-                          echo "SUCCESS: Admin revision is healthy. Rollback image: $PREVIOUS_IMAGE"
+                          BASE_URL="https://$FQDN"
+                          for route in /admin /admin/analytics /admin/explorer/users /admin/explorer/chefs /admin/explorer/orders /admin/finance /admin/academy /admin/search /admin/chef-reviews /admin/subscription-plans /admin/subscriptions /admin/subscription-capacity /admin/operations /admin/accounts /admin/notifications; do
+                            STATUS=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 "${BASE_URL}${route}")
+                            [[ "$STATUS" == '200' ]] || { echo "ERROR: ${route} returned HTTP ${STATUS}." >&2; exit 1; }
+                          done
+                          HEADERS=$(mktemp)
+                          BODY=$(mktemp)
+                          AUTH_STATUS=$(curl --silent --show-error --dump-header "$HEADERS" --output "$BODY" --write-out '%{http_code}' --max-time 30 "${BASE_URL}/api/admin/me")
+                          [[ "$AUTH_STATUS" == '401' ]] || { echo "ERROR: Signed-out admin identity guard returned HTTP ${AUTH_STATUS}." >&2; exit 1; }
+                          grep -Eiq '^cache-control:.*no-store' "$HEADERS" || { echo 'ERROR: Admin identity response is cacheable.' >&2; exit 1; }
+                          jq -e '.code == "AUTHENTICATION_REQUIRED"' "$BODY" >/dev/null || { echo 'ERROR: Admin identity guard returned an unexpected body.' >&2; exit 1; }
+                          echo "SUCCESS: Admin revision and signed-out route matrix are healthy at ${BASE_URL}. Rollback image: $PREVIOUS_IMAGE"
                           exit 0
                         fi
                         sleep 10
                       done
                       echo "ERROR: Admin revision did not become ready. Roll back to: $PREVIOUS_IMAGE" >&2
                       exit 1
+                  env:
+                    EXPECTED_RELEASE_SHA: '${{ parameters.expectedReleaseSha }}'
+                    RG: '${{ parameters.resourceGroupName }}'
+                    ACR: '${{ parameters.acrName }}'
+                    ADMIN_APP: '${{ parameters.containerAppName }}'

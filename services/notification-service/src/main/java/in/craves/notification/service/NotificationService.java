@@ -1,8 +1,11 @@
 package in.craves.notification.service;
 
+import in.craves.notification.api.AppNoticePageResponse;
 import in.craves.notification.api.AppNoticeResponse;
 import in.craves.notification.api.CreateNotificationRequest;
 import in.craves.notification.api.NotificationRequestResponse;
+import in.craves.notification.api.UnreadCountResponse;
+import in.craves.notification.domain.AppNoticeCursor;
 import in.craves.notification.domain.NotificationChannel;
 import in.craves.notification.domain.NotificationStatus;
 import in.craves.notification.repository.NotificationRepository;
@@ -16,6 +19,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class NotificationService {
     private static final String EMAIL_KEY_SUFFIX = "-email";
+    private static final int MAX_INBOX_PAGE_SIZE = 100;
+    private static final int MAX_CURSOR_LENGTH = 512;
 
     private final NotificationRepository repository;
     private final ImportantEmailPolicyProperties importantEmailPolicy;
@@ -97,9 +102,69 @@ public class NotificationService {
         return repository.findAppNotices(userId, limit);
     }
 
+    public AppNoticePageResponse appNoticePage(
+        UUID userId,
+        int limit,
+        String encodedCursor,
+        boolean unreadOnly
+    ) {
+        validatePageSize(limit);
+        AppNoticeCursor cursor = decodeCursor(encodedCursor);
+        List<AppNoticeResponse> fetched = repository.findAppNoticesPage(
+            userId,
+            limit + 1,
+            cursor,
+            unreadOnly
+        );
+        boolean hasMore = fetched.size() > limit;
+        List<AppNoticeResponse> notices = hasMore
+            ? List.copyOf(fetched.subList(0, limit))
+            : List.copyOf(fetched);
+        String nextCursor = null;
+        if (hasMore && !notices.isEmpty()) {
+            AppNoticeResponse last = notices.get(notices.size() - 1);
+            nextCursor = AppNoticeCursorCodec.encode(
+                new AppNoticeCursor(last.createdAt(), last.id())
+            );
+        }
+        return new AppNoticePageResponse(notices, nextCursor, hasMore);
+    }
+
+    public UnreadCountResponse unreadCount(UUID userId) {
+        return new UnreadCountResponse(repository.countUnreadAppNotices(userId));
+    }
+
     @Transactional
     public void markRead(UUID userId, UUID noticeId) {
         repository.markRead(userId, noticeId);
+    }
+
+    @Transactional
+    public void markAllRead(UUID userId) {
+        repository.markAllRead(userId);
+    }
+
+    private static void validatePageSize(int limit) {
+        if (limit <= 0 || limit > MAX_INBOX_PAGE_SIZE) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "limit must be between 1 and 100"
+            );
+        }
+    }
+
+    private static AppNoticeCursor decodeCursor(String encodedCursor) {
+        if (encodedCursor == null || encodedCursor.isBlank()) {
+            return null;
+        }
+        if (encodedCursor.length() > MAX_CURSOR_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "cursor is invalid");
+        }
+        try {
+            return AppNoticeCursorCodec.decode(encodedCursor);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "cursor is invalid", ex);
+        }
     }
 
     private static String emailRequestKey(String requestKey) {

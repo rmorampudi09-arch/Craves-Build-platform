@@ -59,7 +59,22 @@ jq -e '
   and ([.services[].imageRepository] | length == (unique | length))
   and ([.services[].containerApp] | length == (unique | length))
   and ([.services[].deployOrder] == ([.services[].deployOrder] | sort))
+  and (.stepOneDormantFlags | type == "array" and length > 0)
+  and ([.stepOneDormantFlags[].name] | length == (unique | length))
 ' "$PACK" >/dev/null || fail 'backend completion pack structure is invalid'
+
+while IFS= read -r dormant_flag; do
+  service_key=$(jq -r '.serviceKey' <<<"$dormant_flag")
+  flag_name=$(jq -r '.name' <<<"$dormant_flag")
+  [[ "$service_key" =~ ^[A-Za-z][A-Za-z0-9]*$ ]] \
+    || fail "invalid step-one dormant service key: $service_key"
+  [[ "$flag_name" =~ ^[A-Z][A-Z0-9_]*$ ]] \
+    || fail "invalid step-one dormant flag name: $flag_name"
+  service_json=$(jq -c --arg key "$service_key" '.services[] | select(.key == $key)' "$PACK")
+  [[ -n "$service_json" ]] || fail "step-one dormant flag references unknown service: $service_key"
+  jq -e --arg flag "$flag_name" '.defaultFalseFlags | index($flag) != null' <<<"$service_json" >/dev/null \
+    || fail "$flag_name must also be declared in $service_key.defaultFalseFlags"
+done < <(jq -c '.stepOneDormantFlags[]' "$PACK")
 
 [[ "$(jq -r '.azure.resourceGroup' "$PACK")" == "$(jq -r '.resourceGroup' "$INVENTORY")" ]] \
   || fail 'resource group differs from the canonical Azure inventory'
@@ -127,6 +142,33 @@ grep -F 'configuration_hash' "$SINGLE_SERVICE_DEPLOY_SCRIPT" >/dev/null \
 grep -F 'identity_hash' "$SINGLE_SERVICE_DEPLOY_SCRIPT" >/dev/null \
   || fail 'single-service deployment must preserve managed identity state'
 
+grep -F 'deploy-single-service-preserve-runtime.sh' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'full backend deployment must use the proven runtime-preserving single-service helper'
+grep -F 'show_runtime_diagnostics' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'full backend deployment must emit safe runtime diagnostics on failure'
+grep -F 'properties.provisioningState' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend diagnostics must capture revision provisioning state'
+grep -F 'properties.provisioningError' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend diagnostics must capture provisioning error details'
+grep -F 'properties.runningStateDetails' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend diagnostics must capture revision running-state details'
+grep -F 'az containerapp replica list' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend diagnostics must capture safe replica state'
+grep -F -- '--type system' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend diagnostics must capture Container Apps system logs'
+grep -F 'service-logs' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend deployment must publish one log per service attempt'
+grep -F 'materialize_evidence' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend deployment must publish evidence on both success and failure'
+grep -F 'stepOneDormantFlags' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend deployment must verify step-one dormant flags before mutation'
+grep -F 'dormant-flag' "$DEPLOY_SCRIPT" >/dev/null \
+  || fail 'backend deployment must record dormant-flag evidence'
+
+if grep -F 'az containerapp update' "$DEPLOY_SCRIPT" >/dev/null; then
+  fail 'full backend wrapper must not maintain a second direct Container App update implementation'
+fi
+
 for service_pipeline in "${RUNTIME_PRESERVING_PIPELINES[@]}"; do
   grep -F 'scripts/release/deploy-single-service-preserve-runtime.sh' "$service_pipeline" >/dev/null \
     || fail "$(basename "$service_pipeline") must use the shared runtime-preserving deployment helper"
@@ -148,4 +190,7 @@ if grep -En ':latest([[:space:]]|$)' "$PIPELINE" "$DEPLOY_SCRIPT" "$SINGLE_SERVI
   fail 'mutable latest image tags are forbidden'
 fi
 
-echo 'SUCCESS: backend completion pack and service deployment preservation contracts passed.'
+python3 "$ROOT/scripts/release/tests/test-backend-preflight.py"
+python3 "$ROOT/scripts/release/tests/test-backend-image-reuse.py"
+
+echo 'SUCCESS: backend completion pack, diagnostics, and runtime-preserving deployment contracts passed.'

@@ -1,5 +1,7 @@
 "use client";
 
+import { adminFetch } from "@/lib/admin-renewal";
+
 import { useCallback, useEffect, useState } from "react";
 import type { AdminSubscriptionPlan } from "@/lib/admin-subscription-plan-contract";
 import type { AdminSubscriptionSchedule, AdminSubscriptionScheduleItem } from "@/lib/admin-subscription-runtime-contract";
@@ -24,7 +26,7 @@ export function AdminSubscriptionScheduleManager({ plan }: { plan: AdminSubscrip
   const [message, setMessage] = useState("Loading Chef meal schedule…");
 
   const load = useCallback(async () => {
-    const response = await fetch(`/api/admin/subscription-plans/${plan.id}/schedule`, { cache: "no-store" });
+    const response = await adminFetch(`/api/admin/subscription-plans/${plan.id}/schedule`, { cache: "no-store" });
     if (response.status === 404) { setSchedule(null); setMessage("Chef has not saved a meal schedule yet."); return; }
     if (response.status === 401) throw new Error("Administrator session expired.");
     if (response.status === 403) throw new Error("Subscription administrator access is required.");

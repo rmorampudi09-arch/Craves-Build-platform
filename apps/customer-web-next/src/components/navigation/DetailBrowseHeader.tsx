@@ -15,9 +15,10 @@ import {
 
 interface DetailBrowseHeaderProps {
   returnPath: string;
+  onBack: () => void;
 }
 
-export function DetailBrowseHeader({ returnPath }: DetailBrowseHeaderProps) {
+export function DetailBrowseHeader({ returnPath, onBack }: DetailBrowseHeaderProps) {
   const navigate = useNavigate();
   const [address, setAddress] = useState(() => getAddress());
   const [cartItemCount, setCartItemCount] = useState(() => cartCount());
@@ -72,6 +73,8 @@ export function DetailBrowseHeader({ returnPath }: DetailBrowseHeaderProps) {
       onSearchTermChange={setSearchTerm}
       onSearchFocus={openSearch}
       returnPath={returnPath}
+      onBack={onBack}
+      backLabel="Back to home"
     />
   );
 }

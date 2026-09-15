@@ -32,8 +32,12 @@ export function ChefDishesGrid({ chefName, dishes }: ChefDishesGridProps) {
       </div>
 
       <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {dishes.map((dish) => (
-          <DishCard key={dish.id} dish={dish} />
+        {dishes.map((dish, index) => (
+          <DishCard
+            key={dish.id}
+            dish={dish}
+            priorityImage={index < 3}
+          />
         ))}
       </div>
     </section>

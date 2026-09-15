@@ -55,7 +55,17 @@ export function ProgressiveImage({
         loading={loading}
         decoding={decoding}
         fetchPriority={fetchPriority}
-        onLoad={() => setStatus("loaded")}
+        onLoad={(event) => {
+          const image = event.currentTarget;
+          if (typeof image.decode !== "function") {
+            setStatus("loaded");
+            return;
+          }
+          void image
+            .decode()
+            .catch(() => undefined)
+            .then(() => setStatus("loaded"));
+        }}
         onError={() => setStatus("error")}
         className={`${className} transition-opacity duration-200 ease-out ${
           status === "loaded" ? "opacity-100" : "opacity-0"

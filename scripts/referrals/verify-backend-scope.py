@@ -28,7 +28,7 @@ ADDED=('services/referral-service/','docs/referrals/','scripts/referrals/',
  'services/integration-service/src/test/java/in/craves/integration/referrals/')
 EXACT={'services/order-service/src/test/java/in/craves/order/finance/ReferralBenefitsOwnerDatabaseTest.java','.github/workflows/referral-backend-ci.yml',
  'services/order-service/src/test/java/in/craves/order/finance/ReferralCheckoutIntegrationDatabaseTest.java'}
-for service,versions in {'auth-service':[(12,'source_outbox'),(13,'enrollment'),(14,'account_status')],'order-service':[(28,'source_outbox'),(29,'order_binding'),(30,'lifecycle_outbox'),(31,'checkout_benefits')],'integration-service':[(137,'source_outbox'),(138,'finance_consumer'),(139,'finance_refresh'),(140,'finance_reviews_and_execution'),(141,'checkout_funding'),(142,'split_refunds')]}.items():
+for service,versions in {'auth-service':[(12,'source_outbox'),(13,'enrollment'),(14,'account_status')],'order-service':[(28,'source_outbox'),(29,'order_binding'),(30,'lifecycle_outbox'),(31,'checkout_benefits')],'integration-service':[(137,'source_outbox'),(138,'finance_consumer'),(139,'finance_refresh'),(140,'finance_reviews_and_execution'),(141,'checkout_funding'),(142,'split_refunds'),(143,'recovery_audit_and_cancellation')]}.items():
  for version,name in versions:EXACT.add(f'services/{service}/src/main/resources/db/migration/V{version}__referral_{name}.sql')
 lines=subprocess.check_output(['git','diff','--name-status','--no-renames',BASE,'HEAD'],text=True).splitlines()
 assert lines,'No integration changes found'

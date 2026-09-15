@@ -28,6 +28,7 @@ public class RefundRequestService {
     @Transactional
     public boolean accept(EventEnvelope<RefundRequestedData> event, String rawPayload) {
         validator.validate(event);
+        if(referralRefunds!=null)referralRefunds.verifyReplay(event);
 
         int inboxInserted = jdbcTemplate.update(
             """

@@ -7,7 +7,7 @@ import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assertions.*;
 class ReferralCheckoutBenefitsIT {
  ReferralTestRig r;ReferralTestRig.Member buyer;ReferralTestRig.Order order;
- @BeforeEach void setup(){r=new ReferralTestRig();buyer=r.member(r.member(null));order=r.order(r.member(null),buyer,80000,100000);r.fund("DISCOUNT",100000);r.db.tx(()->{r.db.journal("TEST_ONLY_CREDIT",buyer.id(),0,50000,0,"MARKETING_EXPENSE",null,null);return null;});}
+ @BeforeEach void setup(){r=new ReferralTestRig();buyer=r.member(r.member(null));var earning=r.order(r.member(buyer),r.member(null),2500000);r.deliver(earning);r.finance(earning,1,0,2500000);r.awards.award(earning.id());r.mature(earning,0);assertEquals(50000,r.balance(buyer,"available_paise"));order=r.order(r.member(null),buyer,80000,100000);r.fund("DISCOUNT",100000);}
  ObjectNode reserve(long wallet){return Json.MAPPER.createObjectNode().put("checkoutId",order.checkout().toString()).put("buyerUserId",buyer.id().toString()).put("grossPaise","100000").put("foodSubtotalPaise","80000").put("walletPaise",Long.toString(wallet)).put("inviteeDiscount",true).put("createdAt",r.clock.instant().toString()).put("firstQualifyingOrderEligible",true).put("evidenceRef","TEST_ONLY_ORDER");}
  ObjectNode finish(){return Json.MAPPER.createObjectNode().put("checkoutId",order.checkout().toString()).put("buyerUserId",buyer.id().toString()).put("walletPaise","30000").put("discountPaise","25000").put("evidenceRef","TEST_ONLY_CAPTURE").put("checkoutCancellationConfirmed",false);}
  JsonNode operation(String source,String type,UUID id,JsonNode body){return r.benefits.apply(source,Json.MAPPER.createObjectNode().put("operationId",id.toString()).put("operationType",type).set("payload",body));}

@@ -27,6 +27,10 @@ public class ReferralRefundService {
     record Work(UUID order,UUID checkout,UUID lease,String envelope) {}
     public ReferralRefundService(JdbcTemplate db,ObjectMapper json,ReferralSourceClient client,LedgerPostingService ledger,PlatformTransactionManager manager){this.db=db;this.json=json;this.client=client;this.ledger=ledger;this.tx=new TransactionTemplate(manager);}
     /** Called inside the existing source-inbox transaction before its provider refund row is inserted. */
+    public void verifyReplay(EventEnvelope<RefundRequestedData> event){
+        var old=db.queryForList("SELECT source_hash FROM payment_schema.referral_refund_allocation WHERE request_event_id=?",event.eventId());
+        if(!old.isEmpty() && !old.getFirst().get("source_hash").equals(FinancialJson.hash(json.valueToTree(event),json)))throw new IllegalStateException("REFERRAL_REFUND_SOURCE_CONFLICT");
+    }
     public BigDecimal allocate(EventEnvelope<RefundRequestedData> event,String raw,BigDecimal original){
         var data=event.data();var plans=db.queryForList("SELECT * FROM payment_schema.referral_checkout_funding WHERE checkout_id=?",data.checkoutId());if(plans.isEmpty())return original;var plan=plans.getFirst();
         if(!"CONSUMED".equals(plan.get("state")) || !data.customerIdentityId().equals(plan.get("buyer_id")))throw new IllegalStateException("REFERRAL_REFUND_FUNDING_NOT_CONFIRMED");
@@ -56,8 +60,12 @@ public class ReferralRefundService {
     }catch(InterruptedException e){Thread.currentThread().interrupt();failed(w);}catch(Exception e){failed(w);}return true;}
     private Work claim(){return tx.execute(s->{
         var parents=db.queryForList("""
-            SELECT s.* FROM payment_schema.referral_refund_sequence s WHERE EXISTS(
-              SELECT 1 FROM payment_schema.referral_refund_allocation a WHERE a.checkout_id=s.checkout_id AND a.state='WAITING' AND a.next_attempt_at<=now())
+            SELECT s.* FROM payment_schema.referral_refund_sequence s JOIN LATERAL (
+              SELECT a.* FROM payment_schema.referral_refund_allocation a WHERE a.checkout_id=s.checkout_id AND a.state<>'COMPLETE'
+              ORDER BY a.created_at,a.chef_order_id LIMIT 1) a ON true
+            JOIN payment_schema.refund r ON r.chef_sub_order_id=a.chef_order_id
+            WHERE a.state='WAITING' AND a.next_attempt_at<=now() AND (a.lease_until IS NULL OR a.lease_until<=now())
+              AND (a.gateway_paise=0 OR r.status='SUCCESS')
             ORDER BY s.checkout_id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
             """);if(parents.isEmpty())return null;var parent=parents.getFirst();UUID checkout=(UUID)parent.get("checkout_id");
         var rows=db.queryForList("SELECT a.*,r.status AS provider_state FROM payment_schema.referral_refund_allocation a JOIN payment_schema.refund r ON r.chef_sub_order_id=a.chef_order_id WHERE a.checkout_id=? AND a.state<>'COMPLETE' ORDER BY a.created_at,a.chef_order_id LIMIT 1 FOR UPDATE OF a",checkout);

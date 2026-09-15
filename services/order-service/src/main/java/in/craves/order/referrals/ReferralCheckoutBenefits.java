@@ -53,6 +53,16 @@ public class ReferralCheckoutBenefits {
             db.update("UPDATE order_schema.referral_checkout_benefit SET state='CONSUMING',finish_envelope=?::jsonb,attempts=0,next_attempt_at=now() WHERE checkout_id=?",envelope(checkout,"consume",body).toString(),checkout);
         }return false;
     }));}
+    public boolean requestRelease(UUID checkout){return Boolean.TRUE.equals(tx.execute(s->{
+        var r=db.queryForMap("SELECT * FROM order_schema.referral_checkout_benefit WHERE checkout_id=? FOR UPDATE",checkout);
+        if("RELEASED".equals(r.get("state")))return true;
+        if("RELEASING".equals(r.get("state")))return false;
+        if(!"RESERVED".equals(r.get("state")))throw conflict("Only unconsumed funding can be released");
+        var status=db.queryForObject("SELECT status FROM order_schema.checkout WHERE id=? FOR UPDATE",String.class,checkout);
+        if(!Set.of("PAYMENT_PENDING","CREATED").contains(status))throw conflict("Checkout is no longer unpaid");
+        var result=parse(r.get("result").toString());var body=json.createObjectNode().put("checkoutId",checkout.toString()).put("buyerUserId",r.get("buyer_id").toString()).put("walletPaise",result.path("walletPaise").asText()).put("discountPaise",result.path("discountPaise").asText()).put("evidenceRef","finance-cancellation/"+checkout).put("checkoutCancellationConfirmed",true);
+        db.update("UPDATE order_schema.referral_checkout_benefit SET state='RELEASING',finish_envelope=?::jsonb,attempts=0,next_attempt_at=now() WHERE checkout_id=?",envelope(checkout,"release",body).toString(),checkout);return false;
+    }));}
     @Scheduled(fixedDelayString="${CRAVES_REFERRAL_CHECKOUT_POLL_MS:1000}") public void tick(){for(int i=0;i<20;i++)if(!runOne())return;}
     public boolean runOne(){Work w=claim();if(w==null)return false;try{
         var response=client.send(ReferralSourceClient.Endpoint.OPERATIONS,w.envelope().getBytes(StandardCharsets.UTF_8));
@@ -66,7 +76,14 @@ public class ReferralCheckoutBenefits {
             db.update("UPDATE order_schema.referral_checkout_benefit SET state='RESERVED',result=?::jsonb,lease_id=NULL,lease_until=NULL,last_code=NULL WHERE checkout_id=? AND lease_id=? AND lease_until>now()",value.toString(),w.checkout(),w.lease());
         }else{
             if(money(value,"walletPaise")!=money(p,"walletPaise") || money(value,"discountPaise")!=money(p,"discountPaise"))throw new IllegalStateException("REFERRAL_FINISH_AMOUNT_MISMATCH");
-            db.update("UPDATE order_schema.referral_checkout_benefit SET state=?,lease_id=NULL,lease_until=NULL,last_code=NULL WHERE checkout_id=? AND lease_id=? AND lease_until>now()",target,w.checkout(),w.lease());
+            tx.executeWithoutResult(s->{
+                int changed=db.update("UPDATE order_schema.referral_checkout_benefit SET state=?,lease_id=NULL,lease_until=NULL,last_code=NULL WHERE checkout_id=? AND lease_id=? AND lease_until>now()",target,w.checkout(),w.lease());
+                if(changed==1 && target.equals("RELEASED")){
+                    db.update("INSERT INTO order_schema.order_status_history(id,order_id,old_status,new_status,reason) SELECT gen_random_uuid(),id,status,'CANCELLED','Customer cancelled before payment creation; referral funding released' FROM order_schema.customer_order WHERE checkout_id=? AND status IN ('CREATED','PAYMENT_PENDING')",w.checkout());
+                    db.update("UPDATE order_schema.customer_order SET status='CANCELLED',updated_at=now() WHERE checkout_id=? AND status IN ('CREATED','PAYMENT_PENDING')",w.checkout());
+                    db.update("UPDATE order_schema.checkout SET status='CANCELLED',updated_at=now() WHERE id=? AND status IN ('CREATED','PAYMENT_PENDING')",w.checkout());
+                }
+            });
         }
     }catch(InterruptedException e){Thread.currentThread().interrupt();failed(w);}catch(Exception e){failed(w);}return true;}
     private Work claim(){return tx.execute(s->{

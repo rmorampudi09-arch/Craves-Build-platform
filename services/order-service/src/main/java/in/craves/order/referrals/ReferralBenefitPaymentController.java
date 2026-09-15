@@ -21,4 +21,10 @@ public class ReferralBenefitPaymentController {
         if(!benefits.requestConsumption(id))throw ReferralCheckoutBenefits.conflict("Referral funding is pending");
         payments.markCheckoutPaid(id,null,"Verified referral checkout funding");return benefits.read(id);
     }
+    @PostMapping("/internal/v1/payments/checkout/{id}/referral-release")
+    public JsonNode release(@PathVariable UUID id,@RequestHeader(name="X-Craves-Internal-Secret",required=false) String supplied){
+        if(key.isBlank() || supplied==null || !MessageDigest.isEqual(key.getBytes(StandardCharsets.UTF_8),supplied.getBytes(StandardCharsets.UTF_8)))throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        benefits.requestRelease(id);return benefits.read(id);
+    }
+
 }

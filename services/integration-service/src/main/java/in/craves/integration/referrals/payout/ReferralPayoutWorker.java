@@ -60,6 +60,7 @@ public class ReferralPayoutWorker {
                 ORDER BY i.created_at,i.attempt_id LIMIT 1 FOR UPDATE OF i SKIP LOCKED
                 """);
             if(rows.isEmpty())return;var row=rows.getFirst();JsonNode p=parse(row.get("payload")),a=parse(row.get("assessment")),b=parse(row.get("binding"));
+            try {
             long net=ReferralFinanceReviewService.positive(p,"netPaise"),gross=ReferralFinanceReviewService.positive(p,"grossPaise"),tax=zeroOrPositive(p,"withholdingPaise");
             if(gross!=Math.addExact(net,tax) || !"INR".equals(p.path("currency").asText())
                 || !row.get("user_id").toString().equals(a.path("userId").asText()) || !row.get("user_id").toString().equals(p.path("beneficiaryUserId").asText())
@@ -69,6 +70,7 @@ public class ReferralPayoutWorker {
             UUID attempt=(UUID)row.get("attempt_id");
             db.update("INSERT INTO payment_schema.referral_payout_execution(attempt_id,review_id,fund_account_id,contact_id,net_paise,withholding_paise,state) VALUES (?,?,?,?,?,?,'READY')",attempt,row.get("review_id"),b.path("fundAccountId").asText(),b.path("contactId").asText(),net,tax);
             db.update("UPDATE payment_schema.referral_payout_instruction SET state='EXECUTION_RECORDED' WHERE attempt_id=?",attempt);
+            }catch(IllegalStateException|IllegalArgumentException|org.springframework.web.server.ResponseStatusException e){db.update("UPDATE payment_schema.referral_payout_instruction SET state='REVIEW_REQUIRED' WHERE attempt_id=?",row.get("attempt_id"));}
         });
     }
     Work claim(){return tx.execute(s->{
@@ -123,6 +125,7 @@ public class ReferralPayoutWorker {
             if(!Set.of("UNKNOWN","REVIEW").contains(locked.get("state")))throw ReferralFinanceReviewService.conflict("Only unresolved transfers can be reconciled");
             if(locked.get("provider_id")!=null && !locked.get("provider_id").equals(request.providerId()))throw ReferralFinanceReviewService.conflict("Original provider identity cannot change");
             db.update("INSERT INTO payment_schema.referral_payout_evidence(id,attempt_id,outcome,provider_id,observed_at,actor_id,evidence_ref) VALUES (?,?,'IDENTIFIED',?,now(),?,?) ON CONFLICT(attempt_id,outcome) DO NOTHING",UUID.randomUUID(),attempt,request.providerId(),actor.identityId().toString(),request.evidenceRef());
+            db.update("INSERT INTO payment_schema.referral_operator_audit(id,action,target_id,actor_id,reason,evidence_ref,detail) VALUES (?,'PAYOUT_RECONCILIATION',?,?,?,?,?::jsonb)",UUID.randomUUID(),attempt,actor.identityId(),request.reason(),request.evidenceRef(),json.createObjectNode().put("providerId",request.providerId()).put("priorAttempts",((Number)locked.get("attempts")).intValue()).toString());
             db.update("UPDATE payment_schema.referral_payout_execution SET provider_id=?,state='UNKNOWN',attempts=0,next_attempt_at=now(),last_code='OPERATOR_IDENTIFIED_ORIGINAL_TRANSFER' WHERE attempt_id=?",request.providerId(),attempt);
         });return Map.of("status","ORIGINAL_TRANSFER_QUEUED_FOR_VERIFICATION");
     }

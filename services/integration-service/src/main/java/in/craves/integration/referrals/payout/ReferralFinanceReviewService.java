@@ -44,7 +44,8 @@ public class ReferralFinanceReviewService {
         // Include the destination, reason and bank verification context in the approver's digest.
         hash=FinancialJson.hash(json.createObjectNode().put("reviewHash",hash).set("binding",binding),json);
         UUID id=UUID.randomUUID();String finalHash=hash;
-        tx.executeWithoutResult(s->db.update("INSERT INTO payment_schema.referral_finance_review(id,kind,payload,provider_binding,content_hash,evidence_ref,created_by) VALUES (?,?,?::jsonb,?::jsonb,?,?,?)",id,request.kind(),payload.toString(),binding.toString(),finalHash,evidence,actor.identityId()));
+        tx.executeWithoutResult(s->{db.update("INSERT INTO payment_schema.referral_finance_review(id,kind,payload,provider_binding,content_hash,evidence_ref,created_by) VALUES (?,?,?::jsonb,?::jsonb,?,?,?)",id,request.kind(),payload.toString(),binding.toString(),finalHash,evidence,actor.identityId());
+            db.update("INSERT INTO payment_schema.referral_operator_audit(id,action,target_id,actor_id,reason,evidence_ref,detail) VALUES (?,'REVIEW_DRAFTED',?,?,?,?,?::jsonb)",UUID.randomUUID(),id,actor.identityId(),reason,evidence,json.createObjectNode().put("contentHash",finalHash).toString());});
         return Map.of("id",id,"contentHash",hash,"status","AWAITING_SECOND_OPERATOR");
     }
     public Map<String,Object> approve(CravesPrincipal actor,UUID id,Approval request) {
@@ -63,6 +64,7 @@ public class ReferralFinanceReviewService {
             UUID aggregate=UUID.fromString(body.path(kind.equals("RECIPIENT")?"userId":"fundingId").asText());
             outbox.enqueue("review/"+id,kind.equals("RECIPIENT")?"recipient.assessed":"budget.funded",aggregate,now,body);
             db.update("UPDATE payment_schema.referral_finance_review SET approved_by=?,approved_at=? WHERE id=?",actor.identityId(),Timestamp.from(now),id);
+            db.update("INSERT INTO payment_schema.referral_operator_audit(id,action,target_id,actor_id,reason,evidence_ref,detail) VALUES (?,'REVIEW_APPROVED',?,?,?,?,?::jsonb)",UUID.randomUUID(),id,actor.identityId(),request.reason(),row.get("evidence_ref"),json.createObjectNode().put("contentHash",request.expectedHash()).toString());
             return Map.of("id",id,"status","APPROVED");
         });
     }

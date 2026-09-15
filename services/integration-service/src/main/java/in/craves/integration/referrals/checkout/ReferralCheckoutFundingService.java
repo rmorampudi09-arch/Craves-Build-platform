@@ -64,6 +64,7 @@ public class ReferralCheckoutFundingService {
     public UUID paymentId(UUID checkout){return db.queryForObject("SELECT payment_order_id FROM payment_schema.referral_checkout_funding WHERE checkout_id=?",UUID.class,checkout);}
     public RazorpayPaymentClient.CreatedOrder create(UUID checkout,String receipt,BigDecimal amount,String currency,Map<String,String> ignoredNotes){
         var row=newTx.execute(s->{lock("referral-funding/"+checkout);var r=db.queryForMap("SELECT * FROM payment_schema.referral_checkout_funding WHERE checkout_id=? FOR UPDATE",checkout);
+            if(Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.referral_checkout_cancellation WHERE checkout_id=?)",Boolean.class,checkout)))throw conflict("Checkout cancellation is recorded");
             if(amount.movePointRight(2).longValueExact()!=((Number)r.get("gateway_paise")).longValue() || amount.signum()<=0 || !"INR".equals(currency))throw conflict("Frozen collection amount differs");
             if("CREATED".equals(r.get("create_state")))return r;
             if(!"READY".equals(r.get("create_state")))throw conflict("Original provider creation needs reconciliation");
@@ -103,7 +104,7 @@ public class ReferralCheckoutFundingService {
         db.update("UPDATE payment_schema.referral_checkout_funding SET state='REVIEW',lease_id=NULL,lease_until=NULL,last_code='ATTEMPTS_EXHAUSTED' WHERE state='RESERVED' AND attempts>=40 AND (lease_until IS NULL OR lease_until<=now())");
         var rows=db.queryForList("""
             SELECT f.* FROM payment_schema.referral_checkout_funding f JOIN payment_schema.payment_order p ON p.id=f.payment_order_id
-            WHERE f.state='RESERVED' AND f.attempts<40 AND f.next_attempt_at<=now() AND (f.lease_until IS NULL OR f.lease_until<=now())
+            WHERE f.state='RESERVED' AND NOT EXISTS(SELECT 1 FROM payment_schema.referral_checkout_cancellation x WHERE x.checkout_id=f.checkout_id) AND f.attempts<40 AND f.next_attempt_at<=now() AND (f.lease_until IS NULL OR f.lease_until<=now())
               AND ((f.gateway_paise=0 AND p.provider='REFERRAL_WALLET' AND p.status='PAYMENT_PENDING') OR (f.gateway_paise>0 AND p.status='PAID' AND p.provider='RAZORPAY'))
             ORDER BY f.next_attempt_at,f.checkout_id LIMIT 1 FOR UPDATE OF f SKIP LOCKED
             """);if(rows.isEmpty())return null;var r=rows.getFirst();UUID checkout=(UUID)r.get("checkout_id"),lease=UUID.randomUUID();
@@ -116,13 +117,38 @@ public class ReferralCheckoutFundingService {
         if(w.gateway()>0 && (!"PAID".equals(payment.get("status")) || !"RAZORPAY".equals(payment.get("provider")) || payment.get("provider_payment_id")==null || !payment.get("provider_payment_id").toString().matches("pay_[A-Za-z0-9]+") || !Set.of("captured","paid").contains(String.valueOf(payment.get("provider_status")).toLowerCase(Locale.ROOT))))throw conflict("External money is not captured");
         if(w.gateway()==0 && (!"REFERRAL_WALLET".equals(payment.get("provider")) || !Set.of("PAYMENT_PENDING","PAID").contains(payment.get("status"))))throw conflict("Internal tender context mismatch");
     }
+    public Map<String,String> cancel(CravesPrincipal actor,String authorization,UUID checkout){
+        if(actor==null)throw conflict("Customer authentication required");
+        var owned=orders.get().uri("/checkout/{id}",checkout).header("Authorization",authorization).retrieve().body(JsonNode.class);
+        if(owned==null || !actor.identityId().toString().equals(owned.path("customerIdentityId").asText()) || !checkout.toString().equals(owned.path("id").asText()))throw conflict("Checkout ownership differs");
+        if(Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.referral_checkout_cancellation WHERE checkout_id=? AND actor_id=?)",Boolean.class,checkout,actor.identityId())))return Map.of("status","CANCELLATION_RECORDED");
+        prepare(authorization,checkout,actor.identityId(),new BigDecimal(owned.path("grandTotal").asText()),"INR");
+        newTx.executeWithoutResult(s->{lock("referral-funding/"+checkout);var row=db.queryForMap("SELECT * FROM payment_schema.referral_checkout_funding WHERE checkout_id=? FOR UPDATE",checkout);
+            if(!"READY".equals(row.get("create_state")) || !"RESERVED".equals(row.get("state")) || Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.payment_order WHERE checkout_id=?)",Boolean.class,checkout)))throw conflict("Payment creation already started; its original outcome must be resolved");
+            db.update("INSERT INTO payment_schema.referral_checkout_cancellation(checkout_id,actor_id) VALUES (?,?) ON CONFLICT DO NOTHING",checkout,actor.identityId());
+        });return Map.of("status","CANCELLATION_RECORDED");
+    }
+    @Scheduled(fixedDelayString="${CRAVES_REFERRAL_CANCELLATION_POLL_MS:1000}")
+    public void cancelTick(){try{cancelOne();}catch(RuntimeException e){/* Original cancellation stays recorded. */}}
+    public boolean cancelOne(){
+        var rows=newTx.execute(s->{var due=db.queryForList("SELECT c.checkout_id,f.funding_hash FROM payment_schema.referral_checkout_cancellation c JOIN payment_schema.referral_checkout_funding f ON f.checkout_id=c.checkout_id WHERE c.completed_at IS NULL AND c.attempts<40 AND c.next_attempt_at<=now() ORDER BY c.next_attempt_at,c.checkout_id LIMIT 1 FOR UPDATE OF c SKIP LOCKED");
+            if(!due.isEmpty())db.update("UPDATE payment_schema.referral_checkout_cancellation SET attempts=attempts+1,next_attempt_at=now()+interval '60 seconds' WHERE checkout_id=?",due.getFirst().get("checkout_id"));return due;});
+        if(rows.isEmpty())return false;var row=rows.getFirst();UUID checkout=(UUID)row.get("checkout_id");
+        try{var response=internal.post().uri("/payments/checkout/{id}/referral-release",checkout).header("X-Craves-Internal-Secret",internalKey).retrieve().body(JsonNode.class);
+            if(response==null || !"RELEASED".equals(response.path("state").asText()) || !row.get("funding_hash").equals(FinancialJson.hash(response.path("funding"),json)))throw conflict("Funding release is not confirmed");
+            newTx.executeWithoutResult(s->{var pending=db.queryForList("SELECT checkout_id FROM payment_schema.referral_checkout_cancellation WHERE checkout_id=? AND completed_at IS NULL FOR UPDATE",checkout);if(pending.isEmpty())return;
+                db.update("UPDATE payment_schema.referral_checkout_funding SET state='RELEASED' WHERE checkout_id=?",checkout);db.update("UPDATE payment_schema.referral_checkout_cancellation SET completed_at=now(),last_code=NULL WHERE checkout_id=?",checkout);
+            });
+        }catch(RuntimeException e){db.update("UPDATE payment_schema.referral_checkout_cancellation SET last_code='RELEASE_CONFIRMATION_PENDING',next_attempt_at=now()+interval '5 seconds' WHERE checkout_id=? AND completed_at IS NULL",checkout);}return true;
+    }
     public Map<String,String> recover(CravesPrincipal actor,UUID checkout,Recovery request){
         FinancePolicyService.operator(actor);FinancePolicyService.reason(request.reason());FinancePolicyService.reason(request.evidenceRef());
         var row=db.queryForMap("SELECT * FROM payment_schema.referral_checkout_funding WHERE checkout_id=?",checkout);
         if(!Set.of("UNKNOWN","SENDING").contains(row.get("create_state")))throw conflict("Only uncertain creation can be reconciled");
         String ref="CRV_"+checkout.toString().replace("-","")+"_RZP";
         var verified=provider.fetchCreatedOrder(request.providerOrderId(),ref,BigDecimal.valueOf(number(row,"gateway_paise"),2),"INR");
-        newTx.executeWithoutResult(s->db.update("UPDATE payment_schema.referral_checkout_funding SET create_state='CREATED',provider_response=?::jsonb,last_code='ORIGINAL_PROVIDER_ORDER_VERIFIED' WHERE checkout_id=? AND create_state IN ('UNKNOWN','SENDING')",write(verified),checkout));
+        newTx.executeWithoutResult(s->{db.update("UPDATE payment_schema.referral_checkout_funding SET create_state='CREATED',provider_response=?::jsonb,last_code='ORIGINAL_PROVIDER_ORDER_VERIFIED' WHERE checkout_id=? AND create_state IN ('UNKNOWN','SENDING')",write(verified),checkout);
+            db.update("INSERT INTO payment_schema.referral_operator_audit(id,action,target_id,actor_id,reason,evidence_ref,detail) VALUES (?,'PAYMENT_ORDER_RECOVERED',?,?,?,?,?::jsonb)",UUID.randomUUID(),checkout,actor.identityId(),request.reason(),request.evidenceRef(),json.createObjectNode().put("providerOrderId",request.providerOrderId()).toString());});
         return Map.of("status","ORIGINAL_ORDER_VERIFIED");
     }
     private void debit(List<LedgerJournal.Line> lines,String code,long amount){if(amount>0)lines.add(LedgerJournal.Line.debit(code,BigDecimal.valueOf(amount,2),null));}

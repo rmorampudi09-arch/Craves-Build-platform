@@ -11,4 +11,7 @@ public class ReferralCheckoutRecoveryController {
     public ReferralCheckoutRecoveryController(ReferralCheckoutFundingService funding){this.funding=funding;}
     @PostMapping("/api/v1/admin/finance/referrals/checkouts/{id}/recover-provider-order")
     public Map<String,String> recover(@AuthenticationPrincipal CravesPrincipal actor,@PathVariable UUID id,@RequestBody ReferralCheckoutFundingService.Recovery request){return funding.recover(actor,id,request);}
+    @PostMapping("/api/v1/payments/referral-checkouts/{id}/cancel")
+    public Map<String,String> cancel(@AuthenticationPrincipal CravesPrincipal actor,@RequestHeader("Authorization") String authorization,@PathVariable UUID id){return funding.cancel(actor,authorization,id);}
+
 }

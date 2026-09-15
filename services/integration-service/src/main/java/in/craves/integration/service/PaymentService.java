@@ -411,7 +411,7 @@ public class PaymentService {
             orderRef, checkout.grandTotal(), checkout.currency(), notes
         );
         jdbcTemplate.update(
-            "INSERT INTO payment_schema.payment_order (id, checkout_id, customer_identity_id, craves_payment_order_ref, provider, provider_order_id, checkout_key_id, amount, currency, status, provider_status, request_payload, response_payload, created_at, updated_at) VALUES (?, ?, ?, ?, 'RAZORPAY', ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, now(), now())",
+            "INSERT INTO payment_schema.payment_order (id, checkout_id, customer_identity_id, craves_payment_order_ref, provider, provider_order_id, checkout_key_id, amount, currency, status, provider_status, request_payload, response_payload, created_at, updated_at) VALUES (?, ?, ?, ?, 'RAZORPAY', ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, now(), now())" + (checkout.referralBenefitsRequested()?" ON CONFLICT(id) DO NOTHING":""),
             paymentOrderId, checkout.id(), checkout.customerIdentityId(), orderRef, created.orderId(),
             created.checkoutKeyId(), checkout.grandTotal(), checkout.currency(),
             PaymentOrderStatus.PAYMENT_PENDING.name(), created.providerStatus(),
@@ -524,11 +524,11 @@ public class PaymentService {
         String paymentSessionId = jdbcTemplate.query(
             "SELECT payment_session_id FROM payment_schema.payment_order WHERE id = ?",
             (rs, rowNum) -> rs.getString("payment_session_id"), existing.paymentOrderId()
-        ).stream().findFirst().orElse(null);
+        ).stream().filter(java.util.Objects::nonNull).findFirst().orElse(null);
         String checkoutKeyId = jdbcTemplate.query(
             "SELECT checkout_key_id FROM payment_schema.payment_order WHERE id = ?",
             (rs, rowNum) -> rs.getString("checkout_key_id"), existing.paymentOrderId()
-        ).stream().findFirst().orElse(null);
+        ).stream().filter(java.util.Objects::nonNull).findFirst().orElse(null);
         return new CreatePaymentOrderResponse(
             existing.paymentOrderId(), existing.checkoutId(), existing.cravesPaymentOrderRef(),
             existing.provider(), existing.providerOrderId(), existing.providerPaymentId(), checkoutKeyId,

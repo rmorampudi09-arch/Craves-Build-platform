@@ -87,8 +87,8 @@ public class RefundRepository {
                    OR p.currency IS DISTINCT FROM r.currency OR r.amount>p.amount
                    OR coalesce(left(p.checkout_key_id,9),'')<>CASE WHEN ?='PRODUCTION' THEN 'rzp_live_' ELSE 'rzp_test_' END)))
               AND NOT (?='PRODUCTION' AND r.provider='RAZORPAY' AND p.provider=r.provider
-                AND coalesce(left(p.checkout_key_id,9),'')='rzp_test_'))
-            """,Boolean.class,environment,environment));
+                AND coalesce(left(p.checkout_key_id,9),'')='rzp_test_') %s)
+            """.formatted(referralRefunds==null?"":"AND NOT (r.provider='REFERRAL_WALLET' AND r.amount=0 AND EXISTS(SELECT 1 FROM payment_schema.referral_refund_allocation a JOIN payment_schema.referral_funding_capture f ON f.checkout_id=a.checkout_id WHERE a.chef_order_id=r.chef_sub_order_id AND a.checkout_id=r.checkout_id AND a.gateway_paise=0 AND f.payment_order_id=r.payment_order_id AND f.gateway_paise=0))"),Boolean.class,environment,environment));
     }
 
     @Transactional

@@ -121,7 +121,22 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
     <section aria-label={`${dish.name} photos`}>
       <div className="relative overflow-hidden rounded-[1.65rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-[0_14px_36px_rgba(26,26,26,0.08)] md:rounded-[2rem]">
         <div className="relative aspect-[4/3] md:aspect-[16/10]">
-          <ProgressiveImage\n            key={activeImage}\n            src={activeImage}\n            alt={dish.imageIsPlaceholder ? "" : `${dish.name} photo ${safeIndex + 1}`}\n            aria-hidden={dish.imageIsPlaceholder || undefined}\n            width={1280}\n            height={960}\n            loading="eager"\n            fetchPriority="high"\n            fallbackLabel="Dish photo unavailable"\n            className={\n              dish.imageIsPlaceholder\n                ? "h-full w-full object-contain p-16 opacity-80 sm:p-20"\n                : "h-full w-full object-cover object-center"\n            }\n          />
+          <ProgressiveImage
+            key={activeImage}
+            src={activeImage}
+            alt={dish.imageIsPlaceholder ? "" : `${dish.name} photo ${safeIndex + 1}`}
+            aria-hidden={dish.imageIsPlaceholder || undefined}
+            fill
+            sizes="(min-width: 1280px) 42rem, (min-width: 1024px) 60vw, calc(100vw - 32px)"
+            loading="eager"
+            fetchPriority="high"
+            fallbackLabel="Dish photo unavailable"
+            className={
+              dish.imageIsPlaceholder
+                ? "object-contain p-16 opacity-80 sm:p-20"
+                : "object-cover object-center"
+            }
+          />
 
           <div className="absolute inset-x-0 top-0 flex items-center justify-end p-3.5 sm:p-4">
             <div className="flex items-center gap-2">
@@ -212,11 +227,11 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
               <ProgressiveImage
                 src={image}
                 alt=""
-                width={232}
-                height={176}
+                fill
+                sizes="96px"
                 loading="lazy"
                 fetchPriority="low"
-                className="h-full w-full object-cover"
+                className="object-cover"
                 aria-hidden="true"
                 fallbackLabel="Photo unavailable"
               />

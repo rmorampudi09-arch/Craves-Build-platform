@@ -32,7 +32,7 @@ export function ProgressiveImage({
     <>
       <span
         aria-hidden="true"
-        className={`absolute inset-0 bg-[#F1F3F5] transition-opacity duration-200 ${
+        className={`absolute inset-0 bg-[#F1F3F5] transition-opacity duration-200 motion-reduce:transition-none ${
           status === "loading" ? "opacity-100" : "opacity-0"
         }`}
       >
@@ -67,7 +67,7 @@ export function ProgressiveImage({
             .then(() => setStatus("loaded"));
         }}
         onError={() => setStatus("error")}
-        className={`${className} transition-opacity duration-200 ease-out ${
+        className={`${className} transition-opacity duration-200 ease-out motion-reduce:transition-none ${
           status === "loaded" ? "opacity-100" : "opacity-0"
         }`}
       />

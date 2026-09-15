@@ -1,18 +1,18 @@
-# Craves referral service — local setup and verification
+# Craves referral service — pre-integration build and local verification
 
-Java 21 / Spring Boot 3 / Maven / PostgreSQL. This standalone addition implements the supplied Chef Referral Rewards Program v2.0. It is not connected to live Auth, Order, checkout or Finance, and the web/native components are not mounted. All execution and member/admin public-access flags default OFF. Nothing in this README authorises a merge, production migration, deployment or payment.
+Standalone Java 21 / Spring Boot 3 / Maven / PostgreSQL implementation of the supplied Chef Referral Rewards Program v2.0. Start with [the current pre-integration hardening record](../../docs/referrals/PREINTEGRATION_HARDENING.md), which supersedes older descriptions of absent Redis entries, capture helpers and test counts.
 
-A Maven build compiles the Java files and runs automated checks. PostgreSQL is required because these tests verify actual transactions, constraints and concurrent money operations; an in-memory database is not an equivalent test. Docker below starts a temporary local database only. The service's database migrations are separate from normal application startup.
+The branch is `feat/chef-referral-v2-20260915`, draft PR #357. The protected platform baseline is `870f5293884888aa28f0c069b91a86d06492c9a2`. No existing platform route, dependency manifest/lockfile, migration or running service is changed. The referral module is not connected to live Auth, Order, Finance or checkout, and its new client components are unmounted. No merge, deployment, programme activation or provider payment is authorised by this README.
+
+A Maven build compiles Java and runs tests. These database tests require actual PostgreSQL transactions and constraints, not an in-memory substitute. The client contract gate then checks real HTTP responses exported by the Java tests against the web's Zod schemas. A green build is not a guarantee of perfect software or external integration acceptance.
 
 ## Prerequisites
 
-Use a reviewed checkout of `rmorampudi09-arch/Craves-Build-platform`, branch `feat/chef-referral-v2-20260915`, with Java 21, Maven, Python 3 and a running Docker engine. Run the examples from the repository root in Bash (Linux, macOS or Windows WSL). An add-only ZIP does not contain the existing web/mobile manifests; run their checks from the full reviewed repository checkout, not from an empty folder containing only additions.
+Use a full checkout of the intended review SHA with Java 21, Maven, Python 3, Node 24 and a running Docker engine. These commands are Bash/Linux/macOS/Windows WSL commands, run initially from the repository root. The additions ZIP does not contain protected baseline web/mobile manifests and cannot replace a full repository checkout. Do not overwrite newer work or switch a dirty working directory. Confirm `git rev-parse HEAD` before testing.
 
-Before testing, confirm `git rev-parse HEAD` equals the intended review SHA. Do not switch a working directory containing unsaved changes or extract an older ZIP over newer source. The add-only guard requires the original baseline commit in the local Git history.
+## Complete local test sequence — disposable database only
 
-## Local PostgreSQL tests — disposable data only
-
-**Warning:** `TestDatabase.reset()` drops and recreates `referral_schema` for each test fixture. Never use a production database, production credentials or a localhost tunnel to a remote database. The password below is deliberately public and suitable only for the temporary, loopback-bound test container.
+**Warning:** the integration fixture drops and recreates `referral_schema`. Never supply production credentials, a production database or a localhost tunnel to production. The following public password is valid only for this temporary loopback-bound test container. Port 15432 must be free; the unique name prevents replacing an existing container.
 
 ```bash
 set -Eeuo pipefail
@@ -24,7 +24,6 @@ docker run --rm -d --name "$TEST_CONTAINER" \
   -e POSTGRES_PASSWORD=disposable_referral_test_only \
   postgres:16
 trap 'docker stop "$TEST_CONTAINER" >/dev/null 2>&1 || true' EXIT
-
 ready=false
 for attempt in $(seq 1 30); do
   if docker exec "$TEST_CONTAINER" pg_isready -U referral_test -d referral_test >/dev/null 2>&1; then
@@ -34,71 +33,19 @@ for attempt in $(seq 1 30); do
   sleep 1
 done
 if [ "$ready" != true ]; then
-  echo "Local disposable PostgreSQL did not become ready." >&2
+  echo "Disposable PostgreSQL did not become ready." >&2
   exit 1
 fi
-
 export REFERRAL_TEST_JDBC_URL=jdbc:postgresql://127.0.0.1:15432/referral_test
 export REFERRAL_TEST_DB_USER=referral_test
 export REFERRAL_TEST_DB_PASSWORD=disposable_referral_test_only
 export REFERRAL_TEST_CONFIRM=YES_DISPOSABLE_REFERRAL_TEST_ONLY
 python3 scripts/referrals/verify-additive.py
 mvn -B -ntp -f services/referral-service/pom.xml clean verify
-```
+python3 scripts/referrals/verify-build.py
 
-The explicit container name prevents replacing another database container. The shell trap stops only the temporary container started by this example. Port 15432 must be free. At this checkpoint the focused Java suite contains 12 unit tests and 19 PostgreSQL integration tests; use the final-head XML evidence to verify actual counts and no skips. The module CI separately exercises the standalone migrator twice against its disposable database.
-
-## Build outputs and the resumed CI fix
-
-The runnable archive is `services/referral-service/target/referral-service-0.1.0-SNAPSHOT.jar`. Its manifest must start `in.craves.referral.ReferralApplication` through Spring Boot's `JarLauncher`, and its nested runtime dependencies and all seven referral SQL migration resources must be present.
-
-CycloneDX runs in `prepare-package`, before the JAR is created. The dependency inventory is:
-
-```text
-services/referral-service/target/classes/META-INF/sbom/application.cdx.json
-```
-
-Spring Boot preserves this META-INF entry at the executable JAR's top level, rather than relocating it under BOOT-INF/classes. The archive entry is:
-
-```text
-META-INF/sbom/application.cdx.json
-```
-
-CI checks those bytes are identical and records the archive entry plus JAR/SBOM SHA-256 values in `target/artifact-verification.json`. The previous CI failure looked for `target/bom.json`, which was not the generated Spring Boot inventory path. Do not create an empty placeholder inventory or skip the gate. The inventory identifies dependencies; it is not a vulnerability-clearance report.
-
-## Runtime environment — no secret values in chat or Git
-
-| Key | Purpose / handling |
-| --- | --- |
-| `REFERRAL_DB_URL`, `REFERRAL_DB_USER`, `REFERRAL_DB_PASSWORD` | Runtime datasource for the isolated referral schema. Use a restricted role, not a migration owner or superuser. Remote PostgreSQL must use reviewed TLS/hostname verification. |
-| `REFERRAL_DB_POOL_SIZE` | Defaults to 8 connections. Review the total database connection budget before increasing replicas. |
-| `CRAVES_JWT_VERIFICATION_PEM_BASE64` | Base64-encoded existing Auth RSA public verification PEM. Never supply Auth's private signing key. |
-| `CRAVES_JWT_ISSUER`, `CRAVES_JWT_AUDIENCE` | Must exactly match the existing reviewed Auth token contract. |
-| `SPRING_DATA_REDIS_HOST`, `SPRING_DATA_REDIS_PORT`, `SPRING_DATA_REDIS_USERNAME`, `SPRING_DATA_REDIS_PASSWORD`, `SPRING_DATA_REDIS_SSL_ENABLED` | Existing Auth revocation projection connection. Review actual TLS, key, token-version and absent-key semantics before connecting private APIs. |
-| `CRAVES_REFERRALS_AUTH_HMAC_BASE64`, `CRAVES_REFERRALS_ORDER_HMAC_BASE64`, `CRAVES_REFERRALS_FINANCE_HMAC_BASE64` | Three distinct source-signing keys, each at least 32 decoded bytes; inject through approved secret storage. |
-| `CRAVES_REFERRALS_PREVIOUS_AUTH_HMAC_BASE64`, `CRAVES_REFERRALS_PREVIOUS_ORDER_HMAC_BASE64`, `CRAVES_REFERRALS_PREVIOUS_FINANCE_HMAC_BASE64` | Optional previous keys for a separately approved rotation window. |
-| `CRAVES_REFERRALS_PUBLIC_ORIGIN` | Invitation origin; defaults to `https://craves.in`. |
-| `CRAVES_REFERRALS_CASHOUT_MINIMUM_PAISE`, `CRAVES_REFERRALS_ANNUAL_KYC_THRESHOLD_PAISE`, `CRAVES_REFERRALS_LIFETIME_REVIEW_PAISE` | Finance/product-reviewed limits. Zero defaults are not approved legal thresholds. Do not invent values. |
-
-Keep these seven flags false until their separate acceptance gates pass: `CRAVES_REFERRALS_ENABLED`, `CRAVES_REFERRALS_PUBLIC_ACCESS_ENABLED`, `CRAVES_REFERRALS_WORKERS_ENABLED`, `CRAVES_REFERRALS_AWARDS_ENABLED`, `CRAVES_REFERRALS_SETTLEMENT_ENABLED`, `CRAVES_REFERRALS_WITHDRAWALS_ENABLED`, `CRAVES_REFERRALS_SPENDING_ENABLED`.
-
-Migration-only keys are **different**: `REFERRAL_MIGRATION_DB_URL`, `REFERRAL_MIGRATION_DB_USER`, `REFERRAL_MIGRATION_DB_PASSWORD`, and `REFERRAL_MIGRATION_CONFIRM=CREATE_REFERRAL_SCHEMA_ONLY`. See the complete command and safeguards in `docs/referrals/INTEGRATION_RUNBOOK.md`. History is `referral_schema.referral_flyway_history`. Normal Spring Flyway auto-migration is disabled.
-
-## Start locally without activation
-
-In a separate local terminal, after preparing a local runtime database/schema and injecting its runtime environment, keep all flags OFF and run:
-
-```bash
-java -jar services/referral-service/target/referral-service-0.1.0-SNAPSHOT.jar
-```
-
-Check `http://localhost:8080/actuator/health/liveness`. A liveness response does not prove database/Redis readiness, compatible authentication, financial correctness or production integration. With flags off or no verification key, member/admin requests must not expose usable private data. Do not enable rewards simply to remove a disabled response. The Dockerfile also packages this service, but Docker packaging is not a substitute for the preceding tests or an image security scan.
-
-## Related client checks
-
-From the full reviewed repository checkout, run the existing dependency installs without modifying their lockfiles:
-
-```bash
+# Required: the dedicated web suite consumes these actual Java HTTP responses.
+export REFERRAL_WIRE_FIXTURE_DIR="$PWD/services/referral-service/target/contract-fixtures"
 cd apps/customer-web-next
 npm ci
 npm run lint
@@ -113,18 +60,64 @@ npm test -- --runInBand --runTestsByPath src/features/referralsV2/model.test.ts
 npm run test:integration
 ```
 
-The focused native typecheck is not a whole-mobile-application build. Neither command mounts a route, publishes an app-store binary, deploys Azure or tests a real payout. Native device, browser-interaction, identity-switch and deep-link acceptance remain separate work.
+The shell trap stops only the temporary container created by this example. The backend gate requires at least 18 unit tests and 35 integration tests, including six actual loopback-HTTP cases and ten fault/concurrency cases, with no failures/errors/skips. Redis is mocked in those HTTP tests; the database, service, HTTP transport and RSA/HMAC filters are real within the disposable test environment. Production Auth/Order/Finance and payment providers are not called. Use the final-head XML/JSON to establish actual results.
 
-## Manual steps required before release
+The focused web suite includes five backend response-fixture checks, invitation capture, BFF, exact-money, operation recovery and rendering tests. `REFERRAL_WIRE_FIXTURE_DIR` must point to the Java output above or a verified same-SHA backend artifact. Missing fixtures fail rather than skip the gate. Native checks cover the isolated feature and selected existing regressions, not physical devices or the whole native release pipeline.
 
-- [ ] Resolve the existing mobile-consolidation workflow's mobile-only scope rule through a separately approved maintainer change or PR split; do not disable required checks or edit baseline workflows in this add-only delivery.
-- [ ] Connect the actual Auth, Order, Finance and checkout owners and mount the existing authenticated web/native slots. These are remaining engineering changes, not just entering credentials.
-- [ ] Obtain actual legal, terms, tax, privacy, funding, mixed-chef allocation and payout review references, and independently approve a future policy revision.
-- [ ] Confirm Azure hosting/cost approval, isolated resource name, restricted database roles, backups/restore, private networking, Key Vault references and staged rollout. The included dormant Container App template is an option, not an executed or implicitly authorised hosting decision.
-- [ ] Complete staged acceptance and retain exact source SHA, image digest, migration, reconciliation, recovery, security and performance evidence before public activation.
+## Build outputs
 
-Existing Azure DevOps service connection, when a separately approved Azure DevOps release needs it: `Craves-Dev-Service-Connection`. The new referral workflow uses GitHub Actions for **build/test only**, has no Azure login/deployment step and needs no production Azure credentials. A deployment pipeline and its guarded release parameters remain to be reviewed; this README does not standardise a different release tool or provision paid resources.
+| Path below `services/referral-service/target/` | Meaning |
+| --- | --- |
+| `referral-service-0.1.0-SNAPSHOT.jar` | Executable Spring Boot application; main class `in.craves.referral.ReferralApplication`, nested dependencies and all seven isolated migrations. |
+| `classes/META-INF/sbom/application.cdx.json` | Generated CycloneDX dependency inventory. It is packaged at the archive-root path `META-INF/sbom/application.cdx.json`, not under BOOT-INF/classes. |
+| `artifact-verification.json` | Executed test counts, named suites, source SHA, HTTP-fixture hashes and JAR/SBOM hashes. |
+| `contract-fixtures/*.json` | Actual synthetic HTTP responses for the same-SHA web schema gate; no JWT/private key/HMAC is exported. |
+| `container-verification.json` | CI-only dormant image smoke receipt: image ID, non-root user, read-only root, loopback binding, liveness and disabled member endpoint. |
 
-## Documentation
+The Docker smoke check builds the actual Dockerfile and runs a temporary container only on the GitHub CI runner. It performs no registry push, Azure login or deployment and uses no real credentials. `smoke-container.py` refuses invocation outside its explicit CI/disposable-test guard. A dependency inventory or successful image startup is not a vulnerability-clearance report or production network/readiness acceptance.
 
-Start with `docs/referrals/README.md`, then `ARCHITECTURE.md`, `INTEGRATION_RUNBOOK.md`, `ACCEPTANCE.md`, and `OPERATIONS.md`. `deploy/README.md` describes the dormant template. Check the final delivery evidence before using an older checkpoint mentioned in those documents. The original specification's build approval is not proof that its separate pre-launch compliance gates have been completed.
+## Runtime environment and secret placement
+
+Inject secret values through the approved Key Vault/container secret references or a private local environment. Never paste values into chat, source files, CI logs or the evidence PDF.
+
+| Key | Purpose |
+| --- | --- |
+| `REFERRAL_DB_URL`, `REFERRAL_DB_USER`, `REFERRAL_DB_PASSWORD` | Restricted runtime datasource for the isolated schema. Remote PostgreSQL requires reviewed TLS/hostname verification; never use a migration owner or superuser as runtime. |
+| `REFERRAL_DB_POOL_SIZE` | Defaults to eight connections. Account for all replicas before changing the database budget. |
+| `CRAVES_JWT_VERIFICATION_PEM_BASE64` | Existing Auth RSA **public** verification PEM, base64-encoded; never Auth's private signing key. |
+| `CRAVES_JWT_ISSUER`, `CRAVES_JWT_AUDIENCE` | Exact existing Auth contract values. |
+| `SPRING_DATA_REDIS_HOST`, `SPRING_DATA_REDIS_PORT`, `SPRING_DATA_REDIS_USERNAME`, `SPRING_DATA_REDIS_PASSWORD`, `SPRING_DATA_REDIS_SSL_ENABLED` | Reviewed TLS connection to the actual Auth revocation projection. Validate namespace, publisher, token-version and TTL/recovery semantics. |
+| `CRAVES_REFERRALS_REVOCATION_ABSENCE_CONTRACT_CONFIRMED` | Defaults **false**. Missing Redis projection then blocks with 503. Set true only after the Auth absence/TTL contract is explicitly accepted; errors/malformed state still block. |
+| `CRAVES_REFERRALS_AUTH_HMAC_BASE64`, `CRAVES_REFERRALS_ORDER_HMAC_BASE64`, `CRAVES_REFERRALS_FINANCE_HMAC_BASE64` | Three distinct source-signing keys, each at least 32 decoded bytes. Cross-source reuse is refused. |
+| `CRAVES_REFERRALS_PREVIOUS_AUTH_HMAC_BASE64`, `CRAVES_REFERRALS_PREVIOUS_ORDER_HMAC_BASE64`, `CRAVES_REFERRALS_PREVIOUS_FINANCE_HMAC_BASE64` | Optional previous keys for a separately reviewed rotation window; still distinct across sources. |
+| `CRAVES_REFERRALS_PUBLIC_ORIGIN` | Approved invitation origin, default `https://craves.in`. |
+| `CRAVES_REFERRALS_CASHOUT_MINIMUM_PAISE`, `CRAVES_REFERRALS_ANNUAL_KYC_THRESHOLD_PAISE`, `CRAVES_REFERRALS_LIFETIME_REVIEW_PAISE` | Real product/Finance-assessed limits; zero defaults are not approved legal thresholds. |
+
+Keep `CRAVES_REFERRALS_ENABLED`, `CRAVES_REFERRALS_PUBLIC_ACCESS_ENABLED`, `CRAVES_REFERRALS_WORKERS_ENABLED`, `CRAVES_REFERRALS_AWARDS_ENABLED`, `CRAVES_REFERRALS_SETTLEMENT_ENABLED`, `CRAVES_REFERRALS_WITHDRAWALS_ENABLED` and `CRAVES_REFERRALS_SPENDING_ENABLED` false until their separate gates pass. No production values were set here.
+
+Migration-only keys differ from runtime: `REFERRAL_MIGRATION_DB_URL`, `REFERRAL_MIGRATION_DB_USER`, `REFERRAL_MIGRATION_DB_PASSWORD`, and `REFERRAL_MIGRATION_CONFIRM=CREATE_REFERRAL_SCHEMA_ONLY`. The exact standalone command is in [INTEGRATION_RUNBOOK.md](../../docs/referrals/INTEGRATION_RUNBOOK.md). History is `referral_schema.referral_flyway_history`; normal application startup does not run Flyway.
+
+## Start a local dormant instance
+
+After preparing an isolated local runtime schema and injecting its restricted runtime environment, leave all flags off and run:
+
+```bash
+java -jar services/referral-service/target/referral-service-0.1.0-SNAPSHOT.jar
+```
+
+Check `http://localhost:8080/actuator/health/liveness`. Liveness is not proof of external dependencies, policy approval or finance correctness. Disabled processing must not be changed simply to remove a disabled response. Public/member APIs remain unavailable until the separate programme and authentication gates are accepted.
+
+## Integration inputs, not deferred engine repairs
+
+The hardening record identifies defects repaired before integration: signup races, code collision handling, stale claim authority, trailing JSON, source-key reuse, missing revocation state, double-click submission and uncertain retry identity. It also supplies the unmounted invitation route factory and the signup-boundary reader. Connecting them still requires the existing owner session verifier, authoritative active-code lookup, signup transaction/outbox, Order/Finance facts, checkout reserve/consume/refund calls, gateway routes and native app links. Those owners must preserve the documented original event/operation IDs and source money snapshots.
+
+No current route is mounted automatically. The proposed 30-day pre-signup attribution window requires explicit product/privacy approval. An existing account cannot be re-parented. Browser-cookie capture does not by itself provide cross-device or post-install attribution. The later integration change must test these real connections in a controlled environment before public release; module defects found there remain engineering work, not a request for the user to rewrite the engine alone.
+
+## Manual steps required before any release
+
+- [ ] Resolve the existing mobile-consolidation workflow's cross-stack scope failure by a separately approved maintainer correction or appropriate PR split. Do not bypass checks or alter baseline workflows here.
+- [ ] Approve actual legal, terms, privacy, tax, KYC, funding, mixed-chef allocation, retention and payout evidence; independently approve a future policy revision.
+- [ ] Confirm hosting choice and cost approval, isolated resource name, restricted database roles, backups/restore, private networking and Key Vault references. The dormant Container App template is an option, not an executed or approved hosting decision.
+- [ ] Accept the real source/session/checkout/provider connections, dependency/image security assessment, browser/device behaviour and measured load/recovery before activation.
+
+The established Azure DevOps service connection remains `Craves-Dev-Service-Connection`. The new GitHub workflow is build/test only and requires no production Azure credentials. A deployment pipeline/hosting decision still needs its own approval. No seven-service release, live payment or Azure resource creation was performed.

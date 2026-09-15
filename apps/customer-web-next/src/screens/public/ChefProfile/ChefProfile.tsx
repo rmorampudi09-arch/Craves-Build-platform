@@ -116,38 +116,44 @@ function ChefProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white px-4 py-10">
-        <div className="mx-auto max-w-6xl animate-pulse" aria-hidden="true">
-          <div className="h-44 rounded-[2rem] bg-[#F1F3F5]" />
-          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map((item) => (
-              <div key={item} className="h-72 rounded-[1.75rem] bg-[#F1F3F5]" />
-            ))}
+      <div className="min-h-screen bg-white">
+        <DetailBrowseHeader returnPath={`/kitchen/${id}`} onBack={handleBack} />
+        <main className="px-4 py-8 md:py-10">
+          <div className="mx-auto max-w-6xl animate-pulse" aria-hidden="true">
+            <div className="h-44 rounded-[2rem] bg-[#F1F3F5]" />
+            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {[0, 1, 2].map((item) => (
+                <div key={item} className="h-72 rounded-[1.75rem] bg-[#F1F3F5]" />
+              ))}
+            </div>
           </div>
-        </div>
-        <p className="sr-only" role="status">Loading this home kitchen…</p>
+          <p className="sr-only" role="status">Loading this home kitchen…</p>
+        </main>
       </div>
     );
   }
 
   if (!chef) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white px-4 text-center">
-        <div className="max-w-md rounded-[1.75rem] border border-[#E5E7EB] bg-white p-8">
-          <h1 className="font-display text-2xl font-black text-[#1A1A1A]">
-            Home kitchen not found
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
-            {message || "This kitchen is not currently available in the live Craves catalog."}
-          </p>
-          <button
-            type="button"
-            onClick={handleBack}
-            className="!mt-6 !inline-flex !min-h-11 !items-center !rounded-full !bg-[#F62E18] !px-5 !text-sm !font-black !text-white"
-          >
-            Back to Craves
-          </button>
-        </div>
+      <div className="min-h-screen bg-white">
+        <DetailBrowseHeader returnPath={`/kitchen/${id}`} onBack={handleBack} />
+        <main className="flex min-h-[70vh] items-center justify-center px-4 text-center">
+          <div className="max-w-md rounded-[1.75rem] border border-[#E5E7EB] bg-white p-8">
+            <h1 className="font-display text-2xl font-black text-[#1A1A1A]">
+              Home kitchen not found
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
+              {message || "This kitchen is not currently available in the live Craves catalog."}
+            </p>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="!mt-6 !inline-flex !min-h-11 !items-center !rounded-full !bg-[#F62E18] !px-5 !text-sm !font-black !text-white"
+            >
+              Back to home
+            </button>
+          </div>
+        </main>
       </div>
     );
   }

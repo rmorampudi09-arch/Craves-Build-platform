@@ -78,7 +78,7 @@ def secret_metadata(vault, name):
 
 
 def validate_metadata(metadata):
-    require(metadata.get('enabled') is True and metadata.get('tags', {}).get('craves-purpose') == PURPOSE,
+    require(metadata.get('enabled') is True and (metadata.get('tags') or {}).get('craves-purpose') == PURPOSE,
             'Existing email key is disabled or has different provenance; no rotation allowed')
     require(metadata.get('expires') is None, 'Existing email key has an expiry requiring separate rotation review')
     return metadata['id']
@@ -121,7 +121,7 @@ def preflight():
     listing = az('keyvault', 'secret', 'list', '--vault-name', vault, '--query', '[].{id:id,tags:tags}')
     known = {urlparse(item['id']).path.split('/')[2]: item for item in listing}
     for name, item in known.items():
-        if item.get('tags', {}).get('craves-purpose') == PURPOSE:
+        if (item.get('tags') or {}).get('craves-purpose') == PURPOSE:
             require(name in KEYS.values(), 'Another email key with this purpose exists; inspect for compatible reuse')
     metadata = {}
     for local, name in KEYS.items():

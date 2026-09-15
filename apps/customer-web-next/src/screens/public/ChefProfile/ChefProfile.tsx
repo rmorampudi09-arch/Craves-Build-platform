@@ -6,7 +6,6 @@ import {
   PackageCheck,
   UtensilsCrossed,
 } from "lucide-react";
-import { hasHomeReturnState } from "@/lib/home-return-state";
 import {
   getChef,
   getDishesByChef,
@@ -112,14 +111,6 @@ function ChefProfilePage() {
   }, [id, navigate]);
 
   const handleBack = () => {
-    if (
-      typeof window !== "undefined" &&
-      hasHomeReturnState() &&
-      window.history.length > 1
-    ) {
-      window.history.back();
-      return;
-    }
     navigate({ to: "/home" });
   };
 
@@ -168,7 +159,7 @@ function ChefProfilePage() {
 
   return (
     <div className={`min-h-screen bg-white text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "pb-32" : "pb-14"}`}>
-      <DetailBrowseHeader returnPath={`/kitchen/${id}`} />
+      <DetailBrowseHeader returnPath={`/kitchen/${id}`} onBack={handleBack} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
         <section className="rounded-[1.75rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(26,26,26,0.045)] sm:p-6 md:rounded-[2rem] md:p-7">

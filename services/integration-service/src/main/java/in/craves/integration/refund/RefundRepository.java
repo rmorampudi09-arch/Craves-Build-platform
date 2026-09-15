@@ -17,6 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class RefundRepository {
     private final JdbcTemplate jdbcTemplate;
     private final RefundStatusEventFactory statusEventFactory;
+    private in.craves.integration.referrals.checkout.ReferralRefundService referralRefunds;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void setReferralRefunds(in.craves.integration.referrals.checkout.ReferralRefundService service){this.referralRefunds=service;}
 
     public RefundRepository(JdbcTemplate jdbcTemplate, RefundStatusEventFactory statusEventFactory) {
         this.jdbcTemplate = jdbcTemplate;
@@ -48,7 +51,7 @@ public class RefundRepository {
               WHERE r.provider=:provider AND r.provider='RAZORPAY' AND p.provider=r.provider
                 AND p.provider_order_id=r.provider_order_id AND p.provider_payment_id=r.provider_payment_id
                 AND p.checkout_id=r.checkout_id AND p.customer_identity_id=r.customer_identity_id
-                AND p.currency=r.currency AND r.currency='INR' AND r.amount<=p.amount
+                AND p.currency=r.currency AND r.currency='INR' AND r.amount<=p.amount AND r.amount>0
                 AND r.chef_sub_order_id IS NOT NULL AND r.request_event_id IS NOT NULL AND r.idempotency_key IS NOT NULL
                 AND ((:environment='PRODUCTION' AND left(p.checkout_key_id,9)='rzp_live_')
                   OR (:environment='SANDBOX' AND left(p.checkout_key_id,9)='rzp_test_'))
@@ -221,6 +224,7 @@ public class RefundRepository {
     }
 
     private void insertStatusOutbox(SerializedRefundStatusEvent event) {
+        if(referralRefunds!=null){event=referralRefunds.customerEvent(event);if(event==null)return;}
         jdbcTemplate.update(
             """
                 INSERT INTO payment_schema.refund_status_outbox (

@@ -70,6 +70,22 @@ public class InviteeDiscountService {
         db.audit("source:order","INVITEE_DISCOUNT_"+target,id.toString(),Map.of("evidenceRef",evidence));
         return value(db.one("SELECT * FROM referral_schema.discount_reservation WHERE id=?",id));
     }
+    public Map<String,Object> refund(JsonNode body) {
+        Json.fields(body,"reservationId","version","cumulativeRefundPaise","evidenceRef");
+        UUID id=Json.uuid(body,"reservationId");int version=Json.integer(body,"version",1,Integer.MAX_VALUE);long amount=Json.money(body,"cumulativeRefundPaise");
+        String hash=Json.hash(body),evidence=Json.text(body,"evidenceRef",180);
+        UUID buyer=uuid(db.one("SELECT buyer_id FROM referral_schema.discount_reservation WHERE id=?",id),"buyer_id");db.lockWallets(List.of(buyer));
+        var reservation=db.one("SELECT * FROM referral_schema.discount_reservation WHERE id=? FOR UPDATE",id);
+        require("CONSUMED".equals(reservation.get("status")),409,"DISCOUNT_NOT_CONSUMED");
+        db.update("INSERT INTO referral_schema.discount_refund(reservation_id) VALUES (?) ON CONFLICT DO NOTHING",id);
+        var state=db.one("SELECT * FROM referral_schema.discount_refund WHERE reservation_id=? FOR UPDATE",id);
+        if(version<=number(state,"source_version")){require(version<number(state,"source_version") || hash.equals(state.get("source_hash")),409,"DISCOUNT_REFUND_VERSION_CONFLICT");return Map.of("refundedPaise",Long.toString(number(state,"refunded_paise")));}
+        long prior=number(state,"refunded_paise");require(amount>=prior && amount<=number(reservation,"amount_paise"),422,"DISCOUNT_REFUND_OUT_OF_RANGE");
+        if(amount>prior)db.budget("discount-refund:"+id+":"+version,"DISCOUNT",amount-prior,evidence);
+        db.update("UPDATE referral_schema.discount_refund SET refunded_paise=?,source_version=?,source_hash=? WHERE reservation_id=?",amount,version,hash,id);
+        db.audit("source:finance","DISCOUNT_FUNDING_RESTORED",id.toString(),Map.of("cumulativePaise",Long.toString(amount),"evidenceRef",evidence));
+        return Map.of("refundedPaise",Long.toString(amount));
+    }
     private static Map<String,Object> value(Map<String,Object> row) {
         return Map.of("id",uuid(row,"id").toString(),"amountPaise",Long.toString(number(row,"amount_paise")),"status",row.get("status"),"policyRevision",Long.toString(number(row,"policy_id")));
     }

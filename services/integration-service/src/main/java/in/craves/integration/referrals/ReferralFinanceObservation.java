@@ -26,7 +26,9 @@ public class ReferralFinanceObservation {
         if(rows.isEmpty())return false;var binding=rows.getFirst();UUID order=(UUID)binding.get("chef_order_id"),checkout=(UUID)binding.get("checkout_id");
         JsonNode snapshot=parse(db.queryForObject("SELECT payload::text FROM payment_schema.finance_issued_snapshot WHERE chef_order_id=? AND snapshot_hash=?",String.class,order,binding.get("source_hash")));
         var captures=db.queryForList("SELECT c.* FROM payment_schema.finance_capture c JOIN payment_schema.payment_order p ON p.id=c.payment_order_id WHERE c.checkout_id=? AND p.status='PAID' AND p.provider='RAZORPAY' AND p.provider_payment_id=c.provider_payment_id AND p.amount=c.captured_amount AND p.currency='INR' AND lower(p.provider_status) IN ('captured','paid')",checkout);
+        var funding=db.queryForList("SELECT c.gross_paise FROM payment_schema.referral_funding_capture c JOIN payment_schema.payment_order p ON p.id=c.payment_order_id WHERE c.checkout_id=? AND p.status='PAID' AND p.currency='INR' AND p.amount*100=c.gateway_paise AND ((c.gateway_paise=0 AND p.provider='REFERRAL_WALLET') OR (c.gateway_paise>0 AND p.provider='RAZORPAY' AND p.provider_payment_id=c.provider_payment_id AND lower(p.provider_status) IN ('captured','paid')))",checkout);
         long captured=captures.size()==1?paise((BigDecimal)captures.getFirst().get("captured_amount")):0;
+        if(captured==0 && funding.size()==1)captured=((Number)funding.getFirst().get("gross_paise")).longValue();
         long food=paise(new BigDecimal(snapshot.path("customerFood").asText()));
         BigDecimal total=new BigDecimal(snapshot.path("customerTotal").asText());
         var refunds=db.queryForList("SELECT status,amount FROM payment_schema.refund WHERE chef_sub_order_id=? AND status NOT IN ('FAILED','CANCELLED')",order);
@@ -35,7 +37,9 @@ public class ReferralFinanceObservation {
             if(refunds.size()==1 && "SUCCESS".equals(refunds.getFirst().get("status")) && total.compareTo((BigDecimal)refunds.getFirst().get("amount"))==0)refunded=food;
             else unresolved=true;
         }
-        boolean verified=captures.size()==1 && !unresolved;
+        var split=db.queryForList("SELECT state,gross_paise FROM payment_schema.referral_refund_allocation WHERE chef_order_id=?",order);
+        if(!split.isEmpty()) {var r=split.getFirst();unresolved=!"COMPLETE".equals(r.get("state")) || total.movePointRight(2).longValueExact()!=((Number)r.get("gross_paise")).longValue();refunded=unresolved?0:food;}
+        boolean verified=(captures.size()==1 || funding.size()==1) && !unresolved;
         boolean earned=Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.finance_order_binding WHERE chef_order_id=? AND state='DELIVERED' AND earning_journal_id IS NOT NULL)",Boolean.class,order));
         long budget=verified && earned && refunded==0?paise(new BigDecimal(snapshot.path("chefServiceFee").asText())):0;
         int version=Math.addExact(((Number)binding.get("source_version")).intValue(),1);Instant at=Instant.now();

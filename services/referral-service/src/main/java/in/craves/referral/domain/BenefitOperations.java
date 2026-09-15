@@ -16,15 +16,16 @@ public class BenefitOperations {
     private final WalletSpendService spend;
     private final InviteeDiscountService discount;
     private final ReferralSettings settings;
+    private final CheckoutBenefitOperations checkout;
     public BenefitOperations(Store db,WalletSpendService spend,InviteeDiscountService discount,ReferralSettings settings) {
-        this.db=db; this.spend=spend; this.discount=discount; this.settings=settings;
+        this.db=db; this.spend=spend; this.discount=discount; this.settings=settings; this.checkout=new CheckoutBenefitOperations(db,spend,discount);
     }
     public JsonNode apply(String source,JsonNode envelope) {
         settings.requireEnabled();
         Json.fields(envelope,"operationId","operationType","payload");
         UUID id=Json.uuid(envelope,"operationId"); String type=Json.text(envelope,"operationType",40), hash=Json.hash(envelope);
-        boolean allowed=source.equals("order") && List.of("spend.reserve","spend.consume","spend.release","discount.reserve","discount.consume","discount.release").contains(type)
-            || source.equals("finance") && type.equals("spend.refund");
+        boolean allowed=source.equals("order") && List.of("spend.reserve","spend.consume","spend.release","discount.reserve","discount.consume","discount.release","checkout.reserve","checkout.consume","checkout.release").contains(type)
+            || source.equals("finance") && List.of("spend.refund","checkout.refund").contains(type);
         require(allowed,403,"SOURCE_OPERATION_FORBIDDEN");
         return db.tx(() -> {
             db.jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"referral-operation:"+source+":"+id);
@@ -35,6 +36,10 @@ public class BenefitOperations {
             }
             JsonNode body=envelope.get("payload");
             Map<String,Object> result=switch(type) {
+                case "checkout.refund" -> checkout.refund(body);
+                case "checkout.reserve" -> checkout.reserve(body);
+                case "checkout.consume" -> checkout.finish(body,true);
+                case "checkout.release" -> checkout.finish(body,false);
                 case "spend.reserve" -> spend.reserve(body);
                 case "spend.consume" -> spend.finish(body,true);
                 case "spend.release" -> spend.finish(body,false);

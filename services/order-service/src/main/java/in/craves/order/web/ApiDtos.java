@@ -71,7 +71,8 @@ public final class ApiDtos {
     ) {
     }
 
-    public record CheckoutRequest(UUID deliveryAddressId, String note) {
+    public record CheckoutRequest(UUID deliveryAddressId, String note, com.fasterxml.jackson.databind.JsonNode referralBenefits) {
+        public CheckoutRequest(UUID deliveryAddressId,String note) { this(deliveryAddressId,note,null); }
         public CheckoutRequest(String note) {
             this(null, note);
         }
@@ -124,8 +125,13 @@ public final class ApiDtos {
         UUID deliveryAddressId,
         CustomerAddressSnapshotResponse deliveryAddress,
         List<OrderResponse> orders,
-        Instant createdAt
+        Instant createdAt,
+        boolean referralBenefitsRequested
     ) {
+        public CheckoutResponse(UUID id,UUID customerIdentityId,CheckoutStatus status,String currency,BigDecimal foodSubtotal,BigDecimal platformFee,BigDecimal taxAmount,BigDecimal deliveryFee,BigDecimal grandTotal,UUID chargePolicyId,UUID deliveryAddressId,CustomerAddressSnapshotResponse deliveryAddress,List<OrderResponse> orders,Instant createdAt) {
+            this(id,customerIdentityId,status,currency,foodSubtotal,platformFee,taxAmount,deliveryFee,grandTotal,chargePolicyId,deliveryAddressId,deliveryAddress,orders,createdAt,false);
+        }
+        public CheckoutResponse withReferralBenefits() { return new CheckoutResponse(id,customerIdentityId,status,currency,foodSubtotal,platformFee,taxAmount,deliveryFee,grandTotal,chargePolicyId,deliveryAddressId,deliveryAddress,orders,createdAt,true); }
         public CheckoutResponse(
             UUID id,
             UUID customerIdentityId,

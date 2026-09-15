@@ -332,7 +332,7 @@ export function DishesGrid({
           <button
             type="button"
             onClick={onManageAddress}
-            className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-all hover:-translate-y-0.5 hover:scale-[1.02]"
+            className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-shadow hover:shadow-[0_7px_18px_rgba(246,46,24,0.16)]"
           >
             Choose location
           </button>

@@ -1,0 +1,71 @@
+name: Referral backend integration CI
+on:
+  push:
+    branches: [feat/referral-backend-integration-20260915]
+  pull_request:
+    paths: ['services/referral-service/**', 'services/auth-service/**', 'services/order-service/**', 'services/integration-service/**', 'scripts/referrals/**', '.github/workflows/referral-backend-ci.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: referral-backend-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: referral_test
+          POSTGRES_USER: referral_ci
+          POSTGRES_PASSWORD: disposable-referral-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd 'pg_isready -U referral_ci -d referral_test'
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: referral_ci
+      PGPASSWORD: disposable-referral-ci-only
+      REFERRAL_TEST_CONFIRM: YES_DISPOSABLE_REFERRAL_TEST_ONLY
+      REFERRAL_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/referral_test
+      REFERRAL_OWNER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/referral_owner_test
+      REFERRAL_TEST_DB_USER: referral_ci
+      REFERRAL_TEST_DB_PASSWORD: disposable-referral-ci-only
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
+      LEDGER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/chef_ledger_test
+      LEDGER_TEST_DB_USER: referral_ci
+      LEDGER_TEST_DB_PASSWORD: disposable-referral-ci-only
+      EMAIL_TEST_DB_URL: jdbc:postgresql://localhost:5432/craves_email_test
+      EMAIL_TEST_DB_USER: referral_ci
+      EMAIL_TEST_DB_PASSWORD: disposable-referral-ci-only
+      EMAIL_TEST_DISPOSABLE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: 'services/*/pom.xml'
+      - name: Create explicitly disposable databases
+        shell: bash
+        run: |
+          set -euo pipefail
+          for database in referral_owner_test chef_ledger_test craves_email_test; do
+            createdb "$database"
+          done
+      - name: Backend verification from Bash
+        run: bash scripts/referrals/test-backend.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: referral-backend-evidence-${{ github.sha }}
+          path: |
+            services/*/target/surefire-reports
+            services/referral-service/target/failsafe-reports
+            target/referral-backend-summary.json
+          retention-days: 14

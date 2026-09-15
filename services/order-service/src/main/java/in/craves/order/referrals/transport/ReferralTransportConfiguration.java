@@ -1,0 +1,25 @@
+package in.craves.order.referrals.transport;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.time.Clock;
+import java.util.Base64;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+@Configuration
+@EnableScheduling
+@ConditionalOnProperty(name="CRAVES_REFERRAL_SOURCE_ENABLED",havingValue="true")
+public class ReferralTransportConfiguration {
+    @Bean ReferralOutbox referralOutbox(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager){return new ReferralOutbox(db,json,new TransactionTemplate(manager));}
+    @Bean(destroyMethod="close") ReferralSourceClient referralSourceClient(@Value("${CRAVES_REFERRAL_SERVICE_ORIGIN:}") String origin,@Value("${CRAVES_REFERRAL_SOURCE_HMAC_BASE64:}") String key){
+        return new ReferralSourceClient(URI.create(origin),"order","current",Base64.getDecoder().decode(key),Clock.systemUTC());
+    }
+    @Bean ReferralOutboxWorker referralOutboxWorker(ReferralOutbox outbox,ReferralSourceClient client,ObjectMapper json){return new ReferralOutboxWorker(outbox,client,json);}
+}

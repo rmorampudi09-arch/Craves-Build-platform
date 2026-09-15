@@ -2,6 +2,10 @@ trigger: none
 pr: none
 
 parameters:
+  - name: alignUnusedRedisHealth
+    displayName: Align Notification health with its ALREADY DISABLED Redis feature
+    type: boolean
+    default: false
   - name: applySecureBindings
     displayName: Create approved dedicated email keys and bindings with gates CLOSED
     type: boolean
@@ -17,8 +21,21 @@ steps:
   - bash: |
       set -euo pipefail
       python3 scripts/email/test_configure_email_runtime.py
+      python3 scripts/email/test_repair_notification_health.py
       python3 scripts/finance/test_configure_bank_runtime.py
     displayName: Test email setup and reused runtime guards
+  - ${{ if eq(parameters.alignUnusedRedisHealth, true) }}:
+      - task: AzureCLI@2
+        displayName: Align only the unused Notification Redis health indicator
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/email/repair_notification_health.py
+            python3 scripts/email/repair_notification_health.py --apply --expected-source-sha '$(Build.SourceVersion)'
   - task: AzureCLI@2
     displayName: Preflight existing vault identities, keys and closed email gates
     inputs:

@@ -155,7 +155,7 @@ export function DishImageHeader({ dish, onBack }: DishImageHeaderProps) {
                     : `Save ${dish.name}`
                 }
                 title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
-                className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white/95 !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] !backdrop-blur-md transition hover:!-translate-y-0.5 hover:!text-[#F62E18] disabled:cursor-wait disabled:opacity-60"
+                className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white/95 !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] !backdrop-blur-md transition-colors hover:!text-[#F62E18] disabled:cursor-wait disabled:opacity-60"
               >
                 <Heart
                   className={`h-5 w-5 ${

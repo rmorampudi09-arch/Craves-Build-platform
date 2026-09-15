@@ -83,6 +83,7 @@ public class OrderService {
         UUID cartId = getOrCreateCartId(principal.identityId());
         lockCart(cartId);
         Integer itemCount = jdbcTemplate.queryForObject("SELECT count(*) FROM order_schema.cart_item WHERE cart_id = ?", Integer.class, cartId);
+        CartSafetyPolicy.requireKitchen(listCartItems(cartId), item.kitchenId());
         Boolean alreadyPresent = jdbcTemplate.queryForObject("SELECT EXISTS (SELECT 1 FROM order_schema.cart_item WHERE cart_id = ? AND menu_item_id = ?)", Boolean.class, cartId, item.id());
         if (itemCount != null && itemCount >= 200 && !Boolean.TRUE.equals(alreadyPresent)) {
             throw OrderApiException.badRequest("CART_ITEM_LIMIT", "A cart can contain at most 200 different dishes.");
@@ -137,6 +138,52 @@ public class OrderService {
     }
 
     @Transactional
+    public CartResponse clearCartIfUnchanged(CravesPrincipal principal,
+        in.craves.order.web.ApiDtos.CartSnapshotRequest expected) {
+        requireCustomer(principal);
+        UUID cartId = getOrCreateCartId(principal.identityId());
+        lockCart(cartId);
+        CartSafetyPolicy.requireSnapshot(cartId, listCartItems(cartId), expected);
+        return clearCart(principal);
+    }
+
+    @Transactional
+    public CartResponse switchCartKitchen(CravesPrincipal principal,
+        in.craves.order.web.ApiDtos.SwitchKitchenRequest request) {
+        requireCustomer(principal);
+        requireCartQuantity(request.quantity());
+        UUID targetKitchen = catalogClient.getActiveMenuItem(request.menuItemId()).kitchenId();
+        requireExpectedKitchen(targetKitchen, request.expectedKitchenId());
+        catalogClient.getKitchen(targetKitchen);
+        UUID cartId = getOrCreateCartId(principal.identityId());
+        lockCart(cartId);
+        CartSafetyPolicy.requireSnapshot(cartId, listCartItems(cartId), request.expectedCart());
+        // Both calls participate in this transaction. A changed/unavailable target rolls the clear back.
+        clearCart(principal);
+        CartResponse replacement = addCartItem(principal, new AddCartItemRequest(request.menuItemId(), request.quantity()));
+        for (CartItemResponse item : replacement.items()) requireExpectedKitchen(item.kitchenId(), request.expectedKitchenId());
+        return replacement;
+    }
+
+    private void requireExpectedKitchen(UUID actual, UUID expected) {
+        if (!actual.equals(expected)) throw OrderApiException.conflict("CART_TARGET_KITCHEN_CHANGED",
+            "This dish's kitchen changed. Review the dish before switching your cart.");
+    }
+
+    @Transactional
+    public CartResponse replaceCartFromOrderIfUnchanged(CravesPrincipal principal, UUID orderId,
+        in.craves.order.web.ApiDtos.ReorderCartRequest request) {
+        requireCustomer(principal);
+        getOrderForCustomer(principal, orderId);
+        UUID cartId = getOrCreateCartId(principal.identityId());
+        lockCart(cartId);
+        CartSafetyPolicy.requireSnapshot(cartId, listCartItems(cartId), request.expectedCart());
+        CartResponse replacement = replaceCartFromOrder(principal, orderId);
+        for (CartItemResponse item : replacement.items()) requireExpectedKitchen(item.kitchenId(), request.expectedKitchenId());
+        return replacement;
+    }
+
+    @Transactional
     public CartResponse replaceCartFromOrder(CravesPrincipal principal, UUID orderId) {
         requireCustomer(principal);
         if (orderId == null) {
@@ -167,6 +214,9 @@ public class OrderService {
 
         UUID cartId = getOrCreateCartId(principal.identityId());
         lockCart(cartId);
+        if (resolved.stream().map(value -> value.item().kitchenId()).distinct().count() > 1) {
+            throw OrderApiException.conflict("CART_KITCHEN_CONFLICT", "Choose dishes from one kitchen at a time.");
+        }
         jdbcTemplate.update("DELETE FROM order_schema.cart_item WHERE cart_id = ?", cartId);
         for (ReorderResolvedItem replacement : resolved) {
             CatalogMenuItem item = replacement.item();
@@ -202,6 +252,7 @@ public class OrderService {
                 item.kitchenId(), item.itemName(), displayKitchenName(kitchen), item.price(), currency(item.currency()), cartItem.id()
             );
         }
+        CartSafetyPolicy.requireSingleKitchen(listCartItems(cartId));
         touchCart(cartId);
         return mapCart(cartId, principal.identityId());
     }
@@ -233,6 +284,9 @@ public class OrderService {
             byKitchen.computeIfAbsent(catalogItem.kitchenId(), ignored -> new ArrayList<>()).add(cartItem);
         }
 
+        if (byKitchen.size() != 1) {
+            throw OrderApiException.conflict("CART_KITCHEN_CONFLICT", "Choose dishes from one kitchen at a time.");
+        }
         List<PendingKitchenOrder> pendingOrders = new ArrayList<>();
         BigDecimal checkoutFood = BigDecimal.ZERO;
         BigDecimal checkoutPlatform = BigDecimal.ZERO;

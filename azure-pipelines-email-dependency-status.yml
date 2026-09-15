@@ -27,6 +27,18 @@ steps:
             result = subprocess.run(['az','containerapp','show','-g',rg,'-n',name,'-o','json'],capture_output=True,text=True)
             if result.returncode: raise SystemExit('App metadata read failed')
             app = json.loads(result.stdout)
+            env = {item['name']:item for item in app['properties']['template']['containers'][0].get('env',[])}
+            states = {}
+            for key in ['CRAVES_TOKEN_REVOCATION_ENABLED','CRAVES_TOKEN_REVOCATION_FAIL_CLOSED','MANAGEMENT_HEALTH_REDIS_ENABLED','SPRING_DATA_REDIS_HOST','SPRING_REDIS_HOST','SPRING_DATA_REDIS_PORT','SPRING_DATA_REDIS_SSL_ENABLED','SPRING_DATA_REDIS_PASSWORD','SPRING_REDIS_PASSWORD','SPRING_DATA_REDIS_URL','SPRING_REDIS_URL']:
+                item = env.get(key)
+                if item is None: state = 'UNSET'
+                elif key.endswith('_ENABLED') or key.endswith('_CLOSED'):
+                    state = {'true':'TRUE','false':'FALSE'}.get(str(item.get('value','')).lower(),'OTHER')
+                elif key.endswith('_HOST'):
+                    state = 'LOOPBACK' if item.get('value') in ['localhost','127.0.0.1','::1'] else 'CONFIGURED' if item.get('value') or item.get('secretRef') else 'EMPTY'
+                else: state = 'SECRET_REFERENCE' if item.get('secretRef') else 'CONFIGURED' if item.get('value') else 'EMPTY'
+                states[key] = state
+            print('REDIS_SETTINGS ' + name + ' ' + json.dumps(states))
             refs = []
             for item in app['properties']['configuration'].get('secrets',[]):
                 host = urlparse(item.get('keyVaultUrl','')).hostname
@@ -48,6 +60,10 @@ steps:
         patterns = {
             'datasource_health_failure': r'DataSource health check failed',
             'redis_health_failure': r'Redis health check failed',
+            'redis_loopback_connection_failure': r'(?i)(localhost|127\\.0\\.0\\.1)[^\\n]{0,120}:6379',
+            'redis_auth_failure': r'(?i)(WRONGPASS|NOAUTH Authentication required)',
+            'redis_connection_refused': r'(?i)connection refused',
+            'redis_command_timeout': r'RedisCommandTimeoutException',
             'disk_space_low': r'Free disk space below threshold',
             'database_pool_timeout': r'Connection is not available, request timed out',
             'database_connection_failure': r'(?i)(connection to .* refused|connection attempt failed|could not obtain connection)',

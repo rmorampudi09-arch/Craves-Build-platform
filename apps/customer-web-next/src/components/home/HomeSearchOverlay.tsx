@@ -87,7 +87,7 @@ export function HomeSearchOverlay({
   const hasResults = dishResults.length > 0 || kitchenResults.length > 0;
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-white text-[#1A1A1A]" role="dialog" aria-modal="true" aria-label="Search Craves">
+    <div className={`${styles.searchOverlay} fixed inset-0 z-[70] overflow-y-auto bg-white text-[#1A1A1A]`} role="dialog" aria-modal="true" aria-label="Search Craves">
       <div className="sticky top-0 z-10 border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4 md:px-7">
           <button
@@ -154,7 +154,7 @@ export function HomeSearchOverlay({
                   className="group flex items-center gap-4 py-4 focus-visible:outline-none"
                 >
                   <div className="h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-[#F1F3F5]">
-                    <img src={dish.img} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                    <img src={dish.img} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.025]" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-base font-black text-[#1A1A1A] group-hover:text-[#F62E18]">{dish.name}</p>

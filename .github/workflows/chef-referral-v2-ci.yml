@@ -2,19 +2,9 @@ name: Chef referral v2 CI
 on:
   push:
     branches: [feat/chef-referral-v2-20260915]
-    paths:
-      - 'services/referral-service/**'
-      - 'scripts/referrals/**'
-      - 'apps/customer-web-next/src/components/referrals/**'
-      - 'apps/customer-web-next/src/lib/referrals/**'
-      - '.github/workflows/chef-referral-v2-ci.yml'
+    paths: ['services/referral-service/**', 'scripts/referrals/**', 'docs/referrals/**', 'apps/customer-web-next/src/components/referrals/**', 'apps/customer-web-next/src/lib/referrals/**', 'apps/mobile/src/features/referralsV2/**', '.github/workflows/chef-referral-v2-ci.yml']
   pull_request:
-    paths:
-      - 'services/referral-service/**'
-      - 'scripts/referrals/**'
-      - 'apps/customer-web-next/src/components/referrals/**'
-      - 'apps/customer-web-next/src/lib/referrals/**'
-      - '.github/workflows/chef-referral-v2-ci.yml'
+    paths: ['services/referral-service/**', 'scripts/referrals/**', 'docs/referrals/**', 'apps/customer-web-next/src/components/referrals/**', 'apps/customer-web-next/src/lib/referrals/**', 'apps/mobile/src/features/referralsV2/**', '.github/workflows/chef-referral-v2-ci.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -45,6 +35,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -53,9 +44,9 @@ jobs:
           cache-dependency-path: services/referral-service/pom.xml
       - name: Enforce add-only scope
         run: python3 scripts/referrals/verify-additive.py
-      - name: Compile and verify against real disposable PostgreSQL
+      - name: Compile and verify against disposable PostgreSQL
         run: mvn -B -ntp -f services/referral-service/pom.xml verify
-      - name: Require executed, non-skipped database tests
+      - name: Require executed non-skipped database tests
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -65,12 +56,45 @@ jobs:
           suites = [E.parse(p).getroot() for p in reports]
           assert sum(int(s.attrib['tests']) for s in suites) >= 3
           assert all(int(s.attrib.get(k, '0')) == 0 for s in suites for k in ['failures', 'errors', 'skipped'])
+          print('Executed PostgreSQL integration cases:', sum(int(s.attrib['tests']) for s in suites))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: chef-referral-v2-evidence-${{ github.sha }}
+          name: chef-referral-v2-backend-evidence-${{ github.sha }}
           path: |
             services/referral-service/target/surefire-reports/
             services/referral-service/target/failsafe-reports/
+          retention-days: 14
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: apps/customer-web-next
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - run: npm ci
+      - name: Lint existing app plus additive components
+        run: npm run lint
+      - name: Typecheck without editing the app configuration
+        run: npm run typecheck
+      - name: Referral contracts, first touch, BFF and rendering tests
+        run: npx vitest run --config ../../scripts/referrals/web-vitest.config.mts --reporter=default --reporter=junit --outputFile.junit=../../referral-web-results.xml
+      - name: Existing application regression tests
+        run: npm test
+      - name: Production web compilation (no deployment)
+        run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chef-referral-v2-web-evidence-${{ github.sha }}
+          path: referral-web-results.xml
           retention-days: 14

@@ -328,7 +328,7 @@ function DishDetailPage() {
                 type="button"
                 onClick={() => void handleAddToCart()}
                 disabled={adding}
-                className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(246,46,24,0.18)] transition hover:!-translate-y-0.5 hover:!shadow-[0_12px_30px_rgba(246,46,24,0.25)] disabled:cursor-wait disabled:opacity-60"
+                className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(246,46,24,0.18)] transition-shadow hover:!shadow-[0_12px_30px_rgba(246,46,24,0.25)] disabled:cursor-wait disabled:opacity-60"
               >
                 <CravesCartIcon className="h-4 w-4" />
                 {adding ? "Adding…" : "Add to cart"}

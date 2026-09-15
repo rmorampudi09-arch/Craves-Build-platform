@@ -155,12 +155,15 @@ export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
 
 export async function clearSession(): Promise<void> {
   try {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
-  } finally {
-    session = null;
-    selectedLocation = null;
-    notify();
+    const response = await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(8_000) });
+    const receipt = await response.json().catch(() => null) as { signedOut?: unknown } | null;
+    if (!response.ok || receipt?.signedOut !== true) throw new Error("LOGOUT_UNCONFIRMED");
+  } catch {
+    throw new Error("Sign-out could not be confirmed. You are still signed in. Please try again.");
   }
+  session = null;
+  selectedLocation = null;
+  notify();
 }
 
 export function subscribeSession(listener: () => void): () => void {

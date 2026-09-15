@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
@@ -112,6 +113,7 @@ function statusLabel(status: PaymentStatus | null): string {
 }
 
 export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
+  const router = useRouter();
   const [checkout, setCheckout] = useState<CustomerCheckout | null>(null);
   const [payment, setPayment] = useState<CustomerPaymentSession | null>(null);
   const [status, setStatus] = useState<PaymentStatus | null>(null);
@@ -128,7 +130,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
     try {
       const session = await loadSession();
       if (!session) {
-        window.location.assign("/");
+        router.replace("/");
         return;
       }
       const response = await fetch(
@@ -171,7 +173,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [checkoutId]);
+  }, [checkoutId, router]);
 
   useEffect(() => {
     void loadCheckout();

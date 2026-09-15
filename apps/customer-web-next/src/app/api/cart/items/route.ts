@@ -1,3 +1,4 @@
+import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 
 import { parseAddItemInput, parseCart } from "@/lib/cart-contract";
@@ -27,6 +28,10 @@ function upstreamMessage(body: unknown, status: number): string {
 }
 
 export async function POST(request: NextRequest) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  request = bounded;
+
   if (!isSameOrigin(request)) {
     return NextResponse.json(
       { error: "ORIGIN_REJECTED", message: "Invalid cart request origin." },

@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -117,13 +118,9 @@ function forceInstantWindowScroll(top: number): void {
 
   root.style.scrollBehavior = "auto";
   body.style.scrollBehavior = "auto";
-  window.scrollTo(0, top);
-
-  window.requestAnimationFrame(() => {
-    root.style.scrollBehavior = previousRootBehavior;
-    body.style.scrollBehavior = previousBodyBehavior;
-    window.history.scrollRestoration = "auto";
-  });
+  window.scrollTo({ top, left: 0, behavior: "auto" });
+  root.style.scrollBehavior = previousRootBehavior;
+  body.style.scrollBehavior = previousBodyBehavior;
 }
 
 function BrowseFoodsPage() {
@@ -177,6 +174,7 @@ function BrowseFoodsPage() {
   });
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const pendingHomeScrollYRef = useRef<number | null>(null);
 
   const refreshDiscovery = useCallback(async (
     activeAddress: CravesAddress | null,
@@ -274,6 +272,9 @@ function BrowseFoodsPage() {
     const restored = readHomeReturnState();
     if (!restored) return;
 
+    window.history.scrollRestoration = "manual";
+    pendingHomeScrollYRef.current = Math.max(0, restored.scrollY);
+
     setHomeCategory(
       isCravingCategory(restored.homeCategory) ? restored.homeCategory : null,
     );
@@ -281,17 +282,6 @@ function BrowseFoodsPage() {
     setFoodPreference(restored.foodPreference);
     setSearchTerm(restored.searchTerm);
     setSearchOpen(restored.searchOpen);
-
-    if (!restored.searchOpen) {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          forceInstantWindowScroll(restored.scrollY);
-        });
-      });
-    } else {
-      window.history.scrollRestoration = "auto";
-    }
-    clearHomeReturnState();
   }, []);
 
   const rememberHomeView = useCallback(() => {
@@ -311,12 +301,11 @@ function BrowseFoodsPage() {
     const section = heading?.closest("section");
     if (!section) return;
 
-    const root = document.documentElement;
-    const previousBehavior = root.style.scrollBehavior;
-    root.style.scrollBehavior = "auto";
-    section.scrollIntoView({ behavior: "auto", block: "start" });
-    window.requestAnimationFrame(() => {
-      root.style.scrollBehavior = previousBehavior;
+    section.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      block: "start",
     });
   }, []);
 
@@ -337,6 +326,38 @@ function BrowseFoodsPage() {
   useEffect(() => {
     restoreHomeView();
   }, [restoreHomeView]);
+
+  useEffect(() => {
+    const targetScrollY = pendingHomeScrollYRef.current;
+    if (
+      targetScrollY === null ||
+      !defaultAddressResolved ||
+      discoveryState === "loading"
+    ) {
+      return;
+    }
+
+    let firstFrame = 0;
+    let secondFrame = 0;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        forceInstantWindowScroll(targetScrollY);
+        pendingHomeScrollYRef.current = null;
+        clearHomeReturnState();
+        window.history.scrollRestoration = "auto";
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [
+    defaultAddressResolved,
+    discoveryState,
+    kitchens.length,
+    nearbyDishes.length,
+  ]);
 
   useEffect(() => {
     if (window.sessionStorage.getItem("craves-home-open-search") !== "1") return;

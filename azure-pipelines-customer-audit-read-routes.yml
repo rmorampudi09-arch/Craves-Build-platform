@@ -1,0 +1,67 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: applyRoutes
+    displayName: Publish audited customer GET routes and Saved dish resolver
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 1
+  - bash: |
+      set -euo pipefail
+      python3 scripts/apim/test_customer_audit_read_routes.py
+      bash -n scripts/apim/configure-favorites-p1b-catalog-apim.sh
+    displayName: Validate route guards and existing Saved resolver rollout
+  - task: AzureCLI@2
+    displayName: Validate all customer read route prerequisites
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        python3 scripts/apim/customer-audit-read-routes.py
+  - ${{ if eq(parameters.applyRoutes, true) }}:
+      - task: AzureCLI@2
+        displayName: Publish scoped customer read routes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            python3 scripts/apim/customer-audit-read-routes.py --apply
+            CONFIRM_FAVORITES_P1B_APIM=true bash scripts/apim/configure-favorites-p1b-catalog-apim.sh
+            python3 - <<'PY'
+            import time, urllib.request, urllib.error
+            routes = ['/api/v1/reviews/mine', '/api/v1/reviews/tags', '/api/v1/support/cases', '/api/v1/support/cases/00000000-0000-4000-8000-000000000000', '/api/v1/orders/00000000-0000-4000-8000-000000000000/review']
+            for path in routes:
+                for attempt in range(12):
+                    try:
+                        with urllib.request.urlopen('https://api.craves.in' + path, timeout=30) as response:
+                            code = response.status
+                    except urllib.error.HTTPError as error:
+                        code = error.code
+                    if code == 401:
+                        break
+                    if attempt == 11:
+                        raise SystemExit(f'Guard verification failed: {path} HTTP {code}')
+                    time.sleep(5)
+                print(f'PASS: GET {path} rejects anonymous access')
+            request = urllib.request.Request('https://api.craves.in/api/v1/discovery/saved/menu-items/resolve', data=b'{"menuItemIds":[]}', headers={'Content-Type':'application/json'}, method='POST')
+            try:
+                urllib.request.urlopen(request, timeout=30)
+                raise SystemExit('Empty Saved batch was unexpectedly accepted')
+            except urllib.error.HTTPError as error:
+                body = error.read(8192)
+                assert error.code == 400 and b'MENU_ITEM_IDS_REQUIRED' in body, 'Saved resolver contract probe failed'
+            print('PASS: Saved batch read reached the live backend validator; no customer data changed')
+            PY
+

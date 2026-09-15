@@ -1,7 +1,7 @@
 @keyframes homeRiseIn {
   from {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -21,7 +21,7 @@
 }
 
 .fadeUp {
-  animation: homeRiseIn 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: homeRiseIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .delayOne {
@@ -107,12 +107,12 @@
 }
 
 .categoryButton:hover .categoryImageShell {
-  transform: translateY(-3px) scale(1.015);
+  transform: translateY(-2px) scale(1.008);
   box-shadow: 0 16px 34px rgba(26, 26, 26, 0.14);
 }
 
 .categoryButton:hover .categoryImage {
-  transform: scale(1.095);
+  transform: scale(1.055);
 }
 
 .categoryArrowButton,
@@ -145,7 +145,6 @@
 }
 
 .filterTriggerButton:hover {
-  transform: translateY(-1px) !important;
   box-shadow: 0 8px 20px rgba(26, 26, 26, 0.09) !important;
 }
 
@@ -190,7 +189,6 @@
 }
 
 .filterFooterButton:hover {
-  transform: translateY(-1px) !important;
   box-shadow: 0 6px 16px rgba(26, 26, 26, 0.08) !important;
 }
 
@@ -206,7 +204,6 @@
 }
 
 .dishAddButton:hover {
-  transform: translateY(-1px) !important;
   background: #ffffff !important;
   box-shadow: 0 8px 18px rgba(26, 26, 26, 0.1) !important;
 }
@@ -244,14 +241,14 @@
 }
 
 .floatingCartButton:hover {
-  border-color: rgba(46, 125, 50, 0.42) !important;
-  background: rgba(255, 255, 255, 0.84) !important;
+  border-color: rgba(246, 46, 24, 0.24) !important;
+  background: rgba(255, 255, 255, 0.86) !important;
   color: #1a1a1a !important;
-  transform: translateY(-3px) scale(1.006) !important;
+  transform: translateY(-1px) !important;
   box-shadow:
-    0 26px 64px rgba(26, 26, 26, 0.17),
-    0 14px 38px rgba(46, 125, 50, 0.22),
-    0 0 0 2px rgba(46, 125, 50, 0.12),
+    0 24px 60px rgba(26, 26, 26, 0.17),
+    0 10px 30px rgba(246, 46, 24, 0.1),
+    0 0 0 1px rgba(246, 46, 24, 0.08),
     0 1px 0 rgba(255, 255, 255, 1) inset !important;
 }
 
@@ -300,9 +297,119 @@
   }
 }
 
+
+@keyframes popoverIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes searchOverlayIn {
+  from { opacity: 0; transform: scale(0.997); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes addedConfirm {
+  0% { box-shadow: 0 10px 30px rgba(26, 26, 26, 0.06); }
+  40% {
+    box-shadow:
+      0 12px 32px rgba(26, 26, 26, 0.07),
+      0 0 0 3px rgba(46, 125, 50, 0.14);
+  }
+  100% { box-shadow: 0 10px 30px rgba(26, 26, 26, 0.06); }
+}
+
+@keyframes summaryPulse {
+  from { opacity: 0.58; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes selectionPop {
+  from { transform: scale(0.55); }
+  to { transform: scale(1); }
+}
+
+.heroShell,
+.heroContent {
+  min-height: clamp(25rem, 64svh, 34rem);
+}
+
+.dishGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 1.25rem;
+}
+
+.kitchenGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1.25rem;
+}
+
+.filterPopover[data-state="open"] {
+  transform-origin: top left;
+  animation: popoverIn 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.searchOverlay {
+  transform-origin: top center;
+  animation: searchOverlayIn 170ms ease-out both;
+}
+
+.modalBackdrop {
+  animation: backdropIn 160ms ease-out both;
+}
+
+.modalPanel {
+  transform-origin: bottom center;
+  animation: modalIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dishCardAdded {
+  animation: addedConfirm 520ms ease-out both;
+}
+
+.cartSummaryPulse {
+  animation: summaryPulse 220ms ease-out both;
+}
+
+.filterSelectionDot {
+  animation: selectionPop 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (max-width: 639px) {
+  .heroShell,
+  .heroContent {
+    min-height: clamp(24rem, 58svh, 29rem);
+  }
+}
+
+@media (max-height: 700px) and (min-width: 768px) {
+  .heroShell,
+  .heroContent {
+    min-height: 25rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fadeUp,
-  .cartEnter {
+  .cartEnter,
+  .filterPopover,
+  .searchOverlay,
+  .modalBackdrop,
+  .modalPanel,
+  .dishCardAdded,
+  .cartSummaryPulse,
+  .filterSelectionDot {
     animation: none;
   }
 

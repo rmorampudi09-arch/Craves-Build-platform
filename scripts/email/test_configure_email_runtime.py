@@ -37,7 +37,7 @@ class EmailRuntimeTests(unittest.TestCase):
     def test_key_provenance_disabled_or_expiry_fails(self):
         valid = {'id': 'known', 'enabled': True, 'expires': None, 'tags': {'craves-purpose': runtime.PURPOSE}}
         self.assertEqual(runtime.validate_metadata(valid), 'known')
-        for changed in ({'enabled': False}, {'expires': 123}, {'tags': {'craves-purpose': 'another-module'}}):
+        for changed in ({'enabled': False}, {'expires': 123}, {'tags': None}, {'tags': {'craves-purpose': 'another-module'}}):
             with self.assertRaises(runtime.guard.GuardError):
                 runtime.validate_metadata({**valid, **changed})
 

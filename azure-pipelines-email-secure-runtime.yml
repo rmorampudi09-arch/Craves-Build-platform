@@ -1,0 +1,43 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: applySecureBindings
+    displayName: Create approved dedicated email keys and bindings with gates CLOSED
+    type: boolean
+    default: false
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 1
+  - bash: |
+      set -euo pipefail
+      python3 scripts/email/test_configure_email_runtime.py
+      python3 scripts/finance/test_configure_bank_runtime.py
+    displayName: Test email setup and reused runtime guards
+  - task: AzureCLI@2
+    displayName: Preflight existing vault identities, keys and closed email gates
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        python3 scripts/email/configure_email_runtime.py
+  - ${{ if eq(parameters.applySecureBindings, true) }}:
+      - task: AzureCLI@2
+        displayName: Add approved email keys and references without activation
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/email/configure_email_runtime.py --apply --expected-source-sha '$(Build.SourceVersion)'
+

@@ -1,7 +1,6 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { MapPin, Minus, Plus } from "lucide-react";
-import { hasHomeReturnState } from "@/lib/home-return-state";
 import { loadSession } from "@/services/auth/cravesAuth";
 import {
   getDish,
@@ -120,14 +119,6 @@ function DishDetailPage() {
   }, []);
 
   const handleBack = () => {
-    if (
-      typeof window !== "undefined" &&
-      hasHomeReturnState() &&
-      window.history.length > 1
-    ) {
-      window.history.back();
-      return;
-    }
     navigate({ to: "/home" });
   };
 
@@ -215,12 +206,12 @@ function DishDetailPage() {
 
   return (
     <div className={`min-h-screen bg-white text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "pb-32" : "pb-28 lg:pb-14"}`}>
-      <DetailBrowseHeader returnPath={`/dish/${id}`} />
+      <DetailBrowseHeader returnPath={`/dish/${id}`} onBack={handleBack} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
         <div className="grid gap-7 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.9fr)] lg:items-start lg:justify-center xl:grid-cols-[minmax(0,42rem)_24rem] xl:gap-9">
           <div className="min-w-0">
-            <DishImageHeader dish={dish} onBack={handleBack} />
+            <DishImageHeader dish={dish} />
 
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-bold text-[#6B6B6B]">
               <span className="inline-flex items-center gap-2 text-[#1A1A1A]">

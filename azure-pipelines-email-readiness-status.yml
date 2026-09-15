@@ -1,0 +1,20 @@
+# Read-only device-acceptance probe. This branch-specific file can run in the
+# existing audit pipeline without changing that pipeline's default branch.
+trigger: none
+pr: none
+pool:
+  vmImage: ubuntu-latest
+steps:
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 1
+  - task: AzureCLI@2
+    displayName: Read cart dependencies and live revision, without secrets or writes
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        python3 scripts/release/device-cart-readiness.py

@@ -29,6 +29,20 @@ class SafeCartGatewayTest(unittest.TestCase):
         ET.indent(root)
         self.assertEqual(routes.canonical_policy(xml), routes.canonical_policy(ET.tostring(root)))
 
+    def test_owned_escaped_expression_repair_is_exact_and_security_preserving(self):
+        xml = routes.policy('https://orders.example.invalid', '/switch-kitchen')
+        root = ET.fromstring(xml)
+        condition = root.find('inbound/choose/when')
+        condition.set('condition', condition.get('condition').replace('"', '&quot;'))
+        self.assertTrue(routes.matches_owned_policy(ET.tostring(root), xml))
+        condition.set('condition', '@(false)')
+        self.assertFalse(routes.matches_owned_policy(ET.tostring(root), xml))
+
+    def test_changed_backend_is_not_treated_as_encoding_difference(self):
+        xml = routes.policy('https://orders.example.invalid', '/switch-kitchen')
+        other = routes.policy('https://other.example.invalid', '/switch-kitchen')
+        self.assertFalse(routes.matches_owned_policy(other, xml))
+
     @patch.object(routes, 'az')
     @patch.object(routes, 'http_status')
     def test_changed_image_stops_before_any_health_or_gateway_request(self, status, az):

@@ -11,6 +11,7 @@ parameters:
       - inspect
       - release-cart
       - inspect-cart-policy
+      - publish-cart-routes
 pool:
   vmImage: ubuntu-latest
 steps:
@@ -41,3 +42,15 @@ steps:
             set -euo pipefail
             set +x
             python3 scripts/apim/inspect-device-cart-policy.py
+  - ${{ if eq(parameters.action, 'publish-cart-routes') }}:
+      - task: AzureCLI@2
+        displayName: Verify pinned healthy Order image and finish owned cart routes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 -m unittest discover -s scripts/apim/tests -p 'test_device_safe_cart_routes.py'
+            python3 scripts/apim/device-safe-cart-routes.py --expected-image cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0 --apply

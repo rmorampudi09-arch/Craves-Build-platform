@@ -1,5 +1,6 @@
 """Add only the three authenticated conditional-cart operations after a pinned rollout."""
 import argparse
+import html
 import json
 import subprocess
 import time
@@ -31,6 +32,18 @@ def canonical_policy(value):
         if element.tail is not None and not element.tail.strip():
             element.tail = None
     return ET.tostring(root)
+
+def matches_owned_policy(value, expected):
+    if canonical_policy(value) == canonical_policy(expected):
+        return True
+    # The first publication supplied XML-escaped expression attributes as rawxml.
+    # Accept only that exact one-layer encoding difference for our owned rule.
+    # Writes below use xml; post-write verification remains strictly identical.
+    root = ET.fromstring(value)
+    for element in root.iter('when'):
+        if 'condition' in element.attrib:
+            element.set('condition', html.unescape(element.attrib['condition']))
+    return canonical_policy(ET.tostring(root)) == canonical_policy(expected)
 
 def az(*args, write=False):
     response = subprocess.run(['az', *args, '--only-show-errors', '-o', 'none' if write else 'json'], capture_output=True, text=True)
@@ -112,7 +125,7 @@ def main(expected, apply):
             require(key != operation_id or same_route, 'Operation ID belongs to another route')
         if key in wanted:
             existing = read_policies(scope + '/operations/' + key)
-            require(len(existing) == 1 and canonical_policy(existing[0]['properties']['value']) == canonical_policy(policy(origin, wanted[key])), 'Existing new-route policy differs; preserve and review')
+            require(len(existing) == 1 and matches_owned_policy(existing[0]['properties']['value'], policy(origin, wanted[key])), 'Existing new-route policy differs; preserve and review')
     for _, path in ROUTES:
         probe = path.replace('{orderId}', '00000000-0000-4000-8000-000000000000')
         require(http_status(origin + '/api/v1/cart' + probe, 'POST') in (401, 403), 'Backend does not require authentication')
@@ -126,7 +139,7 @@ def main(expected, apply):
         rest('put', target, {'properties': {'displayName': operation_id.replace('-', ' '), 'method':'POST',
             'urlTemplate':path, 'templateParameters':parameters,
             'responses':[{'statusCode':n} for n in (200,400,401,403,404,409,422,503)]}})
-        rest('put', target + '/policies/policy', {'properties': {'format':'rawxml','value':policy(origin,path)}})
+        rest('put', target + '/policies/policy', {'properties': {'format':'xml','value':policy(origin,path)}})
         result = rest('get', target)['properties']
         require(result['method'] == 'POST' and result['urlTemplate'] == path, 'Route readback failed')
         actual = rest('get', target + '/policies/policy')['properties']['value']

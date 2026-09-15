@@ -14,6 +14,8 @@
 html {
   min-height: 100%;
   background: var(--craves-white);
+  scroll-behavior: smooth;
+  scroll-padding-top: 6rem;
 }
 body {
   min-height: 100vh;
@@ -24,3 +26,10 @@ body {
 }
 button, a, input { outline-offset: 3px; }
 ::selection { background: rgba(246, 46, 24, 0.18); }
+
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

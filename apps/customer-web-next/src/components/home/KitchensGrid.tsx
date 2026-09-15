@@ -38,7 +38,7 @@ export function KitchensGrid({ kitchens, searchTerm, state, message, onSelectKit
   const normalizedSearch = searchTerm.trim();
 
   return (
-    <section className={`${styles.fadeUp} mx-auto max-w-[88rem] px-4 pb-12 pt-10 md:px-7 lg:px-10 lg:pb-16 lg:pt-14`} aria-labelledby="nearby-kitchens-heading">
+    <section className="mx-auto max-w-[88rem] px-4 pb-12 pt-10 md:px-7 lg:px-10 lg:pb-16 lg:pt-14" aria-labelledby="nearby-kitchens-heading">
       <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">From real home kitchens</p>
@@ -55,7 +55,7 @@ export function KitchensGrid({ kitchens, searchTerm, state, message, onSelectKit
       {state === "loading" ? (
         <div>
           <p className="sr-only" role="status">Loading nearby kitchens</p>
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className={styles.kitchenGrid}>
             {Array.from({ length: 6 }, (_, index) => <KitchenSkeleton key={index} />)}
           </div>
         </div>
@@ -101,14 +101,14 @@ export function KitchensGrid({ kitchens, searchTerm, state, message, onSelectKit
       ) : null}
 
       {state === "ready" && kitchens.length > 0 ? (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {kitchens.map((kitchen, index) => {
+        <div className={styles.kitchenGrid}>
+          {kitchens.map((kitchen) => {
             const name = kitchen.kitchenName;
             const location = [kitchen.areaName, kitchen.city].filter(Boolean).join(", ");
             return (
               <article
                 key={kitchen.id}
-                className={`group relative overflow-hidden rounded-[1.85rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-all duration-300 hover:-translate-y-1 hover:border-[#F62E18] hover:shadow-[0_16px_38px_rgba(26,26,26,0.10)] ${index % 2 === 1 ? "md:translate-y-3 md:hover:translate-y-2" : ""}`}
+                className="group relative overflow-hidden rounded-[1.85rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[#F62E18]/50 hover:shadow-[0_16px_36px_rgba(26,26,26,0.09)]"
               >
                 <span className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full border-[18px] border-[#F1F3F5]" aria-hidden="true" />
                 <div className="relative flex items-start gap-4">

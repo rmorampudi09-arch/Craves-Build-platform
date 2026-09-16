@@ -69,4 +69,24 @@ class ChefReferralEarningsDatabaseTest {
         apply(credit());assertThrows(RuntimeException.class,()->f.jdbc.update("UPDATE payment_schema.chef_referral_posting SET amount_paise=1"));
         assertThrows(RuntimeException.class,()->f.jdbc.update("DELETE FROM payment_schema.chef_referral_posting"));
     }
+    void refund() {
+        UUID payment=f.jdbc.queryForObject("SELECT payment_order_id FROM payment_schema.finance_capture WHERE checkout_id=?",UUID.class,f.checkout);
+        f.tx.executeWithoutResult(s->f.jdbc.update("INSERT INTO payment_schema.refund(id,payment_order_id,refund_ref,amount,currency,status,chef_sub_order_id) VALUES (?,?,?,?,'INR','REQUESTED',?)",UUID.randomUUID(),payment,"test-refund/"+UUID.randomUUID(),new BigDecimal(f.quote.total()),f.order));
+    }
+    void assertHeld() {
+        assertEquals(true,f.jdbc.queryForObject("SELECT on_hold AND hold_kind='OPERATIONAL' FROM payment_schema.finance_chef_payout_control WHERE chef_identity_id=?",Boolean.class,recipient));
+    }
+    @Test void delayedCreditAfterRefundCanReconcileWithoutReleasingMoney() {
+        var body=credit();refund();apply(body);assertHeld();
+        var reverse=body.deepCopy().put("postingId",UUID.randomUUID().toString()).put("amountPaise","-738")
+            .put("originalPostingId",body.path("postingId").asText());
+        apply(reverse);assertEquals(0,balance(recipient).signum());assertHeld();
+        assertThrows(RuntimeException.class,()->apply(credit()));
+    }
+    @Test void refundAfterCreditImmediatelyHoldsRecipientAndChangedCheckoutCannotReverse() {
+        var body=credit();apply(body);refund();assertHeld();
+        var reverse=body.deepCopy().put("postingId",UUID.randomUUID().toString()).put("amountPaise","-738")
+            .put("originalPostingId",body.path("postingId").asText()).put("checkoutId",UUID.randomUUID().toString());
+        assertThrows(RuntimeException.class,()->apply(reverse));assertEquals(1,f.count("chef_referral_posting"));
+    }
 }

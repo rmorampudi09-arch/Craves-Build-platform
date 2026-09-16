@@ -12,7 +12,7 @@ required = {
 }
 required['referral-service']['ChefEarningsIT']=10
 required['auth-service']['ChefReferralEligibilityDatabaseTest']=3
-required['integration-service']['ChefReferralEarningsDatabaseTest']=6
+required['integration-service']['ChefReferralEarningsDatabaseTest']=8
 summary={'status':'PASS','scope':'Backend source and disposable PostgreSQL; no Azure deployment or provider payment', 'services':{}}
 for service,names in required.items():
  files=list((Path('services')/service/'target').glob('*reports/TEST-*.xml'))

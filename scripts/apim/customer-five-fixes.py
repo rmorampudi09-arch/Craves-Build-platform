@@ -20,6 +20,24 @@ def review_policy(origin):
 def main(apply=False):
     safe.require(safe.az('account', 'show')['id'] == safe.SUB, 'Wrong subscription')
     origin = safe.runtime(EXPECTED)
+    apps = safe.az('containerapp', 'list', '-g', safe.RG)
+    for app in apps:
+        name = app['name']
+        if not any(part in name for part in ('auth-service', 'notification-service', 'user-chef-service', 'order-service')):
+            continue
+        props = app['properties']
+        container = props['template']['containers'][0]
+        metadata = {}
+        for item in container.get('env', []):
+            key = item['name']
+            if not key.startswith(('CRAVES_EMAIL_', 'CRAVES_DOCUMENTS_')):
+                continue
+            if key.endswith('_ENABLED'):
+                metadata[key] = item.get('value', 'REFERENCE')
+            else:
+                metadata[key] = 'SECRET_REFERENCE' if item.get('secretRef') else 'PRESENT' if item.get('value') else 'EMPTY'
+        print('FEATURE_RUNTIME ' + json.dumps({'name':name,'image':container['image'],
+            'latest':props['latestRevisionName'],'ready':props['latestReadyRevisionName'],'settings':metadata}))
     base = f'https://management.azure.com/subscriptions/{safe.SUB}/resourceGroups/{safe.RG}/providers/Microsoft.ApiManagement/service/{safe.APIM}'
     safe.read_policies(base)
     apis = safe.az('apim', 'api', 'list', '-g', safe.RG, '--service-name', safe.APIM)

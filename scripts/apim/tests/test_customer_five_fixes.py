@@ -32,7 +32,7 @@ class CustomerRepairTest(unittest.TestCase):
     @patch.object(fixes.safe, 'rest')
     @patch.object(fixes.safe, 'read_policies')
     @patch.object(fixes.safe, 'runtime', return_value='https://order.example.invalid')
-    @patch.object(fixes.safe, 'az', side_effect=[{'id':fixes.safe.SUB}, []])
+    @patch.object(fixes.safe, 'az', side_effect=[{'id':fixes.safe.SUB}, [], []])
     def test_missing_owner_never_writes(self, az, runtime, policies, rest):
         with self.assertRaisesRegex(RuntimeError, 'ownership ambiguous'):
             fixes.main(True)

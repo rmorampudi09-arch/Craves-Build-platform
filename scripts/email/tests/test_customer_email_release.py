@@ -48,6 +48,21 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'Ready revision differs'):r.healthy('auth-service',requested,'pinned')
         http.assert_not_called()
 
+    @patch.object(r.safe,'http_status',return_value=200)
+    @patch.object(r.safe,'az')
+    def test_azure_order_and_null_serialization_do_not_mean_runtime_drift(self,az,http):
+        requested=self.app();actual=copy.deepcopy(requested['properties']['template'])
+        actual['containers'][0]['env'].reverse()
+        actual['containers'][0]['env'][0]['value']=None
+        actual['containers'][0]['env'][1]['secretRef']=None
+        az.return_value={'properties':{'template':actual,'healthState':'Healthy'}}
+        r.healthy('auth-service',requested,'pinned')
+        http.assert_called_once()
+
+    def test_duplicate_environment_names_fail_closed(self):
+        with self.assertRaisesRegex(RuntimeError,'Duplicate environment'):
+            r.normalized_env({'env':[{'name':'A','value':'one'},{'name':'A','value':'two'}]})
+
     @patch.object(r.safe,'az',return_value={'id':'wrong'})
     @patch.object(r,'snapshot')
     def test_wrong_subscription_never_reads_or_writes_apps(self,snapshot,az):

@@ -36,6 +36,13 @@ def env(app):
 def origin(app):
     return 'https://' + app['properties']['configuration']['ingress']['fqdn']
 
+def normalized_env(container):
+    # Azure's app/revision endpoints differ in ordering and omitted null fields.
+    items=container.get('env',[])
+    safe.require(len({item['name'] for item in items})==len(items), 'Duplicate environment names')
+    return {item['name']:{key:value for key,value in item.items() if value is not None}
+            for item in items}
+
 def healthy(service, app, image):
     props=app['properties']
     safe.require(len(props['template']['containers'])==1, 'Unexpected multi-container app')
@@ -44,7 +51,10 @@ def healthy(service, app, image):
     safe.require(props['configuration'].get('activeRevisionsMode')=='Single', 'Unexpected traffic mode')
     revision=safe.az('containerapp','revision','show','-g',safe.RG,'-n',APPS[service],'--revision',props['latestRevisionName'])
     actual=revision['properties']['template']['containers'][0]
-    safe.require(actual['image']==image and actual.get('env',[])==props['template']['containers'][0].get('env',[]), 'Ready revision differs from requested runtime')
+    wanted=normalized_env(props['template']['containers'][0]); ready=normalized_env(actual)
+    differences=sorted(key for key in wanted.keys() | ready.keys() if wanted.get(key)!=ready.get(key))
+    safe.require(actual['image']==image and not differences,
+        'Ready revision differs from requested runtime: '+service+'; image_matches='+str(actual['image']==image)+'; setting_names='+','.join(differences))
     safe.require(revision['properties']['healthState']=='Healthy', 'Revision is not healthy: '+service)
     safe.require(safe.http_status(origin(app)+'/actuator/health')==200, 'Health probe failed: '+service)
 

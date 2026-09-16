@@ -21,6 +21,8 @@ This document records explicit owner answers, not financial activation or public
 
 Run with Java 21 from `services/referral-service`: `mvn -Dtest=ChefReferralPolicyTest,RewardMathTest test`.
 
+Local verification on September 16: all 17 targeted tests passed with zero failures, errors or skipped tests; then all 38 referral unit tests passed with zero failures, errors or skipped tests. Database integration and cross-service acceptance are distinct checks. The release evidence scripts now require the new policy suite and existing rounding suite to execute without skips.
+
 ## Still required before activation
 
 The policy class is not yet wired to the reward worker. Authoritative chef eligibility/enrolment, immutable policy snapshots, serialized monthly-cap accounting, refund coupling and delivery into the existing chef earnings ledger remain required. Existing migrations V1–V8 are preserved; any database evolution must be additive. No balances, live rewards, customer bonuses, wallet spending or payouts have been created or enabled by this checkpoint.

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import xml.etree.ElementTree as E
 required = {
- 'referral-service': {'ReferralLedgerIT':1,'ReferralResilienceIT':1,'ReferralHttpContractIT':1,'ReferralFinanceTransportIT':3,'ReferralCheckoutBenefitsIT':8,'ReferralAuthStateClientTest':10},
+ 'referral-service': {'ChefReferralPolicyTest':10,'RewardMathTest':7,'ReferralLedgerIT':1,'ReferralResilienceIT':1,'ReferralHttpContractIT':1,'ReferralFinanceTransportIT':3,'ReferralCheckoutBenefitsIT':8,'ReferralAuthStateClientTest':10},
  'auth-service': {'ReferralAccessTest':6,'ReferralAttributionTest':5,'ReferralEnrollmentDatabaseTest':5,'ReferralSourceOutboxDatabaseTest':7,'EmailVerificationPersistenceTest':1,'PostgresAuthRateLimiterDbTest':1},
  'order-service': {'ReferralSourceOutboxDatabaseTest':7,'FinancialCheckoutDatabaseTest':7,'ReferralCheckoutIntegrationDatabaseTest':12,'CartConcurrencyDatabaseTest':6,'ReferralBenefitsOwnerDatabaseTest':20},
  'integration-service': {'ReferralSourceOutboxDatabaseTest':7,'ReferralJournalMirrorTest':4,'ReferralFinanceConsumerDatabaseTest':5,'ReferralPayoutDatabaseTest':12,'ReferralTenderAllocationTest':4,'ReferralCheckoutFundingDatabaseTest':12,'ReferralSplitRefundDatabaseTest':22,'FinancialFullMigrationDatabaseTest':2,'OrderFinancialFinalizationDatabaseTest':18,'ManualChefSettlementDatabaseTest':29},

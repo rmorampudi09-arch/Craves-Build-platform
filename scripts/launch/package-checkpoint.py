@@ -84,7 +84,7 @@ def build_pdf(target, sha, manifest):
              Spacer(1, 16), Paragraph('16 September 2026', body),
              Paragraph('Source: ' + sha, body),
              Paragraph('This report distinguishes working source, test evidence, live settings and unresolved acceptance. It is not a declaration that the app is ready for public launch.', body),
-             Paragraph('The owner confirmed a monthly referral-reward cap of INR 1,500 per chef. Qualification uses the referred chef food subtotal; two INR 150 dishes qualify at INR 300. This does not authorize infrastructure spending or change ordinary food-sale earnings.', body),
+             Paragraph('The owner confirmed a total referral pool of 4% of the referred chef qualifying food subtotal, split 2%, 1.2% and 0.8%, with a monthly cap of INR 1,500 per receiving chef. Qualification requires a food subtotal above INR 250; two INR 150 dishes qualify at INR 300. This does not authorize infrastructure spending or cap ordinary food-sale earnings.', body),
              Paragraph('The owner explicitly authorized sole-owner approval while retaining the other repository protections. Live gateway changes, web release attempts and read-only database evidence are recorded separately below; historical checkpoint statements must not override the dated continuation. No real financial transaction or new APK is claimed by this web and governance handover.', body),
              Paragraph('The ZIP contains complete changed source files at the exact commit above. Selected complete safety-critical files are printed in the appendix. No original private PDFs, credentials or dependency caches are included.', body),
              PageBreak(), Paragraph('How to use this handover', styles['Heading1']),

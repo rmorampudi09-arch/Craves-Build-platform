@@ -12,7 +12,7 @@ PR363 and PR364 are also merged. Current main is `48d0941b3a8210e7754073b99584d1
 
 ## Package sequence
 
-Latest bounded module: read-only Auth protection audit39107 passed; the running enabled flag is explicitly false, with mode absent. PR365 adds inspection only, not activation. `AUTH_PROTECTION_CHECKPOINT.md` records the remaining engineering evidence. This handover/source-overlay branch includes that audit; it must not be represented as a new deployed Auth image or a new APK.
+Latest bounded module: read-only Auth protection audit39107 passed; the running enabled flag is explicitly false, with mode absent. PR365 merged as e91ea99b56485010a969bc2dc448f5ea037b41db after complete exact-head regression35123729700 passed. This is current repository main, while the serving web remains48d0941b from39106. `AUTH_PROTECTION_CHECKPOINT.md` records the remaining engineering evidence. This handover/source-overlay branch includes the audit; it must not be represented as a new deployed Auth image or a new APK.
 
 1. F01: read-only running-service inventory and source reconciliation; preserve today's customer fixes and earlier referral/finance releases.
 2. F02: reproduce the exact subscription migration parity failure in an explicitly disposable local database, then correct unordered comparison without dropping structure or weakening negative checks.

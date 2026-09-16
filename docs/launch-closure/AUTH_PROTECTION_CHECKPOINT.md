@@ -2,6 +2,8 @@
 
 Azure pipeline122/run39107 succeeded at16:45:02UTC on reviewed audit source98a0f80c582bab0e7d58d10adb04fb2de51ebfba. Twelve isolated scope/redaction/drift tests passed before the read. The receipt is `evidence/auth-protection-39107.json`; implementation/setup details are in `docs/auth/AUTH_PROTECTION_RUNTIME_AUDIT.md`.
 
+PR365 subsequently merged as e91ea99b56485010a969bc2dc448f5ea037b41db after exact-head complete regression35123729700 passed all four jobs: source, all seven Java services/connected scenarios, full web install/lint/types/tests/build and the exact-source aggregate. This merge does not deploy or activate Auth. The whole Auth source directory is unchanged between current source and the4ad490be source-tag hint; this source comparison alone still does not independently prove what bytes the old unlabelled image runs.
+
 ## Observed, not assumed
 
 The desired and running Auth environments both explicitly set the rate-limit enabled flag to false. Mode and the other eight documented numeric limits/timeouts are absent from the environment. Defaults are shown only as reviewed source defaults, not verified effective values. The only detected potential override variable is SPRING_PROFILES_ACTIVE; its contents were not exported. There are no container command/argument overrides in this metadata.

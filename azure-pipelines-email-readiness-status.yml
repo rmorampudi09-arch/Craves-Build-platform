@@ -15,6 +15,7 @@ parameters:
       - inspect-customer-fixes
       - publish-review-routes
       - test-email-upgrade
+      - release-customer-email
 pool:
   vmImage: ubuntu-latest
 steps:
@@ -23,6 +24,8 @@ steps:
     fetchDepth: 1
   - ${{ if eq(parameters.action, 'test-email-upgrade') }}:
       - template: pipelines/customer-email-test-steps.yml
+  - ${{ if eq(parameters.action, 'release-customer-email') }}:
+      - template: pipelines/customer-email-release-steps.yml
   - ${{ if or(eq(parameters.action, 'inspect-customer-fixes'), eq(parameters.action, 'publish-review-routes')) }}:
       - task: AzureCLI@2
         displayName: Inspect customer routes and optionally repair review writes

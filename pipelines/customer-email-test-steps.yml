@@ -7,6 +7,8 @@ steps:
       jdkSourceOption: PreInstalled
   - script: |
       set -euo pipefail
+      python3 scripts/email/verify-live-email-migrations.py
+      python3 -m unittest discover -s scripts/email/tests
       docker run -d --name customer-email-tests -e POSTGRES_USER=email_ci -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=craves_email_test -p 127.0.0.1:55432:5432 postgis/postgis:16-3.4
       for i in {1..30}; do
         if docker exec customer-email-tests pg_isready -U email_ci -d craves_email_test; then break; fi

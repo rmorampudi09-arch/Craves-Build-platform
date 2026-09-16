@@ -47,6 +47,33 @@ def stable(app):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
+def comparable_running_template(value):
+    """Resolve only documented defaults absent from Azure's revision response.
+
+    This is NOT used by stable(): desired settings must remain byte-for-byte
+    structurally unchanged across the image-only release, apart from its existing
+    environment/revision normalization. Unknown fields and non-defaults survive.
+    """
+    template = normalized_template(value)
+    scale = template.get('scale', {})
+    for name, default in (('cooldownPeriod', 300), ('pollingInterval', 30)):
+        if scale.get(name) is None:
+            scale[name] = default
+    containers = template['containers']
+    for container in containers:
+        if container.get('probes') is None:
+            container['probes'] = []
+        resources = container.get('resources', {})
+        cpu = resources.get('cpu')
+        # Azure assigns total temporary storage by replica vCPU. Restrict this
+        # equivalence to the supported single-container, no-init-container case.
+        if len(containers) == 1 and not template.get('initContainers') and type(cpu) in (int, float) and 0 < cpu <= 4:
+            default = '1Gi' if cpu <= .25 else '2Gi' if cpu <= .5 else '4Gi' if cpu <= 1 else '8Gi'
+            if resources.get('ephemeralStorage') is None:
+                resources['ephemeralStorage'] = default
+    return template
+
+
 def production(app):
     props = app['properties']
     require(props['configuration']['activeRevisionsMode'] == 'Single', 'Existing web must use Single revision mode')
@@ -70,7 +97,7 @@ def ready(app, revisions, replicas):
     revision = active[0]['properties']
     require(revision.get('healthState') == 'Healthy' and revision.get('runningState') in ('Running', 'RunningAtMaxScale'), 'Active web revision is not healthy')
     require(revision['template']['containers'][0]['image'] == props['template']['containers'][0]['image'], 'Running web image differs from desired image')
-    require(normalized_template(revision['template']) == normalized_template(props['template']), 'Running web template differs from desired configuration')
+    require(comparable_running_template(revision['template']) == comparable_running_template(props['template']), 'Running web template differs from desired configuration')
     require(isinstance(replicas, list) and len(replicas) == 1, 'Actual web replica count must be one')
     containers = replicas[0].get('properties', {}).get('containers', [])
     expected_name = props['template']['containers'][0]['name']

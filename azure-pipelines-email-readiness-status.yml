@@ -24,6 +24,7 @@ parameters:
       - publish-finance-response-privacy
       - inspect-applied-email-history
       - inspect-email-operational-health
+      - inspect-customer-web-shape
   - name: expectedFinancePrivacySource
     displayName: Exact checked source SHA for finance header publication (unused for inspection)
     type: string
@@ -34,6 +35,19 @@ steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
+  - ${{ if eq(parameters.action, 'inspect-customer-web-shape') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_web_runtime_shape.py' -v
+        displayName: Verify read-only web shape redaction
+      - task: AzureCLI@2
+        displayName: Read web template shape differences without settings values
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/inspect-customer-web-shape.py
   - ${{ if eq(parameters.action, 'inspect-email-operational-health') }}:
       - script: python3 -m unittest discover -s scripts/email/tests -p 'test_email_operations.py' -v
         displayName: Verify aggregate-only email inspection boundaries

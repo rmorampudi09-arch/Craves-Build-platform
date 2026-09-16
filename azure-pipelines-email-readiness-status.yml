@@ -21,17 +21,25 @@ parameters:
       - capture-launch-runtime
       - capture-gateway-fingerprints
       - inspect-finance-response-privacy
+      - publish-finance-response-privacy
+  - name: expectedFinancePrivacySource
+    displayName: Exact checked source SHA for finance header publication (unused for inspection)
+    type: string
+    default: NOT_AUTHORIZED
 pool:
   vmImage: ubuntu-latest
 steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
-  - ${{ if eq(parameters.action, 'inspect-finance-response-privacy') }}:
+  - ${{ if or(eq(parameters.action, 'inspect-finance-response-privacy'), eq(parameters.action, 'publish-finance-response-privacy')) }}:
       - script: python3 -m unittest discover -s scripts/apim/tests -p 'test_finance_response_privacy.py'
         displayName: Verify narrow finance response header guards
       - task: AzureCLI@2
-        displayName: Inspect existing finance policy structure without modifying it
+        displayName: Verify finance policy representations and optionally publish cache-only correction
+        env:
+          FINANCE_PRIVACY_ACTION: ${{ parameters.action }}
+          EXPECTED_FINANCE_PRIVACY_SOURCE: ${{ parameters.expectedFinancePrivacySource }}
         inputs:
           azureSubscription: Craves-Dev-Service-Connection
           scriptType: bash
@@ -39,7 +47,11 @@ steps:
           inlineScript: |
             set -euo pipefail
             set +x
-            python3 scripts/apim/finance-response-privacy.py
+            if [ "$FINANCE_PRIVACY_ACTION" = 'publish-finance-response-privacy' ]; then
+              python3 scripts/apim/finance-response-privacy.py --apply --expected-source-sha "$EXPECTED_FINANCE_PRIVACY_SOURCE"
+            else
+              python3 scripts/apim/finance-response-privacy.py
+            fi
   - ${{ if eq(parameters.action, 'capture-gateway-fingerprints') }}:
       - script: python3 -m unittest discover -s scripts/release/tests -p 'test_gateway_policy_fingerprints.py'
         displayName: Verify gateway fingerprint scope and redaction

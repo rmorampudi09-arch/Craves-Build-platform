@@ -21,6 +21,14 @@ Write mode refuses unknown policy bytes, inherited-policy drift, missing ETags, 
 
 ## Test and execution boundary
 
+### Continued after sole-owner approval
+
+Read-only Azure run39086 succeeded on source7d3a695fd9ebb236055866466bf177af4b40a770. It observed the resource-level global hash `be15daa26fce12414c353e55c31dba2e43177dc754ad57b3312ea43d6c6a287c` (990 bytes, inbound/backend/outbound with no on-error) and both finance resource hashes `f34e6e2623f818053b7afebf7afc379736c0f1293df62b1b84f0a2ed97a0322e` (695 bytes, all four sections, exact ETags available). Each finance policy has one early response and outbound-only no-store. All four anonymous probes still failed privacy acceptance. No writes occurred.
+
+The helper now reads BOTH collection and resource representations for these exact three scopes. Write mode requires both previously observed byte fingerprints AND equal parsed XML structure; meaningful expression, body, backend or ordering differences cannot be dismissed as formatting. The known global three-section shape is allowed for inheritance inspection only; global and collection writes remain forbidden. It repeats these comparisons immediately before conditional writes. The existing pipeline has an explicit `publish-finance-response-privacy` action requiring the exact checked source SHA; inspection remains its separate read-only action. Run read-only comparison first, require candidate checks to pass, and only then select publication. No app image, database, product or operation change is part of this action.
+
+The updated local suite passed 21 finance-helper tests / 37 total APIM tests, including resource/collection equivalence, meaningful drift, pagination/format rejection, forbidden collection writes, missing inherited sections, and ETag races. This is not yet live publication evidence or F14 acceptance. Original checkpoint details below are retained chronologically.
+
 Fifteen local regression tests cover header placement and uniqueness, idempotence, nested errors, unchanged routing/auth/body, malformed XML, scope restrictions, exact ETags, no-write inspection including drift/partial-shape diagnostics, and protected apply/readback. All 31 current APIM tests passed locally. These are isolated structural and mocked management tests, not authenticated production 200/403/400/500 acceptance.
 
 Read-only Azure run 39081 at source 0ea1fc397b93521de93c2767f6f0e35606157251 stopped at `Inherited global policy drifted`. No policy write was attempted. The earlier inventory used the collection endpoint while the repair helper reads a policy resource; formatting differences are only a hypothesis until comparison, not a reason to relax write guards. Diagnostic metadata was added without changing apply guards. F14 remains OPEN.

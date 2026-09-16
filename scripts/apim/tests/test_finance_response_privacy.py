@@ -15,6 +15,7 @@ class FakeManagement:
     def __init__(self):
         self.policies = {'/policies/policy': GLOBAL}
         self.policies.update({'/apis/' + aid + '/policies/policy': POLICY for aid in privacy.API_IDS})
+        self.policies.update({scope.removesuffix('/policy'): text for scope, text in tuple(self.policies.items())})
         self.writes = []
         self.etag = '"version-1"'
 
@@ -73,7 +74,7 @@ class FinancePrivacyTest(unittest.TestCase):
         for private in ['UNCHANGED', 'original.example', 'condition=']: self.assertNotIn(private, value)
 
     def run_fixture(self, client, apply=False):
-        with patch.object(privacy, 'EXPECTED_POLICY_SHA', privacy.sha(POLICY)), patch.object(privacy, 'EXPECTED_GLOBAL_SHA', privacy.sha(GLOBAL)), patch.object(privacy, 'probe', return_value=[{'passed': True}]):
+        with patch.object(privacy, 'EXPECTED_POLICY_SHA', privacy.sha(POLICY)), patch.object(privacy, 'EXPECTED_GLOBAL_SHA', privacy.sha(GLOBAL)), patch.object(privacy, 'EXPECTED_RESOURCE_POLICY_SHA', privacy.sha(POLICY)), patch.object(privacy, 'EXPECTED_RESOURCE_GLOBAL_SHA', privacy.sha(GLOBAL)), patch.object(privacy, 'probe', return_value=[{'passed': True}]):
             return privacy.run(client, apply)
 
     def test_inspect_has_no_writes(self):
@@ -132,6 +133,55 @@ class FinancePrivacyTest(unittest.TestCase):
         info = privacy.inspect('<policies><PRIVATE_CANARY /></policies>')
         self.assertEqual(info['sectionOrder'], ['UNRECOGNIZED'])
         self.assertNotIn('PRIVATE_CANARY', json.dumps(info))
+
+    def test_collection_and_resource_equivalence_does_not_ignore_meaningful_changes(self):
+        client = FakeManagement()
+        scope = '/apis/craves-finance-admin-v1/policies/policy'
+        formatted = POLICY.replace('><', '>\n    <')
+        client.policies[scope.removesuffix('/policy')] = formatted
+        with patch.object(privacy, 'EXPECTED_POLICY_SHA', privacy.sha(formatted)), patch.object(privacy, 'EXPECTED_RESOURCE_POLICY_SHA', privacy.sha(POLICY)):
+            self.assertTrue(privacy.reconcile(client, scope, POLICY)['passed'])
+            for mutation in [POLICY.replace('401', '200'), POLICY.replace('UNCHANGED-BODY', 'changed'), POLICY.replace('original.example', 'different.example')]:
+                with self.subTest(mutation=mutation[:20]):
+                    self.assertFalse(privacy.reconcile(client, scope, mutation)['structureEquivalent'])
+
+    def test_collection_drift_blocks_all_writes_even_if_resource_is_expected(self):
+        client = FakeManagement()
+        client.policies['/apis/craves-chef-finance-v1/policies'] += ' '
+        with self.assertRaises(privacy.GuardError): self.run_fixture(client, True)
+        self.assertEqual(client.writes, [])
+
+    def test_collection_validation_rejects_missing_ambiguous_paginated_and_unknown_format(self):
+        row = {'properties': {'format': 'xml', 'value': POLICY}}
+        self.assertEqual(privacy.collection_policy({'value': [row]}), POLICY)
+        for data in [{'value': []}, {'value': [row, row]}, {'value': [row], 'nextLink': 'private'},
+                     {'value': [{'properties': {'format': 'rawxml-link', 'value': POLICY}}]}]:
+            with self.assertRaises(privacy.GuardError): privacy.collection_policy(data)
+
+    def test_collection_writes_are_never_allowed(self):
+        client = privacy.Management.__new__(privacy.Management); client.token = 'canary'
+        for scope in ['/policies', '/apis/craves-finance-admin-v1/policies']:
+            with self.assertRaises(privacy.GuardError): client.request(scope, 'PUT', POLICY, '"1"')
+
+    def test_global_without_error_section_is_valid_but_never_patched(self):
+        text = '<policies><inbound /><backend><forward-request /></backend><outbound /></policies>'
+        privacy.validate_global(text)
+        for altered in [text.replace('<outbound />', ''), text.replace('<inbound />', '<inbound><return-response /></inbound>'),
+                        text.replace('<outbound />', '<outbound><cache-lookup /></outbound>'),
+                        text.replace('<inbound />', '<inbound><include-fragment fragment-id="not-reviewed" /></inbound>')]:
+            with self.assertRaises(privacy.GuardError): privacy.validate_global(altered)
+
+    def test_etag_race_blocks_write(self):
+        client = FakeManagement(); original = client.request; reads = {}
+        def changing(scope, method='GET', text=None, etag=None):
+            result = original(scope, method, text, etag)
+            reads[scope] = reads.get(scope, 0) + 1
+            if scope == '/apis/craves-finance-admin-v1/policies/policy' and reads[scope] > 1:
+                return result[0], '"new-version"'
+            return result
+        client.request = changing
+        with self.assertRaises(privacy.GuardError): self.run_fixture(client, True)
+        self.assertEqual(client.writes, [])
 
 
 if __name__ == '__main__': unittest.main()

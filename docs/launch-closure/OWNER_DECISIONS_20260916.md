@@ -2,6 +2,8 @@
 
 ## Confirmed in this task
 
+- The owner explicitly stated that they are the sole approver, have verified the current work and approve proceeding. They separately confirmed removal of GitHub's second-person approval requirement on main while retaining pull requests, exact-version passing tests, up-to-date code, resolved conversations and force-push/deletion protections. This supersedes the earlier engineering interpretation requiring a separate independent reviewer. No alternate account or fabricated approval is used. Approval does not constitute acceptance of untested functions, financial policy, actual delivery, or public launch.
+
 - Referral rewards arise from sales by referred chefs, not merely sign-up.
 - Qualification uses the referred chef's food subtotal. The owner explicitly confirmed that two150-rupee dishes in one order qualify because their food subtotal is300rupees.
 - The owner specified a threshold of250rupees, using the phrase “above250rs”. Exact equality at250 and excluded components must be made explicit in the final policy receipt, not silently changed by engineering.

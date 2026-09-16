@@ -8,6 +8,14 @@ Draft PR360 contains reconciled source and receipts. It must not be merged simpl
 
 ## Saved rule
 
+### Owner-approved amendment, 16 September 2026
+
+After explicitly stating they are the sole approver and have verified the current work, the owner confirmed the exact change at execution time. Rule 83269016 was saved and reopened: Require approvals is now OFF. Require a pull request remains ON. The GitHub Actions exact-SHA aggregate, up-to-date branch requirement, resolved conversations, no administrator bypass, and disallowed force pushes/deletions remain unchanged. Stale-review dismissal remains configured for any voluntary reviews. No reviewer account was invited and no self-approval was fabricated. The account-switch request is no longer a blocker.
+
+The earlier one-review setting below describes the original checkpoint and negative test, not the current approval requirement. User approval is recorded in OWNER_DECISIONS_20260916.md. Current-source regression run 35102174013 (PR) and 35102170446 (push) both succeeded on 0ff3ea1e7d902e3a137e17624137529521da8087. Later source changes still require fresh checks.
+
+### Original checkpoint (superseded only for required approval count)
+
 The saved rule targets only `main` (one matching branch). It requires a pull request, one approving review, dismissal of stale approvals after new commits, resolved review conversations, and an up-to-date branch. The required check is `Exact-SHA complete regression evidence`, accepting updates only from GitHub Actions. Administrator bypass is disabled. Force pushes and deletions are not allowed. Existing Azure environment approvals were not changed. No emergency bypass user or role was created.
 
 Settings evidence: https://github.com/rmorampudi09-arch/Craves-Build-platform/settings/branch_protection_rules/83269016 . The settings page confirmed creation and the reopened form showed all of the above controls persisted. This is stronger evidence than a locally correct workflow, but the negative merge test below is still required.
@@ -26,4 +34,4 @@ Run 35100342845 passed the complete regression on e535e0fa5ec8339eebabb51af0a916
 
 ## Manual action required
 
-Owner sign-in is complete. A genuine eligible reviewer must approve reviewed changes; the agent must not approve its own work through the owner's session or weaken the rule to accelerate release. No PR has been merged by this launch package.
+Owner sign-in and sole-owner approval are complete. Do not request an alternate reviewer account or manufacture an independent review. Maintain the owner-authorized approval process and all remaining test/protection requirements. No PR has been merged by this launch package at this checkpoint.

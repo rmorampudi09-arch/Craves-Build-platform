@@ -24,6 +24,7 @@ parameters:
       - publish-finance-response-privacy
       - inspect-applied-email-history
       - inspect-email-operational-health
+      - inspect-email-correlation
       - inspect-customer-web-shape
       - inspect-auth-protection
       - release-auth-protection
@@ -118,6 +119,19 @@ steps:
             set +x
             command -v psql >/dev/null
             python3 scripts/email/inspect-email-operations.py
+  - ${{ if eq(parameters.action, 'inspect-email-correlation') }}:
+      - script: python3 -m unittest discover -s scripts/email/tests -p 'test_email_correlation.py' -v
+        displayName: Verify private read-only email correlation boundaries
+      - task: AzureCLI@2
+        displayName: Compare canonical email and profile versions without account output or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/email/inspect-email-correlation.py
   - ${{ if eq(parameters.action, 'inspect-applied-email-history') }}:
       - script: python3 -m unittest discover -s scripts/email/tests -p 'test_applied_email_history.py' -v
         displayName: Verify read-only migration inspection boundaries

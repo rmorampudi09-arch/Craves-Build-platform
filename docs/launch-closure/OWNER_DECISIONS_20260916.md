@@ -17,3 +17,9 @@ The plan retains chef-only benefits, three direct rewarded referral branches wit
 ## Before financial activation
 
 Record the final authoritative event that starts reward qualification and the24-hour hold, the first eligible9AM IST posting rule, the calendar/accounting period for the monthly cap, rounding and how cancellation/refund corrections affect remaining cap. A monthly earnings cap is separate from the number of chefs who may participate. Do not seed credits, balances, qualifying orders or declarations to demonstrate readiness. Existing private referral gates remain disabled until the compatible earning-ledger integration and required acceptance tests pass.
+
+## Subsequent explicit confirmations
+
+The owner confirmed a total 4% reward pool, divided into 2%, 1.2% and 0.8% levels, with the INR 1,500 monthly cap applying per receiving chef. The qualifying basis is the referred chef's food subtotal strictly above INR 250. These supersede the old referral branch's INR 800 threshold, 14-day hold and customer bonus/discount defaults; those must not be activated.
+
+The owner then explicitly confirmed that paid-and-delivered orders start the 24-hour hold, with posting at the first 9 AM India-time run after the hold ends. Monthly caps use India calendar months. A reward reversal after a refund restores allowance to the original month. These are confirmed policy requirements, not evidence of implementation, financial ledger posting or payout activation. Existing paise rounding and cap-boundary allocation behavior still need to be made explicit before activation.

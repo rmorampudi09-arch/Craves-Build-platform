@@ -35,7 +35,7 @@ public class OrderLifecycleService {
     }
     public void financeConfirmed(JsonNode body) {
         Json.fields(body,"chefOrderId","version","sourceSnapshotHash","verifiedCapture","capturedCheckoutPaise",
-            "commissionBudgetPaise","cumulativeFoodRefundPaise","observedAt","evidenceRef","currency");
+            "commissionBudgetPaise","cumulativeFoodRefundPaise","observedAt","evidenceRef","currency","paidAt");
         UUID order=Json.uuid(body,"chefOrderId"); Map<String,Object> state=locks.lockOrder(order);
         Map<String,Object> snapshot=locks.snapshot(order), checkout=locks.checkout(uuid(snapshot,"checkout_id"));
         int version=Json.integer(body,"version",1,Integer.MAX_VALUE); String hash=Json.hash(body);
@@ -49,6 +49,10 @@ public class OrderLifecycleService {
             && (instant(state,"finance_observed_at")==null || !observed.isBefore(instant(state,"finance_observed_at"))),422,"INVALID_FINANCE_OBSERVATION");
         require(!captured || capturedAmount==number(checkout,"payable_paise"),409,"CAPTURE_AMOUNT_MISMATCH");
         require(budget<=number(snapshot,"food_paise") && refunded<=number(snapshot,"food_paise"),422,"INVALID_FINANCE_AMOUNTS");
+        Instant paid=body.hasNonNull("paidAt")?Json.instant(body,"paidAt"):instant(state,"verified_paid_at");
+        require(paid==null || (!paid.isBefore(instant(snapshot,"created_at")) && !paid.isAfter(observed)),422,"INVALID_CAPTURE_TIME");
+        require(instant(state,"verified_paid_at")==null || instant(state,"verified_paid_at").equals(paid),409,"CAPTURE_TIME_CONFLICT");
+        if(captured && paid!=null) db.update("UPDATE referral_schema.order_state SET verified_paid_at=? WHERE order_id=?",time(paid),order);
         db.update("UPDATE referral_schema.order_state SET finance_version=?,finance_hash=?,verified_capture=?,finance_observed_at=?,commission_budget_paise=?,confirmed_refund_paise=? WHERE order_id=?",
             version,hash,captured,time(observed),budget,refunded,order);
         long exposure=db.count("SELECT COALESCE(sum(r.amount_paise-COALESCE((SELECT sum(v.amount_paise) FROM referral_schema.reversal v WHERE v.reward_id=r.id),0)),0) FROM referral_schema.reward r WHERE r.order_id=? AND r.track='UPLINE'",order);

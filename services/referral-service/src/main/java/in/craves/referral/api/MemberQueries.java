@@ -64,6 +64,25 @@ public class MemberQueries {
         result.put("policy",policies.isEmpty()?null:policyValue(policies.getFirst()));
         return result;
     }
+    /** Recorded referral credits are not represented as immediately withdrawable money. */
+    public Map<String,Object> chefEarnings(UUID user) {
+        requireMember(user);
+        long posted=db.count("SELECT coalesce(sum(amount_paise),0) FROM referral_schema.chef_posting WHERE beneficiary_id=? AND amount_paise>0",user);
+        long reversed=-db.count("SELECT coalesce(sum(amount_paise),0) FROM referral_schema.chef_posting WHERE beneficiary_id=? AND amount_paise<0",user);
+        var month=in.craves.referral.core.ChefReferralPolicy.postingMonth(clock.instant());
+        long used=db.count("SELECT coalesce(sum(posted_paise-reversed_paise),0) FROM referral_schema.chef_month WHERE beneficiary_id=? AND month=?",user,java.sql.Date.valueOf(month.atDay(1)));
+        var result=new LinkedHashMap<String,Object>();
+        result.put("currency","INR");result.put("asOf",clock.instant().toString());
+        result.put("creditedPaise",Long.toString(posted));result.put("reversedPaise",Long.toString(reversed));
+        result.put("netRecordedPaise",Long.toString(posted-reversed));result.put("postingMonth",month.toString());
+        result.put("monthlyCapPaise","150000");result.put("monthUsedPaise",Long.toString(used));
+        result.put("monthlyCapReviewCount",db.count("SELECT count(*) FROM referral_schema.chef_reward_review v JOIN referral_schema.chef_reward r ON r.id=v.reward_id WHERE r.beneficiary_id=?",user));
+        result.put("settlementDestination","CHEF_EARNINGS");
+        result.put("withdrawalAvailability","CHECK_VERIFIED_CHEF_EARNINGS_BALANCE");
+        result.put("recentPostings",db.rows("SELECT id,amount_paise,month,posted_at FROM referral_schema.chef_posting WHERE beneficiary_id=? ORDER BY posted_at DESC,id DESC LIMIT 50",user).stream().map(row->
+            Map.of("id",uuid(row,"id").toString(),"amountPaise",Long.toString(number(row,"amount_paise")),"postingMonth",row.get("month").toString(),"postedAt",instant(row,"posted_at").toString())).toList());
+        return result;
+    }
     public Map<String,Object> rewards(UUID user,int limit,String cursor) {
         requireMember(user); require(limit>=1 && limit<=100,422,"INVALID_PAGE_SIZE"); PageCursor page=PageCursor.parse(cursor);
         List<Map<String,Object>> rows;

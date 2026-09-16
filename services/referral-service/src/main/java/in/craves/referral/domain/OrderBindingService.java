@@ -40,8 +40,11 @@ public class OrderBindingService {
         }
         Map<String,Object> policy=program.policyAt(created);
         Map<String,Object> sellingMember=db.one("SELECT * FROM referral_schema.member WHERE user_id=?",seller);
-        Map<String,Object> buyingMember=db.one("SELECT * FROM referral_schema.member WHERE user_id=?",buyer);
-        require(!instant(sellingMember,"registered_at").isAfter(created) && !instant(buyingMember,"registered_at").isAfter(created),422,"ORDER_PRECEDES_ACCOUNT");
+        require(!instant(sellingMember,"registered_at").isAfter(created),422,"ORDER_PRECEDES_ACCOUNT");
+        if(!in.craves.referral.core.ChefReferralPolicy.VERSION.equals(policy.get("program_kind"))) {
+            Map<String,Object> buyingMember=db.one("SELECT * FROM referral_schema.member WHERE user_id=?",buyer);
+            require(!instant(buyingMember,"registered_at").isAfter(created),422,"ORDER_PRECEDES_ACCOUNT");
+        }
         db.update("INSERT INTO referral_schema.checkout(checkout_id,buyer_id,food_paise,payable_paise,chef_order_count,policy_id,created_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(checkout_id) DO NOTHING",
             checkout,buyer,checkoutFood,payable,count,number(policy,"id"),time(created));
         Map<String,Object> frozen=locks.lockCheckout(checkout);

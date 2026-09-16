@@ -32,6 +32,7 @@ public class MemberController {
     }
     private static UUID user(Authentication auth) { return UUID.fromString(auth.getName()); }
     @GetMapping public Object overview(Authentication auth) { return queries.overview(user(auth)); }
+    @GetMapping("/chef-earnings") public Object chefEarnings(Authentication auth) { return queries.chefEarnings(user(auth)); }
     @GetMapping("/code") public Object code(Authentication auth) { return program.code(user(auth)); }
     @GetMapping("/code/qr") public ResponseEntity<String> qr(Authentication auth) throws Exception {
         String link=program.code(user(auth)).get("link").toString();

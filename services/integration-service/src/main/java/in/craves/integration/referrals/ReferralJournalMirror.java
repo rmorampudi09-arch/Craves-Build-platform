@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 public class ReferralJournalMirror {
     private final JdbcTemplate db;private final LedgerPostingService ledger;
     public ReferralJournalMirror(JdbcTemplate db,LedgerPostingService ledger){this.db=db;this.ledger=ledger;}
+    public void applyChef(UUID event,JsonNode body){new ChefReferralEarningsMirror(db,ledger).apply(event,body);}
     public void apply(UUID event,JsonNode body){
         var lines=lines(body);
         if(!body.path("journalId").isIntegralNumber() || !body.path("journalId").canConvertToLong())throw new IllegalArgumentException("Exact referral journal identity required");

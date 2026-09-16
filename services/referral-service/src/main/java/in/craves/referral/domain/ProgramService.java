@@ -40,7 +40,10 @@ public class ProgramService {
     }
     public long createPolicy(UUID actor, JsonNode body) {
         settings.requireEnabled();
-        Json.fields(body,"expectedLatestRevision","l1Bps","l2Bps","l3Bps","capBps","holdDays","minimumPaise","customerBonusPaise","inviteeDiscountPaise","approvals");
+        Json.fields(body,"expectedLatestRevision","l1Bps","l2Bps","l3Bps","capBps","holdDays","minimumPaise","customerBonusPaise","inviteeDiscountPaise","approvals","programKind");
+        String kind=Json.optionalText(body,"programKind",32);
+        final String programKind=kind==null?"LEGACY":kind;
+        require(programKind.equals("LEGACY") || programKind.equals(in.craves.referral.core.ChefReferralPolicy.VERSION),422,"INVALID_PROGRAM_KIND");
         RewardPolicy policy=new RewardPolicy(Json.integer(body,"l1Bps",0,400),Json.integer(body,"l2Bps",0,400),Json.integer(body,"l3Bps",0,400),
             Json.integer(body,"capBps",1,400),Json.integer(body,"holdDays",1,365),Json.money(body,"minimumPaise"),Json.money(body,"customerBonusPaise"),Json.money(body,"inviteeDiscountPaise"));
         long expected=Json.money(body,"expectedLatestRevision");
@@ -49,8 +52,8 @@ public class ProgramService {
         return db.tx(() -> {
             db.jdbc.execute("SELECT pg_advisory_xact_lock(194726851,1)");
             require(db.count("SELECT max(id) FROM referral_schema.policy")==expected,409,"POLICY_REVISION_CONFLICT");
-            long id=db.count("INSERT INTO referral_schema.policy(l1_bps,l2_bps,l3_bps,cap_bps,hold_days,minimum_paise,customer_bonus_paise,invitee_discount_paise,approvals,created_by) VALUES (?,?,?,?,?,?,?,?,?::jsonb,?) RETURNING id",
-                policy.l1Bps(),policy.l2Bps(),policy.l3Bps(),policy.capBps(),policy.holdDays(),policy.minimumPaise(),policy.customerBonusPaise(),policy.inviteeDiscountPaise(),Json.write(approvals),actor);
+            long id=db.count("INSERT INTO referral_schema.policy(l1_bps,l2_bps,l3_bps,cap_bps,hold_days,minimum_paise,customer_bonus_paise,invitee_discount_paise,approvals,created_by,program_kind) VALUES (?,?,?,?,?,?,?,?,?::jsonb,?,?) RETURNING id",
+                policy.l1Bps(),policy.l2Bps(),policy.l3Bps(),policy.capBps(),policy.holdDays(),policy.minimumPaise(),policy.customerBonusPaise(),policy.inviteeDiscountPaise(),Json.write(approvals),actor,programKind);
             db.audit(actor.toString(),"POLICY_DRAFT_CREATED",Long.toString(id),Map.of("expectedRevision",Long.toString(expected)));
             return id;
         });
@@ -132,6 +135,24 @@ public class ProgramService {
     public boolean held(UUID user) {
         return db.count("SELECT count(*) FROM referral_schema.member WHERE user_id=? AND is_active",user)!=1
             || db.count("SELECT count(*) FROM referral_schema.fraud_case WHERE user_id=? AND status IN ('OPEN','CONFIRMED')",user)>0;
+    }
+    /** Auth owns the approved CHEF role and account status; user-supplied roles are never accepted. */
+    public void chefStatus(JsonNode body) {
+        Json.fields(body,"userId","version","eligible","observedAt");
+        UUID user=Json.uuid(body,"userId"); int version=Json.integer(body,"version",1,Integer.MAX_VALUE);
+        boolean eligible=Json.bool(body,"eligible"); Instant observed=Json.instant(body,"observedAt");
+        require(!observed.isAfter(clock.instant().plusSeconds(60)),422,"FUTURE_CHEF_OBSERVATION");
+        db.tx(()->{
+            db.one("SELECT user_id FROM referral_schema.member WHERE user_id=? FOR UPDATE",user);
+            var old=db.rows("SELECT * FROM referral_schema.chef_membership WHERE user_id=?",user);
+            if(!old.isEmpty() && version<=number(old.getFirst(),"version")) {
+                require(version<number(old.getFirst(),"version") || Json.hash(body).equals(old.getFirst().get("source_hash")),409,"CHEF_VERSION_CONFLICT");
+                return null;
+            }
+            require(old.isEmpty() || !observed.isBefore(instant(old.getFirst(),"observed_at")),409,"CHEF_OBSERVATION_REGRESSION");
+            db.update("INSERT INTO referral_schema.chef_membership(user_id,version,eligible,observed_at,source_hash) VALUES (?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET version=EXCLUDED.version,eligible=EXCLUDED.eligible,observed_at=EXCLUDED.observed_at,source_hash=EXCLUDED.source_hash",user,version,eligible,time(observed),Json.hash(body));
+            return null;
+        });
     }
     public boolean fraud(UUID user,String key,String reason,String evidence) {
         db.update("INSERT INTO referral_schema.fraud_case(id,case_key,user_id,reason_code,evidence_ref) VALUES (?,?,?,?,?) ON CONFLICT(case_key) DO NOTHING",UUID.randomUUID(),key,user,reason,evidence);

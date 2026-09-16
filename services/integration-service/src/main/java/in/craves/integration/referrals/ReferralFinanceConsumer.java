@@ -61,6 +61,7 @@ public class ReferralFinanceConsumer {
             switch(type){
                 case "referral.order.bound" -> bind(body);
                 case "referral.journal.appended" -> mirror.apply(event[0],body);
+                case "referral.chef.earning" -> mirror.applyChef(event[0],body);
                 case "referral.finance.refresh.requested" -> db.update("UPDATE payment_schema.referral_finance_binding SET next_observation_at=now() WHERE checkout_id=?",UUID.fromString(body.path("checkoutId").asText()));
                 case "referral.payout.requested" -> payout(event[0],body);
                 case "referral.reward.pending","referral.reward.credited","referral.reward.reversed","referral.funding.review" -> { /* Durable operator/notification facts; accounting uses journal events only. */ }

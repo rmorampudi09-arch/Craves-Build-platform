@@ -17,6 +17,7 @@ public class SourceEventRouter {
     private static final Map<String,Route> ROUTES=Map.ofEntries(
         Map.entry("account.registered",new Route("auth","userId")),
         Map.entry("account.status",new Route("auth","userId")),
+        Map.entry("account.chef_status",new Route("auth","userId")),
         Map.entry("order.bound",new Route("order","chefOrderId")),
         Map.entry("order.delivered",new Route("order","chefOrderId")),
         Map.entry("order.refunded",new Route("order","chefOrderId")),
@@ -43,6 +44,7 @@ public class SourceEventRouter {
         switch(type) {
             case "account.registered" -> program.register(payload);
             case "account.status" -> program.status(payload);
+            case "account.chef_status" -> program.chefStatus(payload);
             case "order.bound" -> binding.bind(payload);
             case "order.delivered" -> lifecycle.delivered(payload);
             case "order.refunded" -> lifecycle.refunded(payload);

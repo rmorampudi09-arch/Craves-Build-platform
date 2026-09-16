@@ -46,6 +46,8 @@ public class ReferralFinanceObservation {
         var payload=json.createObjectNode().put("chefOrderId",order.toString()).put("version",version).put("sourceSnapshotHash",binding.get("source_hash").toString())
             .put("verifiedCapture",verified).put("capturedCheckoutPaise",Long.toString(captured)).put("commissionBudgetPaise",Long.toString(budget))
             .put("cumulativeFoodRefundPaise",Long.toString(refunded)).put("observedAt",at.toString()).put("evidenceRef","finance-source/"+order+"/"+version).put("currency","INR");
+        // Conservatively use the immutable finance capture receipt, never an untrusted client time.
+        if(captures.size()==1 && verified) payload.put("paidAt",((java.sql.Timestamp)captures.getFirst().get("recorded_at")).toInstant().toString());
         outbox.enqueue("finance/"+order+"/"+version,"order.finance_confirmed",order,at,payload);
         db.update("UPDATE payment_schema.referral_finance_binding SET source_version=?,next_observation_at=now()+(?*interval '1 second') WHERE chef_order_id=?",version,verified && earned?86400:60,order);
         return true;

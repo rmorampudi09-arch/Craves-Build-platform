@@ -38,6 +38,7 @@ management:
 referral:
   enabled: ${CRAVES_REFERRALS_ENABLED:false}
   workers-enabled: ${CRAVES_REFERRALS_WORKERS_ENABLED:false}
+  chef-earnings-enabled: ${CRAVES_REFERRALS_CHEF_EARNINGS_ENABLED:false}
   awards-enabled: ${CRAVES_REFERRALS_AWARDS_ENABLED:false}
   settlement-enabled: ${CRAVES_REFERRALS_SETTLEMENT_ENABLED:false}
   withdrawals-enabled: ${CRAVES_REFERRALS_WITHDRAWALS_ENABLED:false}

@@ -27,6 +27,7 @@ public class AwardService {
         return db.tx(() -> {
             Map<String,Object> state=locks.lockOrder(order), snapshot=locks.snapshot(order);
             Map<String,Object> checkout=locks.checkout(uuid(snapshot,"checkout_id"));
+            if(in.craves.referral.core.ChefReferralPolicy.VERSION.equals(program.policyById(number(checkout,"policy_id")).get("program_kind"))) return false;
             if(bool(state,"awarded")) return false;
             if(instant(state,"delivered_at")==null || !bool(state,"verified_capture")
                 || number(state,"confirmed_refund_paise")!=number(state,"refunded_food_paise")) return false;

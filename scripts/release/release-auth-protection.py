@@ -160,6 +160,61 @@ def smoke(send=probe, clock=time.time, sleep=time.sleep):
     return rows
 
 
+def wait_for_activation(before, image, read=snapshot, sleep=time.sleep):
+    """ARM's no-wait update can briefly return the exact old desired template."""
+    old_template = runtime.normalized_template(before[0]['properties']['template'])
+    expected_hash = fingerprint(before[0])
+    saw_candidate = False
+    for attempt in range(60):
+        current = read()
+        require(fingerprint(current[0]) == expected_hash, 'Unrelated Auth runtime drift after activation')
+        template = runtime.normalized_template(current[0]['properties']['template'])
+        still_old = template == old_template and not saw_candidate
+        if still_old and current[0]['properties']['template']['containers'][0]['image'] == image:
+            try:
+                explicit_settings(current[0])
+                still_old = False  # An idempotent release may already be on the exact candidate.
+            except ValueError:
+                pass
+        if not still_old:
+            # Only the exact old template or the complete requested candidate may appear.
+            explicit_settings(current[0])
+            require(current[0]['properties']['template']['containers'][0]['image'] == image,
+                    'Another Auth image selected')
+            saw_candidate = True
+            try:
+                ready(current)
+                return current
+            except ValueError:
+                pass
+        if attempt < 59: sleep(5)
+    raise ValueError('Auth did not converge to the protected ready candidate within the bounded wait')
+
+
+def verify_active(image, expected_hash):
+    """Acceptance only: no application update, rebuild, provider credentials or rollback."""
+    valid_image(image)
+    require(isinstance(expected_hash, str) and re.fullmatch('[a-f0-9]{64}', expected_hash),
+            'Original unrelated-settings fingerprint required')
+    require(az('account', 'show').get('id') == SUB, 'Unexpected subscription')
+    current = snapshot()
+    revision = ready(current)
+    require(fingerprint(current[0]) == expected_hash, 'Unrelated Auth settings differ from original release')
+    explicit_settings(current[0])
+    require(current[0]['properties']['template']['containers'][0]['image'] == image, 'Another Auth image selected')
+    rows = smoke()
+    current = snapshot()
+    require(ready(current) == revision and fingerprint(current[0]) == expected_hash, 'Auth drifted during probes')
+    explicit_settings(current[0])
+    require(current[0]['properties']['template']['containers'][0]['image'] == image, 'Auth image changed during probes')
+    receipt = {'phase': 'protected', 'observedAt': datetime.now(timezone.utc).isoformat(),
+               'app': APP, 'revision': revision, 'image': image, 'settings': SETTINGS,
+               'unrelatedSettingsPreserved': True, 'syntheticRequests': len(rows), 'probes': rows,
+               'realSignInAccepted': False, 'gatewayPolicyChanged': False}
+    print(json.dumps(receipt, sort_keys=True))
+    return receipt
+
+
 def activate(image):
     valid_image(image)
     require(az('account', 'show').get('id') == SUB, 'Unexpected subscription')
@@ -170,33 +225,22 @@ def activate(image):
     print(json.dumps({'phase': 'activating', 'app': APP, 'previousRevision': ready(before),
                       'image': image, 'settings': SETTINGS, 'unrelatedSettingsHash': fingerprint(before[0])}), flush=True)
     az(*update_args(image))
-    for attempt in range(60):
-        current = snapshot()
-        require(fingerprint(current[0]) == fingerprint(before[0]), 'Unrelated Auth runtime drift after activation')
-        explicit_settings(current[0])
-        require(current[0]['properties']['template']['containers'][0]['image'] == image, 'Another Auth image selected')
-        try:
-            revision = ready(current)
-            break
-        except ValueError:
-            if attempt == 59: raise
-            time.sleep(5)
-    rows = smoke()
-    current = snapshot()
-    require(ready(current) == revision and fingerprint(current[0]) == fingerprint(before[0]), 'Auth drifted during probes')
-    explicit_settings(current[0])
-    print(json.dumps({'phase': 'protected', 'observedAt': datetime.now(timezone.utc).isoformat(),
-                      'app': APP, 'revision': revision, 'image': image, 'settings': SETTINGS,
-                      'unrelatedSettingsPreserved': True, 'syntheticRequests': len(rows), 'probes': rows,
-                      'realSignInAccepted': False, 'gatewayPolicyChanged': False}, sort_keys=True))
+    wait_for_activation(before, image)
+    verify_active(image, fingerprint(before[0]))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--image', required=True)
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--expected-unrelated-hash')
     args = parser.parse_args()
     try:
-        activate(args.image)
+        if args.verify_only:
+            verify_active(args.image, args.expected_unrelated_hash)
+        else:
+            require(args.expected_unrelated_hash is None, 'Fingerprint argument requires verification-only mode')
+            activate(args.image)
     except Exception as error:
         # Fail closed: never auto-disable protection to turn a failed acceptance green.
         raise SystemExit('Auth activation stopped; inspect current revision before recovery. ' +

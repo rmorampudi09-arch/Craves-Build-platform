@@ -27,6 +27,7 @@ parameters:
       - inspect-customer-web-shape
       - inspect-auth-protection
       - release-auth-protection
+      - verify-auth-protection
   - name: expectedAuthReleaseSha
     displayName: Exact tested main SHA for Auth protection activation
     type: string
@@ -37,6 +38,14 @@ parameters:
     default: NOT_AUTHORIZED
   - name: expectedFinancePrivacySource
     displayName: Exact checked source SHA for finance header publication (unused for inspection)
+    type: string
+    default: NOT_AUTHORIZED
+  - name: authVerificationImage
+    displayName: Existing immutable Auth image for verification only
+    type: string
+    default: NOT_AUTHORIZED
+  - name: authVerificationFingerprint
+    displayName: Original unrelated-settings hash for Auth verification only
     type: string
     default: NOT_AUTHORIZED
 pool:
@@ -50,6 +59,22 @@ steps:
         parameters:
           sourceSha: ${{ parameters.expectedAuthReleaseSha }}
           regressionRunId: ${{ parameters.authRegressionRunId }}
+  - ${{ if eq(parameters.action, 'verify-auth-protection') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_auth_activation.py' -v
+        displayName: Verify Auth convergence and no-update recovery guards
+      - task: AzureCLI@2
+        displayName: Verify existing Auth protection without another deployment
+        env:
+          AUTH_VERIFY_IMAGE: ${{ parameters.authVerificationImage }}
+          AUTH_VERIFY_FINGERPRINT: ${{ parameters.authVerificationFingerprint }}
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/release-auth-protection.py --verify-only --image "$AUTH_VERIFY_IMAGE" --expected-unrelated-hash "$AUTH_VERIFY_FINGERPRINT"
   - ${{ if eq(parameters.action, 'inspect-auth-protection') }}:
       - script: python3 -m unittest discover -s scripts/release/tests -p 'test_auth_protection_inventory.py' -v
         displayName: Verify read-only Auth protection metadata boundaries

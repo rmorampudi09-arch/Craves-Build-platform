@@ -21,6 +21,12 @@ Write mode refuses unknown policy bytes, inherited-policy drift, missing ETags, 
 
 ## Test and execution boundary
 
+### Live correction receipt
+
+Read-only39089 passed all resource/collection comparisons on b9f9ee0de0d8d76126a7974c0db3607008851884. Publication39091 conditionally wrote both API-level policies, re-read matching proposed structure and recorded actual SHA256 `0228e53486bfffef88a53b3a29b95a53c7b76e20d80fa15f36a309816dd872ae` for both. The original run remains FAILED: its immediate check saw the old chef-route header, while all three admin routes passed. No second write was attempted.
+
+Independent 14:28:34 UTC checks found all four anonymous denials using private/no-store/max-age=0 and Pragma:no-cache. All four synthetic-invalid-token denials also used no-store/no-cache; manual-settlements used no-store without the additional private/max-age directives. This is delayed live-header verification, not a relabelled successful pipeline run. No app image, database, transaction or global policy was changed. F14 remains open for authorized success/wrong-role/validation/upstream-error and unaffected-static-cache evidence. Older notes below describe their respective earlier checkpoints.
+
 ### Continued after sole-owner approval
 
 Read-only Azure run39086 succeeded on source7d3a695fd9ebb236055866466bf177af4b40a770. It observed the resource-level global hash `be15daa26fce12414c353e55c31dba2e43177dc754ad57b3312ea43d6c6a287c` (990 bytes, inbound/backend/outbound with no on-error) and both finance resource hashes `f34e6e2623f818053b7afebf7afc379736c0f1293df62b1b84f0a2ed97a0322e` (695 bytes, all four sections, exact ETags available). Each finance policy has one early response and outbound-only no-store. All four anonymous probes still failed privacy acceptance. No writes occurred.

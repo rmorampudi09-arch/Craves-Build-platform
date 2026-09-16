@@ -1,0 +1,75 @@
+name: Launch P0 exact-source regression
+on:
+  push:
+    branches: [fix/device-acceptance-cart-20260916]
+    paths:
+      - services/subscription-service/**
+      - scripts/release/**
+      - .github/workflows/launch-p0-ci.yml
+  pull_request:
+    paths:
+      - services/subscription-service/**
+      - scripts/release/**
+      - .github/workflows/launch-p0-ci.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    name: P0 subscription migration and evidence integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      EXPECTED_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
+      SUBSCRIPTION_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/subscription_schema_test
+      SUBSCRIPTION_TEST_DB_USER: postgres
+      SUBSCRIPTION_TEST_DB_PASSWORD: postgres
+      DOCUMENT_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/pdf_module_test
+      DOCUMENT_TEST_DB_USER: postgres
+      DOCUMENT_TEST_DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/subscription-service/pom.xml
+      - name: Disposable databases and negative gate tests
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          createdb subscription_schema_test
+          createdb pdf_module_test
+          python3 -m unittest discover -s scripts/release/tests -p 'test_launch_*.py'
+      - name: Full subscription verification and exact-source no-skip evidence
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -f services/subscription-service/pom.xml clean verify
+          python3 scripts/release/require-launch-p0-evidence.py --expected-sha "$EXPECTED_RELEASE_SHA" --output target/launch-p0/evidence.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: launch-p0-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            target/launch-p0/
+            services/subscription-service/target/surefire-reports/
+            services/subscription-service/target/subscription-schema/
+          if-no-files-found: error

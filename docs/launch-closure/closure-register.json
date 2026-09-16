@@ -9,7 +9,7 @@
       "title": "Reconcile serving releases",
       "package": "P0",
       "status": "Verifying",
-      "evidence": [],
+      "evidence": ["2026-09-16-progress.md", "Azure pipeline122/run39076: read-only metadata; policy/migration/lease evidence outstanding"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -18,8 +18,8 @@
       "id": "F02",
       "title": "Fix subscription migration regression",
       "package": "P0",
-      "status": "Verifying",
-      "evidence": [],
+      "status": "CI passed",
+      "evidence": ["evidence/regression-baseline-35094977579.json", "Subscription62 and complete backend1199 passed; combined web gate still RED"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -29,7 +29,7 @@
       "title": "Enforce release governance",
       "package": "P0",
       "status": "Verifying",
-      "evidence": [],
+      "evidence": ["2026-09-16-progress.md", "Exact-SHA CI added; main protection and reviewed deployment wrappers still OPEN"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -38,8 +38,8 @@
       "id": "F04",
       "title": "Complete web email verification",
       "package": "P1",
-      "status": "Not started",
-      "evidence": [],
+      "status": "Fixing",
+      "evidence": ["2026-09-16-progress.md", "Compatible web extraction:615 local tests, typecheck, lint and production build passed; not deployed"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false

@@ -12,12 +12,29 @@ parameters:
       - release-cart
       - inspect-cart-policy
       - publish-cart-routes
+      - inspect-customer-fixes
+      - publish-review-routes
 pool:
   vmImage: ubuntu-latest
 steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
+  - ${{ if or(eq(parameters.action, 'inspect-customer-fixes'), eq(parameters.action, 'publish-review-routes')) }}:
+      - task: AzureCLI@2
+        displayName: Inspect customer routes and optionally repair review writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            if [ '${{ parameters.action }}' = 'publish-review-routes' ]; then
+              python3 scripts/apim/customer-five-fixes.py --apply-reviews
+            else
+              python3 scripts/apim/customer-five-fixes.py
+            fi
   - ${{ if eq(parameters.action, 'inspect') }}:
       - task: AzureCLI@2
         displayName: Read cart dependencies and live revision, without secrets or writes

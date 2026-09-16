@@ -38,10 +38,12 @@ APPENDIX = [
     'apps/customer-web-next/src/components/chef-application-document-panel.tsx',
     'apps/customer-web-next/src/components/chef-application-evidence-uploader.tsx',
     'apps/customer-web-next/src/lib/chef-document-states.vitest.ts',
+    'apps/customer-web-next/src/components/chef-application-session-boundary.tsx',
+    'apps/customer-web-next/src/lib/chef-application-session.vitest.ts',
 ]
 DOCS = ['2026-09-17-checkpoint.md', 'README.md', '2026-09-16-progress.md',
         'OWNER_DECISIONS_20260916.md', 'REPOSITORY_PROTECTION.md',
-        'FINANCE_RESPONSE_PRIVACY.md', 'CHEF_DOCUMENT_STATES.md']
+        'FINANCE_RESPONSE_PRIVACY.md', 'CHEF_DOCUMENT_STATES.md', 'CHEF_APPLICATION_SESSION.md']
 
 
 def git(*args):
@@ -86,7 +88,7 @@ def build_pdf(target, sha, manifest):
              Paragraph('Source: ' + sha, body),
              Paragraph('This report distinguishes working source, test evidence, live settings and unresolved acceptance. It is not a declaration that the app is ready for public launch.', body),
              Paragraph('The owner confirmed a monthly referral-reward cap of INR 1,500 per chef. Qualification uses the referred chef food subtotal; two INR 150 dishes qualify at INR 300. This does not authorize infrastructure spending or change ordinary food-sale earnings.', body),
-             Paragraph('Live Auth protection passed bounded verification in Azure39122, followed by owner-confirmed normal sign-in and Profile access. The owner also confirmed receipt and completion of email verification; Azure39125 observed matching email records without writes. Chef document-state fixes are live in web39124, but browser acceptance exposed an initial-session recovery defect under correction. Referral calculations pass tests; earnings integration is unfinished and rewards remain disabled. No new APK or real financial transaction was produced by this checkpoint.', body),
+             Paragraph('Live Auth protection passed bounded verification in Azure39122, followed by owner-confirmed normal sign-in and Profile access. The owner confirmed email receipt and verification; Azure39125 observed matching email records without writes. Chef session recovery is live in Azure39132 and passed a direct browser reload without another sign-in. Referral calculations pass tests; earnings integration is unfinished and rewards remain disabled. Genuine uploads and final financial/restore/load journeys remain open. No new APK or real financial transaction was produced by this checkpoint.', body),
              Paragraph('The ZIP contains complete changed source files at the exact commit above. Selected complete safety-critical files are printed in the appendix. No original private PDFs, credentials or dependency caches are included.', body),
              PageBreak(), Paragraph('How to use this handover', styles['Heading1']),
              Paragraph('Read the operational sections first, then the 46-finding register. CI passed means automated evidence for a particular source commit only; it does not mean deployed, inbox-verified, capacity-tested or accepted by a reviewer.', body),

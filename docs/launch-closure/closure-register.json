@@ -29,7 +29,7 @@
       "title": "Enforce release governance",
       "package": "P0",
       "status": "Verifying",
-      "evidence": ["REPOSITORY_PROTECTION.md", "Main rule83269016 uses explicitly confirmed sole-owner approval, with all other protections preserved; PR361 failed-check block observed; PR362 old-green/new-head merge block observed and recorded in comment5699595967", "CUSTOMER_WEB_RELEASE.md: merged guarded wrapper; live deployment verification pending"],
+      "evidence": ["REPOSITORY_PROTECTION.md", "Main rule83269016 uses explicitly confirmed sole-owner approval, with all other protections preserved; PR361 failed-check block observed; PR362 old-green/new-head merge block observed and recorded in comment5699595967", "CUSTOMER_WEB_RELEASE.md and evidence/web-release-39124.json: guarded exact-source web release succeeded with matching regression, immutable image, preserved runtime and retained rollback; full owner journey remains separate"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -339,7 +339,7 @@
       "title": "Authoritative chef onboarding",
       "package": "P1",
       "status": "In progress",
-      "evidence": ["CHEF_DOCUMENT_STATES.md: merged PR368 adds truthful history, bounded loads, errors/retry and upload cleanup; live rollout and genuine pending-chef document acceptance remain open", "2026-09-17-checkpoint.md"],
+      "evidence": ["CHEF_DOCUMENT_STATES.md and CHEF_APPLICATION_SESSION.md: PR368/PR374 are live; Azure39132 direct browser reload loaded approved details, verified email and truthful document history without new sign-in; genuine pending-chef uploads and bank enrollment acceptance remain open", "2026-09-17-checkpoint.md", "evidence/web-release-39132.json"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false

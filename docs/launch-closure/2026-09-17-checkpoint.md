@@ -40,6 +40,16 @@ The live browser check found a further session timing defect: email recovered an
 
 Files: `apps/customer-web-next/src/components/chef-application-document-panel.tsx`, `chef-application-evidence-uploader.tsx`, `chef-application-workspace.tsx`, and `apps/customer-web-next/src/lib/chef-document-states.vitest.ts`.
 
+Follow-up PR374 (`fix/chef-application-session-20260917`, head `28cdc6f009b816eddb1b816a784b2ffd4eab6181`) gates application sections on existing sign-in recovery before issuing private reads. It permits active CUSTOMER applicants before CHEF approval, resets private children on account/session changes, retains same-owner email edits, exposes a bounded retry/sign-in state, and locks failed/unloaded application forms. Pending forms remain editable when their read succeeds. Files: `apps/customer-web-next/src/components/chef-application-session-boundary.tsx`, application `page.tsx`, `chef-application-workspace.tsx`, `chef-application-session.vitest.ts`, and `signed-in-integration.test.ts`. No backend authorization or financial policy was changed.
+
+Local evidence on the correction: all342 component tests across29 files, all297 Node contract tests, zero skips; typecheck and scoped lint passed. Ten recovery/form tests plus nine document and sixteen profile/session tests passed together. The first concurrent local runner could not start workers; a resource-constrained serial attempt timed out once before an unchanged-code rerun passed. Full CI35139198708 then correctly failed an old source-contract assertion that expected the former lock expression. The assertion was updated to require unloaded/failure protection, backed by a new rendered pending-editability test. That superseded run was cancelled after its failing web result was preserved; queued35139286585 was superseded automatically. Exact-head full regression35139754729 passed all four required jobs, including all seven Java services and full web verification. All 24 observed head checks passed. PR374 merged as `d91b44d7e8b841d7301b52914e41b46f63aaee53`, preserving main's independent landing sign-in PR370 (`a522fa0a`). Exact-main full regression35140839374 then passed; aggregate artifact10465351588 is available. The correction is included in this source overlay. Its guarded live rollout has been requested, but acceptance remains pending; release39124 does not contain it.
+
+### Final live result of the session correction
+
+Azure39132 SUCCEEDED on exact merged source `d91b44d7e8b841d7301b52914e41b46f63aaee53` at `2026-09-16T19:44:59.0425258Z` (17 September, 01:14 IST). Ready revision91 serves100% traffic with immutable image `sha256:6d1212662c63ecabab68e851c88f58478381900c6ff62a5e322b76ceafe1b317`. Both public/direct origins passed private anonymous email denial checks; production payment mode and runtime were preserved. Rollback image `sha256:8d50c5c31f9b3252936be03db97fadea1f2cf94a839073b003e168d38b165f8b` was retained by the guard. See `evidence/web-release-39132.json`.
+
+After deployment, the existing signed-in browser was reloaded directly on `/chef/application`. It displayed the new sign-in-check loading state, then APPROVED with saved details locked, the verified email and the truthful approved-but-incomplete document history together. No new sign-in or manual document retry was needed; the earlier blank form/sign-in error did not recur. Visual inspection confirmed the white/red application surface. This supersedes the earlier rollout-pending note above and closes the reproduced initial-session display defect for this browser journey. It is not proof of genuine new-applicant uploads, bank enrollment, every network/device case or full public-launch readiness. Bank enrollment remains explicitly unavailable; no financial control was activated.
+
 ## Chef referrals: confirmed rules and unfinished integration
 
 Owner-confirmed rules: chef food subtotal strictly above INR 250; total 4% in 2%, 1.2%, 0.8% levels; INR 1,500 monthly cap per receiving chef; India posting calendar month; paid-and-delivered 24-hour hold followed by the first eligible 9 AM India run; reversals restore the original posting month's allowance; nearest-paise rounding with combined excess trimmed; funding from Craves commission without reducing selling-chef earnings.
@@ -55,7 +65,7 @@ The draft referral source is deliberately not part of the merged-main source ove
 ## Manual steps and next acceptance
 
 1. Completed owner acceptance: normal sign-in and Profile work after Auth protection. Preserve this evidence separately from synthetic verification; refresh/revocation and abnormal-network checks remain distinct.
-2. Engineering: initial chef screen release39124 is complete. Finish the observed session-recovery correction with exact-source regression, guarded deployment and live acceptance; retain Firebase bindings, Razorpay production mode, secret references, sizes and rollback image. Genuine upload acceptance remains separate.
+2. Completed engineering acceptance: initial chef screen release39124 and session-recovery release39132 passed their guards; live direct reload recovered without new sign-in. Genuine new-applicant uploads and bank enrollment remain separate. Existing Firebase bindings, Razorpay mode, sizes and secret references were preserved.
 3. Owner: resolve monthly-cap overflow. Engineering then connects referral policy to authoritative events and chef earnings with concurrency, idempotency, refunds and month-boundary tests before any activation.
 4. Owner/business: provide genuine finance/tax/terms and chef evidence, support and incident ownership, and signing/store inputs where required. Existing financial maker-checker controls have not been removed by the separate GitHub sole-owner approval.
 5. Restore/load: no paid test budget exists. Do not provision chargeable resources or perform disruptive production load tests. Document the safe isolated environment, cost ceiling, expiry and cleanup before an authorized rehearsal.
@@ -73,6 +83,9 @@ The existing Azure inspection pipeline122 offers `inspect-auth-protection` and `
 - Auth bounded verification: https://dev.azure.com/ravitejamorampudi7777/Craves/_build/results?buildId=39122
 - Auth checker: https://github.com/rmorampudi09-arch/Craves-Build-platform/pull/371
 - Chef screens: https://github.com/rmorampudi09-arch/Craves-Build-platform/pull/368
+- Chef session correction: https://github.com/rmorampudi09-arch/Craves-Build-platform/pull/374
+- Verified live chef-session release: https://dev.azure.com/ravitejamorampudi7777/Craves/_build/results?buildId=39132
+- Read-only canonical email comparison: https://dev.azure.com/ravitejamorampudi7777/Craves/_build/results?buildId=39125
 - Referral draft: https://github.com/rmorampudi09-arch/Craves-Build-platform/pull/369
 
 This is a documented decision/outcome record, not a claim to contain an unavailable full verbatim history of every earlier task.

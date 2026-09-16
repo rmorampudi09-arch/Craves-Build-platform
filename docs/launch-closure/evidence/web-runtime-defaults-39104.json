@@ -1,0 +1,14 @@
+{
+  "runId": 39104,
+  "result": "succeeded",
+  "source": "eebba9925273352c2f08ed2833739b6721397843",
+  "observedAt": "2026-09-16T16:04:29.0280145Z",
+  "app": "ca-craves-web-prodlow",
+  "revision": "ca-craves-web-prodlow--0000086",
+  "readOnly": true,
+  "literalSettingsIncluded": false,
+  "documentedDefaultsEquivalent": true,
+  "accepted": false,
+  "differencePaths": ["$.containers[0].probes", "$.containers[0].resources.ephemeralStorage", "$.scale.cooldownPeriod", "$.scale.pollingInterval"],
+  "receipt": "https://dev.azure.com/ravitejamorampudi7777/ac93a324-7998-45b3-9ab4-e0b590996fcb/_apis/build/builds/39104/logs/7"
+}

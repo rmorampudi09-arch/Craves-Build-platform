@@ -253,6 +253,7 @@ export function ChefApplicationWorkspace() {
       const nextApplication = body as unknown as ChefApplication;
       setApplication(nextApplication);
       setForm(fromApplication(nextApplication));
+      window.dispatchEvent(new Event("craves:chef-application-updated"));
       setMessage(
         updating
           ? "Pending application updated. Craves admin review remains authoritative."

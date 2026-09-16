@@ -145,7 +145,8 @@ def probe():
 
 def run(client, apply=False):
     global_xml, _ = client.request('/policies/policy')
-    if sha(global_xml) != EXPECTED_GLOBAL_SHA: raise GuardError('Inherited global policy drifted')
+    global_matches = sha(global_xml) == EXPECTED_GLOBAL_SHA
+    if apply and not global_matches: raise GuardError('Inherited global policy drifted')
     global_info = inspect(global_xml)
     if apply and (global_info['returnResponses'] or global_info['hasFragments'] or global_info['hasCaching']):
         raise GuardError('Inherited early return, fragment or caching needs separate review')
@@ -153,13 +154,15 @@ def run(client, apply=False):
     for aid in API_IDS:
         scope = '/apis/' + aid + '/policies/policy'
         before, etag = client.request(scope)
-        if sha(before) != EXPECTED_POLICY_SHA: raise GuardError('Finance owner policy drifted')
+        if apply and sha(before) != EXPECTED_POLICY_SHA: raise GuardError('Finance owner policy drifted')
         if apply and (not etag or etag == '*'): raise GuardError('Policy ETag missing; no write authorized')
         planned.append((scope, before, etag, patch_policy(before)))
     evidence = {'readOnly': not apply, 'accepted': False, 'observedAt': datetime.now(timezone.utc).isoformat(),
-                'global': global_info, 'policies': [], 'beforeAnonymous': probe()}
+                'global': global_info, 'globalBaselineMatches': global_matches,
+                'policies': [], 'beforeAnonymous': probe()}
     for scope, before, etag, after in planned:
         record = {'scope': scope, 'before': inspect(before), 'proposed': inspect(after), 'applied': False,
+                  'baselineMatches': sha(before) == EXPECTED_POLICY_SHA,
                   'exactEtagAvailable': bool(etag and etag != '*')}
         if apply:
             # Re-read all shared inheritance immediately before each conditional write.

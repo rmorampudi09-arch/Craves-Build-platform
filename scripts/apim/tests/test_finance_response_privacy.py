@@ -93,6 +93,20 @@ class FinancePrivacyTest(unittest.TestCase):
             with self.assertRaises(privacy.GuardError): self.run_fixture(client, True)
             self.assertEqual(client.writes, [])
 
+    def test_readonly_drift_exports_hash_and_structure_without_authorizing_writes(self):
+        client = FakeManagement()
+        client.policies['/policies/policy'] += ' '
+        client.policies['/apis/craves-chef-finance-v1/policies/policy'] += ' '
+        result = self.run_fixture(client)
+        self.assertFalse(result['globalBaselineMatches'])
+        self.assertEqual([row['baselineMatches'] for row in result['policies']], [True, False])
+        self.assertFalse(result['accepted'])
+        self.assertEqual(client.writes, [])
+        for sensitive in ['UNCHANGED', 'original.example', 'condition=']:
+            self.assertNotIn(sensitive, json.dumps(result))
+        with self.assertRaises(privacy.GuardError): self.run_fixture(client, True)
+        self.assertEqual(client.writes, [])
+
     def test_missing_etag_blocks_apply_but_allows_inspection(self):
         client = FakeManagement(); client.etag = None
         result = self.run_fixture(client)

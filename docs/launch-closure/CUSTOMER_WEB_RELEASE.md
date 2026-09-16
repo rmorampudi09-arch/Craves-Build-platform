@@ -28,6 +28,16 @@ Azure39096 ran on merged mainb0cc44f574eb4fff7a31682fd8baaa14f57b2700 with succe
 5. Record the pipeline receipt, immutable new/previous images, revision health, unchanged settings and both direct/public smoke results.
 6. Complete the legitimate chef email-verification flow with an owner-controlled mailbox. Test invalid/expired/reused/replaced-email and cross-account cases using dedicated test identities, not actual customer account mutations.
 
+### Second guarded attempt: configuration comparison safe stop
+
+PR363 merged as `da34ac40ce644b84826cdf29c37d2cdd1a3baad6`; full main regression35115644866 passed. Azure39100 passed the clean-source guard but stopped during initial runtime capture, before publishing or selecting an image: desired and revision templates represented defaults differently. No rollback was needed because there was no deployment.
+
+Read-only Azure39102, source `54800c5f9acfd5b082f7a59a758b98200128695e`, inspected serving revision `ca-craves-web-prodlow--0000086`. It found exactly four representation differences: omitted versus empty probes; desired ephemeralStorage versus omitted revision metadata; desired cooldown300 versus null; desired polling30 versus null. Literal environment settings were not exported. This receipt alone does not prove the storage string is the expected value.
+
+The follow-up uses a separate running-template comparison, leaving the desired-configuration fingerprint unchanged. It resolves absent/null timers to documented300/30, absent/null probes to an empty list, and absent temporary-storage metadata to the documented CPU-derived value ONLY for one container without init containers. Explicit non-default storage, timer changes, resource changes, nonempty probes and unknown fields continue to fail. The live release must still pass this comparison; no blanket field deletion is allowed. Ten runtime tests and four audit tests pass locally, including rejection fixtures and unchanged desired-fingerprint behavior. Fresh exact-source full CI and live release acceptance remain required.
+
+Sources: [Azure scaling defaults](https://learn.microsoft.com/en-us/rest/api/resource-manager/containerapps/container-apps/get?view=rest-resource-manager-containerapps-2025-07-01), [CPU-derived ephemeral allocation](https://learn.microsoft.com/en-us/azure/container-apps/storage-mounts), [redacted Azure39102 receipt](https://dev.azure.com/ravitejamorampudi7777/ac93a324-7998-45b3-9ab4-e0b590996fcb/_apis/build/builds/39102/logs/7).
+
 ## Local verification
 
 Python 3 and PyYAML 6.0.2; Bash/Git available on PATH:

@@ -51,6 +51,7 @@ def main():
     running = runtime.normalized_template(active[0]['properties']['template'])
     runtime.require(az('containerapp', 'show', '-g', RG, '-n', APP) == app, 'Configuration changed during read')
     return {'readOnly': True, 'app': APP, 'revision': active[0]['name'], 'differences': differences(desired, running),
+            'documentedDefaultsEquivalent': runtime.comparable_running_template(desired) == runtime.comparable_running_template(running),
             'accepted': False, 'literalSettingsIncluded': False}
 
 

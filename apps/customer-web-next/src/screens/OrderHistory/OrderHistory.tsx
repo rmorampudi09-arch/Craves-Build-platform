@@ -72,9 +72,9 @@ export default function OrdersPage() {
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
         <section className="overflow-hidden rounded-2xl bg-ink p-6 text-white shadow-[var(--shadow-card)] md:p-8">
-          <p className="craves-overline text-[#F5B400]">Order Service</p>
-          <h1 className="mt-2 font-display text-3xl font-bold tracking-[-0.04em] md:text-4xl">Follow every kitchen-specific order.</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70 md:text-base">A single checkout may create separate orders for different kitchens. Each card below shows the backend status and its own delivery tracking.</p>
+          <p className="craves-overline text-white/75">Made for you</p>
+          <h1 className="mt-2 font-display text-3xl font-bold tracking-[-0.04em] md:text-4xl">Your orders, all in one place.</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70 md:text-base">Check your kitchen&apos;s latest update, follow your delivery and find your order documents.</p>
           {lastUpdatedAt && <p className="mt-4 text-xs text-white/55">Last refreshed {lastUpdatedAt.toLocaleTimeString("en-IN")}</p>}
         </section>
         {!loading && orders.length > 0 && <OrderDocumentsPanel orders={orders} />}

@@ -151,7 +151,7 @@ test("every home-chef call to action opens the live chef registration flow", () 
 
 test("pending chef applications remain editable exactly as the backend permits", () => {
   const contents = source("../components/chef-application-workspace.tsx");
-  assert.match(contents, /const locked = application\?\.status === "APPROVED"/);
+  assert.match(contents, /const locked = !application \|\| loadFailed \|\| application.status === "APPROVED"/);
   assert.match(contents, /onSubmit=\{submit\}/);
   assert.match(contents, /Update pending application/);
   assert.doesNotMatch(

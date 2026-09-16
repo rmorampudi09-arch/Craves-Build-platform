@@ -1,0 +1,40 @@
+{
+  "runId": 39106,
+  "pipelineId": 93,
+  "status": "succeeded",
+  "sourceSha": "48d0941b3a8210e7754073b99584d19d48bc5c9a",
+  "fullRegressionRunId": 35120102748,
+  "fullRegressionArtifactId": 10457745125,
+  "verifiedAt": "2026-09-16T16:24:46.5480132Z",
+  "image": "cravesprodlowacr82121.azurecr.io/craves/customer-web-next@sha256:d4f3fa1d2b35847cd26ee01621ea737bfc3d61da42aa6eecd0681275db3b0308",
+  "rollbackImage": "cravesprodlowacr82121.azurecr.io/craves/customer-web-next@sha256:5fa44ccbd3873d41e651d599d8da0878db987e603b4a55b861e081f6d1fcfe2a",
+  "revision": "ca-craves-web-prodlow--0000087",
+  "healthyActiveRevisions": 1,
+  "readyReplicas": 1,
+  "trafficPercent": 100,
+  "desiredNonImageSettingsPreserved": true,
+  "productionPaymentModePreserved": true,
+  "checkedOrigins": ["https://ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io", "https://craves.in"],
+  "emailRoutesPerOrigin": [
+    {"method": "GET", "path": "/api/auth/email-verification", "status": 401, "cacheControl": "private, no-store, max-age=0"},
+    {"method": "POST", "path": "/api/auth/email-verification/challenges", "status": 401, "cacheControl": "private, no-store, max-age=0"},
+    {"method": "POST", "path": "/api/auth/email-verification/verify", "status": 401, "cacheControl": "private, no-store, max-age=0"},
+    {"method": "POST", "path": "/api/auth/email-verification/resend", "status": 401, "cacheControl": "private, no-store, max-age=0"}
+  ],
+  "mailboxAccepted": false,
+  "signedInPostReleaseTrackingAccepted": false,
+  "subsequentFunctionalAcceptance": {
+    "date": "2026-09-16",
+    "ownerConfirmedInboxReceiptAndSuccessfulCodeVerification": true,
+    "freshSignedInProfileShowedVerifiedEmail": true,
+    "refreshVerificationStatusPreservedVerifiedState": true,
+    "existingOwnedReadyForPickupOrderHeadlineAndTimelineCorrect": true,
+    "customerFacingTrackingCopyAndTotalLabelCorrect": true,
+    "additionalVerificationMessageSentByAgent": false,
+    "scope": "Owner-confirmed inbox journey and browser checks after release; not a new automated send, native-device test, or whole-finding/public-launch acceptance. Earlier false fields describe the anonymous rollout probes only."
+  },
+  "realFinancialTransactionPerformed": false,
+  "newApkBuilt": false,
+  "publicLaunchAccepted": false,
+  "receipt": "https://dev.azure.com/ravitejamorampudi7777/ac93a324-7998-45b3-9ab4-e0b590996fcb/_apis/build/builds/39106/logs/12"
+}

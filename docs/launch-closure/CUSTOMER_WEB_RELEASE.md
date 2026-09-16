@@ -40,6 +40,12 @@ Sources: [Azure scaling defaults](https://learn.microsoft.com/en-us/rest/api/res
 
 ## Local verification
 
+### Successful production rollout39106
+
+At16:24:46UTC (21:54IST), pipeline93/run39106 verified merged main `48d0941b3a8210e7754073b99584d19d48bc5c9a`, backed by complete main regression35120102748 and aggregate artifact10457745125. Serving revision is `ca-craves-web-prodlow--0000087`, one healthy active revision, one ready/started replica and100% traffic. The complete desired non-image runtime fingerprint and production Razorpay mode were preserved. New digest and pre-resolved rollback digest are in `evidence/web-release-39106.json`. No recovery ran.
+
+All four email-verification routes returned401 with private/no-store/max-age0 at BOTH the direct app origin and craves.in; merchant readiness stayed production-eligible. These deliberately anonymous probes did not send email. After a fresh owner sign-in, the updated profile showed a verified email and Refresh verification status retained it. The owner explicitly confirmed receiving and successfully entering a Craves code today. The existing owned Ready For Pickup order now shows matching headline and timeline, appropriate delivery-update text and the Total label. These subsequent browser and owner confirmations are separate from anonymous rollout probes. No additional code was sent; no password, cart, order or payment was changed by the agent. No new APK or full launch readiness is claimed.
+
 Python 3 and PyYAML 6.0.2; Bash/Git available on PATH:
 
 ```text
@@ -54,7 +60,7 @@ During continuation, separate main run35108176803 exposed a resend-countdown UI 
 ## Manual steps / remaining inputs
 
 - Azure: use the existing authenticated portal and pipeline service connection; no new paid resources or permissions.
-- Mailbox: the owner must identify an explicitly controlled address/account for delivery acceptance; existing support addresses are not automatically test-mailbox authorization.
+- Mailbox: the owner authorized the existing profile inbox and confirmed successful receipt/code verification on16 September; fresh browser verified-state checks also passed. No further verification email is needed for this observation.
 - Credentials: retain existing Firebase and Azure bindings; never print or export secret values.
 - No DNS, signing certificate, app-store or APK change in this web-only package.
 

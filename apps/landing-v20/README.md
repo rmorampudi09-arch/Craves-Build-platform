@@ -25,7 +25,7 @@ The uploaded ZIP SHA-256 is `f228311ec018ddfa6958cb0b6c7808b855a56f866331f41d9b0
 | Refund policy | `/refunds-cancellations` |
 | Security | `/security` |
 | Section navigation / About us | Original page sections |
-| Get the App | Availability dialog with `/home` action |
+| Get the App | Availability dialog with `/sign-in?returnTo=%2Fhome` action; `/home` requires sign-in |
 | Social icons | Availability dialog with `/contact` action |
 | Guidelines | Guidance dialog with `/chef/application` action |
 

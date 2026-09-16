@@ -10,6 +10,7 @@ import Footer from './components/Footer/Footer';
 import SplashScreen from './components/SplashScreen/SplashScreen';
 import { usePremiumScroll } from './hooks/usePremiumScroll';
 import './App.css';
+import CustomerAuth from './components/CustomerAuth';
 import LandingNotice from './components/LandingNotice';
 
 function App() {
@@ -101,6 +102,7 @@ function App() {
       </main>
       <Footer />
       <LandingNotice />
+      <CustomerAuth />
 
       {showSplash && (
         <SplashScreen onRevealStart={startLandingReveal} onComplete={finishSplash} />

@@ -23,3 +23,6 @@ dist
 *.njsproj
 *.sln
 *.sw?
+
+# Built from shared authentication source with deployment public Firebase config.
+/public/landing-auth/

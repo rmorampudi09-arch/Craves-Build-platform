@@ -62,7 +62,7 @@ const Navbar = () => {
         </nav>
 
         <div className="navbar__actions">
-          <a className="navbar__auth" href="/sign-in?returnTo=%2Fhome">
+          <a className="navbar__auth" href="#sign-in">
             Sign up / Sign in
           </a>
           <a className="navbar__app" href="#get-app" aria-label="Get the app on App Store and Google Play">

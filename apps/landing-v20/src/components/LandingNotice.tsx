@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import './LandingNotice.css';
 
-type Notice = { title: string; text: string; href: string; action: string };
+type Notice = { title: string; text: string; href?: string; action?: string };
 
 function noticeFor(hash: string, channel?: string): Notice | null {
   if (hash === '#get-app') return {
-    title: 'Craves, wherever you are',
-    text: 'Our App Store and Google Play releases are coming soon. You can discover homemade meals and order on the Craves website today.',
-    href: '/sign-in?returnTo=%2Fhome', action: 'Continue on the web',
+    title: 'The Craves app is coming soon',
+    text: 'Our iOS and Android apps are awaiting App Store and Google Play approval. Download links will appear here once they are available.',
   };
   if (hash === '#social') return {
     title: channel ? `Craves on ${channel}` : 'Stay connected with Craves',
@@ -52,6 +51,6 @@ export default function LandingNotice() {
     <button type="button" className="landing-notice__close" aria-label="Close" onClick={() => dialog.current?.close()}>×</button>
     <h2 id="landing-notice-title">{notice?.title}</h2>
     <p id="landing-notice-description">{notice?.text}</p>
-    <a className="btn btn--primary" href={notice?.href}>{notice?.action}</a>
+    {notice?.href ? <a className="btn btn--primary" href={notice.href}>{notice.action}</a> : <button type="button" className="btn btn--primary" onClick={() => dialog.current?.close()}>Got it</button>}
   </dialog>;
 }

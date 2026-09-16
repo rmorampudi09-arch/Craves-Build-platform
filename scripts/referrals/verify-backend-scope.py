@@ -2,7 +2,7 @@
 """Review gate: only named existing owner files and additive referral backend paths may change."""
 import subprocess
 # Preserve current merged main, including the independent landing/chef-session releases.
-BASE='9f270d27'
+BASE='9f270d27b6c33f299aea7e931f1d015e3dd4d32d'
 MODIFIED={
  'docs/launch-closure/OWNER_DECISIONS_20260916.md',
  'services/order-service/src/main/java/in/craves/order/web/ApiDtos.java',

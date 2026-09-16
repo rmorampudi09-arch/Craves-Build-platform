@@ -42,7 +42,7 @@ public class ReferralFinanceObservation {
         boolean verified=(captures.size()==1 || funding.size()==1) && !unresolved;
         boolean earned=Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.finance_order_binding WHERE chef_order_id=? AND state='DELIVERED' AND earning_journal_id IS NOT NULL)",Boolean.class,order));
         long budget=verified && earned && refunded==0?paise(new BigDecimal(snapshot.path("chefServiceFee").asText())):0;
-        int version=Math.addExact(((Number)binding.get("source_version")).intValue(),1);Instant at=Instant.now();
+        int version=Math.addExact(((Number)binding.get("source_version")).intValue(),1);Instant at=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         var payload=json.createObjectNode().put("chefOrderId",order.toString()).put("version",version).put("sourceSnapshotHash",binding.get("source_hash").toString())
             .put("verifiedCapture",verified).put("capturedCheckoutPaise",Long.toString(captured)).put("commissionBudgetPaise",Long.toString(budget))
             .put("cumulativeFoodRefundPaise",Long.toString(refunded)).put("observedAt",at.toString()).put("evidenceRef","finance-source/"+order+"/"+version).put("currency","INR");

@@ -16,6 +16,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Preformatted
 
 BASE = '39fca66a564d8d9809828d02a3e4ca24540cd043'
+REPORT_DATE = '17 September 2026'
+REPORT_STAMP = '20260917'
 APPENDIX = [
     '.github/workflows/launch-regression-ci.yml',
     'scripts/launch/launch-regression.py',
@@ -31,9 +33,15 @@ APPENDIX = [
     'apps/customer-web-next/src/components/auth/EmailVerificationPanel.tsx',
     'apps/customer-web-next/src/lib/email-verification-bff.ts',
     'apps/customer-web-next/src/lib/email-verification-client.ts',
+    'scripts/release/release-auth-protection.py',
+    'scripts/release/tests/test_auth_activation.py',
+    'apps/customer-web-next/src/components/chef-application-document-panel.tsx',
+    'apps/customer-web-next/src/components/chef-application-evidence-uploader.tsx',
+    'apps/customer-web-next/src/lib/chef-document-states.vitest.ts',
 ]
-DOCS = ['README.md', '2026-09-16-progress.md', 'OWNER_DECISIONS_20260916.md',
-        'REPOSITORY_PROTECTION.md', 'FINANCE_RESPONSE_PRIVACY.md']
+DOCS = ['2026-09-17-checkpoint.md', 'README.md', '2026-09-16-progress.md',
+        'OWNER_DECISIONS_20260916.md', 'REPOSITORY_PROTECTION.md',
+        'FINANCE_RESPONSE_PRIVACY.md', 'CHEF_DOCUMENT_STATES.md']
 
 
 def git(*args):
@@ -58,7 +66,7 @@ def footer(canvas, document):
     canvas.rect(40, 806, 515, 2, fill=1, stroke=0)
     canvas.setFont('Helvetica', 8)
     canvas.setFillColor(colors.HexColor('#555555'))
-    canvas.drawString(40, 817, 'CRAVES | LAUNCH ENGINEERING CHECKPOINT | 16 SEPTEMBER 2026')
+    canvas.drawString(40, 817, 'CRAVES | LAUNCH ENGINEERING CHECKPOINT | ' + REPORT_DATE.upper())
     canvas.drawString(40, 25, 'Implementation evidence - NOT public-launch acceptance')
     canvas.drawRightString(555, 25, str(document.page))
     canvas.restoreState()
@@ -74,18 +82,18 @@ def build_pdf(target, sha, manifest):
     body = styles['BodyCraves']
     story = [Spacer(1, 45), Paragraph('Craves', styles['Title']),
              Paragraph('Public-launch implementation checkpoint', styles['Heading1']),
-             Spacer(1, 16), Paragraph('16 September 2026', body),
+             Spacer(1, 16), Paragraph(REPORT_DATE, body),
              Paragraph('Source: ' + sha, body),
              Paragraph('This report distinguishes working source, test evidence, live settings and unresolved acceptance. It is not a declaration that the app is ready for public launch.', body),
              Paragraph('The owner confirmed a monthly referral-reward cap of INR 1,500 per chef. Qualification uses the referred chef food subtotal; two INR 150 dishes qualify at INR 300. This does not authorize infrastructure spending or change ordinary food-sale earnings.', body),
-             Paragraph('Main branch protection was saved and read back. Serving application images, live customer records and financial transactions were not changed by this launch checkpoint. No new APK was produced for these web and governance changes.', body),
+             Paragraph('Live Auth protection passed bounded verification in Azure39122, followed by owner-confirmed normal sign-in and Profile access. The owner also confirmed receipt and completion of email verification. Chef screen fixes are merged but their live release is pending. Referral calculations pass tests; their earnings integration is unfinished and rewards remain disabled. No new APK or real financial transaction was produced by this checkpoint.', body),
              Paragraph('The ZIP contains complete changed source files at the exact commit above. Selected complete safety-critical files are printed in the appendix. No original private PDFs, credentials or dependency caches are included.', body),
              PageBreak(), Paragraph('How to use this handover', styles['Heading1']),
              Paragraph('Read the operational sections first, then the 46-finding register. CI passed means automated evidence for a particular source commit only; it does not mean deployed, inbox-verified, capacity-tested or accepted by a reviewer.', body),
              Paragraph('The conversation record below consists of documented owner decisions and engineering outcomes visible in this task. It is not represented as a complete verbatim transcript of every earlier task, which is unavailable here.', body),
              Paragraph('The source plan is Craves_Public_Launch_Fixing_Plan_2026-09-16.pdf, 69 pages, SHA-256 CFAAD0C1B125669823DB7B40536D4A38DEE3E715C08AC6BE9926D0F74BA9FF09. It remains unchanged.', body),
-             Paragraph('Before deployment: an eligible independent reviewer must approve the candidate; preserve running migrations, service origins, security controls, payment mode and exact rollback images. Tests must run against disposable databases, never live data.', body),
-             Paragraph('Owner actions still needed include genuine business declarations and policy decisions, controlled mailbox acceptance, support/alert owners and a separate budget for paid restore/load infrastructure. Do not invent these to mark findings complete.', body)]
+             Paragraph('Before deployment: follow the explicitly confirmed sole-owner GitHub approval with protected pull requests and exact-version passing tests. Preserve running migrations, service origins, security controls, payment mode and rollback images. Separate financial approval controls are unchanged. Tests use disposable databases, never live data.', body),
+             Paragraph('Owner actions still needed include the referral monthly-cap overflow decision, business declarations, support/alert owners and a separate budget before paid restore/load infrastructure. The owner has already confirmed post-update sign-in/Profile and real email receipt/verification; retain those observations without repeating the same request.', body)]
     for name in DOCS:
         story.append(PageBreak())
         story.append(Paragraph('Operational record: ' + html.escape(name), styles['PathCraves']))
@@ -149,8 +157,8 @@ def main():
                 'deletedPaths': deleted,
                 'files': [{'path': p, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()} for p, data in blobs.items()]}
     args.output.mkdir(parents=True, exist_ok=True)
-    pdf = args.output / 'Craves-Launch-Checkpoint-20260916.pdf'
-    archive = args.output / 'Craves-Launch-Checkpoint-Source-20260916.zip'
+    pdf = args.output / ('Craves-Launch-Checkpoint-' + REPORT_STAMP + '.pdf')
+    archive = args.output / ('Craves-Launch-Checkpoint-Source-' + REPORT_STAMP + '.zip')
     if pdf.exists() or archive.exists(): raise ValueError('Choose a new output directory; do not overwrite delivered artifacts')
     manifest['handoverPages'] = build_pdf(pdf, sha, manifest)
     with zipfile.ZipFile(archive, 'x', zipfile.ZIP_DEFLATED) as bundle:

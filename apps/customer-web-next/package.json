@@ -5,9 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "scripts": {
-    "predev": "node scripts/extract-brand-logo.mjs && node scripts/extract-landing-reference-assets.mjs && node scripts/restore-landing-media.mjs",
+    "predev": "node scripts/extract-brand-logo.mjs && node scripts/extract-landing-reference-assets.mjs && node scripts/restore-landing-media.mjs && node scripts/build-landing-auth.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/extract-brand-logo.mjs && node scripts/extract-landing-reference-assets.mjs && node scripts/restore-landing-media.mjs",
+    "prebuild": "node scripts/extract-brand-logo.mjs && node scripts/extract-landing-reference-assets.mjs && node scripts/restore-landing-media.mjs && node scripts/build-landing-auth.mjs",
     "build": "next build",
     "standalone:prepare": "node scripts/prepare-standalone.mjs",
     "start": "npm run standalone:prepare && node .next/standalone/server.js",
@@ -95,6 +95,7 @@
     "prettier": "^3.7.3",
     "tailwindcss": "4.3.3",
     "typescript": "^5.9.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "vite": "8.1.3"
   }
 }

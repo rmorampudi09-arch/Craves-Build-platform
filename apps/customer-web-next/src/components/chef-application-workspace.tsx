@@ -102,8 +102,10 @@ export function ChefApplicationWorkspace() {
   const [proofType, setProofType] = useState<ChefDocumentType>("AADHAAR_CARD");
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [emailVerification, setEmailVerification] = useState<EmailVerificationState | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   async function load() {
+    setLoadFailed(false);
     const [applicationResponse, profileResponse, addressesResponse] =
       await Promise.all([
         fetch("/api/chef/application", { cache: "no-store" }),
@@ -141,13 +143,14 @@ export function ChefApplicationWorkspace() {
   }
 
   useEffect(() => {
-    void load().catch((error) =>
+    void load().catch((error) => {
+      setLoadFailed(true);
       setMessage(
         error instanceof Error
           ? error.message
           : "Chef application is temporarily unavailable.",
-      ),
-    );
+      );
+    });
   }, []);
 
   function field<K extends keyof FormState>(name: K, value: FormState[K]) {
@@ -210,7 +213,7 @@ export function ChefApplicationWorkspace() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !application || loadFailed) return;
     if (!chefEmailEligible(emailVerification)) {
       setMessage("Verify your email before submitting your chef application.");
       return;
@@ -253,6 +256,7 @@ export function ChefApplicationWorkspace() {
       const nextApplication = body as unknown as ChefApplication;
       setApplication(nextApplication);
       setForm(fromApplication(nextApplication));
+      window.dispatchEvent(new Event("craves:chef-application-updated"));
       setMessage(
         updating
           ? "Pending application updated. Craves admin review remains authoritative."
@@ -307,7 +311,7 @@ export function ChefApplicationWorkspace() {
     }
   }
 
-  const locked = application?.status === "APPROVED";
+  const locked = !application || loadFailed || application.status === "APPROVED";
   const fields: Array<
     [keyof FormState, string, "text" | "email", boolean]
   > = [
@@ -323,14 +327,14 @@ export function ChefApplicationWorkspace() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 sm:p-8">
+      <section className="rounded-[30px] border border-slate-200 bg-white p-6 text-slate-950 sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">
               Application status
             </p>
             <h2 className="mt-2 text-3xl font-bold">
-              {application?.status?.replaceAll("_", " ") ?? "Loading"}
+              {loadFailed ? "Application unavailable" : application?.status?.replaceAll("_", " ") ?? "Loading"}
             </h2>
           </div>
           {application?.reviewedAt && (
@@ -359,6 +363,10 @@ export function ChefApplicationWorkspace() {
           </Link>
         )}
         <p role="status" className="mt-4 text-sm text-slate-600">{message}</p>
+        {loadFailed && <button type="button" className="mt-4 min-h-12 rounded-full border border-slate-300 px-5 font-semibold" onClick={() => {
+          setMessage("Loading your chef application…");
+          void load().catch(() => { setLoadFailed(true); setMessage("We couldn’t load your application. Please try again."); });
+        }}>Retry application</button>}
       </section>
 
       <EmailVerificationPanel required onStateChange={setEmailVerification} />

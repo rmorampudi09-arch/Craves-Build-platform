@@ -11,7 +11,6 @@ const Hero = () => {
           loop
           playsInline
           preload="auto"
-          poster="/images/hero-poster.jpg"
         >
           <source src="/videos/hero-bg-3.mp4" type="video/mp4" />
         </video>

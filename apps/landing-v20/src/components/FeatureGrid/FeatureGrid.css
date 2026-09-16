@@ -1,0 +1,114 @@
+.features {
+  padding: 110px 0 90px;
+  background: var(--color-white);
+  font-family: var(--font-ui);
+}
+
+.features__kicker {
+  color: var(--color-body-light);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.features__headline {
+  font-family: var(--font-ui);
+  font-size: clamp(2.35rem, 4vw, 3.25rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  margin-bottom: 56px;
+}
+
+.features__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 32px;
+}
+
+.features__card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.features__icon {
+  width: 110px;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 28px;
+  background: #fff8f3;
+  margin-bottom: 24px;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+.features__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.features__card h3 {
+  font-family: var(--font-ui);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  margin-bottom: 10px;
+}
+
+.features__card p {
+  font-family: var(--font-ui);
+  font-size: 0.96rem;
+  line-height: 1.65;
+  color: #5b5f67;
+  margin-bottom: 16px;
+}
+
+.features__card::after {
+  content: '';
+  width: 32px;
+  height: 3px;
+  background: var(--color-red);
+  border-radius: var(--radius-pill);
+}
+
+@media (max-width: 900px) {
+  .features {
+    padding: 80px 0 60px;
+  }
+
+  .features__grid {
+    grid-template-columns: repeat(2, 1fr);
+    row-gap: 44px;
+  }
+}
+
+@media (max-width: 520px) {
+  .features__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .features__icon {
+    width: 92px;
+    height: 92px;
+    border-radius: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .features__card:hover {
+    transform: translateY(-6px);
+  }
+
+  .features__icon {
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
+  }
+
+  .features__card:hover .features__icon {
+    transform: translateY(-3px) scale(1.035);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.09);
+  }
+}

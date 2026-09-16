@@ -1,0 +1,142 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+main {
+  flex: 1;
+}
+
+
+/* --- Scroll reveal system: subtle, fast and performance-friendly --- */
+@media (prefers-reduced-motion: no-preference) {
+  main section:not(.is-visible) {
+    opacity: 0.001;
+  }
+
+  main section.is-visible {
+    opacity: 1;
+    transition: opacity 0.65s ease;
+  }
+
+  .why__copy,
+  .delivered__copy,
+  .chefs__copy {
+    transform: translateY(28px);
+    opacity: 0;
+    transition: transform 0.75s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.75s ease;
+  }
+
+  .why__image,
+  .delivered__image,
+  .chefs__panel {
+    transform: translateY(28px);
+    opacity: 0;
+    transition: transform 0.85s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.85s ease;
+  }
+
+  .why.is-visible .why__copy,
+  .why.is-visible .why__image,
+  .delivered.is-visible .delivered__copy,
+  .delivered.is-visible .delivered__image,
+  .chefs.is-visible .chefs__copy,
+  .chefs.is-visible .chefs__panel {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  .why.is-visible .why__image,
+  .delivered.is-visible .delivered__image {
+    transition-delay: 0.08s;
+  }
+
+  .features__kicker,
+  .features__headline {
+    transform: translateY(24px);
+    opacity: 0;
+    transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.7s ease;
+  }
+
+  .features__card {
+    transform: translateY(30px);
+    opacity: 0;
+    transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.7s ease, box-shadow 0.25s ease;
+  }
+
+  .features.is-visible .features__kicker,
+  .features.is-visible .features__headline,
+  .features.is-visible .features__card {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  .features.is-visible .features__headline {
+    transition-delay: 0.08s;
+  }
+
+  .features.is-visible .features__card:nth-child(1) { transition-delay: 0.12s; }
+  .features.is-visible .features__card:nth-child(2) { transition-delay: 0.20s; }
+  .features.is-visible .features__card:nth-child(3) { transition-delay: 0.28s; }
+  .features.is-visible .features__card:nth-child(4) { transition-delay: 0.36s; }
+}
+
+/* --- Splash-to-landing coordination --- */
+body.splash-active {
+  overflow: hidden;
+}
+
+.app--intro .navbar {
+  opacity: 0;
+  transform: none;
+}
+
+.app--ready .navbar {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.38s 0.06s ease;
+}
+
+/* Native scrolling with measured fixed-navbar clearance. No scroll hijacking. */
+main section:not(.hero),
+footer[id] {
+  scroll-margin-top: var(--anchor-clearance, 104px);
+}
+
+@media (max-width: 900px) {
+  main section:not(.hero),
+  footer[id] {
+    scroll-margin-top: var(--anchor-clearance, 86px);
+  }
+}
+
+/* Keep every content section below the hero inside the same visual shell as
+   the widened navbar. The hero and footer intentionally keep their own sizing. */
+main section:not(.hero) > .container {
+  width: calc(100% - var(--shell-gutter) - var(--shell-gutter));
+  max-width: var(--shell-max-width);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {  .why__shell {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.8s ease, transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  }  .why.is-visible .why__shell {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .chefs__values {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.85s ease, transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .chefs.is-visible .chefs__values {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

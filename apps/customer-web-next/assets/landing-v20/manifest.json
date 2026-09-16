@@ -1,0 +1,56 @@
+{
+  "size": 77733727,
+  "sha256": "04946a4e817b329c347aa67941d8d2e08c34d116f705c2f56ece832e372866e2",
+  "parts": [
+    {
+      "file": "hero-bg-3.mp4.part01",
+      "size": 8388606,
+      "sha256": "c3b63c2b96a37cfbc14d50ca14a8ae9a483a4a2ac9df6e1cf76ee8979498aa84"
+    },
+    {
+      "file": "hero-bg-3.mp4.part02",
+      "size": 8388606,
+      "sha256": "0a235a328e3d2056ed087e1f7d6f7b7aeb546fdb8c9e01a9cb5cb5416b856045"
+    },
+    {
+      "file": "hero-bg-3.mp4.part03",
+      "size": 8388606,
+      "sha256": "23e7db0fd4041b569e4e3d0daa91e065c3417599e9fd582d64eed29cbd38187e"
+    },
+    {
+      "file": "hero-bg-3.mp4.part04",
+      "size": 8388606,
+      "sha256": "f41854211cc67c194318e38d50a57706d03e956dae5bab7ddbb9691eb155c2f3"
+    },
+    {
+      "file": "hero-bg-3.mp4.part05",
+      "size": 8388606,
+      "sha256": "45266e97f6fa9fc9a0564323313f569d0bc93ddd0cdd3370b2fc5c2a413868b7"
+    },
+    {
+      "file": "hero-bg-3.mp4.part06",
+      "size": 8388606,
+      "sha256": "acc485e051ded2772263322d4359af5d8a275edc0c79a7b63789043d609f0424"
+    },
+    {
+      "file": "hero-bg-3.mp4.part07",
+      "size": 8388606,
+      "sha256": "66eebb55d8609557caeb12f0e504024340eb88692fcad27eff7b74a440b67565"
+    },
+    {
+      "file": "hero-bg-3.mp4.part08",
+      "size": 8388606,
+      "sha256": "1363df19bccd82b71aab34ba989a0491b20d16e4203efee100bca77677ff51af"
+    },
+    {
+      "file": "hero-bg-3.mp4.part09",
+      "size": 8388606,
+      "sha256": "6d460e708202b0dccb3db72a5d6b1da3075d64c7860821cbc2bbefa1fa29f63b"
+    },
+    {
+      "file": "hero-bg-3.mp4.part10",
+      "size": 2236273,
+      "sha256": "724ca365595e451a0da28ce42c4856b73a47b5c7853757620b21356409c786ca"
+    }
+  ]
+}

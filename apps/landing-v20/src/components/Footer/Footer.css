@@ -1,0 +1,270 @@
+/* Footer-only refinement; existing content and link destinations are preserved. */
+.footer {
+  font-family: var(--font-ui);
+  position: relative;
+  background: #080808;
+  color: #b8b8bd;
+  padding-top: clamp(40px, 4.2vw, 64px);
+  margin-top: 0;
+  border-top: 1px solid #222224;
+  scroll-margin-top: 112px;
+}
+
+.footer > .container {
+  width: calc(100% - var(--shell-gutter) - var(--shell-gutter));
+  max-width: var(--shell-max-width);
+  padding-inline: 0;
+}
+
+.footer__top {
+  display: grid;
+  grid-template-columns: minmax(205px, 1.2fr) minmax(112px, .7fr) minmax(142px, .85fr) minmax(150px, .85fr) minmax(244px, 1fr);
+  grid-template-areas: "brand craves legal chefs social";
+  gap: clamp(24px, 2.8vw, 44px);
+  align-items: start;
+  padding-bottom: 40px;
+}
+
+.footer__brand { grid-area: brand; }
+.footer__col--craves { grid-area: craves; }
+.footer__col--legal { grid-area: legal; }
+.footer__col--chefs { grid-area: chefs; }
+.footer__social-col { grid-area: social; }
+
+.footer__brand,
+.footer__col { min-width: 0; }
+
+.footer__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.footer__logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 15px;
+  margin-bottom: 18px;
+}
+
+.footer__brand p {
+  font-size: .94rem;
+  line-height: 1.7;
+  color: #b8b8bd;
+  max-width: 262px;
+  text-wrap: pretty;
+}
+
+.footer__col h4 {
+  position: relative;
+  margin: 4px 0 27px;
+  font-family: var(--font-ui);
+  font-size: .76rem;
+  line-height: 1.4;
+  font-weight: 800;
+  letter-spacing: .09em;
+  color: #fff;
+}
+
+.footer__col h4::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -11px;
+  width: 28px;
+  height: 2px;
+  border-radius: 2px;
+  background: #f62e18;
+}
+
+.footer__col ul {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.footer__col li { min-width: 0; }
+
+.footer__col a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: .91rem;
+  line-height: 1.5;
+  color: #b8b8bd;
+  text-underline-offset: 5px;
+  transition: color .18s ease;
+}
+
+.footer__col a:hover { color: #fff; }
+.footer__col li a:hover { text-decoration: underline; }
+
+.footer__col a:focus-visible {
+  color: #fff;
+  outline: 2px solid #ff654f;
+  outline-offset: 5px;
+  border-radius: 3px;
+}
+
+.footer__social-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.footer__social-col h4::after {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.footer__socials {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+.footer__col .footer__social-link {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 50%;
+  background: #fff;
+  color: #080808;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.footer__col .footer__social-link:hover {
+  background: #fff;
+  color: #080808;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(255,255,255,.08);
+}
+
+.footer__col .footer__social-link:focus-visible {
+  outline: 2px solid #ff654f;
+  outline-offset: 5px;
+  border-radius: 50%;
+}
+
+.footer__social-link svg {
+  display: block;
+  width: 21px;
+  height: 21px;
+  flex: 0 0 auto;
+}
+
+.footer__icon-linkedin,
+.footer__icon-youtube,
+.footer__icon-facebook { fill: #080808; stroke: none; }
+
+.footer__icon-instagram {
+  fill: none;
+  stroke: #080808;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.footer__icon-instagram .footer__social-dot { fill: #080808; stroke: none; }
+.footer__social-play { fill: #fff; stroke: none; }
+
+.footer__icon-x {
+  display: block;
+  width: 19px;
+  height: 19px;
+  object-fit: contain;
+}
+
+.footer__sticker {
+  display: block;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 9px rgba(0,0,0,.18));
+}
+
+.footer__sticker--brand {
+  width: 126px;
+  margin: 22px 0 0 4px;
+  transform: rotate(-7deg);
+}
+
+.footer__sticker--social {
+  width: 154px;
+  margin-top: 27px;
+  transform: rotate(-4deg);
+}
+
+.footer__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding-block: 19px 22px;
+  border-top: 1px solid #27272a;
+}
+
+.footer__bottom p {
+  color: #97979e;
+  font-size: .79rem;
+  line-height: 1.6;
+  letter-spacing: .005em;
+}
+
+@media (max-width: 1100px) {
+  .footer__top {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-areas:
+      "brand brand brand social social social"
+      "craves craves legal legal chefs chefs";
+    column-gap: 28px;
+    row-gap: 34px;
+  }
+  .footer__brand p { max-width: 320px; }
+  .footer__sticker--brand { width: 112px; margin-top: 18px; }
+  .footer__social-col { justify-self: end; }
+  .footer__sticker--social { width: 144px; margin-top: 24px; }
+}
+
+@media (max-width: 640px) {
+  .footer { padding-top: 36px; scroll-margin-top: 88px; }
+  .footer__top {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: "brand brand" "craves legal" "chefs chefs" "social social";
+    column-gap: 20px;
+    row-gap: 30px;
+    padding-bottom: 30px;
+  }
+  .footer__brand {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 92px;
+    column-gap: 16px;
+    align-items: center;
+  }
+  .footer__logo { grid-column: 1; margin-bottom: 14px; width: 50px; height: 50px; border-radius: 13px; }
+  .footer__brand p { grid-column: 1; max-width: 270px; font-size: .85rem; }
+  .footer__sticker--brand { grid-column: 2; grid-row: 1 / 3; width: 92px; margin: 0; }
+  .footer__col h4 { font-size: .73rem; margin-top: 0; margin-bottom: 22px; }
+  .footer__col ul { gap: 3px; }
+  .footer__col a { min-height: 38px; font-size: .85rem; }
+  .footer__col--chefs ul { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 20px; }
+  .footer__social-col { justify-self: stretch; border-top: 1px solid #27272a; padding-top: 27px; }
+  .footer__col .footer__social-link { width: 44px; height: 44px; min-height: 44px; flex-basis: 44px; }
+  .footer__sticker--social { width: 132px; margin-top: 24px; }
+  .footer__bottom { padding-block: 17px 20px; }
+  .footer__bottom p { font-size: .74rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer__col a,
+  .footer__col .footer__social-link { transition: none; }
+  .footer__col .footer__social-link:hover { transform: none; }
+}

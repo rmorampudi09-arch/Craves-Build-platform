@@ -12,4 +12,6 @@ Run `python -m unittest discover -s scripts/email/tests -p test_email_operations
 
 ## Manual steps and remaining acceptance
 
+Azure122/run39098 succeeded on2ab3cf8ad815d71d847d66f38e9bfc71331551dd. At15:29:33UTC, Auth had one canonical verified identity and one challenge in the preceding24hours; zero incomplete canonical states, pending/retrying projections, active/expired leases, unavailable/unknown delivery outcomes. User/Chef had one projected identity, one recent receipt and zero mismatches in existing customer profiles or chef applications. Notification had one accepted recent transport receipt and zero failed/unknown receipts. This is healthy aggregate evidence, not proof that the owner's current browser identity is that record or that its email reached the inbox. The exact receipt is `evidence/email-health-39098.json`.
+
 No new secrets, permissions, DNS, resources or store settings. Use the already-authorized Azure service connection; if any scoped read is unavailable, stop and report it rather than grant broader permissions. Owner-controlled sign-in and mailbox entry are still needed for a real verification/profile journey. Retain the receipt and never mark F05/F22 accepted from counts alone.

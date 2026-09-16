@@ -8,6 +8,14 @@ capture=importlib.util.module_from_spec(spec);spec.loader.exec_module(capture)
 
 
 class RuntimeCaptureTest(unittest.TestCase):
+    def test_azure_null_optional_collections(self):
+        fixture={'name':'web','properties':{'configuration':{'secrets':None},
+            'template':{'containers':[{'image':'web','env':None}],'scale':{'rules':None}}}}
+        result=capture.summarize_app(fixture,[])
+        self.assertEqual(result['secretReferenceCount'],0)
+        self.assertEqual(result['containers'][0]['settings'],[])
+        self.assertEqual(result['scale']['rules'],[])
+
     def test_secret_and_literal_values_are_never_exported(self):
         result=capture.containers([{'name':'auth','image':'registry/auth:abc','env':[
             {'name':'TOKEN','value':'CANARY-CREDENTIAL'},

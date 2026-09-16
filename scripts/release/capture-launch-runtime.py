@@ -37,7 +37,7 @@ def containers(items):
     result = []
     for item in items:
         settings = []
-        for env in sorted(item.get('env', []), key=lambda e: e['name']):
+        for env in sorted(item.get('env') or [], key=lambda e: e['name']):
             name = env['name']
             if env.get('secretRef'):
                 settings.append({'name': name, 'kind': 'secretReference'})
@@ -73,7 +73,7 @@ def summarize_app(app, revisions):
                          'rules':[{'name':r.get('name'),'types':sorted(k for k in r if k!='name')} for r in scale.get('rules') or []]},
                'containers': containers(p.get('template', {}).get('containers', [])),
                'activeRevisions': sorted(active, key=lambda r:r['name']),
-               'secretReferenceCount': len(cfg.get('secrets', [])),
+               'secretReferenceCount': len(cfg.get('secrets') or []),
                'workerOwnership': 'NOT_VERIFIED: active revisions are not durable lease evidence',
                'migrationHistory': 'NOT_READ: database/private capability evidence required'}
     summary['sanitizedConfigurationSha256'] = fingerprint(summary)
@@ -129,12 +129,12 @@ def capture():
                                   'restoreRehearsal':'NOT_RUN'} for r in rows]
             elif name == 'alerts':
                 safety[name] = [{'name':r.get('name'),'enabled':r.get('enabled'),'severity':r.get('severity'),
-                                  'actionGroupCount':len(r.get('actions',[]))} for r in rows]
+                                  'actionGroupCount':len(r.get('actions') or [])} for r in rows]
             else:
                 safety[name] = [{'name':r.get('name'),'enabled':r.get('enabled'),
-                                  'emailReceiverCount':len(r.get('emailReceivers',[])),
-                                  'smsReceiverCount':len(r.get('smsReceivers',[])),
-                                  'webhookReceiverCount':len(r.get('webhookReceivers',[])),
+                                  'emailReceiverCount':len(r.get('emailReceivers') or []),
+                                  'smsReceiverCount':len(r.get('smsReceivers') or []),
+                                  'webhookReceiverCount':len(r.get('webhookReceivers') or []),
                                   'humanAcknowledgement':'NOT_TESTED'} for r in rows]
         except (RuntimeError, subprocess.TimeoutExpired):
             safety[name] = {'status':'READ_UNAVAILABLE'}

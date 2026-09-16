@@ -1,0 +1,18 @@
+{
+  "azureRunId": 39094,
+  "sourceSha": "2f64560bc25926308cccaa2246ebfe19a8c9ebaa",
+  "observedAt": "2026-09-16T15:02:05Z",
+  "readOnly": true,
+  "allMatched": true,
+  "totalVersionedSqlMigrations": 35,
+  "canonicalProjectionAccepted": false,
+  "mailboxAccepted": false,
+  "receiptUrl": "https://dev.azure.com/ravitejamorampudi7777/ac93a324-7998-45b3-9ab4-e0b590996fcb/_apis/build/builds/39094/logs/7",
+  "services": [
+    {"service": "auth-service", "revision": "ca-craves-auth-service-prodlow--0000045", "versionedMigrations": 15, "allChecksumsMatched": true, "missingVersions": [], "emailVersion": "15", "emailChecksum": -246237290, "limiterVersion": "16", "limiterChecksum": 1357190339},
+    {"service": "user-chef-service", "revision": "ca-craves-user-chef-service-prod--0000050", "versionedMigrations": 13, "allChecksumsMatched": true, "missingVersions": [], "emailVersion": "12", "emailChecksum": 1627504582},
+    {"service": "notification-service", "revision": "ca-craves-notification-service-p--0000045", "versionedMigrations": 7, "schemaRecords": 1, "allChecksumsMatched": true, "missingVersions": [], "emailVersion": "7", "emailChecksum": 1930506842}
+  ],
+  "servingImageTagSuffix": "customer-email-4ad490bea2a7ae0ca2f00628e63d3b0e202f407c",
+  "limits": "Migration identity/checksum evidence only; no customer rows, OTPs, database writes, repair, flags or financial transactions. Image tag alone is not independently verified pulled-image provenance."
+}

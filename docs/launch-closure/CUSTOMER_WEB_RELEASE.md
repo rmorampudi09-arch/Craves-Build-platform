@@ -17,6 +17,10 @@ The owner has approved proceeding with necessary fixes and live deployment. That
 
 ## Release steps
 
+### First guarded attempt: safe stop before live mutation
+
+Azure39096 ran on merged mainb0cc44f574eb4fff7a31682fd8baaa14f57b2700 with successful full regression35112960978. Its clean install, lint, typecheck, all web tests and production build succeeded. The next step rejected tracked source drift before runtime reads, image publishing or deployment. The pinned Next16.3.5 generator adds the missing `./.next/types/root-params.d.ts` declaration import. The follow-up commits that generated declaration and adds a post-build tracked-source check to the required regression, with a boundary test. The release source guard remains unchanged; no reset, path exclusion or dirty-source bypass is introduced. Run39096 remains failed evidence, not a deployment success.
+
 1. Merge through the existing protected PR route after the candidate's required exact-source regression succeeds.
 2. Wait for the full regression on the exact resulting main SHA. A PR-head green is not interchangeable with the merged commit.
 3. Run existing pipeline 93 on main, `confirmReplaceCurrentCustomerWeb=true`, `targetEnvironment=production`, `expectedReleaseSha=<exact main SHA>`, `imageTag=<same SHA>`, `regressionRunId=<successful main regression run>`.

@@ -22,6 +22,7 @@ parameters:
       - capture-gateway-fingerprints
       - inspect-finance-response-privacy
       - publish-finance-response-privacy
+      - inspect-applied-email-history
   - name: expectedFinancePrivacySource
     displayName: Exact checked source SHA for finance header publication (unused for inspection)
     type: string
@@ -32,6 +33,20 @@ steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
+  - ${{ if eq(parameters.action, 'inspect-applied-email-history') }}:
+      - script: python3 -m unittest discover -s scripts/email/tests -p 'test_applied_email_history.py' -v
+        displayName: Verify read-only migration inspection boundaries
+      - task: AzureCLI@2
+        displayName: Read applied email migration checksums without database writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            command -v psql >/dev/null
+            python3 scripts/email/inspect-applied-email-history.py
   - ${{ if or(eq(parameters.action, 'inspect-finance-response-privacy'), eq(parameters.action, 'publish-finance-response-privacy')) }}:
       - script: python3 -m unittest discover -s scripts/apim/tests -p 'test_finance_response_privacy.py'
         displayName: Verify narrow finance response header guards

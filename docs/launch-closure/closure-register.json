@@ -9,7 +9,7 @@
       "title": "Reconcile serving releases",
       "package": "P0",
       "status": "Verifying",
-      "evidence": ["2026-09-16-progress.md", "Azure pipeline122/run39076: read-only metadata; policy/migration/lease evidence outstanding"],
+      "evidence": ["2026-09-16-progress.md", "Azure pipeline122/run39076: read-only runtime metadata", "APPLIED_EMAIL_HISTORY.md: Azure39094 matched all35 Auth/User-Chef/Notification versioned migrations; other service histories, source/image and worker-lease reconciliation remain open"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -19,7 +19,7 @@
       "title": "Fix subscription migration regression",
       "package": "P0",
       "status": "CI passed",
-      "evidence": ["evidence/regression-baseline-35094977579.json", "evidence/regression-35096170879.json", "Exact SHA24356acc: subscription62, backend1199 and combined web615 GREEN; review gate still outstanding"],
+      "evidence": ["evidence/regression-baseline-35094977579.json", "evidence/regression-35096170879.json", "Owner-approved PR360 merged; exact-main full regression35112960978 passed at b0cc44f574eb4fff7a31682fd8baaa14f57b2700; acceptance remains separate from CI"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -29,7 +29,7 @@
       "title": "Enforce release governance",
       "package": "P0",
       "status": "Verifying",
-      "evidence": ["REPOSITORY_PROTECTION.md", "Main rule 83269016 saved/read back; PR361 required failure and blocked-merge UI observed, then closed unmerged; stale-head and deployment-wrapper evidence OPEN"],
+      "evidence": ["REPOSITORY_PROTECTION.md", "Main rule83269016 uses explicitly confirmed sole-owner approval, with all other protections preserved; PR361 failed-check block observed; PR362 old-green/new-head merge block observed and recorded in comment5699595967", "CUSTOMER_WEB_RELEASE.md: merged guarded wrapper; live deployment verification pending"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -39,7 +39,7 @@
       "title": "Complete web email verification",
       "package": "P1",
       "status": "CI passed",
-      "evidence": ["2026-09-16-progress.md", "evidence/regression-35096170879.json", "615 web tests, typecheck, lint and production build passed at exact SHA24356acc; not deployed or mailbox accepted"],
+      "evidence": ["2026-09-16-progress.md", "evidence/regression-35096170879.json", "CUSTOMER_WEB_RELEASE.md: exact-main web and complete backend regression35112960978 passed; live rollout started; mailbox acceptance still open"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -139,7 +139,7 @@
       "title": "Private-response no-store",
       "package": "P2",
       "status": "Verifying",
-      "evidence": ["FINANCE_RESPONSE_PRIVACY.md", "Four anonymous affected routes reproduced; guarded repair prepared with 31 APIM tests; live policy shape mismatch unresolved, no write performed"],
+      "evidence": ["FINANCE_RESPONSE_PRIVACY.md", "Azure39091 published both scoped cache-only policies and readback matched; immediate post-write probe failed, retained as failed evidence; later anonymous and invalid-token probes verified allfour routes no-store", "Authenticated success/wrong-role/error and unrelated static-cache coverage remain open"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false

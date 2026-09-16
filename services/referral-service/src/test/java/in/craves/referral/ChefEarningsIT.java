@@ -135,4 +135,12 @@ class ChefEarningsIT {
         assertFalse(service.process(order.id()));assertEquals(0,credited(a.id()));
         assertTrue(t.inbox.applyOne());assertFalse(service.process(order.id()));assertEquals(0,credited(a.id()));
     }
+    @Test void pausingNewEarningsStillReconcilesRefundsOfPreviousCredits() {
+        var a=t.member(null);var seller=t.member(a);eligible(a,1,true);eligible(seller,1,true);var order=order(seller,30000);
+        due(order,List.of(a,seller));assertFalse(service.process(order.id(),false));
+        assertEquals(0,t.db.count("SELECT count(*) FROM referral_schema.chef_reward"));
+        assertTrue(service.process(order.id(),true));assertEquals(600,credited(a.id()));
+        t.refund(order,1,30000,true);assertTrue(service.process(order.id(),false));assertEquals(0,credited(a.id()));
+        assertFalse(service.process(order.id(),false));
+    }
 }

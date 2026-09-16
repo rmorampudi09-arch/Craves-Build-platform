@@ -3,6 +3,9 @@ package in.craves.integration.finance.source;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import in.craves.integration.ledger.LedgerPostingService;
 import in.craves.integration.referrals.ChefReferralEarningsMirror;
+import in.craves.integration.referrals.ReferralFinanceConsumer;
+import in.craves.integration.referrals.ReferralJournalMirror;
+import in.craves.integration.referrals.transport.ReferralSourceClient;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -14,12 +17,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 @EnabledIfEnvironmentVariable(named="LEDGER_TEST_JDBC_URL",matches=".+")
 class ChefReferralEarningsDatabaseTest {
     OrderFinancialFinalizationDatabaseTest f; ChefReferralEarningsMirror mirror;
     UUID recipient=UUID.randomUUID();
     @BeforeEach void setup() {
+        assertEquals("true",System.getenv("CRAVES_DISPOSABLE_TEST_DATABASE"));
         f=new OrderFinancialFinalizationDatabaseTest(); f.setup();
         f.payment(f.quote.total(),"PAID",f.customer); f.accept(f.event(f.snapshot,"DELIVERED"));
         mirror=new ChefReferralEarningsMirror(f.jdbc,new LedgerPostingService(f.jdbc,f.json,true));
@@ -33,6 +38,11 @@ class ChefReferralEarningsDatabaseTest {
             .put("postedAt",at.toString()).put("policyVersion","CHEF_COMMISSION_20260916").put("currency","INR");
     }
     void apply(ObjectNode body) {f.tx.executeWithoutResult(s->mirror.apply(UUID.randomUUID(),body));}
+    ReferralFinanceConsumer consumer() {
+        var manager=new org.springframework.jdbc.datasource.DataSourceTransactionManager(f.jdbc.getDataSource());
+        return new ReferralFinanceConsumer(f.jdbc,f.json,mock(ReferralSourceClient.class),manager,
+            new ReferralJournalMirror(f.jdbc,new LedgerPostingService(f.jdbc,f.json,true)));
+    }
     BigDecimal balance(UUID chef) {return f.jdbc.queryForObject("SELECT coalesce(sum(credit_amount-debit_amount),0) FROM payment_schema.ledger_line WHERE account_code='CHEF_PAYABLE' AND chef_identity_id=?",BigDecimal.class,chef);}
     @Test void duplicateCreditIncreasesRecipientEarningsOnceAndSellerKeepsSaleEarnings() {
         var body=credit();BigDecimal sellerBefore=balance(f.chef);apply(body);apply(body);
@@ -88,5 +98,26 @@ class ChefReferralEarningsDatabaseTest {
         var reverse=body.deepCopy().put("postingId",UUID.randomUUID().toString()).put("amountPaise","-738")
             .put("originalPostingId",body.path("postingId").asText()).put("checkoutId",UUID.randomUUID().toString());
         assertThrows(RuntimeException.class,()->apply(reverse));assertEquals(1,f.count("chef_referral_posting"));
+    }
+    @Test void durableConsumerAcknowledgesCreditOnceAcrossRepeatedDeliveries() {
+        var worker=consumer();var body=credit();UUID event=UUID.randomUUID();
+        worker.persist(event,"referral.chef.earning",body);worker.persist(event,"referral.chef.earning",body);
+        assertTrue(worker.applyOne());assertFalse(worker.applyOne());
+        worker.persist(UUID.randomUUID(),"referral.chef.earning",body);assertTrue(worker.applyOne());
+        assertEquals(1,f.count("chef_referral_posting"));
+        assertEquals(2,f.jdbc.queryForObject("SELECT count(*) FROM payment_schema.referral_consumer_inbox WHERE status='APPLIED'",Integer.class));
+        assertEquals(0,new BigDecimal("7.38").compareTo(balance(recipient)));
+    }
+    @Test void durableConsumerRecoversReversalBeforeCreditWithoutLosingEitherFact() {
+        var worker=consumer();var body=credit();UUID reversalEvent=UUID.randomUUID();
+        var reverse=body.deepCopy().put("postingId",UUID.randomUUID().toString()).put("amountPaise","-738")
+            .put("originalPostingId",body.path("postingId").asText());
+        worker.persist(reversalEvent,"referral.chef.earning",reverse);assertTrue(worker.applyOne());
+        assertEquals("RECEIVED",f.jdbc.queryForObject("SELECT status FROM payment_schema.referral_consumer_inbox WHERE event_id=?",String.class,reversalEvent));
+        assertEquals(0,f.count("chef_referral_posting"));
+        worker.persist(UUID.randomUUID(),"referral.chef.earning",body);assertTrue(worker.applyOne());
+        f.jdbc.update("UPDATE payment_schema.referral_consumer_inbox SET next_attempt_at=now() WHERE event_id=?",reversalEvent);
+        assertTrue(worker.applyOne());assertEquals(0,balance(recipient).signum());assertHeld();
+        assertEquals(2,f.jdbc.queryForObject("SELECT count(*) FROM payment_schema.referral_consumer_inbox WHERE status='APPLIED'",Integer.class));
     }
 }

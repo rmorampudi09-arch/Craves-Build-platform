@@ -49,8 +49,14 @@ with zipfile.ZipFile(jar_path) as archive:
     assert 'Main-Class: org.springframework.boot.loader.launch.JarLauncher' in manifest
     assert 'Start-Class: in.craves.referral.ReferralApplication' in manifest
     migrations = sorted((ROOT / 'src/main/resources/db/referral_migration').glob('*.sql'))
-    assert len(migrations) == 9
-    assert any(p.name == 'V8__discount_refund_evidence.sql' for p in migrations)
+    expected_migrations = {
+        'V1__isolated_referral_program.sql', 'V1_1__immutable_ledger_guards.sql',
+        'V2__source_and_transition_guards.sql', 'V3__assessment_evidence_and_outbox_guards.sql',
+        'V4__financial_operation_evidence.sql', 'V5__bounded_worker_schedule.sql',
+        'V6__deferred_reward_reconciliation.sql', 'V7__finance_journal_transport.sql',
+        'V8__discount_refund_evidence.sql', 'V9__chef_commission_earnings.sql',
+    }
+    assert {p.name for p in migrations} == expected_migrations, 'Unexpected referral migration set'
     for migration in migrations:
         assert archive.read('BOOT-INF/classes/db/referral_migration/' + migration.name) == migration.read_bytes()
     assert archive.read(sbom_entry) == bom_bytes, 'Packaged SBOM differs from verified inventory'

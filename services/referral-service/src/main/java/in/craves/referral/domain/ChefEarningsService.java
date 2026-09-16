@@ -25,9 +25,12 @@ public class ChefEarningsService {
         this.db=db; this.program=program; this.locks=locks; this.clock=clock;
     }
     public boolean process(UUID order) {
-        return db.tx(()->processLocked(order));
+        return process(order,true);
     }
-    private boolean processLocked(UUID order) {
+    public boolean process(UUID order,boolean newCreditsAllowed) {
+        return db.tx(()->processLocked(order,newCreditsAllowed));
+    }
+    private boolean processLocked(UUID order,boolean newCreditsAllowed) {
         Map<String,Object> state=locks.lockOrder(order), snapshot=locks.snapshot(order);
         Map<String,Object> checkout=locks.checkout(uuid(snapshot,"checkout_id"));
         Map<String,Object> policy=program.policyById(number(checkout,"policy_id"));
@@ -47,6 +50,7 @@ public class ChefEarningsService {
         if(bool(checkout,"full_refund")) targets=new long[3];
         boolean changed=false;
         for(var reward:rewards) changed=reverseExcess(reward,targets[(int)number(reward,"level")-1],now) || changed;
+        if(!newCreditsAllowed) return changed;
 
         if(!ChefReferralPolicy.qualifies(food) || bool(checkout,"full_refund") || refund>=food) return changed;
         if(!bool(state,"verified_capture") || instant(state,"verified_paid_at")==null || instant(state,"delivered_at")==null

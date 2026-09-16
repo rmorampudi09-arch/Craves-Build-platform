@@ -101,3 +101,14 @@ it("shows failed application reads truthfully and disables editing until retry s
   expect(screen.queryByRole("button", { name: "Retry application" })).toBeNull();
   expect((screen.getByLabelText("First name *") as HTMLInputElement).value).toBe("Fixture");
 });
+
+it("keeps a successfully loaded pending application editable", async () => {
+  fetcher.mockImplementation(input => Promise.resolve(Response.json(String(input) === "/api/chef/application" ? { id: owner.id, status: "PENDING", firstName: "Fixture", documents: [], latitude: null, longitude: null } : [])));
+  render(createElement(ChefApplicationWorkspace));
+  await screen.findByRole("heading", { name: "PENDING" });
+  const firstName = screen.getByLabelText("First name *") as HTMLInputElement;
+  expect(firstName.disabled).toBe(false);
+  fireEvent.change(firstName, { target: { value: "Corrected" } });
+  expect(firstName.value).toBe("Corrected");
+  expect(screen.getByRole("button", { name: "Update pending application" })).toBeTruthy();
+});

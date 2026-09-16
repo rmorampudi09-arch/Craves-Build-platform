@@ -2,6 +2,8 @@
 
 ## Confirmed in this task
 
+- The owner signed in to the customer website and explicitly authorized sending the verification test to the inbox already on that profile. The address is deliberately omitted from this public source/handover. This permission allows the test message, not changing the password, forcing an already verified email back to unverified, or inventing an alternate test identity. Passwords and verification codes are entered directly by the owner, not copied into chat.
+
 - The owner explicitly stated that they are the sole approver, have verified the current work and approve proceeding. They separately confirmed removal of GitHub's second-person approval requirement on main while retaining pull requests, exact-version passing tests, up-to-date code, resolved conversations and force-push/deletion protections. This supersedes the earlier engineering interpretation requiring a separate independent reviewer. No alternate account or fabricated approval is used. Approval does not constitute acceptance of untested functions, financial policy, actual delivery, or public launch.
 
 - Referral rewards arise from sales by referred chefs, not merely sign-up.

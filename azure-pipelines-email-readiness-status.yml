@@ -39,6 +39,8 @@ steps:
   - ${{ if eq(parameters.action, 'inspect-auth-protection') }}:
       - script: python3 -m unittest discover -s scripts/release/tests -p 'test_auth_protection_inventory.py' -v
         displayName: Verify read-only Auth protection metadata boundaries
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_auth_gateway_inventory.py' -v
+        displayName: Verify Auth gateway inspection redaction and inheritance
       - task: AzureCLI@2
         displayName: Read Auth protection settings without activation or customer requests
         inputs:
@@ -49,6 +51,7 @@ steps:
             set -euo pipefail
             set +x
             python3 scripts/release/inspect-auth-protection.py
+            python3 scripts/release/inspect-auth-gateway.py
   - ${{ if eq(parameters.action, 'inspect-customer-web-shape') }}:
       - script: python3 -m unittest discover -s scripts/release/tests -p 'test_web_runtime_shape.py' -v
         displayName: Verify read-only web shape redaction

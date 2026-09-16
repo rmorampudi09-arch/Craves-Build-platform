@@ -59,6 +59,7 @@ jobs:
           python3 -m unittest discover -s scripts/release/tests -p 'test_launch_*.py' -v
           python3 -m unittest discover -s scripts/release/tests -p 'test_gateway_policy_fingerprints.py' -v
           python3 -m unittest discover -s scripts/release/tests -p 'test_auth_protection_inventory.py' -v
+          python3 -m unittest discover -s scripts/release/tests -p 'test_auth_gateway_inventory.py' -v
           python3 -m unittest discover -s scripts/apim/tests -p 'test_*.py' -v
             python3 scripts/release/tests/test-customer-web-runtime.py
             python3 scripts/release/tests/test_web_runtime_shape.py

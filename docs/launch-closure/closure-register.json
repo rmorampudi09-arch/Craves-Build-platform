@@ -49,7 +49,7 @@
       "title": "Verify canonical email authority",
       "package": "P1",
       "status": "Verifying",
-      "evidence": [],
+      "evidence": ["2026-09-17-checkpoint.md: Azure39125 observed two verified canonical rows and two projections, zero missing/orphaned/version/customer/chef mismatches across two stable read-only observations; not a distributed atomic snapshot or replacement/revocation acceptance"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false

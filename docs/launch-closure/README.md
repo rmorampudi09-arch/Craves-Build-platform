@@ -4,7 +4,7 @@ Authority: owner request of16 September2026 to execute the69-page public-launch 
 
 ## Current checkpoint: 17 September 2026
 
-Read `2026-09-17-checkpoint.md` first for the latest evidence. Live Auth protection passed bounded verification in Azure39122; the owner then confirmed normal sign-in and Profile work. The owner also confirmed real email receipt and verification. Chef document-state fixes are merged; their live rollout remains pending. Referral policy calculations and the draft's CI pass, but earnings integration and financial activation are unfinished. Older sections below are a chronological record and do not override this dated checkpoint. The platform is not declared public-launch ready.
+Read `2026-09-17-checkpoint.md` first for the latest evidence. Live Auth protection passed bounded verification in Azure39122; the owner then confirmed normal sign-in and Profile work. The owner also confirmed real email receipt and verification. Azure39125 observed matching canonical email and profile records without writes. Chef document-state fixes are live in web release39124; browser acceptance exposed a further initial-session recovery defect under correction. Referral policy calculations and the draft's CI pass, but earnings integration and financial activation are unfinished. Older sections below are a chronological record and do not override this dated checkpoint. The platform is not declared public-launch ready.
 
 ## Earlier checkpoint: P0 merged; P1 rollout in progress
 

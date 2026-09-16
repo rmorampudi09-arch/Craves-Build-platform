@@ -7,7 +7,7 @@ function noticeFor(hash: string, channel?: string): Notice | null {
   if (hash === '#get-app') return {
     title: 'Craves, wherever you are',
     text: 'Our App Store and Google Play releases are coming soon. You can discover homemade meals and order on the Craves website today.',
-    href: '/home', action: 'Continue on the web',
+    href: '/sign-in?returnTo=%2Fhome', action: 'Continue on the web',
   };
   if (hash === '#social') return {
     title: channel ? `Craves on ${channel}` : 'Stay connected with Craves',

@@ -34,7 +34,7 @@ for suite, minimum in REQUIRED[service].items():
         raise SystemExit('Required suite did not pass without skips: ' + suite)
     result.append({'suite': suite, **counts, 'evidenceFile': str(files[0])})
 summary = {'service': service, 'sourceSha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-    'runId': os.environ.get('GITHUB_RUN_ID'), 'environment': 'disposable GitHub CI; provider transport mocked',
+    'runId': os.environ.get('GITHUB_RUN_ID') or os.environ.get('BUILD_BUILDID'), 'environment': 'disposable CI; provider transport mocked',
     'executedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'status': 'PASS', 'suites': result}
 pathlib.Path('email-test-summary-' + service + '.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
 print(service + ': all required email suites passed without skips')

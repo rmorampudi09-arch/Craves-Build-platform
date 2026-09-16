@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 1,
+  "sourceDocument": "Craves_Public_Launch_Fixing_Plan_2026-09-16.pdf",
+  "totalFindings": 46,
+  "finalOwnerJourney": "NOT_RUN - separate from technical closure",
+  "findings": [
+    {
+      "id": "F01",
+      "title": "Reconcile serving releases",
+      "package": "P0",
+      "status": "Verifying",
+      "evidence": ["2026-09-16-progress.md", "Azure pipeline122/run39076: read-only metadata; policy/migration/lease evidence outstanding"],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F02",
+      "title": "Fix subscription migration regression",
+      "package": "P0",
+      "status": "CI passed",
+      "evidence": ["evidence/regression-baseline-35094977579.json", "evidence/regression-35096170879.json", "Exact SHA24356acc: subscription62, backend1199 and combined web615 GREEN; review gate still outstanding"],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F03",
+      "title": "Enforce release governance",
+      "package": "P0",
+      "status": "Verifying",
+      "evidence": ["REPOSITORY_PROTECTION.md", "Main rule 83269016 saved/read back; PR361 required failure and blocked-merge UI observed, then closed unmerged; stale-head and deployment-wrapper evidence OPEN"],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F04",
+      "title": "Complete web email verification",
+      "package": "P1",
+      "status": "CI passed",
+      "evidence": ["2026-09-16-progress.md", "evidence/regression-35096170879.json", "615 web tests, typecheck, lint and production build passed at exact SHA24356acc; not deployed or mailbox accepted"],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F05",
+      "title": "Verify canonical email authority",
+      "package": "P1",
+      "status": "Verifying",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F06",
+      "title": "Activate bounded Auth protection",
+      "package": "P1",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F07",
+      "title": "Verify identity and revocation",
+      "package": "P1",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F08",
+      "title": "Activate approved finance policy",
+      "package": "P2",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F09",
+      "title": "Collect real chef finance records",
+      "package": "P2",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F10",
+      "title": "Enable authoritative order accounting",
+      "package": "P2",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F11",
+      "title": "Consistent selling eligibility",
+      "package": "P2",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F12",
+      "title": "Safe refund execution",
+      "package": "P3",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F13",
+      "title": "Classify refund exceptions",
+      "package": "P3",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F14",
+      "title": "Private-response no-store",
+      "package": "P2",
+      "status": "Verifying",
+      "evidence": ["FINANCE_RESPONSE_PRIVACY.md", "Four anonymous affected routes reproduced; guarded repair prepared with 31 APIM tests; live policy shape mismatch unresolved, no write performed"],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F15",
+      "title": "Manual chef settlement readiness",
+      "package": "P2",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F16",
+      "title": "Razorpay subscription catch-up",
+      "package": "P5",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F17",
+      "title": "Durable subscription create recovery",
+      "package": "P5",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F18",
+      "title": "Subscription scheduler and lifecycle",
+      "package": "P5",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F19",
+      "title": "Subscription ledger allocation",
+      "package": "P5",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F20",
+      "title": "Required financial documents",
+      "package": "P2",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F21",
+      "title": "Support-led compensation",
+      "package": "P3",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F22",
+      "title": "Email and attachment delivery",
+      "package": "P4",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F23",
+      "title": "Chef/customer alert reliability",
+      "package": "P4",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F24",
+      "title": "Saved meals and availability notifications",
+      "package": "P4",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F25",
+      "title": "Chef referral integration and UI",
+      "package": "P6",
+      "status": "Not started",
+      "evidence": ["OWNER_DECISIONS_20260916.md: INR1500 monthly chef reward cap and food-subtotal qualification confirmed; not financial activation evidence"],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F26",
+      "title": "Chef-only referral policy",
+      "package": "P6",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F27",
+      "title": "Referral governance and funding",
+      "package": "P6",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F28",
+      "title": "Remove eligibility growth ceiling",
+      "package": "P7",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F29",
+      "title": "Measured operating envelope",
+      "package": "P7",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F30",
+      "title": "Safe discovery during outages",
+      "package": "P7",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F31",
+      "title": "Consistent serviceability",
+      "package": "P3",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F32",
+      "title": "Cart and repeat-order safety",
+      "package": "P3",
+      "status": "Verifying",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F33",
+      "title": "Stock and kitchen controls",
+      "package": "P3",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F34",
+      "title": "Authoritative chef onboarding",
+      "package": "P1",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F35",
+      "title": "Chef fulfilment and timeout recovery",
+      "package": "P3",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F36",
+      "title": "Customer payment recovery",
+      "package": "P3",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F37",
+      "title": "Chosen delivery provider/tracking",
+      "package": "P3",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F38",
+      "title": "Staffed support and incident ownership",
+      "package": "P7",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F39",
+      "title": "Admin permissions/session intent",
+      "package": "P1",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F40",
+      "title": "Alerts and asynchronous recovery",
+      "package": "P7",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F41",
+      "title": "Backup and recovery rehearsal",
+      "package": "P7",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F42",
+      "title": "Exact-release security",
+      "package": "P7",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F43",
+      "title": "Browser/device acceptance",
+      "package": "P4",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F44",
+      "title": "Privacy operations",
+      "package": "P7",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F45",
+      "title": "Native distribution",
+      "package": "P8",
+      "status": "Verifying",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    },
+    {
+      "id": "F46",
+      "title": "Academy",
+      "package": "P8",
+      "status": "Not started",
+      "evidence": [],
+      "reviewer": null,
+      "acceptedAt": null,
+      "closureGate": false
+    }
+  ]
+}

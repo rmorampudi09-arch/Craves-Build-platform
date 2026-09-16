@@ -1,0 +1,242 @@
+name: Exact release launch regression
+
+on:
+  push:
+    branches: [main, fix/device-acceptance-cart-20260916]
+    paths:
+      - 'services/**'
+      - 'apps/customer-web-next/**'
+      - 'scripts/launch/**'
+      - 'scripts/release/**'
+      - '.github/workflows/launch-regression-ci.yml'
+  workflow_dispatch:
+    inputs:
+      expectedReleaseSha:
+        description: Exact reviewed 40-character release commit on the selected workflow ref
+        required: true
+        type: string
+  # A required check must exist even for documentation-only PRs. Path-filtered
+  # required workflows can leave checks pending and must not be used as bypasses.
+  pull_request:
+
+permissions:
+  contents: read
+concurrency:
+  group: launch-regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source:
+    name: Pin the reviewed source
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      release_sha: ${{ steps.pin.outputs.release_sha }}
+    env:
+      EXPECTED_RELEASE_SHA: ${{ inputs.expectedReleaseSha || github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify exact checkout and summarize the test manifest
+        id: pin
+        run: |
+          python3 scripts/launch/launch-regression.py source --expected-sha "$EXPECTED_RELEASE_SHA" --output target/launch-source/source.json
+          printf 'release_sha=%s\n' "$EXPECTED_RELEASE_SHA" >> "$GITHUB_OUTPUT"
+      - name: Test failure handling in the evidence summarizer
+        run: python3 -m unittest discover -s scripts/launch -p 'test_*.py' -v
+      - name: Install existing guard-test parser
+        run: python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.2'
+      - name: Verify existing bank, refund, preflight and admin guards
+        run: |
+          python3 -m unittest discover -s scripts/finance -p 'test_*.py' -v
+          python3 -m unittest discover -s scripts/refund -p 'test_*.py' -v
+          python3 scripts/release/tests/test-backend-preflight.py
+          python3 scripts/release/tests/test-backend-image-reuse.py
+          python3 scripts/admin-explorer/test-runtime-readiness.py
+          python3 -m unittest discover -s scripts/release/tests -p 'test_launch_*.py' -v
+          python3 -m unittest discover -s scripts/release/tests -p 'test_gateway_policy_fingerprints.py' -v
+          python3 -m unittest discover -s scripts/apim/tests -p 'test_*.py' -v
+          # The old PR's reviewed-image/web deployment wrappers are not in this
+          # reconciled tree. Their separate release-governance closure is OPEN;
+          # this workflow certifies tests, never permission to deploy or launch.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: launch-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            target/launch-source/
+            scripts/launch/required-suites.json
+          if-no-files-found: error
+          retention-days: 14
+
+  backend:
+    name: Seven complete Java services and connected source
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      # Existing Explorer fixtures deliberately use postgres/postgres only in disposable CI.
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      LEDGER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/chef_ledger_test
+      LEDGER_TEST_DB_USER: postgres
+      LEDGER_TEST_DB_PASSWORD: postgres
+      SUBSCRIPTION_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/subscription_schema_test
+      SUBSCRIPTION_TEST_DB_USER: postgres
+      SUBSCRIPTION_TEST_DB_PASSWORD: postgres
+      DOCUMENT_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/pdf_module_test
+      DOCUMENT_TEST_DB_USER: postgres
+      DOCUMENT_TEST_DB_PASSWORD: postgres
+      ACADEMY_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/craves_academy_ci
+      ACADEMY_TEST_DB_USER: postgres
+      ACADEMY_TEST_DB_PASSWORD: postgres
+      ADMIN_SESSION_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/craves_admin_session_ci
+      ADMIN_SESSION_TEST_DB_USER: postgres
+      ADMIN_SESSION_TEST_DB_PASSWORD: postgres
+      DELIVERY_FEEDBACK_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/delivery_feedback_test
+      DELIVERY_FEEDBACK_TEST_DB_PASSWORD: postgres
+      REFUND_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/craves_refund_test
+      REFUND_TEST_DB_USER: postgres
+      REFUND_TEST_DB_PASSWORD: postgres
+      CRAVES_REFUND_DISPOSABLE_DATABASE: 'true'
+      EMAIL_TEST_DB_URL: jdbc:postgresql://localhost:5432/craves_email_test
+      EMAIL_TEST_DB_USER: postgres
+      EMAIL_TEST_DB_PASSWORD: postgres
+      EMAIL_TEST_DISPOSABLE: 'true'
+      CATALOG_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/catalog_finance_test
+      CATALOG_TEST_DB_PASSWORD: postgres
+      EXPLORER_TEST_DB_URL: jdbc:postgresql://127.0.0.1:5432/craves_explorer_test
+      CRAVES_CATALOG_DISPOSABLE_DATABASE: 'true'
+      REFERRAL_OWNER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/referral_owner_test
+      REFERRAL_TEST_DB_USER: postgres
+      REFERRAL_TEST_DB_PASSWORD: postgres
+      REFERRAL_TEST_CONFIRM: YES_DISPOSABLE_REFERRAL_TEST_ONLY
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: 'services/*/pom.xml'
+      - name: Create isolated databases in this job's PostGIS container
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$CRAVES_DISPOSABLE_TEST_DATABASE" = true
+          for database in subscription_schema_test chef_ledger_test pdf_module_test craves_academy_ci craves_admin_session_ci delivery_feedback_test craves_refund_test craves_email_test catalog_finance_test craves_explorer_test referral_owner_test; do
+            createdb "$database"
+            if [[ "$database" != subscription_schema_test ]]; then
+              psql -X --set=ON_ERROR_STOP=1 --dbname="$database" --command='CREATE EXTENSION IF NOT EXISTS postgis;'
+            fi
+          done
+          mkdir -p target/launch-backend
+          psql -X --set=ON_ERROR_STOP=1 --dbname=chef_ledger_test --tuples-only --command='SELECT version(); SELECT postgis_full_version();' > target/launch-backend/database-version.txt
+      - name: Full clean verify, all conditional DB suites, and signed source round trip
+        env:
+          EXPECTED_RELEASE_SHA: ${{ needs.source.outputs.release_sha }}
+        run: python3 scripts/launch/launch-regression.py backend --expected-sha "$EXPECTED_RELEASE_SHA" --output target/launch-backend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: launch-backend-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            target/launch-backend/
+            services/*/target/surefire-reports/
+            services/*/target/failsafe-reports/
+            services/*/target/document-examples/
+            services/subscription-service/target/subscription-schema/
+            target/finance-roundtrip/report.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  web:
+    name: Clean web install, lint, types, every test and build
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - name: Full web verification with JSON and TAP evidence
+        env:
+          EXPECTED_RELEASE_SHA: ${{ needs.source.outputs.release_sha }}
+        run: python3 scripts/launch/launch-regression.py web --expected-sha "$EXPECTED_RELEASE_SHA" --output target/launch-web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: launch-web-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/launch-web/
+          if-no-files-found: warn
+          retention-days: 14
+
+  acceptance:
+    name: Exact-SHA complete regression evidence
+    needs: [source, backend, web]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reject failed, cancelled, skipped or missing prerequisite jobs
+        env:
+          PREREQUISITES_JSON: ${{ toJSON(needs) }}
+          EXPECTED_RELEASE_SHA: ${{ inputs.expectedReleaseSha || github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          jobs = json.loads(os.environ['PREREQUISITES_JSON'])
+          expected = os.environ['EXPECTED_RELEASE_SHA']
+          assert re.fullmatch(r'[0-9a-f]{40}', expected), 'Expected SHA missing or invalid'
+          assert set(jobs) == {'source', 'backend', 'web'}, 'Missing prerequisite job'
+          assert all(job.get('result') == 'success' for job in jobs.values()), 'A prerequisite did not succeed'
+          assert jobs['source'].get('outputs', {}).get('release_sha') == expected, 'Source evidence is stale or missing'
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: launch-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/launch-evidence
+      - name: Require every component and required suite at the exact reviewed SHA
+        env:
+          EXPECTED_RELEASE_SHA: ${{ needs.source.outputs.release_sha }}
+        run: python3 scripts/launch/launch-regression.py summary --expected-sha "$EXPECTED_RELEASE_SHA" --evidence target/launch-evidence --output target/launch-regression-summary.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: launch-regression-summary-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/launch-regression-summary.json
+          if-no-files-found: error
+          retention-days: 30

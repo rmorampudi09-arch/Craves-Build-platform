@@ -1,0 +1,71 @@
+# Existing audit pipeline, explicit release-cart action only. No automatic trigger.
+steps:
+  - task: JavaToolInstaller@0
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+  - script: |
+      set -euo pipefail
+      python3 scripts/release/verify-device-cart-live-contract.py
+      python3 -m unittest discover -s scripts/apim/tests -p 'test_device_safe_cart_routes.py'
+      docker run -d --name device-cart-test-postgres -e POSTGRES_USER=craves_test -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=chef_ledger_test -p 127.0.0.1:55432:5432 postgres:16
+      for i in {1..30}; do
+        if docker exec device-cart-test-postgres pg_isready -U craves_test -d chef_ledger_test; then break; fi
+        sleep 2
+      done
+      export CRAVES_DISPOSABLE_TEST_DATABASE=true
+      export LEDGER_TEST_JDBC_URL=jdbc:postgresql://localhost:55432/chef_ledger_test
+      export LEDGER_TEST_DB_USER=craves_test
+      export LEDGER_TEST_DB_PASSWORD=''
+      mvn -B -ntp -f services/order-service/pom.xml clean verify
+    displayName: Verify live-contract preservation and disposable database tests
+  - task: AzureCLI@2
+    displayName: Preflight exact live image and cart gateway ownership
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        python3 scripts/apim/device-safe-cart-routes.py --expected-image cravesprodlowacr82121.azurecr.io/craves/order-service:referral-151c36cb2afaaf7b8482ee784704d983f7d87324
+  - task: AzureCLI@2
+    displayName: Build and publish immutable tested Order image
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        IMAGE="cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-$(Build.SourceVersion)"
+        az acr login --name cravesprodlowacr82121 --only-show-errors
+        docker build --pull -t "$IMAGE" services/order-service
+        docker push "$IMAGE"
+  - task: AzureCLI@2
+    displayName: Deploy Order only, preserving runtime and guarded rollback
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        IMAGE="cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-$(Build.SourceVersion)"
+        export EXPECTED_PREVIOUS_IMAGE=cravesprodlowacr82121.azurecr.io/craves/order-service:referral-151c36cb2afaaf7b8482ee784704d983f7d87324
+        export READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10
+        DEPLOY_LOG=$(mktemp)
+        if bash scripts/release/deploy-single-service-preserve-runtime.sh rg-craves-prodlow-centralindia ca-craves-order-service-prodlow "$IMAGE" order >"$DEPLOY_LOG" 2>&1; then
+          echo 'ORDER_DEPLOYMENT_VERIFIED: exact image, runtime hashes, liveness and readiness passed'
+        else
+          echo 'ORDER_DEPLOYMENT_NOT_VERIFIED: inspect revision status; gateway publication stopped. Raw service logs withheld.'
+          exit 1
+        fi
+        python3 scripts/apim/device-safe-cart-routes.py --expected-image "$IMAGE" --apply
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: services/order-service/target/surefire-reports/TEST-*.xml
+      failTaskOnFailedTests: true

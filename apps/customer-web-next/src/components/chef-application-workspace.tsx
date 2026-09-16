@@ -10,6 +10,8 @@ import type {
 } from "@/lib/chef-application-contract";
 import type { CustomerProfile } from "@/lib/profile-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
+import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
+import { chefEmailEligible, type EmailVerificationState } from "@/lib/email-verification-contract";
 
 type FormState = {
   email: string;
@@ -64,7 +66,7 @@ function prefillNewApplication(
   const address = selectActiveDeliveryAddress(addresses);
   return {
     ...form,
-    email: form.email || profile?.email || "",
+    email: "",
     firstName: form.firstName || profile?.firstName || "",
     lastName: form.lastName || profile?.lastName || "",
     addressLine1: form.addressLine1 || address?.addressLine1 || "",
@@ -99,6 +101,7 @@ export function ChefApplicationWorkspace() {
   const [locating, setLocating] = useState(false);
   const [proofType, setProofType] = useState<ChefDocumentType>("AADHAAR_CARD");
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [emailVerification, setEmailVerification] = useState<EmailVerificationState | null>(null);
 
   async function load() {
     const [applicationResponse, profileResponse, addressesResponse] =
@@ -207,6 +210,11 @@ export function ChefApplicationWorkspace() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
+    if (!chefEmailEligible(emailVerification)) {
+      setMessage("Verify your email before submitting your chef application.");
+      return;
+    }
     const updating = application?.status === "PENDING";
     setBusy(true);
     setMessage(
@@ -220,6 +228,7 @@ export function ChefApplicationWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          email: emailVerification?.email,
           addressLine2: form.addressLine2 || null,
           landmark: form.landmark || null,
           postalCode: form.postalCode || null,
@@ -302,7 +311,6 @@ export function ChefApplicationWorkspace() {
   const fields: Array<
     [keyof FormState, string, "text" | "email", boolean]
   > = [
-    ["email", "Email", "email", true],
     ["firstName", "First name", "text", true],
     ["lastName", "Last name", "text", true],
     ["addressLine1", "Flat / House / Building", "text", true],
@@ -353,6 +361,8 @@ export function ChefApplicationWorkspace() {
         <p role="status" className="mt-4 text-sm text-slate-600">{message}</p>
       </section>
 
+      <EmailVerificationPanel required onStateChange={setEmailVerification} />
+
       <form
         onSubmit={submit}
         className="rounded-[30px] bg-white p-6 text-slate-950 sm:p-8"
@@ -388,7 +398,7 @@ export function ChefApplicationWorkspace() {
         </div>
         <button
           type="submit"
-          disabled={locked || busy || locating}
+          disabled={locked || busy || locating || !chefEmailEligible(emailVerification)}
           className="mt-6 rounded-full bg-[#6930CA] px-6 py-3 font-bold text-white disabled:opacity-50"
         >
           {application?.status === "PENDING"

@@ -1,0 +1,2092 @@
+{
+  "boundary": "Automated disposable CI evidence only. Production routing, activation, owner records and any authorized live financial acceptance require separate evidence.",
+  "components": {
+    "backend": {
+      "kind": "backend",
+      "recordedAt": "2026-09-16T12:18:27.686607+00:00",
+      "requiredManifestSha256": "c400f94a1ca746b23d3e91be2c0d9e56c84ce6e4d1f15b7ab910cb10586927fb",
+      "roundtrip": {
+        "command": {
+          "command": [
+            "bash",
+            "scripts/finance/test-source-roundtrip.sh"
+          ],
+          "durationSeconds": 19.195,
+          "exitCode": 0,
+          "log": "source-roundtrip.log",
+          "timedOut": false
+        },
+        "report": {
+          "checkCount": 51,
+          "net": "338.52",
+          "scenarios": {
+            "manual": {
+              "checkCount": 29,
+              "checkoutTotal": "433.47",
+              "checks": [
+                "order-service full migration chain is repeatable",
+                "integration-service full migration chain is repeatable",
+                "Actual checkout returns the bound customer total including component taxes",
+                "Order snapshot committed with checkout",
+                "Integration quote persisted in its independent transaction",
+                "Verified matching capture recognized once",
+                "Captured but undelivered checkout creates no chef payable",
+                "Authoritative delivery transaction emitted its financial outbox event",
+                "Actual saved Order event was accepted and finalized by Integration",
+                "Frozen 7 percent plus fee GST survived later 20 percent policy activation",
+                "Captured customer funds released exactly once",
+                "Manual source accounting did not invent a provider beneficiary",
+                "Manual mode did not queue bank validation",
+                "Chef balance selects the explicitly enabled manual channel",
+                "Delivered posted net is available to the correct chef",
+                "Automatic provider payouts remain disabled in manual mode",
+                "Original delivery-plus-48-hour eligibility timestamp is preserved",
+                "Manual request atomically reserves the available balance",
+                "Provider worker cannot claim a manually authorized transfer",
+                "Real manual settlement service confirms the source-earned payable",
+                "Identical manual bank confirmation replays without another journal",
+                "Manual payment posts the exact BANK credit",
+                "Manual payment retains no fabricated provider or beneficiary identity",
+                "Chef settlement PDF source includes the actual manual channel and recorded bank reference",
+                "Confirmed payout reconciles outstanding to zero",
+                "Capture, earning and payout remain exactly three journals after all replays",
+                "Existing PDF source includes the new earning fee GST and reconciled liability",
+                "Chef statement excludes unrelated customer identity",
+                "Daily manual quota survives processing and successful payment"
+              ],
+              "chefGross": "369.00",
+              "externalBoundaries": "Catalog/address, notifications, Razorpay network and initial capture are controlled fixtures; no bank or production test",
+              "fee": "25.83",
+              "feeGst": "4.65",
+              "net": "338.52",
+              "scope": "actual Order and Integration code, signed in-process transport, disposable PostgreSQL",
+              "status": "PASS"
+            },
+            "provider": {
+              "checkCount": 22,
+              "checkoutTotal": "433.47",
+              "checks": [
+                "order-service full migration chain is repeatable",
+                "integration-service full migration chain is repeatable",
+                "Actual checkout returns the bound customer total including component taxes",
+                "Order snapshot committed with checkout",
+                "Integration quote persisted in its independent transaction",
+                "Verified matching capture recognized once",
+                "Captured but undelivered checkout creates no chef payable",
+                "Authoritative delivery transaction emitted its financial outbox event",
+                "Actual saved Order event was accepted and finalized by Integration",
+                "Frozen 7 percent plus fee GST survived later 20 percent policy activation",
+                "Captured customer funds released exactly once",
+                "Delivered posted net is available to the correct chef",
+                "Automatic 48-hour delay has not matured immediately after delivery",
+                "Original delivery-plus-48-hour eligibility timestamp is preserved",
+                "Manual request atomically reserves the available balance",
+                "Actual payout worker records provider processing, not premature PAID",
+                "Original payout GET confirmation clears the chef liability",
+                "Confirmed payout reconciles outstanding to zero",
+                "Capture, earning and payout remain exactly three journals after all replays",
+                "Existing PDF source includes the new earning fee GST and reconciled liability",
+                "Chef statement excludes unrelated customer identity",
+                "Daily manual quota survives processing and successful payment"
+              ],
+              "chefGross": "369.00",
+              "externalBoundaries": "Catalog/address, notifications, Razorpay network and initial capture are controlled fixtures; no bank or production test",
+              "fee": "25.83",
+              "feeGst": "4.65",
+              "net": "338.52",
+              "scope": "actual Order and Integration code, signed in-process transport, disposable PostgreSQL",
+              "status": "PASS"
+            }
+          },
+          "scope": "Both provider and manual Craves connected source scenarios",
+          "status": "PASS"
+        },
+        "status": "GREEN"
+      },
+      "runAttempt": "1",
+      "runId": "35094977579",
+      "scope": "Disposable PostgreSQL/PostGIS, local HTTP/mock providers; no production credentials or deployment",
+      "services": {
+        "auth-service": {
+          "command": {
+            "command": [
+              "mvn",
+              "-B",
+              "-ntp",
+              "-f",
+              "services/auth-service/pom.xml",
+              "clean",
+              "verify",
+              "-DskipTests=false",
+              "-Dmaven.test.skip=false",
+              "-Djunit.jupiter.execution.parallel.enabled=false"
+            ],
+            "durationSeconds": 48.68,
+            "exitCode": 0,
+            "log": "auth-service.log",
+            "timedOut": false
+          },
+          "counts": {
+            "errors": 0,
+            "failures": 0,
+            "skipped": 0,
+            "tests": 167
+          },
+          "issues": [],
+          "requiredSuites": 28,
+          "service": "auth-service",
+          "status": "GREEN",
+          "suites": {
+            "in.craves.adminexplorer.ExplorerPostgresTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 9
+            },
+            "in.craves.adminexplorer.ExplorerQueryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.adminexplorer.ExplorerRateLimiterPostgresTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.auth.academy.AcademyCoreTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 7
+            },
+            "in.craves.auth.academy.AcademyPersistenceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.auth.admin.AdminAccountInterventionRepositoryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.auth.admin.InternalAdminRolesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.auth.admin.explorer.AdminExplorerControllerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.auth.email.EmailCanonicalPreservationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.auth.email.EmailVerificationControllerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.auth.email.EmailVerificationCryptoTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.auth.email.EmailVerificationPersistenceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 16
+            },
+            "in.craves.auth.email.SignedEmailTransportTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.auth.exception.RestExceptionHandlerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.auth.referrals.ReferralAccessTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.auth.referrals.ReferralAttributionTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.auth.referrals.ReferralEnrollmentDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.auth.referrals.ReferralSourceOutboxDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 7
+            },
+            "in.craves.auth.security.AuthProtectedOperationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.auth.security.AuthProtectedOperationTomcatTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.auth.security.AuthRequestReadConfigurationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.auth.security.AuthRequestReadTomcatTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.auth.security.PostgresAuthAbuseProtectionFilterTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 19
+            },
+            "in.craves.auth.security.PostgresAuthRateLimiterDbTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 12
+            },
+            "in.craves.auth.security.RedisAuthAbuseProtectionFilterTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.auth.service.AdminSessionPersistenceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.auth.service.AdminSessionPolicyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.auth.service.ConsumerSessionRegressionTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            }
+          }
+        },
+        "catalog-service": {
+          "command": {
+            "command": [
+              "mvn",
+              "-B",
+              "-ntp",
+              "-f",
+              "services/catalog-service/pom.xml",
+              "clean",
+              "verify",
+              "-DskipTests=false",
+              "-Dmaven.test.skip=false",
+              "-Djunit.jupiter.execution.parallel.enabled=false"
+            ],
+            "durationSeconds": 13.641,
+            "exitCode": 0,
+            "log": "catalog-service.log",
+            "timedOut": false
+          },
+          "counts": {
+            "errors": 0,
+            "failures": 0,
+            "skipped": 0,
+            "tests": 55
+          },
+          "issues": [],
+          "requiredSuites": 16,
+          "service": "catalog-service",
+          "status": "GREEN",
+          "suites": {
+            "in.craves.catalog.finance.CatalogFinanceEligibilityTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.catalog.finance.CatalogSellingDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.catalog.finance.CatalogSellingGateTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.catalog.security.AdminSessionRevocationWebConfigurationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.catalog.security.InternalCatalogAuthorizerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.catalog.service.DiscoveryCacheServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.catalog.service.FavoriteHomeFeedServiceValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.catalog.service.NearbyDiscoveryServiceCriteriaValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.catalog.service.NearbyDiscoveryServiceValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.catalog.service.PublicMenuBatchResolveServiceValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.catalog.service.SavedMenuItemReadServiceValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.catalog.web.InternalCatalogAccessTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.catalog.web.KitchenScheduleControllerValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.catalog.web.MenuItemRequestValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.catalog.web.NearbyFinanceCacheTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.catalog.web.PublicCatalogControllerPrivacyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            }
+          }
+        },
+        "integration-service": {
+          "command": {
+            "command": [
+              "mvn",
+              "-B",
+              "-ntp",
+              "-f",
+              "services/integration-service/pom.xml",
+              "clean",
+              "verify",
+              "-DskipTests=false",
+              "-Dmaven.test.skip=false",
+              "-Djunit.jupiter.execution.parallel.enabled=false"
+            ],
+            "durationSeconds": 152.005,
+            "exitCode": 0,
+            "log": "integration-service.log",
+            "timedOut": false
+          },
+          "counts": {
+            "errors": 0,
+            "failures": 0,
+            "skipped": 0,
+            "tests": 504
+          },
+          "issues": [],
+          "requiredSuites": 102,
+          "service": "integration-service",
+          "status": "GREEN",
+          "suites": {
+            "in.craves.integration.IntegrationServiceSchedulingTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.admin.deliveryintelligence.AdminDeliveryIntelligenceHistoryControllerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.integration.admin.deliveryintelligence.DeliveryIntelligenceHistoryReadRepositoryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.config.BorzoProductionReadinessTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.config.PaymentApiPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.config.PaymentProviderProductionPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.config.PaymentProviderPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.config.ShiprocketPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.integration.config.SpringComponentBeanNameUniquenessTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.BetaSamplerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.DeliveryIntelligenceNeutralProximityTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.DeliveryOutcomeScorerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.DeliverySchedulingConfigurationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.DeliverySpringWiringTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.delivery.HeuristicDeliverySuccessPredictorTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.delivery.borzo.BorzoApiClientTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.integration.delivery.borzo.BorzoSignatureVerifierTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.delivery.borzo.BorzoSpringWiringTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.borzo.BorzoStatusMapperTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.delivery.borzo.BorzoWebhookNormalizerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.borzo.BorzoWebhookServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.delivery.command.DeliveryCommandCompletionServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.command.DeliveryCommandRepositoryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.command.DeliveryCommandRetryPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.command.DeliveryCommandSchedulerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.delivery.command.DeliveryCommandWorkerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.command.DeliveryCreateReconciliationWorkerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.command.DeliveryProviderRouterTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.integration.delivery.command.DeliveryServiceBusPublisherIsolationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.command.DeliveryStatusControlsTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.delivery.feedback.DeliveryFeedbackConfigurationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.feedback.DeliveryFeedbackDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.integration.delivery.feedback.DeliveryFeedbackScorerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.integration.delivery.feedback.DeliveryFeedbackWorkerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.pidge.PidgeApiClientTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 14
+            },
+            "in.craves.integration.delivery.pidge.PidgeWebhookTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.integration.delivery.production.DeliveryProviderReadinessServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.production.HyperlocalProviderContractReadinessServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.shiprocket.ShiprocketApiClientTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 11
+            },
+            "in.craves.integration.delivery.shiprocket.ShiprocketPickupProvisioningServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.shiprocket.ShiprocketStatusIdSpaceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.shiprocket.ShiprocketStatusMapperTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.shiprocket.ShiprocketTransportTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.integration.delivery.shiprocket.ShiprocketWebhookControllerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.delivery.shiprocket.ShiprocketWebhookNormalizerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.shiprocket.ShiprocketWebhookServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.integration.delivery.status.DeliveryLeaseRecoveryRepositoryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.status.DeliveryStatusMigrationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.status.DeliveryStatusUpdateServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.delivery.status.DeliveryTrackingReconciliationWorkerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.delivery.status.DeliveryWebhookProcessorTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.finance.FinanceArithmeticPropertyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.finance.FinanceCalculationsTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 19
+            },
+            "in.craves.integration.finance.FinancePolicyDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.integration.finance.catalog.CatalogEligibilityControllerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.finance.catalog.CatalogEligibilityDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.finance.catalog.CatalogEligibilityServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.integration.finance.source.ChefTaxProfileBatchTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.finance.source.FinancialSourceCompletionDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.integration.finance.source.FinancialSourceSignatureTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.finance.source.ManualChefSettlementDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 29
+            },
+            "in.craves.integration.finance.source.OrderFinancialFinalizationDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 18
+            },
+            "in.craves.integration.ledger.ChefFeePreviewServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.integration.ledger.ChefFinancialConflictAdviceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.ledger.ChefSettlementHistoryDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 7
+            },
+            "in.craves.integration.ledger.FinancialFullMigrationDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.ledger.FinancialPostingDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 9
+            },
+            "in.craves.integration.ledger.FinancialPostingPrivilegesDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.ledger.LedgerMoneyAndPolicyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 19
+            },
+            "in.craves.integration.payment.CashfreeRequestSafetyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 7
+            },
+            "in.craves.integration.payment.CashfreeWebhookInboxServiceCompatibilityTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.payment.CashfreeWebhookProviderVerifierTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.integration.payment.ScheduledPaymentEligibilityGuardTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.integration.payout.BankAutomationSafetyDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 9
+            },
+            "in.craves.integration.payout.BankOnboardingDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 19
+            },
+            "in.craves.integration.payout.ChefPayoutDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 14
+            },
+            "in.craves.integration.payout.ChefPayoutWebhookDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.integration.payout.FinanceRecoveryDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 10
+            },
+            "in.craves.integration.payout.ManualSettlementMigrationDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.payout.RazorpayXPayoutClientTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 11
+            },
+            "in.craves.integration.payout.bank.BankDataCipherTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.integration.payout.bank.BankOnboardingSecurityTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.integration.payout.bank.RazorpayBankValidationClientTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 14
+            },
+            "in.craves.integration.refund.RazorpayRefundClientTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 21
+            },
+            "in.craves.integration.refund.RefundDispatchDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 16
+            },
+            "in.craves.integration.refund.RefundEventValidatorTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.refund.RefundExecutionWorkerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 13
+            },
+            "in.craves.integration.refund.RefundMigrationDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.refund.RefundProductionApprovalDefaultsTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.refund.RefundProductionReadinessServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.integration.refund.RefundRequestServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.refund.RefundStatusEventFactoryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.refund.RefundWorkflowPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.security.AdminSessionRevocationWebConfigurationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.integration.security.CravesJwtAuthenticationFilterTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.security.InternalAdminRoleAuthorizationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.integration.service.PaymentOwnershipGuardTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.settlement.ChefFinancialServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.subscription.SubscriptionPaymentPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.integration.subscription.SubscriptionPaymentServiceOwnershipTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.integration.web.ChefDocumentSourceDbTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.integration.web.ManualSettlementSecurityTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 7
+            }
+          }
+        },
+        "notification-service": {
+          "command": {
+            "command": [
+              "mvn",
+              "-B",
+              "-ntp",
+              "-f",
+              "services/notification-service/pom.xml",
+              "clean",
+              "verify",
+              "-DskipTests=false",
+              "-Dmaven.test.skip=false",
+              "-Djunit.jupiter.execution.parallel.enabled=false"
+            ],
+            "durationSeconds": 17.858,
+            "exitCode": 0,
+            "log": "notification-service.log",
+            "timedOut": false
+          },
+          "counts": {
+            "errors": 0,
+            "failures": 0,
+            "skipped": 0,
+            "tests": 78
+          },
+          "issues": [],
+          "requiredSuites": 18,
+          "service": "notification-service",
+          "status": "GREEN",
+          "suites": {
+            "in.craves.notification.delivery.AuthRecipientEmailResolverTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.notification.delivery.NotificationDeliveryPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.notification.delivery.NotificationDeliveryRepositoryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.notification.documents.AzureDocumentStorageTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.notification.documents.DocumentBrandTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.notification.documents.DocumentControllerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.notification.documents.DocumentMigrationDbTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.notification.documents.DocumentModelsTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 10
+            },
+            "in.craves.notification.documents.DocumentPdfRendererTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.notification.documents.DocumentRepositoryDbTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 10
+            },
+            "in.craves.notification.email.VerificationEmailReceiptDbTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.notification.email.VerificationEmailSecurityTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 10
+            },
+            "in.craves.notification.email.VerificationEmailTemplateTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.notification.security.AdminSessionRevocationWebConfigurationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.notification.security.InternalAdminRoleAuthorizationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.notification.service.AppNoticeCursorCodecTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.notification.service.NotificationServiceChannelPolicyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.notification.service.NotificationServiceInboxTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            }
+          }
+        },
+        "order-service": {
+          "command": {
+            "command": [
+              "mvn",
+              "-B",
+              "-ntp",
+              "-f",
+              "services/order-service/pom.xml",
+              "clean",
+              "verify",
+              "-DskipTests=false",
+              "-Dmaven.test.skip=false",
+              "-Djunit.jupiter.execution.parallel.enabled=false"
+            ],
+            "durationSeconds": 64.209,
+            "exitCode": 0,
+            "log": "order-service.log",
+            "timedOut": false
+          },
+          "counts": {
+            "errors": 0,
+            "failures": 0,
+            "skipped": 0,
+            "tests": 233
+          },
+          "issues": [],
+          "requiredSuites": 54,
+          "service": "order-service",
+          "status": "GREEN",
+          "suites": {
+            "in.craves.adminexplorer.ExplorerPostgresTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 9
+            },
+            "in.craves.adminexplorer.ExplorerQueryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.adminexplorer.ExplorerRateLimiterPostgresTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.order.admin.AdminDashboardControllerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.order.admin.explorer.AdminExplorerControllerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.order.config.ChefAcceptanceWindowPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.config.DeliveryStatusConsumerPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.config.DomainEventOutboxPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.order.config.NotificationClientPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.order.config.RefundStatusConsumerPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.delivery.DeliveryCommercialOrderStatusProjectionTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.order.delivery.DeliveryStatusCustomerNotificationServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.delivery.DeliveryStatusEventValidatorTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.order.delivery.DeliveryStatusMigrationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.order.delivery.DeliveryStatusTransitionPolicyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.order.delivery.PickupLocationReferenceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.order.event.ChefAcceptedOrderEventFactoryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.event.OrderReadyForPickupEventFactoryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.order.event.RefundRequestedEventFactoryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.order.finance.CheckoutOperationDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 18
+            },
+            "in.craves.order.finance.FinancialCheckoutDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 7
+            },
+            "in.craves.order.finance.ReferralBenefitsOwnerDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 20
+            },
+            "in.craves.order.finance.ReferralCheckoutIntegrationDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 12
+            },
+            "in.craves.order.launchpolicy.LaunchPolicyCheckoutAspectTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.referrals.ReferralSourceOutboxDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 7
+            },
+            "in.craves.order.refund.RefundRequestConstraintMigrationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.order.refund.RefundStatusCustomerNotificationServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.refund.RefundStatusEventValidatorTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.order.refund.RefundStatusTransitionPolicyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.order.review.ReviewCursorCodecTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.order.review.ReviewMigrationContractTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.order.review.ReviewValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 7
+            },
+            "in.craves.order.schedule.ScheduleValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.order.schedule.ScheduledOrderCursorCodecTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.schedule.ScheduledOrderMigrationContractTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.order.security.AdminSessionRevocationWebConfigurationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.order.security.InternalAdminRoleAuthorizationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.order.service.CartConcurrencyDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 12
+            },
+            "in.craves.order.service.CartLimitsTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.service.CartPreflightServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.service.CartSafetyPolicyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.order.service.CatalogClientInternalAccessTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.order.service.CheckoutOperationFingerprintTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.service.CheckoutOperationServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.order.service.CheckoutSnapshotFactoryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.order.service.ChefAcceptancePolicyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.order.service.OrderHistoryCursorCodecTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.service.OrderHistoryServiceValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.order.service.RepeatOrderServiceValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.order.subscription.SubscriptionOrderPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.order.web.CartControllerReorderContractTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.order.web.DeliveryStatusResponsePrivacyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.order.web.OrderDocumentSourceDbTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.order.web.OrderResponsePrivacyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            }
+          }
+        },
+        "subscription-service": {
+          "command": {
+            "command": [
+              "mvn",
+              "-B",
+              "-ntp",
+              "-f",
+              "services/subscription-service/pom.xml",
+              "clean",
+              "verify",
+              "-DskipTests=false",
+              "-Dmaven.test.skip=false",
+              "-Djunit.jupiter.execution.parallel.enabled=false"
+            ],
+            "durationSeconds": 15.093,
+            "exitCode": 0,
+            "log": "subscription-service.log",
+            "timedOut": false
+          },
+          "counts": {
+            "errors": 0,
+            "failures": 0,
+            "skipped": 0,
+            "tests": 62
+          },
+          "issues": [],
+          "requiredSuites": 23,
+          "service": "subscription-service",
+          "status": "GREEN",
+          "suites": {
+            "in.craves.subscription.FlywayBootstrapSafetyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.subscription.FlywaySchemaQualificationSafetyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.subscription.SpringConstructorAmbiguitySafetyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.subscription.SubscriptionMigrationDatabaseTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.subscription.SubscriptionSchemaSnapshotTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.subscription.SubscriptionSpringConstructorWiringTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.subscription.billing.SubscriptionBillingPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.subscription.billing.SubscriptionBillingServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.subscription.capacity.CapacityPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.subscription.config.JdbcInstantConfigurationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.subscription.occurrence.OccurrenceGeneratorServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.subscription.occurrence.OccurrencePaidCycleSafetyTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.subscription.order.OccurrenceOrderInternalSecurityTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.subscription.order.OccurrenceOrderPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.subscription.payment.SubscriptionPaymentStatusPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.subscription.plan.ChefPlanEndpointOwnershipTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.subscription.plan.ChefPlanWorkflowServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.subscription.policy.SubscriptionPolicyPublicVisibilityTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.subscription.schedule.PlanScheduleRequestValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.subscription.security.AdminSessionRevocationWebConfigurationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.subscription.security.InternalAdminRoleAuthorizationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.subscription.service.SubscriptionServiceOwnershipTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.subscription.web.SubscriptionDocumentSourceDbTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            }
+          }
+        },
+        "user-chef-service": {
+          "command": {
+            "command": [
+              "mvn",
+              "-B",
+              "-ntp",
+              "-f",
+              "services/user-chef-service/pom.xml",
+              "clean",
+              "verify",
+              "-DskipTests=false",
+              "-Dmaven.test.skip=false",
+              "-Djunit.jupiter.execution.parallel.enabled=false"
+            ],
+            "durationSeconds": 18.814,
+            "exitCode": 0,
+            "log": "user-chef-service.log",
+            "timedOut": false
+          },
+          "counts": {
+            "errors": 0,
+            "failures": 0,
+            "skipped": 0,
+            "tests": 100
+          },
+          "issues": [],
+          "requiredSuites": 21,
+          "service": "user-chef-service",
+          "status": "GREEN",
+          "suites": {
+            "in.craves.adminexplorer.ExplorerPostgresTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 9
+            },
+            "in.craves.adminexplorer.ExplorerQueryTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.adminexplorer.ExplorerRateLimiterPostgresTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 8
+            },
+            "in.craves.userchef.admin.explorer.AdminExplorerControllerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.userchef.config.ChefNoticeDispatcherPropertiesTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.userchef.email.AuthEmailHttpTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.userchef.email.AuthEmailProjectionDbTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 10
+            },
+            "in.craves.userchef.email.AuthEmailProjectionSecurityTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.userchef.location.AzureMapsReverseGeocoderTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.userchef.security.AdminSessionRevocationWebConfigurationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.userchef.security.InternalAdminRoleAuthorizationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            },
+            "in.craves.userchef.security.InternalRequestAuthorizerTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.userchef.service.AdminDirectoryServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.userchef.service.AuthCanonicalEmailTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 3
+            },
+            "in.craves.userchef.service.CustomerFavoriteServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 4
+            },
+            "in.craves.userchef.service.CustomerHomeFavoriteServiceTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.userchef.service.SupportCaseServiceValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 6
+            },
+            "in.craves.userchef.support.SupportCaseCursorCodecTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 2
+            },
+            "in.craves.userchef.web.BankIdentitySignatureTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 5
+            },
+            "in.craves.userchef.web.CustomerAddressRequestValidationTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 7
+            },
+            "in.craves.userchef.web.RequesterSupportViewTest": {
+              "errors": 0,
+              "failures": 0,
+              "skipped": 0,
+              "tests": 1
+            }
+          }
+        }
+      },
+      "sourceSha": "b0b2ff74619fde36d55ee7bc383f09f8d4a3c426",
+      "sourceTree": "27cd131acc839dc20ffe3cb81ca2bb3221403c10",
+      "status": "GREEN"
+    },
+    "web": {
+      "buildId": "nKD3vSGhCDkY9eTLx5M0x",
+      "commands": {
+        "build": {
+          "command": [
+            "npm",
+            "run",
+            "build"
+          ],
+          "durationSeconds": 23.577,
+          "exitCode": 0,
+          "log": "build.log",
+          "timedOut": false
+        },
+        "install": {
+          "command": [
+            "npm",
+            "ci"
+          ],
+          "durationSeconds": 15.179,
+          "exitCode": 0,
+          "log": "install.log",
+          "timedOut": false
+        },
+        "lint": {
+          "command": [
+            "npm",
+            "run",
+            "lint"
+          ],
+          "durationSeconds": 15.672,
+          "exitCode": 0,
+          "log": "lint.log",
+          "timedOut": false
+        },
+        "node": {
+          "command": [
+            "node",
+            "--test",
+            "--experimental-strip-types",
+            "--test-reporter=tap",
+            "src/lib/academy-design-contract.test.ts",
+            "src/lib/academy-route-policy.test.ts",
+            "src/lib/academy-ux-state.test.ts",
+            "src/lib/address-bff-safety.test.ts",
+            "src/lib/address-contract.test.ts",
+            "src/lib/address-selection.test.ts",
+            "src/lib/admin-account-intervention-contract.test.ts",
+            "src/lib/admin-authorization.test.ts",
+            "src/lib/admin-chef-document-contract.test.ts",
+            "src/lib/admin-chef-review-contract.test.ts",
+            "src/lib/admin-contract.test.ts",
+            "src/lib/admin-customer-360-contract.test.ts",
+            "src/lib/admin-dashboard-contract.test.ts",
+            "src/lib/admin-directory-contract.test.ts",
+            "src/lib/admin-explorer.test.ts",
+            "src/lib/admin-investigation-contract.test.ts",
+            "src/lib/admin-navigation.test.ts",
+            "src/lib/admin-notification-recovery-contract.test.ts",
+            "src/lib/admin-renewal.test.ts",
+            "src/lib/admin-session.test.ts",
+            "src/lib/admin-subscription-operation-contract.test.ts",
+            "src/lib/admin-subscription-plan-contract.test.ts",
+            "src/lib/api-target.test.ts",
+            "src/lib/auth-contract.test.ts",
+            "src/lib/cart-checkout-integration.test.ts",
+            "src/lib/cart-contract.test.ts",
+            "src/lib/catalog-discovery-policy.test.ts",
+            "src/lib/checkout-contract.test.ts",
+            "src/lib/chef-application-contract.test.ts",
+            "src/lib/chef-application-evidence-contract.test.ts",
+            "src/lib/chef-brand-theme.test.ts",
+            "src/lib/chef-customer-theme.test.ts",
+            "src/lib/chef-earnings-contract.test.ts",
+            "src/lib/chef-kitchen-contract.test.ts",
+            "src/lib/chef-menu-contract.test.ts",
+            "src/lib/chef-order-actions.test.ts",
+            "src/lib/chef-order-contract.test.ts",
+            "src/lib/chef-workspace-integration.test.ts",
+            "src/lib/control-border-overrides.test.ts",
+            "src/lib/customer-favorites-bff-safety.test.ts",
+            "src/lib/customer-favorites-contract.test.ts",
+            "src/lib/customer-orders-tracking-integration.test.ts",
+            "src/lib/delivery-status.test.ts",
+            "src/lib/deployment-contract.test.ts",
+            "src/lib/discovery-contract.test.ts",
+            "src/lib/document-contract.test.ts",
+            "src/lib/landing-auth-entrypoints.test.ts",
+            "src/lib/landing-reference-assets.test.ts",
+            "src/lib/legacy-address-runtime.test.ts",
+            "src/lib/location-contract.test.ts",
+            "src/lib/logo-address-runtime.test.ts",
+            "src/lib/notification-contract.test.ts",
+            "src/lib/order-contract.test.ts",
+            "src/lib/otp-surface-regression.test.ts",
+            "src/lib/payment-contract.test.ts",
+            "src/lib/precise-customer-chef-ui.test.ts",
+            "src/lib/profile-contract.test.ts",
+            "src/lib/public-menu-item-contract.test.ts",
+            "src/lib/request-security.test.ts",
+            "src/lib/signed-in-integration.test.ts",
+            "src/lib/subscription-contract.test.ts",
+            "src/lib/subscription-payment-contract.test.ts"
+          ],
+          "durationSeconds": 2.844,
+          "exitCode": 0,
+          "log": "node.tap",
+          "timedOut": false
+        },
+        "typecheck": {
+          "command": [
+            "npm",
+            "run",
+            "typecheck"
+          ],
+          "durationSeconds": 9.647,
+          "exitCode": 0,
+          "log": "typecheck.log",
+          "timedOut": false
+        },
+        "vitest": {
+          "command": [
+            "/home/runner/work/Craves-Build-platform/Craves-Build-platform/apps/customer-web-next/node_modules/.bin/vitest",
+            "run",
+            "--reporter=json",
+            "--outputFile=/home/runner/work/Craves-Build-platform/Craves-Build-platform/target/launch-web/vitest.json"
+          ],
+          "durationSeconds": 2.077,
+          "exitCode": 0,
+          "log": "vitest.log",
+          "timedOut": false
+        }
+      },
+      "kind": "web",
+      "recordedAt": "2026-09-16T12:18:12.475975+00:00",
+      "requiredManifestSha256": "c400f94a1ca746b23d3e91be2c0d9e56c84ce6e4d1f15b7ab910cb10586927fb",
+      "runAttempt": "1",
+      "runId": "35094977579",
+      "scope": "CI validation bundle only; never reuse as a production-configured deployment artifact",
+      "sourceSha": "b0b2ff74619fde36d55ee7bc383f09f8d4a3c426",
+      "sourceTree": "27cd131acc839dc20ffe3cb81ca2bb3221403c10",
+      "status": "RED",
+      "tests": {
+        "counts": {
+          "node": {
+            "cancelled": 0,
+            "fail": 0,
+            "pass": 293,
+            "skipped": 0,
+            "tests": 293,
+            "todo": 0
+          },
+          "vitest": {
+            "failed": 0,
+            "passed": 196,
+            "skipped": 0,
+            "tests": 196
+          }
+        },
+        "issues": [
+          "Missing, skipped or failed required Vitest file: chef-profile-session.vitest.ts",
+          "Missing, skipped or failed required Vitest file: email-phone-modal-races.vitest.ts",
+          "Missing, skipped or failed required Vitest file: email-session-races.vitest.ts",
+          "Missing, skipped or failed required Vitest file: email-session-ui-races.vitest.ts",
+          "Missing, skipped or failed required Vitest file: email-verification-bff.vitest.ts",
+          "Missing, skipped or failed required Vitest file: email-verification-client.vitest.ts",
+          "Missing, skipped or failed required Vitest file: email-verification-contract.vitest.ts",
+          "Missing, skipped or failed required Vitest file: email-verification-ui.vitest.ts",
+          "Vitest failed, skipped or ran fewer than the required cases"
+        ],
+        "status": "RED"
+      }
+    }
+  },
+  "issues": [
+    "web verification is incomplete or failed",
+    "Web tests or production build evidence is incomplete"
+  ],
+  "schemaVersion": 1,
+  "sourceSha": "b0b2ff74619fde36d55ee7bc383f09f8d4a3c426",
+  "status": "RED"
+}

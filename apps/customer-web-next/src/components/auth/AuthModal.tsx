@@ -10,6 +10,12 @@ import {
 import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import {
   loadSession,
+  getSession,
+  captureSessionContext,
+  isSessionContextCurrent,
+  isSessionReady,
+  subscribeSession,
+  type SessionContext,
   setSessionIdentity,
   setSessionProfile,
   type CravesUser,
@@ -17,6 +23,8 @@ import {
 import type { CravesIdentity } from "@/lib/auth-contract";
 import { parseCustomerProfile } from "@/lib/profile-contract";
 import { CravesLogo } from "@/components/brand/CravesLogo";
+import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
+import { chefEmailEligible, verificationEmail, EMAIL_VERIFICATION_MAX_LENGTH, type EmailVerificationState } from "@/lib/email-verification-contract";
 
 type Mode = "login" | "register";
 type RecaptchaMode = "visible" | "invisible";
@@ -32,7 +40,6 @@ interface AuthModalProps {
   onAuthenticated?: (user: CravesUser, accountMode: AccountMode) => void;
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RESEND_DELAY_SECONDS = 30;
 
 export function AuthModal({
@@ -57,15 +64,27 @@ export function AuthModal({
   const [resendIn, setResendIn] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [phoneAuthenticated, setPhoneAuthenticated] = useState<CravesUser | null>(null);
+  const [verifiedEmail, setVerifiedEmail] = useState<EmailVerificationState | null>(null);
+  const authAttempt = useRef(0);
+  const watchedSession = useRef(captureSessionContext());
+  const ownIdentityInstall = useRef(false);
+  const phoneSession = useRef<SessionContext | null>(null);
   const confirmation = useRef<ConfirmationResult | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
-
-  const clearVerifier = useCallback(() => {
-    verifier.current?.clear();
-    verifier.current = null;
+  const discardedVerifiers = useRef(new WeakSet<RecaptchaVerifier>());
+  const discardVerifier = useCallback((instance: RecaptchaVerifier) => {
+    if (discardedVerifiers.current.has(instance)) return;
+    discardedVerifiers.current.add(instance);
+    try { instance.clear(); } catch { /* The provider may have already disposed an abandoned widget. */ }
   }, []);
+  const clearVerifier = useCallback(() => {
+    const instance = verifier.current; verifier.current = null;
+    if (instance) discardVerifier(instance);
+  }, [discardVerifier]);
 
   const reset = useCallback(() => {
+    authAttempt.current += 1; phoneSession.current = null;
     clearVerifier();
     confirmation.current = null;
     setPhone("");
@@ -78,6 +97,8 @@ export function AuthModal({
     setResendIn(0);
     setError(null);
     setInfo(null);
+    setPhoneAuthenticated(null);
+    setVerifiedEmail(null);
   }, [clearVerifier]);
 
   const handleClose = useCallback(() => {
@@ -85,7 +106,14 @@ export function AuthModal({
     onClose();
   }, [onClose, reset]);
 
-  useEffect(() => () => clearVerifier(), [clearVerifier]);
+  useEffect(() => () => { authAttempt.current += 1; clearVerifier(); }, [clearVerifier]);
+  useEffect(() => { if (!open) reset(); }, [open, reset]);
+  useEffect(() => subscribeSession(() => {
+    if (!isSessionContextCurrent(watchedSession.current)) {
+      watchedSession.current = captureSessionContext();
+      if (!ownIdentityInstall.current) reset();
+    }
+  }), [reset]);
 
   useEffect(() => {
     if (open) setAccountMode(initialAccountMode);
@@ -137,7 +165,7 @@ export function AuthModal({
       ? "Your next homemade favourite is waiting. Sign in to discover trusted home chefs and enjoy food that feels like home."
       : "Join Craves to discover fresh homemade food from trusted home chefs near you, made with care and delivered to your door.";
 
-  async function recaptcha(mode: RecaptchaMode): Promise<RecaptchaVerifier> {
+  async function recaptcha(mode: RecaptchaMode, currentAttempt: () => boolean): Promise<RecaptchaVerifier | null> {
     clearVerifier();
     const { auth } = getFirebaseBrowserClient();
     const visible = mode === "visible";
@@ -147,30 +175,38 @@ export function AuthModal({
       {
         size: visible ? "normal" : "invisible",
         callback: () => {
-          if (visible)
+          if (visible && currentAttempt())
             setInfo("You’re all set. Request your verification code when you’re ready.");
         },
         "expired-callback": () => {
-          if (visible)
+          if (visible && currentAttempt())
             setInfo("Your verification check expired. Please complete it again.");
         },
       },
     );
-    await instance.render();
     verifier.current = instance;
-    return instance;
+    try {
+      await instance.render();
+      if (!currentAttempt()) { if (verifier.current === instance) clearVerifier(); else discardVerifier(instance); return null; }
+      return instance;
+    } catch (error) {
+      if (verifier.current === instance) clearVerifier(); else discardVerifier(instance);
+      throw error;
+    }
   }
 
   function validateRegistration(): string | null {
     if (firstName.trim().length < 2)
       return "Enter your first name using at least two characters.";
     if (lastName.trim().length < 1) return "Enter your last name.";
-    if (email.trim() && !EMAIL_PATTERN.test(email.trim()))
+    if (isChef && !email.trim()) return "Enter an email address for your chef account.";
+    if (email.trim() && !verificationEmail.safeParse(email).success)
       return "Enter a valid email address or leave it blank.";
     return null;
   }
 
   async function sendOtp(isResend: boolean) {
+    if (busy) return;
     setError(null);
     setInfo(null);
     if (!/^\d{10}$/.test(phone)) {
@@ -186,13 +222,16 @@ export function AuthModal({
     }
 
     setBusy(true);
+    const attempt = ++authAttempt.current;
+    const context = captureSessionContext();
+    const currentAttempt = () => authAttempt.current === attempt && isSessionContextCurrent(context);
     try {
       const { auth } = getFirebaseBrowserClient();
-      confirmation.current = await signInWithPhoneNumber(
-        auth,
-        `+91${phone}`,
-        await recaptcha(isResend ? "invisible" : "visible"),
-      );
+      const challengeVerifier = await recaptcha(isResend ? "invisible" : "visible", currentAttempt);
+      if (!challengeVerifier || !currentAttempt()) return;
+      const nextConfirmation = await signInWithPhoneNumber(auth, `+91${phone}`, challengeVerifier);
+      if (!currentAttempt()) return;
+      confirmation.current = nextConfirmation;
       clearVerifier();
       setOtp("");
       setOtpSent(true);
@@ -205,6 +244,7 @@ export function AuthModal({
             : "Your verification code is on its way. One quick step, then you can get back to discovering homemade food you’ll love.",
       );
     } catch (caught) {
+      if (!currentAttempt()) return;
       clearVerifier();
       const code =
         caught && typeof caught === "object" && "code" in caught
@@ -216,7 +256,7 @@ export function AuthModal({
           : "We couldn’t send the verification code. Complete the security check and try again.",
       );
     } finally {
-      setBusy(false);
+      if (authAttempt.current === attempt) { clearVerifier(); setBusy(false); }
     }
   }
 
@@ -236,9 +276,14 @@ export function AuthModal({
     if (!confirmation.current || !/^\d{6}$/.test(otp))
       return setError("Enter the six-digit verification code.");
     setBusy(true);
+    const attempt = ++authAttempt.current;
+    let context = captureSessionContext();
+    const currentAttempt = () => authAttempt.current === attempt && isSessionContextCurrent(context);
     try {
       const credential = await confirmation.current.confirm(otp);
+      if (!currentAttempt()) return;
       const firebaseIdToken = await credential.user.getIdToken(true);
+      if (!currentAttempt()) return;
       const response = await fetch("/api/auth/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -249,10 +294,15 @@ export function AuthModal({
         identity?: CravesIdentity;
         message?: string;
       } | null;
+      if (!currentAttempt()) return;
       if (!response.ok || !body?.identity)
         throw new Error(body?.message ?? "Sign-in failed.");
 
-      let user = setSessionIdentity(body.identity);
+      let user: CravesUser;
+      ownIdentityInstall.current = true;
+      try { user = setSessionIdentity(body.identity); }
+      finally { ownIdentityInstall.current = false; }
+      context = captureSessionContext();
 
       if (mode === "register") {
         const profileResponse = await fetch("/api/customer/profile", {
@@ -262,10 +312,10 @@ export function AuthModal({
           body: JSON.stringify({
             firstName: firstName.trim(),
             lastName: lastName.trim(),
-            email: email.trim() || null,
           }),
         });
         const rawProfile = await profileResponse.json().catch(() => null);
+        if (!currentAttempt()) return;
         if (!profileResponse.ok) {
           const message =
             rawProfile &&
@@ -279,22 +329,27 @@ export function AuthModal({
         const profile = parseCustomerProfile(rawProfile);
         if (!profile)
           throw new Error("Craves returned an invalid profile response.");
-        user = setSessionProfile(profile) ?? user;
+        user = setSessionProfile(profile, context) ?? user;
       } else {
         user = (await loadSession()) ?? user;
       }
+      if (!currentAttempt() || !isSessionReady()) return;
 
+      if (mode === "register" || (isChef && !user.emailVerified)) {
+        clearVerifier();
+        confirmation.current = null;
+        setOtp("");
+        phoneSession.current = context;
+        setPhoneAuthenticated(user);
+        return;
+      }
       onAuthenticated?.(user, accountMode);
       reset();
       onClose();
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "The verification code could not be confirmed.",
-      );
+      if (currentAttempt()) setError(caught instanceof Error ? caught.message : "The verification code could not be confirmed.");
     } finally {
-      setBusy(false);
+      if (authAttempt.current === attempt) setBusy(false);
     }
   };
 
@@ -322,6 +377,34 @@ export function AuthModal({
     setError(null);
     setInfo("Enter your number and request a new verification code.");
   };
+
+  if (phoneAuthenticated) {
+    const finish = () => {
+      const current = getSession();
+      if (!current || current.id !== phoneAuthenticated.id || !phoneSession.current || !isSessionContextCurrent(phoneSession.current) || !isSessionReady()) return;
+      if (isChef && !chefEmailEligible(verifiedEmail)) return;
+      onAuthenticated?.(current, accountMode);
+      reset();
+      onClose();
+    };
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-espresso/70 md:items-center md:px-4">
+        <section role="dialog" aria-modal="true" aria-labelledby={`${fieldPrefix}-email-title`} className="max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-white p-6 md:rounded-2xl">
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <div>
+              <h2 id={`${fieldPrefix}-email-title`} className="font-display text-xl font-semibold">Your phone is verified</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{isChef ? "Verify your email to continue to your chef application." : "You can verify your email now or return from your profile later."}</p>
+            </div>
+            <button type="button" aria-label="Close email verification" className="min-h-11 min-w-11" onClick={handleClose}><X aria-hidden="true" /></button>
+          </div>
+          <EmailVerificationPanel initialEmail={email.trim()} required={isChef} onStateChange={setVerifiedEmail} />
+          <button type="button" className="btn-primary mt-5 w-full disabled:opacity-50" disabled={isChef && !chefEmailEligible(verifiedEmail)} onClick={finish}>
+            {isChef ? "Continue to chef application" : chefEmailEligible(verifiedEmail) ? "Continue to Craves" : "Verify later and continue"}
+          </button>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -476,17 +559,18 @@ export function AuthModal({
                 htmlFor={`${fieldPrefix}-email`}
                 className="block text-sm font-semibold text-ink"
               >
-                Email <span className="font-normal text-muted-foreground">(optional)</span>
+                Email <span className="font-normal text-muted-foreground">{isChef ? "(required for chefs)" : "(optional)"}</span>
                 <input
                   id={`${fieldPrefix}-email`}
                   type="email"
                   autoComplete="email"
-                  maxLength={320}
+                  maxLength={EMAIL_VERIFICATION_MAX_LENGTH}
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@example.com"
                   className="mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink placeholder:text-grey-400 focus:border-primary"
                   disabled={busy}
+                  required={isChef}
                 />
               </label>
             )}

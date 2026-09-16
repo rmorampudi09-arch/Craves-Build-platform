@@ -37,6 +37,7 @@ class CartConcurrencyDatabaseTest {
     AnnotationConfigApplicationContext context;
     JdbcTemplate jdbc;
     OrderService orders;
+    CatalogClient catalog;
     final UUID owner = UUID.randomUUID(), kitchen = UUID.randomUUID(), menu = UUID.randomUUID();
     final CravesPrincipal customer = new CravesPrincipal(owner, "", Set.of("CUSTOMER"));
 
@@ -52,7 +53,7 @@ class CartConcurrencyDatabaseTest {
         var flyway = Flyway.configure().dataSource(ds).defaultSchema("order_schema").schemas("order_schema")
             .locations("classpath:db/migration").load();
         flyway.migrate(); flyway.validate(); assertEquals(0, flyway.migrate().migrationsExecuted);
-        var catalog = mock(CatalogClient.class);
+        catalog = mock(CatalogClient.class);
         when(catalog.getActiveMenuItem(any())).thenAnswer(call -> new CatalogMenuItem(call.getArgument(0), kitchen,
             "Fixture meal", "Fixture meal", "MEAL", "VEG", new BigDecimal("10.00"), "INR", 1, 20,
             "MILD", 500, false, true, "ACTIVE"));
@@ -127,5 +128,105 @@ class CartConcurrencyDatabaseTest {
         var cart = orders.getCart(customer); assertEquals(200, cart.items().size());
         orders.updateCartItem(customer, cart.items().getFirst().id(), new UpdateCartItemRequest(2));
         assertEquals(200, orders.getCart(customer).items().size());
+    }
+
+    in.craves.order.web.ApiDtos.CartSnapshotRequest snapshot() {
+        var cart = orders.getCart(customer);
+        return new in.craves.order.web.ApiDtos.CartSnapshotRequest(cart.id(), cart.items().stream()
+            .map(line -> new in.craves.order.web.ApiDtos.CartSnapshotItem(line.id(), line.quantity(), line.updatedAt())).toList());
+    }
+
+    UUID otherKitchenMenu() {
+        UUID otherMenu = UUID.randomUUID(), otherKitchen = UUID.randomUUID();
+        when(catalog.getActiveMenuItem(otherMenu)).thenReturn(new CatalogMenuItem(otherMenu, otherKitchen,
+            "Second meal", "Second meal", "MEAL", "VEG", new BigDecimal("12.00"), "INR", 1, 20,
+            "MILD", 500, false, true, "ACTIVE"));
+        when(catalog.getKitchen(otherKitchen)).thenReturn(new CatalogKitchen(otherKitchen, UUID.randomUUID(),
+            "Second kitchen", "Fixture chef", "Fixture area", "Hyderabad", "ACTIVE"));
+        return otherMenu;
+    }
+
+    @Test void simultaneousFirstAddsCannotMixKitchens() throws Exception {
+        UUID second = otherKitchenMenu();
+        var sequence = new java.util.concurrent.atomic.AtomicInteger();
+        var results = concurrent(2, () -> {
+            UUID chosen = sequence.getAndIncrement() == 0 ? menu : second;
+            try { orders.addCartItem(customer, new AddCartItemRequest(chosen, 1)); return "ACCEPTED"; }
+            catch (OrderApiException ex) { return ex.code(); }
+        });
+        assertEquals(1, results.stream().filter("ACCEPTED"::equals).count());
+        assertEquals(1, results.stream().filter("CART_KITCHEN_CONFLICT"::equals).count());
+        assertEquals(1, orders.getCart(customer).items().size());
+    }
+
+    @Test void conditionalClearRejectsChangedCartAndNeverRemovesNewItems() {
+        orders.addCartItem(customer, new AddCartItemRequest(menu, 1));
+        var expected = snapshot();
+        orders.addCartItem(customer, new AddCartItemRequest(menu, 1));
+        assertEquals("CART_CHANGED", assertThrows(OrderApiException.class,
+            () -> orders.clearCartIfUnchanged(customer, expected)).code());
+        assertEquals(2, quantity());
+        assertTrue(orders.clearCartIfUnchanged(customer, snapshot()).items().isEmpty());
+    }
+
+    @Test void kitchenSwitchUsesExactConsentAndCommitsOneKitchen() {
+        UUID second = otherKitchenMenu();
+        orders.addCartItem(customer, new AddCartItemRequest(menu, 1));
+        UUID target = catalog.getActiveMenuItem(second).kitchenId();
+        var result = orders.switchCartKitchen(customer, new in.craves.order.web.ApiDtos.SwitchKitchenRequest(
+            snapshot(), second, target, 2));
+        assertEquals(1, result.items().size());
+        assertEquals(second, result.items().getFirst().menuItemId());
+        assertEquals(target, result.items().getFirst().kitchenId());
+        assertEquals(2, result.items().getFirst().quantity());
+    }
+
+    @Test void kitchenChangesDuringSwitchRollBackTheClear() {
+        UUID second = otherKitchenMenu();
+        orders.addCartItem(customer, new AddCartItemRequest(menu, 3));
+        var target = catalog.getActiveMenuItem(second);
+        var moved = new CatalogMenuItem(second, kitchen, "Moved meal", "Moved meal", "MEAL", "VEG",
+            BigDecimal.TEN, "INR", 1, 20, "MILD", 500, false, true, "ACTIVE");
+        when(catalog.getActiveMenuItem(second)).thenReturn(target, moved);
+        assertEquals("CART_TARGET_KITCHEN_CHANGED", assertThrows(OrderApiException.class,
+            () -> orders.switchCartKitchen(customer, new in.craves.order.web.ApiDtos.SwitchKitchenRequest(
+                snapshot(), second, target.kitchenId(), 1))).code());
+        assertEquals(menu, orders.getCart(customer).items().getFirst().menuItemId());
+        assertEquals(3, quantity());
+    }
+
+    UUID historicalOrder() {
+        UUID order = UUID.randomUUID();
+        jdbc.update("INSERT INTO catalog_schema.kitchen_profile (id,identity_id) VALUES (?,?) ON CONFLICT (id) DO NOTHING",
+            kitchen, catalog.getKitchen(kitchen).identityId());
+        jdbc.update("INSERT INTO order_schema.customer_order (id,checkout_id,customer_identity_id,kitchen_id,kitchen_name_snapshot,status,food_subtotal,platform_fee,tax_amount,delivery_fee,grand_total) VALUES (?,?,?,?,?,'DELIVERED',10,0,0,0,10)",
+            order, UUID.randomUUID(), owner, kitchen, "Fixture kitchen");
+        jdbc.update("INSERT INTO order_schema.order_item (id,order_id,menu_item_id,item_name_snapshot,unit_price_snapshot,quantity,line_total) VALUES (?,?,?,'Fixture meal',10,1,10)", UUID.randomUUID(), order, menu);
+        return order;
+    }
+
+    @Test void safeReorderChecksOwnershipConsentAndKitchenWithoutCreatingOrders() {
+        UUID historical = historicalOrder();
+        var expected = snapshot();
+        var other = new CravesPrincipal(UUID.randomUUID(), "", Set.of("CUSTOMER"));
+        assertThrows(ResponseStatusException.class, () -> orders.replaceCartFromOrderIfUnchanged(other, historical,
+            new in.craves.order.web.ApiDtos.ReorderCartRequest(expected, kitchen)));
+        assertTrue(orders.getCart(customer).items().isEmpty());
+        var result = orders.replaceCartFromOrderIfUnchanged(customer, historical,
+            new in.craves.order.web.ApiDtos.ReorderCartRequest(expected, kitchen));
+        assertEquals(menu, result.items().getFirst().menuItemId());
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM order_schema.customer_order", Integer.class));
+        assertEquals("CART_CHANGED", assertThrows(OrderApiException.class,
+            () -> orders.replaceCartFromOrderIfUnchanged(customer, historical,
+                new in.craves.order.web.ApiDtos.ReorderCartRequest(expected, kitchen))).code());
+    }
+
+    @Test void safeReorderWrongKitchenRollsBackReplacement() {
+        UUID historical = historicalOrder();
+        orders.addCartItem(customer, new AddCartItemRequest(menu, 4));
+        assertEquals("CART_TARGET_KITCHEN_CHANGED", assertThrows(OrderApiException.class,
+            () -> orders.replaceCartFromOrderIfUnchanged(customer, historical,
+                new in.craves.order.web.ApiDtos.ReorderCartRequest(snapshot(), UUID.randomUUID()))).code());
+        assertEquals(4, quantity());
     }
 }

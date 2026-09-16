@@ -26,6 +26,10 @@ APPENDIX = [
     'scripts/release/capture-launch-runtime.py',
     'scripts/release/capture-gateway-policy-fingerprints.py',
     'scripts/release/require-launch-p0-evidence.py',
+    'azure-pipelines-razorpay-customer-web.yml',
+    'scripts/release/verify-customer-web-runtime.py',
+    'scripts/release/verify-web-release-evidence.py',
+    'scripts/email/inspect-applied-email-history.py',
     'services/subscription-service/src/test/java/in/craves/subscription/SubscriptionSchemaSnapshot.java',
     'services/subscription-service/src/test/java/in/craves/subscription/SubscriptionSchemaSnapshotTest.java',
     'apps/customer-web-next/src/components/auth/EmailVerificationPanel.tsx',
@@ -33,7 +37,8 @@ APPENDIX = [
     'apps/customer-web-next/src/lib/email-verification-client.ts',
 ]
 DOCS = ['README.md', '2026-09-16-progress.md', 'OWNER_DECISIONS_20260916.md',
-        'REPOSITORY_PROTECTION.md', 'FINANCE_RESPONSE_PRIVACY.md']
+        'REPOSITORY_PROTECTION.md', 'FINANCE_RESPONSE_PRIVACY.md',
+        'CUSTOMER_WEB_RELEASE.md', 'APPLIED_EMAIL_HISTORY.md']
 
 
 def git(*args):
@@ -78,13 +83,13 @@ def build_pdf(target, sha, manifest):
              Paragraph('Source: ' + sha, body),
              Paragraph('This report distinguishes working source, test evidence, live settings and unresolved acceptance. It is not a declaration that the app is ready for public launch.', body),
              Paragraph('The owner confirmed a monthly referral-reward cap of INR 1,500 per chef. Qualification uses the referred chef food subtotal; two INR 150 dishes qualify at INR 300. This does not authorize infrastructure spending or change ordinary food-sale earnings.', body),
-             Paragraph('Main branch protection was saved and read back. Serving application images, live customer records and financial transactions were not changed by this launch checkpoint. No new APK was produced for these web and governance changes.', body),
+             Paragraph('The owner explicitly authorized sole-owner approval while retaining the other repository protections. Live gateway changes, web release attempts and read-only database evidence are recorded separately below; historical checkpoint statements must not override the dated continuation. No real financial transaction or new APK is claimed by this web and governance handover.', body),
              Paragraph('The ZIP contains complete changed source files at the exact commit above. Selected complete safety-critical files are printed in the appendix. No original private PDFs, credentials or dependency caches are included.', body),
              PageBreak(), Paragraph('How to use this handover', styles['Heading1']),
              Paragraph('Read the operational sections first, then the 46-finding register. CI passed means automated evidence for a particular source commit only; it does not mean deployed, inbox-verified, capacity-tested or accepted by a reviewer.', body),
              Paragraph('The conversation record below consists of documented owner decisions and engineering outcomes visible in this task. It is not represented as a complete verbatim transcript of every earlier task, which is unavailable here.', body),
              Paragraph('The source plan is Craves_Public_Launch_Fixing_Plan_2026-09-16.pdf, 69 pages, SHA-256 CFAAD0C1B125669823DB7B40536D4A38DEE3E715C08AC6BE9926D0F74BA9FF09. It remains unchanged.', body),
-             Paragraph('Before deployment: an eligible independent reviewer must approve the candidate; preserve running migrations, service origins, security controls, payment mode and exact rollback images. Tests must run against disposable databases, never live data.', body),
+             Paragraph('Before deployment: retain the explicitly approved sole-owner process, pull requests and successful exact-source checks. Preserve running migrations, service origins, security controls, payment mode and exact rollback images. Tests must run against disposable databases, never live data. Do not request a second reviewer or fabricate self-approval.', body),
              Paragraph('Owner actions still needed include genuine business declarations and policy decisions, controlled mailbox acceptance, support/alert owners and a separate budget for paid restore/load infrastructure. Do not invent these to mark findings complete.', body)]
     for name in DOCS:
         story.append(PageBreak())

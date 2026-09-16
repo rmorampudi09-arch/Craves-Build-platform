@@ -19,7 +19,7 @@
       "title": "Fix subscription migration regression",
       "package": "P0",
       "status": "CI passed",
-      "evidence": ["evidence/regression-baseline-35094977579.json", "Subscription62 and complete backend1199 passed; combined web gate still RED"],
+      "evidence": ["evidence/regression-baseline-35094977579.json", "evidence/regression-35096170879.json", "Exact SHA24356acc: subscription62, backend1199 and combined web615 GREEN; review gate still outstanding"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -38,8 +38,8 @@
       "id": "F04",
       "title": "Complete web email verification",
       "package": "P1",
-      "status": "Fixing",
-      "evidence": ["2026-09-16-progress.md", "Compatible web extraction:615 local tests, typecheck, lint and production build passed; not deployed"],
+      "status": "CI passed",
+      "evidence": ["2026-09-16-progress.md", "evidence/regression-35096170879.json", "615 web tests, typecheck, lint and production build passed at exact SHA24356acc; not deployed or mailbox accepted"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false

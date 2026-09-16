@@ -2,7 +2,7 @@ name: Exact release launch regression
 
 on:
   push:
-    branches: [fix/device-acceptance-cart-20260916]
+    branches: [main, fix/device-acceptance-cart-20260916]
     paths:
       - 'services/**'
       - 'apps/customer-web-next/**'
@@ -15,15 +15,9 @@ on:
         description: Exact reviewed 40-character release commit on the selected workflow ref
         required: true
         type: string
+  # A required check must exist even for documentation-only PRs. Path-filtered
+  # required workflows can leave checks pending and must not be used as bypasses.
   pull_request:
-    paths:
-      - 'services/**'
-      - 'apps/customer-web-next/**'
-      - 'scripts/launch/**'
-      - 'scripts/finance/**'
-      - 'scripts/email/**'
-      - 'scripts/refund/**'
-      - '.github/workflows/launch-regression-ci.yml'
 
 permissions:
   contents: read
@@ -62,6 +56,8 @@ jobs:
           python3 scripts/release/tests/test-backend-preflight.py
           python3 scripts/release/tests/test-backend-image-reuse.py
           python3 scripts/admin-explorer/test-runtime-readiness.py
+          python3 -m unittest discover -s scripts/release/tests -p 'test_launch_*.py' -v
+          python3 -m unittest discover -s scripts/release/tests -p 'test_gateway_policy_fingerprints.py' -v
           # The old PR's reviewed-image/web deployment wrappers are not in this
           # reconciled tree. Their separate release-governance closure is OPEN;
           # this workflow certifies tests, never permission to deploy or launch.
@@ -206,10 +202,24 @@ jobs:
   acceptance:
     name: Exact-SHA complete regression evidence
     needs: [source, backend, web]
-    if: ${{ always() && needs.source.result == 'success' }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Reject failed, cancelled, skipped or missing prerequisite jobs
+        env:
+          PREREQUISITES_JSON: ${{ toJSON(needs) }}
+          EXPECTED_RELEASE_SHA: ${{ inputs.expectedReleaseSha || github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          jobs = json.loads(os.environ['PREREQUISITES_JSON'])
+          expected = os.environ['EXPECTED_RELEASE_SHA']
+          assert re.fullmatch(r'[0-9a-f]{40}', expected), 'Expected SHA missing or invalid'
+          assert set(jobs) == {'source', 'backend', 'web'}, 'Missing prerequisite job'
+          assert all(job.get('result') == 'success' for job in jobs.values()), 'A prerequisite did not succeed'
+          assert jobs['source'].get('outputs', {}).get('release_sha') == expected, 'Source evidence is stale or missing'
+          PY
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.source.outputs.release_sha }}

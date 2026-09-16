@@ -1,0 +1,199 @@
+name: Chef referral v2 CI
+on:
+  push:
+    branches: [feat/chef-referral-v2-20260915]
+    paths: ['services/referral-service/**', 'scripts/referrals/**', 'docs/referrals/**', 'apps/customer-web-next/src/components/referrals/**', 'apps/customer-web-next/src/lib/referrals/**', 'apps/mobile/src/features/referralsV2/**', '.github/workflows/chef-referral-v2-ci.yml']
+  pull_request:
+    paths: ['services/referral-service/**', 'scripts/referrals/**', 'docs/referrals/**', 'apps/customer-web-next/src/components/referrals/**', 'apps/customer-web-next/src/lib/referrals/**', 'apps/mobile/src/features/referralsV2/**', '.github/workflows/chef-referral-v2-ci.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: chef-referral-v2-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  referral:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: referral_test
+          POSTGRES_USER: referral_test
+          POSTGRES_PASSWORD: disposable_referral_test_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U referral_test -d referral_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      REFERRAL_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/referral_test
+      REFERRAL_TEST_DB_USER: referral_test
+      REFERRAL_TEST_DB_PASSWORD: disposable_referral_test_only
+      REFERRAL_TEST_CONFIRM: YES_DISPOSABLE_REFERRAL_TEST_ONLY
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/referral-service/pom.xml
+      - name: Enforce add-only scope
+        run: python3 scripts/referrals/verify-additive.py
+      - name: Compile and verify against disposable PostgreSQL
+        run: mvn -B -ntp -f services/referral-service/pom.xml clean verify
+      - name: Require executed hardening suites, HTTP fixtures, executable JAR and SBOM
+        run: python3 scripts/referrals/verify-build.py
+      - name: Verify standalone migrator twice against CI disposable database only
+        env:
+          REFERRAL_MIGRATION_CONFIRM: CREATE_REFERRAL_SCHEMA_ONLY
+          REFERRAL_MIGRATION_DB_URL: jdbc:postgresql://localhost:5432/referral_test
+          REFERRAL_MIGRATION_DB_USER: referral_test
+          REFERRAL_MIGRATION_DB_PASSWORD: disposable_referral_test_only
+        run: |
+          set +x
+          set -Eeuo pipefail
+          umask 077
+          test "$REFERRAL_TEST_CONFIRM" = YES_DISPOSABLE_REFERRAL_TEST_ONLY
+          test "$REFERRAL_MIGRATION_DB_URL" = jdbc:postgresql://localhost:5432/referral_test
+          CP_FILE="$(mktemp)"
+          trap 'rm -f "$CP_FILE"' EXIT
+          mvn -B -ntp -f services/referral-service/pom.xml \
+            org.apache.maven.plugins:maven-dependency-plugin:3.8.1:build-classpath \
+            -DincludeScope=runtime "-Dmdep.outputFile=$CP_FILE"
+          test -s "$CP_FILE"
+          for attempt in 1 2; do
+            java -cp "services/referral-service/target/classes:$(cat "$CP_FILE")" \
+              in.craves.referral.infra.ReferralMigrate
+          done
+      - name: Build and smoke-test the dormant non-root container locally only
+        run: python3 scripts/referrals/smoke-container.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chef-referral-v2-backend-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            services/referral-service/target/surefire-reports/
+            services/referral-service/target/failsafe-reports/
+            services/referral-service/target/classes/META-INF/sbom/application.cdx.json
+            services/referral-service/target/artifact-verification.json
+            services/referral-service/target/container-verification.json
+            services/referral-service/target/contract-fixtures/
+          retention-days: 14
+  web:
+    needs: referral
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: apps/customer-web-next
+    env:
+      REFERRAL_WIRE_FIXTURE_DIR: ${{ github.workspace }}/referral-backend-evidence/contract-fixtures
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: chef-referral-v2-backend-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: referral-backend-evidence
+      - name: Bind contract fixtures to this exact tested source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, subprocess
+          root = Path('../../referral-backend-evidence')
+          receipt = json.loads((root/'artifact-verification.json').read_text())
+          assert receipt['sourceSha'] == subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          for name, expected in receipt['contractFixtureSha256'].items():
+              assert hashlib.sha256((root/'contract-fixtures'/(name+'.json')).read_bytes()).hexdigest() == expected
+          print('Same-SHA HTTP contract fixtures verified')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Referral contracts, capture, BFF, recovery, rendering and real API fixtures
+        run: npx vitest run --config ../../scripts/referrals/web-vitest.config.mts --reporter=default --reporter=junit --outputFile.junit=../../referral-web-results.xml
+      - name: Existing application regression tests
+        run: npm test
+      - name: Production web compilation (no deployment)
+        run: npm run build
+      - name: Record inherited dependency findings without editing the lockfile
+        if: always()
+        run: npm audit --json > ../../referral-web-audit.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chef-referral-v2-web-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            referral-web-results.xml
+            referral-web-audit.json
+          retention-days: 14
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+      - name: Typecheck isolated native feature against existing dependencies
+        run: npx tsc --project ../../scripts/referrals/mobile-tsconfig.json --noEmit
+      - name: Native referral contract and retry-identity tests
+        run: npm test -- --runInBand --runTestsByPath src/features/referralsV2/model.test.ts --json --outputFile=../../referral-mobile-results.json
+      - name: Existing cross-feature regression tests
+        run: npm run test:integration
+      - name: Record native dependency findings without changing the lockfile
+        if: always()
+        run: npm audit --json > ../../referral-mobile-audit.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chef-referral-v2-mobile-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            referral-mobile-results.json
+            referral-mobile-audit.json
+          retention-days: 14
+  release-kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify additive boundary and read-only deployment-plan tests
+        run: |
+          python3 scripts/referrals/verify-additive.py
+          python3 -m unittest discover -s scripts/referrals -p 'test_release_plan.py' -v
+      - name: Compile dormant Bicep template without logging in or deploying
+        run: az bicep build --file services/referral-service/deploy/main.bicep --outfile /tmp/referral-compiled.json
+      - name: Package only additions for offline review
+        run: |
+          git diff --name-only -z --diff-filter=A 870f5293884888aa28f0c069b91a86d06492c9a2...HEAD | tar --null -T - -czf referral-additions.tar.gz
+          git rev-parse HEAD > referral-source-head.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chef-referral-v2-release-kit-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/referral-compiled.json
+            referral-additions.tar.gz
+            referral-source-head.txt
+          retention-days: 14

@@ -66,6 +66,8 @@ def footer(canvas, document):
 
 def build_pdf(target, sha, manifest):
     styles = getSampleStyleSheet()
+    styles['Heading1'].keepWithNext = True
+    styles['Heading2'].keepWithNext = True
     styles.add(ParagraphStyle(name='BodyCraves', fontName='Helvetica', fontSize=10, leading=14, spaceAfter=9))
     styles.add(ParagraphStyle(name='PathCraves', fontName='Helvetica-Bold', fontSize=10, leading=14, wordWrap='CJK', spaceAfter=12))
     styles.add(ParagraphStyle(name='CodeCraves', fontName='Courier', fontSize=7.8, leading=10.3))

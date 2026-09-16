@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Review gate: only named existing owner files and additive referral backend paths may change."""
 import subprocess
-BASE='870f5293884888aa28f0c069b91a86d06492c9a2'
+# Exact reviewed main after #367; do not count already-reviewed main merges as referral edits.
+BASE='2ab2e36d30276a039121529656b8c24e6fecdd64'
 MODIFIED={
+ 'docs/launch-closure/OWNER_DECISIONS_20260916.md',
  'services/order-service/src/main/java/in/craves/order/web/ApiDtos.java',
  'services/integration-service/src/main/java/in/craves/integration/payment/RazorpayPaymentClient.java',
  'services/integration-service/src/main/java/in/craves/integration/payout/RazorpayXPayoutClient.java',
@@ -30,6 +32,7 @@ EXACT={'azure-pipelines-referral-private-backend.yml','services/order-service/sr
  'services/order-service/src/test/java/in/craves/order/finance/ReferralCheckoutIntegrationDatabaseTest.java'}
 for service,versions in {'auth-service':[(12,'source_outbox'),(13,'enrollment'),(14,'account_status')],'order-service':[(28,'source_outbox'),(29,'order_binding'),(30,'lifecycle_outbox'),(31,'checkout_benefits'),(32,'checkout_recovery_audit')],'integration-service':[(137,'source_outbox'),(138,'finance_consumer'),(139,'finance_refresh'),(140,'finance_reviews_and_execution'),(141,'checkout_funding'),(142,'split_refunds'),(143,'recovery_audit_and_cancellation')]}.items():
  for version,name in versions:EXACT.add(f'services/{service}/src/main/resources/db/migration/V{version}__referral_{name}.sql')
+subprocess.run(['git','merge-base','--is-ancestor',BASE,'HEAD'],check=True)
 lines=subprocess.check_output(['git','diff','--name-status','--no-renames',BASE,'HEAD'],text=True).splitlines()
 assert lines,'No integration changes found'
 for line in lines:

@@ -30,6 +30,7 @@ APPENDIX = [
     'scripts/release/verify-customer-web-runtime.py',
     'scripts/release/verify-web-release-evidence.py',
     'scripts/email/inspect-applied-email-history.py',
+    'scripts/release/inspect-auth-protection.py',
     'services/subscription-service/src/test/java/in/craves/subscription/SubscriptionSchemaSnapshot.java',
     'services/subscription-service/src/test/java/in/craves/subscription/SubscriptionSchemaSnapshotTest.java',
     'apps/customer-web-next/src/components/auth/EmailVerificationPanel.tsx',
@@ -39,7 +40,7 @@ APPENDIX = [
 DOCS = ['README.md', '2026-09-16-progress.md', 'OWNER_DECISIONS_20260916.md',
         'REPOSITORY_PROTECTION.md', 'FINANCE_RESPONSE_PRIVACY.md',
         'CUSTOMER_WEB_RELEASE.md', 'APPLIED_EMAIL_HISTORY.md',
-        'EMAIL_OPERATIONAL_HEALTH.md', 'TRACKING_PROGRESS.md']
+        'EMAIL_OPERATIONAL_HEALTH.md', 'TRACKING_PROGRESS.md', 'AUTH_PROTECTION_CHECKPOINT.md']
 
 
 def git(*args):
@@ -91,7 +92,7 @@ def build_pdf(target, sha, manifest):
              Paragraph('The conversation record below consists of documented owner decisions and engineering outcomes visible in this task. It is not represented as a complete verbatim transcript of every earlier task, which is unavailable here.', body),
              Paragraph('The source plan is Craves_Public_Launch_Fixing_Plan_2026-09-16.pdf, 69 pages, SHA-256 CFAAD0C1B125669823DB7B40536D4A38DEE3E715C08AC6BE9926D0F74BA9FF09. It remains unchanged.', body),
              Paragraph('Before deployment: retain the explicitly approved sole-owner process, pull requests and successful exact-source checks. Preserve running migrations, service origins, security controls, payment mode and exact rollback images. Tests must run against disposable databases, never live data. Do not request a second reviewer or fabricate self-approval.', body),
-             Paragraph('Owner actions still needed include genuine business declarations and policy decisions, controlled mailbox acceptance, support/alert owners and a separate budget for paid restore/load infrastructure. Do not invent these to mark findings complete.', body)]
+             Paragraph('The web update is live. The owner confirmed actual email receipt and successful code entry; the fresh browser profile retained verified status, and the affected order now shows consistent Ready For Pickup progress. No new APK or real financial journey was performed. Owner actions still needed include genuine business declarations and policy decisions, support/alert owners and a separate budget for paid restore/load infrastructure. Do not invent these to mark findings complete.', body)]
     for name in DOCS:
         story.append(PageBreak())
         story.append(Paragraph('Operational record: ' + html.escape(name), styles['PathCraves']))

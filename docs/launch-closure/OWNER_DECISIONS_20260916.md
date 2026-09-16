@@ -2,6 +2,8 @@
 
 ## Confirmed in this task
 
+- After the successful web rollout39106 and fresh sign-in, the owner explicitly confirmed receiving and successfully entering the email verification code on16September. The fresh browser profile displayed verified status even after a status refresh. No additional verification message was sent by the agent and the already verified email was not reset. The affected existing Ready For Pickup order was also checked read-only and now has matching headline/timeline progress.
+
 - The owner signed in to the customer website and explicitly authorized sending the verification test to the inbox already on that profile. The address is deliberately omitted from this public source/handover. This permission allows the test message, not changing the password, forcing an already verified email back to unverified, or inventing an alternate test identity. Passwords and verification codes are entered directly by the owner, not copied into chat.
 
 - The owner explicitly stated that they are the sole approver, have verified the current work and approve proceeding. They separately confirmed removal of GitHub's second-person approval requirement on main while retaining pull requests, exact-version passing tests, up-to-date code, resolved conversations and force-push/deletion protections. This supersedes the earlier engineering interpretation requiring a separate independent reviewer. No alternate account or fabricated approval is used. Approval does not constitute acceptance of untested functions, financial policy, actual delivery, or public launch.

@@ -29,7 +29,7 @@
       "title": "Enforce release governance",
       "package": "P0",
       "status": "Verifying",
-      "evidence": ["REPOSITORY_PROTECTION.md", "Main rule83269016 uses explicitly confirmed sole-owner approval, with all other protections preserved; PR361 failed-check block observed; PR362 old-green/new-head merge block observed and recorded in comment5699595967", "CUSTOMER_WEB_RELEASE.md: merged guarded wrapper; live deployment verification pending"],
+      "evidence": ["REPOSITORY_PROTECTION.md", "Main rule83269016 uses explicitly confirmed sole-owner approval, with all other protections preserved; PR361 failed-check block observed; PR362 old-green/new-head merge block observed and recorded in comment5699595967", "CUSTOMER_WEB_RELEASE.md: guarded rollout39106 succeeded on exact tested main48d0941b; desired non-image settings preserved, immutable recovery image recorded"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -38,8 +38,8 @@
       "id": "F04",
       "title": "Complete web email verification",
       "package": "P1",
-      "status": "CI passed",
-      "evidence": ["2026-09-16-progress.md", "evidence/regression-35096170879.json", "CUSTOMER_WEB_RELEASE.md: exact-main web and complete backend regression35112960978 passed; live rollout started; mailbox acceptance still open"],
+      "status": "Verifying",
+      "evidence": ["2026-09-16-progress.md", "evidence/regression-35120102748.json", "CUSTOMER_WEB_RELEASE.md: exact-source rollout39106 succeeded; owner confirmed actual code receipt/verification and fresh profile retained verified status", "Full plan chef-entry acceptance remains separate from the observed customer profile journey"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -49,7 +49,7 @@
       "title": "Verify canonical email authority",
       "package": "P1",
       "status": "Verifying",
-      "evidence": ["APPLIED_EMAIL_HISTORY.md: all35 versioned migrations matched deployed source without writes", "EMAIL_OPERATIONAL_HEALTH.md: read-only39098 aggregate canonical/projection/provider-receipt health; not account-specific inbox acceptance"],
+      "evidence": ["APPLIED_EMAIL_HISTORY.md: all35 versioned migrations matched deployed source without writes", "EMAIL_OPERATIONAL_HEALTH.md: read-only39098 aggregate canonical/projection/provider-receipt health", "Owner separately confirmed inbox receipt/code verification after39106; fresh browser verified status retained. Cross-service identity/version correlation still requires its own evidence"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -58,8 +58,8 @@
       "id": "F06",
       "title": "Activate bounded Auth protection",
       "package": "P1",
-      "status": "Not started",
-      "evidence": [],
+      "status": "Verifying",
+      "evidence": ["AUTH_PROTECTION_CHECKPOINT.md: read-only39107 confirms desired/running enabled=false and mode absent; twelve boundary tests passed. No activation, customer requests or secrets", "Source provenance, effective configuration, gateway rules and safe bounded activation remain open"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -369,7 +369,7 @@
       "title": "Chosen delivery provider/tracking",
       "package": "P3",
       "status": "Verifying",
-      "evidence": ["TRACKING_PROGRESS.md: web Ready For Pickup headline correction merged in PR364; full main35120102748 passed. Provider/delivery acceptance and fresh native checks remain open."],
+      "evidence": ["TRACKING_PROGRESS.md: full main35120102748 and rollout39106 passed; after fresh sign-in the existing owned Ready For Pickup order has matching headline/timeline and correct Total label. Provider/delivery acceptance and fresh native checks remain open."],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false

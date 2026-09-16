@@ -10,7 +10,9 @@ The owner signed in successfully to the live customer website on16September2026.
 
 ## Verification
 
-Four Node regression cases cover a valid empty delivery response, all13 supported order statuses, actual delivery progress and screen wiring. A rendered screen test mocks an owned synthetic order and valid empty delivery response, then asserts the Ready For Pickup headline and Total label. Existing delivery and order integration tests remain enabled. Focused13 Node tests and the rendered screen test pass; typecheck passes. Full exact-source CI and live post-deployment browser verification are still required.
+Completed live check on16September: full exact-main regression35120102748 passed, guarded production rollout39106 succeeded, and after fresh owner sign-in the same existing owned order showed Ready For Pickup in both headline and timeline. The explanation and Total label were correct. This closes the reported browser presentation defect, not all order-state combinations or device/real-delivery acceptance.
+
+Four Node regression cases cover a valid empty delivery response, all13 supported order statuses, actual delivery progress and screen wiring. A rendered screen test mocks an owned synthetic order and valid empty delivery response, then asserts the Ready For Pickup headline and Total label. Existing delivery and order integration tests remain enabled. Focused13 Node tests, the rendered screen test and typecheck passed before the later full exact-source CI and live post-deployment browser verification recorded above.
 
 React checklist: status is derived directly from current state rather than another effect; no new dependency, request, listener or user-data cache; parallel order/delivery reads, ownership validation, HTTPS link checks and existing refresh behavior are retained. No financial action or database write is added.
 

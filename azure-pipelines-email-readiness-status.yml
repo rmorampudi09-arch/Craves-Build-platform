@@ -23,6 +23,7 @@ parameters:
       - inspect-finance-response-privacy
       - publish-finance-response-privacy
       - inspect-applied-email-history
+      - inspect-email-operational-health
   - name: expectedFinancePrivacySource
     displayName: Exact checked source SHA for finance header publication (unused for inspection)
     type: string
@@ -33,6 +34,20 @@ steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
+  - ${{ if eq(parameters.action, 'inspect-email-operational-health') }}:
+      - script: python3 -m unittest discover -s scripts/email/tests -p 'test_email_operations.py' -v
+        displayName: Verify aggregate-only email inspection boundaries
+      - task: AzureCLI@2
+        displayName: Read email operational counts without account data or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            command -v psql >/dev/null
+            python3 scripts/email/inspect-email-operations.py
   - ${{ if eq(parameters.action, 'inspect-applied-email-history') }}:
       - script: python3 -m unittest discover -s scripts/email/tests -p 'test_applied_email_history.py' -v
         displayName: Verify read-only migration inspection boundaries

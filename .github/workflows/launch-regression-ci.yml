@@ -35,6 +35,9 @@ jobs:
     env:
       EXPECTED_RELEASE_SHA: ${{ inputs.expectedReleaseSha || github.event.pull_request.head.sha || github.sha }}
     steps:
+      # Deliberate negative acceptance probe. Never merge this test-only branch.
+      - name: EXPECTED FAILURE - prove protected main rejects failed source
+        run: exit 1
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}

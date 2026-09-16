@@ -1,0 +1,154 @@
+html[data-craves-splash-active="true"] { background: #f62e18; }
+
+/* Startup cover is supplied by vite.config.ts; index.html stays unchanged. */
+.splash {
+  --nav-logo-left: 52px;
+  --nav-logo-top: 48px;
+  --nav-logo-width: 40px;
+  --nav-logo-height: 40px;
+  --nav-logo-radius: 10px;
+  --splash-title-scale: 0.054;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.splash__surface {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.05), transparent 31%),
+    linear-gradient(145deg, #f62e18 0%, #ef2b18 48%, #df2415 100%);
+  border-radius: 0;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  visibility: hidden;
+  will-change: left, top, width, height, border-radius;
+}
+
+/* Background and decoded title appear together. */
+.splash--ready .splash__surface {
+  visibility: visible;
+}
+
+.splash__ambient {
+  position: absolute;
+  inset: -18%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.045), transparent 24%),
+    radial-gradient(circle at 74% 74%, rgba(109, 10, 4, 0.08), transparent 29%);
+  opacity: 0.7;
+}
+
+.splash__brand {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(72vw, 640px);
+  display: grid;
+  place-items: center;
+  transform: translate3d(-50%, -50%, 0);
+  transform-origin: center;
+  will-change: transform;
+}
+
+.splash__wordmark {
+  position: relative;
+  z-index: 3;
+  width: min(100%, 620px);
+  height: auto;
+  display: block;
+  opacity: 1;
+  animation: none;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  filter: drop-shadow(0 8px 20px rgba(88, 9, 4, 0.1));
+}
+
+
+.splash__final-logo {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0;
+  transform: translate3d(0, 0, 0);
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .splash--ready .splash__surface {
+    animation: splashSurfaceMorph 0.96s 1.30s cubic-bezier(0.72, 0, 0.2, 1) forwards;
+  }
+
+  .splash--ready .splash__brand {
+    animation: splashBrandMorph 0.96s 1.30s cubic-bezier(0.72, 0, 0.2, 1) forwards;
+  }
+
+  .splash--ready .splash__final-logo {
+    animation: splashFinalLogoIn 0.10s 2.26s ease-out forwards;
+  }
+}
+
+@keyframes splashBrandMorph {
+  from {
+    left: 50%;
+    top: 50%;
+    transform: translate3d(-50%, -50%, 0) scale(1);
+  }
+  to {
+    left: 50.63795853%;
+    top: 49.48165869%;
+    transform: translate3d(-50%, -50%, 0) scale(var(--splash-title-scale));
+  }
+}
+
+@keyframes splashSurfaceMorph {
+  from {
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100svh;
+    border-radius: 0;
+  }
+  to {
+    left: var(--nav-logo-left);
+    top: var(--nav-logo-top);
+    width: var(--nav-logo-width);
+    height: var(--nav-logo-height);
+    border-radius: var(--nav-logo-radius);
+  }
+}
+
+@keyframes splashFinalLogoIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 640px) {
+  .splash__brand { width: min(84vw, 430px); }
+  .splash__wordmark { width: min(100%, 410px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash__wordmark {
+    opacity: 1;
+    animation: none;
+  }
+  .splash__final-logo { display: none; }
+}

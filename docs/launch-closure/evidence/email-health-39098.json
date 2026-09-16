@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "pipelineId": 122,
+  "runId": 39098,
+  "sourceSha": "2ab3cf8ad815d71d847d66f38e9bfc71331551dd",
+  "readOnly": true,
+  "startedAt": "2026-09-16T15:29:13.251002+00:00",
+  "finishedAt": "2026-09-16T15:29:33.904665+00:00",
+  "receiptUrl": "https://dev.azure.com/ravitejamorampudi7777/ac93a324-7998-45b3-9ab4-e0b590996fcb/_apis/build/builds/39098/logs/7",
+  "auth": {"canonicalVerified": 1, "incompleteCanonicalState": 0, "pendingProjections": 0, "oldestPendingSeconds": 0, "retryingProjections": 0, "activeLeases": 0, "expiredLeases": 0, "challenges24h": 1, "unavailableDeliveries24h": 0, "unknownDeliveries24h": 0},
+  "userChef": {"projectedIdentities": 1, "customerProfileMismatches": 0, "chefApplicationMismatches": 0, "projectionReceipts24h": 1},
+  "notification": {"accepted24h": 1, "failed24h": 0, "unknown24h": 0, "expiredUnknown24h": 0},
+  "mailboxAccepted": false,
+  "crossServiceIdentityEqualityProven": false,
+  "limitations": ["Sequential aggregate reads, not an atomic cross-database snapshot", "Provider acceptance is not inbox delivery", "Counts do not identify the owner's account or prove all identities agree"]
+}

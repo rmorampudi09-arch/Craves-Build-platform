@@ -33,7 +33,7 @@ class AuthEmailProjectionDbTest {
     final Instant verifiedAt=Instant.now().minusSeconds(30).truncatedTo(ChronoUnit.MICROS);
     @BeforeEach void disposableDatabaseOnly() {
         String url=System.getenv("EMAIL_TEST_DB_URL");
-        assertEquals("true",System.getenv("GITHUB_ACTIONS"),"Destructive suite must run in disposable GitHub CI");
+        assertTrue("true".equals(System.getenv("GITHUB_ACTIONS")) || "true".equalsIgnoreCase(System.getenv("TF_BUILD")),"Destructive suite must run in disposable CI");
         assertEquals("true",System.getenv("EMAIL_TEST_DISPOSABLE"));
         assertTrue(url.matches("jdbc:postgresql://(?:localhost|127\\.0\\.0\\.1):[0-9]+/craves_email_test"));
         var admin=new JdbcTemplate(new DriverManagerDataSource(url,System.getenv("EMAIL_TEST_DB_USER"),System.getenv("EMAIL_TEST_DB_PASSWORD")));

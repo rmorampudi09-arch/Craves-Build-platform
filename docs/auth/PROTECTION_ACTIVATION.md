@@ -26,3 +26,11 @@ Run `python3 -m unittest discover -s scripts/release/tests -p 'test_auth_activat
 Read-only gateway inspection 39109 on source `1539ebc8661df401d22820e8d188010801658655` found no direct unconditional rate limits in the two Auth operation, API and global inbound inheritance chains. It changed no policies. XML hashes: API `93911877d8aac14ae478dfb0a3291fcc97f1b5f8fb9b337e2d0d8f3e23f22d84`, global `8e678113f285cd7bef4e758a8f7d3ca893310d891d6301e791b0537132fbedc5`. This is not a complete product/workspace policy execution proof.
 
 Azure environment updates create a revision; see [Microsoft's environment-variable documentation](https://learn.microsoft.com/en-us/azure/container-apps/environment-variables).
+
+## Asynchronous update recovery
+
+Azure run 39117 built and verified source `2ab2e36d30276a039121529656b8c24e6fecdd64` against successful exact-main regression 35131529167. It requested immutable Auth image `cravesprodlowacr82121.azurecr.io/craves/auth-service@sha256:58406225368594ac39a606e3fc38d01fc60be53100cef1721c2416b7e2b620e7`. The first immediate settings read after the asynchronous update did not match, so acceptance stopped. This run remains FAILED; it is not a protected-runtime receipt. The update may finish independently of the client checker. Do not repeat a mutation to discover its outcome.
+
+The updated checker waits at most 60 observations with five-second intervals. During propagation it tolerates only the exact original desired template, with all unrelated configuration unchanged, until it sees the complete candidate. Partial/unknown settings, another image, unrelated drift or return to old settings after seeing the candidate still stop acceptance. Health verification still requires the desired and actually running revisions to agree.
+
+The `verify-auth-protection` pipeline action invokes verification only: no build, image update, settings update, migration, secret read or rollback. Supply the existing immutable image and the pre-update unrelated-settings fingerprint from the original release receipt. For run 39117 that fingerprint is `cd21b72cfdffc279918efdf98d35dcaec0491ab8d1957377b700f9790d095577`. It verifies the ready revision and exact preserved settings before and after the same bounded synthetic probes. It never uses a real account. Genuine sign-in acceptance and final launch approval remain separate.

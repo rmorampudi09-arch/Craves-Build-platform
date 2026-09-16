@@ -57,6 +57,9 @@ public class ChefEarningsService {
             return changed;
         }
         if(db.count("SELECT count(*) FROM referral_schema.inbox WHERE status<>'APPLIED' AND (aggregate_id=? OR aggregate_id=?)",order,uuid(snapshot,"checkout_id"))>0) return changed;
+        // An accepted but not yet applied account/chef event is known uncertainty, even
+        // while the previous observation is still fresh. Refund debits above remain allowed.
+        for(UUID member:members) if(db.count("SELECT count(*) FROM referral_schema.inbox WHERE source='auth' AND aggregate_id=? AND status<>'APPLIED'",member)>0) return changed;
         // Missing/stale authority is a retry, not an invented negative eligibility decision.
         for(UUID member:members) if(db.count("SELECT count(*) FROM referral_schema.chef_membership WHERE user_id=? AND observed_at>=?",member,time(now.minusSeconds(900)))!=1) return changed;
         if(!eligible(uuid(snapshot,"seller_id"))) return changed;

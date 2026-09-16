@@ -127,4 +127,12 @@ class ChefEarningsIT {
         assertEquals(1,t.db.count("SELECT count(*) FROM referral_schema.order_snapshot WHERE order_id=?",order));
         assertEquals(0,t.db.count("SELECT count(*) FROM referral_schema.member WHERE user_id=?",buyer));
     }
+    @Test void queuedChefRevocationBlocksCreditBeforeTheAccountWorkerCatchesUp() {
+        var a=t.member(null);var seller=t.member(a);eligible(a,1,true);eligible(seller,1,true);var order=order(seller,30000);
+        service.process(order.id());due(order,List.of(a,seller));
+        var payload=t.json(Map.of("userId",a.id().toString(),"version",3,"eligible",false,"observedAt",t.clock.instant().toString()));
+        t.inbox.receive("auth",t.envelope("account.chef_status",a.id(),payload,UUID.randomUUID()));
+        assertFalse(service.process(order.id()));assertEquals(0,credited(a.id()));
+        assertTrue(t.inbox.applyOne());assertFalse(service.process(order.id()));assertEquals(0,credited(a.id()));
+    }
 }

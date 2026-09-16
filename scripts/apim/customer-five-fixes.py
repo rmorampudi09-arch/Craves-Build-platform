@@ -38,6 +38,10 @@ def main(apply=False):
                 metadata[key] = 'SECRET_REFERENCE' if item.get('secretRef') else 'PRESENT' if item.get('value') else 'EMPTY'
         print('FEATURE_RUNTIME ' + json.dumps({'name':name,'image':container['image'],
             'latest':props['latestRevisionName'],'ready':props['latestReadyRevisionName'],'settings':metadata}))
+        if 'user-chef-service@sha256:' in container['image']:
+            reference = container['image'].split('.azurecr.io/', 1)[1]
+            info = safe.az('acr', 'manifest', 'show-metadata', '--registry', 'cravesprodlowacr82121', '--name', reference)
+            print('USER_CHEF_SOURCE_TAGS ' + json.dumps(info.get('tags', [])))
     base = f'https://management.azure.com/subscriptions/{safe.SUB}/resourceGroups/{safe.RG}/providers/Microsoft.ApiManagement/service/{safe.APIM}'
     safe.read_policies(base)
     apis = safe.az('apim', 'api', 'list', '-g', safe.RG, '--service-name', safe.APIM)

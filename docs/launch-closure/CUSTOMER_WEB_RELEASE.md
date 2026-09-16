@@ -35,6 +35,8 @@ python -m unittest discover -s scripts/release/tests -p 'test_web_release_*.py' 
 
 The complete GitHub regression additionally runs all seven Java services against disposable PostgreSQL/PostGIS, the whole web suite and connected synthetic finance checks. Never run the database fixtures against a production connection.
 
+During continuation, separate main run35108176803 exposed a resend-countdown UI test timing failure while the full main regression35108176936 passed. The failed receipt is retained, not dismissed. The test previously advanced fake time after a DOM query that could resolve before React installed the interval effect. It now flushes the fetched state and timer effect before advancing, requires an installed timer, checks disabled at59 seconds and enabled at60, and retains the no-early-request and challenge-ownership assertions. All16 email UI tests passed in five consecutive local runs after this test-only correction. Fresh exact-source CI must pass before release; no application timer logic was weakened.
+
 ## Manual steps / remaining inputs
 
 - Azure: use the existing authenticated portal and pipeline service connection; no new paid resources or permissions.

@@ -164,10 +164,16 @@ describe("email OTP lifecycle UI", () => {
     vi.useFakeTimers({ toFake: ["Date", "performance", "setInterval", "clearInterval"] });
     vi.setSystemTime(new Date("2030-01-01T00:00:00Z")); // deliberately skew the browser clock
     current = pending;
-    render(createElement(EmailVerificationPanel));
-    await screen.findByText("Code expires in 10m 0s.");
+    // Flush the fetched state AND its interval effect before moving fake time.
+    // A DOM find can resolve at commit, before the passive effect is installed.
+    await act(async () => { render(createElement(EmailVerificationPanel)); });
+    expect(screen.getByText("Code expires in 10m 0s.")).toBeTruthy();
+    expect(vi.getTimerCount()).toBe(1);
     expect(button("Resend in 60s").disabled).toBe(true);
-    await act(async () => { vi.advanceTimersByTime(60_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(59_000); });
+    expect(button("Resend in 1s").disabled).toBe(true);
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/resend"))).toBe(false);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
     expect(button("Resend email code").disabled).toBe(false);
     fireEvent.click(button("Resend email code"));
     await waitFor(() => expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/resend"))).toBe(true));

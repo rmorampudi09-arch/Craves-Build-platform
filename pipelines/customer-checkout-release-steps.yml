@@ -1,0 +1,61 @@
+steps:
+  - task: JavaToolInstaller@0
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+  - script: |
+      set -euo pipefail
+      python3 scripts/release/verify-customer-checkout-contract.py
+      python3 -m unittest discover -s scripts/apim/tests
+      docker run -d --name customer-checkout-test -e POSTGRES_USER=craves_test -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=chef_ledger_test -p 127.0.0.1:55432:5432 postgres:16
+      for i in {1..30}; do
+        if docker exec customer-checkout-test pg_isready -U craves_test -d chef_ledger_test; then break; fi
+        sleep 2
+      done
+      export CRAVES_DISPOSABLE_TEST_DATABASE=true
+      export LEDGER_TEST_JDBC_URL=jdbc:postgresql://localhost:55432/chef_ledger_test
+      export LEDGER_TEST_DB_USER=craves_test LEDGER_TEST_DB_PASSWORD=''
+      mvn -B -ntp -f services/order-service/pom.xml clean verify
+      python3 scripts/release/require-checkout-test-evidence.py
+    displayName: Test atomic checkout with preserved finance, referrals and cart
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: services/order-service/target/surefire-reports/TEST-*.xml
+      failTaskOnFailedTests: true
+  - task: AzureCLI@2
+    displayName: Preflight, build and publish tested checkout image
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        python3 scripts/apim/customer-checkout-routes.py --expected-image cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0
+        IMAGE="cravesprodlowacr82121.azurecr.io/craves/order-service:customer-checkout-$(Build.SourceVersion)"
+        az acr login --name cravesprodlowacr82121 --only-show-errors
+        docker build --pull -t "$IMAGE" services/order-service
+        docker push "$IMAGE"
+  - task: AzureCLI@2
+    displayName: Deploy exact checkout image and publish operation pair
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        IMAGE="cravesprodlowacr82121.azurecr.io/craves/order-service:customer-checkout-$(Build.SourceVersion)"
+        export EXPECTED_PREVIOUS_IMAGE=cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0
+        export READY_ATTEMPTS=150 READY_SLEEP_SECONDS=5
+        DEPLOY_LOG=$(mktemp)
+        if bash scripts/release/deploy-single-service-preserve-runtime.sh rg-craves-prodlow-centralindia ca-craves-order-service-prodlow "$IMAGE" order >"$DEPLOY_LOG" 2>&1; then
+          echo 'CHECKOUT_IMAGE_VERIFIED: image, unchanged runtime and health passed'
+        else
+          echo 'CHECKOUT_IMAGE_NOT_VERIFIED: gateway publication stopped; raw logs withheld'
+          exit 1
+        fi
+        python3 scripts/apim/customer-checkout-routes.py --expected-image "$IMAGE" --apply

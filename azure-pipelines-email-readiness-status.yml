@@ -16,6 +16,7 @@ parameters:
       - publish-review-routes
       - test-email-upgrade
       - release-customer-email
+      - release-customer-checkout
 pool:
   vmImage: ubuntu-latest
 steps:
@@ -26,6 +27,8 @@ steps:
       - template: pipelines/customer-email-test-steps.yml
   - ${{ if eq(parameters.action, 'release-customer-email') }}:
       - template: pipelines/customer-email-release-steps.yml
+  - ${{ if eq(parameters.action, 'release-customer-checkout') }}:
+      - template: pipelines/customer-checkout-release-steps.yml
   - ${{ if or(eq(parameters.action, 'inspect-customer-fixes'), eq(parameters.action, 'publish-review-routes')) }}:
       - task: AzureCLI@2
         displayName: Inspect customer routes and optionally repair review writes

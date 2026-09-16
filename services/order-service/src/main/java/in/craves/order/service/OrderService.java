@@ -147,6 +147,18 @@ public class OrderService {
         return clearCart(principal);
     }
 
+    /** Holds the cart row until the caller's checkout operation commits. */
+    @Transactional
+    public CartResponse requireUnchangedCart(CravesPrincipal principal,
+        in.craves.order.web.ApiDtos.CartSnapshotRequest expected) {
+        requireCustomer(principal);
+        UUID cartId = getOrCreateCartId(principal.identityId());
+        lockCart(cartId);
+        CartResponse cart = mapCart(cartId, principal.identityId());
+        CartSafetyPolicy.requireSnapshot(cartId, cart.items(), expected);
+        return cart;
+    }
+
     @Transactional
     public CartResponse switchCartKitchen(CravesPrincipal principal,
         in.craves.order.web.ApiDtos.SwitchKitchenRequest request) {

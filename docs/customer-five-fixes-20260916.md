@@ -2,6 +2,12 @@
 
 ## Scope
 
+## Latest result — 16 September 2026, 16:40 IST
+
+Review39064, checkout39071 and email39073 all succeeded live. Email39073 finished at16:36:53: all three new service images passed health/runtime checks, Notification transport and Auth verification/projection flags were enabled, and four authenticated gateway routes verified. Historical failed preflights below are resolved. Exact-source email image tag is `customer-email-4ad490bea2a7ae0ca2f00628e63d3b0e202f407c`; checkout tag is `customer-checkout-1e365e81d24297a92bb6774f5610cce6158d3f67`.
+
+Final02 mobile APK installed preserving app data at16:17:11;264 suites/2,710 tests, TypeScript and scoped lint pass. Existing paid-order summary and receipt were generated live, saved on the phone and visually inspected successfully. Cart cancellation preserves the existing item. Review form and password setup navigation work. Genuine rating submission, actual email receipt/code verification, password entry and real checkout remain customer-acceptance gates. No fabricated review, credential or real order/payment was submitted. Private downloaded PDFs are not in Git or source ZIP.
+
 The user authorized live repairs for review errors, order PDFs, email verification, password setup/reset and checkout. Mobile source and the acceptance ledger are in `C:/Users/saive/CravesStudio`; this checkout contains backend and release changes only. This document is an in-progress record, not evidence that every customer journey passed.
 
 ## Review

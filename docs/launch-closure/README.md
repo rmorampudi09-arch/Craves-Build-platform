@@ -2,13 +2,13 @@
 
 Authority: owner request of16 September2026 to execute the69-page public-launch fixing plan. All46 findings stay in scope; no item is accepted merely because an image is deployed. The owner's final real payment/delivery/bank journey remains NOT RUN and separate.
 
-## Current checkpoint: P0 merged; P1 rollout in progress
+## Current checkpoint: protected fixes merged; live P1 acceptance in progress
 
 Owner-approved PR360 is merged as `111160c1a71674c8b0c178a55884e389c97ffb8c`. PR362 is merged as `b0cc44f574eb4fff7a31682fd8baaa14f57b2700`; its exact-main full regression35112960978 passed all four required jobs. The separate admin workflows also passed. The required second-person approval was removed only after the owner's explicit confirmation; all other recorded main protections remain. See `REPOSITORY_PROTECTION.md` and the dated progress log for chronological evidence.
 
 The production finance response-header correction has been published and read back. Anonymous and invalid-token responses now carry no-store; authenticated role/error coverage remains open. Azure39094 read all35 versioned Auth/User-Chef/Notification migration records and matched their source checksums without writes. See `FINANCE_RESPONSE_PRIVACY.md` and `APPLIED_EMAIL_HISTORY.md`.
 
-The guarded customer-web rollout is in progress. A passing build or applied migration is not proof of a delivered verification email, a verified profile, production capacity, or launch acceptance. Do not infer completion from this checkpoint.
+PR363 and PR364 are also merged. Current main is `48d0941b3a8210e7754073b99584d19d48bc5c9a`; full exact-main regression35120102748 passed all four jobs. Earlier web attempts39096/39100 stopped before any deployment. Read-only39104 confirmed that the four running-template differences are documented defaults; desired settings remain strictly fingerprinted. The subsequent guarded rollout is in progress. See `CUSTOMER_WEB_RELEASE.md` for the chronology. A passing build or applied migration is not proof of a delivered verification email, a verified profile, production capacity, or launch acceptance.
 
 ## Package sequence
 

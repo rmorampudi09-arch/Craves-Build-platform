@@ -1,0 +1,17 @@
+{
+  "runId": 35120102748,
+  "url": "https://github.com/rmorampudi09-arch/Craves-Build-platform/actions/runs/35120102748",
+  "sourceSha": "48d0941b3a8210e7754073b99584d19d48bc5c9a",
+  "branch": "main",
+  "workflow": "Exact release launch regression",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {"name": "Pin the reviewed source", "conclusion": "success"},
+    {"name": "Clean web install, lint, types, every test and build", "conclusion": "success"},
+    {"name": "Seven complete Java services and connected source", "conclusion": "success"},
+    {"name": "Exact-SHA complete regression evidence", "conclusion": "success"}
+  ],
+  "publicLaunchAccepted": false,
+  "liveFinancialJourneyPerformed": false
+}

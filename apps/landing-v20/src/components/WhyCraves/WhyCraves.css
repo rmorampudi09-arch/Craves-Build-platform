@@ -1,0 +1,75 @@
+.why {
+  padding: 112px 0 124px;
+  background: var(--color-white);
+  font-family: var(--font-ui);
+}
+
+.why__shell {
+  max-width: 1040px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.why__eyebrow {
+  color: var(--color-red);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  margin-bottom: 28px;
+}
+
+.why__statement {
+  max-width: 1120px;
+  margin: 0 auto;
+  font-family: var(--font-ui);
+  font-size: clamp(1.55rem, 2.55vw, 2.6rem);
+  line-height: 1.52;
+  letter-spacing: -0.028em;
+  font-weight: 500;
+  color: #4a4c51;
+  text-wrap: balance;
+}
+
+.why__statement strong {
+  font-weight: 800;
+  color: #2e3035;
+}
+
+.why__quote {
+  max-width: 760px;
+  margin: 56px auto 0;
+  font-family: var(--font-script);
+  font-size: clamp(1.4rem, 2.3vw, 2.2rem);
+  line-height: 1.32;
+  font-weight: 400;
+  font-synthesis: none;
+  letter-spacing: 0;
+  color: var(--color-red);
+  text-wrap: balance;
+}
+
+@media (max-width: 900px) {
+  .why {
+    padding: 82px 0 88px;
+  }
+
+  .why__eyebrow {
+    margin-bottom: 20px;
+  }
+
+  .why__quote {
+    margin-top: 40px;
+  }
+}
+
+@media (max-width: 560px) {
+  .why__statement {
+    font-size: clamp(1.28rem, 6vw, 1.78rem);
+    line-height: 1.56;
+  }
+
+  .why__quote {
+    font-size: clamp(1.12rem, 5.8vw, 1.6rem);
+    margin-top: 28px;
+  }
+}

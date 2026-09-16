@@ -1,0 +1,91 @@
+{
+  "source_archive": "craves-landing-page-v1-for-chefs-centered-rider-section-v3-footer-nav-updated(1).zip",
+  "source_sha256": "41728d4e610b447bd2d3127b52d1e9238e75bb26659ea2f74cb87247e29e5bd9",
+  "modified_existing_files": [
+    "craves-landing-page-v1-for-chefs-centered-rider-section-v3-footer-nav-updated/craves-landing/vite.config.ts"
+  ],
+  "added_files": [
+    "COMPATIBILITY_README.md",
+    "COMPATIBILITY_CHECKS.json"
+  ],
+  "omitted_installed_or_generated_files": 706,
+  "source_files_preserved_exactly": 27,
+  "media_files_preserved_exactly": 28,
+  "all_original_src_and_public_files_unchanged": true,
+  "package_and_lockfile_unchanged": true,
+  "typecheck": "PASS",
+  "production_build": "UNVERIFIED: Windows-native binaries; npm DNS unavailable in Linux validation environment.",
+  "configuration_tests": {
+    "passed": 12,
+    "checks": [
+      "Content-based version added to public image URL",
+      "Visible text preserved",
+      "External URLs preserved",
+      "Non-existent public assets unchanged",
+      "Path traversal rejected",
+      "Library files excluded",
+      "Font stylesheet versioned in HTML without editing font files",
+      "Existing URL parameters and fragment preserved",
+      "Version rewrite idempotent",
+      "No runtime scroll or splash modification",
+      "HTML revalidation configured for local preview",
+      "JavaScript target unchanged from upload"
+    ],
+    "scope": "Isolated configuration hooks; not a full Vite production build."
+  },
+  "source_preview_tests": {
+    "browser": "144.0.7559.96",
+    "mode": "Offline source preview: original image bytes inlined, fallback fonts and video posters. This is not a production build, live video test or remote-font test.",
+    "width_checks": [
+      {
+        "viewport": [
+          360,
+          800
+        ],
+        "layout": {
+          "overflow": false,
+          "sections": 6,
+          "visible": true,
+          "logo": 48
+        },
+        "image_errors": [],
+        "runtime_errors": []
+      },
+      {
+        "viewport": [
+          1366,
+          768
+        ],
+        "layout": {
+          "overflow": false,
+          "sections": 6,
+          "visible": true,
+          "logo": 54
+        },
+        "image_errors": [],
+        "runtime_errors": []
+      },
+      {
+        "viewport": [
+          1920,
+          1080
+        ],
+        "layout": {
+          "overflow": false,
+          "sections": 6,
+          "visible": true,
+          "logo": 54
+        },
+        "image_errors": [],
+        "runtime_errors": []
+      }
+    ],
+    "motion": {
+      "splash_completed": true,
+      "page_unlocked": true,
+      "wheel_moved_down": true,
+      "hero_return_y": 0,
+      "runtime_errors": []
+    }
+  }
+}

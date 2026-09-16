@@ -1,0 +1,274 @@
+/* Fontsource 5.3.0. Remote, version-pinned web fonts, not local font files.
+ * Primary: Cloudflare cdnjs; fallback: jsDelivr (same package/version).
+ * No Google Fonts dependency or installed-font assumption.
+ * The browser downloads only the faces it needs. Readable system fallbacks
+ * remain active when offline or when a visitor blocks all remote fonts.
+ */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-inter/5.3.0/files/inter-latin-400-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-400-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-inter/5.3.0/files/inter-latin-400-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-400-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-inter/5.3.0/files/inter-latin-500-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-500-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-inter/5.3.0/files/inter-latin-500-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-500-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-inter/5.3.0/files/inter-latin-600-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-600-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-inter/5.3.0/files/inter-latin-600-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-600-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-inter/5.3.0/files/inter-latin-700-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-700-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-inter/5.3.0/files/inter-latin-700-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-700-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-manrope/5.3.0/files/manrope-latin-400-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-400-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-manrope/5.3.0/files/manrope-latin-400-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-400-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-manrope/5.3.0/files/manrope-latin-500-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-500-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-manrope/5.3.0/files/manrope-latin-500-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-500-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-manrope/5.3.0/files/manrope-latin-600-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-600-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-manrope/5.3.0/files/manrope-latin-600-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-600-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-manrope/5.3.0/files/manrope-latin-700-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-700-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-manrope/5.3.0/files/manrope-latin-700-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-700-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-manrope/5.3.0/files/manrope-latin-800-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-800-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-manrope/5.3.0/files/manrope-latin-800-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-800-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-poppins/5.3.0/files/poppins-latin-500-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/poppins@5.3.0/files/poppins-latin-500-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-poppins/5.3.0/files/poppins-latin-500-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/poppins@5.3.0/files/poppins-latin-500-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-poppins/5.3.0/files/poppins-latin-600-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/poppins@5.3.0/files/poppins-latin-600-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-poppins/5.3.0/files/poppins-latin-600-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/poppins@5.3.0/files/poppins-latin-600-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-poppins/5.3.0/files/poppins-latin-700-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/poppins@5.3.0/files/poppins-latin-700-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-poppins/5.3.0/files/poppins-latin-700-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/poppins@5.3.0/files/poppins-latin-700-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-poppins/5.3.0/files/poppins-latin-800-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/poppins@5.3.0/files/poppins-latin-800-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-poppins/5.3.0/files/poppins-latin-800-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/poppins@5.3.0/files/poppins-latin-800-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-eb-garamond/5.3.0/files/eb-garamond-latin-700-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/eb-garamond@5.3.0/files/eb-garamond-latin-700-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-eb-garamond/5.3.0/files/eb-garamond-latin-700-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/eb-garamond@5.3.0/files/eb-garamond-latin-700-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-eb-garamond/5.3.0/files/eb-garamond-latin-800-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/eb-garamond@5.3.0/files/eb-garamond-latin-800-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-eb-garamond/5.3.0/files/eb-garamond-latin-800-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/eb-garamond@5.3.0/files/eb-garamond-latin-800-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Luckiest Guy';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-luckiest-guy/5.3.0/files/luckiest-guy-latin-400-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/luckiest-guy@5.3.0/files/luckiest-guy-latin-400-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-luckiest-guy/5.3.0/files/luckiest-guy-latin-400-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/luckiest-guy@5.3.0/files/luckiest-guy-latin-400-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Courgette';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-courgette/5.3.0/files/courgette-latin-400-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/courgette@5.3.0/files/courgette-latin-400-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-courgette/5.3.0/files/courgette-latin-400-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/courgette@5.3.0/files/courgette-latin-400-normal.woff') format('woff');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-400-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-400-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-400-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-400-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-500-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-500-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-500-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-500-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-600-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-600-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-600-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-600-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-700-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-700-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-700-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-700-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-800-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-800-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-800-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-800-normal.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-900-normal.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-900-normal.woff2') format('woff2'),
+       url('https://cdnjs.cloudflare.com/ajax/libs/fontsource-fraunces/5.3.0/files/fraunces-latin-900-normal.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-900-normal.woff') format('woff');
+}
+@font-face {
+  font-family: 'Cambria';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Cambria Italic'),
+       local('Cambria-Italic');
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'),
+       local('Lora-Italic');
+}

@@ -21,9 +21,11 @@ Write mode refuses unknown policy bytes, inherited-policy drift, missing ETags, 
 
 ## Test and execution boundary
 
-Thirteen local regression tests cover header placement and uniqueness, idempotence, nested errors, unchanged routing/auth/body, malformed XML, scope restrictions, exact ETags, no-write inspection including drift diagnostics, and protected apply/readback. All 29 current APIM tests passed locally. These are isolated structural and mocked management tests, not authenticated production 200/403/400/500 acceptance.
+Fifteen local regression tests cover header placement and uniqueness, idempotence, nested errors, unchanged routing/auth/body, malformed XML, scope restrictions, exact ETags, no-write inspection including drift/partial-shape diagnostics, and protected apply/readback. All 31 current APIM tests passed locally. These are isolated structural and mocked management tests, not authenticated production 200/403/400/500 acceptance.
 
 Read-only Azure run 39081 at source 0ea1fc397b93521de93c2767f6f0e35606157251 stopped at `Inherited global policy drifted`. No policy write was attempted. The earlier inventory used the collection endpoint while the repair helper reads a policy resource; formatting differences are only a hypothesis until comparison, not a reason to relax write guards. Diagnostic metadata was added without changing apply guards. F14 remains OPEN.
+
+Read-only run 39083 at e535e0fa5ec8339eebabb51af0a91691f6558444 then stopped at `Unexpected policy sections`. Inspection now permits reporting partial or differently ordered section structures; patch/apply still reject them. No live change has been attempted, and neither failure is relabelled as success. A fresh diagnostic is needed before planning any write.
 
 The pipeline122 action `inspect-finance-response-privacy` runs the tests and a read-only live inspection. At this checkpoint the action does not expose a write option. An application image rollout is unnecessary for this cache-only gateway repair. Before publication, attach the current exact-source test result and inspect the emitted plan. After publication, record exact after-policy hashes and independently repeat the anonymous probes; then verify authenticated success, wrong-role denial, validation error and upstream-failure handling through controlled authorized paths. Keep F14 OPEN until all required evidence exists.
 

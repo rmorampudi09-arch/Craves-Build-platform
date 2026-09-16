@@ -32,12 +32,12 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 def sha(value): return hashlib.sha256(value.encode('utf-8')).hexdigest()
 
 
-def root(text):
+def root(text, require_sections=True):
     if not isinstance(text, str) or '<!DOCTYPE' in text.upper() or '<!ENTITY' in text.upper():
         raise GuardError('Unexpected XML declaration')
     try: value = ET.fromstring(text)
     except ET.ParseError: raise GuardError('Policy XML could not be parsed safely') from None
-    if value.tag != 'policies' or [n.tag for n in value] != ['inbound', 'backend', 'outbound', 'on-error']:
+    if value.tag != 'policies' or (require_sections and [n.tag for n in value] != ['inbound', 'backend', 'outbound', 'on-error']):
         raise GuardError('Unexpected policy sections')
     return value
 
@@ -78,14 +78,18 @@ def patch_policy(text):
 
 
 def inspect(text):
-    tree = root(text)
-    return {'sha256': sha(text), 'returnResponses': len(list(tree.iter('return-response'))),
+    tree = root(text, require_sections=False)
+    sections = ['inbound', 'backend', 'outbound', 'on-error']
+    return {'sha256': sha(text), 'xmlBytes': len(text.encode('utf-8')),
+            'sectionsMatchPatchShape': [n.tag for n in tree] == sections,
+            'sectionOrder': [n.tag if n.tag in sections else 'UNRECOGNIZED' for n in tree],
+            'returnResponses': len(list(tree.iter('return-response'))),
             'hasFragments': bool(list(tree.iter('include-fragment'))),
             'hasCaching': any(n.tag.startswith('cache-') for n in tree.iter()),
-            'sectionTags': {section.tag: [node.tag for node in section] for section in tree},
+            'sectionTags': {section.tag: [node.tag for node in section] for section in tree if section.tag in sections},
             'privacy': [{'section': section.tag,
                          'noStoreHeaders': sum(1 for n in section.iter('set-header') if n.get('name', '').lower() == 'cache-control' and any('no-store' in (v.text or '').lower() for v in n.findall('value')))}
-                        for section in tree]}
+                        for section in tree if section.tag in sections]}
 
 
 def scope_url(scope):
@@ -148,6 +152,7 @@ def run(client, apply=False):
     global_matches = sha(global_xml) == EXPECTED_GLOBAL_SHA
     if apply and not global_matches: raise GuardError('Inherited global policy drifted')
     global_info = inspect(global_xml)
+    if apply: root(global_xml)
     if apply and (global_info['returnResponses'] or global_info['hasFragments'] or global_info['hasCaching']):
         raise GuardError('Inherited early return, fragment or caching needs separate review')
     planned = []
@@ -156,12 +161,18 @@ def run(client, apply=False):
         before, etag = client.request(scope)
         if apply and sha(before) != EXPECTED_POLICY_SHA: raise GuardError('Finance owner policy drifted')
         if apply and (not etag or etag == '*'): raise GuardError('Policy ETag missing; no write authorized')
-        planned.append((scope, before, etag, patch_policy(before)))
+        # Read-only diagnosis must be able to describe an unexpected shape.
+        # It never authorizes transforming that shape in write mode.
+        try: after = patch_policy(before)
+        except GuardError:
+            if apply: raise
+            after = None
+        planned.append((scope, before, etag, after))
     evidence = {'readOnly': not apply, 'accepted': False, 'observedAt': datetime.now(timezone.utc).isoformat(),
                 'global': global_info, 'globalBaselineMatches': global_matches,
                 'policies': [], 'beforeAnonymous': probe()}
     for scope, before, etag, after in planned:
-        record = {'scope': scope, 'before': inspect(before), 'proposed': inspect(after), 'applied': False,
+        record = {'scope': scope, 'before': inspect(before), 'proposed': inspect(after) if after else None, 'applied': False,
                   'baselineMatches': sha(before) == EXPECTED_POLICY_SHA,
                   'exactEtagAvailable': bool(etag and etag != '*')}
         if apply:

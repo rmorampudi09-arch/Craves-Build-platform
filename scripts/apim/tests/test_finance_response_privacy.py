@@ -114,5 +114,24 @@ class FinancePrivacyTest(unittest.TestCase):
         with self.assertRaises(privacy.GuardError): self.run_fixture(client, True)
         self.assertEqual(client.writes, [])
 
+    def test_partial_policy_is_described_readonly_but_never_patched_or_applied(self):
+        partial = '<policies><inbound><base /></inbound></policies>'
+        info = privacy.inspect(partial)
+        self.assertEqual(info['sectionOrder'], ['inbound'])
+        self.assertFalse(info['sectionsMatchPatchShape'])
+        with self.assertRaises(privacy.GuardError): privacy.patch_policy(partial)
+        client = FakeManagement()
+        client.policies['/policies/policy'] = partial
+        client.policies['/apis/craves-chef-finance-v1/policies/policy'] = partial
+        result = self.run_fixture(client)
+        self.assertIsNone(result['policies'][1]['proposed'])
+        self.assertEqual(client.writes, [])
+        with self.assertRaises(privacy.GuardError): self.run_fixture(client, True)
+
+    def test_unrecognized_section_names_are_not_exported(self):
+        info = privacy.inspect('<policies><PRIVATE_CANARY /></policies>')
+        self.assertEqual(info['sectionOrder'], ['UNRECOGNIZED'])
+        self.assertNotIn('PRIVATE_CANARY', json.dumps(info))
+
 
 if __name__ == '__main__': unittest.main()

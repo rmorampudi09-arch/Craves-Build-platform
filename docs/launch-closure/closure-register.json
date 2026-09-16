@@ -29,7 +29,7 @@
       "title": "Enforce release governance",
       "package": "P0",
       "status": "Verifying",
-      "evidence": ["2026-09-16-progress.md", "Exact-SHA CI added; main protection and reviewed deployment wrappers still OPEN"],
+      "evidence": ["REPOSITORY_PROTECTION.md", "Main rule 83269016 saved/read back; PR361 required failure and blocked-merge UI observed, then closed unmerged; stale-head and deployment-wrapper evidence OPEN"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -138,8 +138,8 @@
       "id": "F14",
       "title": "Private-response no-store",
       "package": "P2",
-      "status": "Not started",
-      "evidence": [],
+      "status": "Verifying",
+      "evidence": ["FINANCE_RESPONSE_PRIVACY.md", "Four anonymous affected routes reproduced; guarded repair prepared with 31 APIM tests; live policy shape mismatch unresolved, no write performed"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -249,7 +249,7 @@
       "title": "Chef referral integration and UI",
       "package": "P6",
       "status": "Not started",
-      "evidence": [],
+      "evidence": ["OWNER_DECISIONS_20260916.md: INR1500 monthly chef reward cap and food-subtotal qualification confirmed; not financial activation evidence"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false

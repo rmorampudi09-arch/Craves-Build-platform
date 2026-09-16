@@ -20,7 +20,9 @@ The actual inline prerequisite code has positive exact-head coverage and negativ
 
 The latest candidate at 0ea1fc397b93521de93c2767f6f0e35606157251 also passed in push run 35098690426 and PR run 35098696023. Later commits require their own results.
 
-Saved-rule readback is complete. Exercise an intentionally failing harmless test-only PR and a stale-head update; record GitHub's actual blocked-merge result without merging the failing change. Application tests alone do not prove repository enforcement. Deployment wrappers still require separate reviewed-source, artifact and runtime-preservation reconciliation.
+Saved-rule readback and the negative source-failure probe are complete. Test-only PR 361, source 71f3a67bf288896a0f25209d51b3c01fbcdd60d8, ran the exact regression as run 35100885637. The source prerequisite failed intentionally; backend/web were skipped; the required aggregate FAILED rather than becoming skipped-green. The authenticated owner UI labelled that aggregate Required and Failing and showed Merging is blocked with a disabled Merge pull request button. Review was independently required, so this is not claimed as an experiment isolating the status rule from the review rule. PR 361 was closed, never merged or deployed. Its test branch is separate from PR 360 and must never be promoted.
+
+Run 35100342845 passed the complete regression on e535e0fa5ec8339eebabb51af0a91691f6558444; machine evidence is retained in `evidence/regression-35100342845.json`. A later candidate requires its own result. Stale-green-head acceptance and deployment-wrapper reviewed-source/artifact/runtime-preservation reconciliation remain OPEN.
 
 ## Manual action required
 

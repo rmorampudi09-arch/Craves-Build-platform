@@ -18,12 +18,31 @@ parameters:
       - release-customer-email
       - release-customer-checkout
       - inspect-email-runtime
+      - capture-launch-runtime
 pool:
   vmImage: ubuntu-latest
 steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
+  - ${{ if eq(parameters.action, 'capture-launch-runtime') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_launch_runtime_capture.py'
+        displayName: Verify launch inventory read-only and redaction boundaries
+      - task: AzureCLI@2
+        displayName: Capture launch serving metadata and safety baseline without writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/capture-launch-runtime.py --output "$(Build.ArtifactStagingDirectory)/launch-runtime.json"
+      - task: PublishPipelineArtifact@1
+        condition: succeededOrFailed()
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)
+          artifact: launch-runtime-metadata
   - ${{ if eq(parameters.action, 'inspect-email-runtime') }}:
       - task: AzureCLI@2
         displayName: Inspect email runtime metadata without secret values

@@ -33,6 +33,39 @@ def fixture():
 
 
 class CustomerWebRuntimeTest(unittest.TestCase):
+    def test_documented_defaults_only_match_for_running_template_not_desired_fingerprint(self):
+        for cpu, storage in ((.25, '1Gi'), (.5, '2Gi'), (1, '4Gi'), (2, '8Gi')):
+            app, revisions, replicas = fixture()
+            desired = app['properties']['template']
+            running = revisions[0]['properties']['template']
+            desired['containers'][0]['resources'] = {'cpu': cpu, 'memory': '1Gi', 'ephemeralStorage': storage}
+            running['containers'][0]['resources'] = {'cpu': cpu, 'memory': '1Gi'}
+            desired['scale'].update(cooldownPeriod=300, pollingInterval=30)
+            running['scale'].update(cooldownPeriod=None, pollingInterval=None)
+            running['containers'][0]['probes'] = []
+            with self.subTest(cpu=cpu): self.assertEqual('web--ready', runtime.ready(app, revisions, replicas))
+            changed = copy.deepcopy(app)
+            changed['properties']['template'] = copy.deepcopy(running)
+            self.assertNotEqual(runtime.stable(app), runtime.stable(changed))
+
+    def test_real_defaults_drift_and_unknown_fields_are_not_ignored(self):
+        for kind in ('cooldown', 'polling', 'storage', 'cpu', 'memory', 'probe', 'unknown', 'init'):
+            app, revisions, replicas = fixture()
+            desired = app['properties']['template']
+            running = revisions[0]['properties']['template']
+            desired['containers'][0]['resources'] = {'cpu': .5, 'memory': '1Gi', 'ephemeralStorage': '2Gi'}
+            running['containers'][0]['resources'] = {'cpu': .5, 'memory': '1Gi'}
+            if kind == 'cooldown': desired['scale']['cooldownPeriod'] = 301
+            elif kind == 'polling': desired['scale']['pollingInterval'] = 31
+            elif kind == 'storage': desired['containers'][0]['resources']['ephemeralStorage'] = '4Gi'
+            elif kind == 'cpu': running['containers'][0]['resources']['cpu'] = 1
+            elif kind == 'memory': running['containers'][0]['resources']['memory'] = '2Gi'
+            elif kind == 'probe': running['containers'][0]['probes'] = [{'type': 'Readiness'}]
+            elif kind == 'unknown': running['scale']['futureSetting'] = None
+            elif kind == 'init':
+                desired['initContainers'] = running['initContainers'] = [{'name': 'init'}]
+            with self.subTest(kind=kind), self.assertRaises(ValueError): runtime.ready(app, revisions, replicas)
+
     def test_entire_running_template_must_match_but_azure_unused_fields_may_differ(self):
         for kind in ('document-secret', 'literal-env', 'resource', 'scale', 'probe', 'extra-container'):
             app, revisions, replicas = fixture()

@@ -20,6 +20,7 @@ import {
   type DeliveryStatusResponse,
 } from "@/lib/delivery-status";
 import { loadSession } from "@/services/auth/cravesAuth";
+import { trackingPresentation } from "@/lib/tracking-presentation";
 import { TrackingHeader } from "@/components/tracking/TrackingHeader";
 import { CurrentStatusCard } from "@/components/tracking/CurrentStatusCard";
 import { OrderTimeline } from "@/components/tracking/OrderTimeline";
@@ -90,8 +91,8 @@ export default function TrackingPage() {
           setDelivery(parsedDelivery);
           setMessage(
             parsedDelivery.status
-              ? "Delivery status loaded from the Craves delivery projection."
-              : "A delivery job has not been created for this order yet.",
+              ? "Your delivery status is up to date."
+              : "Your latest order progress is shown above. Delivery updates will appear here when available.",
           );
         } else {
           const deliveryRaw = await deliveryResponse.json().catch(() => null);
@@ -99,7 +100,7 @@ export default function TrackingPage() {
           setDelivery(null);
           setMessage(
             deliveryResponse.status === 404
-              ? "Delivery tracking will appear when a delivery job is created."
+              ? "Your latest order progress is shown above. Delivery updates will appear here when available."
               : responseMessage(
                   deliveryRaw,
                   "Delivery tracking is temporarily unavailable; the order status is still current.",
@@ -156,7 +157,7 @@ export default function TrackingPage() {
 
   if (!id || !UUID.test(id)) return null;
 
-  const deliveryPresentation = presentationFor(delivery?.status ?? null);
+  const currentPresentation = trackingPresentation(order?.status ?? null, delivery?.status ?? null);
   const address = order?.deliveryAddress
     ? [
         order.deliveryAddress.addressLine1,
@@ -184,13 +185,13 @@ export default function TrackingPage() {
           key: order?.status ?? "waiting",
           label: order ? formatOrderStatus(order.status) : "Loading order",
           desc: order
-            ? "Current status from the Order Service"
-            : "Waiting for the backend response",
+            ? "Latest order update"
+            : "Getting your latest order update",
         },
       ];
 
   return (
-    <div className="min-h-screen bg-cream pb-20 text-ink">
+    <div className="min-h-screen bg-white pb-20 text-ink">
       <TrackingHeader orderId={id} onBack={() => navigate({ to: "/orders" })} />
       <main className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
         {loading ? (
@@ -226,16 +227,8 @@ export default function TrackingPage() {
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
             <div className="space-y-5">
               <CurrentStatusCard
-                label={
-                  delivery
-                    ? deliveryPresentation.label
-                    : formatOrderStatus(order.status)
-                }
-                desc={
-                  delivery
-                    ? deliveryPresentation.description
-                    : "This is the current order status from Craves. Delivery tracking begins after a delivery job is created."
-                }
+                label={currentPresentation.label}
+                desc={currentPresentation.description}
               />
 
               <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
@@ -293,7 +286,7 @@ export default function TrackingPage() {
                     : ""}
                 </p>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Active delivery states refresh every 30 seconds while this tab is visible. Terminal states stop polling.
+                  This page checks for updates automatically while you keep it open.
                 </p>
               </section>
               <Link to="/home" className="btn-primary inline-flex w-full">

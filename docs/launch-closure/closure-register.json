@@ -49,7 +49,7 @@
       "title": "Verify canonical email authority",
       "package": "P1",
       "status": "Verifying",
-      "evidence": [],
+      "evidence": ["APPLIED_EMAIL_HISTORY.md: all35 versioned migrations matched deployed source without writes", "EMAIL_OPERATIONAL_HEALTH.md: read-only39098 aggregate canonical/projection/provider-receipt health; not account-specific inbox acceptance"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -368,8 +368,8 @@
       "id": "F37",
       "title": "Chosen delivery provider/tracking",
       "package": "P3",
-      "status": "Not started",
-      "evidence": [],
+      "status": "Verifying",
+      "evidence": ["TRACKING_PROGRESS.md: web Ready For Pickup headline correction merged in PR364; full main35120102748 passed. Provider/delivery acceptance and fresh native checks remain open."],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false

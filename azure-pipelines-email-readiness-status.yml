@@ -26,6 +26,15 @@ parameters:
       - inspect-email-operational-health
       - inspect-customer-web-shape
       - inspect-auth-protection
+      - release-auth-protection
+  - name: expectedAuthReleaseSha
+    displayName: Exact tested main SHA for Auth protection activation
+    type: string
+    default: NOT_AUTHORIZED
+  - name: authRegressionRunId
+    displayName: Successful exact-main full regression run for Auth activation
+    type: string
+    default: NOT_AUTHORIZED
   - name: expectedFinancePrivacySource
     displayName: Exact checked source SHA for finance header publication (unused for inspection)
     type: string
@@ -36,6 +45,11 @@ steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
+  - ${{ if eq(parameters.action, 'release-auth-protection') }}:
+      - template: pipelines/auth-protection-release-steps.yml
+        parameters:
+          sourceSha: ${{ parameters.expectedAuthReleaseSha }}
+          regressionRunId: ${{ parameters.authRegressionRunId }}
   - ${{ if eq(parameters.action, 'inspect-auth-protection') }}:
       - script: python3 -m unittest discover -s scripts/release/tests -p 'test_auth_protection_inventory.py' -v
         displayName: Verify read-only Auth protection metadata boundaries

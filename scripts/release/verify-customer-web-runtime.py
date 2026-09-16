@@ -86,8 +86,8 @@ def production(app):
     require(mode.get('value') == 'production' and not mode.get('secretRef'), 'Existing production payment mode must already be production')
 
 
-def ready(app, revisions, replicas):
-    production(app)
+def ready(app, revisions, replicas, validate=production):
+    validate(app)
     props = app['properties']
     require(props.get('provisioningState') == 'Succeeded' and props.get('runningStatus') == 'Running', 'Web app is not healthy and running')
     current = props.get('latestRevisionName')

@@ -41,8 +41,16 @@ def normalized_env(container):
     # Azure's app/revision endpoints differ in ordering and omitted null fields.
     items=container.get('env',[])
     safe.require(len({item['name'] for item in items})==len(items), 'Duplicate environment names')
-    return {item['name']:{key:value for key,value in item.items() if value is not None}
-            for item in items}
+    result={}
+    for item in items:
+        clean={key:value for key,value in item.items() if value is not None}
+        # Run39072 proved identical secretRef with value="" on app show and
+        # no value field on revision show. Compare the reference, never resolve it.
+        if clean.get('secretRef'):
+            safe.require(not clean.get('value'), 'Ambiguous secret reference and literal value')
+            clean.pop('value',None)
+        result[item['name']]=clean
+    return result
 
 def inspect_runtime():
     safe.require(safe.az('account','show')['id']==safe.SUB, 'Wrong subscription')
@@ -78,7 +86,7 @@ def healthy(service, app, image):
 def preserved(app, service):
     template=copy.deepcopy(app['properties']['template'])
     template.pop('revisionSuffix',None)
-    template['containers'][0]['env']=sorted((item for item in template['containers'][0].get('env',[]) if item['name'] not in FLAGS[service]),key=lambda item:item['name'])
+    template['containers'][0]['env']=sorted((item for item in normalized_env(template['containers'][0]).values() if item['name'] not in FLAGS[service]),key=lambda item:item['name'])
     config=copy.deepcopy(app['properties']['configuration'])
     config.get('ingress',{}).pop('traffic',None)
     return template,config,app.get('identity')

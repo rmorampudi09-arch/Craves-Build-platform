@@ -63,6 +63,20 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'Duplicate environment'):
             r.normalized_env({'env':[{'name':'A','value':'one'},{'name':'A','value':'two'}]})
 
+    def test_observed_empty_secret_literal_matches_missing_but_not_changed_reference(self):
+        a={'env':[{'name':'KEY','secretRef':'existing','value':''}]}
+        b={'env':[{'name':'KEY','secretRef':'existing'}]}
+        self.assertEqual(r.normalized_env(a),r.normalized_env(b))
+        b['env'][0]['secretRef']='other'
+        self.assertNotEqual(r.normalized_env(a),r.normalized_env(b))
+
+    def test_nonsecret_empty_string_is_not_ignored(self):
+        self.assertNotEqual(r.normalized_env({'env':[{'name':'FLAG','value':''}]}),r.normalized_env({'env':[{'name':'FLAG'}]}))
+
+    def test_nonempty_literal_with_secret_reference_fails_closed(self):
+        with self.assertRaisesRegex(RuntimeError,'Ambiguous secret'):
+            r.normalized_env({'env':[{'name':'KEY','secretRef':'existing','value':'unexpected'}]})
+
     @patch.object(r.safe,'az',return_value={'id':'wrong'})
     @patch.object(r,'snapshot')
     def test_wrong_subscription_never_reads_or_writes_apps(self,snapshot,az):

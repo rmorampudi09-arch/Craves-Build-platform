@@ -2,7 +2,7 @@
 
 import { CheckCircle2, CircleAlert, FileUp, ShieldCheck, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   parseChefEvidenceMetadata,
   type ChefEvidenceMetadata,
@@ -68,10 +68,10 @@ function statusLabel(document: ChefEvidenceMetadata | undefined): string {
 }
 
 function statusClasses(document: ChefEvidenceMetadata | undefined): string {
-  if (!document) return "bg-amber-50 text-amber-800";
+  if (!document) return "bg-slate-50 text-slate-700";
   if (document.status === "APPROVED") return "bg-emerald-50 text-emerald-800";
   if (document.status === "REJECTED") return "bg-red-50 text-red-800";
-  return "bg-[#f3ecff] text-[#6930CA]";
+  return "bg-slate-50 text-primary";
 }
 
 export function ChefApplicationEvidenceUploader({
@@ -89,6 +89,18 @@ export function ChefApplicationEvidenceUploader({
   const [progress, setProgress] = useState<Partial<Record<EvidenceType, ProgressState>>>({});
   const requestRefs = useRef<Partial<Record<EvidenceType, XMLHttpRequest>>>({});
 
+  useEffect(() => {
+    const requests = requestRefs.current;
+    return () => {
+      for (const xhr of Object.values(requests)) {
+        if (!xhr) continue;
+        xhr.onload = xhr.onerror = xhr.onabort = xhr.ontimeout = null;
+        xhr.upload.onprogress = null;
+        xhr.abort();
+      }
+    };
+  }, []);
+
   const uploadedByType = useMemo(
     () => new Map(documents.map(document => [document.documentType, document])),
     [documents],
@@ -98,6 +110,7 @@ export function ChefApplicationEvidenceUploader({
   const rejectedCount = REQUIREMENTS.filter(item => uploadedByType.get(item.type)?.status === "REJECTED").length;
   const awaitingReviewCount = REQUIREMENTS.filter(item => uploadedByType.get(item.type)?.status === "UPLOADED").length;
   const approvalProgress = Math.round((approvedCount / REQUIREMENTS.length) * 100);
+  const incompleteApprovedHistory = locked && approvedCount < REQUIREMENTS.length;
 
   function stateFor(type: EvidenceType): ProgressState {
     return progress[type] ?? INITIAL_PROGRESS;
@@ -125,6 +138,11 @@ export function ChefApplicationEvidenceUploader({
       return;
     }
     if (!applicationReady || locked || existing?.status === "APPROVED") return;
+    const accepted = REQUIREMENTS.find(item => item.type === type)?.accept.split(",") ?? [];
+    if (file.size <= 0 || file.size > 10_000_000 || !accepted.includes(file.type)) {
+      setTypeProgress(type, { progress: 0, phase: "ERROR", message: "Choose a supported file up to 10 MB. Photos must be JPG or PNG." });
+      return;
+    }
 
     requestRefs.current[type]?.abort();
     const data = new FormData();
@@ -136,6 +154,7 @@ export function ChefApplicationEvidenceUploader({
     xhr.open("POST", "/api/chef/application/proof-files", true);
     xhr.responseType = "json";
     xhr.withCredentials = true;
+    xhr.timeout = 60_000;
 
     setTypeProgress(type, { progress: 0, phase: "UPLOADING", message: existing?.status === "REJECTED" ? "Uploading replacement…" : "Starting secure upload…" });
 
@@ -182,31 +201,32 @@ export function ChefApplicationEvidenceUploader({
     };
 
     xhr.onerror = () => setTypeProgress(type, { progress: 0, phase: "ERROR", message: "Network error during upload. Try again." });
+    xhr.ontimeout = () => setTypeProgress(type, { progress: 0, phase: "ERROR", message: "We couldn’t confirm this upload in time. Refresh your document history before trying again." });
     xhr.onabort = () => setTypeProgress(type, { progress: 0, phase: "IDLE", message: "Upload cancelled." });
     xhr.send(data);
   }
 
   return (
-    <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 sm:p-8">
+    <section className="rounded-[30px] border border-slate-200 bg-white p-6 text-slate-950 sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">Chef application documents</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Chef application documents</p>
           <h2 className="mt-2 text-2xl font-bold">Document review status</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Each file is reviewed independently. If Craves rejects one document, replace only that document; documents already approved remain accepted and locked.
+            {locked ? "Your application is approved. The available document history is shown below." : "Each file is reviewed independently. If a document needs replacing, your other approved documents stay accepted."}
           </p>
         </div>
-        <div className="min-w-[210px] rounded-2xl bg-white p-4">
+        {!incompleteApprovedHistory && <div className="min-w-[210px] rounded-2xl bg-white p-4">
           <div className="flex items-center justify-between gap-3 text-sm"><strong>{approvedCount}/4 approved</strong><span>{uploadedCount}/4 uploaded</span></div>
           <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200" aria-label={`Document approval progress ${approvalProgress}%`}>
-            <div className="h-full rounded-full bg-[#6930CA] transition-[width] duration-500 ease-out" style={{ width: `${approvalProgress}%` }} />
+            <div className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${approvalProgress}%` }} />
           </div>
           <p className="mt-2 text-xs text-slate-500">Final Chef approval requires 4/4 document approvals.</p>
-        </div>
+        </div>}
       </div>
 
       {!applicationReady && (
-        <div className="mt-5 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="mt-5 flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
           <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" />
           <div><strong>Submit your Chef details first.</strong><p className="mt-1">After the application record is created, all four document upload controls become available.</p></div>
         </div>
@@ -215,7 +235,7 @@ export function ChefApplicationEvidenceUploader({
       {locked && (
         <div className="mt-5 flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
-          <div><strong>Chef application approved.</strong><p className="mt-1">Approved evidence is locked and cannot be replaced through the normal application flow.</p></div>
+          <div><strong>Chef application approved.</strong><p className="mt-1">{incompleteApprovedHistory ? "Your approval is recorded, but your current document history is incomplete. Contact Craves support to review this history. You cannot replace documents here while the application is approved." : "Your approved documents are locked. No further upload is needed here."}</p></div>
         </div>
       )}
 
@@ -227,7 +247,7 @@ export function ChefApplicationEvidenceUploader({
       )}
 
       <div className="mt-6 space-y-4">
-        {REQUIREMENTS.map(requirement => {
+        {REQUIREMENTS.filter(requirement => !locked || uploadedByType.has(requirement.type)).map(requirement => {
           const uploaded = uploadedByType.get(requirement.type);
           const selected = files[requirement.type];
           const uploadState = stateFor(requirement.type);
@@ -238,16 +258,16 @@ export function ChefApplicationEvidenceUploader({
           const displayProgress = uploadState.phase === "IDLE" && uploaded ? 100 : uploadState.progress;
 
           return (
-            <article key={requirement.type} className={`rounded-2xl border bg-white p-4 sm:p-5 ${rejected ? "border-red-200" : approved ? "border-emerald-200" : "border-[#eadfd0]"}`}>
+            <article key={requirement.type} className={`rounded-2xl border bg-white p-4 sm:p-5 ${rejected ? "border-red-200" : approved ? "border-emerald-200" : "border-slate-200"}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex min-w-0 gap-3">
-                  <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${approved ? "bg-emerald-50 text-emerald-700" : rejected ? "bg-red-50 text-red-700" : uploaded ? "bg-[#f3ecff] text-[#6930CA]" : "bg-amber-50 text-amber-700"}`}>
+                  <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${approved ? "bg-emerald-50 text-emerald-700" : rejected ? "bg-red-50 text-red-700" : uploaded ? "bg-slate-50 text-primary" : "bg-slate-50 text-slate-700"}`}>
                     {approved ? <CheckCircle2 className="h-5 w-5" /> : rejected ? <XCircle className="h-5 w-5" /> : uploaded ? <ShieldCheck className="h-5 w-5" /> : <FileUp className="h-5 w-5" />}
                   </div>
                   <div className="min-w-0">
                     <h3 className="font-bold">{requirement.title} <span className="text-red-600">*</span></h3>
                     <p className="mt-1 text-xs leading-5 text-slate-500">{requirement.helper}</p>
-                    {uploaded && <p className={`mt-2 truncate text-xs font-semibold ${approved ? "text-emerald-700" : rejected ? "text-red-700" : "text-[#6930CA]"}`}>{uploaded.originalFileName} · {formatBytes(uploaded.fileSizeBytes)}</p>}
+                    {uploaded && <p className={`mt-2 break-words text-xs font-semibold ${approved ? "text-emerald-700" : rejected ? "text-red-700" : "text-primary"}`}>{uploaded.originalFileName} · {formatBytes(uploaded.fileSizeBytes)}</p>}
                     {uploaded?.reviewedAt && <p className="mt-1 text-[11px] text-slate-500">Reviewed {new Date(uploaded.reviewedAt).toLocaleString("en-IN")}</p>}
                   </div>
                 </div>
@@ -267,7 +287,7 @@ export function ChefApplicationEvidenceUploader({
                   <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
                   <div><strong>Accepted by Craves.</strong><p className="mt-1">No action is required for this document, and normal replacement is disabled.</p></div>
                 </div>
-              ) : (
+              ) : !locked ? (
                 <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
                   <label className="text-sm font-semibold">
                     {rejected ? "Choose replacement file" : uploaded ? "Replace before review completes (optional)" : "Choose file"}
@@ -284,19 +304,19 @@ export function ChefApplicationEvidenceUploader({
                     type="button"
                     disabled={!canReplace || busy || !selected}
                     onClick={() => upload(requirement.type)}
-                    className={`min-h-12 rounded-full px-6 font-bold text-white disabled:opacity-40 ${rejected ? "bg-red-700" : "bg-[#6930CA]"}`}
+                    className={`min-h-12 rounded-full px-6 font-bold text-white disabled:opacity-40 ${rejected ? "bg-red-700" : "bg-primary"}`}
                   >
                     {busy ? "Uploading…" : rejected ? "Replace rejected document" : uploaded ? "Replace" : "Upload"}
                   </button>
                 </div>
-              )}
+              ) : null}
 
               {(busy || uploadState.phase === "DONE" || uploadState.phase === "ERROR") && (
                 <div className="mt-4" aria-live="polite">
                   <div className="flex items-center justify-between gap-3 text-xs"><span className={uploadState.phase === "ERROR" ? "font-semibold text-red-700" : "text-slate-600"}>{uploadState.message}</span><strong>{displayProgress}%</strong></div>
                   <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200">
                     <div
-                      className={`h-full rounded-full transition-[width] duration-300 ease-out ${uploadState.phase === "ERROR" ? "bg-red-500" : uploadState.phase === "DONE" ? "bg-emerald-600" : "bg-[#6930CA]"}`}
+                      className={`h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none ${uploadState.phase === "ERROR" ? "bg-red-500" : uploadState.phase === "DONE" ? "bg-emerald-600" : "bg-primary"}`}
                       style={{ width: `${displayProgress}%` }}
                     />
                   </div>
@@ -308,7 +328,9 @@ export function ChefApplicationEvidenceUploader({
       </div>
 
       <div className={`mt-5 rounded-2xl p-4 text-sm ${approvedCount === 4 ? "bg-emerald-50 text-emerald-900" : rejectedCount > 0 ? "bg-red-50 text-red-950" : "bg-white text-slate-700"}`}>
-        {approvedCount === 4
+        {locked
+          ? incompleteApprovedHistory ? "Your application approval has not changed. Missing history has not been marked as verified." : "Your application and all four documents are approved."
+          : approvedCount === 4
           ? "All four required documents are individually approved. Your application can now proceed to the final Chef approval decision."
           : rejectedCount > 0
             ? `${rejectedCount} document${rejectedCount === 1 ? "" : "s"} need replacement. ${approvedCount} already-approved document${approvedCount === 1 ? " remains" : "s remain"} accepted.`

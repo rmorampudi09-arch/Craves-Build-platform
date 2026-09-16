@@ -4,7 +4,7 @@
 
 Main was initially observed at 870f5293884888aa28f0c069b91a86d06492c9a2 with protection false and no repository rulesets. After owner browser access became available on 16 September 2026, classic branch protection rule 83269016 was created for `main` and reopened to verify its saved state. The connected GitHub app still lacks administration access; its readback returned 403, so the authenticated settings UI is the source of the saved-rule evidence.
 
-Draft PR360 contains reconciled source and receipts. It must not be merged simply to turn the launch register green. Previous deployed customer fixes and live referral migrations are included intentionally; old PR348 was not merged wholesale.
+Owner-approved PR360 is merged as111160c1a71674c8b0c178a55884e389c97ffb8c. PR362 is merged asb0cc44f574eb4fff7a31682fd8baaa14f57b2700 after its exact-source regression passed. Previous deployed customer fixes and live referral migrations are included intentionally; old PR348 was not merged wholesale. These merges do not turn the launch acceptance register green.
 
 ## Saved rule
 
@@ -30,8 +30,10 @@ The latest candidate at 0ea1fc397b93521de93c2767f6f0e35606157251 also passed in 
 
 Saved-rule readback and the negative source-failure probe are complete. Test-only PR 361, source 71f3a67bf288896a0f25209d51b3c01fbcdd60d8, ran the exact regression as run 35100885637. The source prerequisite failed intentionally; backend/web were skipped; the required aggregate FAILED rather than becoming skipped-green. The authenticated owner UI labelled that aggregate Required and Failing and showed Merging is blocked with a disabled Merge pull request button. Review was independently required, so this is not claimed as an experiment isolating the status rule from the review rule. PR 361 was closed, never merged or deployed. Its test branch is separate from PR 360 and must never be promoted.
 
-Run 35100342845 passed the complete regression on e535e0fa5ec8339eebabb51af0a91691f6558444; machine evidence is retained in `evidence/regression-35100342845.json`. A later candidate requires its own result. Stale-green-head acceptance and deployment-wrapper reviewed-source/artifact/runtime-preservation reconciliation remain OPEN.
+Run35100342845 passed the complete regression on e535e0fa5ec8339eebabb51af0a91691f6558444; machine evidence is retained in `evidence/regression-35100342845.json`. A later candidate requires its own result.
+
+The stale-green/new-head case was subsequently observed on PR362 after the owner-only amendment. Old headbe7d23f3 had successful regression35110851052; after new headfd1fada2, the exact-SHA required status became Expected/Waiting and the Merge pull request button was disabled. PR362 comment5699595967 records the visible evidence. No merge was attempted while pending. The new head's complete regression35111578964 then succeeded before merge. The merged mainSHA's full regression35112960978 also passed; machine receipt is `evidence/regression-35112960978.json`. The guarded deployment wrapper still needs its live release receipt to close runtime-preservation verification.
 
 ## Manual action required
 
-Owner sign-in and sole-owner approval are complete. Do not request an alternate reviewer account or manufacture an independent review. Maintain the owner-authorized approval process and all remaining test/protection requirements. No PR has been merged by this launch package at this checkpoint.
+Owner sign-in and sole-owner approval are complete. Do not request an alternate reviewer account or manufacture an independent review. Maintain the owner-authorized approval process and all remaining test/protection requirements. PR360 and PR362 have now been merged with passing exact-source checks.

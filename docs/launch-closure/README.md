@@ -2,7 +2,15 @@
 
 Authority: owner request of16 September2026 to execute the69-page public-launch fixing plan. All46 findings stay in scope; no item is accepted merely because an image is deployed. The owner's final real payment/delivery/bank journey remains NOT RUN and separate.
 
-## Current package: P0
+## Current checkpoint: P0 merged; P1 rollout in progress
+
+Owner-approved PR360 is merged as `111160c1a71674c8b0c178a55884e389c97ffb8c`. PR362 is merged as `b0cc44f574eb4fff7a31682fd8baaa14f57b2700`; its exact-main full regression35112960978 passed all four required jobs. The separate admin workflows also passed. The required second-person approval was removed only after the owner's explicit confirmation; all other recorded main protections remain. See `REPOSITORY_PROTECTION.md` and the dated progress log for chronological evidence.
+
+The production finance response-header correction has been published and read back. Anonymous and invalid-token responses now carry no-store; authenticated role/error coverage remains open. Azure39094 read all35 versioned Auth/User-Chef/Notification migration records and matched their source checksums without writes. See `FINANCE_RESPONSE_PRIVACY.md` and `APPLIED_EMAIL_HISTORY.md`.
+
+The guarded customer-web rollout is in progress. A passing build or applied migration is not proof of a delivered verification email, a verified profile, production capacity, or launch acceptance. Do not infer completion from this checkpoint.
+
+## Package sequence
 
 1. F01: read-only running-service inventory and source reconciliation; preserve today's customer fixes and earlier referral/finance releases.
 2. F02: reproduce the exact subscription migration parity failure in an explicitly disposable local database, then correct unordered comparison without dropping structure or weakening negative checks.
@@ -32,4 +40,4 @@ No paid resource is authorized by this package. Before isolated cloud restore/lo
 
 ## Delivery and recovery
 
-Current engineering branch `fix/device-acceptance-cart-20260916`, baseline39fca66a. Do not merge old PR348 wholesale: it conflicts and predates later releases. No serving application, database or gateway mutation has been made in this launch package. The main-branch protection rule was created and read back; see `REPOSITORY_PROTECTION.md`. Local test-only comparison can be reverted independently, while applied migrations remain immutable. `closure-register.json` is the46-finding register with reviewer/date/evidence unset until real acceptance. Source ZIPs contain complete changed files, never private PDFs or credentials.
+Original engineering baseline39fca66a; subsequent release and audit branches are recorded in the progress log. Do not merge old PR348 wholesale: it conflicts and predates later releases. Earlier no-live-mutation checkpoints are historical: the finance gateway correction is now applied, and the web rollout has been authorized and started. Applied database migrations remain immutable. `closure-register.json` is the46-finding register with reviewer/date/evidence unset until real acceptance. Source ZIPs contain complete changed files, never private PDFs or credentials.

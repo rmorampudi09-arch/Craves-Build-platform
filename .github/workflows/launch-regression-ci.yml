@@ -191,6 +191,8 @@ jobs:
         env:
           EXPECTED_RELEASE_SHA: ${{ needs.source.outputs.release_sha }}
         run: python3 scripts/launch/launch-regression.py web --expected-sha "$EXPECTED_RELEASE_SHA" --output target/launch-web
+      - name: Require build to preserve reviewed tracked source
+        run: git diff --exit-code HEAD --
       - uses: actions/upload-artifact@v4
         if: always()
         with:

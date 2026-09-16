@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "headSha": "b0cc44f574eb4fff7a31682fd8baaa14f57b2700",
+  "runId": 35112960978,
+  "runAttempt": 1,
+  "status": "completed",
+  "conclusion": "success",
+  "url": "https://github.com/rmorampudi09-arch/Craves-Build-platform/actions/runs/35112960978",
+  "jobs": [
+    {
+      "id": 104851092457,
+      "name": "Pin the reviewed source",
+      "headSha": "b0cc44f574eb4fff7a31682fd8baaa14f57b2700",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 104851306069,
+      "name": "Clean web install, lint, types, every test and build",
+      "headSha": "b0cc44f574eb4fff7a31682fd8baaa14f57b2700",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 104851306091,
+      "name": "Seven complete Java services and connected source",
+      "headSha": "b0cc44f574eb4fff7a31682fd8baaa14f57b2700",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 104853825892,
+      "name": "Exact-SHA complete regression evidence",
+      "headSha": "b0cc44f574eb4fff7a31682fd8baaa14f57b2700",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 10454330015,
+      "name": "launch-regression-summary-35112960978-1",
+      "sizeBytes": 7106,
+      "expired": false
+    },
+    {
+      "id": 10453501174,
+      "name": "launch-web-35112960978-1",
+      "sizeBytes": 29004,
+      "expired": false
+    },
+    {
+      "id": 10453192462,
+      "name": "launch-backend-35112960978-1",
+      "sizeBytes": 1646680,
+      "expired": false
+    },
+    {
+      "id": 10452713218,
+      "name": "launch-source-35112960978-1",
+      "sizeBytes": 3219,
+      "expired": false
+    }
+  ],
+  "limitations": [
+    "Passing CI is not live deployment or mailbox acceptance."
+  ]
+}

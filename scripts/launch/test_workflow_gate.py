@@ -46,5 +46,13 @@ class RequiredWorkflowGateTest(unittest.TestCase):
         jobs = self.valid(); jobs['source']['outputs'] = {}
         self.assertNotEqual(self.invoke(jobs), 0)
 
+    def test_web_build_cannot_pass_with_generated_tracked_source_drift(self):
+        web = self.workflow.split('  web:\n', 1)[1].split('  acceptance:\n', 1)[0]
+        guard = '      - name: Require build to preserve reviewed tracked source\n        run: git diff --exit-code HEAD --\n'
+        self.assertIn(guard, web)
+        self.assertLess(web.index('run: python3 scripts/launch/launch-regression.py web'), web.index(guard))
+        self.assertLess(web.index(guard), web.index('      - uses: actions/upload-artifact@v4'))
+        self.assertNotIn('continue-on-error', web)
+
 
 if __name__ == '__main__': unittest.main()

@@ -17,12 +17,24 @@ parameters:
       - test-email-upgrade
       - release-customer-email
       - release-customer-checkout
+      - inspect-email-runtime
 pool:
   vmImage: ubuntu-latest
 steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
+  - ${{ if eq(parameters.action, 'inspect-email-runtime') }}:
+      - task: AzureCLI@2
+        displayName: Inspect email runtime metadata without secret values
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/email/customer-email-release.py --inspect
   - ${{ if eq(parameters.action, 'test-email-upgrade') }}:
       - template: pipelines/customer-email-test-steps.yml
   - ${{ if eq(parameters.action, 'release-customer-email') }}:

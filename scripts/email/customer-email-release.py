@@ -1,5 +1,6 @@
 """Narrow customer-email preflight/activation. No secret values, identities or codes are printed."""
 import argparse
+import json
 import copy
 import importlib.util
 import re
@@ -42,6 +43,22 @@ def normalized_env(container):
     safe.require(len({item['name'] for item in items})==len(items), 'Duplicate environment names')
     return {item['name']:{key:value for key,value in item.items() if value is not None}
             for item in items}
+
+def inspect_runtime():
+    safe.require(safe.az('account','show')['id']==safe.SUB, 'Wrong subscription')
+    for service in APPS:
+        app=snapshot(service);props=app['properties']
+        revision=safe.az('containerapp','revision','show','-g',safe.RG,'-n',APPS[service],'--revision',props['latestReadyRevisionName'])
+        desired=normalized_env(props['template']['containers'][0])
+        ready=normalized_env(revision['properties']['template']['containers'][0])
+        def shape(item):
+            if item is None:return None
+            return {'fields':sorted(item),'hasSecretRef':bool(item.get('secretRef')),
+                    'hasNonemptyValue':bool(item.get('value')),'hasEmptyValue':item.get('value')==''}
+        differences=[{'name':key,'desired':shape(desired.get(key)),'ready':shape(ready.get(key)),
+            'secretRefEqual':desired.get(key,{}).get('secretRef')==ready.get(key,{}).get('secretRef')}
+            for key in sorted(desired.keys() | ready.keys()) if desired.get(key)!=ready.get(key)]
+        print('EMAIL_RUNTIME_SHAPES '+json.dumps({'service':service,'differences':differences}))
 
 def healthy(service, app, image):
     props=app['properties']
@@ -165,5 +182,9 @@ def main(sha, activate=False):
     print('EMAIL_RELEASE_READY_FOR_CUSTOMER_ACCEPTANCE; no production verification challenge was sent')
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--source',required=True);parser.add_argument('--activate',action='store_true')
-    args=parser.parse_args();main(args.source,args.activate)
+    parser=argparse.ArgumentParser();parser.add_argument('--source');parser.add_argument('--activate',action='store_true');parser.add_argument('--inspect',action='store_true')
+    args=parser.parse_args()
+    if args.inspect:inspect_runtime()
+    else:
+        safe.require(args.source is not None,'Source required for preflight/release')
+        main(args.source,args.activate)

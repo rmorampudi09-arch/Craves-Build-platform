@@ -117,6 +117,8 @@ public class ChefDocumentReviewService {
     }
 
     private DocumentReviewTarget reviewTarget(UUID applicationId, UUID documentId) {
+        // Same parent-first lock as upload and application approval; no stale document review.
+        jdbcTemplate.query("SELECT id FROM chef_application WHERE id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),applicationId);
         return jdbcTemplate.query(
             """
                 SELECT d.identity_id, d.document_type, d.status AS document_status,
@@ -124,6 +126,7 @@ public class ChefDocumentReviewService {
                 FROM chef_kyc_document d
                 JOIN chef_application a ON a.id = d.application_id
                 WHERE d.id = ? AND d.application_id = ?
+                FOR UPDATE OF d
                 """,
             (resultSet, rowNumber) -> new DocumentReviewTarget(
                 resultSet.getObject("identity_id", UUID.class),

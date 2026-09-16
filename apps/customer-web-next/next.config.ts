@@ -11,6 +11,13 @@ const nextConfig: NextConfig = {
     disableStaticImages: true,
     remotePatterns: [{ protocol: "https", hostname: "**" }],
   },
+  async rewrites() {
+    return {
+      beforeFiles: [{ source: "/", destination: "/landing-v20/index.html" }],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
   async headers() {
     return [
       {

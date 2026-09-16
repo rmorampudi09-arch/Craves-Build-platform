@@ -1,0 +1,55 @@
+# Manual action only. Repeat tests on the precise source used for all three images.
+steps:
+  - template: customer-email-test-steps.yml
+  - task: AzureCLI@2
+    displayName: Preflight exact email runtime and gateway ownership
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        python3 scripts/email/customer-email-release.py --source "$(Build.SourceVersion)"
+  - task: AzureCLI@2
+    displayName: Build tested Auth, Notification and UserChef images
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        az acr login --name cravesprodlowacr82121 --only-show-errors
+        for service in notification-service auth-service user-chef-service; do
+          IMAGE="cravesprodlowacr82121.azurecr.io/craves/$service:customer-email-$(Build.SourceVersion)"
+          docker build --pull -t "$IMAGE" "services/$service"
+          docker push "$IMAGE"
+        done
+  - task: AzureCLI@2
+    displayName: Deploy email services with gates closed and runtime preserved
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        python3 scripts/email/customer-email-release.py --source "$(Build.SourceVersion)"
+        export READY_ATTEMPTS=150 READY_SLEEP_SECONDS=5
+        deploy_email() {
+          local service=$1 app=$2 previous=$3
+          local image="cravesprodlowacr82121.azurecr.io/craves/$service:customer-email-$(Build.SourceVersion)"
+          local evidence
+          evidence=$(mktemp)
+          if EXPECTED_PREVIOUS_IMAGE="$previous" bash scripts/release/deploy-single-service-preserve-runtime.sh rg-craves-prodlow-centralindia "$app" "$image" "$service" >"$evidence" 2>&1; then
+            echo "EMAIL_IMAGE_VERIFIED: $service runtime unchanged, health passed"
+          else
+            echo "EMAIL_IMAGE_NOT_VERIFIED: $service; activation stopped; raw logs withheld"
+            exit 1
+          fi
+        }
+        deploy_email notification-service ca-craves-notification-service-p 'cravesprodlowacr82121.azurecr.io/craves/notification-service@sha256:bb15cc81121173ef2c701f2edc4e967a7cf7ed4fb26f5e5cb4fae1d777145b44'
+        deploy_email auth-service ca-craves-auth-service-prodlow 'cravesprodlowacr82121.azurecr.io/craves/auth-service:referral-151c36cb2afaaf7b8482ee784704d983f7d87324'
+        deploy_email user-chef-service ca-craves-user-chef-service-prod 'cravesprodlowacr82121.azurecr.io/craves/user-chef-service@sha256:fa546c94af8eb329593d158589e0bffee96e19d6f84a55f937032de1f74fa93d'
+        python3 scripts/email/customer-email-release.py --source "$(Build.SourceVersion)" --activate

@@ -29,6 +29,20 @@ public final class ApiDtos {
     public record UpdateCartItemRequest(@Min(1) @jakarta.validation.constraints.Max(100) int quantity) {
     }
 
+    public record CartSnapshotItem(@NotNull UUID id, @Min(1) @jakarta.validation.constraints.Max(100) int quantity,
+        @NotNull Instant updatedAt) {}
+
+    public record CartSnapshotRequest(@NotNull UUID cartId,
+        @NotNull @jakarta.validation.constraints.Size(max = 200)
+        List<@NotNull @jakarta.validation.Valid CartSnapshotItem> items) {}
+
+    public record SwitchKitchenRequest(@NotNull @jakarta.validation.Valid CartSnapshotRequest expectedCart,
+        @NotNull UUID menuItemId, @NotNull UUID expectedKitchenId,
+        @Min(1) @jakarta.validation.constraints.Max(100) int quantity) {}
+
+    public record ReorderCartRequest(@NotNull @jakarta.validation.Valid CartSnapshotRequest expectedCart,
+        @NotNull UUID expectedKitchenId) {}
+
     public record CartItemResponse(
         UUID id,
         UUID menuItemId,

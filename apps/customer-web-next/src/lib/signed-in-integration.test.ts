@@ -184,7 +184,7 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   assert.match(auth, /fetch\("\/api\/auth\/refresh"/);
   assert.match(boundary, /loadSession\(\)/);
   assert.match(boundary, /synchronizeSessionRoles\(\)/);
-  assert.match(boundary, /setState\("not-approved"\)/);
+  // Role denial and session races are exercised by rendered components in chef-profile-session.vitest.ts.
 
   for (const page of [
     "../app/chef/kitchen/page.tsx",

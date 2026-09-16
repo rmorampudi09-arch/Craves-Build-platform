@@ -4,14 +4,22 @@ pr: none
 parameters:
   - name: targetEnvironment
     type: string
-    default: sandbox
-    values: [sandbox, production]
+    default: production
+    values: [production]
   - name: confirmReplaceCurrentCustomerWeb
     type: boolean
     default: false
   - name: imageTag
     type: string
-    default: $(Build.BuildId)
+    default: $(Build.SourceVersion)
+
+  - name: expectedReleaseSha
+    type: string
+    default: NOT_SELECTED
+  - name: regressionRunId
+    displayName: Successful full regression run on this exact merged main SHA
+    type: string
+    default: NOT_SELECTED
 
 variables:
   AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
@@ -27,6 +35,20 @@ pool:
 steps:
   - checkout: self
     clean: true
+    persistCredentials: false
+    fetchDepth: 0
+  - bash: |
+      set -euo pipefail
+      [[ "$BUILD_REASON" == Manual && "$BUILD_SOURCEBRANCH" == refs/heads/main ]] || { echo 'Only an explicit main release is supported.' >&2; exit 2; }
+      [[ "$TARGET_ENVIRONMENT" == production ]] || { echo 'This existing production web target requires production payment mode.' >&2; exit 2; }
+      bash scripts/release/verify-reviewed-service-source.sh
+      python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$REGRESSION_RUN_ID"
+    displayName: Verify production target and exact reviewed source
+    env:
+      TARGET_ENVIRONMENT: ${{ parameters.targetEnvironment }}
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.imageTag }}
+      REGRESSION_RUN_ID: ${{ parameters.regressionRunId }}
   - task: NodeTool@0
     inputs:
       versionSpec: 24.x
@@ -46,7 +68,7 @@ steps:
       [[ "$NEXT_PUBLIC_FIREBASE_APP_ID" == '1:201887934076:web:2f20d18dc85894cc700bf9' ]] || { echo 'Unexpected Firebase web app ID.' >&2; exit 2; }
       [[ "$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" == '201887934076' ]] || { echo 'Unexpected Firebase messaging sender ID.' >&2; exit 2; }
       [[ "$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" == 'cravesapp-dev.firebasestorage.app' ]] || { echo 'Unexpected Firebase storage bucket.' >&2; exit 2; }
-      npm ci --no-audit --no-fund
+      npm ci --ignore-scripts --no-audit --no-fund
       npm run lint
       npm run typecheck
       npm run test
@@ -70,6 +92,10 @@ steps:
   - task: AzureCLI@2
     displayName: Build, deploy and verify Razorpay customer web
     env:
+      EXPECTED_RELEASE_SHA: ${{ parameters.expectedReleaseSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.imageTag }}
+      TARGET_ENVIRONMENT: ${{ parameters.targetEnvironment }}
+      REGRESSION_RUN_ID: ${{ parameters.regressionRunId }}
       NEXT_PUBLIC_FIREBASE_API_KEY: $(NEXT_PUBLIC_FIREBASE_API_KEY)
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: $(NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN)
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: $(NEXT_PUBLIC_FIREBASE_PROJECT_ID)
@@ -83,10 +109,39 @@ steps:
       inlineScript: |
         set -euo pipefail
         set +x
-        previous=$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query 'properties.template.containers[0].image' -o tsv)
+        [[ "$TARGET_ENVIRONMENT" == production ]] || { echo 'Production payment mode is required.' >&2; exit 2; }
+        bash scripts/release/verify-reviewed-service-source.sh
+        python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$REGRESSION_RUN_ID"
+        umask 077
+        runtime_dir=$(mktemp -d)
+        trap 'rm -rf "$runtime_dir"' EXIT
+        read_runtime() {
+          az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' -o json > "$runtime_dir/app.json" || return 1
+          az containerapp revision list -g '$(resourceGroup)' -n '$(containerApp)' -o json > "$runtime_dir/revisions.json" || return 1
+          revision=$(jq -r '.properties.latestReadyRevisionName // empty' "$runtime_dir/app.json")
+          [[ -n "$revision" ]] || return 1
+          az containerapp replica list -g '$(resourceGroup)' -n '$(containerApp)' --revision "$revision" -o json > "$runtime_dir/replicas.json" || return 1
+        }
+        verify_runtime() {
+          python3 scripts/release/verify-customer-web-runtime.py "$1" \
+            --app "$runtime_dir/app.json" --revisions "$runtime_dir/revisions.json" \
+            --replicas "$runtime_dir/replicas.json" --baseline "$runtime_dir/baseline.json" "${@:2}"
+        }
+        read_runtime
+        verify_runtime capture
+        previous=$(jq -r '.image' "$runtime_dir/baseline.json")
+        python3 scripts/release/verify-web-release-evidence.py --origin https://craves.in --baseline
         login=$(az acr show -g '$(resourceGroup)' -n '$(acrName)' --query loginServer -o tsv)
-        image="$login/$(imageRepository):${{ parameters.imageTag }}"
+        [[ "$login" == cravesprodlowacr82121.azurecr.io ]] || { echo 'Wrong production registry.' >&2; exit 2; }
+        [[ "$previous" == "$login/$(imageRepository):"* || "$previous" == "$login/$(imageRepository)@sha256:"* ]] || { echo 'Unexpected prior image owner.' >&2; exit 2; }
+        # Resolve the previous immutable image BEFORE the rollout, not during recovery.
+        previous_ref=${previous#"$login/"}
+        previous_digest=$(az acr repository show -n '$(acrName)' --image "$previous_ref" --query digest -o tsv --only-show-errors)
+        [[ "$previous_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'Previous image digest unavailable.' >&2; exit 2; }
+        rollback_image="$login/$(imageRepository)@$previous_digest"
+        image="$login/$(imageRepository):$REQUESTED_IMAGE_TAG"
         az acr login -n '$(acrName)'
+        docker pull "$rollback_image" >/dev/null
         docker build \
           --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="$NEXT_PUBLIC_FIREBASE_API_KEY" \
           --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" \
@@ -96,17 +151,45 @@ steps:
           --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
           --build-arg NEXT_PUBLIC_RAZORPAY_MODE='${{ parameters.targetEnvironment }}' \
           --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false \
-          --label org.opencontainers.image.revision='$(Build.SourceVersion)' \
+          --label "org.opencontainers.image.revision=$EXPECTED_RELEASE_SHA" \
           -t "$image" '$(appPath)'
+        local_image_id=$(docker image inspect "$image" --format '{{.Id}}')
         docker push "$image"
-        az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' --image "$image" \
-          --set-env-vars NEXT_PUBLIC_RAZORPAY_MODE='${{ parameters.targetEnvironment }}' >/dev/null
-        fqdn=$(az containerapp show -g '$(resourceGroup)' -n '$(containerApp)' --query properties.configuration.ingress.fqdn -o tsv)
+        image=$(bash scripts/release/resolve-reviewed-service-image.sh '$(acrName)' '$(imageRepository)' "$local_image_id")
+        bash scripts/release/verify-reviewed-service-source.sh
+        bash scripts/release/verify-reviewed-service-image.sh "$image"
+        python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$REGRESSION_RUN_ID"
+        read_runtime
+        verify_runtime guard
+        fqdn=$(jq -r '.properties.configuration.ingress.fqdn' "$runtime_dir/app.json")
+        recover() {
+          trap - ERR
+          set +e
+          echo 'Web rollout not verified. Inspecting whether image-only recovery is safe.' >&2
+          read_runtime && verify_runtime rollback-allowed --expected-image "$image" || { echo 'Recovery refused: state unavailable or changed. Manual inspection required.' >&2; exit 2; }
+          az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' --image "$rollback_image" --no-wait -o none || exit 2
+          for attempt in $(seq 1 60); do
+            if read_runtime && verify_runtime verify --expected-image "$rollback_image" && python3 scripts/release/verify-web-release-evidence.py --origin https://craves.in --baseline; then
+              echo "Recovery verified: $rollback_image" >&2
+              exit 2
+            fi
+            sleep 5
+          done
+          echo 'Recovery requested but not verified; operator attention required.' >&2
+          exit 2
+        }
+        trap recover ERR
+        az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' --image "$image" --no-wait -o none
         for _ in $(seq 1 30); do
-          readiness=$(curl -fsS --max-time 20 "https://${fqdn}/api/readiness/razorpay" 2>/dev/null || true)
-          [[ "$(jq -r '.razorpayMode // empty' <<<"$readiness")" == '${{ parameters.targetEnvironment }}' ]] && exit 0
+          if ! read_runtime || ! verify_runtime verify --expected-image "$image"; then
+            sleep 10
+            continue
+          fi
+          if python3 scripts/release/verify-web-release-evidence.py --origin "https://${fqdn}" && python3 scripts/release/verify-web-release-evidence.py --origin https://craves.in; then
+            trap - ERR
+            printf 'WEB_RELEASE_VERIFIED source=%s image=%s rollback=%s regression=%s\n' "$EXPECTED_RELEASE_SHA" "$image" "$rollback_image" "$REGRESSION_RUN_ID"
+            exit 0
+          fi
           sleep 10
         done
-        echo 'Razorpay customer web verification failed; restoring previous image.' >&2
-        az containerapp update -g '$(resourceGroup)' -n '$(containerApp)' --image "$previous" >/dev/null
-        exit 2
+        recover

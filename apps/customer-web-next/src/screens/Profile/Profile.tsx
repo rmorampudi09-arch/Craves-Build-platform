@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Bell,
@@ -16,14 +16,22 @@ import type { CustomerOrder } from "@/lib/order-contract";
 import type { ChefApplication } from "@/lib/chef-application-contract";
 import {
   clearSession,
+  captureSessionContext,
+  isSessionContextCurrent,
+  isSessionReady,
+  LogoutUnconfirmedError,
   loadSession,
+  getSession,
+  subscribeSession,
   type CravesUser,
+  type SessionContext,
 } from "@/services/auth/cravesAuth";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { AccountCard } from "@/components/profile/AccountCard";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { AddressCard } from "@/components/profile/AddressCard";
 import { ProfileLinkCard } from "@/components/profile/ProfileLinkCard";
+import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
 
 function chefLink(user: CravesUser, application: ChefApplication | null) {
   if (user.roles.some((role) => role.toUpperCase() === "CHEF")) {
@@ -61,7 +69,53 @@ function chefLink(user: CravesUser, application: ChefApplication | null) {
   };
 }
 
+function profileScope(): string {
+  const context = captureSessionContext();
+  return JSON.stringify([context.generation, context.identityId, isSessionReady()]);
+}
+const serverProfileScope = () => "server";
+
 export default function ProfilePage() {
+  const navigate = useNavigate();
+  const scope = useSyncExternalStore(subscribeSession, profileScope, serverProfileScope);
+  const logoutAttempt = useRef(0);
+  const [logout, setLogout] = useState<{ context: SessionContext | null; busy: boolean; error: string }>({ context: null, busy: false, error: "" });
+  const owner = getSession()?.id ?? null;
+  const currentLogout = logout.context !== null && isSessionContextCurrent(logout.context);
+  async function signOut() {
+    if (logout.busy && currentLogout) return;
+    const attempt = ++logoutAttempt.current;
+    // clearSession synchronously advances the operation generation before its
+    // network request; capture that generation rather than only the owner ID.
+    const pending = clearSession();
+    setLogout({ context: captureSessionContext(), busy: true, error: "" });
+    try {
+      await pending;
+      if (attempt !== logoutAttempt.current) return;
+      if (!getSession()) navigate({ to: "/" });
+      setLogout({ context: null, busy: false, error: "" });
+    } catch (error) {
+      if (attempt !== logoutAttempt.current) return;
+      if (!(error instanceof LogoutUnconfirmedError) || !error.retryContext || !isSessionContextCurrent(error.retryContext)) return;
+      setLogout({ context: error.retryContext, busy: false, error: "Sign-out could not be confirmed. You are still signed in. Please try again." });
+    }
+  }
+  const logoutBusy = currentLogout && logout.busy;
+  const logoutError = currentLogout ? logout.error : "";
+  return <>
+    <ProfileContent key={scope} />
+    {owner && <section className="mx-auto max-w-3xl px-4 pb-10 md:px-6" aria-label="Account sign out">
+      {logoutError && <p role="alert" className="mb-4 text-sm text-contrast-red">{logoutError}</p>}
+      <button type="button" onClick={() => void signOut()} disabled={logoutBusy}
+        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-contrast-red bg-white px-4 text-sm font-semibold text-contrast-red transition-colors hover:bg-secondary">
+        <LogOut className="h-4 w-4" aria-hidden="true" />
+        {logoutBusy ? "Signing out…" : logoutError ? "Retry sign out" : "Sign out"}
+      </button>
+    </section>}
+  </>;
+}
+
+function ProfileContent() {
   const navigate = useNavigate();
   const [user, setUser] = useState<CravesUser | null>(null);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
@@ -72,19 +126,26 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [logoutBusy, setLogoutBusy] = useState(false);
-  const [logoutError, setLogoutError] = useState("");
+
+  useEffect(() => subscribeSession(() => setUser(getSession())), []);
 
   useEffect(() => {
     let active = true;
 
     void (async () => {
+      if (getSession() && !isSessionReady()) return;
       const session = await loadSession();
       if (!active) return;
       if (!session) {
-        navigate({ to: "/" });
+        if (!getSession()) navigate({ to: "/" });
+        else {
+          setError("Your account details are temporarily unavailable. You can retry sign out below.");
+          setLoading(false);
+        }
         return;
       }
+      if (!isSessionReady() || getSession()?.id !== session.id) return;
+      const context = captureSessionContext();
       setUser(session);
 
       const [profileResponse, addressResponse, ordersResponse, chefResponse] =
@@ -107,7 +168,7 @@ export default function ProfilePage() {
           }),
         ]);
 
-      if (!active) return;
+      if (!active || !isSessionContextCurrent(context) || !isSessionReady()) return;
 
       if (profileResponse.ok) {
         setProfile((await profileResponse.json()) as CustomerProfile);
@@ -147,26 +208,16 @@ export default function ProfilePage() {
     };
   }, [navigate]);
 
-  async function logout() {
-    if (logoutBusy) return;
-    setLogoutBusy(true); setLogoutError("");
-    try { await clearSession(); navigate({ to: "/" }); }
-    catch { setLogoutError("Sign-out could not be confirmed. You are still signed in. Please try again."); }
-    finally { setLogoutBusy(false); }
-  }
-
   if (loading || !user) {
     return (
       <div className="min-h-screen bg-grey-50">
         <ProfileHeader />
         <main
-          aria-busy="true"
+          aria-busy={loading}
           className="mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6"
         >
-          <span className="sr-only">Loading profile</span>
-          <div className="h-56 animate-pulse rounded-xl bg-grey-200" />
-          <div className="h-24 animate-pulse rounded-xl bg-grey-200" />
-          <div className="h-24 animate-pulse rounded-xl bg-grey-200" />
+          <span className="sr-only">{error ? "Profile temporarily unavailable" : "Loading profile"}</span>
+          {error ? <p role="alert">Your account details are temporarily unavailable. Sign-out controls remain available below.</p> : <><div className="h-56 animate-pulse rounded-xl bg-grey-200" /><div className="h-24 animate-pulse rounded-xl bg-grey-200" /><div className="h-24 animate-pulse rounded-xl bg-grey-200" /></>}
         </main>
       </div>
     );
@@ -199,6 +250,8 @@ export default function ProfilePage() {
           addressCount={addresses.length}
           onEdit={() => setEditOpen(true)}
         />
+
+        {!editOpen && <div className="mt-4"><EmailVerificationPanel /></div>}
 
         {error ? (
           <p
@@ -253,16 +306,6 @@ export default function ProfilePage() {
           />
         </section>
 
-        {logoutError && <p role="alert" className="mt-6 text-sm text-contrast-red">{logoutError}</p>}
-        <button
-          type="button"
-          onClick={() => void logout()}
-          disabled={logoutBusy}
-          className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-contrast-red bg-white px-4 text-sm font-semibold text-contrast-red transition-colors hover:bg-secondary"
-        >
-          <LogOut className="h-4 w-4" aria-hidden="true" />
-          {logoutBusy ? "Signing out…" : logoutError ? "Retry sign out" : "Sign out"}
-        </button>
       </main>
 
       <EditProfileModal

@@ -1,0 +1,33 @@
+# Disposable database only. This action does not use an Azure connection or deploy.
+steps:
+  - task: JavaToolInstaller@0
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+  - script: |
+      set -euo pipefail
+      python3 scripts/email/verify-live-email-migrations.py
+      python3 -m unittest discover -s scripts/email/tests
+      docker run -d --name customer-email-tests -e POSTGRES_USER=email_ci -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=craves_email_test -p 127.0.0.1:55432:5432 postgis/postgis:16-3.4
+      for i in {1..30}; do
+        if docker exec customer-email-tests pg_isready -U email_ci -d craves_email_test; then break; fi
+        sleep 2
+      done
+      docker exec customer-email-tests createdb -U email_ci referral_owner_test
+      export EMAIL_TEST_DB_URL=jdbc:postgresql://localhost:55432/craves_email_test
+      export EMAIL_TEST_DB_USER=email_ci EMAIL_TEST_DB_PASSWORD='' EMAIL_TEST_DISPOSABLE=true
+      export REFERRAL_OWNER_TEST_JDBC_URL=jdbc:postgresql://localhost:55432/referral_owner_test
+      export REFERRAL_TEST_DB_USER=email_ci REFERRAL_TEST_DB_PASSWORD='' REFERRAL_TEST_CONFIRM=YES_DISPOSABLE_REFERRAL_TEST_ONLY
+      export CRAVES_EMAIL_VERIFICATION_ENABLED=false CRAVES_EMAIL_VERIFICATION_TRANSPORT_ENABLED=false CRAVES_EMAIL_PROJECTION_WORKER_ENABLED=false
+      for service in auth-service notification-service user-chef-service; do
+        mvn -B -ntp -f "services/$service/pom.xml" clean verify
+        python3 scripts/email/require-email-test-evidence.py "$service"
+      done
+    displayName: Test preserved referrals and email migration, concurrency and security
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: services/**/target/surefire-reports/TEST-*.xml
+      failTaskOnFailedTests: true

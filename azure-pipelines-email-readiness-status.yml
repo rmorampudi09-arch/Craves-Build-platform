@@ -1,0 +1,216 @@
+# Read-only device-acceptance probe. This branch-specific file can run in the
+# existing audit pipeline without changing that pipeline's default branch.
+trigger: none
+pr: none
+parameters:
+  - name: action
+    displayName: Device acceptance action
+    type: string
+    default: inspect
+    values:
+      - inspect
+      - release-cart
+      - inspect-cart-policy
+      - publish-cart-routes
+      - inspect-customer-fixes
+      - publish-review-routes
+      - test-email-upgrade
+      - release-customer-email
+      - release-customer-checkout
+      - inspect-email-runtime
+      - capture-launch-runtime
+      - capture-gateway-fingerprints
+      - inspect-finance-response-privacy
+      - publish-finance-response-privacy
+      - inspect-applied-email-history
+      - inspect-email-operational-health
+      - inspect-customer-web-shape
+      - inspect-auth-protection
+  - name: expectedFinancePrivacySource
+    displayName: Exact checked source SHA for finance header publication (unused for inspection)
+    type: string
+    default: NOT_AUTHORIZED
+pool:
+  vmImage: ubuntu-latest
+steps:
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 1
+  - ${{ if eq(parameters.action, 'inspect-auth-protection') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_auth_protection_inventory.py' -v
+        displayName: Verify read-only Auth protection metadata boundaries
+      - task: AzureCLI@2
+        displayName: Read Auth protection settings without activation or customer requests
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/inspect-auth-protection.py
+  - ${{ if eq(parameters.action, 'inspect-customer-web-shape') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_web_runtime_shape.py' -v
+        displayName: Verify read-only web shape redaction
+      - task: AzureCLI@2
+        displayName: Read web template shape differences without settings values
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/inspect-customer-web-shape.py
+  - ${{ if eq(parameters.action, 'inspect-email-operational-health') }}:
+      - script: python3 -m unittest discover -s scripts/email/tests -p 'test_email_operations.py' -v
+        displayName: Verify aggregate-only email inspection boundaries
+      - task: AzureCLI@2
+        displayName: Read email operational counts without account data or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            command -v psql >/dev/null
+            python3 scripts/email/inspect-email-operations.py
+  - ${{ if eq(parameters.action, 'inspect-applied-email-history') }}:
+      - script: python3 -m unittest discover -s scripts/email/tests -p 'test_applied_email_history.py' -v
+        displayName: Verify read-only migration inspection boundaries
+      - task: AzureCLI@2
+        displayName: Read applied email migration checksums without database writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            command -v psql >/dev/null
+            python3 scripts/email/inspect-applied-email-history.py
+  - ${{ if or(eq(parameters.action, 'inspect-finance-response-privacy'), eq(parameters.action, 'publish-finance-response-privacy')) }}:
+      - script: python3 -m unittest discover -s scripts/apim/tests -p 'test_finance_response_privacy.py'
+        displayName: Verify narrow finance response header guards
+      - task: AzureCLI@2
+        displayName: Verify finance policy representations and optionally publish cache-only correction
+        env:
+          FINANCE_PRIVACY_ACTION: ${{ parameters.action }}
+          EXPECTED_FINANCE_PRIVACY_SOURCE: ${{ parameters.expectedFinancePrivacySource }}
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            if [ "$FINANCE_PRIVACY_ACTION" = 'publish-finance-response-privacy' ]; then
+              python3 scripts/apim/finance-response-privacy.py --apply --expected-source-sha "$EXPECTED_FINANCE_PRIVACY_SOURCE"
+            else
+              python3 scripts/apim/finance-response-privacy.py
+            fi
+  - ${{ if eq(parameters.action, 'capture-gateway-fingerprints') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_gateway_policy_fingerprints.py'
+        displayName: Verify gateway fingerprint scope and redaction
+      - task: AzureCLI@2
+        displayName: Read existing gateway policy fingerprints without writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/capture-gateway-policy-fingerprints.py --output "$(Build.ArtifactStagingDirectory)/gateway-policy-fingerprints.json"
+      - task: PublishPipelineArtifact@1
+        condition: succeededOrFailed()
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)
+          artifact: gateway-policy-fingerprints
+  - ${{ if eq(parameters.action, 'capture-launch-runtime') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_launch_runtime_capture.py'
+        displayName: Verify launch inventory read-only and redaction boundaries
+      - task: AzureCLI@2
+        displayName: Capture launch serving metadata and safety baseline without writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/capture-launch-runtime.py --output "$(Build.ArtifactStagingDirectory)/launch-runtime.json"
+      - task: PublishPipelineArtifact@1
+        condition: succeededOrFailed()
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)
+          artifact: launch-runtime-metadata
+  - ${{ if eq(parameters.action, 'inspect-email-runtime') }}:
+      - task: AzureCLI@2
+        displayName: Inspect email runtime metadata without secret values
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/email/customer-email-release.py --inspect
+  - ${{ if eq(parameters.action, 'test-email-upgrade') }}:
+      - template: pipelines/customer-email-test-steps.yml
+  - ${{ if eq(parameters.action, 'release-customer-email') }}:
+      - template: pipelines/customer-email-release-steps.yml
+  - ${{ if eq(parameters.action, 'release-customer-checkout') }}:
+      - template: pipelines/customer-checkout-release-steps.yml
+  - ${{ if or(eq(parameters.action, 'inspect-customer-fixes'), eq(parameters.action, 'publish-review-routes')) }}:
+      - task: AzureCLI@2
+        displayName: Inspect customer routes and optionally repair review writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            if [ '${{ parameters.action }}' = 'publish-review-routes' ]; then
+              python3 scripts/apim/customer-five-fixes.py --apply-reviews
+            else
+              python3 scripts/apim/customer-five-fixes.py
+            fi
+  - ${{ if eq(parameters.action, 'inspect') }}:
+      - task: AzureCLI@2
+        displayName: Read cart dependencies and live revision, without secrets or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/device-cart-readiness.py
+  - ${{ if eq(parameters.action, 'release-cart') }}:
+      - template: pipelines/device-cart-release-steps.yml
+  - ${{ if eq(parameters.action, 'inspect-cart-policy') }}:
+      - task: AzureCLI@2
+        displayName: Inspect owned cart policy structure without values or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/apim/inspect-device-cart-policy.py
+  - ${{ if eq(parameters.action, 'publish-cart-routes') }}:
+      - task: AzureCLI@2
+        displayName: Verify pinned healthy Order image and finish owned cart routes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 -m unittest discover -s scripts/apim/tests -p 'test_device_safe_cart_routes.py'
+            python3 scripts/apim/device-safe-cart-routes.py --expected-image cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0 --apply

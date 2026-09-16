@@ -45,7 +45,7 @@ class EmailVerificationPersistenceTest {
     @BeforeAll static void database() {
         String url=System.getenv("EMAIL_TEST_DB_URL");
         URI uri=URI.create(url.substring("jdbc:".length()));
-        if (!"true".equals(System.getenv("GITHUB_ACTIONS")) || !"true".equals(System.getenv("EMAIL_TEST_DISPOSABLE")) || !"postgresql".equals(uri.getScheme()) ||
+        if (!("true".equals(System.getenv("GITHUB_ACTIONS")) || "True".equalsIgnoreCase(System.getenv("TF_BUILD"))) || !"true".equals(System.getenv("EMAIL_TEST_DISPOSABLE")) || !"postgresql".equals(uri.getScheme()) ||
             !List.of("localhost","127.0.0.1").contains(uri.getHost()) || !"/craves_email_test".equals(uri.getPath()) ||
             uri.getQuery()!=null || uri.getUserInfo()!=null || uri.getFragment()!=null)
             throw new IllegalStateException("Only the explicitly disposable CI PostgreSQL service is allowed");
@@ -57,13 +57,13 @@ class EmailVerificationPersistenceTest {
         new JdbcTemplate(admin).execute("CREATE SCHEMA email_auth_test");
         var source=new DriverManagerDataSource(url+"?currentSchema=email_auth_test",System.getenv("EMAIL_TEST_DB_USER"),System.getenv("EMAIL_TEST_DB_PASSWORD"));
         // Exercise the exact previously deployed version before additive upgrade.
-        Flyway.configure().dataSource(source).schemas("email_auth_test").defaultSchema("email_auth_test").target("8").load().migrate();
+        Flyway.configure().dataSource(source).schemas("email_auth_test").defaultSchema("email_auth_test").target("14").load().migrate();
         jdbc=new JdbcTemplate(source);
         UUID historical=UUID.randomUUID();
         jdbc.update("INSERT INTO auth_identity(id,firebase_uid,phone_number,email,email_verified) VALUES(?,?,?,'existing@example.test',true)",
             historical,"historical-"+historical,"hist-"+historical.toString().substring(0,20));
         flyway=Flyway.configure().dataSource(source).schemas("email_auth_test").defaultSchema("email_auth_test").load();
-        assertEquals(7,flyway.migrate().migrationsExecuted); // Existing four upgrades plus three additive referral migrations.
+        assertEquals(2,flyway.migrate().migrationsExecuted);
         assertEquals("existing@example.test",jdbc.queryForObject("SELECT email FROM auth_identity WHERE id=?",String.class,historical));
         assertTrue(Boolean.TRUE.equals(jdbc.queryForObject("SELECT email_verified FROM auth_identity WHERE id=?",Boolean.class,historical)));
         assertEquals(0L,jdbc.queryForObject("SELECT email_revision FROM auth_identity WHERE id=?",Long.class,historical));

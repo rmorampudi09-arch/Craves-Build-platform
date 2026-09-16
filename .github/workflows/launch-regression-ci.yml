@@ -52,15 +52,18 @@ jobs:
           printf 'release_sha=%s\n' "$EXPECTED_RELEASE_SHA" >> "$GITHUB_OUTPUT"
       - name: Test failure handling in the evidence summarizer
         run: python3 -m unittest discover -s scripts/launch -p 'test_*.py' -v
-      - name: Verify bank, refund, deployment and admin release guards
+      - name: Install existing guard-test parser
+        run: python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.2'
+      - name: Verify existing bank, refund, preflight and admin guards
         run: |
           python3 -m unittest discover -s scripts/finance -p 'test_*.py' -v
           python3 -m unittest discover -s scripts/refund -p 'test_*.py' -v
           python3 scripts/release/tests/test-backend-preflight.py
           python3 scripts/release/tests/test-backend-image-reuse.py
-          python3 scripts/release/tests/test-reviewed-service-image.py
-          python3 scripts/release/tests/test-customer-web-runtime.py
           python3 scripts/admin-explorer/test-runtime-readiness.py
+          # The old PR's reviewed-image/web deployment wrappers are not in this
+          # reconciled tree. Their separate release-governance closure is OPEN;
+          # this workflow certifies tests, never permission to deploy or launch.
       - uses: actions/upload-artifact@v4
         if: always()
         with:

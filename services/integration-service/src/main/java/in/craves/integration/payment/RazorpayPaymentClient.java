@@ -57,6 +57,16 @@ public class RazorpayPaymentClient {
         }
     }
 
+    /** Read-only recovery of an uncertain original order; verifies the persisted receipt and amount. */
+    public CreatedOrder fetchCreatedOrder(String id,String receipt,BigDecimal amount,String currency) {
+        requireCredentials();
+        if(id==null || !id.matches("order_[A-Za-z0-9]+"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Original provider order ID required");
+        JsonNode response=client.get().uri("/v1/orders/{id}",id).headers(this::basicAuth).retrieve().body(JsonNode.class);
+        if(!id.equals(text(response,"id")) || !receipt.equals(text(response,"receipt")))throw new ResponseStatusException(HttpStatus.CONFLICT,"Original provider order context differs");
+        RazorpayRequestSafety.requireMoney(amount,currency,longValue(response,"amount"),text(response,"currency"),"Recovered Razorpay order");
+        return new CreatedOrder(id,text(response,"status"),properties.keyId(),Map.of("receipt",receipt,"amount",RazorpayRequestSafety.toSubunits(amount),"currency",currency),response);
+    }
+
     public VerifiedPayment verifyCheckout(
         String expectedOrderId,
         String paymentId,

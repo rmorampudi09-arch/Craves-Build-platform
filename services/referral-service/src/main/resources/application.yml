@@ -1,0 +1,59 @@
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+spring:
+  application:
+    name: craves-referral-service
+  datasource:
+    url: ${REFERRAL_DB_URL:jdbc:postgresql://127.0.0.1:5432/referral_unconfigured}
+    username: ${REFERRAL_DB_USER:referral_unconfigured}
+    password: ${REFERRAL_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${REFERRAL_DB_POOL_SIZE:8}
+      minimum-idle: 0
+      connection-timeout: 5000
+      validation-timeout: 2000
+      initialization-fail-timeout: -1
+      connection-init-sql: SET statement_timeout = '15s'
+  flyway:
+    enabled: false
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+referral:
+  enabled: ${CRAVES_REFERRALS_ENABLED:false}
+  workers-enabled: ${CRAVES_REFERRALS_WORKERS_ENABLED:false}
+  chef-earnings-enabled: ${CRAVES_REFERRALS_CHEF_EARNINGS_ENABLED:false}
+  awards-enabled: ${CRAVES_REFERRALS_AWARDS_ENABLED:false}
+  settlement-enabled: ${CRAVES_REFERRALS_SETTLEMENT_ENABLED:false}
+  withdrawals-enabled: ${CRAVES_REFERRALS_WITHDRAWALS_ENABLED:false}
+  spending-enabled: ${CRAVES_REFERRALS_SPENDING_ENABLED:false}
+  public-origin: ${CRAVES_REFERRALS_PUBLIC_ORIGIN:https://craves.in}
+  jwt-issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
+  jwt-audience: ${CRAVES_JWT_AUDIENCE:craves-api}
+  verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
+  auth-key: ${CRAVES_REFERRALS_AUTH_HMAC_BASE64:}
+  order-key: ${CRAVES_REFERRALS_ORDER_HMAC_BASE64:}
+  finance-key: ${CRAVES_REFERRALS_FINANCE_HMAC_BASE64:}
+  previous-auth-key: ${CRAVES_REFERRALS_PREVIOUS_AUTH_HMAC_BASE64:}
+  previous-order-key: ${CRAVES_REFERRALS_PREVIOUS_ORDER_HMAC_BASE64:}
+  previous-finance-key: ${CRAVES_REFERRALS_PREVIOUS_FINANCE_HMAC_BASE64:}
+  cashout-minimum-paise: ${CRAVES_REFERRALS_CASHOUT_MINIMUM_PAISE:0}
+  annual-kyc-threshold-paise: ${CRAVES_REFERRALS_ANNUAL_KYC_THRESHOLD_PAISE:0}
+  lifetime-review-paise: ${CRAVES_REFERRALS_LIFETIME_REVIEW_PAISE:0}
+  reconciliation-freshness-seconds: 900

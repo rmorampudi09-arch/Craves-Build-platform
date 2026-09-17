@@ -39,6 +39,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class PaymentService {
+    private in.craves.integration.referrals.checkout.ReferralCheckoutFundingService referralFunding;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void setReferralFunding(in.craves.integration.referrals.checkout.ReferralCheckoutFundingService funding){this.referralFunding=funding;}
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final PaymentProviderProperties provider;
@@ -79,6 +82,11 @@ public class PaymentService {
         if (checkout.id() == null || checkout.grandTotal() == null || checkout.customerIdentityId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Checkout was not valid for payment");
         }
+        if(checkout.referralBenefitsRequested()) {
+            if(referralFunding==null || !routing.razorpay())throw new ResponseStatusException(HttpStatus.CONFLICT,"Referral checkout funding is not enabled for this provider");
+            BigDecimal net=referralFunding.prepare(authorizationHeader,checkout.id(),checkout.customerIdentityId(),checkout.grandTotal(),checkout.currency());
+            checkout=new CheckoutResponse(checkout.id(),checkout.customerIdentityId(),checkout.status(),checkout.currency(),net,true);
+        }
         Optional<PaymentOrderResponse> existing = findByCheckout(checkout.id());
         if (existing.isPresent() && (
             existing.get().status() == PaymentOrderStatus.PAID
@@ -87,6 +95,7 @@ public class PaymentService {
             requireMatchingCustomer(existing.get().customerIdentityId(), checkout);
             return toCreateResponse(existing.get());
         }
+        if(checkout.referralBenefitsRequested() && checkout.grandTotal().signum()==0)return referralFunding.zero(checkout.id(),checkout.customerIdentityId());
         return createProviderOrder(checkout, request);
     }
 
@@ -105,6 +114,7 @@ public class PaymentService {
         VerifyPaymentRequest request
     ) {
         PaymentOrderResponse existing = getPaymentOrder(authorizationHeader, paymentOrderId);
+        if ("REFERRAL_WALLET".equals(existing.provider())) return new VerifyPaymentResponse(paymentOrderId,existing.status(),existing.providerStatus(),null);
         if ("RAZORPAY".equalsIgnoreCase(existing.provider())) {
             return verifyRazorpayPayment(existing, request);
         }
@@ -391,17 +401,17 @@ public class PaymentService {
     }
 
     private CreatePaymentOrderResponse createRazorpayOrder(CheckoutResponse checkout, CreatePaymentOrderRequest request) {
-        UUID paymentOrderId = UUID.randomUUID();
+        UUID paymentOrderId = checkout.referralBenefitsRequested()?referralFunding.paymentId(checkout.id()):UUID.randomUUID();
         String orderRef = "CRV_" + checkout.id().toString().replace("-", "") + "_RZP";
         Map<String, String> notes = new LinkedHashMap<>();
         notes.put("craves_checkout_id", checkout.id().toString());
         notes.put("craves_customer_identity_id", checkout.customerIdentityId().toString());
         if (StringUtils.hasText(request.customerName())) notes.put("customer_name", request.customerName().trim());
-        RazorpayPaymentClient.CreatedOrder created = razorpayClient.createOrder(
+        RazorpayPaymentClient.CreatedOrder created = checkout.referralBenefitsRequested()?referralFunding.create(checkout.id(),orderRef,checkout.grandTotal(),checkout.currency(),notes):razorpayClient.createOrder(
             orderRef, checkout.grandTotal(), checkout.currency(), notes
         );
         jdbcTemplate.update(
-            "INSERT INTO payment_schema.payment_order (id, checkout_id, customer_identity_id, craves_payment_order_ref, provider, provider_order_id, checkout_key_id, amount, currency, status, provider_status, request_payload, response_payload, created_at, updated_at) VALUES (?, ?, ?, ?, 'RAZORPAY', ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, now(), now())",
+            "INSERT INTO payment_schema.payment_order (id, checkout_id, customer_identity_id, craves_payment_order_ref, provider, provider_order_id, checkout_key_id, amount, currency, status, provider_status, request_payload, response_payload, created_at, updated_at) VALUES (?, ?, ?, ?, 'RAZORPAY', ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, now(), now())" + (checkout.referralBenefitsRequested()?" ON CONFLICT(id) DO NOTHING":""),
             paymentOrderId, checkout.id(), checkout.customerIdentityId(), orderRef, created.orderId(),
             created.checkoutKeyId(), checkout.grandTotal(), checkout.currency(),
             PaymentOrderStatus.PAYMENT_PENDING.name(), created.providerStatus(),
@@ -514,11 +524,11 @@ public class PaymentService {
         String paymentSessionId = jdbcTemplate.query(
             "SELECT payment_session_id FROM payment_schema.payment_order WHERE id = ?",
             (rs, rowNum) -> rs.getString("payment_session_id"), existing.paymentOrderId()
-        ).stream().findFirst().orElse(null);
+        ).stream().filter(java.util.Objects::nonNull).findFirst().orElse(null);
         String checkoutKeyId = jdbcTemplate.query(
             "SELECT checkout_key_id FROM payment_schema.payment_order WHERE id = ?",
             (rs, rowNum) -> rs.getString("checkout_key_id"), existing.paymentOrderId()
-        ).stream().findFirst().orElse(null);
+        ).stream().filter(java.util.Objects::nonNull).findFirst().orElse(null);
         return new CreatePaymentOrderResponse(
             existing.paymentOrderId(), existing.checkoutId(), existing.cravesPaymentOrderRef(),
             existing.provider(), existing.providerOrderId(), existing.providerPaymentId(), checkoutKeyId,
@@ -528,6 +538,7 @@ public class PaymentService {
     }
 
     private void notifyOrderPaid(UUID checkoutId, PaymentOrderResponse order, String cfPaymentId) {
+        if(referralFunding!=null && referralFunding.exists(checkoutId))return; // Durable funding worker consumes benefits and confirms Order after this payment transaction commits.
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("paymentOrderId", order.paymentOrderId());
         body.put("provider", order.provider());
@@ -628,7 +639,9 @@ public class PaymentService {
         UUID customerIdentityId,
         String status,
         String currency,
-        BigDecimal grandTotal
+        BigDecimal grandTotal,
+        boolean referralBenefitsRequested
     ) {
+        public CheckoutResponse(UUID id,UUID customerIdentityId,String status,String currency,BigDecimal grandTotal){this(id,customerIdentityId,status,currency,grandTotal,false);}
     }
 }

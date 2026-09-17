@@ -63,7 +63,7 @@ class EmailVerificationPersistenceTest {
         jdbc.update("INSERT INTO auth_identity(id,firebase_uid,phone_number,email,email_verified) VALUES(?,?,?,'existing@example.test',true)",
             historical,"historical-"+historical,"hist-"+historical.toString().substring(0,20));
         flyway=Flyway.configure().dataSource(source).schemas("email_auth_test").defaultSchema("email_auth_test").load();
-        assertEquals(2,flyway.migrate().migrationsExecuted);
+        assertEquals(3,flyway.migrate().migrationsExecuted);
         assertEquals("existing@example.test",jdbc.queryForObject("SELECT email FROM auth_identity WHERE id=?",String.class,historical));
         assertTrue(Boolean.TRUE.equals(jdbc.queryForObject("SELECT email_verified FROM auth_identity WHERE id=?",Boolean.class,historical)));
         assertEquals(0L,jdbc.queryForObject("SELECT email_revision FROM auth_identity WHERE id=?",Long.class,historical));
@@ -229,9 +229,9 @@ class EmailVerificationPersistenceTest {
         jdbc.execute("DROP SCHEMA IF EXISTS email_auth_clean_test CASCADE");
         var source=jdbc.getDataSource();
         Flyway clean=Flyway.configure().dataSource(source).schemas("email_auth_clean_test").defaultSchema("email_auth_clean_test").load();
-        assertEquals(15,clean.migrate().migrationsExecuted);
+        assertEquals(16,clean.migrate().migrationsExecuted);
         assertEquals(0,clean.migrate().migrationsExecuted);clean.validate();
-        assertEquals(15,jdbc.queryForObject("SELECT count(*) FROM email_auth_clean_test.flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        assertEquals(16,jdbc.queryForObject("SELECT count(*) FROM email_auth_clean_test.flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('academy_schema.learner')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_audit')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_admission')::text",String.class));

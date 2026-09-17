@@ -26,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OrderFinancialFinalizationService {
     public record Receipt(UUID chefOrderId,String result,UUID earningJournalId) {}
+    private in.craves.integration.referrals.checkout.ReferralCheckoutFundingService referralFunding;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void setReferralFunding(in.craves.integration.referrals.checkout.ReferralCheckoutFundingService service){this.referralFunding=service;}
     private final JdbcTemplate jdbc;private final ObjectMapper json;private final LedgerPostingService ledger;private final ChefPayoutService payouts;private final boolean enabled;
     public OrderFinancialFinalizationService(JdbcTemplate jdbc,ObjectMapper json,LedgerPostingService ledger,ChefPayoutService payouts,
         @Value("${CRAVES_FINANCE_FINALIZATION_ENABLED:false}") boolean enabled){this.jdbc=jdbc;this.json=json;this.ledger=ledger;this.payouts=payouts;this.enabled=enabled;}
@@ -117,6 +120,10 @@ public class OrderFinancialFinalizationService {
     }
     private Map<String,Object> capture(UUID checkout,UUID customer) {
         lock("finance-capture/"+checkout);
+        if(referralFunding!=null && referralFunding.exists(checkout)) {
+            var funded=jdbc.queryForList("SELECT c.* FROM payment_schema.referral_funding_capture c JOIN payment_schema.payment_order p ON p.id=c.payment_order_id WHERE c.checkout_id=? AND p.customer_identity_id=? AND p.status='PAID' AND p.currency='INR' AND p.amount*100=c.gateway_paise AND ((c.gateway_paise=0 AND p.provider='REFERRAL_WALLET') OR (c.gateway_paise>0 AND p.provider='RAZORPAY' AND p.provider_payment_id=c.provider_payment_id AND lower(p.provider_status) IN ('captured','paid')))",checkout,customer);
+            return funded.size()==1?funded.getFirst():null;
+        }
         var paid=jdbc.queryForList("SELECT * FROM payment_schema.payment_order WHERE checkout_id=? AND status='PAID' ORDER BY id FOR UPDATE",checkout);
         if(paid.size()!=1)return null;var payment=paid.getFirst();
         String ref=(String)payment.get("provider_payment_id"),provider=(String)payment.get("provider"),providerStatus=(String)payment.get("provider_status");

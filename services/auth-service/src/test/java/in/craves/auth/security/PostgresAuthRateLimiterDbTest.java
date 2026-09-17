@@ -80,13 +80,13 @@ class PostgresAuthRateLimiterDbTest {
     }
 
     @Test void additiveEmailV15ToLimiterV16UpgradeAndReplayPreserveHistoricalIdentity() {
-        assertEquals(1,upgradeMigrations);
+        assertEquals(2,upgradeMigrations);
         assertEquals(0,flyway.migrate().migrationsExecuted);flyway.validate();
         var identity=jdbc.queryForMap("SELECT email,email_verified,email_revision,email_verified_at FROM auth_identity WHERE id=?",historicalIdentity);
         assertEquals("historical-fixture@example.test",identity.get("email"));assertEquals(Boolean.TRUE,identity.get("email_verified"));
         assertEquals(3L,((Number)identity.get("email_revision")).longValue());
         assertEquals(START.minusSeconds(3600),((Timestamp)identity.get("email_verified_at")).toInstant());
-        assertEquals(15,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        assertEquals(16,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
     }
     @Test void cleanLatestMigrationAndReplayCreateCounterAndExpiryIndex() {
         // This second fresh migration also executes V7; another default schema does not isolate academy_schema.
@@ -94,10 +94,10 @@ class PostgresAuthRateLimiterDbTest {
         resetPublicExplorerFixture(jdbc);
         jdbc.execute("DROP SCHEMA IF EXISTS "+CLEAN_SCHEMA+" CASCADE");
         var clean=Flyway.configure().dataSource(data).schemas(CLEAN_SCHEMA).defaultSchema(CLEAN_SCHEMA).load();
-        assertEquals(15,clean.migrate().migrationsExecuted);clean.validate();assertEquals(0,clean.migrate().migrationsExecuted);
+        assertEquals(16,clean.migrate().migrationsExecuted);clean.validate();assertEquals(0,clean.migrate().migrationsExecuted);
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('"+CLEAN_SCHEMA+".auth_rate_limit_counter')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('"+CLEAN_SCHEMA+".auth_rate_limit_expiry')::text",String.class));
-        assertEquals(15,jdbc.queryForObject("SELECT count(*) FROM "+CLEAN_SCHEMA+".flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        assertEquals(16,jdbc.queryForObject("SELECT count(*) FROM "+CLEAN_SCHEMA+".flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('academy_schema.learner')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_audit')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_admission')::text",String.class));

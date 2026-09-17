@@ -155,7 +155,7 @@ export function ChefEarningsLedger() {
               Chef earning allocations
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Paid and delivered orders appear automatically after their accounting is recorded. Older manually approved entries remain visible. The totals above cover only these listed records, not your available balance; refunds, holds and later adjustments are shown separately in your balance breakdown.
+              Paid and delivered orders appear automatically after their accounting is recorded. Older manually approved entries remain visible. The browser never calculates commission, tax withholding or payout timing. These listed totals are not your available balance; refunds, holds and later adjustments appear in your balance breakdown.
             </p>
           </div>
           <button

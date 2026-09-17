@@ -207,7 +207,7 @@ public class SubscriptionLifecycleRepository {
                 "ORDER BY created_at DESC, id DESC LIMIT ?",
             (rs, rowNum) -> new SubscriptionStatusHistoryResponse(
                 rs.getObject("id", UUID.class), rs.getString("old_status"), rs.getString("new_status"),
-                rs.getString("reason"), rs.getObject("actor_identity_id", UUID.class), rs.getObject("created_at", Instant.class)
+                rs.getString("reason"), rs.getObject("actor_identity_id", UUID.class), in.craves.subscription.config.JdbcTimes.instant(rs, "created_at")
             ), subscriptionId, limit
         );
     }
@@ -227,8 +227,8 @@ public class SubscriptionLifecycleRepository {
                 rs.getObject("plan_id", UUID.class), rs.getObject("chef_identity_id", UUID.class),
                 rs.getString("status"), rs.getObject("start_date", LocalDate.class),
                 rs.getObject("end_date", LocalDate.class), rs.getObject("next_service_date", LocalDate.class),
-                rs.getObject("delivery_address_id", UUID.class), rs.getObject("created_at", Instant.class),
-                rs.getObject("updated_at", Instant.class)
+                rs.getObject("delivery_address_id", UUID.class), in.craves.subscription.config.JdbcTimes.instant(rs, "created_at"),
+                in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at")
             ),
             status, status, planId, planId, afterCreatedAt, afterCreatedAt, afterCreatedAt, afterId, afterId, limit + 1
         );
@@ -305,8 +305,8 @@ public class SubscriptionLifecycleRepository {
         return new SkipRequestResponse(
             rs.getObject("id", UUID.class), rs.getObject("subscription_id", UUID.class),
             rs.getObject("service_date", LocalDate.class), rs.getString("status"), rs.getString("reason"),
-            rs.getObject("occurrence_id", UUID.class), rs.getObject("created_at", Instant.class),
-            rs.getObject("applied_at", Instant.class), rs.getObject("updated_at", Instant.class)
+            rs.getObject("occurrence_id", UUID.class), in.craves.subscription.config.JdbcTimes.instant(rs, "created_at"),
+            in.craves.subscription.config.JdbcTimes.instant(rs, "applied_at"), in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at")
         );
     }
 

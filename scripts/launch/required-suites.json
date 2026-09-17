@@ -6,6 +6,9 @@
   "schemaVersion": 1,
   "services": {
     "auth-service": {
+      "RedisRevocationConsumerTest": 6,
+      "RedisTokenRevocationPublisherTest": 4,
+      "RedisRevocationAtomicTest": 5,
       "AcademyCoreTest": 7,
       "AcademyPersistenceTest": 6,
       "AdminAccountInterventionRepositoryTest": 3,
@@ -31,6 +34,7 @@
       "SignedEmailTransportTest": 4
     },
     "catalog-service": {
+      "RedisRevocationConsumerTest": 6,
       "AdminSessionRevocationWebConfigurationTest": 6,
       "CatalogFinanceEligibilityTest": 5,
       "CatalogSellingDatabaseTest": 3,
@@ -49,6 +53,7 @@
       "SavedMenuItemReadServiceValidationTest": 4
     },
     "integration-service": {
+      "RedisRevocationConsumerTest": 6,
       "DeliveryTariffTest": 5,
       "DeliveryTariffDatabaseTest": 4,
       "AdminDeliveryIntelligenceHistoryControllerTest": 4,
@@ -155,6 +160,7 @@
       "SubscriptionPaymentServiceOwnershipTest": 6
     },
     "notification-service": {
+      "RedisRevocationConsumerTest": 6,
       "AdminSessionRevocationWebConfigurationTest": 6,
       "AppNoticeCursorCodecTest": 2,
       "AuthRecipientEmailResolverTest": 4,
@@ -175,6 +181,7 @@
       "VerificationEmailTemplateTest": 5
     },
     "order-service": {
+      "RedisRevocationConsumerTest": 6,
       "DeliveryTariffCheckoutDatabaseTest": 2,
       "AdminDashboardControllerTest": 4,
       "AdminExplorerControllerTest": 5,
@@ -224,6 +231,9 @@
       "SubscriptionOrderPropertiesTest": 2
     },
     "subscription-service": {
+      "JdbcTimesTest": 2,
+      "RedisRevocationConsumerTest": 6,
+      "SubscriptionPaymentRecoveryDatabaseTest": 8,
       "AdminSessionRevocationWebConfigurationTest": 6,
       "CapacityPropertiesTest": 2,
       "ChefPlanEndpointOwnershipTest": 3,
@@ -248,6 +258,7 @@
       "SubscriptionSpringConstructorWiringTest": 1
     },
     "user-chef-service": {
+      "RedisRevocationConsumerTest": 6,
       "AdminDirectoryServiceTest": 3,
       "AdminExplorerControllerTest": 5,
       "AdminSessionRevocationWebConfigurationTest": 6,

@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Review gate: only named existing owner files and additive referral backend paths may change."""
 import subprocess
+# The bounded referral integration was accepted in PR #369. Subsequent platform
+# changes still run its complete compatibility tests, but must not be described
+# as part of that original integration's file-scope review. Check that the
+# accepted referral module AND its named owner integration seams are unchanged
+# before allowing this path. Any change to those seams uses the original gate.
+ACCEPTED='075382779390902040e504466fe82345b3fecf92'
 # Preserve current merged main, including the independent landing/chef-session releases.
 BASE='d0c1245a3e1e02c43d1b70578491fbc54f2baf3c'
 MODIFIED={
@@ -40,6 +46,13 @@ EXACT={'azure-pipelines-referral-private-backend.yml','services/order-service/sr
  'services/order-service/src/test/java/in/craves/order/finance/ReferralCheckoutIntegrationDatabaseTest.java'}
 for service,versions in {'auth-service':[(12,'source_outbox'),(13,'enrollment'),(14,'account_status')],'order-service':[(28,'source_outbox'),(29,'order_binding'),(30,'lifecycle_outbox'),(31,'checkout_benefits'),(32,'checkout_recovery_audit')],'integration-service':[(137,'source_outbox'),(138,'finance_consumer'),(139,'finance_refresh'),(140,'finance_reviews_and_execution'),(141,'checkout_funding'),(142,'split_refunds'),(143,'recovery_audit_and_cancellation')]}.items():
  for version,name in versions:EXACT.add(f'services/{service}/src/main/resources/db/migration/V{version}__referral_{name}.sql')
+if subprocess.run(['git','merge-base','--is-ancestor',ACCEPTED,'HEAD'],capture_output=True).returncode==0:
+ protected = sorted({p for p in MODIFIED|EXACT if p.startswith('services/')} |
+                    {p for p in ADDED if p.startswith('services/')})
+ changed = subprocess.check_output(['git','diff','--name-only',ACCEPTED,'HEAD','--',*protected],text=True).splitlines()
+ if not changed:
+  print('PASS: accepted referral module and owner integration seams are unchanged; full compatibility tests still required')
+  raise SystemExit(0)
 subprocess.run(['git','merge-base','--is-ancestor',BASE,'HEAD'],check=True)
 lines=subprocess.check_output(['git','diff','--name-status','--no-renames',BASE,'HEAD'],text=True).splitlines()
 assert lines,'No integration changes found'

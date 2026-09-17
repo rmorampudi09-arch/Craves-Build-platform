@@ -23,8 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 /** Runs before checkout commit. Any quote/ownership failure rolls back checkout and cart mutation. */
 @Service
 public class OrderFinancialBindingService {
-    private final JdbcTemplate jdbc;private final ObjectMapper json;private final CatalogClient catalog;private final FinanceSourceClient finance;
-    public OrderFinancialBindingService(JdbcTemplate jdbc,ObjectMapper json,CatalogClient catalog,FinanceSourceClient finance){this.jdbc=jdbc;this.json=json;this.catalog=catalog;this.finance=finance;}
+    private final JdbcTemplate jdbc;private final ObjectMapper json;private final CatalogClient catalog;private final FinanceSourceClient finance;private final boolean tariffSourceReady;
+    public OrderFinancialBindingService(JdbcTemplate jdbc,ObjectMapper json,CatalogClient catalog,FinanceSourceClient finance){this(jdbc,json,catalog,finance,false);}
+    @org.springframework.beans.factory.annotation.Autowired
+    public OrderFinancialBindingService(JdbcTemplate jdbc,ObjectMapper json,CatalogClient catalog,FinanceSourceClient finance,
+        @org.springframework.beans.factory.annotation.Value("${CRAVES_DELIVERY_TARIFF_SOURCE_READY:false}") boolean tariffSourceReady){this.jdbc=jdbc;this.json=json;this.catalog=catalog;this.finance=finance;this.tariffSourceReady=tariffSourceReady;}
     @Transactional(propagation=Propagation.MANDATORY)
     public void bind(CheckoutResponse checkout){
         if(checkout==null || checkout.id()==null || checkout.customerIdentityId()==null || checkout.orders()==null || checkout.orders().isEmpty())throw new IllegalArgumentException("Checkout source is incomplete");
@@ -38,6 +41,10 @@ public class OrderFinancialBindingService {
             chefs.put(order.id(),kitchen.identityId());
             var input=requested.addObject().put("chefOrderId",order.id().toString()).put("chefIdentityId",kitchen.identityId().toString()).put("kitchenId",order.kitchenId().toString())
                 .put("pickupStateCode",pickup).put("dropoffStateCode",dropoff).put("deliveryBeforeTax",money(order.deliveryFee()));
+            var address=order.deliveryAddress();
+            if(tariffSourceReady && kitchen.latitude()!=null && kitchen.longitude()!=null && address.latitude()!=null && address.longitude()!=null)
+                input.putObject("deliveryCoordinates").put("pickupLatitude",kitchen.latitude().toPlainString()).put("pickupLongitude",kitchen.longitude().toPlainString())
+                    .put("dropoffLatitude",address.latitude().toPlainString()).put("dropoffLongitude",address.longitude().toPlainString());
             var array=input.putArray("items");
             for(var item:order.items())array.addObject().put("menuItemId",item.menuItemId().toString()).put("quantity",item.quantity()).put("chefBaseUnit",money(item.unitPrice())).put("customerUnit",money(item.unitPrice()));
             // Current catalog has one published price. Explicitly snapshot equal bases; do not invent an uplift or infer historical prices later.
@@ -56,11 +63,15 @@ public class OrderFinancialBindingService {
                 || !"INR".equals(snapshot.path("currency").asText()) || !"ON_DEMAND".equals(snapshot.path("orderSource").asText()) || !items.get(orderId).equals(snapshot.path("items")))
                 throw new IllegalStateException("Immutable financial snapshot identity, prices or hash mismatch");
             var order=checkout.orders().stream().filter(o->o.id().equals(orderId)).findFirst().orElseThrow();
+            if(snapshot.path("policy").path("deliveryTariff").isObject() && !tariffSourceReady)
+                throw new IllegalStateException("Distance tariff checkout wiring is not enabled");
             if(!order.kitchenId().toString().equals(snapshot.path("kitchenId").asText()) || amount(snapshot,"customerFood").compareTo(order.foodSubtotal())!=0 || amount(snapshot,"chefGross").compareTo(order.foodSubtotal())!=0
-                || amount(snapshot,"delivery").compareTo(order.deliveryFee())!=0 || amount(snapshot,"customerTotal").compareTo(amount(snapshot,"customerFood").add(amount(snapshot,"platform")).add(amount(snapshot,"delivery")).add(amount(snapshot,"customerTax")))!=0)
+                || (!snapshot.path("policy").path("deliveryTariff").isObject() && amount(snapshot,"delivery").compareTo(order.deliveryFee())!=0)
+                || (snapshot.path("policy").path("deliveryTariff").isObject() && (!snapshot.path("deliveryQuote").isObject() || amount(snapshot.path("deliveryQuote"),"beforeTax").compareTo(amount(snapshot,"delivery"))!=0))
+                || amount(snapshot,"customerTotal").compareTo(amount(snapshot,"customerFood").add(amount(snapshot,"platform")).add(amount(snapshot,"delivery")).add(amount(snapshot,"customerTax")))!=0)
                 throw new IllegalStateException("Finance quote changed the selected food or delivery base");
-            if(jdbc.update("UPDATE order_schema.customer_order SET chef_identity_id=?,platform_fee=?,tax_amount=?,grand_total=?,updated_at=now() WHERE id=? AND checkout_id=? AND customer_identity_id=? AND status='PAYMENT_PENDING'",
-                chefs.get(orderId),amount(snapshot,"platform"),amount(snapshot,"customerTax"),amount(snapshot,"customerTotal"),orderId,checkout.id(),checkout.customerIdentityId())!=1)
+            if(jdbc.update("UPDATE order_schema.customer_order SET chef_identity_id=?,platform_fee=?,tax_amount=?,delivery_fee=?,grand_total=?,updated_at=now() WHERE id=? AND checkout_id=? AND customer_identity_id=? AND status='PAYMENT_PENDING'",
+                chefs.get(orderId),amount(snapshot,"platform"),amount(snapshot,"customerTax"),amount(snapshot,"delivery"),amount(snapshot,"customerTotal"),orderId,checkout.id(),checkout.customerIdentityId())!=1)
                 throw new IllegalStateException("Checkout is no longer bindable");
             food=food.add(amount(snapshot,"customerFood"));platform=platform.add(amount(snapshot,"platform"));tax=tax.add(amount(snapshot,"customerTax"));delivery=delivery.add(amount(snapshot,"delivery"));total=total.add(amount(snapshot,"customerTotal"));
         }

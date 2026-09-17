@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOrigin } from "@/lib/request-security";
 import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
-import { chefBalanceSchema, draftSchema, financeRoute, financeViewSchema, payoutSchema, subscriptionPreviewSchema } from "@/lib/finance-contract";
+import { chefBalanceSchema, draftSchema, financeRoute, financeViewSchema, payoutSchema, subscriptionPreviewSchema, deliveryPreviewSchema } from "@/lib/finance-contract";
 import { z } from "zod";
 
 export async function financeProxy(request: NextRequest, scope: "admin" | "chef", segments: string[]) {
@@ -28,7 +28,7 @@ export async function financeProxy(request: NextRequest, scope: "admin" | "chef"
     const tail = segments.at(-1);
     const schema = tail === "settings" || tail === "activate" ? financeViewSchema : tail === "policies" ? draftSchema
       : tail === "balance" ? chefBalanceSchema : tail === "withdrawals" ? payoutSchema : tail === "payouts" ? z.array(payoutSchema)
-      : tail === "subscription-preview" ? subscriptionPreviewSchema : z.object({status: z.string(), notice: z.string().optional()});
+      : tail === "subscription-preview" ? subscriptionPreviewSchema : tail === "delivery-preview" ? deliveryPreviewSchema : z.object({status: z.string(), notice: z.string().optional()});
     const parsed = schema.safeParse(body);
     return parsed.success ? NextResponse.json(parsed.data, {status: response.status, headers: {"Cache-Control": "no-store"}})
       : fail(502, "INVALID_FINANCE_RESPONSE");

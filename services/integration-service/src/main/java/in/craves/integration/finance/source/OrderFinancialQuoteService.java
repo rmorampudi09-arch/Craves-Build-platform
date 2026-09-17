@@ -27,7 +27,12 @@ public class OrderFinancialQuoteService {
     public record Item(UUID menuItemId,int quantity,String chefBaseUnit,String customerUnit) {
         public Item {if(menuItemId==null || quantity<1 || quantity>1000)throw new IllegalArgumentException("Invalid quote item");chefBaseUnit=LedgerMoney.text(LedgerMoney.parse(chefBaseUnit));customerUnit=LedgerMoney.text(LedgerMoney.parse(customerUnit));if(new BigDecimal(customerUnit).compareTo(new BigDecimal(chefBaseUnit))<0)throw new IllegalArgumentException("Unfunded chef discount is not permitted");}
     }
-    public record OrderInput(UUID chefOrderId,UUID chefIdentityId,UUID kitchenId,String pickupStateCode,String dropoffStateCode,String deliveryBeforeTax,List<Item> items) {
+    public record DeliveryCoordinates(String pickupLatitude,String pickupLongitude,String dropoffLatitude,String dropoffLongitude) {}
+    public record OrderInput(UUID chefOrderId,UUID chefIdentityId,UUID kitchenId,String pickupStateCode,String dropoffStateCode,String deliveryBeforeTax,List<Item> items,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) DeliveryCoordinates deliveryCoordinates) {
+        public OrderInput(UUID chefOrderId,UUID chefIdentityId,UUID kitchenId,String pickupStateCode,String dropoffStateCode,String deliveryBeforeTax,List<Item> items) {
+            this(chefOrderId,chefIdentityId,kitchenId,pickupStateCode,dropoffStateCode,deliveryBeforeTax,items,null);
+        }
         public OrderInput {if(chefOrderId==null || chefIdentityId==null || kitchenId==null || !"36".equals(pickupStateCode) || !"36".equals(dropoffStateCode))throw new IllegalArgumentException("A same-state Telangana chef order is required for this launch regime");deliveryBeforeTax=LedgerMoney.text(LedgerMoney.parse(deliveryBeforeTax));if(items==null || items.isEmpty() || items.size()>100)throw new IllegalArgumentException("Bounded quote items required");items=List.copyOf(items);if(items.stream().map(Item::menuItemId).distinct().count()!=items.size())throw new IllegalArgumentException("Duplicate item");}
     }
     public record Request(UUID checkoutId,UUID customerIdentityId,Instant pricedAt,List<OrderInput> orders) {}
@@ -56,6 +61,14 @@ public class OrderFinancialQuoteService {
             if("REGISTRATION_REVIEW_REQUIRED".equals(profile.registrationReview()))throw conflict("Chef registration requires review; turnover does not authorize a GST deduction");
             if(!profile.profile().stateCode().equals(order.pickupStateCode()))throw conflict("Tax profile does not match kitchen jurisdiction");
             BigDecimal base=sum(order.items(),true),food=sum(order.items(),false),delivery=LedgerMoney.parse(order.deliveryBeforeTax());
+            in.craves.integration.finance.DeliveryTariff.Quote deliveryQuote=null;
+            if(policy.deliveryTariff()!=null) {
+                var coordinates=order.deliveryCoordinates();
+                if(coordinates==null)throw conflict("Verified kitchen and customer coordinates are required for the configured distance tariff");
+                deliveryQuote=policy.deliveryTariff().between(coordinate(coordinates.pickupLatitude()),coordinate(coordinates.pickupLongitude()),
+                    coordinate(coordinates.dropoffLatitude()),coordinate(coordinates.dropoffLongitude()),policy.deliveryGstPercent());
+                delivery=LedgerMoney.parse(deliveryQuote.beforeTax());
+            }
             var chef=FinanceCalculations.chef(base.toPlainString(),policy);
             BigDecimal withholding=FinanceCalculations.percent(base,profile.profile().withholdingRate());
             BigDecimal payable=LedgerMoney.parse(chef.payable()).subtract(withholding);
@@ -76,6 +89,7 @@ public class OrderFinancialQuoteService {
                 .put("foodGstLiableParty","CRAVES_ECO_SECTION_9_5").put("policyId",resolved.policyId().toString()).put("policyRevision",resolved.revision())
                 .put("chefTaxProfileId",profile.id().toString()).put("stateCode","36");
             snapshot.set("items",json.valueToTree(order.items()));snapshot.set("policy",json.valueToTree(policy));
+            if(deliveryQuote!=null) snapshot.set("deliveryQuote",json.valueToTree(deliveryQuote));
             snapshot.put("hash",FinancialJson.hash(snapshot,json));snapshots.add(snapshot);total=total.add(gross);
             jdbc.update("INSERT INTO payment_schema.finance_issued_snapshot(id,checkout_id,chef_order_id,chef_identity_id,snapshot_hash,payload) VALUES (?,?,?,?,?,CAST(? AS jsonb))",
                 UUID.fromString(snapshot.path("snapshotId").asText()),request.checkoutId(),order.chefOrderId(),order.chefIdentityId(),snapshot.path("hash").asText(),snapshot.toString());
@@ -85,6 +99,10 @@ public class OrderFinancialQuoteService {
         return response;
     }
     private static BigDecimal sum(List<Item> items,boolean chef) {return LedgerMoney.amount(items.stream().map(i->LedgerMoney.parse(chef?i.chefBaseUnit():i.customerUnit()).multiply(BigDecimal.valueOf(i.quantity()))).reduce(LedgerMoney.ZERO,BigDecimal::add));}
+    private static BigDecimal coordinate(String value) {
+        if(value==null || !value.matches("-?[0-9]{1,3}(\\.[0-9]{1,15})?"))throw bad("Invalid verified location coordinate");
+        return new BigDecimal(value);
+    }
     private String encode(Object value){try{return json.writeValueAsString(value);}catch(Exception e){throw bad("Invalid financial quote");}}
     private Response decode(String value){try{return json.readValue(value,Response.class);}catch(Exception e){throw new IllegalStateException("Stored quote is invalid",e);}}
     private static ResponseStatusException bad(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}

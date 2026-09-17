@@ -101,6 +101,12 @@ class FinancialCheckoutDatabaseTest {
         doThrow(new IllegalStateException("Finance not reachable")).when(finance).quote(any());assertThrows(RuntimeException.class,this::checkout);
         assertEquals(0,count("customer_order"));assertEquals(0,count("checkout"));assertEquals(0,count("finance_source_outbox"));assertEquals(1,count("cart_item"));verifyNoInteractions(notifications);
     }
+    @Test void unexpectedDistanceTariffWithoutCertifiedSourceRollsBack(){
+        doAnswer(invocation->{var result=quote(invocation.getArgument(0));var snap=(ObjectNode)result.path("snapshots").get(0);
+            snap.putObject("policy").putObject("deliveryTariff").put("baseCharge","20.00");
+            snap.remove("hash");snap.put("hash",hash(snap));return result;}).when(finance).quote(any());
+        assertThrows(RuntimeException.class,this::checkout);assertEquals(0,count("checkout"));assertEquals(1,count("cart_item"));verifyNoInteractions(notifications);
+    }
     @Test void changedQuoteIdentityRollsBackInsteadOfChargingWrongMoney(){
         doAnswer(invocation->{var result=quote(invocation.getArgument(0));result.put("checkoutId",UUID.randomUUID().toString());return result;}).when(finance).quote(any());
         assertThrows(RuntimeException.class,this::checkout);assertEquals(0,count("checkout"));assertEquals(1,count("cart_item"));

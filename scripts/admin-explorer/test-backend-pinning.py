@@ -10,6 +10,14 @@ REGISTRY = 'fixture.azurecr.io'
 
 
 class PinTest(unittest.TestCase):
+    def test_recorded_build_number_pins_only_that_exact_tag(self):
+        image = f'{REGISTRY}/craves/user-chef-service:39139'
+        target, changed = pin.image_plan('user-chef', SHA, REGISTRY, image, DIGEST, '39139')
+        self.assertTrue(changed)
+        self.assertTrue(target.endswith('@' + DIGEST))
+        with self.assertRaises(ValueError): pin.image_plan('user-chef', SHA, REGISTRY, image, DIGEST, '39140')
+        with self.assertRaises(ValueError): pin.image_plan('user-chef', SHA, REGISTRY, image, DIGEST, 'latest')
+
     def test_exact_tag_is_pinned_and_existing_digest_is_idempotent(self):
         target, changed = pin.image_plan('auth', SHA, REGISTRY, f'{REGISTRY}/craves/auth-service:{SHA}', DIGEST)
         self.assertTrue(changed)

@@ -10,6 +10,13 @@ spec=importlib.util.spec_from_file_location('gate', pathlib.Path(__file__).with_
 gate=importlib.util.module_from_spec(spec);spec.loader.exec_module(gate)
 
 class BackendReleaseTest(unittest.TestCase):
+    def test_image_tag_is_bound_to_source_or_recorded_deployment(self):
+        release = {'source': 'a' * 40, 'deployment': 39139}
+        self.assertEqual('a' * 40, gate.image_tag(release))
+        self.assertEqual('39139', gate.image_tag({**release, 'imageTag': '39139'}))
+        for value in ['latest', '39140', 'main', 'b' * 40]:
+            with self.assertRaises(AssertionError): gate.image_tag({**release, 'imageTag': value})
+
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=pathlib.Path(self.tmp.name)

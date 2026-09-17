@@ -111,5 +111,17 @@ class RuntimeTests(unittest.TestCase):
         self.assertNotIn("private-sentinel", json.dumps(differences))
         self.assertTrue(any(d.get("running") == 2 for d in differences))
 
+    def test_only_empty_command_and_zero_probe_delay_are_equivalent(self):
+        left = app()["properties"]["template"]; right = copy.deepcopy(left)
+        left["containers"][0].update(command=[], args=[], probes=[{"type": "Readiness", "initialDelaySeconds": 0}])
+        right["containers"][0]["probes"] = [{"type": "Readiness"}]
+        self.assertEqual(target.readiness_defaults(left), target.readiness_defaults(right))
+        self.assertNotIn("command", right["containers"][0])
+        right["containers"][0]["command"] = ["unexpected"]
+        self.assertNotEqual(target.readiness_defaults(left), target.readiness_defaults(right))
+        right["containers"][0]["command"] = []
+        right["containers"][0]["probes"][0]["initialDelaySeconds"] = 1
+        self.assertNotEqual(target.readiness_defaults(left), target.readiness_defaults(right))
+
 
 if __name__ == "__main__": unittest.main()

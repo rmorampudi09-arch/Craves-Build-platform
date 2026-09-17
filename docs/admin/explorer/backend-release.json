@@ -2,7 +2,7 @@
   "version": 2,
   "services": {
     "auth": {"source": "2ab2e36d30276a039121529656b8c24e6fecdd64", "deployment": 39117},
-    "user-chef": {"source": "b08766de7ca0aa6e6b5c0599556481fe67507f9d", "deployment": 39139},
+    "user-chef": {"source": "b08766de7ca0aa6e6b5c0599556481fe67507f9d", "deployment": 39139, "imageTag": "39139"},
     "order": {"source": "d13cd1a4620da67413179ad53960f4e72639574c", "deployment": 39147}
   }
 }

@@ -119,6 +119,20 @@ def template_difference(desired, running):
     return result[:50]
 
 
+def readiness_defaults(template):
+    # Running ACA revisions omit empty command/args and zero probe delay.
+    # Compare these documented defaults only; never alter the saved template.
+    # https://kubernetes.io/docs/reference/kubernetes-api/core/pod-v1/
+    # https://kubernetes.io/docs/concepts/workloads/pods/probes/
+    result = copy.deepcopy(template)
+    for container in result.get("containers", []):
+        for field in ("command", "args"):
+            if container.get(field) is None: container[field] = []
+        for probe in container.get("probes") or []:
+            if probe.get("initialDelaySeconds") is None: probe["initialDelaySeconds"] = 0
+    return result
+
+
 def ready(role, app, explain=False):
     props = app["properties"]
     revision = props.get("latestRevisionName")
@@ -128,7 +142,12 @@ def ready(role, app, explain=False):
     rows = az("containerapp", "revision", "list", "-g", RG, "-n", APPS[role])
     replicas = az("containerapp", "replica", "list", "-g", RG, "-n", APPS[role], "--revision", revision)
     try:
-        runtime.ready(app, rows, replicas, validate=lambda _: None)
+        compared_app = copy.deepcopy(app)
+        compared_rows = copy.deepcopy(rows)
+        compared_app["properties"]["template"] = readiness_defaults(props["template"])
+        for row in compared_rows:
+            if "template" in row.get("properties", {}): row["properties"]["template"] = readiness_defaults(row["properties"]["template"])
+        runtime.ready(compared_app, compared_rows, replicas, validate=lambda _: None)
         return True
     except (ValueError, KeyError, TypeError) as error:
         if explain:

@@ -38,10 +38,10 @@ class ManualSettlementMigrationDatabaseTest {
     void upgrade() {
         Flyway flyway=Flyway.configure().dataSource(ds).defaultSchema("payment_schema").schemas("payment_schema").locations("classpath:db/migration").load();
         assertEquals("133",flyway.info().current().getVersion().getVersion());
-        assertEquals(List.of("134","136","137","138","139","140","141","142","143","144"),Arrays.stream(flyway.info().pending()).map(m->m.getVersion().getVersion()).toList(),
+        assertEquals(List.of("134","136","137","138","139","140","141","142","143","144","145"),Arrays.stream(flyway.info().pending()).map(m->m.getVersion().getVersion()).toList(),
                 "The combined release must test every exact source migration; this checkout has no V135");
-        assertEquals(10,flyway.migrate().migrationsExecuted);
-        assertEquals("144",flyway.info().current().getVersion().getVersion());
+        assertEquals(11,flyway.migrate().migrationsExecuted);
+        assertEquals("145",flyway.info().current().getVersion().getVersion());
         flyway.validate();
         assertEquals(0,flyway.migrate().migrationsExecuted,"Validated release migrations must be safe to replay");
     }

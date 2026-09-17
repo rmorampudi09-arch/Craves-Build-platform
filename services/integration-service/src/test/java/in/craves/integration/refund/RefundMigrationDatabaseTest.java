@@ -34,7 +34,7 @@ class RefundMigrationDatabaseTest {
         var pending=java.util.Arrays.stream(latest.info().pending()).map(m->m.getVersion().getVersion()).toList();
         // V134 is the separately reviewed manual channel; V135 has never existed.
         // Both the isolated refund branch and the combined release start from real production V133.
-        assertEquals(java.util.List.of("134","136","137","138","139","140","141","142","143","144"),pending); // Combined baseline plus additive chef earnings.
+        assertEquals(java.util.List.of("134","136","137","138","139","140","141","142","143","144","145"),pending); // Combined baseline plus additive referral settlement.
         assertEquals(pending.size(),latest.migrate().migrationsExecuted);latest.validate();assertEquals(0,latest.migrate().migrationsExecuted);
         assertEquals(before,jdbc.queryForMap("SELECT status,attempt_count,last_error,provider_payload,created_at,updated_at FROM payment_schema.refund WHERE id=?",id));
         assertEquals(beforeEvent,jdbc.queryForMap("SELECT * FROM payment_schema.refund_status_outbox WHERE id=?",event));

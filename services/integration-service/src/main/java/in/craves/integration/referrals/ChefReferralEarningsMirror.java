@@ -81,10 +81,13 @@ public final class ChefReferralEarningsMirror {
         if(result.outcome()==LedgerJournal.Outcome.CONFLICT) throw new IllegalStateException("CHEF_REFERRAL_LEDGER_CONFLICT");
         db.update("INSERT INTO payment_schema.chef_referral_posting(posting_id,reward_id,chef_order_id,beneficiary_id,selling_chef_id,amount_paise,original_posting_id,posting_month,posted_at,payload_hash,journal_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             posting,reward,order,owner,seller,amount,original,Date.valueOf(month),Timestamp.from(at),hash,result.transactionId());
+        // Establish the same manual-mode bank requirement as sale earnings, never
+        // clear a genuine hold or fabricate a verified bank beneficiary.
+        db.update("INSERT INTO payment_schema.finance_chef_payout_control(chef_identity_id,hold_reason,hold_kind) VALUES (?,'Beneficiary verification required','BANK_REQUIREMENT') ON CONFLICT DO NOTHING",owner);
     }
     private void lock(String key) {db.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",rs->{return null;},key);}
     private void hold(UUID owner) {
-        db.update("INSERT INTO payment_schema.finance_chef_payout_control(chef_identity_id,on_hold,hold_kind,hold_reason) VALUES (?,true,'OPERATIONAL','Referral refund requires settlement reconciliation') ON CONFLICT(chef_identity_id) DO UPDATE SET on_hold=true,hold_kind='OPERATIONAL',hold_reason=EXCLUDED.hold_reason,updated_at=now()",owner);
+        db.query("SELECT payment_schema.ensure_referral_settlement_hold(?)",rs->{return null;},owner);
     }
     private long count(String sql,Object... args) {return db.queryForObject(sql,Long.class,args);}
     private static UUID id(JsonNode body,String field) {return UUID.fromString(body.path(field).asText());}

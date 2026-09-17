@@ -2,8 +2,10 @@
 """Review gate: only named existing owner files and additive referral backend paths may change."""
 import subprocess
 # Preserve current merged main, including the independent landing/chef-session releases.
-BASE='b08766de7ca0aa6e6b5c0599556481fe67507f9d'
+BASE='d0c1245a3e1e02c43d1b70578491fbc54f2baf3c'
 MODIFIED={
+ 'services/integration-service/src/main/java/in/craves/integration/payout/ManualChefSettlementService.java',
+ 'services/integration-service/src/main/java/in/craves/integration/payout/ChefPayoutService.java',
  'docs/launch-closure/OWNER_DECISIONS_20260916.md',
  'services/order-service/src/main/java/in/craves/order/web/ApiDtos.java',
  'services/integration-service/src/main/java/in/craves/integration/payment/RazorpayPaymentClient.java',
@@ -31,6 +33,8 @@ ADDED=('services/referral-service/','docs/referrals/','scripts/referrals/',
 EXACT={'azure-pipelines-referral-private-backend.yml','services/order-service/src/test/java/in/craves/order/finance/ReferralBenefitsOwnerDatabaseTest.java','.github/workflows/referral-backend-ci.yml',
  'services/auth-service/src/main/resources/db/migration/V17__chef_referral_eligibility.sql',
  'services/integration-service/src/main/resources/db/migration/V144__chef_referral_earnings.sql',
+ 'services/integration-service/src/main/resources/db/migration/V145__manual_referral_withdrawal_allocations.sql',
+ 'services/integration-service/src/test/java/in/craves/integration/finance/source/ReferralManualWithdrawalDatabaseTest.java',
  'services/integration-service/src/test/java/in/craves/integration/finance/source/ChefReferralEarningsDatabaseTest.java',
  'services/order-service/src/test/java/in/craves/order/finance/ReferralCheckoutIntegrationDatabaseTest.java'}
 for service,versions in {'auth-service':[(12,'source_outbox'),(13,'enrollment'),(14,'account_status')],'order-service':[(28,'source_outbox'),(29,'order_binding'),(30,'lifecycle_outbox'),(31,'checkout_benefits'),(32,'checkout_recovery_audit')],'integration-service':[(137,'source_outbox'),(138,'finance_consumer'),(139,'finance_refresh'),(140,'finance_reviews_and_execution'),(141,'checkout_funding'),(142,'split_refunds'),(143,'recovery_audit_and_cancellation')]}.items():

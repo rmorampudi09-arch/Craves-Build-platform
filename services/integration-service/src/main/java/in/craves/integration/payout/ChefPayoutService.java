@@ -67,9 +67,10 @@ public class ChefPayoutService {
         chef(actor);UUID id=actor.identityId();Instant now=Instant.now();LocalDate date=now.atZone(FinancePolicy.ZONE).toLocalDate();
         boolean manualMode=manual!=null && manual.configured();
         boolean held=manualMode?manual.held(id):isHeld(id),used=usedDay(id,date);
-        BigDecimal available=sumAvailable(id,now,false);
+        BigDecimal available=manualMode?manual.available(id):sumAvailable(id,now,false);
         var accounting=in.craves.integration.settlement.ChefAccountingSummary.read(jdbc,id);
         BigDecimal allocated=jdbc.queryForObject("SELECT coalesce(sum(p.amount),0) FROM payment_schema.finance_payable p JOIN payment_schema.finance_payout_allocation a ON a.payable_id=p.id WHERE p.chef_identity_id=? AND a.active",BigDecimal.class,id);
+        allocated=allocated.add(in.craves.integration.referrals.ReferralManualPayables.allocated(jdbc,id));
         // Preserve the installed app's nonnegative amount-owed contract; the accounting breakdown
         // separately exposes the signed journal balance, including any recoverable chef debt.
         return new Balance(LedgerMoney.text(held?BigDecimal.ZERO:available),LedgerMoney.text(new BigDecimal(accounting.outstanding()).max(BigDecimal.ZERO)),LedgerMoney.text(allocated),held,used,

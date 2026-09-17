@@ -10,9 +10,10 @@ required = {
  'order-service': {'ReferralSourceOutboxDatabaseTest':7,'FinancialCheckoutDatabaseTest':7,'ReferralCheckoutIntegrationDatabaseTest':12,'CartConcurrencyDatabaseTest':6,'ReferralBenefitsOwnerDatabaseTest':20},
  'integration-service': {'ReferralSourceOutboxDatabaseTest':7,'ReferralJournalMirrorTest':4,'ReferralFinanceConsumerDatabaseTest':5,'ReferralPayoutDatabaseTest':12,'ReferralTenderAllocationTest':4,'ReferralCheckoutFundingDatabaseTest':12,'ReferralSplitRefundDatabaseTest':22,'FinancialFullMigrationDatabaseTest':2,'OrderFinancialFinalizationDatabaseTest':18,'ManualChefSettlementDatabaseTest':29},
 }
-required['referral-service']['ChefEarningsIT']=12
+required['referral-service']['ChefEarningsIT']=14
 required['auth-service']['ChefReferralEligibilityDatabaseTest']=3
 required['integration-service']['ChefReferralEarningsDatabaseTest']=10
+required['integration-service']['ReferralManualWithdrawalDatabaseTest']=13
 summary={'status':'PASS','scope':'Backend source and disposable PostgreSQL; no Azure deployment or provider payment', 'services':{}}
 for service,names in required.items():
  files=list((Path('services')/service/'target').glob('*reports/TEST-*.xml'))

@@ -31,6 +31,14 @@ class ReadinessTests(unittest.TestCase):
         for sql in probe.QUERIES.values():
             self.assertTrue(sql.startswith('SELECT json_build_object('))
             self.assertNotRegex(sql.upper(),r'\b(UPDATE|DELETE|INSERT|ALTER|DROP|TRUNCATE)\b')
+    def test_status_literals_are_not_response_fields(self):
+        self.assertEqual(len(probe.FIELDS['auth-service']),4)
+        self.assertEqual(len(probe.FIELDS['subscription-service']),8)
+        with patch.object(probe.ops,'FIELDS',probe.FIELDS):
+            for service, fields in probe.FIELDS.items():
+                data={name:0 for name in fields}
+                self.assertEqual(probe.ops.validate(service,data),data)
+                self.assertFalse(fields.intersection({'PENDING','FAILED','PROCESSING','REJECTED'}))
 
 
 if __name__=='__main__':unittest.main()

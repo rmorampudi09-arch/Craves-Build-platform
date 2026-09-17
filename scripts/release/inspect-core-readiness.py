@@ -37,6 +37,8 @@ QUERIES = {
  'orderOutboxDead', (SELECT count(*) FROM subscription_schema.subscription_order_request_outbox WHERE status='DEAD_LETTER'));
 """
 }
+FIELDS = {name: set(re.findall(r"^\s*'([A-Za-z][A-Za-z0-9]+)'\s*,", sql, re.MULTILINE))
+          for name, sql in QUERIES.items()}
 
 
 def validate_refund(data):
@@ -60,15 +62,21 @@ def capture():
     history.require(history.az('account','show').get('id') == history.SUB, 'Unexpected subscription')
     servers = history.az('postgres','flexible-server','list','-g',history.RG)
     ops.QUERIES = QUERIES
-    ops.FIELDS = {name: set(re.findall(r"'([A-Za-z][A-Za-z0-9]+)'\s*,", sql)) for name,sql in QUERIES.items()}
+    ops.FIELDS = FIELDS
     history.APPS['subscription-service'] = ('ca-craves-subscription-service-p','subscription_schema')
     # The existing credential resolver and SQL helper enforce scoped vaults,
     # TLS, read-only transactions, deadlines, and aggregate-only result fields.
     results = []
     for service in QUERIES:
         try: results.append(ops.capture_service(service,servers))
-        except Exception:
-            results.append({'service':service,'status':'READ_UNAVAILABLE_NO_WRITE_ATTEMPTED'})
+        except Exception as error:
+            # Only our fixed error categories, never database/provider exception text.
+            safe_errors = {'Unexpected aggregate fields':'AGGREGATE_SHAPE',
+                           'Read-only email aggregate unavailable; no write attempted':'AGGREGATE_QUERY',
+                           'Runtime changed during inspection':'RUNTIME_CHANGED',
+                           'Service deployment not settled':'DEPLOYMENT_UNSETTLED'}
+            reason=safe_errors.get(str(error),'READ_DEPENDENCY_UNAVAILABLE') if isinstance(error,ValueError) else 'READ_DEPENDENCY_UNAVAILABLE'
+            results.append({'service':service,'status':'READ_UNAVAILABLE_NO_WRITE_ATTEMPTED','reason':reason})
     # Reuse only read helpers; reject every mutating Azure command family.
     refund.az = history.az
     app = refund.show()

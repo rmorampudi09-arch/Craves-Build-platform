@@ -1,7 +1,7 @@
 FROM node:24-alpine AS dependencies
 WORKDIR /workspace/apps/delivery-intelligence-admin
-COPY apps/delivery-intelligence-admin/package.json ./
-RUN npm install --ignore-scripts --no-audit --no-fund
+COPY apps/delivery-intelligence-admin/package.json apps/delivery-intelligence-admin/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
 
 FROM node:24-alpine AS builder
 WORKDIR /workspace

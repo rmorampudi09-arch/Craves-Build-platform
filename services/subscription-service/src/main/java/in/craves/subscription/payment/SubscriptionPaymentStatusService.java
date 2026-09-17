@@ -80,10 +80,16 @@ public class SubscriptionPaymentStatusService {
             reject(eventId, "Payment amount or currency does not match invoice");
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Subscription payment does not match invoice");
         }
-        if ("PAID".equals(invoice.status()) && !"PAID".equals(status)) {
-            complete(eventId, "PROCESSED", null);
+        if ("PAID".equals(invoice.status())) {
+            // A transport replay must not reacquire capacity after pause/cancel.
+            complete(eventId, "DUPLICATE", null);
             return false;
         }
+
+        // Serialize with customer lifecycle changes before touching capacity.
+        jdbcTemplate.queryForObject("SELECT id FROM subscription_schema.customer_subscription WHERE id=? FOR UPDATE",UUID.class,subscriptionId);
+        SubscriptionResponse subscription = subscriptionRepository.findSubscriptionById(subscriptionId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Subscription was not found"));
 
         String oldStatus = invoice.status();
         if (!oldStatus.equals(status)) {
@@ -101,20 +107,38 @@ public class SubscriptionPaymentStatusService {
             );
         }
 
-        SubscriptionResponse subscription = subscriptionRepository.findSubscriptionById(subscriptionId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Subscription was not found"));
-
         if ("PAID".equals(status)) {
+            if (Set.of("CANCELLED","EXPIRED").contains(subscription.status())) {
+                // Preserve the captured-money fact and a durable unresolved case.
+                // Never invent a refund or silently restart a closed subscription.
+                String code="PAYMENT_RECEIVED_AFTER_SUBSCRIPTION_CLOSED";
+                jdbcTemplate.update("UPDATE subscription_schema.subscription_invoice SET failure_code=?,failure_message=?,updated_at=now() WHERE id=?",
+                    code,"Payment received after plan closure; manual payment recovery is required",invoiceId);
+                complete(eventId,"FAILED",code);
+                return true;
+            }
+            if ("PAUSED".equals(subscription.status())) {
+                complete(eventId,"PROCESSED",null);
+                return true;
+            }
             // Capacity is committed before the subscription can become ACTIVE. Any capacity failure rolls back
             // this entire inbox transaction so Service Bus can retry instead of creating an overbooked subscription.
             capacityService.commitForActivation(subscription);
             activateSubscription(subscriptionId);
             moveOccurrences(subscriptionId, invoice.cycleStart(), invoice.cycleEnd(), "READY_FOR_ORDER", "Billing cycle paid");
         } else if ("FAILED".equals(status) || "CANCELLED".equals(status)) {
+            LocalDate today=LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"));
+            boolean protectedActiveCycle="ACTIVE".equals(subscription.status()) &&
+                (today.isBefore(invoice.cycleStart()) || !today.isBefore(invoice.cycleEnd()) ||
+                 Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM subscription_schema.subscription_invoice WHERE subscription_id=? AND status='PAID' AND cycle_start<=? AND cycle_end>?)",Boolean.class,subscriptionId,today,today)));
+            if (protectedActiveCycle || Set.of("PAUSED","CANCELLED","EXPIRED").contains(subscription.status())) {
+                complete(eventId,"PROCESSED",null);
+                return !oldStatus.equals(status);
+            }
             markPaymentFailed(subscriptionId, providerStatus);
             capacityService.releaseForPauseOrTerminal(
                 subscription,
-                LocalDate.now(),
+                today,
                 "Subscription payment was not completed: " + safe(providerStatus)
             );
             moveOccurrences(subscriptionId, invoice.cycleStart(), invoice.cycleEnd(), "PAYMENT_PENDING", "Billing payment not completed");

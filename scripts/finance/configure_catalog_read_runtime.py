@@ -3,6 +3,8 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import hmac
+import importlib.util
+import copy
 import json
 import os
 from pathlib import Path
@@ -29,6 +31,9 @@ STAMP = "X-Craves-Catalog-Timestamp"
 SIGNATURE = "X-Craves-Catalog-Signature"
 az = shared.az
 GuardError = shared.GuardError
+_spec = importlib.util.spec_from_file_location("catalog_runtime_readiness", Path(__file__).resolve().parents[1] / "release" / "verify-customer-web-runtime.py")
+runtime = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(runtime)
 
 
 def require(ok, message):
@@ -52,7 +57,12 @@ def wanted(apps):
 
 
 def fingerprint(app, settings):
-    return shared.stable(app, set(settings), {LOCAL})
+    value = copy.deepcopy(app)
+    value["properties"]["template"] = runtime.normalized_template(value["properties"]["template"])
+    # Single-revision traffic metadata follows the new revision automatically;
+    # ready() independently requires exactly 100% on the current healthy revision.
+    value["properties"]["configuration"].get("ingress", {}).pop("traffic", None)
+    return shared.stable(value, set(settings), {LOCAL})
 
 
 def metadata(vault):
@@ -96,10 +106,12 @@ def ready(role, app):
     revision = props.get("latestRevisionName")
     if not revision or revision != props.get("latestReadyRevisionName"): return False
     rows = az("containerapp", "revision", "list", "-g", RG, "-n", APPS[role])
-    active = [r for r in rows if r.get("properties", {}).get("active")]
-    if len(active) != 1 or active[0].get("name") != revision: return False
-    state = active[0]["properties"]
-    return state.get("healthState") == "Healthy" and state.get("runningState") == "Running"
+    replicas = az("containerapp", "replica", "list", "-g", RG, "-n", APPS[role], "--revision", revision)
+    try:
+        runtime.ready(app, rows, replicas, validate=lambda _: None)
+        return True
+    except (ValueError, KeyError, TypeError):
+        return False
 
 
 def configure(role, before, settings, reference, identity):

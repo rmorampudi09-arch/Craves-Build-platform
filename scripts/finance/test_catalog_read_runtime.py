@@ -91,5 +91,17 @@ class RuntimeTests(unittest.TestCase):
     def test_redirect_is_never_followed(self):
         self.assertIsNone(target.NoRedirect().redirect_request(None, None, 302, "redirect", {}, "https://other.example"))
 
+    def test_runtime_guard_checks_actual_replica_and_running_template(self):
+        current = app()
+        current["properties"].update(latestRevisionName="current", latestReadyRevisionName="current")
+        with patch.object(target, "az", side_effect=[[], []]), patch.object(target.runtime, "ready", side_effect=ValueError("Not ready")) as guard:
+            self.assertFalse(target.ready("integration", current))
+            guard.assert_called_once()
+
+    def test_metadata_traffic_is_checked_by_readiness_not_unrelated_hash(self):
+        current = app(); other = copy.deepcopy(current)
+        other["properties"]["configuration"]["ingress"]["traffic"] = [{"revisionName": "new", "weight": 100}]
+        self.assertEqual(target.fingerprint(current, {}), target.fingerprint(other, {}))
+
 
 if __name__ == "__main__": unittest.main()

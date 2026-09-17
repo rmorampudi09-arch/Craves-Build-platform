@@ -49,6 +49,8 @@
       "SavedMenuItemReadServiceValidationTest": 4
     },
     "integration-service": {
+      "DeliveryTariffTest": 4,
+      "DeliveryTariffDatabaseTest": 4,
       "AdminDeliveryIntelligenceHistoryControllerTest": 4,
       "AdminSessionRevocationWebConfigurationTest": 6,
       "BankAutomationSafetyDatabaseTest": 9,
@@ -173,6 +175,7 @@
       "VerificationEmailTemplateTest": 5
     },
     "order-service": {
+      "DeliveryTariffCheckoutDatabaseTest": 2,
       "AdminDashboardControllerTest": 4,
       "AdminExplorerControllerTest": 5,
       "AdminSessionRevocationWebConfigurationTest": 6,

@@ -14,9 +14,22 @@ public record FinancePolicy(LocalDate ledgerStartDate, boolean ledgerEnabled,
     int customerCancellationSeconds, String chefFeePercent,
     String restaurantGstPercent, String deliveryGstPercent, String platformGstPercent,
     String chefFeeGstPercent, FeeTaxTreatment chefFeeTaxTreatment,
-    String platformFee, boolean subscriptionQuotesEnabled, String taxApprovalReference) {
+    String platformFee, boolean subscriptionQuotesEnabled, String taxApprovalReference,
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) DeliveryTariff deliveryTariff) {
     public static final ZoneId ZONE = ZoneId.of("Asia/Kolkata");
     public enum FeeTaxTreatment { UNCONFIRMED, INCLUSIVE, EXCLUSIVE }
+
+    /** Historical policies and callers keep their original flat-delivery semantics. */
+    public FinancePolicy(LocalDate ledgerStartDate, boolean ledgerEnabled, boolean automaticPayoutsEnabled,
+        boolean manualWithdrawalsEnabled, int automaticPayoutDelayHours, int manualAvailabilityDelayHours,
+        int customerCancellationSeconds, String chefFeePercent, String restaurantGstPercent,
+        String deliveryGstPercent, String platformGstPercent, String chefFeeGstPercent,
+        FeeTaxTreatment chefFeeTaxTreatment, String platformFee, boolean subscriptionQuotesEnabled, String taxApprovalReference) {
+        this(ledgerStartDate, ledgerEnabled, automaticPayoutsEnabled, manualWithdrawalsEnabled,
+            automaticPayoutDelayHours, manualAvailabilityDelayHours, customerCancellationSeconds, chefFeePercent,
+            restaurantGstPercent, deliveryGstPercent, platformGstPercent, chefFeeGstPercent, chefFeeTaxTreatment,
+            platformFee, subscriptionQuotesEnabled, taxApprovalReference, null);
+    }
 
     public FinancePolicy {
         Objects.requireNonNull(ledgerStartDate,"ledger start date is required");

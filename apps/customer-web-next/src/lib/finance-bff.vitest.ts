@@ -31,4 +31,13 @@ describe("finance BFF safety", () => {
     const response = await financeProxy(request("https://craves.in", "{}"), "chef", ["withdrawals"]);
     expect(response.status).toBe(200);expect(response.headers.get("cache-control")).toBe("no-store");expect((await response.json()).amount).toBe("343.17");
   });
+  it("checks delivery preview origin and schema without exposing provider internals", async () => {
+    expect((await financeProxy(request("https://attacker.invalid", "{}"), "admin", ["delivery-preview"])).status).toBe(403);
+    expect(upstream).not.toHaveBeenCalled();
+    upstream.mockResolvedValue(Response.json({distanceKm:"2.500",beforeTax:"25.00",gst:"4.50",total:"29.50",distanceBasis:"STRAIGHT_LINE",increment:"PRO_RATA",privateProviderField:"secret-test"}));
+    const result=await financeProxy(request("https://craves.in", "{}"), "admin", ["delivery-preview"]);
+    expect(result.status).toBe(200);expect(result.headers.get("cache-control")).toBe("no-store");expect(await result.json()).not.toHaveProperty("privateProviderField");
+    upstream.mockResolvedValue(Response.json({total:29.5}));
+    expect((await financeProxy(request("https://craves.in", "{}"), "admin", ["delivery-preview"])).status).toBe(502);
+  });
 });

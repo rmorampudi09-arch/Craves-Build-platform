@@ -81,7 +81,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, pathlib, xml.etree.ElementTree as E
-          required={'ManualChefSettlementDatabaseTest':29,'ManualSettlementMigrationDatabaseTest':2,
+          required={'ChefAccountingReadDatabaseTest':11,'ManualChefSettlementDatabaseTest':29,'ManualSettlementMigrationDatabaseTest':2,
                     'ManualSettlementSecurityTest':7,'BankOnboardingDatabaseTest':19,'FinancialPostingDatabaseTest':9,'ChefSettlementHistoryDatabaseTest':7,
                     'FinancialFullMigrationDatabaseTest':2,'FinancialPostingPrivilegesDatabaseTest':3,
                     'LedgerMoneyAndPolicyTest':19,'ChefFeePreviewServiceTest':4,

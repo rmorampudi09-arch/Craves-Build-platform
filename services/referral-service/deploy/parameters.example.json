@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {"value": "REPLACE_WITH_NEW_REFERRAL_APP_NAME"},
+    "location": {"value": "REPLACE_WITH_APPROVED_ENVIRONMENT_REGION"},
+    "managedEnvironmentId": {"value": "REPLACE_WITH_EXISTING_ENVIRONMENT_RESOURCE_ID"},
+    "userAssignedIdentityId": {"value": "REPLACE_WITH_EXISTING_IDENTITY_RESOURCE_ID"},
+    "registryServer": {"value": "REPLACE_WITH_APPROVED_REGISTRY.azurecr.io"},
+    "image": {"value": "REPLACE_WITH_SCANNED_IMAGE_AT_SHA256_DIGEST"},
+    "redisHost": {"value": "REPLACE_WITH_AUTH_REVOCATION_REDIS_HOST"},
+    "redisPort": {"value": 6380},
+    "redisUsername": {"value": "default"},
+    "secretReferences": {"value": {
+      "dbUrl": "REPLACE_WITH_VERSIONED_KEY_VAULT_SECRET_URL",
+      "dbUser": "REPLACE_WITH_VERSIONED_KEY_VAULT_SECRET_URL",
+      "dbPassword": "REPLACE_WITH_VERSIONED_KEY_VAULT_SECRET_URL",
+      "jwtVerificationPem": "REPLACE_WITH_VERSIONED_KEY_VAULT_SECRET_URL",
+      "redisPassword": "REPLACE_WITH_VERSIONED_KEY_VAULT_SECRET_URL",
+      "authHmac": "REPLACE_WITH_VERSIONED_KEY_VAULT_SECRET_URL",
+      "orderHmac": "REPLACE_WITH_VERSIONED_KEY_VAULT_SECRET_URL",
+      "financeHmac": "REPLACE_WITH_VERSIONED_KEY_VAULT_SECRET_URL"
+    }}
+  }
+}

@@ -35,14 +35,16 @@ public class RazorpayXPayoutClient {
     }
     public boolean ready() {return approved && keyId.startsWith("rzp_live_") && !keySecret.isBlank() && !accountNumber.isBlank();}
     private void requireReady() {if(!ready()) throw new IllegalStateException("RAZORPAYX_PAYOUT_ACCOUNT_NOT_READY");}
-    public Receipt submit(Instruction instruction) {
+    public Receipt submit(Instruction instruction) { return submit(instruction,"Craves chef payout"); }
+    public Receipt submitReferral(Instruction instruction) { return submit(instruction,"Craves referral"); }
+    private Receipt submit(Instruction instruction,String narration) {
         requireReady();validate(instruction);
         // UUID is persisted before this request. Never mint a new key on a timeout or retry.
         JsonNode body=client.post().uri("/v1/payouts").headers(h->{h.setBasicAuth(keyId,keySecret);h.set("X-Payout-Idempotency",instruction.id().toString());})
             .body(Map.of("account_number",accountNumber,"fund_account_id",instruction.fundAccountId(),
                 "amount",LedgerMoney.parse(instruction.amount()).movePointRight(2).longValueExact(),"currency","INR",
                 "mode","IMPS","purpose","payout","queue_if_low_balance",false,
-                "reference_id",instruction.id().toString(),"narration","Craves chef payout"))
+                "reference_id",instruction.id().toString(),"narration",narration))
             .retrieve().body(JsonNode.class);
         return verify(instruction,body);
     }

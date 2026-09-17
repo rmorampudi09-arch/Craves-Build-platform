@@ -7,6 +7,7 @@ import in.craves.integration.ledger.LedgerJournal;
 import in.craves.integration.ledger.LedgerMoney;
 import in.craves.integration.ledger.LedgerPostingService;
 import in.craves.integration.security.CravesPrincipal;
+import in.craves.integration.referrals.ReferralManualPayables;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -54,7 +55,7 @@ public class ManualChefSettlementService {
     public boolean enabled() { var p=policies.current(); return configured && p.policyId()!=null && p.settings().ledgerEnabled() && p.settings().manualWithdrawalsEnabled(); }
     public boolean held(UUID chef) { return Boolean.TRUE.equals(jdbc.queryForObject("SELECT payment_schema.finance_manual_money_held(?)",Boolean.class,chef)); }
     public BigDecimal available(UUID chef) {
-        return held(chef)?BigDecimal.ZERO:jdbc.queryForObject("SELECT coalesce(sum(p.amount),0) FROM payment_schema.finance_payable p WHERE p.chef_identity_id=? AND p.manual_available_at<=now() AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_payout_allocation a WHERE a.payable_id=p.id AND a.active)",BigDecimal.class,chef);
+        return held(chef)?BigDecimal.ZERO:jdbc.queryForObject("SELECT coalesce(sum(p.amount),0) FROM payment_schema.finance_payable p WHERE p.chef_identity_id=? AND p.manual_available_at<=now() AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_payout_allocation a WHERE a.payable_id=p.id AND a.active)",BigDecimal.class,chef).add(ReferralManualPayables.total(jdbc,chef));
     }
     public Balance balance(CravesPrincipal actor, UUID chef) {
         FinancePolicyService.reader(actor); requireChefId(chef);
@@ -97,12 +98,15 @@ public class ManualChefSettlementService {
         if(usedToday(chef)) throw conflict("One accepted withdrawal is allowed per Asia/Kolkata calendar day");
         var rows=jdbc.query("SELECT p.id,p.amount FROM payment_schema.finance_payable p WHERE p.chef_identity_id=? AND p.manual_available_at<=now() AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_payout_allocation a WHERE a.payable_id=p.id AND a.active) ORDER BY p.id FOR UPDATE",
                 (rs,n)->new Payable(rs.getObject(1,UUID.class),rs.getBigDecimal(2)),chef);
-        BigDecimal total=rows.stream().map(Payable::amount).reduce(BigDecimal.ZERO,BigDecimal::add);
+        var referralRows=ReferralManualPayables.available(jdbc,chef);
+        BigDecimal total=rows.stream().map(Payable::amount).reduce(BigDecimal.ZERO,BigDecimal::add)
+            .add(referralRows.stream().map(ReferralManualPayables.Payable::amount).reduce(BigDecimal.ZERO,BigDecimal::add));
         if(total.signum()<=0 || total.compareTo(expected)!=0) throw conflict("Available balance changed or is empty; refresh before reserving");
         UUID id=UUID.randomUUID();
         jdbc.update("INSERT INTO payment_schema.finance_payout_instruction(id,chef_identity_id,request_key,mode,amount,status,policy_revision,payout_channel,manual_request_hash) VALUES (?,?,?,'MANUAL',?,'RESERVED',?,'CRAVES_MANUAL',?)",
                 id,chef,request.requestKey(),total,policies.current().revision(),hash);
         for(var row:rows) jdbc.update("INSERT INTO payment_schema.finance_payout_allocation(instruction_id,payable_id) VALUES (?,?)",id,row.id());
+        ReferralManualPayables.reserve(jdbc,id,referralRows);
         jdbc.update("INSERT INTO payment_schema.finance_manual_withdrawal_day(chef_identity_id,business_date,instruction_id) VALUES (?,?,?)",chef,java.sql.Date.valueOf(Instant.now().atZone(FinancePolicy.ZONE).toLocalDate()),id);
         audit(id,chef,actor,"MANUAL_RESERVED",reason);
         return get(id);
@@ -159,6 +163,7 @@ public class ManualChefSettlementService {
             default -> jdbc.update("UPDATE payment_schema.finance_payout_instruction SET status=?,manual_version=manual_version+1,updated_at=now() WHERE id=?",target,id);
         }
         if(Set.of("CANCELLED","FAILED","REVERSED").contains(target)) jdbc.update("UPDATE payment_schema.finance_payout_allocation SET active=false WHERE instruction_id=? AND active",id);
+        if(Set.of("CANCELLED","FAILED","REVERSED").contains(target)) ReferralManualPayables.release(jdbc,id);
         if(Set.of("UNKNOWN","FAILED","REVERSED").contains(target)) jdbc.update("UPDATE payment_schema.finance_chef_payout_control SET on_hold=true,hold_kind='OPERATIONAL',hold_reason='Manual bank payment requires operational review',updated_at=now() WHERE chef_identity_id=?",chef);
         audit(id,chef,actor,"MANUAL_"+request.action(),request.reason());return get(id);
     }

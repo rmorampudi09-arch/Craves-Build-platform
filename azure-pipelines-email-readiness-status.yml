@@ -20,6 +20,7 @@ parameters:
       - inspect-email-runtime
       - capture-launch-runtime
       - inspect-core-readiness
+      - inspect-backup-metadata
       - capture-gateway-fingerprints
       - inspect-finance-response-privacy
       - publish-finance-response-privacy
@@ -75,6 +76,19 @@ steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
+  - ${{ if eq(parameters.action, 'inspect-backup-metadata') }}:
+      - script: python3 -m unittest discover -s scripts/release -p 'test_backup_metadata.py' -v
+        displayName: Verify exact-resource read-only backup inspection
+      - task: AzureCLI@2
+        displayName: Inspect recorded PostgreSQL backups without writes or restores
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/inspect-backup-metadata.py
   - ${{ if eq(parameters.action, 'inspect-core-readiness') }}:
       - script: python3 -m unittest discover -s scripts/release -p 'test_core_readiness.py' -v
         displayName: Verify read-only core readiness boundaries

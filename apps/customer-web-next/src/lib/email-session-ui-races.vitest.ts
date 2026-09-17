@@ -98,14 +98,23 @@ it("does not apply a saved profile response or success callback to a different s
   expect(saved).not.toHaveBeenCalled(); expect(closed).not.toHaveBeenCalled(); expect(getSession()?.username).toBe("Current owner");
 });
 
-it("does not change expiry or resend time after a device wall-clock jump", async () => {
-  vi.useFakeTimers({ toFake: ["Date", "performance", "setInterval", "clearInterval"] });
-  vi.setSystemTime(new Date("2030-01-01T00:00:00Z")); fetcher.mockResolvedValue(Response.json(pending));
-  render(createElement(EmailVerificationPanel)); await screen.findByText("Code expires in 10m 0s.");
-  vi.setSystemTime(new Date("2050-01-01T00:00:00Z"));
-  await act(async () => { vi.advanceTimersByTime(1000); });
+it.each(["2050-01-01T00:00:00Z", "2010-01-01T00:00:00Z"])("does not change expiry or resend time after a device wall-clock jump to %s", async (wallClock) => {
+  // jsdom's window.setInterval delegates to setTimeout; fake both so no real
+  // event-loop timing can race the simulated monotonic performance clock.
+  vi.useFakeTimers({ toFake: ["Date", "performance", "setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
+  vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
+  const delayed = deferred(); fetcher.mockReturnValue(delayed.promise);
+  render(createElement(EmailVerificationPanel));
+  await act(async () => delayed.resolve(Response.json(pending)));
+  expect(screen.getByText("Code expires in 10m 0s.")).toBeTruthy();
+  vi.setSystemTime(new Date(wallClock));
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
   expect(screen.getByText("Code expires in 9m 59s.")).toBeTruthy();
   expect((screen.getByRole("button", { name: "Resend in 59s" }) as HTMLButtonElement).disabled).toBe(true);
+  await act(async () => { await vi.advanceTimersByTimeAsync(599000); });
+  expect(screen.getByText("This code has expired. Request a new code.")).toBeTruthy();
+  expect((screen.getByLabelText("Six-digit email code") as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Resend email code" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
 it("uses only the effective current revision for a delayed verification callback and input", async () => {

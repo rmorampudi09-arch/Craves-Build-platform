@@ -49,7 +49,7 @@
       "SavedMenuItemReadServiceValidationTest": 4
     },
     "integration-service": {
-      "DeliveryTariffTest": 4,
+      "DeliveryTariffTest": 5,
       "DeliveryTariffDatabaseTest": 4,
       "AdminDeliveryIntelligenceHistoryControllerTest": 4,
       "AdminSessionRevocationWebConfigurationTest": 6,

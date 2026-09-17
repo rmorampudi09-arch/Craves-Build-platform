@@ -34,10 +34,22 @@ class DeliveryTariffTest {
     @Test void geometryUsesVerifiedCoordinatesAndNeverPretendsToBeRoadDistance() {
         var t=tariff(DeliveryTariff.Increment.PRO_RATA);var zero=BigDecimal.ZERO;
         assertEquals("0.000",t.between(zero,zero,zero,zero,"18").distanceKm());
-        assertEquals("1.112",t.between(zero,zero,zero,new BigDecimal("0.01"),"18").distanceKm());
+        assertEquals("1.113",t.between(zero,zero,zero,new BigDecimal("0.01"),"18").distanceKm());
+        assertEquals("1.106",t.between(zero,zero,new BigDecimal("0.01"),zero,"18").distanceKm());
         assertThrows(IllegalArgumentException.class,()->t.between(null,zero,zero,zero,"18"));
         assertThrows(IllegalArgumentException.class,()->t.between(new BigDecimal("91"),zero,zero,zero,"18"));
         var road=new DeliveryTariff("20.00","2","10.00","10",DeliveryTariff.DistanceBasis.ROAD_ROUTE,t.increment());
         assertThrows(IllegalStateException.class,()->road.between(zero,zero,zero,zero,"18"));
+    }
+    @Test void ownerApprovedTariffBillsPartialKilometresAndStopsAtTen() {
+        // Owner's 2026-09-17 commercial instruction, supplied as policy data, never a production fallback.
+        var t=new DeliveryTariff("40.00","4","9.00","10",DeliveryTariff.DistanceBasis.STRAIGHT_LINE,DeliveryTariff.Increment.PRO_RATA);
+        assertEquals("40.00",t.quote("0","0").beforeTax());
+        assertEquals("40.00",t.quote("4","0").beforeTax());
+        assertEquals("40.01",t.quote("4.001","0").beforeTax());
+        assertEquals("44.50",t.quote("4.5","0").beforeTax());
+        assertEquals("49.00",t.quote("5","0").beforeTax());
+        assertEquals("94.00",t.quote("10","0").beforeTax());
+        assertThrows(IllegalArgumentException.class,()->t.quote("10.001","0"));
     }
 }

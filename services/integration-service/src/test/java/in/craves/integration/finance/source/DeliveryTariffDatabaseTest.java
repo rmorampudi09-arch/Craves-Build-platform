@@ -35,9 +35,9 @@ class DeliveryTariffDatabaseTest {
     @Test void distanceTariffOverridesFlatChargeAndPreservesInclusiveChefFee(){
         activate("20.00");var request=request(new OrderFinancialQuoteService.DeliveryCoordinates("0","0","0","0.01"));
         var quote=f.tx.execute(s->f.quotes.quote(request));var snapshot=quote.snapshots().getFirst();
-        assertEquals("21.12",snapshot.path("delivery").asText());assertEquals("3.80",snapshot.path("deliveryGst").asText());
-        assertEquals("412.37",quote.total());assertEquals("343.17",snapshot.path("chefPayable").asText());
-        assertEquals("1.112",snapshot.path("deliveryQuote").path("distanceKm").asText());
+        assertEquals("21.13",snapshot.path("delivery").asText());assertEquals("3.80",snapshot.path("deliveryGst").asText());
+        assertEquals("412.38",quote.total());assertEquals("343.17",snapshot.path("chefPayable").asText());
+        assertEquals("1.113",snapshot.path("deliveryQuote").path("distanceKm").asText());
         activate("30.00");var replay=f.tx.execute(s->f.quotes.quote(request));
         // JSONB may deserialize an integer into a different Jackson numeric node class;
         // compare the complete canonical wire content, not Java numeric node identity.

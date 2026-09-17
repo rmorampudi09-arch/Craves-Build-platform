@@ -37,12 +37,13 @@ public record DeliveryTariff(String baseCharge, String includedKm, String perKmC
             throw new IllegalStateException("Verified road-route distance is not connected; straight-line substitution is not permitted");
         coordinate(pickupLatitude, 90); coordinate(dropoffLatitude, 90);
         coordinate(pickupLongitude, 180); coordinate(dropoffLongitude, 180);
-        double first = Math.toRadians(pickupLatitude.doubleValue()), second = Math.toRadians(dropoffLatitude.doubleValue());
-        double lat = (second - first) / 2, lon = Math.toRadians(dropoffLongitude.subtract(pickupLongitude).doubleValue()) / 2;
-        double a = Math.sin(lat) * Math.sin(lat) + Math.cos(first) * Math.cos(second) * Math.sin(lon) * Math.sin(lon);
-        double km = 6371.0088 * 2 * Math.asin(Math.sqrt(Math.max(0, Math.min(1, a))));
+        // Catalog uses ROUND(ST_Distance(geography(Point,4326), geography(Point,4326))).
+        // Use the same WGS84 ellipsoid, not a spherical approximation that changes boundary prices.
+        double metres = net.sf.geographiclib.Geodesic.WGS84.Inverse(pickupLatitude.doubleValue(),
+            pickupLongitude.doubleValue(), dropoffLatitude.doubleValue(), dropoffLongitude.doubleValue()).s12;
+        if (!Double.isFinite(metres)) throw new IllegalArgumentException("Unable to calculate delivery distance");
         // Bill and validate the same metre-rounded distance, recorded in the immutable order snapshot.
-        return quote(BigDecimal.valueOf(km).setScale(3, RoundingMode.HALF_UP).toPlainString(), gstRate);
+        return quote(BigDecimal.valueOf(metres).setScale(0, RoundingMode.HALF_UP).movePointLeft(3).toPlainString(), gstRate);
     }
     private static void coordinate(BigDecimal value, int bound) {
         if (value == null || value.abs().compareTo(BigDecimal.valueOf(bound)) > 0)

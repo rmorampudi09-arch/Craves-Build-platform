@@ -30,6 +30,16 @@ parameters:
       - verify-auth-protection
       - inspect-catalog-finance-read
       - connect-catalog-finance-read
+      - inspect-finance-source-cutover
+      - activate-finance-source-cutover
+  - name: financeSourceReleaseSha
+    displayName: Exact tested main SHA for Finance source cutover
+    type: string
+    default: NOT_AUTHORIZED
+  - name: financeSourceRegressionRunId
+    displayName: Successful exact-main complete regression run for Finance cutover
+    type: string
+    default: NOT_AUTHORIZED
   - name: catalogFinanceReadSource
     displayName: Exact tested main SHA for dedicated Catalog Finance read connection
     type: string
@@ -64,6 +74,32 @@ steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
+  - ${{ if or(eq(parameters.action, 'inspect-finance-source-cutover'), eq(parameters.action, 'activate-finance-source-cutover')) }}:
+      - script: python3 -m unittest discover -s scripts/finance -p 'test_source_activation.py' -v
+        displayName: Verify bounded Finance cutover guards
+      - task: AzureCLI@2
+        displayName: Verify and configure existing Finance accounting source
+        env:
+          SOURCE_CUTOVER_ACTION: ${{ parameters.action }}
+          EXPECTED_RELEASE_SHA: ${{ parameters.financeSourceReleaseSha }}
+          REQUESTED_IMAGE_TAG: ${{ parameters.financeSourceReleaseSha }}
+          SOURCE_REGRESSION_RUN_ID: ${{ parameters.financeSourceRegressionRunId }}
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            git fetch --quiet --no-tags origin main
+            git fetch --quiet --unshallow || test "$(git rev-parse --is-shallow-repository)" = false
+            if [ "$SOURCE_CUTOVER_ACTION" = 'activate-finance-source-cutover' ]; then
+              bash scripts/release/verify-reviewed-service-source.sh
+              python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$SOURCE_REGRESSION_RUN_ID"
+              python3 scripts/finance/activate_source_runtime.py --apply --expected-source-sha "$EXPECTED_RELEASE_SHA"
+            else
+              python3 scripts/finance/activate_source_runtime.py
+            fi
   - ${{ if or(eq(parameters.action, 'inspect-catalog-finance-read'), eq(parameters.action, 'connect-catalog-finance-read')) }}:
       - script: python3 -m unittest discover -s scripts/finance -p 'test_catalog_read_runtime.py' -v
         displayName: Verify dedicated read connection scope and secret preservation

@@ -22,6 +22,9 @@ parameters:
   - name: expectedReleaseSha
     type: string
     default: ''
+  - name: regressionRunId
+    type: string
+    default: ''
   - name: resourceGroupName
     type: string
     default: rg-craves-prodlow-centralindia
@@ -57,11 +60,13 @@ stages:
                 [[ "$BUILD_REASON" == Manual && "$BUILD_SOURCEBRANCH" == refs/heads/main ]] || { echo 'ERROR: Production requires a manual approved release run.' >&2; exit 1; }
                 [[ "$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'ERROR: Exact expectedReleaseSha is required.' >&2; exit 1; }
                 [[ "$(git rev-parse HEAD)" == "$EXPECTED_RELEASE_SHA" && "$BUILD_SOURCEVERSION" == "$EXPECTED_RELEASE_SHA" ]] || { echo 'ERROR: Reviewed source does not match this checkout.' >&2; exit 1; }
+                python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$REGRESSION_RUN_ID"
               fi
             displayName: Bind explicit production request to exact reviewed source
             env:
               DEPLOY_PRODUCTION: '${{ parameters.deployProduction }}'
               EXPECTED_RELEASE_SHA: '${{ parameters.expectedReleaseSha }}'
+              REGRESSION_RUN_ID: '${{ parameters.regressionRunId }}'
           - task: NodeTool@0
             displayName: Use Node.js 24
             inputs:
@@ -175,6 +180,7 @@ stages:
                       set -euo pipefail
                       set +x
                       [[ "$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$(git rev-parse HEAD)" == "$EXPECTED_RELEASE_SHA" && "$BUILD_SOURCEVERSION" == "$EXPECTED_RELEASE_SHA" ]] || { echo 'ERROR: Deployment checkout differs from reviewed source.' >&2; exit 1; }
+                      python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$REGRESSION_RUN_ID"
                       RG='${{ parameters.resourceGroupName }}'
                       APP='${{ parameters.containerAppName }}'
                       IMAGE='$(ADMIN_IMAGE)'
@@ -235,6 +241,7 @@ stages:
                       exit 1
                   env:
                     EXPECTED_RELEASE_SHA: '${{ parameters.expectedReleaseSha }}'
+                    REGRESSION_RUN_ID: '${{ parameters.regressionRunId }}'
                     RG: '${{ parameters.resourceGroupName }}'
                     ACR: '${{ parameters.acrName }}'
                     ADMIN_APP: '${{ parameters.containerAppName }}'

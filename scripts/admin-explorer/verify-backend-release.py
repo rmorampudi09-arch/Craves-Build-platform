@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Bind an independently tested maintenance build to its merged admin release."""
 import json
+import argparse
 import pathlib
 import re
 import subprocess
@@ -22,6 +23,22 @@ def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args], text=True, stderr=subprocess.PIPE).strip()
 
 def verify(root, manifest):
+    if manifest.get('version') == 2:
+        releases = manifest.get('services', {})
+        expected = {service for service, _, _ in BINDINGS}
+        assert set(releases) == expected, 'Exact backend service inventory is required'
+        sources = {}
+        for service in sorted(expected):
+            source = releases[service].get('source', '')
+            assert re.fullmatch('[0-9a-f]{40}', source), 'Exact backend source is required'
+            git(root, 'merge-base', '--is-ancestor', source, 'HEAD')
+            # A normal service release may contain features beyond Explorer. Require
+            # its ENTIRE build context to match the new fully tested main release,
+            # rather than accepting a matching controller with unrelated drift.
+            path = f'services/{service}-service'
+            assert git(root, 'rev-parse', source+':'+path) == git(root, 'rev-parse', 'HEAD:'+path), 'Backend build context drift: '+service
+            sources[service] = source
+        return sources
     assert manifest.get('version') == 1, 'Unsupported backend release manifest'
     source, baseline = manifest.get('source', ''), manifest.get('baseline', '')
     assert re.fullmatch('[0-9a-f]{40}', source) and re.fullmatch('[0-9a-f]{40}', baseline), 'Exact backend source and baseline are required'
@@ -42,4 +59,13 @@ def verify(root, manifest):
     return source
 
 if __name__ == '__main__':
-    print(verify(ROOT, json.loads((ROOT/'docs/admin/explorer/backend-release.json').read_text())))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--service', choices=[service for service, _, _ in BINDINGS])
+    parser.add_argument('--verify-only', action='store_true')
+    args = parser.parse_args()
+    result = verify(ROOT, json.loads((ROOT/'docs/admin/explorer/backend-release.json').read_text()))
+    if not args.verify_only:
+        if isinstance(result, dict):
+            print(result[args.service] if args.service else json.dumps(result, sort_keys=True))
+        else:
+            print(result)

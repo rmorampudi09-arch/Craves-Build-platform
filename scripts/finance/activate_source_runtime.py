@@ -132,7 +132,17 @@ def empty_cutover(role, app, servers):
         for row in rows:
             require(row['success'] is True, 'Failed applied migration')
             if row['type'] in ('BASELINE', 'SCHEMA'): continue
-            require(row['type'] == 'SQL' and row['version'] not in versions and sources.get(row['version']) == {'script': row['script'], 'checksum': row['checksum']}, 'Applied migration differs from reviewed source')
+            matching = row['type'] == 'SQL' and row['version'] not in versions and sources.get(row['version']) == {'script': row['script'], 'checksum': row['checksum']}
+            if not matching:
+                # Migration metadata only. Never log records, credentials or raw DB errors.
+                version = row.get('version')
+                safe_version = version if isinstance(version, str) and re.fullmatch(r'[0-9.]{1,30}', version) else 'UNRECOGNIZED'
+                source = sources.get(version, {})
+                print(json.dumps({'service': role, 'migrationMismatch': safe_version,
+                    'knownSource': bool(source), 'scriptNameMatches': source.get('script') == row.get('script'),
+                    'appliedChecksum': row.get('checksum') if type(row.get('checksum')) is int else None,
+                    'sourceChecksum': source.get('checksum'), 'migrationType': row['type'] if row['type'] in ('SQL', 'BASELINE', 'SCHEMA') else 'UNRECOGNIZED'}), flush=True)
+            require(matching, 'Applied migration differs from reviewed source')
             versions.add(row['version'])
         require(versions == set(sources), 'Source migrations are not all installed')
         counts = sql(QUERIES[role], db)

@@ -91,8 +91,8 @@ steps:
           inlineScript: |
             set -euo pipefail
             set +x
-            git fetch --no-tags origin main
-            git fetch --unshallow || test "$(git rev-parse --is-shallow-repository)" = false
+            git fetch --quiet --no-tags origin main
+            git fetch --quiet --unshallow || test "$(git rev-parse --is-shallow-repository)" = false
             if [ "$SOURCE_CUTOVER_ACTION" = 'activate-finance-source-cutover' ]; then
               bash scripts/release/verify-reviewed-service-source.sh
               python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$SOURCE_REGRESSION_RUN_ID"

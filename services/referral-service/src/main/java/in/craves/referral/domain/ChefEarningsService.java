@@ -89,18 +89,22 @@ public class ChefEarningsService {
             long target=targets[(int)number(reward,"level")-1];
             if(target<=0 || !eligible(owner) || instant(reward,"eligible_at").isAfter(ChefReferralPolicy.latestPostingRun(now))
                 || db.count("SELECT count(*) FROM referral_schema.chef_posting WHERE reward_id=? AND amount_paise>0",id)>0
-                || db.count("SELECT count(*) FROM referral_schema.chef_reward_review WHERE reward_id=?",id)>0) continue;
+                || db.count("SELECT count(*) FROM referral_schema.chef_cap_decision WHERE reward_id=?",id)>0
+                || db.count("SELECT count(*) FROM referral_schema.chef_reward_review WHERE reward_id=? AND reason<>'MONTHLY_CAP_POLICY_REQUIRED'",id)>0) continue;
             Date month=Date.valueOf(ChefReferralPolicy.postingMonth(now).atDay(1));
             db.update("INSERT INTO referral_schema.chef_month(beneficiary_id,month) VALUES (?,?) ON CONFLICT DO NOTHING",owner,month);
             var balance=db.one("SELECT * FROM referral_schema.chef_month WHERE beneficiary_id=? AND month=? FOR UPDATE",owner,month);
             long allowance=ChefReferralPolicy.remainingAllowance(number(balance,"posted_paise"),number(balance,"reversed_paise"));
-            if(target>allowance) {
-                // No approved expiry/carry-forward rule exists. Preserve the claim without inventing one.
-                db.update("INSERT INTO referral_schema.chef_reward_review(reward_id,reason,first_observed_at) VALUES (?,'MONTHLY_CAP_POLICY_REQUIRED',?) ON CONFLICT DO NOTHING",id,time(now));
-                continue;
-            }
+            // Owner-approved hard cap: only the remaining allowance is earned. The
+            // decision is final even at zero, so a retry/refund/new month cannot
+            // resurrect the skipped part as a deferred balance or carry-forward.
+            long credit=Math.min(target,allowance);
+            db.update("INSERT INTO referral_schema.chef_cap_decision(reward_id,month,credited_paise,decided_at) VALUES (?,?,?,?)",
+                id,month,credit,time(now));
+            changed=true;
+            if(credit==0) continue;
             db.update("INSERT INTO referral_schema.chef_posting(id,event_key,reward_id,beneficiary_id,month,amount_paise,posted_at) VALUES (?,?,?,?,?,?,?)",
-                UUID.randomUUID(),"chef-credit:"+id,id,owner,month,target,time(now));
+                UUID.randomUUID(),"chef-credit:"+id,id,owner,month,credit,time(now));
             changed=true;
         }
         return changed;

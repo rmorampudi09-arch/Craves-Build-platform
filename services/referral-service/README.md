@@ -115,6 +115,16 @@ No current route is mounted automatically. The proposed 30-day pre-signup attrib
 
 ## Manual steps required before any release
 
+Chef referral cap decision confirmed by the owner on 2026-09-17: each receiving chef
+can earn at most INR 1,500 per India calendar posting month. A crossing reward earns
+only the remaining allowance; after exhaustion it earns zero. Excess is not a
+pending balance, is not shown to the chef, and never carries forward. Internal
+immutable cap decisions prevent duplicate processing or resurrection next month.
+Refund reversals restore only the actual credited amount in its original month;
+skipped rewards do not revive. The member response exposes remaining allowance
+and whether the cap is reached, not an excess/review balance. Production activation
+and verified withdrawable-earnings integration remain separate release gates.
+
 - [ ] Resolve the existing mobile-consolidation workflow's cross-stack scope failure by a separately approved maintainer correction or appropriate PR split. Do not bypass checks or alter baseline workflows here.
 - [ ] Approve actual legal, terms, privacy, tax, KYC, funding, mixed-chef allocation, retention and payout evidence; independently approve a future policy revision.
 - [ ] Confirm hosting choice and cost approval, isolated resource name, restricted database roles, backups/restore, private networking and Key Vault references. The dormant Container App template is an option, not an executed or approved hosting decision.

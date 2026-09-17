@@ -76,7 +76,8 @@ public class MemberQueries {
         result.put("creditedPaise",Long.toString(posted));result.put("reversedPaise",Long.toString(reversed));
         result.put("netRecordedPaise",Long.toString(posted-reversed));result.put("postingMonth",month.toString());
         result.put("monthlyCapPaise","150000");result.put("monthUsedPaise",Long.toString(used));
-        result.put("monthlyCapReviewCount",db.count("SELECT count(*) FROM referral_schema.chef_reward_review v JOIN referral_schema.chef_reward r ON r.id=v.reward_id WHERE r.beneficiary_id=?",user));
+        result.put("monthRemainingPaise",Long.toString(in.craves.referral.core.ChefReferralPolicy.remainingAllowance(used,0)));
+        result.put("monthlyCapReached",used>=in.craves.referral.core.ChefReferralPolicy.MONTHLY_CAP_PAISE);
         result.put("settlementDestination","CHEF_EARNINGS");
         result.put("withdrawalAvailability","CHECK_VERIFIED_CHEF_EARNINGS_BALANCE");
         result.put("recentPostings",db.rows("SELECT id,amount_paise,month,posted_at FROM referral_schema.chef_posting WHERE beneficiary_id=? ORDER BY posted_at DESC,id DESC LIMIT 50",user).stream().map(row->

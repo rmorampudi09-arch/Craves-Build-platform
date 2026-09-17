@@ -82,11 +82,12 @@ class ChefEarningsIT {
             var results=pool.invokeAll(List.of(()->service.process(one.id()),()->service.process(two.id())));
             for(var result:results) result.get();
         }
-        assertEquals(100000,credited(a.id()));assertEquals(1,t.db.count("SELECT count(*) FROM referral_schema.chef_reward_review"));
-        assertEquals(100000,t.db.count("SELECT posted_paise-reversed_paise FROM referral_schema.chef_month"));
+        assertEquals(150000,credited(a.id()));assertEquals(0,t.db.count("SELECT count(*) FROM referral_schema.chef_reward_review"));
+        assertEquals(150000,t.db.count("SELECT posted_paise-reversed_paise FROM referral_schema.chef_month"));
+        assertEquals(1,t.db.count("SELECT count(*) FROM referral_schema.chef_posting WHERE amount_paise=50000"));
         t.clock.set(Instant.parse("2026-10-01T04:00:00Z"));eligible(a,3,true);eligible(seller,3,true);
         t.finance(one,3,0,one.food());t.finance(two,3,0,two.food());service.process(one.id());service.process(two.id());
-        assertEquals(100000,credited(a.id()));
+        assertEquals(150000,credited(a.id()));
     }
     @Test void refundReversesOnceAndRestoresOriginalMonthEvenAfterRoleRevocation() {
         var a=t.member(null);var seller=t.member(a);eligible(a,1,true);eligible(seller,1,true);var order=order(seller,30000);
@@ -98,6 +99,45 @@ class ChefEarningsIT {
         assertEquals(300,t.db.count("SELECT reversed_paise FROM referral_schema.chef_month"));
         t.refund(order,2,30000,true);assertTrue(service.process(order.id()));assertEquals(0,credited(a.id()));
         assertEquals(600,t.db.count("SELECT reversed_paise FROM referral_schema.chef_month"));
+    }
+    @Test void exhaustedCapCreatesNoVisibleRewardAndSkippedRewardNeverReturns() {
+        var a=t.member(null);var seller=t.member(a);eligible(a,1,true);eligible(seller,1,true);
+        var full=order(seller,7500000);var skipped=order(seller,30000);
+        service.process(full.id());service.process(skipped.id());due(full,List.of(a,seller));t.finance(skipped,2,0,skipped.food());
+        assertTrue(service.process(full.id()));assertTrue(service.process(skipped.id()));
+        assertEquals(150000,credited(a.id()));assertEquals(1,t.db.count("SELECT count(*) FROM referral_schema.chef_posting"));
+        assertEquals(1,t.db.count("SELECT count(*) FROM referral_schema.chef_cap_decision WHERE credited_paise=0"));
+        assertFalse(service.process(skipped.id()));
+        var queries=new in.craves.referral.api.MemberQueries(t.db,t.program,t.recipients,t.settings,t.clock);
+        var view=queries.chefEarnings(a.id());
+        assertEquals(true,view.get("monthlyCapReached"));assertEquals("0",view.get("monthRemainingPaise"));
+        assertFalse(view.containsKey("monthlyCapReviewCount"));
+        assertEquals(1,((List<?>)view.get("recentPostings")).size());
+        // A refund restores this month's allowance for NEW rewards, not skipped ones.
+        t.refund(full,1,7500000,true);assertTrue(service.process(full.id()));
+        assertEquals(0,credited(a.id()));assertFalse(service.process(skipped.id()));
+        assertEquals("150000",queries.chefEarnings(a.id()).get("monthRemainingPaise"));
+        t.clock.set(Instant.parse("2026-09-30T18:30:00Z")); // October starts in India.
+        eligible(a,3,true);eligible(seller,3,true);t.finance(skipped,3,0,skipped.food());
+        assertFalse(service.process(skipped.id()));assertEquals(0,credited(a.id()));
+        assertEquals("2026-10",queries.chefEarnings(a.id()).get("postingMonth"));
+        var next=order(seller,30000);due(next,List.of(a,seller));
+        eligible(a,4,true);eligible(seller,4,true);assertTrue(service.process(next.id()));
+        assertEquals(600,credited(a.id()));
+        assertThrows(Exception.class,()->t.db.update("DELETE FROM referral_schema.chef_cap_decision"));
+    }
+    @Test void oldPolicyReviewUsesOnlyRemainingAllowanceAndPartialCreditRefundDoesNotRestoreExcess() {
+        var a=t.member(null);var seller=t.member(a);eligible(a,1,true);eligible(seller,1,true);
+        var first=order(seller,7499950);var last=order(seller,30000); // one paise remains.
+        service.process(first.id());service.process(last.id());due(first,List.of(a,seller));t.finance(last,2,0,last.food());
+        service.process(first.id());
+        UUID reward=uuid(t.db.one("SELECT id FROM referral_schema.chef_reward WHERE order_id=?",last.id()),"id");
+        t.db.update("INSERT INTO referral_schema.chef_reward_review VALUES (?,'MONTHLY_CAP_POLICY_REQUIRED',?)",reward,time(t.clock.instant()));
+        assertTrue(service.process(last.id()));assertEquals(150000,credited(a.id()));
+        assertEquals(1,t.db.count("SELECT amount_paise FROM referral_schema.chef_posting WHERE reward_id=?",reward));
+        t.refund(last,1,30000,true);assertTrue(service.process(last.id()));
+        assertEquals(149999,credited(a.id()));assertFalse(service.process(last.id()));
+        assertEquals(1,t.db.count("SELECT reversed_paise FROM referral_schema.chef_month"));
     }
     @Test void insufficientCommissionDoesNotDebitSellingChefOrCreateReward() {
         var a=t.member(null);var seller=t.member(a);eligible(a,1,true);eligible(seller,1,true);var order=order(seller,30000);

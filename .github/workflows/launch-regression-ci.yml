@@ -8,6 +8,7 @@ on:
       - 'apps/customer-web-next/**'
       - 'scripts/launch/**'
       - 'scripts/release/**'
+      - 'scripts/finance/**'
       - '.github/workflows/launch-regression-ci.yml'
   workflow_dispatch:
     inputs:

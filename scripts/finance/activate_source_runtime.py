@@ -38,6 +38,27 @@ OBSERVED_REFERRAL = {
     '137': {'script': 'V137__referral_source_outbox.sql', 'checksum': -195666581},
     '138': {'script': 'V138__referral_finance_consumer.sql', 'checksum': -669247105},
     '139': {'script': 'V139__referral_finance_refresh.sql', 'checksum': -1450785615},
+    '140': {'script': 'V140__referral_finance_reviews_and_execution.sql', 'checksum': 2123126489},
+    '141': {'script': 'V141__referral_checkout_funding.sql', 'checksum': -2098369338},
+    '142': {'script': 'V142__referral_split_refunds.sql', 'checksum': 2042151555},
+    '143': {'script': 'V143__referral_recovery_audit_and_cancellation.sql', 'checksum': -345494307},
+    '144': {'script': 'V144__chef_referral_earnings.sql', 'checksum': 268584164},
+}
+REFERRAL_HISTORY_SOURCES = {
+    **{str(v): REFERRAL_HISTORY_SOURCE for v in range(137, 140)},
+    **{str(v): '96c8e163eef4e1912261aa950c6734974e67f5b5' for v in range(140, 143)},
+    '143': '8a5d8882fa1f10d2586d62ab0723cc1d99118f7a',
+    '144': '2fdf9939f02856b33b956cac7d7c7f955770e2c6',
+}
+REFERRAL_TABLES = {
+    '137': ('referral_source_outbox',),
+    '138': ('referral_consumer_inbox', 'referral_finance_binding', 'referral_journal_projection', 'referral_payout_instruction'),
+    '139': (),
+    '140': ('referral_finance_review', 'referral_payout_execution', 'referral_payout_evidence'),
+    '141': ('referral_checkout_funding', 'referral_funding_capture'),
+    '142': ('referral_refund_allocation', 'referral_refund_sequence'),
+    '143': ('referral_operator_audit', 'referral_checkout_cancellation'),
+    '144': ('chef_referral_posting',),
 }
 QUERIES = {
     'order': """SELECT json_build_object(
@@ -54,7 +75,21 @@ QUERIES = {
 
 
 def observed_migration_matches(role, row):
-    return role == 'integration' and row.get('type') == 'SQL' and row.get('success') is True and OBSERVED_REFERRAL.get(row.get('version')) == {'script': row.get('script'), 'checksum': row.get('checksum')}
+    expected = OBSERVED_REFERRAL.get(row.get('version'))
+    # Both authored 144 versions are reviewed, never repaired. Neither can affect
+    # the core cutover while all referral activity tables are empty.
+    original_144 = row.get('version') == '144' and row.get('script') == 'V144__chef_referral_earnings.sql' and row.get('checksum') == -573818622
+    return role == 'integration' and row.get('type') == 'SQL' and row.get('success') is True and (original_144 or expected == {'script': row.get('script'), 'checksum': row.get('checksum')})
+
+
+def referral_empty_query(observed):
+    require(bool(observed) and observed <= set(OBSERVED_REFERRAL), 'Unknown historical referral schema')
+    last = max(map(int, observed))
+    require(observed == {str(v) for v in range(137, last + 1)} and last >= 139, 'Partial historical referral schema requires review')
+    tables = tuple(table for version in sorted(observed) for table in REFERRAL_TABLES[version])
+    # Identifiers come exclusively from the reviewed constant allowlist, not DB input.
+    query = 'SELECT json_build_object(' + ','.join("'" + table + "',(SELECT count(*) FROM payment_schema." + table + ')' for table in tables) + ');'
+    return query, set(tables)
 
 
 def require_zero_counts(counts, expected):
@@ -144,13 +179,14 @@ def empty_cutover(role, app, servers):
         sources = {}
         for path in (ROOT / 'services' / (role + '-service') / 'src/main/resources/db/migration').glob('V*__*.sql'):
             sources[path.name.split('__')[0][1:].replace('_', '.')] = {'script': path.name, 'checksum': history.crc(path.read_text(encoding='utf-8-sig'))}
-        versions = set(); observed = set()
+        versions = set(); observed = set(); observed_sources = {}; mismatch = False
         for row in rows:
             require(row['success'] is True, 'Failed applied migration')
             if row['type'] in ('BASELINE', 'SCHEMA'): continue
             if observed_migration_matches(role, row):
                 require(row['version'] not in observed, 'Duplicate observed referral migration')
                 observed.add(row['version'])
+                observed_sources[row['version']] = '509c9a7ca1585228a8aff2507f5a999d074a8666' if row['version'] == '144' and row['checksum'] == -573818622 else REFERRAL_HISTORY_SOURCES[row['version']]
                 continue
             matching = row['type'] == 'SQL' and row['version'] not in versions and sources.get(row['version']) == {'script': row['script'], 'checksum': row['checksum']}
             if not matching:
@@ -162,19 +198,14 @@ def empty_cutover(role, app, servers):
                     'knownSource': bool(source), 'scriptNameMatches': source.get('script') == row.get('script'),
                     'appliedChecksum': row.get('checksum') if type(row.get('checksum')) is int else None,
                     'sourceChecksum': source.get('checksum'), 'migrationType': row['type'] if row['type'] in ('SQL', 'BASELINE', 'SCHEMA') else 'UNRECOGNIZED'}), flush=True)
-            require(matching, 'Applied migration differs from reviewed source')
+            mismatch = mismatch or not matching
             versions.add(row['version'])
+        require(not mismatch, 'Applied migration differs from reviewed source')
         require(versions == set(sources), 'Source migrations are not all installed')
         if observed:
-            require(observed == set(OBSERVED_REFERRAL), 'Partial historical referral schema requires review')
-            referral_counts = sql("""SELECT json_build_object(
-              'outbox',(SELECT count(*) FROM payment_schema.referral_source_outbox),
-              'inbox',(SELECT count(*) FROM payment_schema.referral_consumer_inbox),
-              'bindings',(SELECT count(*) FROM payment_schema.referral_finance_binding),
-              'journals',(SELECT count(*) FROM payment_schema.referral_journal_projection),
-              'payouts',(SELECT count(*) FROM payment_schema.referral_payout_instruction));""", db)
-            require_zero_counts(referral_counts, {'outbox', 'inbox', 'bindings', 'journals', 'payouts'})
-            print(json.dumps({'service': role, 'observedAdditiveMigrationSource': REFERRAL_HISTORY_SOURCE,
+            query, tables = referral_empty_query(observed)
+            require_zero_counts(sql(query, db), tables)
+            print(json.dumps({'service': role, 'observedAdditiveMigrationSources': observed_sources,
                               'observedAdditiveVersions': sorted(observed), 'dormantReferralTablesEmpty': True}), flush=True)
         counts = sql(QUERIES[role], db)
         expected = {'snapshots', 'events'} if role == 'order' else {'policyRevision', 'snapshots', 'captures', 'earnings', 'receipts', 'payouts'}

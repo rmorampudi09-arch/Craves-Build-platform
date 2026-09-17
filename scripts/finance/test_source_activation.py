@@ -21,8 +21,23 @@ class SourceActivationTests(unittest.TestCase):
             row = {**expected, 'version': version, 'type': 'SQL', 'success': True}
             self.assertTrue(target.observed_migration_matches('integration', row))
             self.assertFalse(target.observed_migration_matches('order', row))
-            for change in ({'version': '140'}, {'checksum': 0}, {'script': 'other.sql'}, {'success': False}, {'type': 'BASELINE'}):
+            for change in ({'version': '145'}, {'checksum': 0}, {'script': 'other.sql'}, {'success': False}, {'type': 'BASELINE'}):
                 self.assertFalse(target.observed_migration_matches('integration', {**row, **change}))
+
+    def test_referral_history_requires_complete_prefix_and_all_tables_empty(self):
+        for last in range(139, 145):
+            query, tables = target.referral_empty_query({str(v) for v in range(137, last + 1)})
+            self.assertTrue(query.startswith('SELECT '))
+            self.assertEqual(tables, {table for version, names in target.REFERRAL_TABLES.items() if int(version) <= last for table in names})
+            for table in tables: self.assertIn('count(*) FROM payment_schema.' + table, query)
+        for invalid in (set(), {'137'}, {'137', '139'}, {'137', '138', '139', '141'}, {'145'}):
+            with self.assertRaises(target.GuardError): target.referral_empty_query(invalid)
+
+    def test_original_144_has_specific_evidence_not_arbitrary_checksum(self):
+        row = {**target.OBSERVED_REFERRAL['144'], 'version': '144', 'type': 'SQL', 'success': True, 'checksum': -573818622}
+        self.assertTrue(target.observed_migration_matches('integration', row))
+        self.assertFalse(target.observed_migration_matches('order', row))
+        self.assertFalse(target.observed_migration_matches('integration', {**row, 'checksum': -573818621}))
 
     def test_empty_cutover_requires_complete_zero_integer_counts(self):
         target.require_zero_counts({'a': 0, 'b': 0}, {'a', 'b'})

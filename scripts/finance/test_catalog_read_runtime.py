@@ -103,5 +103,13 @@ class RuntimeTests(unittest.TestCase):
         other["properties"]["configuration"]["ingress"]["traffic"] = [{"revisionName": "new", "weight": 100}]
         self.assertEqual(target.fingerprint(current, {}), target.fingerprint(other, {}))
 
+    def test_template_diagnostic_never_prints_environment_values(self):
+        left = app()["properties"]["template"]; right = copy.deepcopy(left)
+        right["containers"][0]["env"][0]["secretRef"] = "private-sentinel"
+        right["scale"]["maxReplicas"] = 2
+        differences = target.template_difference(left, right)
+        self.assertNotIn("private-sentinel", json.dumps(differences))
+        self.assertTrue(any(d.get("running") == 2 for d in differences))
+
 
 if __name__ == "__main__": unittest.main()

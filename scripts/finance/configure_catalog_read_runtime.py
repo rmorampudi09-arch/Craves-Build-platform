@@ -101,6 +101,24 @@ def check_reference(app, reference, identity):
     return bool(rows)
 
 
+def template_difference(desired, running):
+    """Only paths/types, and explicitly non-secret probe/scale/resource values."""
+    result = []
+    def walk(left, right, path):
+        if left == right: return
+        if isinstance(left, dict) and isinstance(right, dict):
+            for key in sorted(set(left) | set(right)): walk(left.get(key), right.get(key), path + "/" + key)
+        elif isinstance(left, list) and isinstance(right, list) and len(left) == len(right):
+            for index, (a, b) in enumerate(zip(left, right)): walk(a, b, path + "/" + str(index))
+        else:
+            row = {"path": path, "desiredType": type(left).__name__, "runningType": type(right).__name__}
+            if path.startswith("/scale/") or re.fullmatch(r"/containers/[0-9]+/resources/[A-Za-z]+", path) or re.fullmatch(r"/containers/[0-9]+/probes/[0-9]+/(initialDelaySeconds|periodSeconds|timeoutSeconds|failureThreshold|successThreshold)", path):
+                row.update(desired=left, running=right)
+            result.append(row)
+    walk(runtime.comparable_running_template(desired), runtime.comparable_running_template(running), "")
+    return result[:50]
+
+
 def ready(role, app, explain=False):
     props = app["properties"]
     revision = props.get("latestRevisionName")
@@ -115,6 +133,9 @@ def ready(role, app, explain=False):
     except (ValueError, KeyError, TypeError) as error:
         if explain:
             print(json.dumps({"app": APPS[role], "readinessFailure": str(error) if isinstance(error, ValueError) else type(error).__name__}), flush=True)
+            active = [r for r in rows if r.get("name") == revision]
+            if len(active) == 1:
+                print(json.dumps({"app": APPS[role], "templateDifferences": template_difference(props["template"], active[0]["properties"]["template"])}), flush=True)
         return False
 
 

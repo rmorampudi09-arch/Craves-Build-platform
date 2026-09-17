@@ -4,6 +4,7 @@ import json
 import copy
 import os
 import pathlib
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -75,23 +76,38 @@ class ReadinessTest(unittest.TestCase):
     def run_case(self, case, sha=SHA, configure=False):
         with tempfile.TemporaryDirectory(prefix='craves-readiness-fixture-') as folder:
             path = pathlib.Path(folder)
+            # Test the gate against a real, internally consistent disposable Git
+            # release. The production manifest describes deployed code and must
+            # neither be rewritten nor treated as a fixture for a new candidate.
+            fixture = path/'release'
+            fixture.mkdir()
+            for relative in ['scripts/admin-explorer','scripts/apim','infra/apim/admin-explorer']:
+                shutil.copytree(ROOT/relative,fixture/relative,ignore=shutil.ignore_patterns('__pycache__'))
+            def git(*args):
+                return subprocess.check_output(['git','-C',str(fixture),*args],text=True,stderr=subprocess.PIPE).strip()
+            git('init','-q');git('config','user.name','Readiness fixture');git('config','user.email','fixture@example.test')
+            for service in ['auth','user-chef','order']:
+                service_path=fixture/f'services/{service}-service'
+                service_path.mkdir(parents=True);(service_path/'fixture.txt').write_text('synthetic service build context')
+            git('add','.');git('commit','-qm','Synthetic tested backend')
+            backend_sha=git('rev-parse','HEAD')
+            manifest={'version':2,'services':{s:{'source':backend_sha} for s in ['auth','user-chef','order']}}
+            manifest_path=fixture/'docs/admin/explorer/backend-release.json'
+            manifest_path.parent.mkdir(parents=True);manifest_path.write_text(json.dumps(manifest))
+            git('add','.');git('commit','-qm','Synthetic release manifest')
+            fixture_sha=git('rev-parse','HEAD')
             for name, content in [('az', AZ), ('curl', CURL)]:
                 file = path / name
                 file.write_text(content)
                 file.chmod(0o700)
             env = os.environ.copy()
-            manifest=json.loads((ROOT/'docs/admin/explorer/backend-release.json').read_text())
-            env['BACKEND_FIXTURE_SHA']=manifest['source'] if manifest['version']==1 else manifest['services']['auth']['source']
-            env.update(PATH=str(path)+os.pathsep+env['PATH'], EXPECTED_RELEASE_SHA=sha, READINESS_CASE=case, READINESS_POLICY=str(ROOT/'infra/apim/admin-explorer/authenticated-policy.xml'))
+            env['BACKEND_FIXTURE_SHA']=backend_sha
+            env.update(PATH=str(path)+os.pathsep+env['PATH'], EXPECTED_RELEASE_SHA=fixture_sha if sha==SHA else sha, READINESS_CASE=case, READINESS_POLICY=str(fixture/'infra/apim/admin-explorer/authenticated-policy.xml'))
             if configure:
-                # The gateway fixture represents an already-reviewed clean checkout.
-                git = path/'git'
-                git.write_text('#!/usr/bin/env python3\nimport os,sys\na=sys.argv[1:]\nif a[:1]==["-C"]:a=a[2:]\nif a==["rev-parse","HEAD"]:print(os.environ["EXPECTED_RELEASE_SHA"])\nelif a!=["status","--porcelain","--untracked-files=no"]:raise AssertionError(a)\n')
-                git.chmod(0o700)
                 env['CONFIRM_APIM_WRITE']='true'
             script='scripts/apim/configure-admin-explorer-apim.sh' if configure else 'scripts/admin-explorer/verify-runtime-readiness.sh'
-            return subprocess.run(['bash', str(ROOT/script)],
-                                  cwd=ROOT, env=env, capture_output=True, text=True, timeout=30)
+            return subprocess.run(['bash', str(fixture/script)],
+                                  cwd=fixture, env=env, capture_output=True, text=True, timeout=30)
 
     def test_consumption_tier_passes_with_source_linked_backend_admission(self):
         result=self.run_case('consumption')

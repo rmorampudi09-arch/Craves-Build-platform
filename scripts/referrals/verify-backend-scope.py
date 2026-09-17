@@ -4,6 +4,7 @@ import subprocess
 # Preserve current merged main, including the independent landing/chef-session releases.
 BASE='d0c1245a3e1e02c43d1b70578491fbc54f2baf3c'
 MODIFIED={
+ 'scripts/admin-explorer/test-runtime-readiness.py',
  'services/integration-service/src/main/java/in/craves/integration/payout/ManualChefSettlementService.java',
  'services/integration-service/src/main/java/in/craves/integration/payout/ChefPayoutService.java',
  'docs/launch-closure/OWNER_DECISIONS_20260916.md',

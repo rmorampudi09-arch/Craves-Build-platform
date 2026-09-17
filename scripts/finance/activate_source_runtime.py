@@ -31,6 +31,14 @@ FLAGS = {
 SOURCES = {'order': 'd13cd1a4620da67413179ad53960f4e72639574c',
            'integration': 'd13cd1a4620da67413179ad53960f4e72639574c',
            'catalog': 'aded9a92cba88e9d5559928abb458357e19f24fe'}
+# Already-applied additive referral migrations from the recorded owner-work source.
+# No wildcard future-version allowance, repair, reapply or referral activation.
+REFERRAL_HISTORY_SOURCE = 'd3328d772f1950e968412c0404d8e44edff16a0d'
+OBSERVED_REFERRAL = {
+    '137': {'script': 'V137__referral_source_outbox.sql', 'checksum': -195666581},
+    '138': {'script': 'V138__referral_finance_consumer.sql', 'checksum': -669247105},
+    '139': {'script': 'V139__referral_finance_refresh.sql', 'checksum': -1450785615},
+}
 QUERIES = {
     'order': """SELECT json_build_object(
       'snapshots',(SELECT count(*) FROM order_schema.order_financial_snapshot),
@@ -43,6 +51,14 @@ QUERIES = {
       'receipts',(SELECT count(*) FROM payment_schema.finance_source_receipt),
       'payouts',(SELECT count(*) FROM payment_schema.finance_payout_instruction));""",
 }
+
+
+def observed_migration_matches(role, row):
+    return role == 'integration' and row.get('type') == 'SQL' and row.get('success') is True and OBSERVED_REFERRAL.get(row.get('version')) == {'script': row.get('script'), 'checksum': row.get('checksum')}
+
+
+def require_zero_counts(counts, expected):
+    require(isinstance(counts, dict) and set(counts) == set(expected) and all(type(v) is int and v == 0 for v in counts.values()), 'Existing finance activity requires reconciliation before first cutover')
 
 
 def snapshot(role):
@@ -128,10 +144,14 @@ def empty_cutover(role, app, servers):
         sources = {}
         for path in (ROOT / 'services' / (role + '-service') / 'src/main/resources/db/migration').glob('V*__*.sql'):
             sources[path.name.split('__')[0][1:].replace('_', '.')] = {'script': path.name, 'checksum': history.crc(path.read_text(encoding='utf-8-sig'))}
-        versions = set()
+        versions = set(); observed = set()
         for row in rows:
             require(row['success'] is True, 'Failed applied migration')
             if row['type'] in ('BASELINE', 'SCHEMA'): continue
+            if observed_migration_matches(role, row):
+                require(row['version'] not in observed, 'Duplicate observed referral migration')
+                observed.add(row['version'])
+                continue
             matching = row['type'] == 'SQL' and row['version'] not in versions and sources.get(row['version']) == {'script': row['script'], 'checksum': row['checksum']}
             if not matching:
                 # Migration metadata only. Never log records, credentials or raw DB errors.
@@ -145,9 +165,20 @@ def empty_cutover(role, app, servers):
             require(matching, 'Applied migration differs from reviewed source')
             versions.add(row['version'])
         require(versions == set(sources), 'Source migrations are not all installed')
+        if observed:
+            require(observed == set(OBSERVED_REFERRAL), 'Partial historical referral schema requires review')
+            referral_counts = sql("""SELECT json_build_object(
+              'outbox',(SELECT count(*) FROM payment_schema.referral_source_outbox),
+              'inbox',(SELECT count(*) FROM payment_schema.referral_consumer_inbox),
+              'bindings',(SELECT count(*) FROM payment_schema.referral_finance_binding),
+              'journals',(SELECT count(*) FROM payment_schema.referral_journal_projection),
+              'payouts',(SELECT count(*) FROM payment_schema.referral_payout_instruction));""", db)
+            require_zero_counts(referral_counts, {'outbox', 'inbox', 'bindings', 'journals', 'payouts'})
+            print(json.dumps({'service': role, 'observedAdditiveMigrationSource': REFERRAL_HISTORY_SOURCE,
+                              'observedAdditiveVersions': sorted(observed), 'dormantReferralTablesEmpty': True}), flush=True)
         counts = sql(QUERIES[role], db)
         expected = {'snapshots', 'events'} if role == 'order' else {'policyRevision', 'snapshots', 'captures', 'earnings', 'receipts', 'payouts'}
-        require(isinstance(counts, dict) and set(counts) == expected and all(type(v) is int and v == 0 for v in counts.values()), 'Existing finance activity requires reconciliation before first cutover')
+        require_zero_counts(counts, expected)
         print(json.dumps({'service': role, 'appliedMigrationsVerified': len(versions), 'emptyFinancialCutover': True}), flush=True)
     finally: db.pop('PGPASSWORD', None)
 

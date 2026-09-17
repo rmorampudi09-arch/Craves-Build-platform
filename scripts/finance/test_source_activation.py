@@ -16,6 +16,19 @@ def app():
 
 
 class SourceActivationTests(unittest.TestCase):
+    def test_only_exact_observed_referral_history_is_recognized(self):
+        for version, expected in target.OBSERVED_REFERRAL.items():
+            row = {**expected, 'version': version, 'type': 'SQL', 'success': True}
+            self.assertTrue(target.observed_migration_matches('integration', row))
+            self.assertFalse(target.observed_migration_matches('order', row))
+            for change in ({'version': '140'}, {'checksum': 0}, {'script': 'other.sql'}, {'success': False}, {'type': 'BASELINE'}):
+                self.assertFalse(target.observed_migration_matches('integration', {**row, **change}))
+
+    def test_empty_cutover_requires_complete_zero_integer_counts(self):
+        target.require_zero_counts({'a': 0, 'b': 0}, {'a', 'b'})
+        for value in ({'a': 0}, {'a': 0, 'b': 1}, {'a': 0, 'b': False}, {'a': 0, 'b': None}, {'a': 0, 'b': 0, 'unknown': 0}):
+            with self.assertRaises(target.GuardError): target.require_zero_counts(value, {'a', 'b'})
+
     def test_only_five_named_accounting_flags(self):
         self.assertEqual(set(target.FLAGS), {'order', 'integration'})
         self.assertEqual(sum(map(len, target.FLAGS.values())), 5)

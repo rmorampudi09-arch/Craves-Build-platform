@@ -101,16 +101,20 @@ def check_reference(app, reference, identity):
     return bool(rows)
 
 
-def ready(role, app):
+def ready(role, app, explain=False):
     props = app["properties"]
     revision = props.get("latestRevisionName")
-    if not revision or revision != props.get("latestReadyRevisionName"): return False
+    if not revision or revision != props.get("latestReadyRevisionName"):
+        if explain: print(json.dumps({"app": APPS[role], "readinessFailure": "Latest revision is not ready"}), flush=True)
+        return False
     rows = az("containerapp", "revision", "list", "-g", RG, "-n", APPS[role])
     replicas = az("containerapp", "replica", "list", "-g", RG, "-n", APPS[role], "--revision", revision)
     try:
         runtime.ready(app, rows, replicas, validate=lambda _: None)
         return True
-    except (ValueError, KeyError, TypeError):
+    except (ValueError, KeyError, TypeError) as error:
+        if explain:
+            print(json.dumps({"app": APPS[role], "readinessFailure": str(error) if isinstance(error, ValueError) else type(error).__name__}), flush=True)
         return False
 
 
@@ -211,7 +215,7 @@ def main():
     for role, app in apps.items():
         shared.check_env(app, settings[role])
         check_reference(app, reference, identities[role])
-        require(ready(role, app), "Existing service is not ready; connection was not changed")
+        require(ready(role, app, explain=True), "Existing service is not ready; connection was not changed")
     print(json.dumps({"apply": args.apply, "source": head, "apps": APPS, "vault": vault,
                       "newPaidResources": False, "permissionsChanged": False, "financeActivation": False}), flush=True)
     if not args.apply: return

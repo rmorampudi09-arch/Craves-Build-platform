@@ -197,6 +197,9 @@ stages:
                       REPLICAS=$(mktemp)
                       export ADMIN_RUNTIME_SNAPSHOT_FILE
                       trap 'rm -f "$ADMIN_RUNTIME_SNAPSHOT_FILE" "$APP_STATE" "$REPLICAS" "${HEADERS:-}" "${BODY:-}"' EXIT
+                      # Pin only already-reviewed service versions. This cannot
+                      # rebuild, replace an unknown image or alter runtime flags.
+                      python3 scripts/admin-explorer/pin-reviewed-backends.py
                       bash scripts/admin-explorer/verify-runtime-readiness.sh
                       # Keep the healthy UI until its required Auth session capability is deployed.
                       AUTH_FQDN=$(az containerapp show -g "$RG" -n ca-craves-auth-service-prodlow --query 'properties.configuration.ingress.fqdn' -o tsv --only-show-errors)

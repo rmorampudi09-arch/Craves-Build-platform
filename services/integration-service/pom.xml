@@ -18,6 +18,8 @@
         <azure.identity.version>1.18.4</azure.identity.version>
     </properties>
     <dependencies>
+        <!-- Matches Catalog's WGS84 PostGIS geography distance without a paid routing API. -->
+        <dependency><groupId>net.sf.geographiclib</groupId><artifactId>GeographicLib-Java</artifactId><version>2.1</version></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-actuator</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-jdbc</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-redis</artifactId></dependency>

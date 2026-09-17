@@ -1,4 +1,5 @@
 "use client";
+import { ChefAccountingBreakdown } from "@/components/chef-accounting-breakdown";
 
 import { useEffect, useRef, useState } from "react";
 import { chefBalanceSchema, payoutSchema, type ChefBalance } from "@/lib/finance-contract";
@@ -30,6 +31,7 @@ export function ChefWithdrawalPanel() {
   return <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 text-slate-900">
     {message && <p role="status" className="rounded-xl bg-amber-50 p-4 text-sm">{message}</p>}
     {balance && <><div className="grid gap-4 sm:grid-cols-3">{[["Available to request", balance.available], ["Outstanding earnings", balance.outstanding], ["Reserved or already paid", balance.reservedOrPaid]].map(([label, amount]) => <div className="rounded-xl border p-5" key={label}><p className="text-sm text-slate-600">{label}</p><p className="mt-2 text-2xl font-bold">₹{amount}</p></div>)}</div>
+      <ChefAccountingBreakdown accounting={balance.accounting} />
       <p className="text-sm">{balance.payoutMode === "CRAVES_MANUAL" ? balance.executionEnabled ? "Eligible payouts are currently processed manually by Craves." : "New manual Craves payment requests are currently unavailable." : "Bank payouts follow the current eligibility and processing settings."} You may request the full available balance once per India calendar day. Held, reserved, uncertain and already-paid amounts cannot be requested again.</p>
       {balance.onHold && <p className="rounded-xl bg-amber-50 p-4 text-sm">Your payout balance is on hold. Contact Craves finance for resolution.</p>}
       {!balance.executionEnabled && <p className="text-sm">A new withdrawal is not currently available. Existing payment requests retain their recorded status.</p>}

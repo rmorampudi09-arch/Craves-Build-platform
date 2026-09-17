@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Bind an independently tested maintenance build to its merged admin release."""
 import json
+import argparse
 import pathlib
 import re
 import subprocess
@@ -21,7 +22,31 @@ def paths():
 def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args], text=True, stderr=subprocess.PIPE).strip()
 
+def image_tag(release):
+    source = release.get('source', '')
+    tag = release.get('imageTag', source)
+    deployment = release.get('deployment')
+    assert tag == source or (type(deployment) is int and deployment > 0 and tag == str(deployment)), 'Image tag must match source or recorded deployment number'
+    return tag
+
 def verify(root, manifest):
+    if manifest.get('version') == 2:
+        releases = manifest.get('services', {})
+        expected = {service for service, _, _ in BINDINGS}
+        assert set(releases) == expected, 'Exact backend service inventory is required'
+        sources = {}
+        for service in sorted(expected):
+            source = releases[service].get('source', '')
+            assert re.fullmatch('[0-9a-f]{40}', source), 'Exact backend source is required'
+            image_tag(releases[service])
+            git(root, 'merge-base', '--is-ancestor', source, 'HEAD')
+            # A normal service release may contain features beyond Explorer. Require
+            # its ENTIRE build context to match the new fully tested main release,
+            # rather than accepting a matching controller with unrelated drift.
+            path = f'services/{service}-service'
+            assert git(root, 'rev-parse', source+':'+path) == git(root, 'rev-parse', 'HEAD:'+path), 'Backend build context drift: '+service
+            sources[service] = source
+        return sources
     assert manifest.get('version') == 1, 'Unsupported backend release manifest'
     source, baseline = manifest.get('source', ''), manifest.get('baseline', '')
     assert re.fullmatch('[0-9a-f]{40}', source) and re.fullmatch('[0-9a-f]{40}', baseline), 'Exact backend source and baseline are required'
@@ -42,4 +67,17 @@ def verify(root, manifest):
     return source
 
 if __name__ == '__main__':
-    print(verify(ROOT, json.loads((ROOT/'docs/admin/explorer/backend-release.json').read_text())))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--service', choices=[service for service, _, _ in BINDINGS])
+    parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--image-tag', choices=[service for service, _, _ in BINDINGS])
+    args = parser.parse_args()
+    manifest = json.loads((ROOT/'docs/admin/explorer/backend-release.json').read_text())
+    result = verify(ROOT, manifest)
+    if not args.verify_only:
+        if args.image_tag:
+            print(image_tag(manifest['services'][args.image_tag]) if isinstance(result, dict) else result)
+        elif isinstance(result, dict):
+            print(result[args.service] if args.service else json.dumps(result, sort_keys=True))
+        else:
+            print(result)

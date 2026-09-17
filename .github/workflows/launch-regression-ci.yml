@@ -8,6 +8,7 @@ on:
       - 'apps/customer-web-next/**'
       - 'scripts/launch/**'
       - 'scripts/release/**'
+      - 'scripts/finance/**'
       - '.github/workflows/launch-regression-ci.yml'
   workflow_dispatch:
     inputs:
@@ -56,6 +57,8 @@ jobs:
           python3 scripts/release/tests/test-backend-preflight.py
           python3 scripts/release/tests/test-backend-image-reuse.py
           python3 scripts/admin-explorer/test-runtime-readiness.py
+          python3 scripts/admin-explorer/test-backend-release.py
+          python3 scripts/admin-explorer/test-backend-pinning.py
           python3 -m unittest discover -s scripts/release/tests -p 'test_launch_*.py' -v
           python3 -m unittest discover -s scripts/release/tests -p 'test_gateway_policy_fingerprints.py' -v
           python3 -m unittest discover -s scripts/release/tests -p 'test_auth_protection_inventory.py' -v

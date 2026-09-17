@@ -27,7 +27,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class ChefPayoutService {
     public record Payout(UUID id,String amount,String mode,String status,String providerStatus,String transferReference,Instant createdAt,String payoutChannel) {}
     public record Balance(String available,String outstanding,String reservedOrPaid,boolean onHold,
-        boolean manualRequestUsedToday,String nextManualRequestAt,List<Payout> recentPayouts,boolean executionEnabled,String payoutMode) {}
+        boolean manualRequestUsedToday,String nextManualRequestAt,List<Payout> recentPayouts,boolean executionEnabled,String payoutMode,
+        in.craves.integration.settlement.ChefAccountingSummary accounting) {}
     public record Withdrawal(UUID requestKey,String expectedAvailableAmount) {}
     public record Binding(String fundAccountId,String contactId,String bankOwnershipEvidence,String reason) {}
     public record Hold(boolean onHold,String reason) {}
@@ -66,12 +67,15 @@ public class ChefPayoutService {
         chef(actor);UUID id=actor.identityId();Instant now=Instant.now();LocalDate date=now.atZone(FinancePolicy.ZONE).toLocalDate();
         boolean manualMode=manual!=null && manual.configured();
         boolean held=manualMode?manual.held(id):isHeld(id),used=usedDay(id,date);
-        BigDecimal available=sumAvailable(id,now,false);BigDecimal total=jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM payment_schema.finance_payable WHERE chef_identity_id=?",BigDecimal.class,id);
+        BigDecimal available=sumAvailable(id,now,false);
+        var accounting=in.craves.integration.settlement.ChefAccountingSummary.read(jdbc,id);
         BigDecimal allocated=jdbc.queryForObject("SELECT coalesce(sum(p.amount),0) FROM payment_schema.finance_payable p JOIN payment_schema.finance_payout_allocation a ON a.payable_id=p.id WHERE p.chef_identity_id=? AND a.active",BigDecimal.class,id);
-        return new Balance(LedgerMoney.text(held?BigDecimal.ZERO:available),LedgerMoney.text(total.subtract(paidTotal(id))),LedgerMoney.text(allocated),held,used,
-            date.plusDays(1).atStartOfDay(FinancePolicy.ZONE).toInstant().toString(),listForChef(id),!held && (manualMode?manual.enabled():policies.current().settings().manualWithdrawalsEnabled() && provider.ready()),manualMode?"CRAVES_MANUAL":"RAZORPAYX");
+        // Preserve the installed app's nonnegative amount-owed contract; the accounting breakdown
+        // separately exposes the signed journal balance, including any recoverable chef debt.
+        return new Balance(LedgerMoney.text(held?BigDecimal.ZERO:available),LedgerMoney.text(new BigDecimal(accounting.outstanding()).max(BigDecimal.ZERO)),LedgerMoney.text(allocated),held,used,
+            date.plusDays(1).atStartOfDay(FinancePolicy.ZONE).toInstant().toString(),listForChef(id),!held && (manualMode?manual.enabled():policies.current().settings().manualWithdrawalsEnabled() && provider.ready()),manualMode?"CRAVES_MANUAL":"RAZORPAYX",
+            accounting);
     }
-    private BigDecimal paidTotal(UUID chef) {return jdbc.queryForObject("SELECT coalesce(sum(amount),0) FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? AND settlement_journal_id IS NOT NULL AND reversal_journal_id IS NULL",BigDecimal.class,chef);}
     private List<Payout> listForChef(UUID chef) {return jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? ORDER BY created_at DESC,id DESC LIMIT 100",this::map,chef);}
     public List<Payout> listAdmin(CravesPrincipal actor) {FinancePolicyService.reader(actor);return jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction ORDER BY created_at DESC,id DESC LIMIT 100",this::map);}
     @Transactional

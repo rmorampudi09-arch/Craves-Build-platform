@@ -117,7 +117,7 @@ export function ChefEarningsLedger() {
       <section className="grid gap-4 sm:grid-cols-3">
         {[
           {
-            label: "Approved net payable",
+            label: "Net earnings in listed records",
             value: money(approvedPayable, currency),
             icon: FileCheck2,
           },
@@ -155,7 +155,7 @@ export function ChefEarningsLedger() {
               Chef earning allocations
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              These values are entered and approved by Craves finance/admin. The browser never calculates commission, tax withholding or payout timing.
+              Paid and delivered orders appear automatically after their accounting is recorded. Older manually approved entries remain visible. The browser never calculates commission, tax withholding or payout timing. These listed totals are not your available balance; refunds, holds and later adjustments appear in your balance breakdown.
             </p>
           </div>
           <button
@@ -227,7 +227,7 @@ export function ChefEarningsLedger() {
               No earning allocations yet
             </h3>
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-              Delivered orders do not automatically become payout entries. Craves finance must create and approve an allocation using the approved commission and tax policy.
+              Earnings will appear here once a paid and delivered order has been recorded. No earnings are estimated from unpaid or unfinished orders.
             </p>
           </div>
         ) : visibleEntries.length === 0 ? (
@@ -269,7 +269,7 @@ export function ChefEarningsLedger() {
                     <dd className="mt-1 font-semibold text-ink">{money(entry.grossAmount, entry.currency)}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Commission</dt>
+                    <dt className="text-xs text-muted-foreground">Total service fee</dt>
                     <dd className="mt-1 font-semibold text-ink">-{money(entry.commissionAmount, entry.currency)}</dd>
                   </div>
                   <div>

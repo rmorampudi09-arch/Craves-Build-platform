@@ -10,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -23,6 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 )
 public class RedisTokenRevocationPublisher {
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisTokenRevocationPublisher.class);
+    static final DefaultRedisScript<Long> PROJECTION_SCRIPT = new DefaultRedisScript<>();
+    static {
+        PROJECTION_SCRIPT.setLocation(new ClassPathResource("security/monotonic-revocation.lua"));
+        PROJECTION_SCRIPT.setResultType(Long.class);
+    }
 
     private final JdbcTemplate jdbcTemplate;
     private final StringRedisTemplate redisTemplate;
@@ -77,21 +84,22 @@ public class RedisTokenRevocationPublisher {
         for (ProjectionWorkItem item : claim()) {
             try {
                 Duration ttl = jwtProperties.getAccessTokenTtl().plusSeconds(ttlGraceSeconds);
-                redisTemplate.opsForValue().set(
-                    keyPrefix + ":" + item.identityId(),
-                    item.accountStatus() + "|" + item.minimumTokenVersion(),
-                    ttl
-                );
+                if (item.minimumTokenVersion() < 1 || !List.of("ACTIVE","SUSPENDED").contains(item.accountStatus())) {
+                    throw new IllegalStateException("INVALID_AUTHORITATIVE_REVOCATION_STATE");
+                }
+                Long result = redisTemplate.execute(PROJECTION_SCRIPT,
+                    List.of(keyPrefix + ":" + item.identityId()), item.accountStatus(),
+                    Long.toString(item.minimumTokenVersion()), Long.toString(ttl.toSeconds()));
+                if (result == null || (result != 0L && result != 1L)) {
+                    throw new IllegalStateException("REVOCATION_PROJECTION_CONFLICT");
+                }
                 markPublished(item);
-                LOGGER.info(
-                    "Token revocation projection published identityId={} minimumVersion={} status={}",
-                    item.identityId(), item.minimumTokenVersion(), item.accountStatus()
-                );
+                LOGGER.debug("Token revocation projection processed");
             } catch (RuntimeException exception) {
                 markFailure(item, exception);
                 LOGGER.error(
-                    "Token revocation projection failed identityId={} attempt={}",
-                    item.identityId(), item.attemptCount(), exception
+                    "Token revocation projection failed attempt={}; details suppressed",
+                    item.attemptCount()
                 );
             }
         }
@@ -116,10 +124,10 @@ public class RedisTokenRevocationPublisher {
             UPDATE auth_token_revocation_outbox outbox
                SET status = 'PROCESSING', lock_token = ?, locked_at = now(),
                    attempt_count = attempt_count + 1, last_error = NULL, updated_at = now()
-              FROM candidates candidate
-             WHERE outbox.id = candidate.id
-            RETURNING outbox.id, outbox.identity_id, outbox.account_status,
-                      outbox.minimum_token_version, outbox.attempt_count, outbox.lock_token
+              FROM candidates candidate, auth_identity identity
+             WHERE outbox.id = candidate.id AND identity.id = outbox.identity_id
+            RETURNING outbox.id, outbox.identity_id, identity.status AS account_status,
+                      identity.token_version AS minimum_token_version, outbox.attempt_count, outbox.lock_token
             """;
         return jdbcTemplate.query(
             sql,
@@ -158,16 +166,8 @@ public class RedisTokenRevocationPublisher {
              WHERE id = ? AND lock_token = ?
             """,
             dead ? "DEAD_LETTER" : "FAILED", dead ? 0L : delay,
-            safe(error == null ? null : error.getMessage()), item.id(), item.lockToken()
+            "REVOCATION_PROJECTION_UNAVAILABLE", item.id(), item.lockToken()
         );
-    }
-
-    private static String safe(String value) {
-        if (value == null || value.isBlank()) {
-            return "UNKNOWN";
-        }
-        String normalized = value.replace('\n', ' ').replace('\r', ' ').trim();
-        return normalized.length() > 1000 ? normalized.substring(0, 1000) : normalized;
     }
 
     record ProjectionWorkItem(

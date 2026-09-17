@@ -19,6 +19,7 @@ parameters:
       - release-customer-checkout
       - inspect-email-runtime
       - capture-launch-runtime
+      - inspect-core-readiness
       - capture-gateway-fingerprints
       - inspect-finance-response-privacy
       - publish-finance-response-privacy
@@ -74,6 +75,20 @@ steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 1
+  - ${{ if eq(parameters.action, 'inspect-core-readiness') }}:
+      - script: python3 -m unittest discover -s scripts/release -p 'test_core_readiness.py' -v
+        displayName: Verify read-only core readiness boundaries
+      - task: AzureCLI@2
+        displayName: Read refund, subscription and security readiness without writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            command -v psql >/dev/null
+            python3 scripts/release/inspect-core-readiness.py
   - ${{ if or(eq(parameters.action, 'inspect-finance-source-cutover'), eq(parameters.action, 'activate-finance-source-cutover')) }}:
       - script: python3 -m unittest discover -s scripts/finance -p 'test_source_activation.py' -v
         displayName: Verify bounded Finance cutover guards

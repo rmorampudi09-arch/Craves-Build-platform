@@ -1,6 +1,24 @@
 import { z } from "zod";
 
 export const moneySchema = z.string().regex(/^\d{1,14}\.\d{2}$/);
+const signedMoney = z.string().regex(/^-?\d{1,14}\.\d{2}$/);
+export const chefAccountingSchema = z.object({
+  recordedOrders: z.number().int().nonnegative(), grossFood: moneySchema, totalServiceFee: moneySchema,
+  feeBeforeGst: moneySchema, feeGst: moneySchema, withholding: moneySchema, originalNetEarnings: moneySchema,
+  recordedPayments: moneySchema, outstanding: signedMoney, otherLedgerMovements: signedMoney,
+  legacyRecords: z.number().int().nonnegative(),
+}).superRefine((value, context) => {
+  if ([value.grossFood,value.totalServiceFee,value.feeBeforeGst,value.feeGst,value.withholding,
+    value.originalNetEarnings,value.recordedPayments,value.outstanding,value.otherLedgerMovements]
+    .some(amount => !/^-?\d{1,14}\.\d{2}$/.test(amount))) return;
+  const paise = (amount: string) => BigInt(amount.replace(".", ""));
+  if (paise(value.totalServiceFee) !== paise(value.feeBeforeGst) + paise(value.feeGst)
+    || paise(value.grossFood) !== paise(value.totalServiceFee) + paise(value.withholding) + paise(value.originalNetEarnings)
+    || paise(value.outstanding) !== paise(value.originalNetEarnings) + paise(value.otherLedgerMovements) - paise(value.recordedPayments)) {
+    context.addIssue({code: "custom", message: "Accounting totals do not reconcile. Refresh before recording a payment."});
+  }
+});
+export type ChefAccounting = z.infer<typeof chefAccountingSchema>;
 const rate = z.string().regex(/^\d{1,3}(\.\d{1,6})?$/).refine(value => Number(value) <= 100);
 const distanceKm = z.string().regex(/^\d{1,5}(\.\d{1,3})?$/);
 export const deliveryTariffSchema = z.object({
@@ -41,7 +59,8 @@ export const payoutSchema = z.object({
   providerStatus: z.string().nullable(), transferReference: z.string().nullable(), createdAt: z.string().datetime(),
 });
 export const chefBalanceSchema = z.object({
-  available: moneySchema, outstanding: moneySchema, reservedOrPaid: moneySchema, onHold: z.boolean(),
+  accounting: chefAccountingSchema.optional(),
+  available: moneySchema, outstanding: signedMoney, reservedOrPaid: moneySchema, onHold: z.boolean(),
   manualRequestUsedToday: z.boolean(), nextManualRequestAt: z.string().datetime(), recentPayouts: z.array(payoutSchema), executionEnabled: z.boolean(), payoutMode: z.enum(["RAZORPAYX", "CRAVES_MANUAL"]).default("RAZORPAYX"),
 });
 export type ChefBalance = z.infer<typeof chefBalanceSchema>;

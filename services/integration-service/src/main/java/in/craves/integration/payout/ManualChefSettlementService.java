@@ -38,7 +38,8 @@ public class ManualChefSettlementService {
                               String destinationReference, String bankReference, Instant authorizedAt,
                               Instant paidAt, Instant createdAt) {}
     public record Balance(UUID chefIdentityId, String available, boolean onHold, boolean enabled,
-                          boolean manualRequestUsedToday, List<Instruction> recent) {}
+                          boolean manualRequestUsedToday, List<Instruction> recent,
+                          in.craves.integration.settlement.ChefAccountingSummary accounting) {}
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private final FinancePolicyService policies;
@@ -57,7 +58,8 @@ public class ManualChefSettlementService {
     }
     public Balance balance(CravesPrincipal actor, UUID chef) {
         FinancePolicyService.reader(actor); requireChefId(chef);
-        return new Balance(chef,LedgerMoney.text(available(chef)),held(chef),enabled(),usedToday(chef),listForChef(chef));
+        return new Balance(chef,LedgerMoney.text(available(chef)),held(chef),enabled(),usedToday(chef),listForChef(chef),
+                in.craves.integration.settlement.ChefAccountingSummary.read(jdbc,chef));
     }
     public List<Instruction> list(CravesPrincipal actor) {
         FinancePolicyService.reader(actor);

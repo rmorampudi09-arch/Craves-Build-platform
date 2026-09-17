@@ -73,6 +73,23 @@ class ChefAccountingReadDatabaseTest {
         deliver();f.tx.execute(s->f.finalizer.finish(f.order));assertEquals(1,repository.listForChef(f.chef,100).size());
         assertEquals(1,summary().recordedOrders());assertEquals("930.00",summary().originalNetEarnings());
     }
+    @Test void reversedEarningsCarryConsistentDatesForTheInstalledApp(){
+        deliver();var original=repository.listForChef(f.chef,100).getFirst();
+        var lines=f.jdbc.query("SELECT * FROM payment_schema.ledger_line WHERE transaction_id=? ORDER BY sequence",
+                (rs,n)->new in.craves.integration.ledger.LedgerJournal.Line(rs.getString("account_code"),"INR",
+                    rs.getBigDecimal("credit_amount").toPlainString(),rs.getBigDecimal("debit_amount").toPlainString(),
+                    rs.getObject("chef_identity_id",UUID.class),rs.getObject("delivery_attempt_id",UUID.class),rs.getString("provider_id"),
+                    rs.getObject("payment_id",UUID.class),rs.getObject("refund_id",UUID.class),rs.getObject("payout_instruction_id",UUID.class)),original.id());
+        UUID checkout=f.jdbc.queryForObject("SELECT checkout_id FROM payment_schema.ledger_transaction WHERE id=?",UUID.class,original.id());
+        var entry=new in.craves.integration.ledger.LedgerJournal.Entry("TEST/full-reversal/"+original.id(),UUID.randomUUID(),"TEST","FULL_REVERSAL",
+                checkout,f.order,"INR",Instant.now(),"TEST isolated reversal",original.id(),"SERVICE","TEST",lines);
+        f.tx.execute(s->new LedgerPostingService(f.jdbc,f.json,true).post(entry));
+        var reversed=repository.listForChef(f.chef,100).getFirst();
+        assertEquals("REVERSED",reversed.status());assertNotNull(reversed.reversedAt());
+        assertFalse(reversed.reversedAt().isBefore(reversed.approvedAt()));
+        assertFalse(reversed.updatedAt().isBefore(reversed.reversedAt()));
+        assertEquals("0.00",summary().outstanding());assertEquals("-930.00",summary().otherLedgerMovements());
+    }
     @Test void anotherChefAndCustomerCannotReadThisChefEarnings(){
         deliver();assertTrue(repository.listForChef(UUID.randomUUID(),100).isEmpty());
         var service=new ChefFinancialService(repository);

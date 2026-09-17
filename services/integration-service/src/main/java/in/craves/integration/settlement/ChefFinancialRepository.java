@@ -63,12 +63,13 @@ public class ChefFinancialRepository {
               UNION ALL
               SELECT e.journal_id,e.chef_order_id,e.chef_identity_id,'ON_DEMAND','INR',e.gross,
                      e.service_fee+e.fee_gst,e.withholding,0,e.payable,'source-ledger/'||e.journal_id,
-                     CASE WHEN EXISTS(SELECT 1 FROM payment_schema.ledger_transaction t WHERE t.reversal_of=e.journal_id) THEN 'REVERSED'
+                     CASE WHEN reversal.id IS NOT NULL THEN 'REVERSED'
                           WHEN i.settlement_journal_id IS NOT NULL AND i.reversal_journal_id IS NULL THEN 'SETTLED'
                           WHEN i.id IS NOT NULL THEN 'SETTLEMENT_PENDING' ELSE 'APPROVED' END,
                      'Paid and delivered order. Total service fee includes fee GST. Original earnings before subsequent adjustments; not a withdrawable balance.',
-                     e.created_at,NULL,e.created_at,coalesce(i.updated_at,e.created_at)
+                     e.created_at,reversal.posted_at,e.created_at,greatest(e.created_at,i.updated_at,reversal.posted_at)
               FROM payment_schema.finance_earning_projection e
+              LEFT JOIN payment_schema.ledger_transaction reversal ON reversal.reversal_of=e.journal_id
               LEFT JOIN payment_schema.finance_payable p ON p.chef_order_id=e.chef_order_id
               LEFT JOIN payment_schema.finance_payout_allocation a ON a.payable_id=p.id AND a.active
               LEFT JOIN payment_schema.finance_payout_instruction i ON i.id=a.instruction_id

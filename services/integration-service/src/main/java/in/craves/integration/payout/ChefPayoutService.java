@@ -70,7 +70,9 @@ public class ChefPayoutService {
         BigDecimal available=sumAvailable(id,now,false);
         var accounting=in.craves.integration.settlement.ChefAccountingSummary.read(jdbc,id);
         BigDecimal allocated=jdbc.queryForObject("SELECT coalesce(sum(p.amount),0) FROM payment_schema.finance_payable p JOIN payment_schema.finance_payout_allocation a ON a.payable_id=p.id WHERE p.chef_identity_id=? AND a.active",BigDecimal.class,id);
-        return new Balance(LedgerMoney.text(held?BigDecimal.ZERO:available),accounting.outstanding(),LedgerMoney.text(allocated),held,used,
+        // Preserve the installed app's nonnegative amount-owed contract; the accounting breakdown
+        // separately exposes the signed journal balance, including any recoverable chef debt.
+        return new Balance(LedgerMoney.text(held?BigDecimal.ZERO:available),LedgerMoney.text(new BigDecimal(accounting.outstanding()).max(BigDecimal.ZERO)),LedgerMoney.text(allocated),held,used,
             date.plusDays(1).atStartOfDay(FinancePolicy.ZONE).toInstant().toString(),listForChef(id),!held && (manualMode?manual.enabled():policies.current().settings().manualWithdrawalsEnabled() && provider.ready()),manualMode?"CRAVES_MANUAL":"RAZORPAYX",
             accounting);
     }

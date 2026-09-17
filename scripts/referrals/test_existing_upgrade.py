@@ -20,7 +20,7 @@ def app_fixture():
     return {'id': target.RESOURCE, 'name': target.APP, 'identity': {'userAssignedIdentities': {target.IDENTITY: {}}},
             'properties': {'provisioningState': 'Succeeded', 'latestRevisionName': 'r1', 'latestReadyRevisionName': 'r1',
                            'managedEnvironmentId': 'existing-environment', 'configuration': {
-                               'activeRevisionsMode': 'Single', 'ingress': {'external': False, 'allowInsecure': False, 'targetPort': 8080}, 'secrets': refs},
+                               'activeRevisionsMode': 'Single', 'ingress': {'external': False, 'allowInsecure': False, 'targetPort': 8080, 'traffic': [{'latestRevision': True, 'weight': 100}]}, 'secrets': refs},
                            'template': {'containers': [{'name': 'referral-service', 'image': IMAGE, 'env': env, 'resources': {'cpu': 1, 'memory': '2Gi'}}],
                                         'scale': {'minReplicas': 1, 'maxReplicas': 1}}}}
 
@@ -63,9 +63,23 @@ class ExistingReferralUpgradeTests(unittest.TestCase):
 
     def test_ready_revision_requires_actual_health(self):
         app = app_fixture()
-        revision = {'properties': {'healthState': 'Healthy', 'runningState': 'Running'}}
-        with patch.object(target, 'show', return_value=app), patch.object(target, 'az', return_value=revision):
+        revision = {'properties': {'healthState': 'Healthy', 'runningState': 'Running', 'active': True}}
+        with patch.object(target, 'show', return_value=app), patch.object(target, 'az', side_effect=[revision, [{}]]):
             self.assertEqual('r1', target.wait_ready(IMAGE, target.fingerprint(app)))
+
+    def test_traffic_cannot_remain_on_an_old_or_split_revision(self):
+        for traffic in ([], [{'revisionName': 'old', 'weight': 100}], [{'latestRevision': True, 'weight': 50}]):
+            app = app_fixture()
+            app['properties']['configuration']['ingress']['traffic'] = traffic
+            with self.assertRaisesRegex(ValueError, 'LATEST_REVISION_TRAFFIC_REQUIRED'): target.validate_app(app)
+
+    def test_healthy_revision_still_requires_exact_replica_count(self):
+        app = app_fixture()
+        revision = {'properties': {'healthState': 'Healthy', 'runningState': 'Running', 'active': True}}
+        for replicas in ([], [{}, {}]):
+            with patch.object(target, 'show', return_value=app), patch.object(target, 'az', side_effect=[revision, replicas]):
+                with self.assertRaisesRegex(ValueError, 'EXACT_ONE_RUNNING_REPLICA_REQUIRED'):
+                    target.wait_ready(IMAGE, target.fingerprint(app))
 
     def test_never_provisions_another_app(self):
         app = app_fixture()

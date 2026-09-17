@@ -83,6 +83,8 @@ def validate_app(app):
     require(p['provisioningState'] == 'Succeeded' and p['latestRevisionName'] == p['latestReadyRevisionName'], 'APP_NOT_SETTLED')
     ingress = p['configuration']['ingress']
     require(ingress['external'] is False and ingress['allowInsecure'] is False and ingress['targetPort'] == 8080, 'PRIVATE_INGRESS_REQUIRED')
+    traffic = ingress.get('traffic', [])
+    require(len(traffic) == 1 and traffic[0].get('latestRevision') is True and traffic[0].get('weight') == 100, 'LATEST_REVISION_TRAFFIC_REQUIRED')
     require(p['configuration']['activeRevisionsMode'] == 'Single', 'SINGLE_REVISION_REQUIRED')
     scale = p['template']['scale']
     require(scale['minReplicas'] == 1 and scale['maxReplicas'] == 1, 'ONE_REPLICA_REQUIRED')
@@ -224,7 +226,9 @@ def wait_ready(image, original_fingerprint):
         if p['provisioningState'] == 'Succeeded' and p['latestRevisionName'] == p['latestReadyRevisionName']:
             require(p['template']['containers'][0]['image'] == image, 'UNEXPECTED_IMAGE')
             revision = az('containerapp', 'revision', 'show', '-g', RG, '-n', APP, '--revision', p['latestReadyRevisionName'])['properties']
-            if revision.get('healthState') == 'Healthy' and revision.get('runningState') in ('Running', 'RunningAtMaxScale'):
+            if revision.get('healthState') == 'Healthy' and revision.get('active') is True and revision.get('runningState') in ('Running', 'RunningAtMaxScale'):
+                replicas = az('containerapp', 'replica', 'list', '-g', RG, '-n', APP, '--revision', p['latestReadyRevisionName'])
+                require(isinstance(replicas, list) and len(replicas) == 1, 'EXACT_ONE_RUNNING_REPLICA_REQUIRED')
                 validate_app(app)
                 return p['latestReadyRevisionName']
         time.sleep(5)

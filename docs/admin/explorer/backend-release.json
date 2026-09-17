@@ -1,6 +1,8 @@
 {
-  "version": 1,
-  "baseline": "f06d3f64194a0754de2a173b539f46e2270819c0",
-  "source": "3a4dfa69a547a64223ec09373bfcefbd5d487131",
-  "review": "https://github.com/rmorampudi09-arch/Craves-Build-platform/pull/350"
+  "version": 2,
+  "services": {
+    "auth": {"source": "2ab2e36d30276a039121529656b8c24e6fecdd64", "deployment": 39117},
+    "user-chef": {"source": "b08766de7ca0aa6e6b5c0599556481fe67507f9d", "deployment": 39139},
+    "order": {"source": "d13cd1a4620da67413179ad53960f4e72639574c", "deployment": 39147}
+  }
 }

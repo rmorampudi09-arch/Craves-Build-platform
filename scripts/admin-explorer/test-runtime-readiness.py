@@ -80,7 +80,8 @@ class ReadinessTest(unittest.TestCase):
                 file.write_text(content)
                 file.chmod(0o700)
             env = os.environ.copy()
-            env['BACKEND_FIXTURE_SHA']=json.loads((ROOT/'docs/admin/explorer/backend-release.json').read_text())['source']
+            manifest=json.loads((ROOT/'docs/admin/explorer/backend-release.json').read_text())
+            env['BACKEND_FIXTURE_SHA']=manifest['source'] if manifest['version']==1 else manifest['services']['auth']['source']
             env.update(PATH=str(path)+os.pathsep+env['PATH'], EXPECTED_RELEASE_SHA=sha, READINESS_CASE=case, READINESS_POLICY=str(ROOT/'infra/apim/admin-explorer/authenticated-policy.xml'))
             if configure:
                 # The gateway fixture represents an already-reviewed clean checkout.

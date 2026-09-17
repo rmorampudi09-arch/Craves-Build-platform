@@ -159,6 +159,7 @@ jobs:
       - run: python3 scripts/admin-explorer/verify-source.py
       - run: python3 scripts/admin-explorer/verify-backend-release.py
       - run: python3 scripts/admin-explorer/test-backend-release.py
+      - run: python3 scripts/admin-explorer/test-backend-pinning.py
       - run: bash -n scripts/apim/configure-admin-explorer-apim.sh
       - run: bash -n scripts/admin-explorer/verify-runtime-readiness.sh
       - run: python3 scripts/admin-explorer/test-runtime-readiness.py

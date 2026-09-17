@@ -11,7 +11,7 @@ APIM="${APIM:-apim-craves-prodlow-l3ing6}"
 fail(){ echo "ERROR: $* Existing admin image preserved." >&2; exit 1; }
 [[ "${EXPECTED_RELEASE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'Exact reviewed source SHA is required.'
 [[ "$(git -C "$ROOT" rev-parse HEAD)" == "$EXPECTED_RELEASE_SHA" ]] || fail 'Readiness checkout differs from reviewed source.'
-BACKEND_RELEASE_SHA=$(python3 "$ROOT/scripts/admin-explorer/verify-backend-release.py") || fail 'Backend release provenance or explorer parity failed.'
+python3 "$ROOT/scripts/admin-explorer/verify-backend-release.py" --verify-only || fail 'Backend release provenance or source parity failed.'
 for tool in az jq curl python3; do command -v "$tool" >/dev/null || fail "$tool is required."; done
 APIM_SKU=$(az apim show -g "$RG" --name "$APIM" --query sku.name -o tsv --only-show-errors)
 [[ -n "$APIM_SKU" ]] || fail 'APIM tier could not be verified.'
@@ -73,8 +73,10 @@ if not (origin.scheme=='https' and origin.hostname in allowed and origin.path.rs
 PY
 apps=(ca-craves-auth-service-prodlow ca-craves-user-chef-service-prod ca-craves-order-service-prodlow)
 domains=(users chefs orders)
+services=(auth user-chef order)
 for i in 0 1 2; do
   app="${apps[$i]}"; domain="${domains[$i]}"
+  BACKEND_RELEASE_SHA=$(python3 "$ROOT/scripts/admin-explorer/verify-backend-release.py" --service "${services[$i]}") || fail 'Backend service release provenance failed.'
   # Backend inventory needs only health, image, replica limits and the Explorer flag.
   # Do not persist unrelated environment values (for example telemetry credentials).
   az containerapp show -g "$RG" -n "$app" --query '{properties:{latestRevisionName:properties.latestRevisionName,latestReadyRevisionName:properties.latestReadyRevisionName,runningStatus:properties.runningStatus,configuration:{activeRevisionsMode:properties.configuration.activeRevisionsMode,ingress:{fqdn:properties.configuration.ingress.fqdn}},template:{scale:properties.template.scale,containers:properties.template.containers[].{image:image,env:env[?name==`"CRAVES_ADMIN_EXPLORER_ENABLED"`].{name:name,value:value}}}}}' -o json >"$TMP/app.json"

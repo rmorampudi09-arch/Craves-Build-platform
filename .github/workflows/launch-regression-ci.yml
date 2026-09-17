@@ -84,6 +84,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     services:
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
       postgres:
         image: postgis/postgis:16-3.4
         env:
@@ -97,6 +103,7 @@ jobs:
     env:
       # Existing Explorer fixtures deliberately use postgres/postgres only in disposable CI.
       CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
+      CRAVES_DISPOSABLE_REDIS_TEST: YES_LOCAL_REDIS_ONLY
       PGHOST: localhost
       PGPORT: '5432'
       PGUSER: postgres

@@ -301,8 +301,8 @@ public class SubscriptionRepository {
             rs.getBigDecimal("amount"),
             rs.getString("currency"),
             rs.getString("status"),
-            rs.getObject("created_at", Instant.class),
-            rs.getObject("updated_at", Instant.class)
+            in.craves.subscription.config.JdbcTimes.instant(rs, "created_at"),
+            in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at")
         );
     }
 
@@ -318,8 +318,8 @@ public class SubscriptionRepository {
             rs.getObject("next_service_date", LocalDate.class),
             rs.getObject("delivery_address_id", UUID.class),
             rs.getString("notes"),
-            rs.getObject("created_at", Instant.class),
-            rs.getObject("updated_at", Instant.class)
+            in.craves.subscription.config.JdbcTimes.instant(rs, "created_at"),
+            in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at")
         );
     }
 }

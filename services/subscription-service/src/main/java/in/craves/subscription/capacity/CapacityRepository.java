@@ -632,7 +632,7 @@ public class CapacityRepository {
         return new SlotRuleRow(
             rs.getObject("id", UUID.class), rs.getObject("chef_identity_id", UUID.class), rs.getInt("iso_day_of_week"),
             rs.getString("meal_slot_code"), rs.getInt("total_capacity_units"), rs.getInt("subscription_capacity_units"),
-            rs.getBoolean("sales_enabled"), rs.getInt("version"), rs.getObject("updated_at", Instant.class)
+            rs.getBoolean("sales_enabled"), rs.getInt("version"), in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at")
         );
     }
 
@@ -640,7 +640,7 @@ public class CapacityRepository {
         return new MenuRuleRow(
             rs.getObject("id", UUID.class), rs.getObject("chef_identity_id", UUID.class), rs.getObject("menu_item_id", UUID.class),
             rs.getInt("iso_day_of_week"), rs.getString("meal_slot_code"), rs.getInt("max_subscription_units"),
-            rs.getBoolean("sales_enabled"), rs.getInt("version"), rs.getObject("updated_at", Instant.class)
+            rs.getBoolean("sales_enabled"), rs.getInt("version"), in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at")
         );
     }
 
@@ -648,7 +648,7 @@ public class CapacityRepository {
         return new DateOverrideRow(
             rs.getObject("id", UUID.class), rs.getObject("chef_identity_id", UUID.class), rs.getObject("service_date", LocalDate.class),
             rs.getString("meal_slot_code"), rs.getInt("total_capacity_units"), rs.getInt("subscription_capacity_units"),
-            rs.getBoolean("closed"), rs.getString("reason"), rs.getObject("updated_at", Instant.class)
+            rs.getBoolean("closed"), rs.getString("reason"), in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at")
         );
     }
 
@@ -656,7 +656,7 @@ public class CapacityRepository {
         return new MenuDateOverrideRow(
             rs.getObject("id", UUID.class), rs.getObject("chef_identity_id", UUID.class), rs.getObject("menu_item_id", UUID.class),
             rs.getObject("service_date", LocalDate.class), rs.getString("meal_slot_code"), rs.getInt("max_subscription_units"),
-            rs.getBoolean("closed"), rs.getString("reason"), rs.getObject("updated_at", Instant.class)
+            rs.getBoolean("closed"), rs.getString("reason"), in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at")
         );
     }
 
@@ -665,7 +665,7 @@ public class CapacityRepository {
             rs.getObject("id", UUID.class), rs.getObject("subscription_id", UUID.class), rs.getObject("chef_identity_id", UUID.class),
             rs.getString("recurrence_type"), nullableInt(rs, "iso_day_of_week"), nullableInt(rs, "day_of_month"),
             rs.getString("meal_slot_code"), rs.getObject("menu_item_id", UUID.class), rs.getInt("units"), rs.getString("status"),
-            rs.getObject("hold_expires_at", Instant.class)
+            in.craves.subscription.config.JdbcTimes.instant(rs, "hold_expires_at")
         );
     }
 
@@ -674,8 +674,8 @@ public class CapacityRepository {
             rs.getObject("id", UUID.class), rs.getObject("chef_identity_id", UUID.class), rs.getObject("service_date", LocalDate.class),
             nullableInt(rs, "iso_day_of_week"), rs.getString("meal_slot_code"), rs.getObject("menu_item_id", UUID.class),
             rs.getString("incident_type"), rs.getString("severity"), rs.getString("status"), rs.getInt("reserved_units"),
-            rs.getInt("capacity_units"), rs.getString("reason"), rs.getObject("created_at", Instant.class),
-            rs.getObject("updated_at", Instant.class), rs.getObject("resolved_at", Instant.class)
+            rs.getInt("capacity_units"), rs.getString("reason"), in.craves.subscription.config.JdbcTimes.instant(rs, "created_at"),
+            in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at"), in.craves.subscription.config.JdbcTimes.instant(rs, "resolved_at")
         );
     }
 

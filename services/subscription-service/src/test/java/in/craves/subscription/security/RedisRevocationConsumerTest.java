@@ -27,7 +27,7 @@ class RedisRevocationConsumerTest {
         when(redis.opsForValue()).thenReturn(values);
         if(outage)when(values.get(anyString())).thenThrow(new IllegalStateException("Private connection details"));
         else when(values.get(anyString())).thenReturn(projection);
-        var config=new RedisTokenRevocationWebConfiguration(redis,new ObjectMapper(),true,true,"test:revocation");
+        var config=new RedisTokenRevocationWebConfiguration(redis,new ObjectMapper(),true,"test:revocation");
         var registry=new Registry();config.addInterceptors(registry);
         return (HandlerInterceptor)registry.items().getFirst();
     }
@@ -68,4 +68,3 @@ class RedisRevocationConsumerTest {
         }
     }
 }
-

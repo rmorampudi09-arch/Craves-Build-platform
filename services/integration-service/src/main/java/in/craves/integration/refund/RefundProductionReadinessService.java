@@ -22,24 +22,26 @@ public class RefundProductionReadinessService {
     public ReadinessResponse status() {
         long executable=count("SELECT count(*) FROM payment_schema.refund WHERE provider='RAZORPAY' AND provider_refund_id IS NULL AND NOT recovery_required AND ((status='REQUESTED' AND attempt_count=0) OR (status='RETRY' AND dispatch_protocol='RAZORPAY_REFUND_IDEMPOTENCY_V1'))");
         long reconcilable=count("SELECT count(*) FROM payment_schema.refund WHERE status IN ('PENDING','ONHOLD','RETRY','PROCESSING','DEAD_LETTER') AND (NULLIF(btrim(provider_refund_id),'') IS NOT NULL OR attempt_count>0) AND consecutive_reconciliation_failures<?",refund.validatedMaxProviderAttempts());
-        long exhausted=count("SELECT count(*) FROM payment_schema.refund WHERE status IN ('PENDING','ONHOLD','RETRY','PROCESSING','DEAD_LETTER') AND consecutive_reconciliation_failures>=?",refund.validatedMaxProviderAttempts());
+        long exhausted=count("SELECT count(*) FROM payment_schema.refund WHERE status IN ('PENDING','ONHOLD','RETRY','PROCESSING','DEAD_LETTER') AND consecutive_reconciliation_failures>=? AND NOT (?='PRODUCTION' AND payment_schema.refund_verified_cashfree_sandbox(id))",refund.validatedMaxProviderAttempts(),razorpay.environment());
         long processing=count("SELECT count(*) FROM payment_schema.refund WHERE status='PROCESSING'");
         long dead=count("SELECT count(*) FROM payment_schema.refund WHERE status='DEAD_LETTER'");
         long unknown=count("""
             SELECT count(*) FROM payment_schema.refund r LEFT JOIN payment_schema.payment_order p ON p.id=r.payment_order_id
             WHERE (r.recovery_required OR (r.attempt_count>0 AND NULLIF(btrim(r.provider_refund_id),'') IS NULL AND r.dispatch_protocol IS NULL))
-              AND NOT (?='PRODUCTION' AND r.provider='RAZORPAY' AND p.provider=r.provider AND coalesce(left(p.checkout_key_id,9),'')='rzp_test_')
+              AND NOT (?='PRODUCTION' AND ((r.provider='RAZORPAY' AND p.provider=r.provider AND coalesce(left(p.checkout_key_id,9),'')='rzp_test_')
+                OR payment_schema.refund_verified_cashfree_sandbox(r.id)))
             """,razorpay.environment());
-        long historicalTest=count("SELECT count(*) FROM payment_schema.refund r JOIN payment_schema.payment_order p ON p.id=r.payment_order_id WHERE r.provider='RAZORPAY' AND p.provider=r.provider AND left(p.checkout_key_id,9)='rzp_test_'");
+        long historicalTest=count("SELECT count(*) FROM payment_schema.refund r JOIN payment_schema.payment_order p ON p.id=r.payment_order_id WHERE (r.provider='RAZORPAY' AND p.provider=r.provider AND left(p.checkout_key_id,9)='rzp_test_') OR payment_schema.refund_verified_cashfree_sandbox(r.id)");
         long actionableDead=count("""
             SELECT count(*) FROM payment_schema.refund r LEFT JOIN payment_schema.payment_order p ON p.id=r.payment_order_id
-            WHERE r.status='DEAD_LETTER' AND NOT (?='PRODUCTION' AND r.provider='RAZORPAY' AND p.provider=r.provider
-              AND coalesce(left(p.checkout_key_id,9),'')='rzp_test_')
+            WHERE r.status='DEAD_LETTER' AND NOT (?='PRODUCTION' AND ((r.provider='RAZORPAY' AND p.provider=r.provider
+              AND coalesce(left(p.checkout_key_id,9),'')='rzp_test_') OR payment_schema.refund_verified_cashfree_sandbox(r.id)))
             """,razorpay.environment());
         long modeMismatch=count("""
             SELECT count(*) FROM payment_schema.refund r LEFT JOIN payment_schema.payment_order p ON p.id=r.payment_order_id
             WHERE r.status NOT IN ('SUCCESS','FAILED','CANCELLED')
-              AND NOT (?='PRODUCTION' AND r.provider='RAZORPAY' AND p.provider=r.provider AND coalesce(left(p.checkout_key_id,9),'')='rzp_test_') AND
+              AND NOT (?='PRODUCTION' AND ((r.provider='RAZORPAY' AND p.provider=r.provider AND coalesce(left(p.checkout_key_id,9),'')='rzp_test_')
+                OR payment_schema.refund_verified_cashfree_sandbox(r.id))) AND
               (r.provider<>'RAZORPAY' OR p.id IS NULL OR p.provider IS DISTINCT FROM r.provider
                OR p.provider_payment_id IS DISTINCT FROM r.provider_payment_id OR p.provider_order_id IS DISTINCT FROM r.provider_order_id
                OR p.checkout_id IS DISTINCT FROM r.checkout_id OR p.customer_identity_id IS DISTINCT FROM r.customer_identity_id

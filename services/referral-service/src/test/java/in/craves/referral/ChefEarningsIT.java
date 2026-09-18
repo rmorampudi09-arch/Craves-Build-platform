@@ -50,10 +50,10 @@ class ChefEarningsIT {
         assertEquals(3,t.db.count("SELECT count(*) FROM referral_schema.outbox WHERE event_type='referral.chef.earning'"));
         assertFalse(service.process(order.id()));
     }
-    @Test void thresholdIsStrictAndCustomerAncestorDoesNotReceiveOrRedistribute() {
+    @Test void belowThresholdAndCustomerAncestorDoesNotReceiveOrRedistribute() {
         var a=t.member(null);var b=t.member(a);var seller=t.member(b);
         eligible(a,1,true);eligible(b,1,false);eligible(seller,1,true);
-        assertFalse(service.process(order(seller,25000).id()));
+        assertFalse(service.process(order(seller,24999).id()));
         var order=order(seller,30000);assertTrue(service.process(order.id()));
         assertEquals(1,t.db.count("SELECT count(*) FROM referral_schema.chef_reward"));
         assertEquals(360,t.db.count("SELECT amount_paise FROM referral_schema.chef_reward"));
@@ -183,4 +183,35 @@ class ChefEarningsIT {
         t.refund(order,1,30000,true);assertTrue(service.process(order.id(),false));assertEquals(0,credited(a.id()));
         assertFalse(service.process(order.id(),false));
     }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(longs = {25000, 25001})
+    void minimumBoundaryCreditsChefEarningsExactlyOnce(long food) {
+        var a=t.member(null); var b=t.member(a); var c=t.member(b); var seller=t.member(c);
+        var members=List.of(a,b,c,seller);
+        members.forEach(m->eligible(m,1,true));
+        var order=order(seller,food);
+        assertTrue(service.process(order.id()));
+        assertEquals(3,t.db.count("SELECT count(*) FROM referral_schema.chef_reward"));
+        assertEquals(0,credited(a.id())+credited(b.id())+credited(c.id()));
+        due(order,members);
+        assertTrue(service.process(order.id()));
+        assertFalse(service.process(order.id()));
+        assertEquals(500,credited(c.id()));
+        assertEquals(300,credited(b.id()));
+        assertEquals(200,credited(a.id()));
+        assertEquals(0,credited(seller.id()));
+        assertEquals(0,t.db.count("SELECT count(*) FROM referral_schema.journal"));
+        assertEquals(3,t.db.count("SELECT count(*) FROM referral_schema.outbox WHERE event_type='referral.chef.earning'"));
+    }
+    @Test void databaseGuardStillRejectsOnePaiseBelowMinimum() {
+        var parent=t.member(null); var seller=t.member(parent);
+        var order=order(seller,24999);
+        long policy=t.db.count("SELECT policy_id FROM referral_schema.checkout WHERE checkout_id=?",order.checkout());
+        var error=assertThrows(org.springframework.dao.DataAccessException.class,()->
+            t.db.update("INSERT INTO referral_schema.chef_reward(id,order_id,beneficiary_id,level,amount_paise,eligible_at,policy_id,created_at) VALUES (?,?,?,1,500,?,?,?)",
+                UUID.randomUUID(),order.id(),parent.id(),time(t.clock.instant().plusSeconds(86400)),policy,time(t.clock.instant())));
+        assertTrue(error.getMostSpecificCause().getMessage().contains("INVALID_CHEF_REWARD_SOURCE"));
+        assertEquals(0,t.db.count("SELECT count(*) FROM referral_schema.chef_reward"));
+    }
+
 }

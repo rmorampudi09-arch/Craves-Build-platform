@@ -23,7 +23,7 @@ for folder, minimum in [('surefire-reports', 18), ('failsafe-reports', 39)]:
     for suite in suites:
         assert all(int(suite.attrib.get(key, '0')) == 0 for key in ['failures', 'errors', 'skipped']), suite.attrib
         suite_counts[suite.attrib['name']] = int(suite.attrib['tests'])
-for name, minimum in [('ChefReferralPolicyTest', 10), ('ChefEarningsIT', 14), ('RewardMathTest', 7), ('BoundaryValidationTest', 6), ('ReferralResilienceIT', 10), ('ReferralHttpContractIT', 6)]:
+for name, minimum in [('ChefReferralPolicyTest', 10), ('ChefEarningsIT', 17), ('ChefMinimumMigrationIT', 1), ('RewardMathTest', 7), ('BoundaryValidationTest', 6), ('ReferralResilienceIT', 10), ('ReferralHttpContractIT', 6)]:
     assert suite_counts.get('in.craves.referral.' + name, 0) >= minimum, f'Hardening suite did not execute: {name}'
 
 fixtures = {}
@@ -56,6 +56,7 @@ with zipfile.ZipFile(jar_path) as archive:
         'V6__deferred_reward_reconciliation.sql', 'V7__finance_journal_transport.sql',
         'V8__discount_refund_evidence.sql', 'V9__chef_commission_earnings.sql',
         'V10__chef_monthly_hard_cap.sql',
+        'V11__inclusive_chef_referral_minimum.sql',
     }
     assert {p.name for p in migrations} == expected_migrations, 'Unexpected referral migration set'
     for migration in migrations:

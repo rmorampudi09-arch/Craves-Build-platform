@@ -38,10 +38,12 @@ class ManualSettlementMigrationDatabaseTest {
     void upgrade() {
         Flyway flyway=Flyway.configure().dataSource(ds).defaultSchema("payment_schema").schemas("payment_schema").locations("classpath:db/migration").load();
         assertEquals("133",flyway.info().current().getVersion().getVersion());
-        assertEquals(List.of("134","136","137","138","139","140","141","142","143","144","145"),Arrays.stream(flyway.info().pending()).map(m->m.getVersion().getVersion()).toList(),
+        assertEquals(List.of("134","136","137","138","139","140","141","142","143","144","145","146"),Arrays.stream(flyway.info().pending()).map(m->m.getVersion().getVersion()).toList(),
                 "The combined release must test every exact source migration; this checkout has no V135");
-        assertEquals(11,flyway.migrate().migrationsExecuted);
-        assertEquals("145",flyway.info().current().getVersion().getVersion());
+        assertEquals(12,flyway.migrate().migrationsExecuted);
+        assertEquals("146",flyway.info().current().getVersion().getVersion());
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM payment_schema.refund_sandbox_context_review",Integer.class),
+                "New review storage must not classify or release any existing financial record");
         flyway.validate();
         assertEquals(0,flyway.migrate().migrationsExecuted,"Validated release migrations must be safe to replay");
     }

@@ -1,4 +1,4 @@
-"""Actual seven-path Cashfree follow-up predicate; no network or Azure writes."""
+"""Actual eight-path Cashfree follow-up predicate; no network or Azure writes."""
 import ast
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,7 +22,7 @@ class CashfreeSandboxScopeTest(unittest.TestCase):
   return self.scope['reviewed_cashfree_sandbox_scope']()
  def test_exact_named_paths_pass(self):
   self.assertTrue(self.check())
-  self.assertEqual(len(self.rows),7)
+  self.assertEqual(len(self.rows),8)
   self.process.check_output.assert_called_once_with(['git','diff','--name-status','--no-renames',self.scope['SANDBOX_BASE'],'HEAD'],text=True)
  def test_no_workflow_or_runtime_script_change_allowed(self):
   for path in ('.github/workflows/launch-regression-ci.yml','azure-pipelines-email-readiness-status.yml'):

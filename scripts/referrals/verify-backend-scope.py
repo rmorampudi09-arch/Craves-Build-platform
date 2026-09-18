@@ -78,6 +78,7 @@ SANDBOX_REQUIRED={
  'services/integration-service/src/main/java/in/craves/integration/refund/RefundProductionReadinessService.java':'M',
  'services/integration-service/src/main/resources/db/migration/V146__verified_cashfree_sandbox_context.sql':'A',
  'services/integration-service/src/test/java/in/craves/integration/refund/RefundSandboxContextDatabaseTest.java':'A',
+ 'services/integration-service/src/test/java/in/craves/integration/refund/RefundMigrationDatabaseTest.java':'M',
  'scripts/launch/test_cashfree_sandbox_scope.py':'A',
 }
 SANDBOX_OPTIONAL={'scripts/referrals/verify-backend-scope.py':'M'}

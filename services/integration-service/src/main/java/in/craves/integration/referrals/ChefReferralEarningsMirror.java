@@ -56,7 +56,7 @@ public final class ChefReferralEarningsMirror {
             long used=count("SELECT coalesce(sum(amount_paise),0) FROM payment_schema.chef_referral_posting WHERE chef_order_id=?",order);
             long commission=((BigDecimal)source.getFirst().get("service_fee")).movePointRight(2).longValueExact();
             long food=((BigDecimal)source.getFirst().get("food")).movePointRight(2).longValueExact();
-            if(food<=25000 || used+amount>commission || used+amount>BigDecimal.valueOf(food).multiply(new BigDecimal("0.04")).longValue())
+            if(food<25000 || used+amount>commission || used+amount>BigDecimal.valueOf(food).multiply(new BigDecimal("0.04")).longValue())
                 throw new IllegalStateException("CHEF_REFERRAL_COMMISSION_EXCEEDED");
             long monthly=count("SELECT coalesce(sum(amount_paise),0) FROM payment_schema.chef_referral_posting WHERE beneficiary_id=? AND posting_month=?",owner,Date.valueOf(month));
             if(monthly+amount>150000) throw new IllegalStateException("CHEF_REFERRAL_MONTHLY_CAP_EXCEEDED");

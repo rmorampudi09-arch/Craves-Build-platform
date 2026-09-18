@@ -12,10 +12,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class ChefReferralPolicyTest {
     private static final boolean[] CHEFS = {true, true, true};
 
-    @Test void strictlyAbove250AndUsesTheWholeChefFoodSubtotal() {
-        assertFalse(ChefReferralPolicy.qualifies(25_000));
+    @Test void atLeast250AndUsesTheWholeChefFoodSubtotal() {
+        assertFalse(ChefReferralPolicy.qualifies(24_999));
+        assertTrue(ChefReferralPolicy.qualifies(25_000));
         assertTrue(ChefReferralPolicy.qualifies(25_001));
-        assertArrayEquals(new long[3], ChefReferralPolicy.allocate(25_000, true, CHEFS));
+        assertArrayEquals(new long[3], ChefReferralPolicy.allocate(24_999, true, CHEFS));
+        assertArrayEquals(new long[]{500,300,200}, ChefReferralPolicy.allocate(25_000, true, CHEFS));
+        assertArrayEquals(new long[]{500,300,200}, ChefReferralPolicy.allocate(25_001, true, CHEFS));
         assertArrayEquals(new long[]{600,360,240}, ChefReferralPolicy.allocate(15_000 + 15_000, true, CHEFS));
     }
     @Test void customerOrIneligibleChefCannotEarnAndMissingLevelsDoNotRollUp() {
@@ -31,7 +34,7 @@ class ChefReferralPolicyTest {
     @Test void preservesConfirmedRoundingAndNeverExceedsFourPercent() {
         Random random = new Random(20260916);
         for (int i=0; i<20_000; i++) {
-            long basis = random.nextLong(25_001, 1_000_000_000_001L);
+            long basis = random.nextLong(25_000, 1_000_000_000_001L);
             long[] reward = ChefReferralPolicy.allocate(basis, true, CHEFS);
             assertTrue(Arrays.stream(reward).sum() <= RewardMath.floorBps(basis, 400));
             assertTrue(reward[0] <= RewardMath.roundBps(basis, 200));

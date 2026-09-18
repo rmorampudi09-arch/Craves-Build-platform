@@ -120,4 +120,35 @@ class ChefReferralEarningsDatabaseTest {
         assertTrue(worker.applyOne());assertEquals(0,balance(recipient).signum());assertHeld();
         assertEquals(2,f.jdbc.queryForObject("SELECT count(*) FROM payment_schema.referral_consumer_inbox WHERE status='APPLIED'",Integer.class));
     }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"249.99,false", "250.00,true", "250.01,true"})
+    void minimumBoundaryReachesChefPayableWithoutChangingSeller(String food,boolean accepted) {
+        // Rebuild only the explicitly disposable fixture with the tested food amount.
+        f=new OrderFinancialFinalizationDatabaseTest() {
+            @Override OrderFinancialQuoteService.OrderInput input(UUID id,UUID owner) {
+                return new OrderFinancialQuoteService.OrderInput(id,owner,UUID.randomUUID(),"36","36","39.00",
+                    List.of(new OrderFinancialQuoteService.Item(UUID.randomUUID(),1,food,food)));
+            }
+        };
+        f.setup();
+        f.payment(f.quote.total(),"PAID",f.customer);
+        f.accept(f.event(f.snapshot,"DELIVERED"));
+        mirror=new ChefReferralEarningsMirror(f.jdbc,new LedgerPostingService(f.jdbc,f.json,true));
+        var body=credit().put("amountPaise","500");
+        BigDecimal sellerBefore=balance(f.chef);
+        if(accepted) {
+            apply(body); apply(body);
+            assertEquals(0,new BigDecimal("5.00").compareTo(balance(recipient)));
+            assertEquals(1,f.count("chef_referral_posting"));
+        } else {
+            var error=assertThrows(IllegalStateException.class,()->apply(body));
+            assertEquals("CHEF_REFERRAL_COMMISSION_EXCEEDED",error.getMessage());
+            assertEquals(0,balance(recipient).signum());
+            assertEquals(0,f.count("chef_referral_posting"));
+        }
+        assertEquals(sellerBefore,balance(f.chef));
+        assertEquals(0,f.count("referral_journal_projection"));
+        assertEquals(0,f.jdbc.queryForObject("SELECT sum(debit_amount-credit_amount) FROM payment_schema.ledger_line",BigDecimal.class).signum());
+    }
+
 }

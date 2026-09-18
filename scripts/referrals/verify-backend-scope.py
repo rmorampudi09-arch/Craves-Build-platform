@@ -92,6 +92,27 @@ def reviewed_cashfree_sandbox_scope():
  return (all(actual.get(path)==state for path,state in SANDBOX_REQUIRED.items())
          and all(allowed.get(path)==state for path,state in actual.items()))
 
+
+# Exact reviewed INR 250 boundary follow-up; no old migration or workflow edits.
+CHEF_MINIMUM_BASE='eac22369594b441a1ee3545d1706b70d4e494f29'
+CHEF_MINIMUM_REQUIRED={'scripts/launch/test_chef_minimum_scope.py': 'A', 'scripts/referrals/require-backend-evidence.py': 'M', 'scripts/referrals/verify-backend-scope.py': 'M', 'scripts/referrals/verify-build.py': 'M', 'services/integration-service/src/main/java/in/craves/integration/referrals/ChefReferralEarningsMirror.java': 'M', 'services/integration-service/src/test/java/in/craves/integration/finance/source/ChefReferralEarningsDatabaseTest.java': 'M', 'services/referral-service/src/main/java/in/craves/referral/core/ChefReferralPolicy.java': 'M', 'services/referral-service/src/main/resources/db/referral_migration/V11__inclusive_chef_referral_minimum.sql': 'A', 'services/referral-service/src/test/java/in/craves/referral/ChefEarningsIT.java': 'M', 'services/referral-service/src/test/java/in/craves/referral/ChefMinimumMigrationIT.java': 'A', 'services/referral-service/src/test/java/in/craves/referral/ChefReferralPolicyTest.java': 'M'}
+
+def reviewed_chef_minimum_scope():
+ if subprocess.run(['git','merge-base','--is-ancestor',CHEF_MINIMUM_BASE,'HEAD'],capture_output=True).returncode!=0:
+  return False
+ rows=subprocess.check_output(['git','diff','--name-status','--no-renames',CHEF_MINIMUM_BASE,'HEAD'],text=True).splitlines()
+ actual={}
+ for row in rows:
+  parts=row.split('\t')
+  if len(parts)!=2 or parts[1] in actual:return False
+  actual[parts[1]]=parts[0]
+ return actual==CHEF_MINIMUM_REQUIRED
+
+if reviewed_chef_minimum_scope():
+ subprocess.run(['python3','scripts/launch/test_chef_minimum_scope.py'],check=True)
+ print('PASS: exact chef minimum boundary scope; full backend compatibility tests still required')
+ raise SystemExit(0)
+
 if subprocess.run(['git','merge-base','--is-ancestor',ACCEPTED,'HEAD'],capture_output=True).returncode==0:
  protected = sorted({p for p in MODIFIED|EXACT if p.startswith('services/')} |
                     {p for p in ADDED if p.startswith('services/')})

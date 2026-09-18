@@ -24,7 +24,7 @@ public final class ChefReferralPolicy {
 
     public static boolean qualifies(long chefFoodSubtotalPaise) {
         RewardMath.money(chefFoodSubtotalPaise);
-        return chefFoodSubtotalPaise > THRESHOLD_PAISE;
+        return chefFoodSubtotalPaise >= THRESHOLD_PAISE;
     }
 
     /** Eligibility must come from the authoritative chef service, never client-supplied roles. */

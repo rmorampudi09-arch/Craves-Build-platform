@@ -69,6 +69,32 @@ def reviewed_subscription_recovery_scope():
  return (all(actual.get(path)==state for path,state in FOLLOWUP_REQUIRED.items())
          and all(allowed.get(path)==state for path,state in actual.items()))
 
+# PR392 changes the shared refund exposure guard after the accepted PR391.
+# Require this exact additive correction and its tests; never permit unrelated
+# workflow changes, old migration edits, or arbitrary changes under services/.
+SANDBOX_BASE='fe38b10ba0b4bb13d6e893bab962b5b52976b3d2'
+SANDBOX_REQUIRED={
+ 'services/integration-service/src/main/java/in/craves/integration/refund/RefundRepository.java':'M',
+ 'services/integration-service/src/main/java/in/craves/integration/refund/RefundProductionReadinessService.java':'M',
+ 'services/integration-service/src/main/resources/db/migration/V146__verified_cashfree_sandbox_context.sql':'A',
+ 'services/integration-service/src/test/java/in/craves/integration/refund/RefundSandboxContextDatabaseTest.java':'A',
+ 'scripts/launch/test_cashfree_sandbox_scope.py':'A',
+}
+SANDBOX_OPTIONAL={'scripts/referrals/verify-backend-scope.py':'M'}
+
+def reviewed_cashfree_sandbox_scope():
+ if subprocess.run(['git','merge-base','--is-ancestor',SANDBOX_BASE,'HEAD'],capture_output=True).returncode!=0:
+  return False
+ rows=subprocess.check_output(['git','diff','--name-status','--no-renames',SANDBOX_BASE,'HEAD'],text=True).splitlines()
+ actual={}
+ for row in rows:
+  parts=row.split('\t')
+  if len(parts)!=2 or parts[1] in actual:return False
+  actual[parts[1]]=parts[0]
+ allowed={**SANDBOX_REQUIRED,**SANDBOX_OPTIONAL}
+ return (all(actual.get(path)==state for path,state in SANDBOX_REQUIRED.items())
+         and all(allowed.get(path)==state for path,state in actual.items()))
+
 if subprocess.run(['git','merge-base','--is-ancestor',ACCEPTED,'HEAD'],capture_output=True).returncode==0:
  protected = sorted({p for p in MODIFIED|EXACT if p.startswith('services/')} |
                     {p for p in ADDED if p.startswith('services/')})
@@ -78,6 +104,9 @@ if subprocess.run(['git','merge-base','--is-ancestor',ACCEPTED,'HEAD'],capture_o
   raise SystemExit(0)
  if reviewed_subscription_recovery_scope():
   print('PASS: exact named subscription recovery follow-up scope; full referral compatibility tests still required')
+  raise SystemExit(0)
+ if reviewed_cashfree_sandbox_scope():
+  print('PASS: exact named Cashfree sandbox follow-up scope; full referral compatibility tests still required')
   raise SystemExit(0)
 subprocess.run(['git','merge-base','--is-ancestor',BASE,'HEAD'],check=True)
 lines=subprocess.check_output(['git','diff','--name-status','--no-renames',BASE,'HEAD'],text=True).splitlines()

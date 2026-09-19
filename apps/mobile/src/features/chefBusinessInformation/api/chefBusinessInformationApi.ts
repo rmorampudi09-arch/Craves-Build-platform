@@ -33,6 +33,12 @@ export const CHEF_PROOF_FILES_ROUTE =
   '/api/v1/chef/application/proof-files' as const;
 export const CHEF_APPLICATION_EVIDENCE_ROUTE =
   '/api/v1/chef/application?evidence=true' as const;
+
+export interface ChefProofUploadFile {
+  uri: string;
+  name: string;
+  type: 'image/jpeg' | 'image/png';
+}
 export type ChefBusinessDocumentStatus =
   | 'UPLOADED'
   | 'APPROVED'
@@ -421,15 +427,34 @@ export const chefBusinessInformationApi = {
 
   async uploadProofFile(
     documentType: ChefRequiredApplicationDocumentType,
-    formData: FormData,
+    file: ChefProofUploadFile,
     signal?: AbortSignal,
   ): Promise<ChefBusinessProofDocument> {
     const allowed = new Set<string>(CHEF_REQUIRED_APPLICATION_DOCUMENT_TYPES);
     if (!allowed.has(documentType)) {
       throw new Error('Unsupported Chef application document type.');
     }
+    if (
+      !file.uri ||
+      !file.name.trim() ||
+      (file.type !== 'image/jpeg' && file.type !== 'image/png')
+    ) {
+      throw new Error('Unsupported Chef proof file.');
+    }
+
+    const formData = new FormData();
+    formData.append('documentType', documentType);
+    formData.append(
+      'file',
+      {
+        uri: file.uri,
+        name: file.name.trim(),
+        type: file.type,
+      } as unknown as Blob,
+    );
+
     const response = await httpClient.post<unknown>(
-      `${CHEF_PROOF_FILES_ROUTE}?documentType=${encodeURIComponent(documentType)}`,
+      CHEF_PROOF_FILES_ROUTE,
       formData,
       {signal},
     );

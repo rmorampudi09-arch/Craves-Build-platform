@@ -77,7 +77,9 @@ export function useChefKitchenScheduleModel() {
     },
     onSuccess: schedule => {
       queryClient.setQueryData<ChefKitchenSchedule>(queryKey, schedule);
-      void availabilityQuery.refetch();
+      if (PUBLIC_KITCHEN_AVAILABILITY_AVAILABLE) {
+        void availabilityQuery.refetch();
+      }
     },
   });
 
@@ -95,10 +97,11 @@ export function useChefKitchenScheduleModel() {
       updateMutation.isPending,
     isSaving: updateMutation.isPending,
     refresh: async () => {
-      await Promise.allSettled([
-        scheduleQuery.refetch(),
-        availabilityQuery.refetch(),
-      ]);
+      const requests: Promise<unknown>[] = [scheduleQuery.refetch()];
+      if (PUBLIC_KITCHEN_AVAILABILITY_AVAILABLE) {
+        requests.push(availabilityQuery.refetch());
+      }
+      await Promise.allSettled(requests);
     },
     setAcceptingOrders: async (acceptingOrders: boolean) => {
       const current = scheduleQuery.data;

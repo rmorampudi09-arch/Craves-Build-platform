@@ -15,7 +15,6 @@ import { AnimateCount } from "@/components/ui/AnimateCount";
 import { rememberReturnRoute, toCustomerReturnRoute } from "@/lib/return-navigation";
 import type { HomeFoodPreference } from "@/lib/home-return-state";
 import type { CravesUser } from "@/services/auth/cravesAuth";
-import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 interface BrowseHeaderProps {
   user?: CravesUser;
@@ -142,7 +141,7 @@ export function BrowseHeader({
               onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search homemade dishes or kitchens"
-              className={`${styles.searchInput} w-full p-0 text-sm font-semibold text-[#1A1A1A] placeholder:text-[#6B6B6B]`}
+              className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"
               inputMode="search"
               autoComplete="off"
@@ -197,7 +196,7 @@ export function BrowseHeader({
               onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search homemade dishes or kitchens"
-              className={`${styles.searchInput} w-full p-0 text-sm font-semibold text-[#1A1A1A] placeholder:text-[#6B6B6B]`}
+              className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"
               inputMode="search"
               autoComplete="off"

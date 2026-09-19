@@ -17,6 +17,7 @@ import {
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {ChefHeader} from '../../chefShell/components/ChefHeader';
+import {ChefBankOnboardingPanel} from '../../chefBankOnboarding/components/ChefBankOnboardingPanel';
 import {ChefEarningsLedgerList} from '../components/ChefEarningsLedgerList';
 import {ChefFinanceBalancePanel} from '../components/ChefFinanceBalancePanel';
 import {
@@ -134,6 +135,7 @@ export function ChefPayoutHistoryScreen() {
         {viewState.selectedTab === 'overview' ? (
           <>
             <ChefFinanceBalancePanel />
+            <ChefBankOnboardingPanel />
 
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeadingRow}>

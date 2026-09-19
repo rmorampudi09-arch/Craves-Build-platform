@@ -1,6 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
-import {uuid} from 'expo-modules-core';
 import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {InputField} from '../../../shared/components/InputField';
@@ -12,6 +11,14 @@ type Props = {
   disabled?: boolean;
   onVerified?: (email: string) => void;
 };
+
+function createRequestId(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, token => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = token === 'x' ? value : (value & 0x3) | 0x8;
+    return nibble.toString(16);
+  });
+}
 
 export function EmailVerificationPanel({email, disabled = false, onVerified}: Props) {
   const mounted = useRef(true);
@@ -34,11 +41,11 @@ export function EmailVerificationPanel({email, disabled = false, onVerified}: Pr
     try {
       let next: EmailVerificationState;
       if (action === 'issue') {
-        next = await emailVerificationApi.issue(email, uuid.v4());
+        next = await emailVerificationApi.issue(email, createRequestId());
       } else if (action === 'verify' && state?.pending) {
         next = await emailVerificationApi.verify(state.pending.challengeId, code);
       } else if (action === 'resend' && state?.pending) {
-        next = await emailVerificationApi.resend(state.pending.challengeId, uuid.v4());
+        next = await emailVerificationApi.resend(state.pending.challengeId, createRequestId());
       } else {
         next = await emailVerificationApi.read();
       }

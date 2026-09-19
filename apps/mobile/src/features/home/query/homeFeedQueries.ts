@@ -51,7 +51,6 @@ function normalizeOptionalFilter(value: string | null | undefined): string | nul
 export function getHomeFeedContractBlocker(
   filters: HomeFeedFilters = {},
 ): string | null {
-  const category = normalizeOptionalFilter(filters.category);
   const cuisine = normalizeOptionalFilter(filters.cuisine);
 
   if (cuisine) {

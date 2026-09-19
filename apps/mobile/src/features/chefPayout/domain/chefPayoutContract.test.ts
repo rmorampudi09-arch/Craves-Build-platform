@@ -3,6 +3,7 @@ import {
   CHEF_FINANCE_BALANCE_ROUTE,
   CHEF_WITHDRAWALS_ROUTE,
 } from '../api/chefPayoutApi';
+import {CHEF_BANK_ROUTE} from '../../chefBankOnboarding/api/chefBankOnboardingApi';
 import {
   CHEF_PAYOUT_CONTRACT_MODEL,
   getChefWithdrawEligibilityBoundary,
@@ -39,9 +40,11 @@ describe('chef payout contract boundary', () => {
     expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.payoutSeries.availability).toBe(
       'unavailable',
     );
-    expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.bankDestination.availability).toBe(
-      'unavailable',
-    );
+    expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.bankDestination).toMatchObject({
+      availability: 'available',
+      method: 'GET',
+      path: CHEF_BANK_ROUTE,
+    });
     expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.transactionDetail.availability).toBe(
       'unavailable',
     );

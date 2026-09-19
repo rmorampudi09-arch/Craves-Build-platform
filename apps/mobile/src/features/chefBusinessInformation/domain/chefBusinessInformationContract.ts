@@ -89,10 +89,11 @@ export const CHEF_BUSINESS_INFORMATION_CAPABILITIES = {
   cuisines: unavailable(
     'No approved Chef cuisine/specialty taxonomy or Chef read/write contract was found in the current backend/APIM surface.',
   ),
-  payoutSetupStatus: unavailable(
-    'No approved Chef payout-configuration, bank-destination, or payout-setup-status contract was found. The existing earnings ledger is financial history/reconciliation data and must not be reclassified as payout setup.',
-    'GET /api/v1/chef/earnings is not a payout configuration contract.',
-  ),
+  payoutSetupStatus: supported('chefBankOnboarding', [
+    'GET /api/v1/chef-onboarding/bank returns only the authenticated applicant’s masked bank enrollment state.',
+    'POST /api/v1/chef-onboarding/bank creates or versions bank details using stable request identity, current-version comparison and explicit Razorpay validation consent.',
+    'Full account numbers are write-only and never returned by the public status model.',
+  ]),
 } as const satisfies Record<
   ChefBusinessInformationCapabilityKey,
   ChefBusinessInformationCapability
@@ -134,6 +135,31 @@ export const CHEF_BUSINESS_INFORMATION_SOURCES = {
     limitations: [
       'Application status is not a per-document validity/expiry state.',
       'Response storage locators and reviewer identity are not required by the mobile Business Information surface and are excluded from its safe model.',
+    ],
+  },
+  chefBankOnboardingRead: {
+    availability: 'source-only',
+    method: 'GET',
+    path: '/api/v1/chef-onboarding/bank',
+    request: 'none',
+    response: 'BankStatus',
+    purpose: 'Masked Chef-owned payout bank enrollment status and automatic-validation readiness.',
+    limitations: [
+      'Returns only lastFour and IFSC; full account numbers are never returned.',
+      'Bank validation does not replace Chef application approval or independent finance holds.',
+    ],
+  },
+  chefBankOnboardingWrite: {
+    availability: 'source-only',
+    method: 'POST',
+    path: '/api/v1/chef-onboarding/bank',
+    request: 'BankSubmission',
+    response: 'BankStatus',
+    purpose: 'Consent-bound encrypted Chef bank enrollment or bank-account version change.',
+    limitations: [
+      'Requires a submitted PENDING or APPROVED Chef application with matching saved applicant name.',
+      'Existing unresolved payouts block account changes.',
+      'Provider validation and payout execution remain asynchronous backend-owned processes.',
     ],
   },
   chefProofFileUpload: {

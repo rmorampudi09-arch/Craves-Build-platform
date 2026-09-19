@@ -5,6 +5,7 @@ const UUID_PATTERN =
 const CODE_PATTERN = /^[2-9A-HJ-NP-Z]{16}$/;
 const PAISE_PATTERN = /^-?[0-9]{1,13}$/;
 const NON_NEGATIVE_PAISE_PATTERN = /^[0-9]{1,13}$/;
+const INTEGER_STRING_PATTERN = /^[0-9]{1,19}$/;
 const CURSOR_PATTERN = /^[A-Za-z0-9_-]{1,180}$/;
 
 export const REFERRAL_OVERVIEW_ROUTE = '/api/v1/referrals/me' as const;
@@ -209,7 +210,10 @@ function parseDownline(value: unknown): ReferralDownlineLevel | null {
   const raw = asRecord(value);
   if (!raw || !exactKeys(raw, DOWNLINE_KEYS)) return null;
   const level = smallInteger(raw.level, 1, 3) as 1 | 2 | 3 | null;
-  const members = paise(raw.members);
+  const members =
+    typeof raw.members === 'string' && INTEGER_STRING_PATTERN.test(raw.members)
+      ? raw.members
+      : null;
   return level && members !== null ? {level, members} : null;
 }
 
@@ -240,7 +244,10 @@ function parsePolicy(value: unknown): ReferralPolicy | null | undefined {
   const raw = asRecord(value);
   if (!raw || !exactKeys(raw, POLICY_KEYS)) return undefined;
 
-  const revision = paise(raw.revision);
+  const revision =
+    typeof raw.revision === 'string' && INTEGER_STRING_PATTERN.test(raw.revision)
+      ? raw.revision
+      : null;
   const minimumPaise = paise(raw.minimumPaise);
   const customerBonusPaise = paise(raw.customerBonusPaise);
   const inviteeDiscountPaise = paise(raw.inviteeDiscountPaise);
@@ -458,11 +465,12 @@ export const referralRewardsApi = {
       throw new Error('REFERRAL_INVALID_PAGE_CURSOR');
     }
 
-    const query = new URLSearchParams({limit: String(limit)});
-    if (cursor) query.set('cursor', cursor);
+    const query = cursor
+      ? `limit=${limit}&cursor=${encodeURIComponent(cursor)}`
+      : `limit=${limit}`;
     return requireRewardPage(
       await httpClient.get<unknown>(
-        `${REFERRAL_REWARDS_ROUTE}?${query.toString()}`,
+        `${REFERRAL_REWARDS_ROUTE}?${query}`,
         {
           signal,
           dedupeKey: `referral-rewards:${limit}:${cursor ?? 'first'}`,

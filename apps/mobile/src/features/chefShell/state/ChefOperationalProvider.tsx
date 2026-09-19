@@ -486,6 +486,7 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       v2NotificationsQuery.isFetching,
       v2NotificationsQuery.isFetchingNextPage,
       v2NotificationsQuery.isPending,
+      v2NotificationsQuery,
     ],
   );
 

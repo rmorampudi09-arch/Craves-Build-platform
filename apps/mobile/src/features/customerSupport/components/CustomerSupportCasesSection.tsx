@@ -214,7 +214,7 @@ export function CustomerSupportCasesSection({
             accessibilityRole="button"
             accessibilityLabel="Submit support case"
             disabled={creating}
-            onPress={() => void submitCase()}
+            onPress={() => { submitCase().catch(() => undefined); }}
             style={({pressed}) => [
               styles.primaryButton,
               (pressed || creating) && styles.pressed,
@@ -244,7 +244,7 @@ export function CustomerSupportCasesSection({
           <Text style={styles.errorText}>{listError}</Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => void loadCases()}
+            onPress={() => { loadCases().catch(() => undefined); }}
             style={({pressed}) => [
               styles.secondaryButton,
               pressed && styles.pressed,
@@ -269,7 +269,7 @@ export function CustomerSupportCasesSection({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Open support case ${entry.caseNumber}`}
-                  onPress={() => void openCase(entry)}
+                  onPress={() => { openCase(entry).catch(() => undefined); }}
                   style={({pressed}) => [
                     styles.caseCard,
                     selected && styles.caseCardSelected,
@@ -342,7 +342,7 @@ export function CustomerSupportCasesSection({
                           accessibilityRole="button"
                           accessibilityLabel="Send support case reply"
                           disabled={replying}
-                          onPress={() => void sendReply()}
+                          onPress={() => { sendReply().catch(() => undefined); }}
                           style={({pressed}) => [
                             styles.secondaryButton,
                             (pressed || replying) && styles.pressed,

@@ -343,10 +343,11 @@ export function AddressEditorFlow({
           latitude: String(latitude),
           longitude: String(longitude),
         }));
+        setResolvedAddress("");
         setMessage(
           error instanceof Error
-            ? error.message
-            : "Craves could not identify this map point.",
+            ? `${error.message} Move the pin again or choose another location before continuing.`
+            : "Craves could not identify this map point. Move the pin again or choose another location before continuing.",
         );
       }
     } finally {
@@ -532,13 +533,13 @@ export function AddressEditorFlow({
             >
               {title}
             </Dialog.Title>
-            <p className="mt-1 text-xs font-medium leading-5 text-[#6B6B6B] md:text-sm">
+            <Dialog.Description className="mt-1 text-xs font-medium leading-5 text-[#6B6B6B] md:text-sm">
               {step === "choose"
                 ? "Choose a delivery point first. Craves keeps the exact coordinates in the background."
                 : step === "map"
                   ? "Move the map if needed, then confirm the exact delivery point."
                   : "Add only the details a map cannot reliably know."}
-            </p>
+            </Dialog.Description>
           </div>
 
           <button
@@ -846,7 +847,7 @@ export function AddressEditorFlow({
           <div className="border-t border-[#F1F3F5] bg-white px-5 py-4 md:px-7">
             <button
               type="button"
-              disabled={!point || busy || mapResolving}
+              disabled={!point || busy || mapResolving || !resolvedAddress}
               onClick={() => setStep("details")}
               className="min-h-12 w-full rounded-xl bg-[#F62E18] px-4 text-sm font-black text-white hover:bg-[#C92716] disabled:cursor-not-allowed disabled:opacity-50"
             >

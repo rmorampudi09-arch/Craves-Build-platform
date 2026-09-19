@@ -14,6 +14,7 @@ import type {
   ChefTabRouteName,
 } from '../../../app/navigation/types';
 import {useAppSelector} from '../../../app/store/hooks';
+import {toAppApiError} from '../../../core/http/apiError';
 import {
   colors,
   elevation,
@@ -27,6 +28,7 @@ import {Icon, type IconName} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
 import {ChefHeader} from '../../chefShell/components/ChefHeader';
+import {useChefReviewPreview} from '../../reviews/query/useChefReviewPreview';
 import {
   CHEF_DASHBOARD_SALES_RANGES,
   formatChefDashboardOrderStatus,
@@ -137,12 +139,22 @@ function ActiveOrderRow({
   );
 }
 
+function formatReviewPublishedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+}
+
 export function ChefDashboardScreen() {
   const navigation = useNavigation<NavigationProp<ChefTabParamList>>();
   const displayName = useAppSelector(
     state => state.auth.identity?.displayName?.trim() || 'Chef',
   );
   const {data, sources, isRefreshing, refresh} = useChefDashboardModel();
+  const reviews = useChefReviewPreview();
   const [salesRange, setSalesRange] =
     React.useState<ChefDashboardSalesRange>('7D');
 
@@ -160,8 +172,8 @@ export function ChefDashboardScreen() {
     [navigation],
   );
   const refreshDashboard = React.useCallback(() => {
-    refresh().catch(() => undefined);
-  }, [refresh]);
+    Promise.allSettled([refresh(), reviews.refresh()]).catch(() => undefined);
+  }, [refresh, reviews]);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -172,7 +184,7 @@ export function ChefDashboardScreen() {
           <RefreshControl
             colors={[colors.flameRed]}
             onRefresh={refreshDashboard}
-            refreshing={isRefreshing}
+            refreshing={isRefreshing || reviews.isRefreshing}
             tintColor={colors.flameRed}
           />
         }
@@ -415,14 +427,94 @@ export function ChefDashboardScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent reviews</Text>
-          <View style={styles.card}>
-            <Unavailable
-              icon="star"
-              message="Recent reviews will appear when an approved Chef reviews read model is available."
-              title="Reviews unavailable"
-            />
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitleCompact}>Recent reviews</Text>
+            {reviews.available &&
+            reviews.summary?.overallAverage !== null &&
+            reviews.summary !== null ? (
+              <View style={styles.reviewSummary}>
+                <Text style={styles.reviewSummaryScore}>
+                  {reviews.summary.overallAverage.toFixed(1)} ★
+                </Text>
+                <Text style={styles.reviewSummaryCount}>
+                  {reviews.summary.reviewCount}{' '}
+                  {reviews.summary.reviewCount === 1 ? 'review' : 'reviews'}
+                </Text>
+              </View>
+            ) : null}
           </View>
+
+          {!reviews.available ? (
+            <View style={styles.card}>
+              <Unavailable
+                icon="star"
+                message="The Chef reviews backend exists, but its gateway routes are not published yet."
+                title="Reviews unavailable"
+              />
+            </View>
+          ) : reviews.isPending ? (
+            <View style={styles.skeletonList}>
+              <SkeletonBlock borderRadius={radius.lg} height={112} />
+              <SkeletonBlock borderRadius={radius.lg} height={112} />
+            </View>
+          ) : reviews.error ? (
+            <View style={styles.card}>
+              <Unavailable
+                icon="wifi-off"
+                message={toAppApiError(reviews.error).message}
+                title="Reviews could not be loaded"
+              />
+              <Pressable
+                accessibilityLabel="Retry recent reviews"
+                accessibilityRole="button"
+                onPress={() => void reviews.refresh()}
+                style={({pressed}) => [
+                  styles.inlineRetry,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={styles.inlineRetryText}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : reviews.reviews.length === 0 ? (
+            <View style={styles.card}>
+              <Unavailable
+                icon="star"
+                message="Published customer reviews will appear here."
+                title="No published reviews yet"
+              />
+            </View>
+          ) : (
+            <View style={styles.reviewList}>
+              {reviews.reviews.map(review => (
+                <View key={review.reviewId} style={styles.reviewCard}>
+                  <View style={styles.reviewCardHeader}>
+                    <Text style={styles.reviewRating}>
+                      {review.overallRating} ★
+                    </Text>
+                    <Text style={styles.reviewDate}>
+                      {formatReviewPublishedAt(review.publishedAt)}
+                    </Text>
+                  </View>
+                  {review.reviewText ? (
+                    <Text numberOfLines={4} style={styles.reviewText}>
+                      {review.reviewText}
+                    </Text>
+                  ) : null}
+                  {review.tagCodes.length > 0 ? (
+                    <View style={styles.reviewTags}>
+                      {review.tagCodes.map(code => (
+                        <View key={code} style={styles.reviewTag}>
+                          <Text style={styles.reviewTagText}>
+                            {code.replace(/_/g, ' ')}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.insightBanner}>
@@ -717,6 +809,66 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
     marginTop: spacing.xxs,
+  },
+  reviewSummary: {
+    alignItems: 'flex-end',
+  },
+  reviewSummaryScore: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  reviewSummaryCount: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    marginTop: spacing.xxs,
+  },
+  reviewList: {
+    gap: spacing.sm,
+  },
+  reviewCard: {
+    ...elevation.card,
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  reviewCardHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  reviewRating: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  reviewDate: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
+  reviewText: {
+    color: colors.textPrimary,
+    fontSize: typography.small,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+  },
+  reviewTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  reviewTag: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xxs,
+  },
+  reviewTagText: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.semibold,
   },
   unavailableRow: {alignItems: 'center', flexDirection: 'row', gap: spacing.sm},
   unavailableIcon: {

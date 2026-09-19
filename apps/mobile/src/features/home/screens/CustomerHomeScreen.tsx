@@ -327,7 +327,11 @@ export function CustomerHomeScreen() {
       ? 'PRICE_ASC'
       : appliedFilters.sort === 'PRICE_HIGH_TO_LOW'
         ? 'PRICE_DESC'
-        : 'DISTANCE_ASC';
+        : appliedFilters.sort === 'PREPARATION_TIME_ASC'
+          ? 'PREPARATION_TIME_ASC'
+          : appliedFilters.sort === 'NAME_ASC'
+            ? 'NAME_ASC'
+            : 'DISTANCE_ASC';
   const feed = useHomeNearbyDishesQuery({
     radiusMeters: HOME_RADIUS_METERS,
     size: HOME_PAGE_SIZE,
@@ -335,6 +339,10 @@ export function CustomerHomeScreen() {
       query: search.query || null,
       category: selectedCategory,
       foodType: serverFoodType,
+      minPrice: appliedFilters.minPrice,
+      maxPrice: appliedFilters.maxPrice,
+      maxPreparationTimeMinutes: appliedFilters.maxPreparationTimeMinutes,
+      spiceLevel: appliedFilters.spiceLevel,
       sort: serverSort,
     },
   });
@@ -796,7 +804,7 @@ export function CustomerHomeScreen() {
                   <View style={styles.sectionHeadingRow}>
                     <Text style={styles.sectionTitle}>Popular near you</Text>
                     <Text style={styles.sectionCaption}>
-                      Available meals ordered by distance
+                      Available meals using your current discovery filters
                     </Text>
                   </View>
                   {mutationError ? (

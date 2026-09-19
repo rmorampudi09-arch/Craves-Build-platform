@@ -64,6 +64,37 @@ describe('P31 home feed query model', () => {
     expect(getHomeFeedContractBlocker()).toBeNull();
   });
 
+  it('keys the supported Catalog v2 menu filters and sort', () => {
+    const key = createHomeNearbyDishesQueryKey('customer-1', location, {
+      radiusMeters: 10000,
+      size: 20,
+      filters: {
+        query: 'paneer',
+        category: 'Meals',
+        foodType: 'VEG',
+        minPrice: 100,
+        maxPrice: 350,
+        maxPreparationTimeMinutes: 30,
+        spiceLevel: 'MEDIUM',
+        sort: 'PREPARATION_TIME_ASC',
+      },
+    });
+
+    expect(key[4]).toMatchObject({
+      filters: {
+        query: 'paneer',
+        category: 'Meals',
+        cuisine: null,
+        foodType: 'VEG',
+        minPrice: 100,
+        maxPrice: 350,
+        maxPreparationTimeMinutes: 30,
+        spiceLevel: 'MEDIUM',
+        sort: 'PREPARATION_TIME_ASC',
+      },
+    });
+  });
+
   it('uses authoritative hasNext metadata for pagination', () => {
     expect(getNextHomeFeedPage(page(0, true))).toBe(1);
     expect(getNextHomeFeedPage(page(1, false))).toBeUndefined();

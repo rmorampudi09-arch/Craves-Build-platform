@@ -65,25 +65,21 @@ export function CustomerYourUsualSection() {
   const dispatch = useAppDispatch();
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const focused = useIsFocused();
-  const epoch = sessionManager.currentSessionEpoch();
   const [appActive, setAppActive] = React.useState(AppState.currentState === 'active');
   const active = focused && appActive && Boolean(identityId);
   const mounted = React.useRef(true);
   const activity = React.useRef({
     active,
     identityId,
-    epoch,
     generation: 0,
   });
   if (
     activity.current.active !== active ||
-    activity.current.identityId !== identityId ||
-    activity.current.epoch !== epoch
+    activity.current.identityId !== identityId
   ) {
     activity.current = {
       active,
       identityId,
-      epoch,
       generation: activity.current.generation + 1,
     };
   }
@@ -113,6 +109,17 @@ export function CustomerYourUsualSection() {
   }, []);
 
   React.useEffect(() => {
+    return sessionManager.subscribeInvalidation(() => {
+      confirmation.current?.(false);
+      activity.current = {
+        ...activity.current,
+        active: false,
+        generation: activity.current.generation + 1,
+      };
+    });
+  }, []);
+
+  React.useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
       if (state !== 'active') confirmation.current?.(false);
       setAppActive(state === 'active');
@@ -126,7 +133,7 @@ export function CustomerYourUsualSection() {
     setUncertainReorder(false);
     setFailureMessage(null);
     setFailedCandidate(null);
-  }, [identityId, epoch]);
+  }, [identityId]);
 
   const ranked = React.useMemo(
     () => rankRepeatOrderCandidates(repeatOrders.items, {
@@ -150,14 +157,11 @@ export function CustomerYourUsualSection() {
 
       const generation = activity.current.generation;
       const requestIdentity = identityId;
-      const requestEpoch = epoch;
       const isCurrent = () =>
         mounted.current &&
         activity.current.active &&
         activity.current.generation === generation &&
-        activity.current.identityId === requestIdentity &&
-        activity.current.epoch === requestEpoch &&
-        sessionManager.currentSessionEpoch() === requestEpoch;
+        activity.current.identityId === requestIdentity;
 
       reorderBusy.current = true;
       setFailureMessage(null);
@@ -282,7 +286,7 @@ export function CustomerYourUsualSection() {
         if (mounted.current) setPendingOrderId(null);
       }
     },
-    [dispatch, epoch, identityId, navigation, pendingOrderId],
+    [dispatch, identityId, navigation, pendingOrderId],
   );
 
   const checkCart = React.useCallback(async () => {
@@ -297,8 +301,7 @@ export function CustomerYourUsualSection() {
       if (
         !mounted.current ||
         !activity.current.active ||
-        activity.current.generation !== generation ||
-        sessionManager.currentSessionEpoch() !== activity.current.epoch
+        activity.current.generation !== generation
       ) {
         return;
       }

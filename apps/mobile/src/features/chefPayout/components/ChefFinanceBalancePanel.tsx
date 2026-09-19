@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -15,12 +16,30 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {toAppApiError} from '../../../core/http/apiError';
+import {toAppApiError, type AppApiError} from '../../../core/http/apiError';
 import {
   chefPayoutApi,
   type ChefFinanceBalance,
   type ChefPayoutTransaction,
 } from '../api/chefPayoutApi';
+
+interface PendingWithdrawal {
+  requestKey: string;
+  expectedAvailableAmount: string;
+}
+
+function createWithdrawalRequestKey(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, token => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = token === 'x' ? value : 8 + (value % 4);
+    return nibble.toString(16);
+  });
+}
+
+function isDefinitiveWithdrawalRejection(error: AppApiError): boolean {
+  if (error.cancelled || error.status == null) return false;
+  return [400, 401, 403, 404, 409, 422, 429].includes(error.status);
+}
 
 function money(amount: string): string {
   const value = Number(amount);
@@ -56,11 +75,107 @@ export function ChefFinanceBalancePanel() {
   const [balance, setBalance] = React.useState<ChefFinanceBalance | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [withdrawalBusy, setWithdrawalBusy] = React.useState(false);
+  const [withdrawalMessage, setWithdrawalMessage] = React.useState<string | null>(
+    null,
+  );
+  const [uncertainWithdrawal, setUncertainWithdrawal] = React.useState(false);
+  const pendingWithdrawal = React.useRef<PendingWithdrawal | null>(null);
 
   const apply = React.useCallback((next: ChefFinanceBalance) => {
     setBalance(next);
     setError(null);
   }, []);
+
+  const refreshBalance = React.useCallback(async () => {
+    const next = await chefPayoutApi.getBalance();
+    apply(next);
+    return next;
+  }, [apply]);
+
+  const submitWithdrawal = React.useCallback(
+    async (request: PendingWithdrawal) => {
+      if (withdrawalBusy) return;
+      setWithdrawalBusy(true);
+      setWithdrawalMessage(null);
+      try {
+        const payout = await chefPayoutApi.requestWithdrawal(
+          request.requestKey,
+          request.expectedAvailableAmount,
+        );
+        pendingWithdrawal.current = null;
+        setUncertainWithdrawal(false);
+        setWithdrawalMessage(
+          `Withdrawal request ${payout.id.slice(-8).toUpperCase()} is ${payout.status
+            .replace(/_/g, ' ')
+            .toLowerCase()}. Bank payment is confirmed only when marked PAID.`,
+        );
+        await refreshBalance();
+      } catch (caught) {
+        const failure = toAppApiError(caught);
+        if (isDefinitiveWithdrawalRejection(failure)) {
+          pendingWithdrawal.current = null;
+          setUncertainWithdrawal(false);
+          setWithdrawalMessage(failure.message);
+          try {
+            await refreshBalance();
+          } catch {
+            // Preserve the definitive server result; manual refresh remains available.
+          }
+        } else {
+          pendingWithdrawal.current = request;
+          setUncertainWithdrawal(true);
+          setWithdrawalMessage(
+            'Craves could not confirm whether this withdrawal was accepted. Do not create another request. Use Resolve request to safely replay the same request ID.',
+          );
+        }
+      } finally {
+        setWithdrawalBusy(false);
+      }
+    },
+    [refreshBalance, withdrawalBusy],
+  );
+
+  const requestWithdrawal = React.useCallback(() => {
+    if (
+      !balance ||
+      withdrawalBusy ||
+      uncertainWithdrawal ||
+      balance.onHold ||
+      balance.manualRequestUsedToday ||
+      !balance.executionEnabled ||
+      Number(balance.available) <= 0
+    ) {
+      return;
+    }
+
+    const request: PendingWithdrawal = {
+      requestKey: createWithdrawalRequestKey(),
+      expectedAvailableAmount: balance.available,
+    };
+    Alert.alert(
+      'Request available balance?',
+      `Request ${money(
+        balance.available,
+      )}. Craves will reserve the exact available balance shown now. A request is not a confirmed bank payment until its status becomes PAID.`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Request payout',
+          onPress: () => {
+            pendingWithdrawal.current = request;
+            submitWithdrawal(request).catch(() => undefined);
+          },
+        },
+      ],
+    );
+  }, [balance, submitWithdrawal, uncertainWithdrawal, withdrawalBusy]);
+
+  const resolveWithdrawal = React.useCallback(() => {
+    const request = pendingWithdrawal.current;
+    if (!request || withdrawalBusy) return;
+    submitWithdrawal(request).catch(() => undefined);
+  }, [submitWithdrawal, withdrawalBusy]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -157,7 +272,66 @@ export function ChefFinanceBalancePanel() {
             eligibility: {dateTime(balance.nextManualRequestAt)}.
           </Text>
         ) : null}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{
+            busy: withdrawalBusy,
+            disabled:
+              withdrawalBusy ||
+              uncertainWithdrawal ||
+              balance.onHold ||
+              balance.manualRequestUsedToday ||
+              !balance.executionEnabled ||
+              Number(balance.available) <= 0,
+          }}
+          disabled={
+            withdrawalBusy ||
+            uncertainWithdrawal ||
+            balance.onHold ||
+            balance.manualRequestUsedToday ||
+            !balance.executionEnabled ||
+            Number(balance.available) <= 0
+          }
+          onPress={requestWithdrawal}
+          style={({pressed}) => [
+            styles.withdrawButton,
+            pressed && styles.withdrawPressed,
+            (withdrawalBusy ||
+              uncertainWithdrawal ||
+              balance.onHold ||
+              balance.manualRequestUsedToday ||
+              !balance.executionEnabled ||
+              Number(balance.available) <= 0) &&
+              styles.withdrawDisabled,
+          ]}>
+          <Text style={styles.withdrawText}>
+            {withdrawalBusy
+              ? 'Requesting…'
+              : `Request ${money(balance.available)}`}
+          </Text>
+        </Pressable>
       </View>
+
+      {withdrawalMessage ? (
+        <View style={styles.withdrawalNotice}>
+          <Text accessibilityRole="status" style={styles.withdrawalNoticeText}>
+            {withdrawalMessage}
+          </Text>
+          {uncertainWithdrawal ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{busy: withdrawalBusy}}
+              disabled={withdrawalBusy}
+              onPress={resolveWithdrawal}
+              style={styles.refreshButton}>
+              <Text style={styles.refreshText}>
+                {withdrawalBusy ? 'Resolving…' : 'Resolve request'}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.metrics}>
         <Metric label="Outstanding earnings" value={balance.outstanding} />
@@ -291,6 +465,32 @@ const styles = StyleSheet.create({
   balanceDetail: {
     marginTop: spacing.sm,
     color: colors.creamDeep,
+    fontSize: typography.small,
+  },
+  withdrawButton: {
+    minHeight: touchTarget.comfortable,
+    marginTop: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md,
+  },
+  withdrawText: {
+    color: colors.espressoBrown,
+    fontSize: typography.button,
+    fontWeight: fontWeight.bold,
+  },
+  withdrawPressed: {opacity: 0.82},
+  withdrawDisabled: {opacity: 0.48},
+  withdrawalNotice: {
+    gap: spacing.xs,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.warningSoft,
+  },
+  withdrawalNoticeText: {
+    color: colors.textPrimary,
     fontSize: typography.small,
   },
   metrics: {flexDirection: 'row', gap: spacing.sm},

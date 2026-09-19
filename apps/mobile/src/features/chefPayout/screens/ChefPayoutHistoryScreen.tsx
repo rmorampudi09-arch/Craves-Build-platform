@@ -112,7 +112,7 @@ export function ChefPayoutHistoryScreen() {
             Earnings & payouts
           </Text>
           <Text style={styles.subtitle}>
-            Review your server-recorded earnings, current payout balance and recent payout requests. Money-moving actions remain separate from this read-only history step.
+            Review your server-recorded earnings, current payout balance and recent payout requests. When the backend marks your balance eligible, you can request the exact available amount from this screen.
           </Text>
         </View>
 

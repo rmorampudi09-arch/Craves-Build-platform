@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -41,6 +42,7 @@ import {
   CHEF_ORDER_TABS,
   type ChefOrderTab,
 } from '../domain/chefOrderTabs';
+import {useChefCompletedOrderHistoryQuery} from '../query/chefCompletedOrderHistoryQueries';
 
 const TAB_LABELS: Record<ChefOrderTab, string> = {
   NEW: 'New',
@@ -224,7 +226,20 @@ function CompletedOrderCard({
 export function ChefCompletedOrdersScreen() {
   const navigation = useNavigation<ChefCompletedOrdersNavigation>();
   const {orderTabs, ordersStatus, isRefreshing, refresh} = useChefOperationalState();
+  const completedHistory = useChefCompletedOrderHistoryQuery();
   const page = orderTabs.pages.COMPLETED;
+  const completedOrders = completedHistory.available
+    ? completedHistory.orders
+    : page.items;
+  const completedCount = completedHistory.available
+    ? completedOrders.length
+    : orderTabs.tabCounts.COMPLETED;
+  const statusCounts = completedHistory.available
+    ? {...orderTabs.tabCounts, COMPLETED: completedCount}
+    : orderTabs.tabCounts;
+  const screenRefreshing = completedHistory.available
+    ? isRefreshing || completedHistory.isFetching
+    : isRefreshing;
   const initialScrollOffset = React.useRef(orderTabs.scrollState.COMPLETED).current;
   const latestScrollOffsetRef = React.useRef(initialScrollOffset);
   const listRef = React.useRef<FlatList<ChefOperationalOrder>>(null);
@@ -235,13 +250,13 @@ export function ChefCompletedOrdersScreen() {
   }, [orderTabs]);
 
   React.useEffect(() => {
-    if (page.items.length === 0) {
+    if (completedOrders.length === 0) {
       return undefined;
     }
     setClockSampleMs(Date.now());
     const timerId = setInterval(() => setClockSampleMs(Date.now()), 60_000);
     return () => clearInterval(timerId);
-  }, [page.items.length]);
+  }, [completedOrders.length]);
 
   const persistScrollOffset = React.useCallback(() => {
     orderTabs.setScrollOffset('COMPLETED', latestScrollOffsetRef.current);
@@ -288,8 +303,14 @@ export function ChefCompletedOrdersScreen() {
   );
 
   const refreshOrders = React.useCallback(() => {
+    if (completedHistory.available) {
+      Promise.allSettled([refresh(), completedHistory.refetch()]).catch(
+        () => undefined,
+      );
+      return;
+    }
     refresh().catch(() => undefined);
-  }, [refresh]);
+  }, [completedHistory, refresh]);
 
   const changePage = React.useCallback(
     (nextPage: number) => {
@@ -319,8 +340,12 @@ export function ChefCompletedOrdersScreen() {
     [clockSampleMs, openOrder],
   );
 
-  const showInitialLoading = ordersStatus === 'pending' && page.items.length === 0;
-  const showInitialError = ordersStatus === 'error' && page.items.length === 0;
+  const showInitialLoading = completedHistory.available
+    ? completedHistory.isPending && completedOrders.length === 0
+    : ordersStatus === 'pending' && page.items.length === 0;
+  const showInitialError = completedHistory.available
+    ? completedHistory.isError && completedOrders.length === 0
+    : ordersStatus === 'error' && page.items.length === 0;
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -333,7 +358,7 @@ export function ChefCompletedOrdersScreen() {
           Review delivered orders. Completed records remain read-only.
         </Text>
       </View>
-      <StatusTabs counts={orderTabs.tabCounts} onSelect={selectStatusTab} />
+      <StatusTabs counts={statusCounts} onSelect={selectStatusTab} />
 
       <View style={styles.summaryBanner}>
         <View style={styles.summaryIcon}>
@@ -341,11 +366,14 @@ export function ChefCompletedOrdersScreen() {
         </View>
         <View style={styles.flex}>
           <Text style={styles.summaryTitle}>
-            {orderTabs.tabCounts.COMPLETED} delivered{' '}
-            {orderTabs.tabCounts.COMPLETED === 1 ? 'order' : 'orders'}
+            {completedCount} delivered{' '}
+            {completedCount === 1 ? 'order' : 'orders'}
+            {completedHistory.available ? ' loaded' : ''}
           </Text>
           <Text style={styles.summaryText}>
-            Bounded history from the authoritative Chef orders feed.
+            {completedHistory.available
+              ? 'Cursor-paged delivered history from the authoritative Chef order service.'
+              : 'Bounded history from the authoritative Chef orders feed.'}
           </Text>
         </View>
       </View>
@@ -362,14 +390,14 @@ export function ChefCompletedOrdersScreen() {
           <Pressable
             accessibilityLabel="Retry completed orders"
             accessibilityRole="button"
-            disabled={isRefreshing}
+            disabled={screenRefreshing}
             onPress={refreshOrders}
             style={({pressed}) => [
               styles.retryButton,
-              (pressed || isRefreshing) && styles.pressed,
+              (pressed || screenRefreshing) && styles.pressed,
             ]}>
             <Text style={styles.retryButtonText}>
-              {isRefreshing ? 'Refreshing…' : 'Try again'}
+              {screenRefreshing ? 'Refreshing…' : 'Try again'}
             </Text>
           </Pressable>
         </View>
@@ -379,10 +407,10 @@ export function ChefCompletedOrdersScreen() {
           style={styles.list}
           contentContainerStyle={[
             styles.listContent,
-            page.items.length === 0 && styles.emptyListContent,
+            completedOrders.length === 0 && styles.emptyListContent,
           ]}
           contentOffset={{x: 0, y: initialScrollOffset}}
-          data={page.items}
+          data={completedOrders}
           keyExtractor={order => order.id}
           ListEmptyComponent={
             <View style={styles.centerState}>
@@ -394,7 +422,26 @@ export function ChefCompletedOrdersScreen() {
             </View>
           }
           ListFooterComponent={
-            page.totalPages > 1 ? (
+            completedHistory.available && completedHistory.hasNextPage ? (
+              <Pressable
+                accessibilityLabel="Load older completed orders"
+                accessibilityRole="button"
+                disabled={completedHistory.isFetchingNextPage}
+                onPress={() =>
+                  completedHistory.fetchNextPage().catch(() => undefined)
+                }
+                style={({pressed}) => [
+                  styles.loadOlderButton,
+                  (pressed || completedHistory.isFetchingNextPage) &&
+                    styles.pageButtonDisabled,
+                ]}>
+                {completedHistory.isFetchingNextPage ? (
+                  <ActivityIndicator color={colors.flameRed} />
+                ) : (
+                  <Text style={styles.pageButtonText}>Load older orders</Text>
+                )}
+              </Pressable>
+            ) : !completedHistory.available && page.totalPages > 1 ? (
               <View style={styles.pagination}>
                 <Pressable
                   accessibilityLabel="Previous completed orders page"
@@ -431,7 +478,7 @@ export function ChefCompletedOrdersScreen() {
             <RefreshControl
               colors={[colors.flameRed]}
               onRefresh={refreshOrders}
-              refreshing={isRefreshing}
+              refreshing={screenRefreshing}
               tintColor={colors.flameRed}
             />
           }
@@ -693,6 +740,17 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
+  },
+  loadOlderButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    borderColor: colors.borderStrong,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    justifyContent: 'center',
+    marginVertical: spacing.md,
+    minHeight: touchTarget.minimum,
+    paddingHorizontal: spacing.lg,
   },
   pagination: {
     flexDirection: 'row',

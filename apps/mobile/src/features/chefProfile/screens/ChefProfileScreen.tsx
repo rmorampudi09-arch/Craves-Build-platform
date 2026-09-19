@@ -46,6 +46,7 @@ type ChefTabsNavigation = BottomTabNavigationProp<ChefTabParamList>;
 type BlockedDestination =
   | 'business-information'
   | 'schedule'
+  | 'scheduled-orders'
   | 'payouts'
   | 'referrals'
   | 'subscription'
@@ -77,6 +78,14 @@ const BUSINESS_ROWS: readonly AccountRowModel[] = [
     icon: 'clock',
     blockerMessage:
       'Kitchen schedule opens the protected Catalog schedule flow and remains fail-closed until its APIM route is published.',
+  },
+  {
+    id: 'scheduled-orders',
+    title: 'Scheduled orders',
+    subtitle: 'Future order requests waiting for your confirmation',
+    icon: 'orders',
+    blockerMessage:
+      'Scheduled orders use the protected Order Service queue and remain fail-closed until its APIM routes are published.',
   },
   {
     id: 'payouts',
@@ -336,6 +345,10 @@ export function ChefProfileScreen() {
       }
       if (row.id === 'schedule') {
         navigation.navigate('ChefKitchenSchedule');
+        return;
+      }
+      if (row.id === 'scheduled-orders') {
+        navigation.navigate('ChefScheduledOrders');
         return;
       }
       if (row.id === 'payouts') {

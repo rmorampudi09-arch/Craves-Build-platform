@@ -481,8 +481,6 @@ export function AddressEditorFlow({
   const unresolvedRequired = missingLocationFields.filter(
     ([key]) => !draft[key].trim(),
   );
-  const contactComplete =
-    draft.recipientName.trim() !== "" && draft.contactPhoneNumber.trim() !== "";
   const title =
     step === "choose"
       ? targetAddressId
@@ -510,6 +508,7 @@ export function AddressEditorFlow({
           aria-labelledby="address-flow-title"
           className="fixed bottom-0 left-1/2 z-[91] flex max-h-[96svh] w-full max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-[0_30px_90px_rgba(26,26,26,0.25)] outline-none md:bottom-auto md:top-1/2 md:max-h-[92vh] md:-translate-y-1/2 md:rounded-[2rem] md:border md:border-[#E5E7EB]"
         >
+        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[#D7DADF] md:hidden" aria-hidden="true" />
         <div className="flex items-start gap-3 border-b border-[#F1F3F5] px-5 py-5 md:px-7 md:py-6">
           {step !== "choose" ? (
             <button
@@ -754,53 +753,49 @@ export function AddressEditorFlow({
                 </div>
               </div>
 
-              {contactComplete ? (
-                <div className="mt-7 rounded-2xl bg-[#F1F3F5] p-4">
-                  <p className="text-xs font-black uppercase tracking-[0.1em] text-[#6B6B6B]">
-                    Delivery contact
-                  </p>
-                  <p className="mt-1.5 text-sm font-bold text-[#1A1A1A]">
-                    {draft.recipientName} · {draft.contactPhoneNumber}
-                  </p>
+              <div className="mt-7">
+                <p className="text-xs font-black uppercase tracking-[0.1em] text-[#6B6B6B]">
+                  Delivery contact
+                </p>
+                <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                  {!draft.recipientName.trim() ? (
+                    <label className="text-xs font-bold text-[#1A1A1A]">
+                      Recipient name
+                      <input
+                        value={draft.recipientName}
+                        onChange={(event) =>
+                          update("recipientName", event.target.value)
+                        }
+                        placeholder="Full name"
+                        maxLength={160}
+                        className={fieldClass}
+                      />
+                    </label>
+                  ) : (
+                    <div className="rounded-xl bg-[#F1F3F5] px-3.5 py-3">
+                      <p className="text-[11px] font-semibold text-[#6B6B6B]">
+                        Receiver
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-[#1A1A1A]">
+                        {draft.recipientName}
+                      </p>
+                    </div>
+                  )}
+                  <label className="text-xs font-bold text-[#1A1A1A]">
+                    Receiver&apos;s phone
+                    <input
+                      value={draft.contactPhoneNumber}
+                      onChange={(event) =>
+                        update("contactPhoneNumber", event.target.value)
+                      }
+                      placeholder="+919876543210"
+                      inputMode="tel"
+                      maxLength={16}
+                      className={fieldClass}
+                    />
+                  </label>
                 </div>
-              ) : (
-                <div className="mt-7">
-                  <p className="text-xs font-black uppercase tracking-[0.1em] text-[#6B6B6B]">
-                    Delivery contact
-                  </p>
-                  <div className="mt-2 grid gap-4 sm:grid-cols-2">
-                    {!draft.recipientName.trim() ? (
-                      <label className="text-xs font-bold text-[#1A1A1A]">
-                        Recipient name
-                        <input
-                          value={draft.recipientName}
-                          onChange={(event) =>
-                            update("recipientName", event.target.value)
-                          }
-                          placeholder="Full name"
-                          maxLength={160}
-                          className={fieldClass}
-                        />
-                      </label>
-                    ) : null}
-                    {!draft.contactPhoneNumber.trim() ? (
-                      <label className="text-xs font-bold text-[#1A1A1A]">
-                        Phone number
-                        <input
-                          value={draft.contactPhoneNumber}
-                          onChange={(event) =>
-                            update("contactPhoneNumber", event.target.value)
-                          }
-                          placeholder="+919876543210"
-                          inputMode="tel"
-                          maxLength={16}
-                          className={fieldClass}
-                        />
-                      </label>
-                    ) : null}
-                  </div>
-                </div>
-              )}
+              </div>
 
               {unresolvedRequired.length > 0 ? (
                 <div className="mt-7 rounded-2xl border border-[#F62E18]/20 bg-[#F1F3F5] p-4">

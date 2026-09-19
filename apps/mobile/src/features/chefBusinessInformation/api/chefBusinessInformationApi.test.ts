@@ -86,9 +86,10 @@ describe('chefBusinessInformationApi KYC evidence', () => {
     (httpClient.post as jest.Mock).mockResolvedValue(uploaded);
     const append = jest.fn();
     const formData = {append};
-    const originalFormData = globalThis.FormData;
+    const formDataGlobal = globalThis as unknown as {FormData: typeof FormData};
+    const originalFormData = formDataGlobal.FormData;
     const FormDataMock = jest.fn().mockImplementation(() => formData);
-    Object.defineProperty(globalThis, 'FormData', {
+    Object.defineProperty(formDataGlobal, 'FormData', {
       configurable: true,
       writable: true,
       value: FormDataMock,
@@ -124,7 +125,7 @@ describe('chefBusinessInformationApi KYC evidence', () => {
       {signal: undefined},
     );
 
-    Object.defineProperty(globalThis, 'FormData', {
+    Object.defineProperty(formDataGlobal, 'FormData', {
       configurable: true,
       writable: true,
       value: originalFormData,

@@ -14,7 +14,7 @@ export interface ChefPayoutHistoryBoundaryState {
   payoutSeries: readonly never[];
   transactionsPage: null;
   withdrawEligibility: ChefWithdrawEligibilityBoundary;
-  withdrawState: 'blocked';
+  withdrawState: 'available' | 'blocked';
 }
 
 const sourceOnlyMessage =
@@ -44,15 +44,10 @@ export const CHEF_PAYOUT_HISTORY_MESSAGES = {
       : sourceOnlyMessage,
   dateFilter:
     'Date filtering remains unavailable until the payout trend or payout-transaction contract defines authoritative range and bucket semantics.',
-  withdraw: `${
-    CHEF_PAYOUT_CONTRACT_MODEL.capabilities.withdrawEligibility.availability === 'unavailable'
-      ? CHEF_PAYOUT_CONTRACT_MODEL.capabilities.withdrawEligibility.reason
-      : 'Withdrawal eligibility is unavailable.'
-  } ${
-    CHEF_PAYOUT_CONTRACT_MODEL.capabilities.withdrawInitiation.availability === 'unavailable'
-      ? CHEF_PAYOUT_CONTRACT_MODEL.capabilities.withdrawInitiation.reason
-      : 'Withdrawal initiation is unavailable.'
-  }`,
+  withdraw:
+    getChefWithdrawEligibilityBoundary().availability === 'available'
+      ? 'Withdrawal requests use the exact server available balance and a stable request UUID. A request is not a confirmed bank payment until its status is PAID.'
+      : getChefWithdrawEligibilityBoundary().reason,
 } as const;
 
 export function createChefPayoutHistoryBoundaryState(): ChefPayoutHistoryBoundaryState {
@@ -64,7 +59,10 @@ export function createChefPayoutHistoryBoundaryState(): ChefPayoutHistoryBoundar
     payoutSeries: [],
     transactionsPage: null,
     withdrawEligibility: getChefWithdrawEligibilityBoundary(),
-    withdrawState: 'blocked',
+    withdrawState:
+      getChefWithdrawEligibilityBoundary().availability === 'available'
+        ? 'available'
+        : 'blocked',
   };
 }
 

@@ -46,6 +46,7 @@ type ChefTabsNavigation = BottomTabNavigationProp<ChefTabParamList>;
 type BlockedDestination =
   | 'business-information'
   | 'payouts'
+  | 'referrals'
   | 'subscription'
   | 'preferences'
   | 'security'
@@ -75,6 +76,14 @@ const BUSINESS_ROWS: readonly AccountRowModel[] = [
     icon: 'analytics',
     blockerMessage:
       'Payout history opens the protected Chef payout view; unavailable financial capabilities remain fail-closed until approved contracts exist.',
+  },
+  {
+    id: 'referrals',
+    title: 'Referral earnings',
+    subtitle: 'Chef referral credits, monthly cap and recent postings',
+    icon: 'analytics',
+    blockerMessage:
+      'Chef referral earnings open the protected referral ledger view. The screen remains fail-closed until its gateway route is published.',
   },
   {
     id: 'subscription',
@@ -318,6 +327,10 @@ export function ChefProfileScreen() {
       }
       if (row.id === 'payouts') {
         navigation.navigate('ChefPayoutHistory');
+        return;
+      }
+      if (row.id === 'referrals') {
+        navigation.navigate('ChefReferralEarnings');
         return;
       }
       if (row.id === 'subscription') {

@@ -105,6 +105,53 @@ describe('P42 customer kitchen profile API contract', () => {
     jest.resetAllMocks();
   });
 
+  it('uses the exact public kitchen availability route and rejects extra fields', async () => {
+    getMock.mockResolvedValueOnce({
+      kitchenId,
+      evaluatedAt: '2026-09-20T12:00:00Z',
+      timezoneId: 'Asia/Kolkata',
+      localDate: '2026-09-20',
+      localTime: '17:30:00',
+      kitchenActive: true,
+      scheduleConfigured: true,
+      acceptingOrders: true,
+      paused: false,
+      openBySchedule: true,
+      availableNow: true,
+    });
+
+    await expect(
+      kitchenProfileApi.getCustomerKitchenAvailability(kitchenId),
+    ).resolves.toMatchObject({availableNow: true, kitchenId});
+
+    expect(getMock).toHaveBeenCalledWith(
+      `${PUBLIC_KITCHEN_PROFILE_PATH}/${kitchenId}/availability`,
+      {
+        signal: undefined,
+        dedupeKey: `customer-kitchen-availability:${kitchenId}`,
+      },
+    );
+
+    getMock.mockResolvedValueOnce({
+      kitchenId,
+      evaluatedAt: '2026-09-20T12:00:00Z',
+      timezoneId: 'Asia/Kolkata',
+      localDate: '2026-09-20',
+      localTime: '17:30:00',
+      kitchenActive: true,
+      scheduleConfigured: true,
+      acceptingOrders: true,
+      paused: false,
+      openBySchedule: true,
+      availableNow: true,
+      internalReason: 'private',
+    });
+
+    await expect(
+      kitchenProfileApi.getCustomerKitchenAvailability(kitchenId),
+    ).rejects.toThrow();
+  });
+
   it('uses only the exact public Catalog kitchen and kitchen-menu routes', async () => {
     getMock
       .mockResolvedValueOnce(kitchen)

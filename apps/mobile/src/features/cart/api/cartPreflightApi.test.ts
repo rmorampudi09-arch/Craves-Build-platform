@@ -1,6 +1,7 @@
 import {httpClient} from '../../../core/http/httpClient';
 import {
   cartPreflightApi,
+  cartPreflightMatchesSnapshot,
   parseCartItemPreflight,
   parseCartPreflight,
 } from './cartPreflightApi';
@@ -111,6 +112,45 @@ describe('cartPreflightApi contract', () => {
         internalCatalogPayload: {},
       }),
     ).toBeNull();
+  });
+
+  it('requires preflight to match the exact cart snapshot being reviewed', () => {
+    const parsed = parseCartPreflight(preflight);
+    expect(parsed).not.toBeNull();
+
+    const snapshot = {
+      cartId: preflight.cartId,
+      currency: 'INR',
+      lines: [
+        {
+          lineId: item.cartItemId,
+          menuItemId: item.menuItemId,
+          kitchenId: item.cartKitchenId,
+          itemName: item.cartItemName,
+          kitchenName: 'Test Kitchen',
+          unitPrice: {amount: '180', currency: 'INR'},
+          quantity: item.quantity,
+          lineTotal: {amount: '360', currency: 'INR'},
+          imageUrl: null,
+          foodType: null,
+          servesCount: null,
+          spiceLevel: null,
+          createdAt: '2026-09-19T11:00:00Z',
+          updatedAt: '2026-09-19T11:00:00Z',
+        },
+      ],
+      totals: {
+        foodSubtotal: {amount: '360', currency: 'INR'},
+      },
+    };
+
+    expect(cartPreflightMatchesSnapshot(parsed!, snapshot)).toBe(true);
+    expect(
+      cartPreflightMatchesSnapshot(parsed!, {
+        ...snapshot,
+        lines: [{...snapshot.lines[0], quantity: 3}],
+      }),
+    ).toBe(false);
   });
 
   it('reads the exact preflight route', async () => {

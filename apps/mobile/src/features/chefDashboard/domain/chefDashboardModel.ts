@@ -43,7 +43,7 @@ export const CHEF_DASHBOARD_CONTRACT_GAPS = {
     availability: 'unavailable',
     code: 'BACKEND_CONTRACT_UNAVAILABLE',
     reason:
-      'No approved Chef recent-reviews/read-model contract is present in the repository.',
+      'Order Service now owns the Chef reviews read model, but the Chef review gateway routes are not published on main yet.',
   },
   businessInsights: {
     availability: 'unavailable',

@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   FlatList,
   Pressable,
   RefreshControl,
@@ -11,7 +12,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {useIsFocused, useNavigation} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
@@ -35,6 +36,8 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {sessionManager} from '../../auth/api/sessionManager';
+import {refreshCartSnapshot} from '../../cart/state/cartRefresh';
 import {reorderCart} from '../../cart/state/cartMutations';
 import {isDefinitiveCartRejection} from '../../cart/domain/cartWriteRejection';
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
@@ -43,6 +46,7 @@ import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {CustomerOrderCard} from '../components/CustomerOrderCard';
 import type {CustomerOrder} from '../domain/customerOrderTypes';
+import {createCustomerOrderReorder} from '../domain/customerOrderReorder';
 import {
   CUSTOMER_ORDERS_LIFECYCLE_BUCKET_BLOCKER,
   CUSTOMER_ORDERS_TABS,
@@ -85,13 +89,42 @@ export function CustomerOrdersScreen() {
       >
     >();
   const dispatch = useAppDispatch();
-  const cartSnapshot = useAppSelector(state => state.cart.snapshot);
+  const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
+  const focused = useIsFocused();
+  const epoch = sessionManager.currentSessionEpoch();
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  const active = focused && appActive && Boolean(identityId);
+  const mounted = useRef(true);
+  const activity = useRef({
+    active,
+    identityId,
+    epoch,
+    generation: 0,
+  });
+  if (
+    activity.current.active !== active ||
+    activity.current.identityId !== identityId ||
+    activity.current.epoch !== epoch
+  ) {
+    activity.current = {
+      active,
+      identityId,
+      epoch,
+      generation: activity.current.generation + 1,
+    };
+  }
   const bottomNavScroll = useCustomerBottomNavScroll();
   const ordersQuery = useCustomerOrdersQuery();
   const [selectedTab, setSelectedTab] = useState<CustomerOrdersTabKey>('ALL');
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [capabilityMessage, setCapabilityMessage] = useState<string | null>(null);
   const [reorderingOrderId, setReorderingOrderId] = useState<string | null>(null);
+  const [uncertainReorder, setUncertainReorder] = useState(false);
+  const [checkingCart, setCheckingCart] = useState(false);
+  const reorderBusy = useRef(false);
+  const cartCheckBusy = useRef(false);
+  const uncertainRef = useRef(false);
+  const confirmation = useRef<((confirmed: boolean) => void) | null>(null);
   const listRef = useRef<FlatList<CustomerOrder>>(null);
   const offsetsRef = useRef<Record<CustomerOrdersTabKey, number>>({...initialOffsets});
 
@@ -104,6 +137,31 @@ export function CustomerOrdersScreen() {
   const offline = queryError?.code === 'NETWORK_ERROR';
   const initialLoading = ordersQuery.isPending && !snapshot;
   const lifecycleBlocked = !isCustomerOrdersTabAuthoritative(selectedTab);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      confirmation.current?.(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state !== 'active') {
+        confirmation.current?.(false);
+      }
+      setAppActive(state === 'active');
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    confirmation.current?.(false);
+    uncertainRef.current = false;
+    setUncertainReorder(false);
+    setCapabilityMessage(null);
+  }, [identityId, epoch]);
 
   const restoreSelectedOffset = useCallback(() => {
     requestAnimationFrame(() => {
@@ -136,52 +194,176 @@ export function CustomerOrdersScreen() {
     ordersQuery.refetch();
   }, [ordersQuery]);
 
-  const reorder = useCallback(async (order: CustomerOrder) => {
-    if (reorderingOrderId) return;
-    setCapabilityMessage(null);
-    if (!cartSnapshot) {
-      setCapabilityMessage('Check your cart before reordering so Craves can protect any newer cart changes.');
-      return;
-    }
-    setReorderingOrderId(order.id);
-    try {
-      const outcome = await dispatch(
-        reorderCart({
-          orderId: order.id,
-          expectedSnapshot: cartSnapshot,
-          expectedKitchenId: order.kitchenId,
-        }),
-      );
-      if (outcome.status === 'FAILED') {
-        setCapabilityMessage(
-          isDefinitiveCartRejection(outcome.error)
-            ? outcome.error.message
-            : 'The reorder result could not be confirmed. Check your cart before trying again so you do not replace a newer cart by mistake.',
-        );
+  const confirmReorder = useCallback(
+    async (order: CustomerOrder) => {
+      if (
+        reorderBusy.current ||
+        uncertainRef.current ||
+        !activity.current.active ||
+        !identityId
+      ) {
         return;
       }
-      if (outcome.status === 'APPLIED') {
-        navigation.navigate('CustomerCart');
-      }
-    } finally {
-      setReorderingOrderId(null);
-    }
-  }, [cartSnapshot, dispatch, navigation, reorderingOrderId]);
 
-  const confirmReorder = useCallback((order: CustomerOrder) => {
-    if (cartSnapshot?.lines.length) {
-      Alert.alert(
-        'Replace current cart?',
-        'Reorder will replace your current cart after Craves verifies every dish is still available.',
-        [
-          {text: 'Keep cart', style: 'cancel'},
-          {text: 'Replace & reorder', style: 'destructive', onPress: () => { reorder(order).catch(() => undefined); }},
-        ],
-      );
+      const generation = activity.current.generation;
+      const requestIdentity = identityId;
+      const requestEpoch = epoch;
+      const isCurrent = () =>
+        mounted.current &&
+        activity.current.active &&
+        activity.current.generation === generation &&
+        activity.current.identityId === requestIdentity &&
+        activity.current.epoch === requestEpoch &&
+        sessionManager.currentSessionEpoch() === requestEpoch;
+
+      reorderBusy.current = true;
+      setCapabilityMessage(null);
+      setReorderingOrderId(order.id);
+      let rejectionMessage =
+        'These dishes could not be added. Please try again later.';
+
+      try {
+        const coordinator = createCustomerOrderReorder({
+          isCurrent,
+          readCart: async () => {
+            const result = await dispatch(refreshCartSnapshot());
+            return result.status === 'APPLIED' ? result.snapshot : null;
+          },
+          confirm: cart =>
+            new Promise(resolve => {
+              let settled = false;
+              const finish = (value: boolean) => {
+                if (settled) return;
+                settled = true;
+                confirmation.current = null;
+                resolve(value);
+              };
+              confirmation.current = finish;
+              Alert.alert(
+                cart.lines.length
+                  ? 'Replace your current cart?'
+                  : 'Add these dishes to your cart?',
+                cart.lines.length
+                  ? 'Craves will recheck this exact cart before replacing it, then rebuild the previous order using today’s availability and prices.'
+                  : 'Craves will recheck your cart before adding these dishes, then use today’s availability and prices.',
+                [
+                  {
+                    text: cart.lines.length ? 'Keep cart' : 'Not now',
+                    style: 'cancel',
+                    onPress: () => finish(false),
+                  },
+                  {
+                    text: cart.lines.length ? 'Verify & replace' : 'Add to cart',
+                    onPress: () => finish(true),
+                  },
+                ],
+                {cancelable: true, onDismiss: () => finish(false)},
+              );
+            }),
+          replaceCart: async (orderId, expectedSnapshot, expectedKitchenId) => {
+            uncertainRef.current = true;
+            setUncertainReorder(true);
+            setCapabilityMessage(
+              'If this reorder cannot be confirmed, check your cart before trying again.',
+            );
+            const result = await dispatch(
+              reorderCart({
+                orderId,
+                expectedSnapshot,
+                expectedKitchenId,
+              }),
+            );
+            if (
+              result.status === 'FAILED' &&
+              isDefinitiveCartRejection(result.error)
+            ) {
+              rejectionMessage = result.error.message;
+              return 'REJECTED';
+            }
+            return result.status === 'APPLIED'
+              ? 'APPLIED'
+              : result.status === 'FAILED'
+                ? 'FAILED'
+                : 'STALE';
+          },
+        });
+
+        const result = await coordinator.run({
+          orderId: order.id,
+          kitchenId: order.kitchenId,
+          eligible: order.status === 'DELIVERED',
+        });
+
+        if (!isCurrent()) return;
+
+        if (result === 'APPLIED') {
+          uncertainRef.current = false;
+          setUncertainReorder(false);
+          setCapabilityMessage(null);
+          navigation.navigate('CustomerCart');
+        } else if (result === 'REJECTED' || result === 'STALE') {
+          uncertainRef.current = false;
+          setUncertainReorder(false);
+          setCapabilityMessage(result === 'REJECTED' ? rejectionMessage : null);
+        } else if (result === 'CART_CHANGED') {
+          uncertainRef.current = false;
+          setUncertainReorder(false);
+          setCapabilityMessage(
+            'Your cart changed while you were reviewing it. Tap Reorder again to review the latest cart.',
+          );
+        } else if (result === 'READ_FAILED') {
+          uncertainRef.current = false;
+          setUncertainReorder(false);
+          setCapabilityMessage(
+            'We couldn’t verify your current cart. Please try again after it finishes refreshing.',
+          );
+        } else if (result === 'UNCERTAIN') {
+          uncertainRef.current = true;
+          setUncertainReorder(true);
+          setCapabilityMessage(
+            'We couldn’t confirm the reorder. Check your cart before trying again so a newer cart is never replaced twice.',
+          );
+        }
+      } finally {
+        reorderBusy.current = false;
+        if (mounted.current) setReorderingOrderId(null);
+      }
+    },
+    [dispatch, epoch, identityId, navigation],
+  );
+
+  const checkCart = useCallback(async () => {
+    if (!activity.current.active || reorderBusy.current || cartCheckBusy.current) {
       return;
     }
-    reorder(order).catch(() => undefined);
-  }, [cartSnapshot?.lines.length, reorder]);
+    const generation = activity.current.generation;
+    cartCheckBusy.current = true;
+    setCheckingCart(true);
+    try {
+      const result = await dispatch(refreshCartSnapshot());
+      if (
+        !mounted.current ||
+        !activity.current.active ||
+        activity.current.generation !== generation ||
+        sessionManager.currentSessionEpoch() !== activity.current.epoch
+      ) {
+        return;
+      }
+      if (result.status === 'APPLIED') {
+        uncertainRef.current = false;
+        setUncertainReorder(false);
+        setCapabilityMessage(null);
+        navigation.navigate('CustomerCart');
+      } else {
+        setCapabilityMessage(
+          'Your cart couldn’t be checked yet. Reconnect and try again before another reorder.',
+        );
+      }
+    } finally {
+      cartCheckBusy.current = false;
+      if (mounted.current) setCheckingCart(false);
+    }
+  }, [dispatch, navigation]);
 
   const openDiscovery = useCallback(() => {
     const parent = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
@@ -226,6 +408,8 @@ export function CustomerOrdersScreen() {
       {capabilityMessage ? (
         <RecoverableErrorBanner
           message={capabilityMessage}
+          onRetry={uncertainReorder ? () => void checkCart() : undefined}
+          retryLabel={checkingCart ? 'Checking cart…' : 'Check cart'}
           style={styles.banner}
         />
       ) : null}
@@ -327,6 +511,9 @@ export function CustomerOrdersScreen() {
             order={item}
             onReorder={confirmReorder}
             reorderPending={reorderingOrderId === item.id}
+            reorderDisabled={
+              Boolean(reorderingOrderId) || uncertainReorder || !active
+            }
           />
         )}
         ListHeaderComponent={listHeader}

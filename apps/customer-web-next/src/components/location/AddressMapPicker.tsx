@@ -157,7 +157,6 @@ export function AddressMapPicker({
         {!imageFailed ? (
           // Static Azure map bytes come from our authenticated same-origin BFF,
           // so Next/Image optimization would only add another server hop.
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             key={imageUrl}
             src={imageUrl}

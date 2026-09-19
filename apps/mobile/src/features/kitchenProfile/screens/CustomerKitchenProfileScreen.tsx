@@ -1,4 +1,4 @@
-import React, {useCallback, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -48,6 +48,12 @@ import {
   useCustomerFavoritesQuery,
   useToggleCustomerFavorite,
 } from '../../favorites/query/customerFavoritesQueries';
+import {
+  PUBLIC_KITCHEN_REVIEWS_AVAILABLE,
+  publicKitchenReviewsApi,
+  type PublicKitchenReview,
+  type PublicKitchenReviewSummary,
+} from '../../reviews/api/publicKitchenReviewsApi';
 import type {CustomerKitchenMenuItemSummary} from '../api/kitchenProfileApi';
 import {CustomerKitchenMenuCard} from '../components/CustomerKitchenMenuCard';
 import {
@@ -68,6 +74,17 @@ type KitchenProfileNavigation = NavigationProp<
 >;
 
 const MENU_PREVIEW_LIMIT = 4;
+const REVIEW_PREVIEW_LIMIT = 3;
+
+function formatReviewPublishedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
 
 function KitchenProfileSkeleton() {
   return (
@@ -116,6 +133,10 @@ export function CustomerKitchenProfileScreen() {
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [interactionNotice, setInteractionNotice] = useState<string | null>(null);
   const [revalidatingItemId, setRevalidatingItemId] = useState<string | null>(null);
+  const [reviewSummary, setReviewSummary] =
+    useState<PublicKitchenReviewSummary | null>(null);
+  const [reviewPreview, setReviewPreview] = useState<PublicKitchenReview[]>([]);
+  const [reviewLoadError, setReviewLoadError] = useState<string | null>(null);
 
   const profile = profileQuery.data;
   const queryError = profileQuery.error ? toAppApiError(profileQuery.error) : null;
@@ -126,6 +147,33 @@ export function CustomerKitchenProfileScreen() {
     () => getCustomerKitchenMenuPreview(profile?.menuItems ?? [], MENU_PREVIEW_LIMIT),
     [profile?.menuItems],
   );
+
+  const loadPublicReviews = useCallback(async () => {
+    if (!PUBLIC_KITCHEN_REVIEWS_AVAILABLE) {
+      setReviewSummary(null);
+      setReviewPreview([]);
+      setReviewLoadError(null);
+      return;
+    }
+
+    setReviewLoadError(null);
+    try {
+      const [summary, page] = await Promise.all([
+        publicKitchenReviewsApi.summary(route.params.kitchenId),
+        publicKitchenReviewsApi.list(route.params.kitchenId, {
+          limit: REVIEW_PREVIEW_LIMIT,
+        }),
+      ]);
+      setReviewSummary(summary);
+      setReviewPreview(page.items);
+    } catch (error) {
+      setReviewLoadError(toAppApiError(error).message);
+    }
+  }, [route.params.kitchenId]);
+
+  useEffect(() => {
+    void loadPublicReviews();
+  }, [loadPublicReviews]);
 
   useFocusEffect(
     useCallback(() => {
@@ -333,7 +381,10 @@ export function CustomerKitchenProfileScreen() {
           refreshControl={
             <RefreshControl
               colors={[colors.flameRed]}
-              onRefresh={() => profileQuery.refetch()}
+              onRefresh={() => {
+                void profileQuery.refetch();
+                void loadPublicReviews();
+              }}
               refreshing={profileQuery.isRefetching && revalidatingItemId === null}
               tintColor={colors.flameRed}
             />
@@ -403,6 +454,74 @@ export function CustomerKitchenProfileScreen() {
                 </View>
               ) : null}
             </View>
+
+            {PUBLIC_KITCHEN_REVIEWS_AVAILABLE && reviewSummary ? (
+              <View style={styles.section}>
+                <View style={styles.reviewHeadingRow}>
+                  <View>
+                    <Text style={styles.sectionTitle}>Ratings & reviews</Text>
+                    <Text style={styles.sectionCaption}>
+                      Published customer feedback for this kitchen
+                    </Text>
+                  </View>
+                  {reviewSummary.reviewCount > 0 &&
+                  reviewSummary.overallAverage !== null ? (
+                    <View style={styles.reviewScorePill}>
+                      <Text style={styles.reviewScoreText}>
+                        {reviewSummary.overallAverage.toFixed(1)} ★
+                      </Text>
+                      <Text style={styles.reviewCountText}>
+                        {reviewSummary.reviewCount}{' '}
+                        {reviewSummary.reviewCount === 1 ? 'review' : 'reviews'}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {reviewLoadError ? (
+                  <RecoverableErrorBanner
+                    message={reviewLoadError}
+                    onRetry={() => void loadPublicReviews()}
+                    style={styles.notice}
+                  />
+                ) : reviewSummary.reviewCount === 0 ? (
+                  <View style={styles.emptyReviewsCard}>
+                    <Text style={styles.emptyReviewsText}>
+                      No published reviews yet.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.reviewList}>
+                    {reviewPreview.map(review => (
+                      <View key={review.reviewId} style={styles.reviewCard}>
+                        <View style={styles.reviewCardHeader}>
+                          <Text style={styles.reviewRating}>
+                            {review.overallRating} ★
+                          </Text>
+                          <Text style={styles.reviewDate}>
+                            {formatReviewPublishedAt(review.publishedAt)}
+                          </Text>
+                        </View>
+                        {review.reviewText ? (
+                          <Text style={styles.reviewText}>{review.reviewText}</Text>
+                        ) : null}
+                        {review.tagCodes.length > 0 ? (
+                          <View style={styles.reviewTags}>
+                            {review.tagCodes.map(code => (
+                              <View key={code} style={styles.reviewTag}>
+                                <Text style={styles.reviewTagText}>
+                                  {code.replace(/_/g, ' ')}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ) : null}
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>About this kitchen</Text>
@@ -704,6 +823,89 @@ const styles = StyleSheet.create({
     color: colors.espressoBrown,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
+  },
+  reviewHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  reviewScorePill: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+  },
+  reviewScoreText: {
+    color: colors.espressoBrown,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.extrabold,
+  },
+  reviewCountText: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
+  reviewList: {
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  reviewCard: {
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  reviewCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  reviewRating: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  reviewDate: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
+  reviewText: {
+    marginTop: spacing.sm,
+    color: colors.textPrimary,
+    fontSize: typography.small,
+    lineHeight: 20,
+  },
+  reviewTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  reviewTag: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+  },
+  reviewTagText: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.medium,
+  },
+  emptyReviewsCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+  },
+  emptyReviewsText: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
   },
   bodyText: {
     marginTop: spacing.sm,

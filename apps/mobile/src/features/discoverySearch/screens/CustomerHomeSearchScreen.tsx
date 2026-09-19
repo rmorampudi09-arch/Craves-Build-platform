@@ -51,6 +51,7 @@ export function CustomerHomeSearchScreen() {
   >();
   const selectedLocation = useAppSelector(state => state.customerShell.selectedLocation);
   const [query, setQuery] = useState('');
+  const normalizedQuery = query.trim();
   const dishesQuery = useHomeNearbyDishesQuery({
     radiusMeters: SEARCH_RADIUS_METERS,
     size: SEARCH_PAGE_SIZE,
@@ -70,7 +71,6 @@ export function CustomerHomeSearchScreen() {
     () => flattenNearbyKitchenPages(kitchensQuery.data?.pages),
     [kitchensQuery.data?.pages],
   );
-  const normalizedQuery = query.trim();
   const matchingDishes = useMemo(
     () =>
       normalizedQuery

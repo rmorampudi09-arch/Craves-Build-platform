@@ -128,6 +128,35 @@ export interface ChefMenuAvailabilityRequest {
   reason?: string | null;
 }
 
+export const CHEF_MENU_BULK_AVAILABILITY_AVAILABLE = false;
+export const CHEF_MENU_BULK_AVAILABILITY_PATH =
+  '/api/v1/kitchens/me/menu-items/availability';
+
+export interface ChefMenuBulkAvailabilityChange {
+  menuItemId: string;
+  available: boolean;
+  reason?: string | null;
+}
+
+export interface ChefMenuBulkAvailabilityResult {
+  menuItemId: string;
+  available: boolean;
+  changed: boolean;
+}
+
+export interface ChefMenuBulkAvailabilityResponse {
+  requestedCount: number;
+  changedCount: number;
+  items: ChefMenuBulkAvailabilityResult[];
+}
+
+const BULK_RESPONSE_KEYS = new Set([
+  'requestedCount',
+  'changedCount',
+  'items',
+]);
+const BULK_RESULT_KEYS = new Set(['menuItemId', 'available', 'changed']);
+
 const STATUS_SET = new Set<string>(CHEF_MENU_ITEM_STATUSES);
 const FOOD_TYPE_SET = new Set<string>(CHEF_MENU_FOOD_TYPES);
 const SPICE_LEVEL_SET = new Set<string>(CHEF_MENU_SPICE_LEVELS);
@@ -137,6 +166,14 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function exactKeys(
+  value: Record<string, unknown>,
+  expected: ReadonlySet<string>,
+): boolean {
+  const keys = Object.keys(value);
+  return keys.length === expected.size && keys.every(key => expected.has(key));
 }
 
 function requiredString(value: unknown): string | null {
@@ -406,6 +443,90 @@ function requireImageResponse(value: unknown): ChefMenuItemImage {
   return parsed;
 }
 
+function normalizeBulkAvailabilityChanges(
+  changes: readonly ChefMenuBulkAvailabilityChange[],
+): ChefMenuBulkAvailabilityChange[] {
+  if (changes.length < 1 || changes.length > 100) {
+    throw new Error('Chef bulk availability requires between 1 and 100 items.');
+  }
+
+  const seen = new Set<string>();
+  return changes.map(change => {
+    const menuItemId = requireMenuItemId(change.menuItemId);
+    if (seen.has(menuItemId)) {
+      throw new Error('Chef bulk availability cannot contain duplicate menu items.');
+    }
+    seen.add(menuItemId);
+    if (typeof change.available !== 'boolean') {
+      throw new Error('Menu item availability must be boolean.');
+    }
+    const reason = change.reason?.trim() || null;
+    if (reason && reason.length > 500) {
+      throw new Error('Availability reason must be 500 characters or fewer.');
+    }
+    return {menuItemId, available: change.available, reason};
+  });
+}
+
+export function parseChefMenuBulkAvailabilityResponse(
+  value: unknown,
+  requested: readonly ChefMenuBulkAvailabilityChange[],
+): ChefMenuBulkAvailabilityResponse | null {
+  const raw = asRecord(value);
+  if (
+    !raw ||
+    !exactKeys(raw, BULK_RESPONSE_KEYS) ||
+    !Number.isSafeInteger(raw.requestedCount) ||
+    !Number.isSafeInteger(raw.changedCount) ||
+    raw.requestedCount !== requested.length ||
+    typeof raw.changedCount !== 'number' ||
+    raw.changedCount < 0 ||
+    raw.changedCount > requested.length ||
+    !Array.isArray(raw.items) ||
+    raw.items.length !== requested.length
+  ) {
+    return null;
+  }
+
+  const requestedById = new Map(
+    requested.map(change => [change.menuItemId, change.available] as const),
+  );
+  const seen = new Set<string>();
+  const items: ChefMenuBulkAvailabilityResult[] = [];
+  let actualChangedCount = 0;
+
+  for (const valueItem of raw.items) {
+    const item = asRecord(valueItem);
+    if (!item || !exactKeys(item, BULK_RESULT_KEYS)) return null;
+    const menuItemId = uuid(item.menuItemId);
+    if (
+      !menuItemId ||
+      seen.has(menuItemId) ||
+      !requestedById.has(menuItemId) ||
+      typeof item.available !== 'boolean' ||
+      item.available !== requestedById.get(menuItemId) ||
+      typeof item.changed !== 'boolean'
+    ) {
+      return null;
+    }
+    seen.add(menuItemId);
+    if (item.changed) actualChangedCount += 1;
+    items.push({
+      menuItemId,
+      available: item.available,
+      changed: item.changed,
+    });
+  }
+
+  if (actualChangedCount !== raw.changedCount) return null;
+
+  return {
+    requestedCount: raw.requestedCount,
+    changedCount: raw.changedCount,
+    items,
+  };
+}
+
 export const chefMenuApi = {
   async listItems(signal?: AbortSignal): Promise<ChefMenuItem[]> {
     const response = await httpClient.get<unknown>(
@@ -443,6 +564,23 @@ export const chefMenuApi = {
       {signal},
     );
     return requireItemResponse(response);
+  },
+
+  async updateAvailabilityBulk(
+    changes: readonly ChefMenuBulkAvailabilityChange[],
+    signal?: AbortSignal,
+  ): Promise<ChefMenuBulkAvailabilityResponse> {
+    const normalized = normalizeBulkAvailabilityChanges(changes);
+    const response = await httpClient.patch<unknown>(
+      CHEF_MENU_BULK_AVAILABILITY_PATH,
+      {changes: normalized},
+      {signal},
+    );
+    const parsed = parseChefMenuBulkAvailabilityResponse(response, normalized);
+    if (!parsed) {
+      throw new Error('Chef bulk availability returned an unsupported response.');
+    }
+    return parsed;
   },
 
   async updateAvailability(

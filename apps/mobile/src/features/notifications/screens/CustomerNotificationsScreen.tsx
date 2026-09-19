@@ -351,7 +351,7 @@ export function CustomerNotificationsScreen() {
               unreadCount === 0 ||
               markAllRead.isPending
             }
-            onPress={() => void markAll()}
+            onPress={() => { markAll().catch(() => undefined); }}
             style={({pressed}) => [
               notificationsQuery.v2Available && unreadCount > 0
                 ? styles.markAllButton

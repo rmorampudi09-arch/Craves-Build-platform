@@ -62,6 +62,14 @@ export interface NearbyKitchenPageRequest {
   radiusMeters: number;
   page: number;
   size: number;
+  query?: string | null;
+  category?: string | null;
+  foodType?: 'VEG' | 'NON_VEG' | 'EGG' | null;
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  maxPreparationTimeMinutes?: number | null;
+  spiceLevel?: 'MILD' | 'MEDIUM' | 'SPICY' | null;
+  sort?: 'DISTANCE_ASC' | 'NAME_ASC' | null;
 }
 
 function requireFiniteRange(
@@ -91,6 +99,20 @@ function requireIntegerRange(
 export function normalizeNearbyKitchenPageRequest(
   request: NearbyKitchenPageRequest,
 ): NearbyKitchenPageRequest {
+  const query = request.query?.trim() || null;
+  const category = request.category?.trim() || null;
+  if (query && [...query].length > 120) throw new Error('query must be 120 characters or fewer.');
+  if (category && [...category].length > 80) throw new Error('category must be 80 characters or fewer.');
+  const minPrice = request.minPrice ?? null;
+  const maxPrice = request.maxPrice ?? null;
+  if (minPrice !== null && (!Number.isFinite(minPrice) || minPrice < 0)) throw new Error('minPrice must be zero or greater.');
+  if (maxPrice !== null && (!Number.isFinite(maxPrice) || maxPrice < 0)) throw new Error('maxPrice must be zero or greater.');
+  if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) throw new Error('minPrice must not exceed maxPrice.');
+  const maxPreparationTimeMinutes = request.maxPreparationTimeMinutes ?? null;
+  if (
+    maxPreparationTimeMinutes !== null &&
+    (!Number.isInteger(maxPreparationTimeMinutes) || maxPreparationTimeMinutes <= 0)
+  ) throw new Error('maxPreparationTimeMinutes must be a positive integer.');
   return {
     latitude: requireFiniteRange('latitude', request.latitude, -90, 90),
     longitude: requireFiniteRange('longitude', request.longitude, -180, 180),
@@ -102,6 +124,14 @@ export function normalizeNearbyKitchenPageRequest(
     ),
     page: requireIntegerRange('page', request.page, 0, Number.MAX_SAFE_INTEGER),
     size: requireIntegerRange('size', request.size, 1, NEARBY_CHEF_MAX_PAGE_SIZE),
+    query,
+    category,
+    foodType: request.foodType ?? null,
+    minPrice,
+    maxPrice,
+    maxPreparationTimeMinutes,
+    spiceLevel: request.spiceLevel ?? null,
+    sort: request.sort ?? 'DISTANCE_ASC',
   };
 }
 
@@ -179,12 +209,32 @@ export const nearbyChefDiscoveryApi = {
           normalized.radiusMeters,
           normalized.page,
           normalized.size,
+          normalized.query ?? '',
+          normalized.category ?? '',
+          normalized.foodType ?? '',
+          normalized.minPrice ?? '',
+          normalized.maxPrice ?? '',
+          normalized.maxPreparationTimeMinutes ?? '',
+          normalized.spiceLevel ?? '',
+          normalized.sort ?? '',
         ].join(':'),
       });
 
       const parsed = nearbyKitchenPageSchema.parse(response);
       return verifyResponseContext(parsed, normalized);
     } catch (primaryError) {
+      if (
+        normalized.query ||
+        normalized.category ||
+        normalized.foodType ||
+        normalized.minPrice !== null ||
+        normalized.maxPrice !== null ||
+        normalized.maxPreparationTimeMinutes !== null ||
+        normalized.spiceLevel ||
+        normalized.sort !== 'DISTANCE_ASC'
+      ) {
+        throw primaryError;
+      }
       try {
         const fallback = await httpClient.get<unknown>(LEGACY_NEARBY_CHEF_DISCOVERY_PATH, {
           params: {

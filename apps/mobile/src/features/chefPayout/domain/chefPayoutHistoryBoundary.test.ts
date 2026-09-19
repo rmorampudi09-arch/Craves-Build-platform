@@ -31,7 +31,7 @@ describe('Chef payout history UI boundary', () => {
   });
 
   it('explains the exact blocked integration instead of fabricating a payout route', () => {
-    expect(CHEF_PAYOUT_HISTORY_MESSAGES.source).toContain('approved mobile APIM');
+    expect(CHEF_PAYOUT_HISTORY_MESSAGES.source).toContain('published Chef earnings API');
     expect(CHEF_PAYOUT_HISTORY_MESSAGES.withdraw).toContain('No Chef-role');
 
     const serialized = JSON.stringify(CHEF_PAYOUT_HISTORY_MESSAGES);

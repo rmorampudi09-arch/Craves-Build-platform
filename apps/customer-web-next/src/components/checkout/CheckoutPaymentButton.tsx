@@ -12,10 +12,12 @@ import type { CustomerCheckout } from "@/lib/checkout-contract";
 import { clearCart } from "@/services/api/cravesCart";
 import { loadSession } from "@/services/auth/cravesAuth";
 
-declare global {
-  interface Window {
-    Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayCheckout;
-  }
+type CheckoutWindow = Window & {
+  Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayCheckout;
+};
+
+function razorpayConstructor() {
+  return (window as CheckoutWindow).Razorpay;
 }
 
 type RazorpaySuccess = {
@@ -88,7 +90,7 @@ function responseMessage(body: unknown, fallback: string): string {
 
 function loadRazorpay(): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (window.Razorpay) {
+    if (razorpayConstructor()) {
       resolve();
       return;
     }
@@ -250,7 +252,7 @@ export function CheckoutPaymentButton({
       }
 
       await loadRazorpay();
-      if (!window.Razorpay) {
+      if (!razorpayConstructor()) {
         throw new Error("Razorpay checkout is unavailable.");
       }
 
@@ -263,7 +265,12 @@ export function CheckoutPaymentButton({
 
       const result = await new Promise<RazorpaySuccess>((resolve, reject) => {
         let settled = false;
-        const instance = new window.Razorpay!({
+        const Razorpay = razorpayConstructor();
+        if (!Razorpay) {
+          reject(new Error("Razorpay checkout is unavailable."));
+          return;
+        }
+        const instance = new Razorpay({
           key: payment.checkoutKeyId!,
           amount: payment.amountPaise!,
           currency: payment.currency,

@@ -34,6 +34,8 @@ describe('customerSettingsChildModel', () => {
     expect(CUSTOMER_SETTINGS_CAPABILITY_STATUS.deviceSessions).toBe(
       'contract-unavailable',
     );
+    expect(CUSTOMER_SETTINGS_CAPABILITY_STATUS.referral).toBe('available');
+
     expect(CUSTOMER_SETTINGS_CAPABILITY_STATUS.legalContent).toBe(
       'contract-unavailable',
     );

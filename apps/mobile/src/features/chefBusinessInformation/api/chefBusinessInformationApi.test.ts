@@ -84,6 +84,11 @@ describe('chefBusinessInformationApi KYC evidence', () => {
 
   it('posts exact multipart documentType and file fields', async () => {
     (httpClient.post as jest.Mock).mockResolvedValue(uploaded);
+    const append = jest.fn();
+    const formData = {append};
+    const formDataSpy = jest
+      .spyOn(globalThis, 'FormData')
+      .mockImplementation(() => formData as unknown as FormData);
 
     await expect(
       chefBusinessInformationApi.uploadProofFile('GOVERNMENT_ID_FRONT', {
@@ -98,40 +103,24 @@ describe('chefBusinessInformationApi KYC evidence', () => {
       }),
     );
 
-    expect(httpClient.post).toHaveBeenCalledTimes(1);
-    const [, formData, options] = (httpClient.post as jest.Mock).mock.calls[0];
-    expect((httpClient.post as jest.Mock).mock.calls[0][0]).toBe(
+    expect(formDataSpy).toHaveBeenCalledTimes(1);
+    expect(append).toHaveBeenNthCalledWith(
+      1,
+      'documentType',
+      'GOVERNMENT_ID_FRONT',
+    );
+    expect(append).toHaveBeenNthCalledWith(2, 'file', {
+      uri: 'file:///identity-front.jpg',
+      name: 'identity-front.jpg',
+      type: 'image/jpeg',
+    });
+    expect(httpClient.post).toHaveBeenCalledWith(
       CHEF_PROOF_FILES_ROUTE,
+      formData,
+      {signal: undefined},
     );
-    expect(options).toEqual({signal: undefined});
 
-    const parts = (
-      formData as {
-        getParts: () => Array<{
-          fieldName: string;
-          string?: string;
-          uri?: string;
-          name?: string;
-          type?: string;
-        }>;
-      }
-    ).getParts();
-
-    expect(parts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          fieldName: 'documentType',
-          string: 'GOVERNMENT_ID_FRONT',
-        }),
-        expect.objectContaining({
-          fieldName: 'file',
-          uri: 'file:///identity-front.jpg',
-          name: 'identity-front.jpg',
-          type: 'image/jpeg',
-        }),
-      ]),
-    );
-    expect(parts).toHaveLength(2);
+    formDataSpy.mockRestore();
   });
 
   it('does not allow legacy document types through the upload API', async () => {

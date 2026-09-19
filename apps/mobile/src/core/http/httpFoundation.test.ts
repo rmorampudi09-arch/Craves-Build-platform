@@ -182,6 +182,27 @@ describe('typed HTTP client foundation', () => {
     );
   });
 
+  it('uses RFC ProblemDetail detail when message is absent', () => {
+    const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+    const normalized = toAppApiError(
+      new AxiosError('bank validation', 'ERR_BAD_REQUEST', config, undefined, {
+        data: {
+          status: 400,
+          detail:
+            'Check consent, matching bank numbers, IFSC and the account holder name from your saved chef application.',
+        },
+        status: 400,
+        statusText: 'Bad Request',
+        headers: new AxiosHeaders(),
+        config,
+      }),
+    );
+
+    expect(normalized.message).toBe(
+      'Check consent, matching bank numbers, IFSC and the account holder name from your saved chef application.',
+    );
+  });
+
   it('keeps bounded user-safe validation messages', () => {
     const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
     const normalized = toAppApiError(

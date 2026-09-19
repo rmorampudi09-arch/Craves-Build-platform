@@ -28,6 +28,7 @@ import {Icon} from '../../../shared/components/Icon';
 import {InputField} from '../../../shared/components/InputField';
 import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {EmailVerificationPanel} from '../components/EmailVerificationPanel';
 import type {CustomerProfileIdentity} from '../domain/customerProfileContract';
 import {
   applyCustomerProfileLocalValidation,
@@ -141,6 +142,10 @@ function EditProfileForm({
           helperText="Your registered mobile number cannot be changed from this screen."
           label="Mobile number"
           value={resolveCustomerProfilePhoneLabel(profile)}
+        />
+        <EmailVerificationPanel
+          email={form.draft.email}
+          disabled={saving}
         />
       </View>
 

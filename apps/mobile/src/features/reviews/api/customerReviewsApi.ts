@@ -3,6 +3,10 @@ import {httpClient} from '../../../core/http/httpClient';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TAG_CODE_PATTERN = /^[A-Z0-9_]{1,64}$/;
+
+// Backend source exists, but customer review APIM publication is not present on main yet.
+// Keep the route/UI fail-closed until the gateway contract is published.
+export const CUSTOMER_REVIEWS_AVAILABLE = false;
 const REVIEW_STATUSES = [
   'PENDING_MODERATION',
   'PUBLISHED',

@@ -1,11 +1,17 @@
 import {useEffect} from 'react';
 import {
+  useInfiniteQuery,
   useQuery,
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
+import {
+  CUSTOMER_ORDER_HISTORY_PAGE_SIZE,
+  CUSTOMER_ORDER_HISTORY_V2_AVAILABLE,
+  customerOrderHistoryApi,
+} from '../api/customerOrderHistoryApi';
 import {customerOrderTrackingApi} from '../api/customerOrderTrackingApi';
 import {
   customerOrdersApi,
@@ -19,6 +25,7 @@ import {
 
 const CUSTOMER_ROLE = 'CUSTOMER' as const;
 const CUSTOMER_ORDERS_DOMAIN = 'customer-orders';
+const CUSTOMER_ORDERS_V2_DOMAIN = 'customer-orders-v2';
 const CUSTOMER_ORDER_TRACKING_DOMAIN = 'customer-order-tracking';
 
 export const customerOrdersQueryPrefix = [
@@ -26,6 +33,13 @@ export const customerOrdersQueryPrefix = [
   'v1',
   'private',
   CUSTOMER_ORDERS_DOMAIN,
+] as const;
+
+export const customerOrdersV2QueryPrefix = [
+  'craves',
+  'v1',
+  'private',
+  CUSTOMER_ORDERS_V2_DOMAIN,
 ] as const;
 
 export const customerOrderTrackingQueryPrefix = [
@@ -40,6 +54,14 @@ export function createCustomerOrdersQueryKey(identityId: string) {
     userId: identityId,
     role: CUSTOMER_ROLE,
     paging: {serverWindowLimit: CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT},
+  });
+}
+
+export function createCustomerOrdersV2QueryKey(identityId: string) {
+  return createPrivateQueryKey(CUSTOMER_ORDERS_V2_DOMAIN, {
+    userId: identityId,
+    role: CUSTOMER_ROLE,
+    paging: {limit: CUSTOMER_ORDER_HISTORY_PAGE_SIZE},
   });
 }
 
@@ -68,31 +90,98 @@ export function createCustomerOrderTrackingQueryKey(
 export function invalidateCustomerOrdersQueries(
   queryClient: QueryClient,
 ): Promise<void> {
-  return queryClient
-    .invalidateQueries({queryKey: customerOrdersQueryPrefix})
-    .then(() => undefined);
+  return Promise.all([
+    queryClient.invalidateQueries({queryKey: customerOrdersQueryPrefix}),
+    queryClient.invalidateQueries({queryKey: customerOrdersV2QueryPrefix}),
+  ]).then(() => undefined);
 }
 
 export function useCustomerOrdersQuery() {
   const queryClient = useQueryClient();
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
-  const queryKey = identityId
+  const legacyQueryKey = identityId
     ? createCustomerOrdersQueryKey(identityId)
     : ([...customerOrdersQueryPrefix, 'disabled'] as const);
+  const v2QueryKey = identityId
+    ? createCustomerOrdersV2QueryKey(identityId)
+    : ([...customerOrdersV2QueryPrefix, 'disabled'] as const);
 
-  const query = useQuery({
-    queryKey,
+  const legacyQuery = useQuery({
+    queryKey: legacyQueryKey,
     queryFn: async ({signal}) =>
-      createCustomerOrdersSnapshot(await customerOrdersApi.listRecentOrders(signal)),
-    enabled: identityId !== null,
+      createCustomerOrdersSnapshot(
+        await customerOrdersApi.listRecentOrders(signal),
+      ),
+    enabled: identityId !== null && !CUSTOMER_ORDER_HISTORY_V2_AVAILABLE,
     staleTime: 30_000,
   });
 
+  const v2Query = useInfiniteQuery({
+    queryKey: v2QueryKey,
+    queryFn: ({pageParam, signal}) =>
+      customerOrderHistoryApi.page({
+        limit: CUSTOMER_ORDER_HISTORY_PAGE_SIZE,
+        cursor: pageParam,
+        signal,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: lastPage =>
+      lastPage.hasMore ? lastPage.nextCursor ?? undefined : undefined,
+    enabled: identityId !== null && CUSTOMER_ORDER_HISTORY_V2_AVAILABLE,
+    staleTime: 30_000,
+  });
+
+  const v2Orders =
+    v2Query.data?.pages.flatMap(page => page.orders) ?? [];
+  const v2Snapshot = v2Query.data
+    ? createCustomerOrdersSnapshot(v2Orders, !v2Query.hasNextPage)
+    : undefined;
+
   return {
-    ...query,
+    data: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+      ? v2Snapshot
+      : legacyQuery.data,
+    error: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+      ? v2Query.error
+      : legacyQuery.error,
+    identityId,
     sessionRequired: identityId === null,
+    v2Available: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE,
+    isPending: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+      ? v2Query.isPending
+      : legacyQuery.isPending,
+    isError: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+      ? v2Query.isError
+      : legacyQuery.isError,
+    isFetching: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+      ? v2Query.isFetching
+      : legacyQuery.isFetching,
+    isRefetching: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+      ? v2Query.isRefetching
+      : legacyQuery.isRefetching,
+    hasNextPage: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+      ? Boolean(v2Query.hasNextPage)
+      : false,
+    isFetchingNextPage: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+      ? v2Query.isFetchingNextPage
+      : false,
+    fetchNextPage: () =>
+      CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+        ? v2Query.fetchNextPage().then(() => undefined)
+        : Promise.resolve(),
+    refetch: () =>
+      CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+        ? v2Query.refetch()
+        : legacyQuery.refetch(),
     cancelPendingRequest: () =>
-      queryClient.cancelQueries({queryKey, exact: true}).then(() => undefined),
+      queryClient
+        .cancelQueries({
+          queryKey: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE
+            ? v2QueryKey
+            : legacyQueryKey,
+          exact: true,
+        })
+        .then(() => undefined),
   };
 }
 
@@ -115,6 +204,14 @@ export function useCustomerOrderDetailQuery(orderId: string) {
   useEffect(() => {
     const order = query.data;
     if (!identityId || !order) {
+      return;
+    }
+
+    if (CUSTOMER_ORDER_HISTORY_V2_AVAILABLE) {
+      void queryClient.invalidateQueries({
+        queryKey: createCustomerOrdersV2QueryKey(identityId),
+        exact: true,
+      });
       return;
     }
 

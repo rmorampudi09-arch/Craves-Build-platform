@@ -28,7 +28,23 @@ export async function POST(request: NextRequest) {
     const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return NextResponse.json({ error: upstream.status === 401 ? "SESSION_REQUIRED" : "PAYMENT_CREATE_FAILED", message: upstream.status === 401 ? "Please sign in again." : upstream.status === 400 ? "Checkout is not ready for payment." : "Payment order could not be created." }, { status: upstream.status });
     const session = parsePaymentSession(body);
-    return session ? NextResponse.json(session, { status: 201, headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ error: "INVALID_UPSTREAM_RESPONSE", message: "Payment response validation failed." }, { status: 502 });
+    if (!session) {
+      return NextResponse.json(
+        { error: "INVALID_UPSTREAM_RESPONSE", message: "Payment response validation failed." },
+        { status: 502 },
+      );
+    }
+    const amountPaise = Math.round((session.amount + Number.EPSILON) * 100);
+    if (!Number.isSafeInteger(amountPaise) || amountPaise < 0) {
+      return NextResponse.json(
+        { error: "INVALID_PAYMENT_AMOUNT", message: "Payment amount could not be represented safely." },
+        { status: 502 },
+      );
+    }
+    return NextResponse.json(
+      { ...session, amountPaise },
+      { status: 201, headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     const timeout = error instanceof Error && error.name === "AbortError";
     return NextResponse.json({ error: error instanceof SessionRequiredError ? "SESSION_REQUIRED" : timeout ? "PAYMENT_TIMEOUT" : "PAYMENT_UNAVAILABLE", message: error instanceof SessionRequiredError ? "Please sign in again." : "Payment is unavailable right now." }, { status: error instanceof SessionRequiredError ? 401 : timeout ? 504 : 502 });

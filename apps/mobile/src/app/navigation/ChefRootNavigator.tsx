@@ -32,6 +32,7 @@ import {ChefReadyOrdersScreen} from '../../features/chefOrders/screens/ChefReady
 import {ChefPayoutHistoryScreen} from '../../features/chefPayout/screens/ChefPayoutHistoryScreen';
 import {ChefAppPreferencesScreen} from '../../features/chefPreferences/screens/ChefAppPreferencesScreen';
 import {ChefEditProfileScreen} from '../../features/chefProfile/screens/ChefEditProfileScreen';
+import {ChefReferralEarningsScreen} from '../../features/chefReferrals/screens/ChefReferralEarningsScreen';
 import {ChefProfileScreen} from '../../features/chefProfile/screens/ChefProfileScreen';
 import {ChefEditProfileDraftProvider} from '../../features/chefProfile/state/ChefEditProfileDraftProvider';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
@@ -203,6 +204,10 @@ function ChefProfileNavigator() {
         <ProfileStack.Screen
           name="ChefSupport"
           component={ChefSupportScreen}
+        />
+        <ProfileStack.Screen
+          name="ChefReferralEarnings"
+          component={ChefReferralEarningsScreen}
         />
         <ProfileStack.Screen
           name="ChefEditProfile"

@@ -14,7 +14,6 @@ import {
 import {
   isDeliveryReadyAddress,
   parseAddressInput,
-  type AddressLabel,
   type CustomerAddress,
   type CustomerAddressInput,
 } from "@/lib/address-contract";
@@ -31,7 +30,6 @@ type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude"> & {
   latitude: string;
   longitude: string;
 };
-
 
 
 function draftFrom(address: CustomerAddress): AddressDraft {
@@ -79,12 +77,6 @@ function invalidateHomeDeliveryContext(): void {
   clearDishDiscoveryCache();
   clearKitchenDiscoveryCache();
 }
-
-const addressLabels: Array<{ value: AddressLabel; label: string }> = [
-  { value: "HOME", label: "Home" },
-  { value: "WORK", label: "Work" },
-  { value: "OTHER", label: "Other" },
-];
 
 export default function AddressesPage() {
   const navigate = useNavigate();

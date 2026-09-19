@@ -66,14 +66,31 @@ const slotRuleSchema = z.object({
   recurringDeficitUnits: z.number().int().nonnegative(),
   version: z.number().int(),
   updatedAt: z.string(),
-});
+}).strict();
+
+export const menuItemRuleSchema = z.object({
+  id: uuid,
+  chefIdentityId: uuid,
+  menuItemId: uuid,
+  isoDayOfWeek: z.number().int().min(1).max(7),
+  mealSlotCode: z.string().min(1).max(40),
+  maxSubscriptionUnits: z.number().int().min(0).max(100000),
+  salesEnabled: z.boolean(),
+  recurringReservedUnits: z.number().int().nonnegative(),
+  recurringAvailableUnits: z.number().int(),
+  recurringDeficitUnits: z.number().int().nonnegative(),
+  version: z.number().int().positive(),
+  updatedAt: z.string().refine(value => !Number.isNaN(Date.parse(value))),
+}).strict();
+
+export type ChefMenuItemCapacityRule = z.infer<typeof menuItemRuleSchema>;
 
 export const chefCapacitySummarySchema = z.object({
   chefIdentityId: uuid,
   adminSalesFrozen: z.boolean(),
   freezeReason: z.string().nullable().optional().transform(value => value ?? null),
   slotRules: z.array(slotRuleSchema).max(1000),
-  menuItemRules: z.array(z.unknown()).max(1000),
+  menuItemRules: z.array(menuItemRuleSchema).max(1000),
   dateOverrides: z.array(z.unknown()).max(1000),
   menuItemDateOverrides: z.array(z.unknown()).max(1000),
   openIncidentCount: z.number().int().nonnegative(),
@@ -104,6 +121,30 @@ export interface PutChefScheduleRequest {
   generationLeadHours: number;
   items: ChefScheduleItemInput[];
 }
+
+export interface PutChefMenuItemCapacityRuleRequest {
+  menuItemId: string;
+  isoDayOfWeek: number;
+  mealSlotCode: string;
+  maxSubscriptionUnits: number;
+  salesEnabled: boolean;
+  reason: string;
+}
+
+const putChefMenuItemCapacityRuleRequestSchema = z.object({
+  menuItemId: uuid,
+  isoDayOfWeek: z.number().int().min(1).max(7),
+  mealSlotCode: z
+    .string()
+    .trim()
+    .min(1)
+    .max(40)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/)
+    .transform(value => value.toUpperCase()),
+  maxSubscriptionUnits: z.number().int().min(0).max(100000),
+  salesEnabled: z.boolean(),
+  reason: z.string().trim().min(1).max(1000),
+}).strict();
 
 function parseOne<T>(schema: z.ZodType<T>, value: unknown, message: string): T {
   const parsed = schema.safeParse(value);
@@ -172,5 +213,19 @@ export const chefSubscriptionApi = {
     reason: string;
   }): Promise<void> {
     await httpClient.put<unknown>('/api/v1/chef/subscription-capacity/rules/slots', request);
+  },
+
+  async putMenuItemRule(
+    request: PutChefMenuItemCapacityRuleRequest,
+  ): Promise<ChefMenuItemCapacityRule> {
+    const body = putChefMenuItemCapacityRuleRequestSchema.parse(request);
+    return parseOne(
+      menuItemRuleSchema,
+      await httpClient.put<unknown>(
+        '/api/v1/chef/subscription-capacity/rules/menu-items',
+        body,
+      ),
+      'Chef menu-item capacity rule could not be verified.',
+    );
   },
 };

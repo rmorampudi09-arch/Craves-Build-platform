@@ -55,12 +55,11 @@ describe('P31 home feed query model', () => {
     });
   });
 
-  it('blocks category and cuisine filters instead of silently inventing query parameters', () => {
-    expect(getHomeFeedContractBlocker({category: 'Meals'})).toContain(
-      'category query parameter',
-    );
+  it('accepts Discovery v2 category/search filters but still blocks unsupported cuisine IDs', () => {
+    expect(getHomeFeedContractBlocker({category: 'Meals'})).toBeNull();
+    expect(getHomeFeedContractBlocker({query: 'biryani'})).toBeNull();
     expect(getHomeFeedContractBlocker({cuisine: 'Telugu'})).toContain(
-      'cuisine query parameter',
+      'Cuisine IDs',
     );
     expect(getHomeFeedContractBlocker()).toBeNull();
   });

@@ -34,6 +34,7 @@ import {ChefAppPreferencesScreen} from '../../features/chefPreferences/screens/C
 import {ChefEditProfileScreen} from '../../features/chefProfile/screens/ChefEditProfileScreen';
 import {ChefReferralEarningsScreen} from '../../features/chefReferrals/screens/ChefReferralEarningsScreen';
 import {ChefKitchenScheduleScreen} from '../../features/chefSchedule/screens/ChefKitchenScheduleScreen';
+import {ChefScheduledOrdersScreen} from '../../features/chefScheduledOrders/screens/ChefScheduledOrdersScreen';
 import {ChefProfileScreen} from '../../features/chefProfile/screens/ChefProfileScreen';
 import {ChefEditProfileDraftProvider} from '../../features/chefProfile/state/ChefEditProfileDraftProvider';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
@@ -213,6 +214,10 @@ function ChefProfileNavigator() {
         <ProfileStack.Screen
           name="ChefKitchenSchedule"
           component={ChefKitchenScheduleScreen}
+        />
+        <ProfileStack.Screen
+          name="ChefScheduledOrders"
+          component={ChefScheduledOrdersScreen}
         />
         <ProfileStack.Screen
           name="ChefEditProfile"

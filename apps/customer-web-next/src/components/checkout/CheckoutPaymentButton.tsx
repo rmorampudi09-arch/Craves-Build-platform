@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, LockKeyhole } from "lucide-react";
 import {
@@ -148,7 +149,7 @@ export function CheckoutPaymentButton({
   onFailure,
 }: CheckoutPaymentButtonProps) {
   const router = useRouter();
-  const [busy, setBusy] = React.useState(false);
+  const [busy, setBusy] = useState(false);
 
   async function finishConfirmedOrder(currentCheckout: CustomerCheckout) {
     const orderId = currentCheckout.orders[0]?.id;
@@ -378,5 +379,3 @@ export function CheckoutPaymentButton({
     </div>
   );
 }
-
-import React from "react";

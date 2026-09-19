@@ -62,7 +62,10 @@ import {
   getCustomerKitchenInitials,
   getCustomerKitchenMenuPreview,
 } from '../kitchenProfilePresentation';
-import {useCustomerKitchenProfileQuery} from '../query/kitchenProfileQueries';
+import {
+  useCustomerKitchenAvailabilityQuery,
+  useCustomerKitchenProfileQuery,
+} from '../query/kitchenProfileQueries';
 
 type KitchenProfileRoute = RouteProp<
   CustomerDishDetailStackParamList,
@@ -123,6 +126,9 @@ export function CustomerKitchenProfileScreen() {
   const route = useRoute<KitchenProfileRoute>();
   const dispatch = useAppDispatch();
   const profileQuery = useCustomerKitchenProfileQuery(route.params.kitchenId);
+  const availabilityQuery = useCustomerKitchenAvailabilityQuery(
+    route.params.kitchenId,
+  );
   const favorites = useCustomerFavoritesQuery();
   const toggleFavorite = useToggleCustomerFavorite();
   const cartSnapshot = useAppSelector(state => state.cart.snapshot);
@@ -383,6 +389,9 @@ export function CustomerKitchenProfileScreen() {
               colors={[colors.flameRed]}
               onRefresh={() => {
                 void profileQuery.refetch();
+                if (availabilityQuery.available) {
+                  void availabilityQuery.refetch();
+                }
                 void loadPublicReviews();
               }}
               refreshing={profileQuery.isRefetching && revalidatingItemId === null}
@@ -400,6 +409,31 @@ export function CustomerKitchenProfileScreen() {
             <View style={styles.activeBadge}>
               <Text style={styles.activeBadgeText}>Active kitchen</Text>
             </View>
+            {availabilityQuery.available && availabilityQuery.data ? (
+              <View
+                style={[
+                  styles.currentAvailabilityBadge,
+                  availabilityQuery.data.availableNow
+                    ? styles.currentAvailabilityOpen
+                    : styles.currentAvailabilityClosed,
+                ]}>
+                <Text
+                  style={[
+                    styles.currentAvailabilityText,
+                    availabilityQuery.data.availableNow
+                      ? styles.currentAvailabilityOpenText
+                      : styles.currentAvailabilityClosedText,
+                  ]}>
+                  {availabilityQuery.data.availableNow
+                    ? 'Available now'
+                    : availabilityQuery.data.paused
+                      ? 'Paused'
+                      : !availabilityQuery.data.acceptingOrders
+                        ? 'Not accepting orders'
+                        : 'Closed right now'}
+                </Text>
+              </View>
+            ) : null}
             <Text accessibilityRole="header" style={styles.kitchenName}>
               {kitchenName}
             </Text>
@@ -729,6 +763,20 @@ const styles = StyleSheet.create({
     fontSize: typography.tiny,
     fontWeight: fontWeight.bold,
   },
+  currentAvailabilityBadge: {
+    marginTop: spacing.xs,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+  },
+  currentAvailabilityOpen: {backgroundColor: colors.successSoft},
+  currentAvailabilityClosed: {backgroundColor: colors.warningSoft},
+  currentAvailabilityText: {
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
+  },
+  currentAvailabilityOpenText: {color: colors.success},
+  currentAvailabilityClosedText: {color: colors.warningText},
   kitchenName: {
     marginTop: spacing.sm,
     color: colors.espressoBrown,

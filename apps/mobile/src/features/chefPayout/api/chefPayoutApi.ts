@@ -10,6 +10,59 @@ const MONEY_PATTERN = /^-?\d{1,10}(?:\.\d{1,2})?$/;
 export const CHEF_EARNINGS_ROUTE = '/api/v1/chef/earnings' as const;
 export const CHEF_EARNINGS_DEFAULT_LIMIT = 100;
 export const CHEF_EARNINGS_MAX_LIMIT = 200;
+export const CHEF_FINANCE_BALANCE_ROUTE =
+  '/api/v1/chef/finance/balance' as const;
+
+export type ChefPayoutMode = 'MANUAL' | 'AUTOMATIC';
+export type ChefPayoutChannel = 'RAZORPAYX' | 'CRAVES_MANUAL';
+export type ChefPayoutStatus =
+  | 'RESERVED'
+  | 'SUBMITTING'
+  | 'PROCESSING'
+  | 'UNKNOWN'
+  | 'PAID'
+  | 'FAILED'
+  | 'REVERSED'
+  | 'REVIEW_REQUIRED'
+  | 'CANCELLED';
+
+export interface ChefPayoutTransaction {
+  id: string;
+  amount: ChefMoneyDecimal;
+  mode: ChefPayoutMode;
+  status: ChefPayoutStatus;
+  providerStatus: string | null;
+  transferReference: string | null;
+  createdAt: string;
+  payoutChannel: ChefPayoutChannel;
+}
+
+export interface ChefAccountingSummary {
+  recordedOrders: number;
+  grossFood: ChefMoneyDecimal;
+  totalServiceFee: ChefMoneyDecimal;
+  feeBeforeGst: ChefMoneyDecimal;
+  feeGst: ChefMoneyDecimal;
+  withholding: ChefMoneyDecimal;
+  originalNetEarnings: ChefMoneyDecimal;
+  recordedPayments: ChefMoneyDecimal;
+  outstanding: ChefMoneyDecimal;
+  otherLedgerMovements: ChefMoneyDecimal;
+  legacyRecords: number;
+}
+
+export interface ChefFinanceBalance {
+  available: ChefMoneyDecimal;
+  outstanding: ChefMoneyDecimal;
+  reservedOrPaid: ChefMoneyDecimal;
+  onHold: boolean;
+  manualRequestUsedToday: boolean;
+  nextManualRequestAt: string;
+  recentPayouts: ChefPayoutTransaction[];
+  executionEnabled: boolean;
+  payoutMode: ChefPayoutChannel;
+  accounting: ChefAccountingSummary;
+}
 
 export type ChefEarningOrderSource = 'ON_DEMAND' | 'SUBSCRIPTION';
 export type ChefEarningStatus =
@@ -91,6 +144,69 @@ function hasOnlyEarningResponseKeys(raw: Record<string, unknown>): boolean {
   );
 }
 
+const PAYOUT_STATUSES = new Set<ChefPayoutStatus>([
+  'RESERVED',
+  'SUBMITTING',
+  'PROCESSING',
+  'UNKNOWN',
+  'PAID',
+  'FAILED',
+  'REVERSED',
+  'REVIEW_REQUIRED',
+  'CANCELLED',
+]);
+const PAYOUT_MODES = new Set<ChefPayoutMode>(['MANUAL', 'AUTOMATIC']);
+const PAYOUT_CHANNELS = new Set<ChefPayoutChannel>([
+  'RAZORPAYX',
+  'CRAVES_MANUAL',
+]);
+
+const BALANCE_KEYS = new Set([
+  'available',
+  'outstanding',
+  'reservedOrPaid',
+  'onHold',
+  'manualRequestUsedToday',
+  'nextManualRequestAt',
+  'recentPayouts',
+  'executionEnabled',
+  'payoutMode',
+  'accounting',
+]);
+
+const PAYOUT_KEYS = new Set([
+  'id',
+  'amount',
+  'mode',
+  'status',
+  'providerStatus',
+  'transferReference',
+  'createdAt',
+  'payoutChannel',
+]);
+
+const ACCOUNTING_KEYS = new Set([
+  'recordedOrders',
+  'grossFood',
+  'totalServiceFee',
+  'feeBeforeGst',
+  'feeGst',
+  'withholding',
+  'originalNetEarnings',
+  'recordedPayments',
+  'outstanding',
+  'otherLedgerMovements',
+  'legacyRecords',
+]);
+
+function hasExactKeys(
+  raw: Record<string, unknown>,
+  expected: Set<string>,
+): boolean {
+  const keys = Object.keys(raw);
+  return keys.length === expected.size && keys.every(key => expected.has(key));
+}
+
 function requiredString(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') {
     return null;
@@ -135,6 +251,177 @@ function normalizeMoney(
   const [whole, fraction = ''] = unsigned.split('.');
   const normalized = `${whole}.${fraction.padEnd(2, '0')}`;
   return negative ? `-${normalized}` : normalized;
+}
+
+export function parseChefPayoutTransaction(
+  value: unknown,
+): ChefPayoutTransaction | null {
+  const raw = asRecord(value);
+  if (!raw || !hasExactKeys(raw, PAYOUT_KEYS)) return null;
+
+  const id = requiredString(raw.id, 64);
+  const amount = normalizeMoney(raw.amount, false);
+  const mode = requiredString(raw.mode, 20) as ChefPayoutMode | null;
+  const status = requiredString(raw.status, 40) as ChefPayoutStatus | null;
+  const providerStatus =
+    raw.providerStatus == null
+      ? null
+      : requiredString(raw.providerStatus, 120);
+  const transferReference =
+    raw.transferReference == null
+      ? null
+      : requiredString(raw.transferReference, 240);
+  const createdAt = requiredTimestamp(raw.createdAt);
+  const payoutChannel = requiredString(
+    raw.payoutChannel,
+    40,
+  ) as ChefPayoutChannel | null;
+
+  if (
+    !id ||
+    !UUID_PATTERN.test(id) ||
+    amount === null ||
+    !mode ||
+    !PAYOUT_MODES.has(mode) ||
+    !status ||
+    !PAYOUT_STATUSES.has(status) ||
+    (raw.providerStatus != null && !providerStatus) ||
+    (raw.transferReference != null && !transferReference) ||
+    !createdAt ||
+    !payoutChannel ||
+    !PAYOUT_CHANNELS.has(payoutChannel)
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    amount,
+    mode,
+    status,
+    providerStatus,
+    transferReference,
+    createdAt,
+    payoutChannel,
+  };
+}
+
+function parseAccountingSummary(value: unknown): ChefAccountingSummary | null {
+  const raw = asRecord(value);
+  if (!raw || !hasExactKeys(raw, ACCOUNTING_KEYS)) return null;
+
+  const recordedOrders = raw.recordedOrders;
+  const legacyRecords = raw.legacyRecords;
+  const grossFood = normalizeMoney(raw.grossFood, false);
+  const totalServiceFee = normalizeMoney(raw.totalServiceFee, false);
+  const feeBeforeGst = normalizeMoney(raw.feeBeforeGst, false);
+  const feeGst = normalizeMoney(raw.feeGst, false);
+  const withholding = normalizeMoney(raw.withholding, false);
+  const originalNetEarnings = normalizeMoney(raw.originalNetEarnings, false);
+  const recordedPayments = normalizeMoney(raw.recordedPayments, false);
+  const outstanding = normalizeMoney(raw.outstanding, true);
+  const otherLedgerMovements = normalizeMoney(raw.otherLedgerMovements, true);
+
+  if (
+    typeof recordedOrders !== 'number' ||
+    !Number.isSafeInteger(recordedOrders) ||
+    recordedOrders < 0 ||
+    typeof legacyRecords !== 'number' ||
+    !Number.isSafeInteger(legacyRecords) ||
+    legacyRecords < 0 ||
+    grossFood === null ||
+    totalServiceFee === null ||
+    feeBeforeGst === null ||
+    feeGst === null ||
+    withholding === null ||
+    originalNetEarnings === null ||
+    recordedPayments === null ||
+    outstanding === null ||
+    otherLedgerMovements === null
+  ) {
+    return null;
+  }
+
+  const paise = (amount: string) =>
+    BigInt(amount.replace('.', ''));
+  if (
+    paise(totalServiceFee) !== paise(feeBeforeGst) + paise(feeGst) ||
+    paise(grossFood) !==
+      paise(totalServiceFee) + paise(withholding) + paise(originalNetEarnings) ||
+    paise(outstanding) !==
+      paise(originalNetEarnings) +
+        paise(otherLedgerMovements) -
+        paise(recordedPayments)
+  ) {
+    return null;
+  }
+
+  return {
+    recordedOrders,
+    grossFood,
+    totalServiceFee,
+    feeBeforeGst,
+    feeGst,
+    withholding,
+    originalNetEarnings,
+    recordedPayments,
+    outstanding,
+    otherLedgerMovements,
+    legacyRecords,
+  };
+}
+
+export function parseChefFinanceBalance(
+  value: unknown,
+): ChefFinanceBalance | null {
+  const raw = asRecord(value);
+  if (!raw || !hasExactKeys(raw, BALANCE_KEYS)) return null;
+
+  const available = normalizeMoney(raw.available, false);
+  const outstanding = normalizeMoney(raw.outstanding, true);
+  const reservedOrPaid = normalizeMoney(raw.reservedOrPaid, false);
+  const nextManualRequestAt = requiredTimestamp(raw.nextManualRequestAt);
+  const payoutMode = requiredString(
+    raw.payoutMode,
+    40,
+  ) as ChefPayoutChannel | null;
+  const accounting = parseAccountingSummary(raw.accounting);
+  if (
+    available === null ||
+    outstanding === null ||
+    reservedOrPaid === null ||
+    typeof raw.onHold !== 'boolean' ||
+    typeof raw.manualRequestUsedToday !== 'boolean' ||
+    !nextManualRequestAt ||
+    !Array.isArray(raw.recentPayouts) ||
+    raw.recentPayouts.length > 100 ||
+    typeof raw.executionEnabled !== 'boolean' ||
+    !payoutMode ||
+    !PAYOUT_CHANNELS.has(payoutMode) ||
+    !accounting
+  ) {
+    return null;
+  }
+
+  const recentPayouts = raw.recentPayouts.map(parseChefPayoutTransaction);
+  if (recentPayouts.some(item => item === null)) return null;
+  const payouts = recentPayouts as ChefPayoutTransaction[];
+  if (new Set(payouts.map(item => item.id)).size !== payouts.length) {
+    return null;
+  }
+
+  return {
+    available,
+    outstanding,
+    reservedOrPaid,
+    onHold: raw.onHold,
+    manualRequestUsedToday: raw.manualRequestUsedToday,
+    nextManualRequestAt,
+    recentPayouts: payouts,
+    executionEnabled: raw.executionEnabled,
+    payoutMode,
+    accounting,
+  };
 }
 
 export function normalizeChefEarningsLimit(limit: number): number {
@@ -250,6 +537,18 @@ export function parseChefEarningLedger(
 
 
 export const chefPayoutApi = {
+  async getBalance(signal?: AbortSignal): Promise<ChefFinanceBalance> {
+    const response = await httpClient.get<unknown>(CHEF_FINANCE_BALANCE_ROUTE, {
+      signal,
+      dedupeKey: 'chef-finance-balance',
+    });
+    const parsed = parseChefFinanceBalance(response);
+    if (!parsed) {
+      throw new Error('CHEF_FINANCE_BALANCE_INVALID_RESPONSE');
+    }
+    return parsed;
+  },
+
   async listEarnings(
     limit = CHEF_EARNINGS_DEFAULT_LIMIT,
     signal?: AbortSignal,

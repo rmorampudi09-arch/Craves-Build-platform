@@ -60,7 +60,7 @@ export function useChefReviewPreview(): ChefReviewPreviewModel {
         ? createPrivateQueryKey('chef-review-summary', {
             userId: identityId,
             role: CHEF_ROLE,
-            resourceId: kitchenId,
+            entityId: kitchenId,
           })
         : (['craves', 'v1', 'private', 'chef-review-summary', 'unresolved'] as const),
     [identityId, kitchenId],

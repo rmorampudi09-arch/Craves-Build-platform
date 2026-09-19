@@ -423,12 +423,11 @@ describe('P123 critical E2E journeys', () => {
     expect(paymentRecoveryCapability.nativeRazorpayCallbackAdapterSupported).toBe(true);
     expect(paymentRecoveryCapability.newPaymentAttemptAfterTerminalFailureSupported).toBe(false);
 
-    expect(CHEF_PAYOUT_CONTRACT_MODEL.status).toBe('blocked');
+    expect(CHEF_PAYOUT_CONTRACT_MODEL.status).toBe('partial');
     expect(hasCompleteChefPayoutContract()).toBe(false);
     expect(getChefWithdrawEligibilityBoundary()).toMatchObject({
-      availability: 'unavailable',
-      code: 'BACKEND_CONTRACT_UNAVAILABLE',
-      canWithdraw: false,
+      availability: 'available',
+      canWithdraw: true,
     });
 
     expect(hasCompleteChefSubscriptionContract()).toBe(false);

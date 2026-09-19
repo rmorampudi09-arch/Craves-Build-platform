@@ -177,7 +177,7 @@ export function CustomerOrderReviewScreen() {
         Alert.alert(
           'Review changed',
           'Refresh the review before saving your changes.',
-          [{text: 'Refresh', onPress: () => void load()}],
+          [{text: 'Refresh', onPress: () => { load().catch(() => undefined); }}],
         );
       } else {
         Alert.alert('Could not save review', apiError.message);
@@ -227,7 +227,7 @@ export function CustomerOrderReviewScreen() {
                 <Text style={styles.errorText}>{loadError}</Text>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => void load()}>
+                  onPress={() => { load().catch(() => undefined); }}>
                   <Text style={styles.retryText}>Try again</Text>
                 </Pressable>
               </View>
@@ -337,7 +337,7 @@ export function CustomerOrderReviewScreen() {
               accessibilityRole="button"
               accessibilityState={{disabled: saving || Boolean(loadError)}}
               disabled={saving || Boolean(loadError)}
-              onPress={() => void save()}
+              onPress={() => { save().catch(() => undefined); }}
               style={({pressed}) => [
                 styles.submitButton,
                 (saving || Boolean(loadError)) && styles.disabled,

@@ -15,7 +15,6 @@ test("parses a Cashfree payment session without leaking internal identifiers", (
     cfOrderId: "provider-cf-id",
     paymentSessionId: "session-token-for-cashfree-sdk",
     amount: 234,
-    amountPaise: 23400,
     currency: "INR",
     status: "PAYMENT_PENDING",
     createdAt: "2026-07-30T00:00:00Z"
@@ -60,6 +59,7 @@ test("parses a Razorpay checkout session", () => {
     checkoutKeyId: "rzp_test_123",
     paymentSessionId: null,
     amount: 234,
+    amountPaise: 23400,
     currency: "INR",
     status: "PAYMENT_PENDING",
     createdAt: "2026-07-30T00:00:00Z"

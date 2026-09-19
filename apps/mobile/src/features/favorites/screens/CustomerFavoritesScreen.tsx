@@ -292,15 +292,15 @@ export function CustomerFavoritesScreen() {
 
       let snapshot = cartSnapshot;
       if (!snapshot) {
-        const refresh = await dispatch(refreshCartSnapshot());
-        if (refresh.status !== 'APPLIED') {
+        const refreshedCart = await dispatch(refreshCartSnapshot());
+        if (refreshedCart.status !== 'APPLIED') {
           setCartError(
             dish.menuItemId,
             'Your cart could not be checked. Refresh it before adding this dish.',
           );
           return;
         }
-        snapshot = refresh.snapshot;
+        snapshot = refreshedCart.snapshot;
       }
 
       const existing = snapshot.lines.find(

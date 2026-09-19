@@ -15,6 +15,7 @@ import {accountResolutionService} from '../state/accountResolutionService';
 import {authActions} from '../state/authSlice';
 import {completeLogout} from '../state/logoutCoordinator';
 import {ChefBankOnboardingPanel} from '../../chefBankOnboarding/components/ChefBankOnboardingPanel';
+import {ChefKycEvidencePanel} from '../../chefBusinessInformation/components/ChefKycEvidencePanel';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ChefAccountStatus'>;
 
@@ -108,6 +109,9 @@ export function ChefAccountStatusScreen({navigation, route}: Props) {
           <Text style={styles.rejectionReason}>Review note: {rejectionReason}</Text>
         ) : null}
         {refreshError ? <Text style={styles.error}>{refreshError}</Text> : null}
+        {status === 'PENDING' || status === 'REJECTED' ? (
+          <ChefKycEvidencePanel applicationStatus={status} />
+        ) : null}
         {status === 'REJECTED' ? (
           <PrimaryButton
             label="Update and resubmit"

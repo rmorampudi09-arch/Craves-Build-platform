@@ -152,9 +152,12 @@ export function AddressMapPicker({
         }}
         onPointerUp={(event) => finishDrag(event)}
         onPointerCancel={(event) => finishDrag(event, true)}
-        className="relative h-[19rem] w-full touch-none overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 sm:h-[22rem]"
+        className="relative aspect-[900/520] w-full touch-none overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
       >
         {!imageFailed ? (
+          // Static Azure map bytes come from our authenticated same-origin BFF,
+          // so Next/Image optimization would only add another server hop.
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             key={imageUrl}
             src={imageUrl}

@@ -106,10 +106,10 @@ const SETTINGS_ROWS: readonly AccountRowModel[] = [
   {
     id: 'support',
     title: 'Help & support',
-    subtitle: 'Get help with your Chef account',
+    subtitle: 'Support cases for orders, payouts and your Chef account',
     icon: 'phone',
     blockerMessage:
-      'A Chef-specific support destination is not present in the approved mobile route contract yet.',
+      'Chef support cases are available in the dedicated support flow.',
   },
 ];
 
@@ -326,6 +326,10 @@ export function ChefProfileScreen() {
       }
       if (row.id === 'preferences') {
         navigation.navigate('ChefAppPreferences');
+        return;
+      }
+      if (row.id === 'support') {
+        navigation.navigate('ChefSupport');
         return;
       }
       showBlocker(row.title, row.blockerMessage);

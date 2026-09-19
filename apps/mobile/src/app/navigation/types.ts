@@ -160,6 +160,7 @@ export type ChefProfileStackParamList = {
   ChefAppPreferences: undefined;
   ChefSupport: undefined;
   ChefReferralEarnings: undefined;
+  ChefKitchenSchedule: undefined;
   ChefEditProfile: undefined;
 };
 

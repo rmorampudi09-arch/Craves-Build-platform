@@ -265,7 +265,7 @@ export function ChefKycEvidencePanel({
       ) : null}
 
       {message ? (
-        <Text accessibilityRole="status" style={styles.message}>
+        <Text accessibilityLiveRegion="polite" style={styles.message}>
           {message}
         </Text>
       ) : null}

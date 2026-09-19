@@ -6,6 +6,7 @@ import {
 import {useAppSelector} from '../../../app/store/hooks';
 import {nearbyChefDiscoveryQueryPrefix} from '../../chefDiscovery/query/nearbyChefDiscoveryQueries';
 import {
+  PUBLIC_KITCHEN_AVAILABILITY_AVAILABLE,
   isCustomerKitchenId,
   kitchenProfileApi,
 } from '../api/kitchenProfileApi';
@@ -101,6 +102,45 @@ export function useCustomerKitchenProfileQuery(kitchenId: string) {
 
   return {
     ...query,
+    invalidKitchenId: !validKitchenId,
+    sessionRequired: identityId === null,
+  };
+}
+
+
+export function useCustomerKitchenAvailabilityQuery(kitchenId: string) {
+  const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
+  const validKitchenId = isCustomerKitchenId(kitchenId);
+  const queryKey =
+    identityId && validKitchenId
+      ? createPrivateQueryKey('customer-kitchen-availability', {
+          userId: identityId,
+          role: CUSTOMER_ROLE,
+          entityId: kitchenId.trim(),
+        })
+      : ([
+          'craves',
+          'v1',
+          'private',
+          'customer-kitchen-availability',
+          'disabled',
+          identityId ?? 'no-customer-session',
+          kitchenId,
+        ] as const);
+
+  const query = useQuery({
+    queryKey,
+    queryFn: ({signal}) =>
+      kitchenProfileApi.getCustomerKitchenAvailability(kitchenId, signal),
+    enabled:
+      PUBLIC_KITCHEN_AVAILABILITY_AVAILABLE &&
+      Boolean(identityId && validKitchenId),
+    staleTime: 30_000,
+  });
+
+  return {
+    ...query,
+    available: PUBLIC_KITCHEN_AVAILABILITY_AVAILABLE,
     invalidKitchenId: !validKitchenId,
     sessionRequired: identityId === null,
   };

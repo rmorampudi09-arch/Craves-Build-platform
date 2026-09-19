@@ -96,3 +96,107 @@ describe('chefSubscriptionApi menu item capacity', () => {
     ).toBe(false);
   });
 });
+
+
+describe('chefSubscriptionApi date overrides', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('sends the exact slot date override and verifies the response', async () => {
+    (httpClient.put as jest.Mock).mockResolvedValue({
+      id: '44444444-4444-4444-8444-444444444444',
+      chefIdentityId: CHEF_ID,
+      serviceDate: '2026-09-25',
+      mealSlotCode: 'DINNER',
+      totalCapacityUnits: 20,
+      subscriptionCapacityUnits: 8,
+      closed: false,
+      reason: 'Festival staffing',
+      heldUnits: 2,
+      committedUnits: 4,
+      deficitUnits: 0,
+      updatedAt: '2026-09-20T13:00:00Z',
+    });
+
+    await expect(
+      chefSubscriptionApi.putDateOverride({
+        serviceDate: '2026-09-25',
+        mealSlotCode: ' dinner ',
+        totalCapacityUnits: 20,
+        subscriptionCapacityUnits: 8,
+        closed: false,
+        reason: ' Festival staffing ',
+      }),
+    ).resolves.toMatchObject({
+      serviceDate: '2026-09-25',
+      mealSlotCode: 'DINNER',
+      subscriptionCapacityUnits: 8,
+    });
+
+    expect(httpClient.put).toHaveBeenCalledWith(
+      '/api/v1/chef/subscription-capacity/overrides/slots',
+      {
+        serviceDate: '2026-09-25',
+        mealSlotCode: 'DINNER',
+        totalCapacityUnits: 20,
+        subscriptionCapacityUnits: 8,
+        closed: false,
+        reason: 'Festival staffing',
+      },
+    );
+  });
+
+  it('sends the exact dish date override and keeps normal menu state separate', async () => {
+    (httpClient.put as jest.Mock).mockResolvedValue({
+      id: '55555555-5555-4555-8555-555555555555',
+      chefIdentityId: CHEF_ID,
+      menuItemId: MENU_ITEM_ID,
+      serviceDate: '2026-09-25',
+      mealSlotCode: 'LUNCH',
+      maxSubscriptionUnits: 5,
+      closed: true,
+      reason: 'Not offered for subscriptions that day',
+      heldUnits: 0,
+      committedUnits: 3,
+      deficitUnits: 3,
+      updatedAt: '2026-09-20T13:05:00Z',
+    });
+
+    await chefSubscriptionApi.putMenuItemDateOverride({
+      menuItemId: MENU_ITEM_ID,
+      serviceDate: '2026-09-25',
+      mealSlotCode: ' lunch ',
+      maxSubscriptionUnits: 5,
+      closed: true,
+      reason: ' Not offered for subscriptions that day ',
+    });
+
+    expect(httpClient.put).toHaveBeenCalledWith(
+      '/api/v1/chef/subscription-capacity/overrides/menu-items',
+      {
+        menuItemId: MENU_ITEM_ID,
+        serviceDate: '2026-09-25',
+        mealSlotCode: 'LUNCH',
+        maxSubscriptionUnits: 5,
+        closed: true,
+        reason: 'Not offered for subscriptions that day',
+      },
+    );
+  });
+
+  it('rejects a slot override where subscription capacity exceeds total', async () => {
+    await expect(
+      chefSubscriptionApi.putDateOverride({
+        serviceDate: '2026-09-25',
+        mealSlotCode: 'LUNCH',
+        totalCapacityUnits: 5,
+        subscriptionCapacityUnits: 6,
+        closed: false,
+        reason: 'Invalid',
+      }),
+    ).rejects.toThrow();
+
+    expect(httpClient.put).not.toHaveBeenCalled();
+  });
+});

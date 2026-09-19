@@ -253,7 +253,7 @@ export function ChefSupportScreen() {
                   accessibilityLabel="Submit Chef support case"
                   accessibilityRole="button"
                   disabled={creating}
-                  onPress={() => void submitCase()}
+                  onPress={() => { submitCase().catch(() => undefined); }}
                   style={({pressed}) => [
                     styles.primaryButton,
                     (pressed || creating) && styles.pressed,
@@ -295,7 +295,7 @@ export function ChefSupportScreen() {
                       <Pressable
                         accessibilityLabel={`Open support case ${entry.caseNumber}`}
                         accessibilityRole="button"
-                        onPress={() => void openCase(entry)}
+                        onPress={() => { openCase(entry).catch(() => undefined); }}
                         style={({pressed}) => [
                           styles.caseCard,
                           isSelected && styles.caseCardSelected,
@@ -372,7 +372,7 @@ export function ChefSupportScreen() {
                                 accessibilityLabel="Send Chef support reply"
                                 accessibilityRole="button"
                                 disabled={replying}
-                                onPress={() => void sendReply()}
+                                onPress={() => { sendReply().catch(() => undefined); }}
                                 style={({pressed}) => [
                                   styles.secondaryButton,
                                   (pressed || replying) && styles.pressed,

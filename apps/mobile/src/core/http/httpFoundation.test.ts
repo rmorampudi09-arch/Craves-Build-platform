@@ -161,6 +161,27 @@ describe('typed HTTP client foundation', () => {
     expect(normalized.retriable).toBe(true);
   });
 
+  it('accepts Order-service error JSON that uses the error field', () => {
+    const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+    const normalized = toAppApiError(
+      new AxiosError('cart changed', 'ERR_BAD_REQUEST', config, undefined, {
+        data: {
+          error: 'CART_CHANGED',
+          message: 'Your cart changed. Review it before trying again.',
+        },
+        status: 409,
+        statusText: 'Conflict',
+        headers: new AxiosHeaders(),
+        config,
+      }),
+    );
+
+    expect(normalized.code).toBe('CART_CHANGED');
+    expect(normalized.message).toBe(
+      'Your cart changed. Review it before trying again.',
+    );
+  });
+
   it('keeps bounded user-safe validation messages', () => {
     const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
     const normalized = toAppApiError(

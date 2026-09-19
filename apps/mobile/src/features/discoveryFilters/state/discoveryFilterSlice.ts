@@ -4,13 +4,20 @@ export type DiscoveryFilterSurface = 'HOME' | 'CHEFS';
 export type DiscoverySortOption =
   | 'RECOMMENDED'
   | 'PRICE_LOW_TO_HIGH'
-  | 'PRICE_HIGH_TO_LOW';
+  | 'PRICE_HIGH_TO_LOW'
+  | 'PREPARATION_TIME_ASC'
+  | 'NAME_ASC';
 export type DiscoveryDietOption = 'VEG' | 'NON_VEG' | 'EGG';
+export type DiscoverySpiceLevel = 'MILD' | 'MEDIUM' | 'SPICY';
 
 export interface DiscoveryFilterSnapshot {
   sort: DiscoverySortOption;
   cuisineIds: string[];
   diets: DiscoveryDietOption[];
+  minPrice: number | null;
+  maxPrice: number | null;
+  maxPreparationTimeMinutes: number | null;
+  spiceLevel: DiscoverySpiceLevel | null;
 }
 
 export interface DiscoveryFilterSession {
@@ -29,6 +36,10 @@ export function createDefaultDiscoveryFilters(): DiscoveryFilterSnapshot {
     sort: 'RECOMMENDED',
     cuisineIds: [],
     diets: [],
+    minPrice: null,
+    maxPrice: null,
+    maxPreparationTimeMinutes: null,
+    spiceLevel: null,
   };
 }
 
@@ -59,15 +70,33 @@ interface FiltersAppliedAction extends ScopedFilterAction {
   filters?: DiscoveryFilterSnapshot;
 }
 
+function nonNegativeFinite(value: number | null): number | null {
+  return value !== null && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function positiveInteger(value: number | null): number | null {
+  return value !== null && Number.isInteger(value) && value > 0 ? value : null;
+}
+
 function normalizeFilters(filters: DiscoveryFilterSnapshot): DiscoveryFilterSnapshot {
   const cuisineIds = [...new Set(filters.cuisineIds.map(value => value.trim()).filter(Boolean))]
     .sort();
   const dietSet = new Set(filters.diets);
+  let minPrice = nonNegativeFinite(filters.minPrice);
+  let maxPrice = nonNegativeFinite(filters.maxPrice);
+  if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+    minPrice = null;
+    maxPrice = null;
+  }
 
   return {
     sort: filters.sort,
     cuisineIds,
     diets: DIET_ORDER.filter(diet => dietSet.has(diet)),
+    minPrice,
+    maxPrice,
+    maxPreparationTimeMinutes: positiveInteger(filters.maxPreparationTimeMinutes),
+    spiceLevel: filters.spiceLevel,
   };
 }
 
@@ -142,7 +171,12 @@ export function areDiscoveryFiltersEqual(
   return (
     normalizedLeft.sort === normalizedRight.sort &&
     normalizedLeft.cuisineIds.join('|') === normalizedRight.cuisineIds.join('|') &&
-    normalizedLeft.diets.join('|') === normalizedRight.diets.join('|')
+    normalizedLeft.diets.join('|') === normalizedRight.diets.join('|') &&
+    normalizedLeft.minPrice === normalizedRight.minPrice &&
+    normalizedLeft.maxPrice === normalizedRight.maxPrice &&
+    normalizedLeft.maxPreparationTimeMinutes ===
+      normalizedRight.maxPreparationTimeMinutes &&
+    normalizedLeft.spiceLevel === normalizedRight.spiceLevel
   );
 }
 
@@ -152,7 +186,11 @@ export function getActiveDiscoveryFilterCount(
   return (
     (filters.sort === 'RECOMMENDED' ? 0 : 1) +
     filters.cuisineIds.length +
-    filters.diets.length
+    filters.diets.length +
+    (filters.minPrice === null ? 0 : 1) +
+    (filters.maxPrice === null ? 0 : 1) +
+    (filters.maxPreparationTimeMinutes === null ? 0 : 1) +
+    (filters.spiceLevel === null ? 0 : 1)
   );
 }
 

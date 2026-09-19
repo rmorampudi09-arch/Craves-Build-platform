@@ -481,11 +481,6 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       ordersQuery.status,
       reconcileOrderStatus,
       refresh,
-      v2NotificationsQuery.hasNextPage,
-      v2NotificationsQuery.isError,
-      v2NotificationsQuery.isFetching,
-      v2NotificationsQuery.isFetchingNextPage,
-      v2NotificationsQuery.isPending,
       v2NotificationsQuery,
     ],
   );

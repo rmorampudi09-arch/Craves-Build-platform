@@ -4,7 +4,7 @@ import {httpClient} from '../../../core/http/httpClient';
 const favoriteSchema = z.object({
   menuItemId: z.string().uuid(),
   createdAt: z.string().refine(value => !Number.isNaN(Date.parse(value))),
-});
+}).strict();
 
 export type CustomerFavorite = z.infer<typeof favoriteSchema>;
 

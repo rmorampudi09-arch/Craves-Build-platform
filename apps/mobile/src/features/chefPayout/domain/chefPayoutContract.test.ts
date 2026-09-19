@@ -1,4 +1,7 @@
-import {CHEF_EARNINGS_ROUTE} from '../api/chefPayoutApi';
+import {
+  CHEF_EARNINGS_ROUTE,
+  CHEF_FINANCE_BALANCE_ROUTE,
+} from '../api/chefPayoutApi';
 import {
   CHEF_PAYOUT_CONTRACT_MODEL,
   getChefWithdrawEligibilityBoundary,
@@ -18,29 +21,44 @@ describe('chef payout contract boundary', () => {
     });
   });
 
-  it('fails closed for every Guide-50 payout capability that lacks an exact Chef backend contract', () => {
-    expect(
-      Object.values(CHEF_PAYOUT_CONTRACT_MODEL.capabilities).every(
-        capability =>
-          capability.availability === 'unavailable' &&
-          capability.code === 'BACKEND_CONTRACT_UNAVAILABLE',
-      ),
-    ).toBe(true);
+  it('uses the published balance route for balance and recent payout history', () => {
+    expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.availableBalance).toMatchObject({
+      availability: 'available',
+      method: 'GET',
+      path: CHEF_FINANCE_BALANCE_ROUTE,
+    });
+    expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.payoutTransactions).toMatchObject({
+      availability: 'available',
+      method: 'GET',
+      path: CHEF_FINANCE_BALANCE_ROUTE,
+    });
+  });
+
+  it('keeps unsupported payout surfaces fail-closed', () => {
+    expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.payoutSeries.availability).toBe(
+      'unavailable',
+    );
+    expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.bankDestination.availability).toBe(
+      'unavailable',
+    );
+    expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.transactionDetail.availability).toBe(
+      'unavailable',
+    );
     expect(hasCompleteChefPayoutContract()).toBe(false);
   });
 
-  it('never promotes ledger rows into an available balance or withdrawal decision', () => {
-    expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.availableBalance.availability).toBe(
-      'unavailable',
-    );
+  it('does not turn the new read into a withdrawal action', () => {
     expect(getChefWithdrawEligibilityBoundary()).toMatchObject({
       availability: 'unavailable',
       code: 'BACKEND_CONTRACT_UNAVAILABLE',
       canWithdraw: false,
     });
+    expect(
+      CHEF_PAYOUT_CONTRACT_MODEL.capabilities.withdrawInitiation.availability,
+    ).toBe('unavailable');
   });
 
-  it('does not expose a fabricated payout, bank, settlement, or withdraw endpoint', () => {
+  it('does not fabricate alternate payout, bank, or settlement endpoints', () => {
     const serialized = JSON.stringify(CHEF_PAYOUT_CONTRACT_MODEL);
     expect(serialized).not.toContain('/api/v1/chef/payout');
     expect(serialized).not.toContain('/api/v1/chef/withdraw');

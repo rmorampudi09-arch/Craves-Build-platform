@@ -1,5 +1,6 @@
 import {httpClient} from '../../../core/http/httpClient';
 import {
+  SUPPORT_CASE_STATUSES,
   parseSupportCaseDetail,
   parseSupportCasePage,
   type AddSupportCaseMessageRequest,
@@ -10,6 +11,7 @@ import {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const STATUS_SET = new Set<string>(SUPPORT_CASE_STATUSES);
 
 export const CHEF_SUPPORT_CASES_AVAILABLE = false;
 
@@ -114,7 +116,12 @@ export const chefSupportCasesApi = {
     const limit = normalizeLimit(options?.limit);
     const params: Record<string, string | number> = {limit};
     if (options?.cursor) params.cursor = options.cursor;
-    if (options?.status) params.status = options.status;
+    if (options?.status) {
+      if (!STATUS_SET.has(options.status)) {
+        throw new Error('CHEF_SUPPORT_STATUS_INVALID');
+      }
+      params.status = options.status;
+    }
 
     const response = await httpClient.get<unknown>('/api/v1/support/cases', {
       signal: options?.signal,

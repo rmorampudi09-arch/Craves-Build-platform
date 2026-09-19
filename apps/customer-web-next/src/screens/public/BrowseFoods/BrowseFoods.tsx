@@ -649,6 +649,8 @@ function BrowseFoodsPage() {
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
         onSearchFocus={() => setSearchOpen(true)}
+        foodPreference={foodPreference}
+        onFoodPreferenceChange={setFoodPreference}
       />
 
       <main>

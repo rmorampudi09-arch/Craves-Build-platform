@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     if (process.env.NODE_ENV === "production" && !origin.startsWith("https://")) return NextResponse.json({ error: "HTTPS_REQUIRED", message: "Secure HTTPS is required for payment." }, { status: 500 });
     const upstream = await authenticatedApiFetch(request, "/payments/orders", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checkoutId: input.checkoutId, customerName: identity.displayName || "Craves Customer", customerEmail: identity.email, customerPhone: identity.phoneNumber, returnUrl: `${origin}/checkout/${input.checkoutId}/payment` }),
+      body: JSON.stringify({ checkoutId: input.checkoutId, customerName: identity.displayName || "Craves Customer", customerEmail: identity.email, customerPhone: identity.phoneNumber, returnUrl: `${origin}/checkout` }),
     }, 20_000);
     const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return NextResponse.json({ error: upstream.status === 401 ? "SESSION_REQUIRED" : "PAYMENT_CREATE_FAILED", message: upstream.status === 401 ? "Please sign in again." : upstream.status === 400 ? "Checkout is not ready for payment." : "Payment order could not be created." }, { status: upstream.status });

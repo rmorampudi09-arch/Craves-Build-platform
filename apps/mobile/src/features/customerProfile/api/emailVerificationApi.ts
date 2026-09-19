@@ -4,8 +4,17 @@ import {httpClient} from '../../../core/http/httpClient';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const uuidSchema = z.string().regex(UUID_PATTERN);
 const instantSchema = z.string().max(40).refine(value => !Number.isNaN(Date.parse(value)));
+
+function hasUnsupportedEmailCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code <= 32 || code === 127 || code > 127) return true;
+  }
+  return false;
+}
+
 const authEmailSchema = z.string().min(5).max(320).refine(value => {
-  if (/[\u0000-\u0020\u007f-\uffff]/.test(value)) return false;
+  if (hasUnsupportedEmailCharacter(value)) return false;
   if (!/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,63}$/.test(value)) return false;
   const at = value.indexOf('@');
   return at > 0 && at <= 64 && !value.startsWith('.') && value[at - 1] !== '.' && !value.includes('..') &&
@@ -18,7 +27,9 @@ export const emailVerificationStateSchema = z.object({
   emailRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   pending: z.object({
     challengeId: uuidSchema,
-    maskedEmail: z.string().min(3).max(320).refine(value => !/[\r\n\u0000]/.test(value)),
+    maskedEmail: z.string().min(3).max(320).refine(
+      value => !value.includes('\r') && !value.includes('\n') && !value.includes(String.fromCharCode(0)),
+    ),
     expiresAt: instantSchema,
     resendAvailableAt: instantSchema,
     deliveryStatus: z.enum(['PENDING', 'ACCEPTED', 'UNKNOWN', 'UNAVAILABLE']),

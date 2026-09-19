@@ -36,6 +36,7 @@ import {
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {reorderCart} from '../../cart/state/cartMutations';
+import {isDefinitiveCartRejection} from '../../cart/domain/cartWriteRejection';
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
 import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
@@ -138,11 +139,25 @@ export function CustomerOrdersScreen() {
   const reorder = useCallback(async (order: CustomerOrder) => {
     if (reorderingOrderId) return;
     setCapabilityMessage(null);
+    if (!cartSnapshot) {
+      setCapabilityMessage('Check your cart before reordering so Craves can protect any newer cart changes.');
+      return;
+    }
     setReorderingOrderId(order.id);
     try {
-      const outcome = await dispatch(reorderCart({orderId: order.id}));
+      const outcome = await dispatch(
+        reorderCart({
+          orderId: order.id,
+          expectedSnapshot: cartSnapshot,
+          expectedKitchenId: order.kitchenId,
+        }),
+      );
       if (outcome.status === 'FAILED') {
-        setCapabilityMessage(outcome.error.message);
+        setCapabilityMessage(
+          isDefinitiveCartRejection(outcome.error)
+            ? outcome.error.message
+            : 'The reorder result could not be confirmed. Check your cart before trying again so you do not replace a newer cart by mistake.',
+        );
         return;
       }
       if (outcome.status === 'APPLIED') {
@@ -151,7 +166,7 @@ export function CustomerOrdersScreen() {
     } finally {
       setReorderingOrderId(null);
     }
-  }, [dispatch, navigation, reorderingOrderId]);
+  }, [cartSnapshot, dispatch, navigation, reorderingOrderId]);
 
   const confirmReorder = useCallback((order: CustomerOrder) => {
     if (cartSnapshot?.lines.length) {

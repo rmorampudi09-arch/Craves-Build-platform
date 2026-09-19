@@ -25,7 +25,7 @@ test("cart validates with the backend before address selection", () => {
 test("checkout uses parsed active saved addresses and backend checkout", () => {
   const page = source("../screens/Checkout/Checkout.tsx");
   assert.match(page, /parseCustomerAddresses\(raw\)/);
-  assert.match(page, /filter\(\(address\) => address\.active\)/);
+  assert.match(page, /filter\(isDeliveryReadyAddress\)/);
   assert.match(page, /fetch\("\/api\/checkout"/);
   assert.match(page, /deliveryAddressId: selectedId/);
   assert.match(page, /parseCheckout\(raw\)/);

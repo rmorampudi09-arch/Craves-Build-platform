@@ -422,7 +422,8 @@ export function CustomerOrdersScreen() {
           style={styles.banner}
         />
       ) : null}
-      {snapshot?.historyCompleteness === 'UNKNOWN_AFTER_SERVER_LIMIT' ? (
+      {!ordersQuery.v2Available &&
+      snapshot?.historyCompleteness === 'UNKNOWN_AFTER_SERVER_LIMIT' ? (
         <RecoverableErrorBanner
           message="Showing the newest 50 orders. The current server contract does not expose another page or a complete-history count yet."
           style={styles.banner}
@@ -542,13 +543,36 @@ export function CustomerOrdersScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         ListFooterComponent={
-          ordersQuery.isFetching && snapshot ? (
-            <View
-              accessibilityLabel="Refreshing order status"
-              accessibilityRole="progressbar"
-              style={styles.footerLoading}>
-              <ActivityIndicator color={colors.flameRed} />
-            </View>
+          snapshot ? (
+            ordersQuery.v2Available && ordersQuery.hasNextPage ? (
+              <Pressable
+                accessibilityLabel="Load older orders"
+                accessibilityRole="button"
+                disabled={ordersQuery.isFetchingNextPage}
+                onPress={() =>
+                  ordersQuery.fetchNextPage().catch(() => undefined)
+                }
+                style={({pressed}) => [
+                  styles.loadOlderButton,
+                  (pressed || ordersQuery.isFetchingNextPage) &&
+                    styles.loadOlderButtonPressed,
+                ]}>
+                {ordersQuery.isFetchingNextPage ? (
+                  <ActivityIndicator color={colors.flameRed} />
+                ) : (
+                  <Text style={styles.loadOlderButtonText}>
+                    Load older orders
+                  </Text>
+                )}
+              </Pressable>
+            ) : ordersQuery.isFetching ? (
+              <View
+                accessibilityLabel="Refreshing order status"
+                accessibilityRole="progressbar"
+                style={styles.footerLoading}>
+                <ActivityIndicator color={colors.flameRed} />
+              </View>
+            ) : null
           ) : null
         }
       />
@@ -645,6 +669,26 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.border,
+  },
+  loadOlderButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    borderColor: colors.flameRed,
+    borderRadius: radius.pill,
+    borderWidth: borderWidth.standard,
+    justifyContent: 'center',
+    marginVertical: spacing.md,
+    minHeight: 44,
+    paddingHorizontal: spacing.lg,
+  },
+  loadOlderButtonPressed: {
+    backgroundColor: colors.surfaceMuted,
+    opacity: 0.72,
+  },
+  loadOlderButtonText: {
+    color: colors.flameRed,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
   },
   footerLoading: {
     alignItems: 'center',

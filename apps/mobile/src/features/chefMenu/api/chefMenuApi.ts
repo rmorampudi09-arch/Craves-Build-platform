@@ -473,15 +473,19 @@ export function parseChefMenuBulkAvailabilityResponse(
   requested: readonly ChefMenuBulkAvailabilityChange[],
 ): ChefMenuBulkAvailabilityResponse | null {
   const raw = asRecord(value);
+  if (!raw || !exactKeys(raw, BULK_RESPONSE_KEYS)) {
+    return null;
+  }
+  const requestedCount = raw.requestedCount;
+  const changedCount = raw.changedCount;
   if (
-    !raw ||
-    !exactKeys(raw, BULK_RESPONSE_KEYS) ||
-    !Number.isSafeInteger(raw.requestedCount) ||
-    !Number.isSafeInteger(raw.changedCount) ||
-    raw.requestedCount !== requested.length ||
-    typeof raw.changedCount !== 'number' ||
-    raw.changedCount < 0 ||
-    raw.changedCount > requested.length ||
+    typeof requestedCount !== 'number' ||
+    !Number.isSafeInteger(requestedCount) ||
+    typeof changedCount !== 'number' ||
+    !Number.isSafeInteger(changedCount) ||
+    requestedCount !== requested.length ||
+    changedCount < 0 ||
+    changedCount > requested.length ||
     !Array.isArray(raw.items) ||
     raw.items.length !== requested.length
   ) {
@@ -518,11 +522,11 @@ export function parseChefMenuBulkAvailabilityResponse(
     });
   }
 
-  if (actualChangedCount !== raw.changedCount) return null;
+  if (actualChangedCount !== changedCount) return null;
 
   return {
-    requestedCount: raw.requestedCount,
-    changedCount: raw.changedCount,
+    requestedCount,
+    changedCount,
     items,
   };
 }

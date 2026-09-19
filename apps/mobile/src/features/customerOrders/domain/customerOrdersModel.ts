@@ -15,6 +15,7 @@ function emptyStatusCounts(): Record<CustomerOrderStatus, number> {
 
 export function createCustomerOrdersSnapshot(
   orders: readonly CustomerOrder[],
+  historyComplete?: boolean,
 ): CustomerOrdersSnapshot {
   const counts = emptyStatusCounts();
   for (const order of orders) {
@@ -26,9 +27,13 @@ export function createCustomerOrdersSnapshot(
     countsByStatus: counts as CustomerOrderStatusCounts,
     returnedCount: orders.length,
     historyCompleteness:
-      orders.length < CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT
+      historyComplete === true
         ? 'COMPLETE'
-        : 'UNKNOWN_AFTER_SERVER_LIMIT',
+        : historyComplete === false
+          ? 'UNKNOWN_AFTER_SERVER_LIMIT'
+          : orders.length < CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT
+            ? 'COMPLETE'
+            : 'UNKNOWN_AFTER_SERVER_LIMIT',
   };
 }
 

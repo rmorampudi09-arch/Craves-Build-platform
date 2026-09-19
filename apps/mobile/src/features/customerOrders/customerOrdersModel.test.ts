@@ -8,6 +8,7 @@ import type {CustomerOrder} from './domain/customerOrderTypes';
 import {
   createCustomerOrdersQueryKey,
   customerOrdersQueryPrefix,
+  customerOrdersV2QueryPrefix,
   invalidateCustomerOrdersQueries,
 } from './query/customerOrdersQueries';
 
@@ -61,6 +62,20 @@ describe('P52 customer orders snapshot and cache model', () => {
     );
   });
 
+  it('uses cursor exhaustion as authoritative v2 history completeness', () => {
+    const orders = Array.from(
+      {length: CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT},
+      (_, index) => order(index + 1, 'DELIVERED'),
+    );
+
+    expect(createCustomerOrdersSnapshot(orders, true).historyCompleteness).toBe(
+      'COMPLETE',
+    );
+    expect(createCustomerOrdersSnapshot(orders, false).historyCompleteness).toBe(
+      'UNKNOWN_AFTER_SERVER_LIMIT',
+    );
+  });
+
   it('scopes the cache by authenticated customer and fixed server window', () => {
     expect(
       createCustomerOrdersQueryKey('33333333-3333-4333-8333-333333333333'),
@@ -77,7 +92,7 @@ describe('P52 customer orders snapshot and cache model', () => {
     ]);
   });
 
-  it('invalidates only the customer orders domain prefix', async () => {
+  it('invalidates both legacy and v2 customer order caches', async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
 
@@ -85,6 +100,9 @@ describe('P52 customer orders snapshot and cache model', () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: customerOrdersQueryPrefix,
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: customerOrdersV2QueryPrefix,
     });
   });
 });

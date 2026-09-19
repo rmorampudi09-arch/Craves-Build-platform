@@ -1,4 +1,5 @@
 import {httpClient} from '../../../core/http/httpClient';
+import type {CartSnapshot} from '../domain/cartTypes';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -271,6 +272,28 @@ export function parseCartPreflight(value: unknown): CartPreflight | null {
     checkedAt,
     items: parsedItems,
   };
+}
+
+export function cartPreflightMatchesSnapshot(
+  preflight: CartPreflight,
+  snapshot: CartSnapshot,
+): boolean {
+  if (
+    preflight.cartId !== snapshot.cartId ||
+    preflight.itemCount !== snapshot.lines.length
+  ) {
+    return false;
+  }
+
+  const byLineId = new Map(snapshot.lines.map(line => [line.lineId, line]));
+  return preflight.items.every(item => {
+    const line = byLineId.get(item.cartItemId);
+    return Boolean(
+      line &&
+        line.menuItemId === item.menuItemId &&
+        line.quantity === item.quantity,
+    );
+  });
 }
 
 export const cartPreflightApi = {

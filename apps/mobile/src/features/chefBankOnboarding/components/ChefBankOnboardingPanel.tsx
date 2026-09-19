@@ -250,7 +250,7 @@ export function ChefBankOnboardingPanel() {
 
       {message ? (
         <View style={styles.notice}>
-          <Text accessibilityRole="status" style={styles.noticeText}>
+          <Text accessibilityLiveRegion="polite" style={styles.noticeText}>
             {message}
           </Text>
         </View>

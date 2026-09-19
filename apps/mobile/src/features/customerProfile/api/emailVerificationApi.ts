@@ -1,9 +1,10 @@
 import {z} from 'zod';
+import {AppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const uuidSchema = z.string().regex(UUID_PATTERN);
-const instantSchema = z.string().max(40).refine(value => !Number.isNaN(Date.parse(value)));
+const instantSchema = z.string().max(40).datetime({offset: true});
 
 function hasUnsupportedEmailCharacter(value: string): boolean {
   for (const character of value) {
@@ -41,21 +42,31 @@ export type EmailVerificationState = z.infer<typeof emailVerificationStateSchema
 
 function requireState(value: unknown): EmailVerificationState {
   const parsed = emailVerificationStateSchema.safeParse(value);
-  if (!parsed.success) throw new Error('EMAIL_VERIFICATION_INVALID_RESPONSE');
+  if (!parsed.success) {
+    throw new AppApiError(
+      'EMAIL_VERIFICATION_INVALID_RESPONSE',
+      'Email verification status could not be verified. Please refresh and try again.',
+    );
+  }
   return parsed.data;
 }
 
 function requireRequestId(value: string): string {
-  if (!UUID_PATTERN.test(value)) throw new Error('EMAIL_VERIFICATION_INVALID_REQUEST_ID');
+  if (!UUID_PATTERN.test(value)) {
+    throw new AppApiError(
+      'EMAIL_VERIFICATION_INVALID_REQUEST_ID',
+      'Email verification could not be started safely. Please try again.',
+    );
+  }
   return value;
 }
 
-function normalizeEmail(value: string): string {
+export function normalizeVerificationEmail(value: string): string {
   const trimmed = value.trim();
   const at = trimmed.indexOf('@');
   const normalized = at > 0 ? trimmed.slice(0, at) + '@' + trimmed.slice(at + 1).toLowerCase() : trimmed;
   if (!authEmailSchema.safeParse(normalized).success || normalized.length > 254) {
-    throw new Error('EMAIL_INVALID');
+    throw new AppApiError('EMAIL_INVALID', 'Enter a valid email address.');
   }
   return normalized;
 }
@@ -71,25 +82,86 @@ export function emailDeliveryMessage(state: EmailVerificationState): string {
   }
 }
 
+export interface EmailVerificationIssueRequest {
+  email: string;
+  requestId: string;
+}
+
+export interface EmailVerificationResendRequest {
+  challengeId: string;
+  requestId: string;
+}
+
+export interface EmailVerificationVerifyRequest {
+  challengeId: string;
+  code: string;
+}
+
+export function buildEmailVerificationIssueRequest(
+  email: string,
+  requestId: string,
+): EmailVerificationIssueRequest {
+  return {
+    email: normalizeVerificationEmail(email),
+    requestId: requireRequestId(requestId),
+  };
+}
+
+export function buildEmailVerificationResendRequest(
+  challengeId: string,
+  requestId: string,
+): EmailVerificationResendRequest {
+  if (!UUID_PATTERN.test(challengeId)) {
+    throw new AppApiError(
+      'EMAIL_REQUEST_INVALID',
+      'Check the verification details and try again.',
+    );
+  }
+  return {
+    challengeId,
+    requestId: requireRequestId(requestId),
+  };
+}
+
+export function buildEmailVerificationVerifyRequest(
+  challengeId: string,
+  code: string,
+): EmailVerificationVerifyRequest {
+  if (!UUID_PATTERN.test(challengeId) || !/^\d{6}$/.test(code)) {
+    throw new AppApiError(
+      'EMAIL_REQUEST_INVALID',
+      'Check the verification details and try again.',
+    );
+  }
+  return {challengeId, code};
+}
+
 export const emailVerificationApi = {
   async read(): Promise<EmailVerificationState> {
     return requireState(await httpClient.get<unknown>('/api/v1/auth/email-verification', {dedupeKey: 'email-verification:state'}));
   },
   async issue(email: string, requestId: string): Promise<EmailVerificationState> {
-    return requireState(await httpClient.post<unknown>('/api/v1/auth/email-verification/challenges', {
-      email: normalizeEmail(email),
-      requestId: requireRequestId(requestId),
-    }));
+    return requireState(
+      await httpClient.post<unknown>(
+        '/api/v1/auth/email-verification/challenges',
+        buildEmailVerificationIssueRequest(email, requestId),
+      ),
+    );
   },
   async verify(challengeId: string, code: string): Promise<EmailVerificationState> {
-    if (!UUID_PATTERN.test(challengeId) || !/^\d{6}$/.test(code)) throw new Error('EMAIL_REQUEST_INVALID');
-    return requireState(await httpClient.post<unknown>('/api/v1/auth/email-verification/verify', {challengeId, code}));
+    return requireState(
+      await httpClient.post<unknown>(
+        '/api/v1/auth/email-verification/verify',
+        buildEmailVerificationVerifyRequest(challengeId, code),
+      ),
+    );
   },
   async resend(challengeId: string, requestId: string): Promise<EmailVerificationState> {
-    if (!UUID_PATTERN.test(challengeId)) throw new Error('EMAIL_REQUEST_INVALID');
-    return requireState(await httpClient.post<unknown>('/api/v1/auth/email-verification/resend', {
-      challengeId,
-      requestId: requireRequestId(requestId),
-    }));
+    return requireState(
+      await httpClient.post<unknown>(
+        '/api/v1/auth/email-verification/resend',
+        buildEmailVerificationResendRequest(challengeId, requestId),
+      ),
+    );
   },
 };

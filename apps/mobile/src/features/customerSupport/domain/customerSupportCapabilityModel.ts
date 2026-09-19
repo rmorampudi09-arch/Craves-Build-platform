@@ -55,6 +55,6 @@ export const customerSupportIntegrationBoundary: CustomerSupportIntegrationBound
   supportTicket: {
     status: 'unavailable',
     blocker: 'CUSTOMER_SUPPORT_TICKET_CONTRACT_UNAVAILABLE',
-    reason: 'No approved customer support ticket contract is registered.',
+    reason: 'Requester-owned support case APIs exist in User-Chef Service, but their APIM gateway operations are not published on main yet.',
   },
 };

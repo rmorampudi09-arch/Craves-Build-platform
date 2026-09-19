@@ -3,6 +3,8 @@ import {
   CHEF_EARNINGS_MAX_LIMIT,
   CHEF_EARNINGS_ROUTE,
   CHEF_FINANCE_BALANCE_ROUTE,
+  CHEF_WITHDRAWALS_ROUTE,
+  buildChefWithdrawalRequest,
   chefPayoutApi,
   normalizeChefEarningsLimit,
   parseChefEarningLedger,
@@ -13,6 +15,7 @@ import {
 jest.mock('../../../core/http/httpClient', () => ({
   httpClient: {
     get: jest.fn(),
+    post: jest.fn(),
   },
 }));
 
@@ -149,6 +152,39 @@ describe('chefPayoutApi financial parsing', () => {
         bankAccountNumber: 'must-not-be-exposed',
       }),
     ).toBeNull();
+  });
+
+  it('builds the exact withdrawal body required by main', () => {
+    expect(
+      buildChefWithdrawalRequest(
+        '55555555-5555-4555-8555-555555555555',
+        '578.88',
+      ),
+    ).toEqual({
+      requestKey: '55555555-5555-4555-8555-555555555555',
+      expectedAvailableAmount: '578.88',
+    });
+  });
+
+  it('posts only the stable request key and exact available amount', async () => {
+    const payout = balanceResponse.recentPayouts[0];
+    (httpClient.post as jest.Mock).mockResolvedValue(payout);
+
+    await expect(
+      chefPayoutApi.requestWithdrawal(
+        '55555555-5555-4555-8555-555555555555',
+        '578.88',
+      ),
+    ).resolves.toEqual(payout);
+
+    expect(httpClient.post).toHaveBeenCalledWith(
+      CHEF_WITHDRAWALS_ROUTE,
+      {
+        requestKey: '55555555-5555-4555-8555-555555555555',
+        expectedAvailableAmount: '578.88',
+      },
+      {signal: undefined},
+    );
   });
 
   it('reads balance without sending request JSON', async () => {

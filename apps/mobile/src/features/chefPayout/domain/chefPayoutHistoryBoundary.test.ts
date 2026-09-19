@@ -5,7 +5,7 @@ import {
 } from './chefPayoutHistoryBoundary';
 
 describe('Chef payout history UI boundary', () => {
-  it('starts without inventing payout money, trend, transactions, or date semantics', () => {
+  it('starts with server-authoritative withdrawal capability but no invented trend/detail data', () => {
     const state = createChefPayoutHistoryBoundaryState();
 
     expect(state).toMatchObject({
@@ -15,24 +15,28 @@ describe('Chef payout history UI boundary', () => {
       availableBalance: null,
       payoutSeries: [],
       transactionsPage: null,
-      withdrawState: 'blocked',
+      withdrawState: 'available',
     });
-    expect(state.withdrawEligibility.canWithdraw).toBe(false);
+    expect(state.withdrawEligibility.canWithdraw).toBe(true);
   });
 
-  it('supports only local tab selection while server-owned payout state stays fail-closed', () => {
+  it('supports local tab selection without inventing unsupported payout series/detail state', () => {
     const initial = createChefPayoutHistoryBoundaryState();
     const transactions = selectChefPayoutHistoryTab(initial, 'transactions');
 
     expect(transactions.selectedTab).toBe('transactions');
-    expect(transactions.availableBalance).toBeNull();
+    expect(transactions.payoutSeries).toEqual([]);
     expect(transactions.transactionsPage).toBeNull();
-    expect(transactions.withdrawEligibility.canWithdraw).toBe(false);
+    expect(transactions.withdrawEligibility.canWithdraw).toBe(true);
   });
 
-  it('explains the exact blocked integration instead of fabricating a payout route', () => {
-    expect(CHEF_PAYOUT_HISTORY_MESSAGES.source).toContain('published Chef earnings API');
-    expect(CHEF_PAYOUT_HISTORY_MESSAGES.withdraw).toContain('No Chef-role');
+  it('describes the stable-key withdrawal safety boundary', () => {
+    expect(CHEF_PAYOUT_HISTORY_MESSAGES.source).toContain(
+      'Published Chef finance reads',
+    );
+    expect(CHEF_PAYOUT_HISTORY_MESSAGES.withdraw).toContain(
+      'stable request UUID',
+    );
 
     const serialized = JSON.stringify(CHEF_PAYOUT_HISTORY_MESSAGES);
     expect(serialized).not.toContain('/api/v1/chef/payout');

@@ -696,7 +696,7 @@ export function AddressEditorFlow({
             <div>
               <div className="grid gap-4">
                 <label className="text-xs font-bold text-[#1A1A1A]">
-                  Door / Flat No.
+                  Flat / house / floor
                   <input
                     value={draft.addressLine1}
                     onChange={(event) => update("addressLine1", event.target.value)}
@@ -724,7 +724,7 @@ export function AddressEditorFlow({
                     onChange={(event) =>
                       update("landmark", event.target.value || null)
                     }
-                    placeholder="Nearby landmark"
+                    placeholder="Opposite Metro pillar 1142"
                     maxLength={160}
                     className={fieldClass}
                   />
@@ -851,7 +851,7 @@ export function AddressEditorFlow({
               onClick={() => setStep("details")}
               className="min-h-12 w-full rounded-xl bg-[#F62E18] px-4 text-sm font-black text-white hover:bg-[#C92716] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {mapResolving ? "UPDATING LOCATION…" : "ADD MORE DETAILS"}
+              {mapResolving ? "Updating location…" : "Add more details"}
             </button>
           </div>
         ) : null}
@@ -872,7 +872,7 @@ export function AddressEditorFlow({
               disabled={busy || mapResolving}
               className="min-h-12 rounded-xl bg-[#F62E18] px-3 text-sm font-black text-white hover:bg-[#C92716] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {busy ? "SAVING…" : "SAVE ADDRESS & PROCEED"}
+              {busy ? "Saving…" : "Save and use this address"}
             </button>
           </div>
         ) : null}

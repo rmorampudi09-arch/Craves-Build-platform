@@ -14,6 +14,7 @@ import type {ChefApplication, ChefApplicationStatus} from '../domain/types';
 import {accountResolutionService} from '../state/accountResolutionService';
 import {authActions} from '../state/authSlice';
 import {completeLogout} from '../state/logoutCoordinator';
+import {ChefBankOnboardingPanel} from '../../chefBankOnboarding/components/ChefBankOnboardingPanel';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ChefAccountStatus'>;
 
@@ -120,6 +121,9 @@ export function ChefAccountStatusScreen({navigation, route}: Props) {
             disabled={refreshing}
             onPress={() => navigation.replace('ChefRegistration')}
           />
+        ) : null}
+        {status === 'PENDING' || status === 'APPROVED' ? (
+          <ChefBankOnboardingPanel />
         ) : null}
         <PrimaryButton
           variant={status === 'PENDING' || status === 'APPROVED' ? 'primary' : 'outline'}

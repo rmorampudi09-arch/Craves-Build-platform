@@ -73,10 +73,12 @@ import {
   type CartKitchenSectionModel,
 } from '../cartUiModel';
 import {
+  clearCart,
   removeCartItem,
   setCartItemQuantity,
   type CartMutationOutcome,
 } from '../state/cartMutations';
+import {isDefinitiveCartRejection} from '../domain/cartWriteRejection';
 import {refreshCartSnapshot} from '../state/cartRefresh';
 import {selectCartScreenModel} from '../state/cartSelectors';
 import {formatCartMoney} from '../viewCartOverlayModel';
@@ -318,6 +320,7 @@ export function CustomerCartScreen() {
   const snapshotStatus = useAppSelector(state => state.cart.snapshotStatus);
   const snapshotErrorCode = useAppSelector(state => state.cart.snapshotErrorCode);
   const mutations = useAppSelector(state => state.cart.mutations);
+  const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const authPhone = useAppSelector(state => state.auth.identity?.phoneNumber ?? null);
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
@@ -331,6 +334,7 @@ export function CustomerCartScreen() {
     Record<string, CartDiscoveryDish>
   >({});
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [clearBusy, setClearBusy] = useState(false);
   const [paymentRecoveryActive, setPaymentRecoveryActive] = useState(false);
   const activeCheckoutRef = useRef<CheckoutSession | null>(null);
   const persistedRecoveryRef = useRef<
@@ -540,6 +544,36 @@ export function CustomerCartScreen() {
     [dispatch, handleMutationOutcome],
   );
 
+  const requestClearCart = useCallback(() => {
+    if (!cartSnapshot || cartSnapshot.lines.length === 0 || clearBusy || checkoutBusy || paymentRecoveryActive) return;
+    const expectedSnapshot = cartSnapshot;
+    Alert.alert(
+      'Clear your cart?',
+      'This removes only the cart you are reviewing now. If it changed elsewhere, Craves will stop instead of deleting newer items.',
+      [
+        {text: 'Keep cart', style: 'cancel'},
+        {
+          text: 'Clear cart',
+          style: 'destructive',
+          onPress: () => {
+            setInteractionError(null);
+            setClearBusy(true);
+            void dispatch(clearCart({expectedSnapshot}))
+              .then(outcome => {
+                if (outcome.status !== 'FAILED') return;
+                setInteractionError(
+                  isDefinitiveCartRejection(outcome.error)
+                    ? outcome.error.message
+                    : 'We couldn’t confirm that your cart was cleared. Refresh the cart before trying again.',
+                );
+              })
+              .finally(() => setClearBusy(false));
+          },
+        },
+      ],
+    );
+  }, [cartSnapshot, checkoutBusy, clearBusy, dispatch, paymentRecoveryActive]);
+
   const handleCheckout = useCallback(async () => {
     const addressId = header.selectedLocation?.addressId;
     if (!model || !addressId || checkoutBusy) return;
@@ -705,6 +739,16 @@ export function CustomerCartScreen() {
             {sections.length === 1 ? 'kitchen' : 'kitchens'}
           </Text>
         </View>
+        {cartSnapshot?.lines.length ? (
+          <Button
+            label={clearBusy ? 'Clearing…' : 'Clear cart'}
+            variant="ghost"
+            loading={clearBusy}
+            disabled={checkoutBusy || paymentRecoveryActive}
+            onPress={requestClearCart}
+            style={styles.clearAction}
+          />
+        ) : null}
       </View>
 
       {visibleRefreshError ? (
@@ -913,6 +957,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,
+  },
+  clearAction: {
+    width: 104,
+    minHeight: touchTarget.minimum,
+    paddingHorizontal: spacing.xs,
   },
   titleCopy: {flex: 1},
   title: {

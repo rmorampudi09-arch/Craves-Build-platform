@@ -84,7 +84,10 @@ function parseCartLine(value: unknown, cartCurrency: string): CartLine | null {
   if (
     !lineId || !menuItemId || !kitchenId || !itemName || !kitchenName ||
     currency !== cartCurrency || !createdAt || !updatedAt ||
-    typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity < 1
+    typeof quantity !== 'number' ||
+    !Number.isSafeInteger(quantity) ||
+    quantity < 1 ||
+    quantity > 100
   ) return null;
 
   const unitPrice = parseMoney(item.unitPrice, cartCurrency);
@@ -136,8 +139,11 @@ function requireUuid(value: string, code: string, message: string): void {
 }
 
 function requireQuantity(quantity: number): void {
-  if (!Number.isSafeInteger(quantity) || quantity < 1) {
-    throw new AppApiError('CART_INVALID_QUANTITY', 'Choose a quantity of at least one item.');
+  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 100) {
+    throw new AppApiError(
+      'CART_INVALID_QUANTITY',
+      'Choose a quantity between 1 and 100.',
+    );
   }
 }
 
@@ -169,6 +175,58 @@ export function buildCartSnapshotRequest(snapshot: CartSnapshot): CartSnapshotRe
       }
       return {id: line.lineId, quantity: line.quantity, updatedAt: line.updatedAt};
     }),
+  };
+}
+
+export interface SwitchKitchenRequestPayload {
+  expectedCart: CartSnapshotRequestPayload;
+  menuItemId: string;
+  expectedKitchenId: string;
+  quantity: number;
+}
+
+export interface ReorderCartRequestPayload {
+  expectedCart: CartSnapshotRequestPayload;
+  expectedKitchenId: string;
+}
+
+export function buildSwitchKitchenRequest(
+  expectedCart: CartSnapshot,
+  menuItemId: string,
+  quantity: number,
+  expectedKitchenId: string,
+): SwitchKitchenRequestPayload {
+  requireUuid(
+    menuItemId,
+    'CART_INVALID_MENU_ITEM_ID',
+    'This dish could not be added to the cart.',
+  );
+  requireUuid(
+    expectedKitchenId,
+    'CART_INVALID_KITCHEN_ID',
+    'This kitchen could not be verified.',
+  );
+  requireQuantity(quantity);
+  return {
+    expectedCart: buildCartSnapshotRequest(expectedCart),
+    menuItemId,
+    expectedKitchenId,
+    quantity,
+  };
+}
+
+export function buildReorderCartRequest(
+  expectedCart: CartSnapshot,
+  expectedKitchenId: string,
+): ReorderCartRequestPayload {
+  requireUuid(
+    expectedKitchenId,
+    'CART_INVALID_KITCHEN_ID',
+    'This kitchen could not be verified.',
+  );
+  return {
+    expectedCart: buildCartSnapshotRequest(expectedCart),
+    expectedKitchenId,
   };
 }
 
@@ -205,16 +263,16 @@ export const cartApi = {
     quantity: number,
     expectedKitchenId: string,
   ): Promise<CartSnapshot> {
-    requireUuid(menuItemId, 'CART_INVALID_MENU_ITEM_ID', 'This dish could not be added to the cart.');
-    requireUuid(expectedKitchenId, 'CART_INVALID_KITCHEN_ID', 'This kitchen could not be verified.');
-    requireQuantity(quantity);
     return requireCartSnapshot(
-      await httpClient.post<unknown>('/api/v1/cart/switch-kitchen', {
-        expectedCart: buildCartSnapshotRequest(expectedCart),
-        menuItemId,
-        expectedKitchenId,
-        quantity,
-      }),
+      await httpClient.post<unknown>(
+        '/api/v1/cart/switch-kitchen',
+        buildSwitchKitchenRequest(
+          expectedCart,
+          menuItemId,
+          quantity,
+          expectedKitchenId,
+        ),
+      ),
     );
   },
   async reorderIfUnchanged(
@@ -222,13 +280,16 @@ export const cartApi = {
     expectedCart: CartSnapshot,
     expectedKitchenId: string,
   ): Promise<CartSnapshot> {
-    requireUuid(orderId, 'CART_INVALID_ORDER_ID', 'This order could not be reordered.');
-    requireUuid(expectedKitchenId, 'CART_INVALID_KITCHEN_ID', 'This kitchen could not be verified.');
+    requireUuid(
+      orderId,
+      'CART_INVALID_ORDER_ID',
+      'This order could not be reordered.',
+    );
     return requireCartSnapshot(
-      await httpClient.post<unknown>(`/api/v1/cart/reorder-if-unchanged/${encodeURIComponent(orderId)}`, {
-        expectedCart: buildCartSnapshotRequest(expectedCart),
-        expectedKitchenId,
-      }),
+      await httpClient.post<unknown>(
+        `/api/v1/cart/reorder-if-unchanged/${encodeURIComponent(orderId)}`,
+        buildReorderCartRequest(expectedCart, expectedKitchenId),
+      ),
     );
   },
   async reorder(orderId: string): Promise<CartSnapshot> {
